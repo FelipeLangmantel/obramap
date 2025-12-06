@@ -71,6 +71,137 @@ export type Database = {
           },
         ]
       }
+      planned_productions: {
+        Row: {
+          created_at: string
+          id: string
+          macro_color: string
+          macro_id: string
+          macro_name: string
+          notes: string | null
+          planned_house_ids: number[]
+          planned_houses: number
+          project_id: string
+          scope_id: string
+          scope_name: string
+          updated_at: string
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          macro_color?: string
+          macro_id: string
+          macro_name: string
+          notes?: string | null
+          planned_house_ids?: number[]
+          planned_houses?: number
+          project_id: string
+          scope_id: string
+          scope_name: string
+          updated_at?: string
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          macro_color?: string
+          macro_id?: string
+          macro_name?: string
+          notes?: string | null
+          planned_house_ids?: number[]
+          planned_houses?: number
+          project_id?: string
+          scope_id?: string
+          scope_name?: string
+          updated_at?: string
+          week_end?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planned_productions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_deviations: {
+        Row: {
+          actual_count: number
+          corrective_action: string | null
+          created_at: string
+          deviation: number
+          deviation_reason: string
+          id: string
+          macro_id: string
+          macro_name: string
+          planned_count: number
+          planned_production_id: string
+          project_id: string
+          scope_id: string
+          scope_name: string
+          updated_at: string
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          actual_count?: number
+          corrective_action?: string | null
+          created_at?: string
+          deviation?: number
+          deviation_reason: string
+          id?: string
+          macro_id: string
+          macro_name: string
+          planned_count?: number
+          planned_production_id: string
+          project_id: string
+          scope_id: string
+          scope_name: string
+          updated_at?: string
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          actual_count?: number
+          corrective_action?: string | null
+          created_at?: string
+          deviation?: number
+          deviation_reason?: string
+          id?: string
+          macro_id?: string
+          macro_name?: string
+          planned_count?: number
+          planned_production_id?: string
+          project_id?: string
+          scope_id?: string
+          scope_name?: string
+          updated_at?: string
+          week_end?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_deviations_planned_production_id_fkey"
+            columns: ["planned_production_id"]
+            isOneToOne: false
+            referencedRelation: "planned_productions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_deviations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
