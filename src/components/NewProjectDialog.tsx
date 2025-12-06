@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useConstruction } from "@/contexts/ConstructionContext";
-import { ArrowRight, Building2 } from "lucide-react";
+import { ArrowRight, Building2, Loader2 } from "lucide-react";
 
 interface NewProjectDialogProps {
   open: boolean;
@@ -32,32 +32,38 @@ export function NewProjectDialog({ open, onOpenChange }: NewProjectDialogProps) 
   const [totalHouses, setTotalHouses] = useState("");
   const [unitSize, setUnitSize] = useState("");
   const [projectType, setProjectType] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name || !totalHouses) return;
     
-    addProject({
-      name,
-      location,
-      contractor,
-      startDate,
-      expectedEndDate,
-      totalHouses: parseInt(totalHouses) || 0,
-      unitSize: parseFloat(unitSize) || 45,
-      projectType: projectType || "Residencial Popular",
-    });
-    
-    // Reset form
-    setName("");
-    setLocation("");
-    setContractor("");
-    setStartDate("");
-    setExpectedEndDate("");
-    setTotalHouses("");
-    setUnitSize("");
-    setProjectType("");
-    
-    onOpenChange(false);
+    setIsSubmitting(true);
+    try {
+      await addProject({
+        name,
+        location,
+        contractor,
+        startDate,
+        expectedEndDate,
+        totalHouses: parseInt(totalHouses) || 0,
+        unitSize: parseFloat(unitSize) || 45,
+        projectType: projectType || "Residencial Popular",
+      });
+      
+      // Reset form
+      setName("");
+      setLocation("");
+      setContractor("");
+      setStartDate("");
+      setExpectedEndDate("");
+      setTotalHouses("");
+      setUnitSize("");
+      setProjectType("");
+      
+      onOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isValid = name.trim() && totalHouses;
@@ -170,9 +176,10 @@ export function NewProjectDialog({ open, onOpenChange }: NewProjectDialogProps) 
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={!isValid} className="gap-2">
+          <Button onClick={handleSubmit} disabled={!isValid || isSubmitting} className="gap-2">
+            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Criar Obra
-            <ArrowRight className="h-4 w-4" />
+            {!isSubmitting && <ArrowRight className="h-4 w-4" />}
           </Button>
         </DialogFooter>
       </DialogContent>

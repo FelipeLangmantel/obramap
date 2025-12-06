@@ -14,7 +14,143 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      houses: {
+        Row: {
+          area: number
+          constructor_name: string | null
+          created_at: string
+          expected_date: string | null
+          house_number: number
+          id: string
+          last_update: string
+          macros: Json
+          project_id: string
+          quadra_id: string | null
+          type: string
+        }
+        Insert: {
+          area?: number
+          constructor_name?: string | null
+          created_at?: string
+          expected_date?: string | null
+          house_number: number
+          id?: string
+          last_update?: string
+          macros?: Json
+          project_id: string
+          quadra_id?: string | null
+          type?: string
+        }
+        Update: {
+          area?: number
+          constructor_name?: string | null
+          created_at?: string
+          expected_date?: string | null
+          house_number?: number
+          id?: string
+          last_update?: string
+          macros?: Json
+          project_id?: string
+          quadra_id?: string | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "houses_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "houses_quadra_id_fkey"
+            columns: ["quadra_id"]
+            isOneToOne: false
+            referencedRelation: "quadras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          contractor: string
+          created_at: string
+          expected_end_date: string
+          id: string
+          location: string
+          macros_template: Json
+          name: string
+          project_type: string
+          setup_complete: boolean
+          start_date: string
+          total_houses: number
+          unit_size: number
+          updated_at: string
+        }
+        Insert: {
+          contractor: string
+          created_at?: string
+          expected_end_date: string
+          id?: string
+          location: string
+          macros_template?: Json
+          name: string
+          project_type?: string
+          setup_complete?: boolean
+          start_date: string
+          total_houses?: number
+          unit_size?: number
+          updated_at?: string
+        }
+        Update: {
+          contractor?: string
+          created_at?: string
+          expected_end_date?: string
+          id?: string
+          location?: string
+          macros_template?: Json
+          name?: string
+          project_type?: string
+          setup_complete?: boolean
+          start_date?: string
+          total_houses?: number
+          unit_size?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      quadras: {
+        Row: {
+          created_at: string
+          house_ids: number[]
+          id: string
+          name: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          house_ids?: number[]
+          id?: string
+          name: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          house_ids?: number[]
+          id?: string
+          name?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quadras_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
