@@ -35,7 +35,7 @@ export function HouseDetails() {
       <div className="p-4 border-b border-border flex items-start justify-between shrink-0">
         <div>
           <h3 className="text-lg font-semibold text-foreground">
-            Quadra {house.quadra} - Casa {house.id}
+            Quadra {currentProject.quadras.find(q => q.id === house.quadra)?.name || house.quadra} - Casa {house.id}
           </h3>
           <p className="text-sm text-muted-foreground">
             Última atualização: {house.lastUpdate}
