@@ -1,5 +1,8 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from "react";
 import { House, Macro, Scope, Quadra, MACROS_TEMPLATE, calculateHouseProgress } from "@/data/constructionData";
+import { supabase } from "@/integrations/supabase/client";
+import { Json } from "@/integrations/supabase/types";
+import { toast } from "sonner";
 
 export interface Project {
   id: string;
@@ -23,7 +26,7 @@ interface ConstructionContextType {
   projects: Project[];
   currentProject: Project | null;
   setCurrentProject: (projectId: string | null) => void;
-  addProject: (project: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete">) => string;
+  addProject: (project: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete">) => Promise<string>;
   updateProject: (projectId: string, updates: Partial<Project>) => void;
   deleteProject: (projectId: string) => void;
   completeProjectSetup: (projectId: string) => void;
@@ -60,100 +63,117 @@ interface ConstructionContextType {
   
   // Time calculations
   getDaysRemaining: () => number;
+  
+  // Loading state
+  isLoading: boolean;
 }
 
 const ConstructionContext = createContext<ConstructionContextType | undefined>(undefined);
 
-const DEFAULT_PROJECT: Project = {
-  id: "default",
-  name: "Loteamento TAPEJARA",
-  location: "Tapejara - RS",
-  contractor: "Construtora Principal",
-  startDate: "2024-01-15",
-  expectedEndDate: "2025-12-30",
-  totalHouses: 123,
-  unitSize: 45,
-  projectType: "Residencial Popular",
-  houses: [],
-  quadras: [],
-  macrosTemplate: JSON.parse(JSON.stringify(MACROS_TEMPLATE)),
-  createdAt: new Date().toISOString(),
-  setupComplete: true,
+// Helper to convert Macro[] to Json
+const macrosToJson = (macros: Macro[]): Json => {
+  return macros as unknown as Json;
 };
 
-// Generate initial houses for default project
-function generateDefaultHouses(): House[] {
-  const quadras: Quadra[] = [
-    { id: "A", name: "Quadra A", houses: [1, 2, 3, 4, 5, 6] },
-    { id: "B", name: "Quadra B", houses: [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27] },
-    { id: "C", name: "Quadra C", houses: [28, 29, 30, 31, 32, 33, 34, 35] },
-    { id: "D", name: "Quadra D", houses: [36, 37, 38, 39, 40, 41, 42, 43, 44, 45] },
-    { id: "E", name: "Quadra E", houses: [46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57] },
-    { id: "F", name: "Quadra F", houses: [59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74] },
-    { id: "G", name: "Quadra G", houses: [75, 76, 77, 78, 79, 80, 81, 82] },
-    { id: "H", name: "Quadra H", houses: [83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102] },
-    { id: "I", name: "Quadra I", houses: [103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123] },
-  ];
-  
-  const constructors = ["Construtora Alpha", "Engenharia Beta", "Construções Delta", "Edificações Gama"];
-  const houses: House[] = [];
-  
-  quadras.forEach(quadra => {
-    quadra.houses.forEach(houseNum => {
-      houses.push({
-        id: houseNum,
-        quadra: quadra.id,
-        area: 45,
-        type: "Residencial",
-        constructorName: constructors[Math.floor(Math.random() * constructors.length)],
-        expectedDate: "29/06/2025",
-        lastUpdate: new Date().toLocaleDateString("pt-BR"),
-        macros: MACROS_TEMPLATE.map(macro => ({
-          ...macro,
-          scopes: macro.scopes.map(scope => ({
-            ...scope,
-            progress: Math.floor(Math.random() * 100),
-            startDate: Math.random() > 0.3 ? "2024-06-15" : null,
-            endDate: null,
-          })),
-        })),
-      });
-    });
-  });
-  
-  return houses;
-}
-
-function generateDefaultQuadras(): Quadra[] {
-  return [
-    { id: "A", name: "Quadra A", houses: [1, 2, 3, 4, 5, 6] },
-    { id: "B", name: "Quadra B", houses: [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27] },
-    { id: "C", name: "Quadra C", houses: [28, 29, 30, 31, 32, 33, 34, 35] },
-    { id: "D", name: "Quadra D", houses: [36, 37, 38, 39, 40, 41, 42, 43, 44, 45] },
-    { id: "E", name: "Quadra E", houses: [46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57] },
-    { id: "F", name: "Quadra F", houses: [59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74] },
-    { id: "G", name: "Quadra G", houses: [75, 76, 77, 78, 79, 80, 81, 82] },
-    { id: "H", name: "Quadra H", houses: [83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102] },
-    { id: "I", name: "Quadra I", houses: [103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123] },
-  ];
-}
+// Helper to convert Json to Macro[]
+const jsonToMacros = (json: Json): Macro[] => {
+  if (!json || !Array.isArray(json)) return JSON.parse(JSON.stringify(MACROS_TEMPLATE));
+  return json as unknown as Macro[];
+};
 
 export function ConstructionProvider({ children }: { children: ReactNode }) {
-  const [projects, setProjects] = useState<Project[]>(() => {
-    const defaultWithData = {
-      ...DEFAULT_PROJECT,
-      houses: generateDefaultHouses(),
-      quadras: generateDefaultQuadras(),
-    };
-    return [defaultWithData];
-  });
-  
-  const [currentProjectId, setCurrentProjectId] = useState<string | null>("default");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
   const [filterQuadra, setFilterQuadra] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [isLoading, setIsLoading] = useState(true);
+  const initialLoadDone = useRef(false);
 
   const currentProject = projects.find(p => p.id === currentProjectId) || null;
+
+  // Load projects from database on mount
+  useEffect(() => {
+    if (initialLoadDone.current) return;
+    initialLoadDone.current = true;
+
+    const loadProjects = async () => {
+      setIsLoading(true);
+      try {
+        const { data: projectsData, error: projectsError } = await supabase
+          .from('projects')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (projectsError) {
+          console.error('Error loading projects:', projectsError);
+          setIsLoading(false);
+          return;
+        }
+
+        const loadedProjects: Project[] = [];
+
+        for (const p of projectsData || []) {
+          // Load quadras for this project
+          const { data: quadrasData } = await supabase
+            .from('quadras')
+            .select('*')
+            .eq('project_id', p.id);
+
+          // Load houses for this project
+          const { data: housesData } = await supabase
+            .from('houses')
+            .select('*')
+            .eq('project_id', p.id)
+            .order('house_number', { ascending: true });
+
+          const quadras: Quadra[] = (quadrasData || []).map(q => ({
+            id: q.id,
+            name: q.name,
+            houses: q.house_ids || [],
+          }));
+
+          const houses: House[] = (housesData || []).map(h => ({
+            id: h.house_number,
+            quadra: h.quadra_id || "",
+            area: h.area,
+            type: h.type,
+            constructorName: h.constructor_name || "",
+            expectedDate: h.expected_date || "",
+            lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
+            macros: jsonToMacros(h.macros),
+          }));
+
+          loadedProjects.push({
+            id: p.id,
+            name: p.name,
+            location: p.location,
+            contractor: p.contractor,
+            startDate: p.start_date,
+            expectedEndDate: p.expected_end_date,
+            totalHouses: p.total_houses,
+            unitSize: p.unit_size,
+            projectType: p.project_type,
+            houses,
+            quadras,
+            macrosTemplate: jsonToMacros(p.macros_template),
+            createdAt: p.created_at,
+            setupComplete: p.setup_complete,
+          });
+        }
+
+        setProjects(loadedProjects);
+        if (loadedProjects.length > 0) {
+          setCurrentProjectId(loadedProjects[0].id);
+        }
+      } catch (error) {
+        console.error('Error loading projects:', error);
+      }
+      setIsLoading(false);
+    };
+
+    loadProjects();
+  }, []);
 
   const setCurrentProject = useCallback((projectId: string | null) => {
     setCurrentProjectId(projectId);
@@ -162,14 +182,38 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     setFilterStatus("all");
   }, []);
 
-  const addProject = useCallback((projectData: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete">) => {
-    const newId = `project_${Date.now()}`;
+  const addProject = useCallback(async (projectData: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete">): Promise<string> => {
     const macrosTemplate = JSON.parse(JSON.stringify(MACROS_TEMPLATE));
     
-    // Generate houses immediately with 0% progress
+    // Insert project to database first to get real UUID
+    const { data: newProjectData, error: projectError } = await supabase
+      .from('projects')
+      .insert({
+        name: projectData.name,
+        location: projectData.location,
+        contractor: projectData.contractor,
+        start_date: projectData.startDate,
+        expected_end_date: projectData.expectedEndDate,
+        total_houses: projectData.totalHouses,
+        unit_size: projectData.unitSize,
+        project_type: projectData.projectType,
+        macros_template: macrosToJson(macrosTemplate),
+        setup_complete: false,
+      })
+      .select()
+      .single();
+
+    if (projectError || !newProjectData) {
+      console.error('Error creating project:', projectError);
+      toast.error("Erro ao criar projeto");
+      return "";
+    }
+
+    // Generate houses with 0% progress
     const houses: House[] = [];
+    const housesInsert = [];
     for (let i = 1; i <= projectData.totalHouses; i++) {
-      houses.push({
+      const house: House = {
         id: i,
         quadra: "",
         area: projectData.unitSize,
@@ -186,24 +230,47 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             endDate: null,
           })),
         })),
+      };
+      houses.push(house);
+      housesInsert.push({
+        project_id: newProjectData.id,
+        house_number: i,
+        area: projectData.unitSize,
+        type: projectData.projectType,
+        constructor_name: projectData.contractor,
+        expected_date: projectData.expectedEndDate,
+        macros: macrosToJson(house.macros),
       });
+    }
+
+    // Insert houses to database
+    if (housesInsert.length > 0) {
+      const { error: housesError } = await supabase
+        .from('houses')
+        .insert(housesInsert);
+
+      if (housesError) {
+        console.error('Error creating houses:', housesError);
+      }
     }
     
     const newProject: Project = {
       ...projectData,
-      id: newId,
+      id: newProjectData.id,
       houses,
       quadras: [],
       macrosTemplate,
-      createdAt: new Date().toISOString(),
+      createdAt: newProjectData.created_at,
       setupComplete: false,
     };
-    setProjects(prev => [...prev, newProject]);
-    setCurrentProjectId(newId);
-    return newId;
+
+    setProjects(prev => [newProject, ...prev]);
+    setCurrentProjectId(newProjectData.id);
+    toast.success("Obra criada com sucesso!");
+    return newProjectData.id;
   }, []);
 
-  const updateProject = useCallback((projectId: string, updates: Partial<Project>) => {
+  const updateProject = useCallback(async (projectId: string, updates: Partial<Project>) => {
     setProjects(prev => {
       const newProjects = prev.map(p => {
         if (p.id !== projectId) return p;
@@ -288,30 +355,109 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         }
       }
       
+      // Save to database
+      const updatedProject = newProjects.find(p => p.id === projectId);
+      if (updatedProject) {
+        supabase
+          .from('projects')
+          .update({
+            name: updatedProject.name,
+            location: updatedProject.location,
+            contractor: updatedProject.contractor,
+            start_date: updatedProject.startDate,
+            expected_end_date: updatedProject.expectedEndDate,
+            total_houses: updatedProject.totalHouses,
+            unit_size: updatedProject.unitSize,
+            project_type: updatedProject.projectType,
+            macros_template: macrosToJson(updatedProject.macrosTemplate),
+            setup_complete: updatedProject.setupComplete,
+          })
+          .eq('id', projectId)
+          .then(({ error }) => {
+            if (error) console.error('Error updating project:', error);
+          });
+
+        // Update houses in database
+        const saveHousesToDb = async () => {
+          // Delete existing houses
+          await supabase.from('houses').delete().eq('project_id', projectId);
+          
+          // Insert updated houses
+          if (updatedProject.houses.length > 0) {
+            const housesInsert = updatedProject.houses.map(h => ({
+              project_id: projectId,
+              house_number: h.id,
+              quadra_id: h.quadra || null,
+              area: h.area,
+              type: h.type,
+              constructor_name: h.constructorName,
+              expected_date: h.expectedDate || null,
+              macros: macrosToJson(h.macros),
+            }));
+            
+            await supabase.from('houses').insert(housesInsert);
+          }
+        };
+        saveHousesToDb();
+      }
+      
       return newProjects;
     });
   }, [currentProjectId, selectedHouse]);
 
-  const deleteProject = useCallback((projectId: string) => {
+  const deleteProject = useCallback(async (projectId: string) => {
+    // Delete from database
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('id', projectId);
+
+    if (error) {
+      console.error('Error deleting project:', error);
+      toast.error("Erro ao excluir projeto");
+      return;
+    }
+
     setProjects(prev => prev.filter(p => p.id !== projectId));
     if (currentProjectId === projectId) {
       const remaining = projects.filter(p => p.id !== projectId);
       setCurrentProjectId(remaining.length > 0 ? remaining[0].id : null);
     }
+    toast.success("Projeto excluído");
   }, [currentProjectId, projects]);
 
-  const completeProjectSetup = useCallback((projectId: string) => {
+  const completeProjectSetup = useCallback(async (projectId: string) => {
     setProjects(prev => prev.map(p => 
       p.id === projectId ? { ...p, setupComplete: true } : p
     ));
+
+    await supabase
+      .from('projects')
+      .update({ setup_complete: true })
+      .eq('id', projectId);
   }, []);
 
   // Quadra management
-  const addQuadra = useCallback((name: string, houseIds: number[]) => {
+  const addQuadra = useCallback(async (name: string, houseIds: number[]) => {
     if (!currentProjectId) return;
     
+    const { data: quadraData, error } = await supabase
+      .from('quadras')
+      .insert({
+        project_id: currentProjectId,
+        name,
+        house_ids: houseIds,
+      })
+      .select()
+      .single();
+
+    if (error || !quadraData) {
+      console.error('Error creating quadra:', error);
+      return;
+    }
+
     const newQuadra: Quadra = {
-      id: `quadra_${Date.now()}`,
+      id: quadraData.id,
       name,
       houses: houseIds,
     };
@@ -330,13 +476,31 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         houses: updatedHouses,
       };
     }));
+
+    // Update houses in database
+    for (const houseId of houseIds) {
+      await supabase
+        .from('houses')
+        .update({ quadra_id: quadraData.id })
+        .eq('project_id', currentProjectId)
+        .eq('house_number', houseId);
+    }
   }, [currentProjectId]);
 
-  const updateQuadra = useCallback((quadraId: string, name: string, houseIds: number[]) => {
+  const updateQuadra = useCallback(async (quadraId: string, name: string, houseIds: number[]) => {
     if (!currentProjectId) return;
     
+    // Update quadra in database
+    await supabase
+      .from('quadras')
+      .update({ name, house_ids: houseIds })
+      .eq('id', quadraId);
+
     setProjects(prev => prev.map(p => {
       if (p.id !== currentProjectId) return p;
+      
+      const oldQuadra = p.quadras.find(q => q.id === quadraId);
+      const oldHouseIds = oldQuadra?.houses || [];
       
       const updatedQuadras = p.quadras.map(q => 
         q.id === quadraId ? { ...q, name, houses: houseIds } : q
@@ -352,14 +516,43 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         }
         return h;
       });
+
+      // Update houses in database
+      const updateHousesInDb = async () => {
+        // Remove old houses from quadra
+        for (const houseId of oldHouseIds) {
+          if (!houseIds.includes(houseId)) {
+            await supabase
+              .from('houses')
+              .update({ quadra_id: null })
+              .eq('project_id', currentProjectId)
+              .eq('house_number', houseId);
+          }
+        }
+        // Add new houses to quadra
+        for (const houseId of houseIds) {
+          await supabase
+            .from('houses')
+            .update({ quadra_id: quadraId })
+            .eq('project_id', currentProjectId)
+            .eq('house_number', houseId);
+        }
+      };
+      updateHousesInDb();
       
       return { ...p, quadras: updatedQuadras, houses: updatedHouses };
     }));
   }, [currentProjectId]);
 
-  const deleteQuadra = useCallback((quadraId: string) => {
+  const deleteQuadra = useCallback(async (quadraId: string) => {
     if (!currentProjectId) return;
     
+    // Delete from database
+    await supabase
+      .from('quadras')
+      .delete()
+      .eq('id', quadraId);
+
     setProjects(prev => prev.map(p => {
       if (p.id !== currentProjectId) return p;
       
@@ -373,14 +566,22 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         houses: updatedHouses,
       };
     }));
+
+    // Update houses in database
+    await supabase
+      .from('houses')
+      .update({ quadra_id: null })
+      .eq('project_id', currentProjectId)
+      .eq('quadra_id', quadraId);
   }, [currentProjectId]);
 
-  const generateHousesForProject = useCallback(() => {
+  const generateHousesForProject = useCallback(async () => {
     if (!currentProjectId || !currentProject) return;
     
     const houses: House[] = [];
+    const housesInsert = [];
     for (let i = 1; i <= currentProject.totalHouses; i++) {
-      houses.push({
+      const house: House = {
         id: i,
         quadra: "",
         area: currentProject.unitSize,
@@ -397,15 +598,31 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             endDate: null,
           })),
         })),
+      };
+      houses.push(house);
+      housesInsert.push({
+        project_id: currentProjectId,
+        house_number: i,
+        area: currentProject.unitSize,
+        type: currentProject.projectType,
+        constructor_name: currentProject.contractor,
+        expected_date: currentProject.expectedEndDate,
+        macros: macrosToJson(house.macros),
       });
     }
     
+    // Delete existing and insert new houses
+    await supabase.from('houses').delete().eq('project_id', currentProjectId);
+    if (housesInsert.length > 0) {
+      await supabase.from('houses').insert(housesInsert);
+    }
+
     setProjects(prev => prev.map(p => 
       p.id === currentProjectId ? { ...p, houses } : p
     ));
   }, [currentProjectId, currentProject]);
 
-  const moveHouseToQuadra = useCallback((houseId: number, newQuadraId: string) => {
+  const moveHouseToQuadra = useCallback(async (houseId: number, newQuadraId: string) => {
     if (!currentProjectId) return;
     
     setProjects(prev => prev.map(p => {
@@ -427,10 +644,32 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       return { ...p, houses: updatedHouses, quadras: updatedQuadras };
     }));
 
+    // Update in database
+    await supabase
+      .from('houses')
+      .update({ quadra_id: newQuadraId })
+      .eq('project_id', currentProjectId)
+      .eq('house_number', houseId);
+
+    // Update quadras in database
+    const project = projects.find(p => p.id === currentProjectId);
+    if (project) {
+      for (const q of project.quadras) {
+        const newHouses = q.id === newQuadraId 
+          ? [...q.houses.filter(id => id !== houseId), houseId].sort((a, b) => a - b)
+          : q.houses.filter(id => id !== houseId);
+        
+        await supabase
+          .from('quadras')
+          .update({ house_ids: newHouses })
+          .eq('id', q.id);
+      }
+    }
+
     if (selectedHouse?.id === houseId) {
       setSelectedHouse(prev => prev ? { ...prev, quadra: newQuadraId } : null);
     }
-  }, [currentProjectId, selectedHouse]);
+  }, [currentProjectId, selectedHouse, projects]);
 
   // Sync macros to houses helper
   const syncMacrosToHouses = useCallback((newTemplate: Macro[]) => {
@@ -486,14 +725,30 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       name,
       scopes: [],
     };
-    syncMacrosToHouses([...currentProject.macrosTemplate, newMacro]);
+    
+    const newTemplate = [...currentProject.macrosTemplate, newMacro];
+    syncMacrosToHouses(newTemplate);
+
+    // Update in database
+    supabase
+      .from('projects')
+      .update({ macros_template: macrosToJson(newTemplate) })
+      .eq('id', currentProject.id);
   }, [currentProject, syncMacrosToHouses]);
 
   const updateMacro = useCallback((macroId: string, name: string) => {
     if (!currentProject) return;
     
-    const newTemplate = currentProject.macrosTemplate.map(m => m.id === macroId ? { ...m, name } : m);
+    const newTemplate = currentProject.macrosTemplate.map(m => 
+      m.id === macroId ? { ...m, name } : m
+    );
     syncMacrosToHouses(newTemplate);
+
+    // Update in database
+    supabase
+      .from('projects')
+      .update({ macros_template: macrosToJson(newTemplate) })
+      .eq('id', currentProject.id);
   }, [currentProject, syncMacrosToHouses]);
 
   const deleteMacro = useCallback((macroId: string) => {
@@ -501,6 +756,12 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     
     const newTemplate = currentProject.macrosTemplate.filter(m => m.id !== macroId);
     syncMacrosToHouses(newTemplate);
+
+    // Update in database
+    supabase
+      .from('projects')
+      .update({ macros_template: macrosToJson(newTemplate) })
+      .eq('id', currentProject.id);
   }, [currentProject, syncMacrosToHouses]);
 
   // Scope management
@@ -515,10 +776,19 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       startDate: null,
       endDate: null,
     };
+    
     const newTemplate = currentProject.macrosTemplate.map(m => 
-      m.id === macroId ? { ...m, scopes: [...m.scopes, newScope] } : m
+      m.id === macroId 
+        ? { ...m, scopes: [...m.scopes, newScope] }
+        : m
     );
     syncMacrosToHouses(newTemplate);
+
+    // Update in database
+    supabase
+      .from('projects')
+      .update({ macros_template: macrosToJson(newTemplate) })
+      .eq('id', currentProject.id);
   }, [currentProject, syncMacrosToHouses]);
 
   const updateScope = useCallback((macroId: string, scopeId: string, updates: Partial<Pick<Scope, "name" | "weight">>) => {
@@ -530,20 +800,35 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         : m
     );
     syncMacrosToHouses(newTemplate);
+
+    // Update in database
+    supabase
+      .from('projects')
+      .update({ macros_template: macrosToJson(newTemplate) })
+      .eq('id', currentProject.id);
   }, [currentProject, syncMacrosToHouses]);
 
   const deleteScope = useCallback((macroId: string, scopeId: string) => {
     if (!currentProject) return;
     
     const newTemplate = currentProject.macrosTemplate.map(m => 
-      m.id === macroId ? { ...m, scopes: m.scopes.filter(s => s.id !== scopeId) } : m
+      m.id === macroId 
+        ? { ...m, scopes: m.scopes.filter(s => s.id !== scopeId) }
+        : m
     );
     syncMacrosToHouses(newTemplate);
+
+    // Update in database
+    supabase
+      .from('projects')
+      .update({ macros_template: macrosToJson(newTemplate) })
+      .eq('id', currentProject.id);
   }, [currentProject, syncMacrosToHouses]);
 
-  const updateScopeProgress = useCallback((houseId: number, macroId: string, scopeId: string, progress: number, startDate?: string | null, endDate?: string | null) => {
+  // House updates
+  const updateScopeProgress = useCallback(async (houseId: number, macroId: string, scopeId: string, progress: number, startDate?: string | null, endDate?: string | null) => {
     if (!currentProjectId) return;
-    
+
     setProjects(prev => prev.map(p => {
       if (p.id !== currentProjectId) return p;
       
@@ -555,37 +840,58 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
           
           const updatedScopes = macro.scopes.map(scope => {
             if (scope.id !== scopeId) return scope;
-            
-            const now = new Date().toLocaleDateString("pt-BR");
             return {
               ...scope,
               progress,
-              startDate: startDate !== undefined ? startDate : (scope.startDate || (progress > 0 ? now : null)),
-              endDate: endDate !== undefined ? endDate : (progress === 100 ? now : null),
+              startDate: startDate !== undefined ? startDate : scope.startDate,
+              endDate: endDate !== undefined ? endDate : scope.endDate,
             };
           });
           
           return { ...macro, scopes: updatedScopes };
         });
         
-        const updatedHouse = { 
-          ...house, 
-          macros: updatedMacros,
-          lastUpdate: new Date().toLocaleDateString("pt-BR"),
-        };
-        
-        if (selectedHouse?.id === houseId) {
-          setSelectedHouse(updatedHouse);
-        }
-        
-        return updatedHouse;
+        return { ...house, macros: updatedMacros, lastUpdate: new Date().toLocaleDateString("pt-BR") };
       });
+      
+      // Update in database
+      const updatedHouse = updatedHouses.find(h => h.id === houseId);
+      if (updatedHouse) {
+        supabase
+          .from('houses')
+          .update({ 
+            macros: macrosToJson(updatedHouse.macros),
+            last_update: new Date().toISOString().split('T')[0]
+          })
+          .eq('project_id', currentProjectId)
+          .eq('house_number', houseId);
+      }
       
       return { ...p, houses: updatedHouses };
     }));
+
+    if (selectedHouse?.id === houseId) {
+      setSelectedHouse(prev => {
+        if (!prev) return null;
+        const updatedMacros = prev.macros.map(macro => {
+          if (macro.id !== macroId) return macro;
+          const updatedScopes = macro.scopes.map(scope => {
+            if (scope.id !== scopeId) return scope;
+            return {
+              ...scope,
+              progress,
+              startDate: startDate !== undefined ? startDate : scope.startDate,
+              endDate: endDate !== undefined ? endDate : scope.endDate,
+            };
+          });
+          return { ...macro, scopes: updatedScopes };
+        });
+        return { ...prev, macros: updatedMacros, lastUpdate: new Date().toLocaleDateString("pt-BR") };
+      });
+    }
   }, [currentProjectId, selectedHouse]);
 
-  const updateHouseInfo = useCallback((houseId: number, updates: Partial<Pick<House, "area" | "constructorName" | "type" | "expectedDate">>) => {
+  const updateHouseInfo = useCallback(async (houseId: number, updates: Partial<Pick<House, "area" | "constructorName" | "type" | "expectedDate">>) => {
     if (!currentProjectId) return;
     
     setProjects(prev => prev.map(p => {
@@ -593,25 +899,33 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       
       const updatedHouses = p.houses.map(house => {
         if (house.id !== houseId) return house;
-        
-        const updatedHouse = { 
-          ...house, 
-          ...updates,
-          lastUpdate: new Date().toLocaleDateString("pt-BR"),
-        };
-        
-        if (selectedHouse?.id === houseId) {
-          setSelectedHouse(updatedHouse);
-        }
-        
-        return updatedHouse;
+        return { ...house, ...updates, lastUpdate: new Date().toLocaleDateString("pt-BR") };
       });
       
       return { ...p, houses: updatedHouses };
     }));
+
+    // Update in database
+    const dbUpdates: Record<string, unknown> = {
+      last_update: new Date().toISOString().split('T')[0]
+    };
+    if (updates.area !== undefined) dbUpdates.area = updates.area;
+    if (updates.constructorName !== undefined) dbUpdates.constructor_name = updates.constructorName;
+    if (updates.type !== undefined) dbUpdates.type = updates.type;
+    if (updates.expectedDate !== undefined) dbUpdates.expected_date = updates.expectedDate;
+
+    await supabase
+      .from('houses')
+      .update(dbUpdates)
+      .eq('project_id', currentProjectId)
+      .eq('house_number', houseId);
+
+    if (selectedHouse?.id === houseId) {
+      setSelectedHouse(prev => prev ? { ...prev, ...updates, lastUpdate: new Date().toLocaleDateString("pt-BR") } : null);
+    }
   }, [currentProjectId, selectedHouse]);
 
-  const getHouseProgress = useCallback((houseId: number) => {
+  const getHouseProgress = useCallback((houseId: number): number => {
     if (!currentProject) return 0;
     const house = currentProject.houses.find(h => h.id === houseId);
     return house ? calculateHouseProgress(house) : 0;
@@ -619,10 +933,12 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
 
   const getDaysRemaining = useCallback(() => {
     if (!currentProject) return 0;
+    
     const endDate = new Date(currentProject.expectedEndDate);
     const today = new Date();
     const diffTime = endDate.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
     return Math.max(0, diffDays);
   }, [currentProject]);
 
@@ -657,6 +973,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         updateScope,
         deleteScope,
         getDaysRemaining,
+        isLoading,
       }}
     >
       {children}
@@ -666,7 +983,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
 
 export function useConstruction() {
   const context = useContext(ConstructionContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error("useConstruction must be used within a ConstructionProvider");
   }
   return context;
