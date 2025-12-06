@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import {
   Dialog,
@@ -17,7 +17,11 @@ import {
   Save, 
   X, 
   Grid3X3,
-  Home
+  Home,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
+  Sparkles
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,8 +32,51 @@ interface ManageQuadrasDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+// Detect naming pattern type
+type NamingPattern = "letter" | "number" | "custom";
+
+function detectNamingPattern(names: string[]): NamingPattern {
+  if (names.length === 0) return "letter";
+  
+  const allLetters = names.every(name => /^[A-Za-z]$/.test(name.trim()));
+  const allNumbers = names.every(name => /^\d+$/.test(name.trim()));
+  
+  if (allLetters) return "letter";
+  if (allNumbers) return "number";
+  return "custom";
+}
+
+function getNextInSequence(names: string[], pattern: NamingPattern): string {
+  if (names.length === 0) {
+    return pattern === "number" ? "1" : "A";
+  }
+
+  if (pattern === "letter") {
+    const letters = names.map(n => n.trim().toUpperCase()).filter(n => /^[A-Z]$/.test(n)).sort();
+    if (letters.length === 0) return "A";
+    
+    // Find the next available letter
+    const usedSet = new Set(letters);
+    for (let i = 0; i < 26; i++) {
+      const letter = String.fromCharCode(65 + i);
+      if (!usedSet.has(letter)) return letter;
+    }
+    return "AA"; // fallback if all letters used
+  }
+  
+  if (pattern === "number") {
+    const numbers = names.map(n => parseInt(n.trim())).filter(n => !isNaN(n));
+    if (numbers.length === 0) return "1";
+    
+    const maxNum = Math.max(...numbers);
+    return String(maxNum + 1);
+  }
+  
+  return `Quadra ${names.length + 1}`;
+}
+
 export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogProps) {
-  const { currentProject, addQuadra, updateQuadra, deleteQuadra } = useConstruction();
+  const { currentProject, addQuadra, updateQuadra, deleteQuadra, reorderQuadras } = useConstruction();
   
   const [newQuadraName, setNewQuadraName] = useState("");
   const [selectedHouseIds, setSelectedHouseIds] = useState<number[]>([]);
@@ -37,6 +84,26 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
   const [editingName, setEditingName] = useState("");
   const [editingHouseIds, setEditingHouseIds] = useState<number[]>([]);
   const [isAdding, setIsAdding] = useState(false);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+  // Detect current naming pattern
+  const namingPattern = useMemo(() => {
+    if (!currentProject) return "letter" as NamingPattern;
+    return detectNamingPattern(currentProject.quadras.map(q => q.name));
+  }, [currentProject?.quadras]);
+
+  // Auto-suggest next name
+  const suggestedName = useMemo(() => {
+    if (!currentProject) return "A";
+    return getNextInSequence(currentProject.quadras.map(q => q.name), namingPattern);
+  }, [currentProject?.quadras, namingPattern]);
+
+  // Auto-fill suggested name when opening add form
+  useEffect(() => {
+    if (isAdding && !newQuadraName) {
+      setNewQuadraName(suggestedName);
+    }
+  }, [isAdding, suggestedName]);
 
   // Get all houses that are not assigned to any quadra
   const getUnassignedHouses = () => {
@@ -47,12 +114,6 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
     return currentProject.houses
       .filter(h => !assignedHouseIds.has(h.id))
       .map(h => h.id);
-  };
-
-  // Get houses assigned to a specific quadra
-  const getQuadraHouses = (quadraId: string) => {
-    const quadra = currentProject?.quadras.find(q => q.id === quadraId);
-    return quadra?.houses || [];
   };
 
   const handleAddQuadra = () => {
@@ -128,6 +189,42 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
     setSelectedHouseIds(getUnassignedHouses());
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index || !currentProject) return;
+
+    const newQuadras = [...currentProject.quadras];
+    const [draggedItem] = newQuadras.splice(draggedIndex, 1);
+    newQuadras.splice(index, 0, draggedItem);
+    
+    reorderQuadras(newQuadras.map(q => q.id));
+    setDraggedIndex(index);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    toast.success("Ordem das quadras atualizada!");
+  };
+
+  // Move quadra up/down
+  const moveQuadra = (index: number, direction: "up" | "down") => {
+    if (!currentProject) return;
+    
+    const newIndex = direction === "up" ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= currentProject.quadras.length) return;
+
+    const newQuadras = [...currentProject.quadras];
+    [newQuadras[index], newQuadras[newIndex]] = [newQuadras[newIndex], newQuadras[index]];
+    
+    reorderQuadras(newQuadras.map(q => q.id));
+    toast.success("Ordem atualizada!");
+  };
+
   if (!currentProject) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -158,7 +255,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
         <div className="flex-1 overflow-y-auto min-h-0">
           <div className="space-y-4 pr-2 pb-4">
             {/* Summary */}
-            <div className="flex gap-4 text-sm">
+            <div className="flex flex-wrap gap-2 text-sm">
               <Badge variant="outline" className="gap-1">
                 <Home className="h-3 w-3" />
                 Total: {currentProject.houses.length} casas
@@ -169,6 +266,10 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
               </Badge>
               <Badge variant="secondary" className="gap-1">
                 {unassignedHouses.length} casas sem quadra
+              </Badge>
+              <Badge variant="outline" className="gap-1 ml-auto">
+                <Sparkles className="h-3 w-3" />
+                Padrão: {namingPattern === "letter" ? "Letras (A, B, C...)" : namingPattern === "number" ? "Números (1, 2, 3...)" : "Personalizado"}
               </Badge>
             </div>
 
@@ -184,7 +285,12 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
             {isAdding && (
               <Card className="border-primary">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Nova Quadra</CardTitle>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    Nova Quadra
+                    <Badge variant="secondary" className="text-xs">
+                      Sugerido: {suggestedName}
+                    </Badge>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
@@ -192,8 +298,12 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                     <Input
                       value={newQuadraName}
                       onChange={(e) => setNewQuadraName(e.target.value)}
-                      placeholder="Ex: Quadra A, Bloco 1..."
+                      placeholder={`Ex: ${suggestedName}`}
                     />
+                    <p className="text-xs text-muted-foreground">
+                      O sistema detectou padrão de {namingPattern === "letter" ? "letras" : namingPattern === "number" ? "números" : "nomes personalizados"}. 
+                      A próxima sugestão é "{suggestedName}".
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -258,113 +368,153 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
               </Card>
             )}
 
-            {/* Existing Quadras */}
-            <div className="space-y-3">
+            {/* Existing Quadras with Drag & Drop */}
+            <div className="space-y-2">
               {currentProject.quadras.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8">
                   Nenhuma quadra cadastrada
                 </div>
               ) : (
-                currentProject.quadras.map(quadra => (
-                  <Card key={quadra.id} className={editingQuadraId === quadra.id ? "border-primary" : ""}>
-                    <CardContent className="p-4">
-                      {editingQuadraId === quadra.id ? (
-                        // Editing mode
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label>Nome da Quadra</Label>
-                            <Input
-                              value={editingName}
-                              onChange={(e) => setEditingName(e.target.value)}
-                            />
-                          </div>
+                <>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <GripVertical className="h-3 w-3" />
+                    Arraste para reordenar ou use as setas
+                  </p>
+                  {currentProject.quadras.map((quadra, index) => (
+                    <Card 
+                      key={quadra.id} 
+                      className={`
+                        ${editingQuadraId === quadra.id ? "border-primary" : ""}
+                        ${draggedIndex === index ? "opacity-50 border-dashed" : ""}
+                        transition-all
+                      `}
+                      draggable={editingQuadraId !== quadra.id}
+                      onDragStart={() => handleDragStart(index)}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <CardContent className="p-4">
+                        {editingQuadraId === quadra.id ? (
+                          // Editing mode
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label>Nome da Quadra</Label>
+                              <Input
+                                value={editingName}
+                                onChange={(e) => setEditingName(e.target.value)}
+                              />
+                            </div>
 
-                          <div className="space-y-2">
-                            <Label>Casas ({editingHouseIds.length} selecionadas)</Label>
-                            <ScrollArea className="h-40 border rounded-md p-3">
-                              <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-1">
-                                {/* Show current houses + unassigned houses */}
-                                {[...quadra.houses, ...unassignedHouses]
-                                  .sort((a, b) => a - b)
-                                  .map(houseId => (
-                                    <button
+                            <div className="space-y-2">
+                              <Label>Casas ({editingHouseIds.length} selecionadas)</Label>
+                              <ScrollArea className="h-40 border rounded-md p-3">
+                                <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-1">
+                                  {/* Show current houses + unassigned houses */}
+                                  {[...quadra.houses, ...unassignedHouses]
+                                    .sort((a, b) => a - b)
+                                    .map(houseId => (
+                                      <button
+                                        key={houseId}
+                                        onClick={() => toggleHouseSelection(houseId, true)}
+                                        className={`
+                                          h-8 w-8 text-xs rounded border transition-colors
+                                          ${editingHouseIds.includes(houseId)
+                                            ? 'bg-primary text-primary-foreground border-primary'
+                                            : 'bg-card hover:bg-accent border-border'
+                                          }
+                                        `}
+                                      >
+                                        {houseId}
+                                      </button>
+                                    ))}
+                                </div>
+                              </ScrollArea>
+                            </div>
+
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={handleSaveEdit} className="gap-2">
+                                <Save className="h-4 w-4" />
+                                Salvar
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={handleCancelEdit}>
+                                <X className="h-4 w-4 mr-2" />
+                                Cancelar
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          // View mode
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-2">
+                              <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-medium">{quadra.name}</h4>
+                                  <Badge variant="secondary" className="text-xs">
+                                    {quadra.houses.length} casas
+                                  </Badge>
+                                </div>
+                                <div className="flex flex-wrap gap-1">
+                                  {quadra.houses.slice(0, 20).map(houseId => (
+                                    <span 
                                       key={houseId}
-                                      onClick={() => toggleHouseSelection(houseId, true)}
-                                      className={`
-                                        h-8 w-8 text-xs rounded border transition-colors
-                                        ${editingHouseIds.includes(houseId)
-                                          ? 'bg-primary text-primary-foreground border-primary'
-                                          : 'bg-card hover:bg-accent border-border'
-                                        }
-                                      `}
+                                      className="inline-flex items-center justify-center h-6 w-6 text-xs bg-muted rounded"
                                     >
                                       {houseId}
-                                    </button>
+                                    </span>
                                   ))}
+                                  {quadra.houses.length > 20 && (
+                                    <span className="text-xs text-muted-foreground ml-1 flex items-center">
+                                      +{quadra.houses.length - 20} mais
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                            </ScrollArea>
-                          </div>
-
-                          <div className="flex gap-2">
-                            <Button size="sm" onClick={handleSaveEdit} className="gap-2">
-                              <Save className="h-4 w-4" />
-                              Salvar
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={handleCancelEdit}>
-                              <X className="h-4 w-4 mr-2" />
-                              Cancelar
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        // View mode
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <h4 className="font-medium">{quadra.name}</h4>
-                              <Badge variant="secondary" className="text-xs">
-                                {quadra.houses.length} casas
-                              </Badge>
                             </div>
-                            <div className="flex flex-wrap gap-1">
-                              {quadra.houses.slice(0, 30).map(houseId => (
-                                <span 
-                                  key={houseId}
-                                  className="inline-flex items-center justify-center h-6 w-6 text-xs bg-muted rounded"
+                            
+                            <div className="flex gap-1 items-center">
+                              <div className="flex flex-col">
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6"
+                                  onClick={() => moveQuadra(index, "up")}
+                                  disabled={index === 0}
                                 >
-                                  {houseId}
-                                </span>
-                              ))}
-                              {quadra.houses.length > 30 && (
-                                <span className="text-xs text-muted-foreground ml-1 flex items-center">
-                                  +{quadra.houses.length - 30} mais
-                                </span>
-                              )}
+                                  <ArrowUp className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6"
+                                  onClick={() => moveQuadra(index, "down")}
+                                  disabled={index === currentProject.quadras.length - 1}
+                                >
+                                  <ArrowDown className="h-3 w-3" />
+                                </Button>
+                              </div>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleStartEdit(quadra.id)}
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => handleDeleteQuadra(quadra.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
                           </div>
-                          
-                          <div className="flex gap-1">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => handleStartEdit(quadra.id)}
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => handleDeleteQuadra(quadra.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </>
               )}
             </div>
           </div>
