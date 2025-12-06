@@ -36,7 +36,15 @@ export function ScopesList({ house }: ScopesListProps) {
             className="border border-border rounded-lg overflow-hidden"
           >
             <AccordionTrigger className="px-3 py-2 hover:no-underline hover:bg-secondary/50">
-              <span className="text-sm font-medium">{macro.name}</span>
+              <div className="flex items-center justify-between w-full pr-2">
+                <span className="text-sm font-medium">{macro.name}</span>
+                <span className="text-xs font-medium text-muted-foreground ml-2">
+                  {macro.scopes.length > 0 
+                    ? `${Math.round(macro.scopes.reduce((sum, s) => sum + s.progress, 0) / macro.scopes.length)}%`
+                    : "0%"
+                  }
+                </span>
+              </div>
             </AccordionTrigger>
             <AccordionContent className="px-3 pb-3">
               <div className="space-y-2">
