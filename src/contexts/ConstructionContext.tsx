@@ -53,6 +53,7 @@ interface ConstructionContextType {
   addQuadra: (name: string, houseIds: number[]) => void;
   updateQuadra: (quadraId: string, name: string, houseIds: number[]) => void;
   deleteQuadra: (quadraId: string) => void;
+  reorderQuadras: (orderedIds: string[]) => void;
   generateHousesForProject: () => void;
   
   // Houses
@@ -610,6 +611,24 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       .eq('quadra_id', quadraId);
   }, [currentProjectId]);
 
+  const reorderQuadras = useCallback(async (orderedIds: string[]) => {
+    if (!currentProjectId) return;
+
+    setProjects(prev => prev.map(p => {
+      if (p.id !== currentProjectId) return p;
+      
+      // Reorder quadras based on orderedIds
+      const reorderedQuadras = orderedIds
+        .map(id => p.quadras.find(q => q.id === id))
+        .filter((q): q is typeof p.quadras[0] => q !== undefined);
+      
+      return { ...p, quadras: reorderedQuadras };
+    }));
+
+    // Note: The order is maintained in the local state
+    // If needed, add an 'order' column to the quadras table for persistence
+  }, [currentProjectId]);
+
   const generateHousesForProject = useCallback(async () => {
     if (!currentProjectId || !currentProject) return;
     
@@ -1082,6 +1101,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         updateHouseInfo,
         getHouseProgress,
         moveHouseToQuadra,
+        reorderQuadras,
         filterQuadra,
         setFilterQuadra,
         filterStatus,
