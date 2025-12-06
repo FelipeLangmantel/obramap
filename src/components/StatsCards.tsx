@@ -1,20 +1,27 @@
 import { Home, TrendingUp, CheckCircle2, Clock } from "lucide-react";
 import { useConstruction } from "@/contexts/ConstructionContext";
-import { calculateHouseProgress, getStatusFromProgress } from "@/data/constructionData";
+import { calculateHouseProgress } from "@/data/constructionData";
 import { useMemo } from "react";
 
 export function StatsCards() {
-  const { houses } = useConstruction();
+  const { currentProject } = useConstruction();
   
   const stats = useMemo(() => {
+    if (!currentProject) return { total: 0, avgProgress: 0, completed: 0, inProgress: 0 };
+    
+    const houses = currentProject.houses;
     const total = houses.length;
+    if (total === 0) return { total: 0, avgProgress: 0, completed: 0, inProgress: 0 };
+    
     const progresses = houses.map(h => calculateHouseProgress(h));
     const avgProgress = Math.round(progresses.reduce((a, b) => a + b, 0) / total);
     const completed = progresses.filter(p => p === 100).length;
     const inProgress = progresses.filter(p => p > 0 && p < 100).length;
     
     return { total, avgProgress, completed, inProgress };
-  }, [houses]);
+  }, [currentProject]);
+
+  if (!currentProject) return null;
 
   const cards = [
     {

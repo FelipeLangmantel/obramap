@@ -3,7 +3,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useConstruction } from "@/contexts/ConstructionContext";
 
 export function FilterBar() {
-  const { filterQuadra, setFilterQuadra, filterStatus, setFilterStatus, quadras } = useConstruction();
+  const { currentProject, filterQuadra, setFilterQuadra, filterStatus, setFilterStatus } = useConstruction();
+
+  if (!currentProject) return null;
+
+  const quadras = currentProject.quadras;
 
   return (
     <div className="flex flex-wrap items-center gap-3">

@@ -1,26 +1,22 @@
-import { Building2, User } from "lucide-react";
-import { useConstruction } from "@/contexts/ConstructionContext";
+import { ProjectSelector } from "./ProjectSelector";
 
 export function Header() {
-  const { projectInfo } = useConstruction();
-  
   return (
-    <header className="h-16 bg-card border-b border-border flex items-center justify-between px-6 sticky top-0 z-50">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-          <Building2 className="w-5 h-5 text-primary-foreground" />
+    <header className="bg-card border-b border-border px-4 py-3 lg:px-6 lg:py-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
+              <span className="text-primary-foreground font-bold text-lg">🏗️</span>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-foreground">Acompanhamento de Obras</h1>
+              <p className="text-sm text-muted-foreground">Sistema de Gestão</p>
+            </div>
+          </div>
         </div>
-        <div>
-          <h1 className="text-lg font-semibold text-foreground">{projectInfo.name}</h1>
-          <p className="text-sm text-muted-foreground">Acompanhamento de Obras</p>
-        </div>
-      </div>
-      
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <User className="w-5 h-5" />
-          <span className="text-sm font-medium">Usuário</span>
-        </div>
+        
+        <ProjectSelector />
       </div>
     </header>
   );

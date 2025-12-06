@@ -10,9 +10,13 @@ interface QuadraCardProps {
 }
 
 export function QuadraCard({ quadraId }: QuadraCardProps) {
-  const { houses, filterStatus, quadras, moveHouseToQuadra } = useConstruction();
+  const { currentProject, filterStatus, moveHouseToQuadra } = useConstruction();
   const [isDragOver, setIsDragOver] = useState(false);
   
+  if (!currentProject) return null;
+  
+  const houses = currentProject.houses;
+  const quadras = currentProject.quadras;
   const quadra = quadras.find(q => q.id === quadraId);
   
   if (!quadra) return null;
