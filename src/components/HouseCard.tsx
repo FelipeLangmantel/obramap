@@ -155,19 +155,36 @@ export function HouseCard({ houseId }: HouseCardProps) {
     e.dataTransfer.effectAllowed = "move";
   };
 
+  // Create inline styles for the card based on progress color
+  const borderColor = cardStyle.borderColor;
+  const textColor = cardStyle.color;
+  
   return (
     <button
       draggable
       onDragStart={handleDragStart}
       onClick={() => setSelectedHouse(house)}
       className={cn(
-        "w-14 h-14 rounded-lg border-2 flex flex-col items-center justify-center transition-all duration-200 hover:scale-105 hover:shadow-md cursor-grab active:cursor-grabbing",
+        "w-14 h-14 rounded-xl border-2 flex flex-col items-center justify-center transition-all duration-200 hover:scale-105 hover:shadow-md cursor-grab active:cursor-grabbing bg-card",
         isSelected && "ring-2 ring-primary ring-offset-2"
       )}
-      style={cardStyle}
+      style={{
+        borderColor: borderColor,
+        backgroundColor: cardStyle.backgroundColor,
+      }}
     >
-      <span className="text-xs font-medium opacity-70">{houseId}</span>
-      <span className="text-sm font-bold">{progress}%</span>
+      <span 
+        className="text-xs font-semibold"
+        style={{ color: textColor }}
+      >
+        {houseId}
+      </span>
+      <span 
+        className="text-sm font-bold"
+        style={{ color: textColor }}
+      >
+        {progress}%
+      </span>
     </button>
   );
 }

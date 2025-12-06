@@ -90,6 +90,10 @@ interface ConstructionContextType {
   updateScope: (macroId: string, scopeId: string, updates: Partial<Pick<Scope, "name" | "weight">>) => Promise<void>;
   deleteScope: (macroId: string, scopeId: string) => Promise<void>;
   
+  // Reorder macros and scopes
+  reorderMacros: (orderedMacroIds: string[]) => Promise<void>;
+  reorderScopes: (macroId: string, orderedScopeIds: string[]) => Promise<void>;
+  
   // Time calculations
   getDaysRemaining: () => number;
   
@@ -1035,6 +1039,62 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     toast.success("Serviço removido!");
   }, [currentProject, syncMacrosToHouses]);
 
+  // Reorder macros - reorganizes the order of macros/etapas
+  const reorderMacros = useCallback(async (orderedMacroIds: string[]) => {
+    if (!currentProject) return;
+    
+    const newTemplate = orderedMacroIds
+      .map(id => currentProject.macrosTemplate.find(m => m.id === id))
+      .filter((m): m is Macro => m !== undefined);
+
+    // Update in database
+    const { error } = await supabase
+      .from('projects')
+      .update({ macros_template: macrosToJson(newTemplate) })
+      .eq('id', currentProject.id);
+
+    if (error) {
+      console.error('Error reordering macros:', error);
+      toast.error("Erro ao reordenar etapas");
+      return;
+    }
+
+    // Sync to houses
+    await syncMacrosToHouses(newTemplate);
+    toast.success("Ordem das etapas atualizada!");
+  }, [currentProject, syncMacrosToHouses]);
+
+  // Reorder scopes within a macro - reorganizes the order of scopes/services
+  const reorderScopes = useCallback(async (macroId: string, orderedScopeIds: string[]) => {
+    if (!currentProject) return;
+    
+    const newTemplate = currentProject.macrosTemplate.map(m => {
+      if (m.id !== macroId) return m;
+      
+      const reorderedScopes = orderedScopeIds
+        .map(id => m.scopes.find(s => s.id === id))
+        .filter((s): s is Scope => s !== undefined);
+      
+      return { ...m, scopes: reorderedScopes };
+    });
+
+    // Update in database
+    const { error } = await supabase
+      .from('projects')
+      .update({ macros_template: macrosToJson(newTemplate) })
+      .eq('id', currentProject.id);
+
+    if (error) {
+      console.error('Error reordering scopes:', error);
+      toast.error("Erro ao reordenar serviços");
+      return;
+    }
+
+    // Sync to houses
+    await syncMacrosToHouses(newTemplate);
+    toast.success("Ordem dos serviços atualizada!");
+  }, [currentProject, syncMacrosToHouses]);
+
   // House updates
   const updateScopeProgress = useCallback(async (houseId: number, macroId: string, scopeId: string, progress: number, startDate?: string | null, endDate?: string | null) => {
     if (!currentProjectId) return;
@@ -1269,6 +1329,8 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         addScope,
         updateScope,
         deleteScope,
+        reorderMacros,
+        reorderScopes,
         getDaysRemaining,
         resetProjectData,
         updateLegendSettings,
