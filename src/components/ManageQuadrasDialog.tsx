@@ -147,7 +147,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Grid3X3 className="h-5 w-5" />
@@ -155,8 +155,8 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 max-h-[calc(90vh-100px)]">
-          <div className="space-y-4 pr-4">
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="space-y-4 pr-2 pb-4">
             {/* Summary */}
             <div className="flex gap-4 text-sm">
               <Badge variant="outline" className="gap-1">
@@ -368,7 +368,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
               )}
             </div>
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
