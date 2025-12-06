@@ -11,6 +11,7 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { 
@@ -19,7 +20,8 @@ import {
   BarChart3,
   Users,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  Building
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +33,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
+import obraMapLogo from "@/assets/obramap-logo.png";
 
 interface AppSidebarProps {
   activeView: "map" | "charts" | "production";
@@ -42,6 +46,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const collapsed = state === "collapsed";
   const { profile, role, signOut, isAdmin } = useAuth();
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const getInitials = (name: string) => {
     return name
@@ -78,15 +83,11 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
 
   const handleViewChange = (view: "map" | "charts" | "production") => {
     onViewChange(view);
-    setOpen(false); // Collapse sidebar after selection
-  };
-
-  const handleMouseEnter = () => {
-    setOpen(true);
-  };
-
-  const handleMouseLeave = () => {
     setOpen(false);
+  };
+
+  const handleToggleSidebar = () => {
+    setOpen(!collapsed);
   };
 
   return (
@@ -94,17 +95,18 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       <Sidebar 
         className="border-r border-sidebar-border"
         collapsible="icon"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
       >
         <SidebarHeader className="p-4 border-b border-sidebar-border">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center shrink-0">
-              <span className="text-primary-foreground font-bold text-lg">🏗️</span>
+          <div 
+            className="flex items-center gap-3 cursor-pointer" 
+            onClick={handleToggleSidebar}
+          >
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
+              <img src={obraMapLogo} alt="ObraMap" className="h-8 w-8 object-contain" />
             </div>
             {!collapsed && (
               <div className="overflow-hidden">
-                <h1 className="text-base font-bold text-sidebar-foreground truncate">Acompanhamento</h1>
+                <h1 className="text-base font-bold text-sidebar-foreground truncate">ObraMap</h1>
                 <p className="text-xs text-sidebar-foreground/60">Sistema de Gestão</p>
               </div>
             )}
@@ -143,27 +145,37 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
             </SidebarGroupContent>
           </SidebarGroup>
 
-          {isAdmin && (
-            <SidebarGroup className="mt-4">
-              <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider px-2">
-                Gerenciamento
-              </SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
+          <SidebarGroup className="mt-4">
+            <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider px-2">
+              Gerenciamento
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setSettingsOpen(true)}
+                    tooltip={collapsed ? "Cadastro de Obras" : undefined}
+                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+                  >
+                    <Building className="h-5 w-5 shrink-0" />
+                    {!collapsed && <span className="truncate">Cadastro de Obras</span>}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {isAdmin && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => setUsersDialogOpen(true)}
-                      tooltip={collapsed ? "Gerenciar Usuários" : undefined}
+                      tooltip={collapsed ? "Gerenciar Acessos" : undefined}
                       className="w-full justify-start gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
                     >
                       <Users className="h-5 w-5 shrink-0" />
-                      {!collapsed && <span className="truncate">Gerenciar Usuários</span>}
+                      {!collapsed && <span className="truncate">Gerenciar Acessos</span>}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
         </SidebarContent>
 
         <SidebarFooter className="p-3 border-t border-sidebar-border">
@@ -204,11 +216,13 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Gerenciar Usuários</DialogTitle>
+            <DialogTitle>Gerenciar Acessos</DialogTitle>
           </DialogHeader>
           <UserManagement />
         </DialogContent>
       </Dialog>
+
+      <ProjectSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </>
   );
 }

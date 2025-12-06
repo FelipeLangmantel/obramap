@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ConstructionProvider, useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ProjectSelector } from "@/components/ProjectSelector";
 import { StatsCards } from "@/components/StatsCards";
@@ -46,15 +46,16 @@ function IndexContent() {
         <div className="flex-1 flex flex-col min-w-0">
           {/* Top Header */}
           <header className="h-14 bg-card border-b border-border px-4 flex items-center gap-4 shrink-0">
-            <div className="flex items-center gap-3 shrink-0">
-              <SidebarTrigger className="lg:hidden" />
-              <h2 className="text-lg font-semibold text-foreground whitespace-nowrap">{viewTitles[activeView]}</h2>
-            </div>
+            <h2 className="text-lg font-semibold text-foreground whitespace-nowrap shrink-0">
+              {viewTitles[activeView]}
+            </h2>
+            
             {activeView !== "production" && (
-              <div className="flex-1 flex items-center justify-start overflow-x-auto">
+              <div className="flex-1 flex items-center justify-center">
                 <FilterBar />
               </div>
             )}
+            
             <div className="shrink-0 ml-auto">
               <ProjectSelector />
             </div>
@@ -67,7 +68,7 @@ function IndexContent() {
                 <div className="text-6xl">🏗️</div>
                 <h2 className="text-2xl font-semibold text-foreground">Nenhuma obra cadastrada</h2>
                 <p className="text-muted-foreground text-center max-w-md">
-                  Clique em "Nova Obra" no menu superior para cadastrar seu primeiro empreendimento.
+                  Clique em "Cadastro de Obras" no menu lateral para cadastrar seu primeiro empreendimento.
                 </p>
               </div>
             ) : (
