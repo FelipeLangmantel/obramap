@@ -19,12 +19,11 @@ import {
   BarChart3,
   Users,
   LogOut,
-  ChevronRight,
-  Building,
+  Building2,
   Plus,
   Settings,
-  PanelLeftClose,
-  PanelLeft
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -96,31 +95,33 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
 
   return (
     <>
-      <div className="relative flex">
+      <div className="relative flex h-screen">
         <Sidebar 
-          className="border-r border-sidebar-border bg-sidebar transition-all duration-300"
+          className="border-r border-border/40 bg-card transition-all duration-300"
           collapsible="icon"
         >
-          <SidebarHeader className="p-4 border-b border-sidebar-border">
+          {/* Header with Logo */}
+          <SidebarHeader className="px-4 py-5">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
-                <img src={obraMapLogo} alt="ObraMap" className="h-8 w-8 object-contain" />
+              <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+                <img src={obraMapLogo} alt="ObraMap" className="h-9 w-9 object-contain" />
               </div>
               {!collapsed && (
-                <div className="overflow-hidden">
-                  <h1 className="text-lg font-bold text-sidebar-foreground truncate">ObraMap</h1>
-                </div>
+                <h1 className="text-xl font-bold text-foreground tracking-tight">ObraMap</h1>
               )}
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="px-2 py-4">
+          <SidebarContent className="px-3">
+            {/* Menu Principal */}
             <SidebarGroup>
-              <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider px-3 mb-2">
-                Menu Principal
-              </SidebarGroupLabel>
+              {!collapsed && (
+                <SidebarGroupLabel className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wider px-3 mb-1">
+                  Menu Principal
+                </SidebarGroupLabel>
+              )}
               <SidebarGroupContent>
-                <SidebarMenu>
+                <SidebarMenu className="space-y-0.5">
                   {mainMenuItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
@@ -128,14 +129,14 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                         isActive={activeView === item.view}
                         tooltip={collapsed ? item.title : undefined}
                         className={cn(
-                          "w-full justify-start gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                          "w-full justify-start gap-3 px-3 py-2 rounded-md transition-all duration-150",
                           activeView === item.view 
-                            ? "bg-primary/10 text-primary font-medium" 
-                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                            ? "bg-accent text-accent-foreground font-medium" 
+                            : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                         )}
                       >
-                        <item.icon className="h-5 w-5 shrink-0" />
-                        {!collapsed && <span className="truncate">{item.title}</span>}
+                        <item.icon className="h-[18px] w-[18px] shrink-0" />
+                        {!collapsed && <span className="text-sm">{item.title}</span>}
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
@@ -143,30 +144,33 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
               </SidebarGroupContent>
             </SidebarGroup>
 
-            <SidebarGroup className="mt-6">
-              <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider px-3 mb-2">
-                Gerenciamento
-              </SidebarGroupLabel>
+            {/* Gerenciamento */}
+            <SidebarGroup className="mt-8">
+              {!collapsed && (
+                <SidebarGroupLabel className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wider px-3 mb-1">
+                  Gerenciamento
+                </SidebarGroupLabel>
+              )}
               <SidebarGroupContent>
-                <SidebarMenu>
+                <SidebarMenu className="space-y-0.5">
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => setNewProjectOpen(true)}
                       tooltip={collapsed ? "Nova Obra" : undefined}
-                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all duration-200"
+                      className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
                     >
-                      <Plus className="h-5 w-5 shrink-0" />
-                      {!collapsed && <span className="truncate">Nova Obra</span>}
+                      <Plus className="h-[18px] w-[18px] shrink-0" />
+                      {!collapsed && <span className="text-sm">Nova Obra</span>}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => setSettingsOpen(true)}
                       tooltip={collapsed ? "Cadastro de Obras" : undefined}
-                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all duration-200"
+                      className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
                     >
-                      <Building className="h-5 w-5 shrink-0" />
-                      {!collapsed && <span className="truncate">Cadastro de Obras</span>}
+                      <Building2 className="h-[18px] w-[18px] shrink-0" />
+                      {!collapsed && <span className="text-sm">Cadastro de Obras</span>}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   {isAdmin && (
@@ -174,10 +178,10 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                       <SidebarMenuButton
                         onClick={() => setUsersDialogOpen(true)}
                         tooltip={collapsed ? "Gerenciar Usuários" : undefined}
-                        className="w-full justify-start gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all duration-200"
+                        className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
                       >
-                        <Users className="h-5 w-5 shrink-0" />
-                        {!collapsed && <span className="truncate">Gerenciar Usuários</span>}
+                        <Users className="h-[18px] w-[18px] shrink-0" />
+                        {!collapsed && <span className="text-sm">Gerenciar Usuários</span>}
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   )}
@@ -185,10 +189,10 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                     <SidebarMenuButton
                       onClick={() => setSettingsOpen(true)}
                       tooltip={collapsed ? "Configurações" : undefined}
-                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all duration-200"
+                      className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
                     >
-                      <Settings className="h-5 w-5 shrink-0" />
-                      {!collapsed && <span className="truncate">Configurações</span>}
+                      <Settings className="h-[18px] w-[18px] shrink-0" />
+                      {!collapsed && <span className="text-sm">Configurações</span>}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 </SidebarMenu>
@@ -196,31 +200,32 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
             </SidebarGroup>
           </SidebarContent>
 
-          <SidebarFooter className="p-3 border-t border-sidebar-border">
+          {/* Footer with User Info */}
+          <SidebarFooter className="p-3 border-t border-border/40 mt-auto">
             {profile && (
               <div className={cn(
                 "flex items-center gap-3 p-2 rounded-lg",
                 collapsed ? "justify-center" : ""
               )}>
-                <Avatar className="h-9 w-9 shrink-0">
-                  <AvatarFallback className="bg-primary/20 text-primary text-sm">
+                <Avatar className="h-8 w-8 shrink-0">
+                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
                     {getInitials(profile.display_name)}
                   </AvatarFallback>
                 </Avatar>
                 {!collapsed && (
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-sidebar-foreground truncate">
+                    <p className="text-sm font-medium text-foreground truncate">
                       {profile.display_name}
                     </p>
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-sidebar-foreground/60 border-sidebar-border">
+                    <p className="text-[11px] text-muted-foreground">
                       {getRoleLabel()}
-                    </Badge>
+                    </p>
                   </div>
                 )}
                 {!collapsed && (
                   <button
                     onClick={() => signOut()}
-                    className="p-1.5 rounded-md text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                     title="Sair"
                   >
                     <LogOut className="h-4 w-4" />
@@ -231,13 +236,17 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
           </SidebarFooter>
         </Sidebar>
 
-        {/* Toggle Bar */}
+        {/* Toggle Button - Thin bar on the right edge */}
         <button
           onClick={handleToggleSidebar}
-          className="h-full w-4 flex items-center justify-center bg-sidebar border-r border-sidebar-border hover:bg-sidebar-accent transition-colors cursor-pointer group"
+          className="h-full w-5 flex items-center justify-center bg-card border-r border-border/40 hover:bg-accent/30 transition-colors cursor-pointer group"
           title={collapsed ? "Expandir menu" : "Recolher menu"}
         >
-          <div className="h-8 w-1 rounded-full bg-sidebar-border group-hover:bg-primary/50 transition-colors" />
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+          ) : (
+            <ChevronLeft className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+          )}
         </button>
       </div>
 
