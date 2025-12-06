@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Map, BarChart3, Settings2, Building } from "lucide-react";
+import { Map, BarChart3, Settings2, Building, ClipboardList } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { ManageMacrosDialog } from "./ManageMacrosDialog";
 import { ProjectSettingsDialog } from "./ProjectSettingsDialog";
 
 interface ViewTabsProps {
-  activeView: "map" | "charts";
-  onViewChange: (view: "map" | "charts") => void;
+  activeView: "map" | "charts" | "production";
+  onViewChange: (view: "map" | "charts" | "production") => void;
 }
 
 export function ViewTabs({ activeView, onViewChange }: ViewTabsProps) {
@@ -15,8 +15,8 @@ export function ViewTabs({ activeView, onViewChange }: ViewTabsProps) {
   const [showProjectSettings, setShowProjectSettings] = useState(false);
 
   return (
-    <div className="flex items-center gap-2">
-      <Tabs value={activeView} onValueChange={(v) => onViewChange(v as "map" | "charts")}>
+    <div className="flex items-center gap-2 flex-wrap">
+      <Tabs value={activeView} onValueChange={(v) => onViewChange(v as "map" | "charts" | "production")}>
         <TabsList className="bg-card border border-border">
           <TabsTrigger value="map" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <Map className="w-4 h-4" />
@@ -25,6 +25,10 @@ export function ViewTabs({ activeView, onViewChange }: ViewTabsProps) {
           <TabsTrigger value="charts" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <BarChart3 className="w-4 h-4" />
             Gráficos
+          </TabsTrigger>
+          <TabsTrigger value="production" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <ClipboardList className="w-4 h-4" />
+            Produção
           </TabsTrigger>
         </TabsList>
       </Tabs>

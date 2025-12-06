@@ -157,6 +157,65 @@ export type Database = {
           },
         ]
       }
+      weekly_productions: {
+        Row: {
+          created_at: string
+          house_ids: number[]
+          houses_count: number
+          id: string
+          macro_color: string
+          macro_id: string
+          macro_name: string
+          notes: string | null
+          project_id: string
+          scope_id: string
+          scope_name: string
+          updated_at: string
+          week_end: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string
+          house_ids?: number[]
+          houses_count?: number
+          id?: string
+          macro_color?: string
+          macro_id: string
+          macro_name: string
+          notes?: string | null
+          project_id: string
+          scope_id: string
+          scope_name: string
+          updated_at?: string
+          week_end: string
+          week_start: string
+        }
+        Update: {
+          created_at?: string
+          house_ids?: number[]
+          houses_count?: number
+          id?: string
+          macro_color?: string
+          macro_id?: string
+          macro_name?: string
+          notes?: string | null
+          project_id?: string
+          scope_id?: string
+          scope_name?: string
+          updated_at?: string
+          week_end?: string
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_productions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
