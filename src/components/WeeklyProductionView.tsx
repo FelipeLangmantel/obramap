@@ -47,6 +47,8 @@ interface WeeklyProduction {
   notes: string | null;
 }
 
+const FILTER_STORAGE_KEY = "obramap_production_filters";
+
 export function WeeklyProductionView() {
   const { currentProject, updateScopeProgress } = useConstruction();
   const { canEdit } = useAuth();
@@ -60,10 +62,13 @@ export function WeeklyProductionView() {
   const [measurementEndDate, setMeasurementEndDate] = useState<string>(format(endOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
   const [registrationDate, setRegistrationDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   
-  // Analysis period filter
+  // Analysis filters with persistence
   const [analysisPeriod, setAnalysisPeriod] = useState<string>("4weeks");
   const [analysisStartDate, setAnalysisStartDate] = useState<string>(format(subWeeks(new Date(), 4), "yyyy-MM-dd"));
   const [analysisEndDate, setAnalysisEndDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [analysisHouseFilter, setAnalysisHouseFilter] = useState<string>("");
+  const [analysisMacroFilter, setAnalysisMacroFilter] = useState<string>("");
+  const [analysisScopeFilter, setAnalysisScopeFilter] = useState<string>("");
   
   const [productions, setProductions] = useState<WeeklyProduction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -74,12 +79,50 @@ export function WeeklyProductionView() {
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
   
+  // Load saved filters from localStorage
+  useEffect(() => {
+    if (currentProject?.id) {
+      const savedFilters = localStorage.getItem(`${FILTER_STORAGE_KEY}_${currentProject.id}`);
+      if (savedFilters) {
+        const filters = JSON.parse(savedFilters);
+        if (filters.analysisPeriod) setAnalysisPeriod(filters.analysisPeriod);
+        if (filters.analysisHouseFilter) setAnalysisHouseFilter(filters.analysisHouseFilter);
+        if (filters.analysisMacroFilter) setAnalysisMacroFilter(filters.analysisMacroFilter);
+        if (filters.analysisScopeFilter) setAnalysisScopeFilter(filters.analysisScopeFilter);
+      }
+    }
+  }, [currentProject?.id]);
+
+  // Save filters to localStorage
+  useEffect(() => {
+    if (currentProject?.id) {
+      const filters = {
+        analysisPeriod,
+        analysisHouseFilter,
+        analysisMacroFilter,
+        analysisScopeFilter
+      };
+      localStorage.setItem(`${FILTER_STORAGE_KEY}_${currentProject.id}`, JSON.stringify(filters));
+    }
+  }, [currentProject?.id, analysisPeriod, analysisHouseFilter, analysisMacroFilter, analysisScopeFilter]);
+  
   // Get scopes for selected macro
   const scopes = useMemo(() => {
     if (!selectedMacro) return [];
     const macro = macros.find(m => m.id === selectedMacro);
     return macro?.scopes || [];
   }, [selectedMacro, macros]);
+
+  // Get all scopes for filter
+  const allScopes = useMemo(() => {
+    const scopeList: { id: string; name: string; macroId: string }[] = [];
+    macros.forEach(macro => {
+      macro.scopes.forEach(scope => {
+        scopeList.push({ id: scope.id, name: scope.name, macroId: macro.id });
+      });
+    });
+    return scopeList;
+  }, [macros]);
 
   // Handle period filter change
   useEffect(() => {
@@ -225,7 +268,7 @@ export function WeeklyProductionView() {
     await reloadProductions();
   };
 
-  // Filter productions by analysis period
+  // Filter productions by analysis period and other filters
   const filteredProductions = useMemo(() => {
     if (!analysisStartDate || !analysisEndDate) return productions;
     
@@ -234,9 +277,21 @@ export function WeeklyProductionView() {
     
     return productions.filter(prod => {
       const prodDate = parseISO(prod.week_start);
-      return isWithinInterval(prodDate, { start, end });
+      const inDateRange = isWithinInterval(prodDate, { start, end });
+      
+      // Filter by house
+      const houseMatch = !analysisHouseFilter || 
+        prod.house_ids.includes(parseInt(analysisHouseFilter));
+      
+      // Filter by macro
+      const macroMatch = !analysisMacroFilter || prod.macro_id === analysisMacroFilter;
+      
+      // Filter by scope
+      const scopeMatch = !analysisScopeFilter || prod.scope_id === analysisScopeFilter;
+      
+      return inDateRange && houseMatch && macroMatch && scopeMatch;
     });
-  }, [productions, analysisStartDate, analysisEndDate]);
+  }, [productions, analysisStartDate, analysisEndDate, analysisHouseFilter, analysisMacroFilter, analysisScopeFilter]);
 
   // Weekly stats
   const weeklyStats = useMemo(() => {
@@ -487,49 +542,128 @@ export function WeeklyProductionView() {
         </TabsContent>
 
         <TabsContent value="analysis" className="flex-1 overflow-auto mt-4 space-y-4">
-          {/* Period Filter */}
+          {/* Filters */}
           <Card className="p-4">
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-muted-foreground" />
-                <Label className="text-sm font-medium">Período:</Label>
-              </div>
-              <Select value={analysisPeriod} onValueChange={setAnalysisPeriod}>
-                <SelectTrigger className="w-[180px] h-9">
-                  <SelectValue placeholder="Selecione o período" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1week">Última semana</SelectItem>
-                  <SelectItem value="2weeks">Últimas 2 semanas</SelectItem>
-                  <SelectItem value="4weeks">Últimas 4 semanas</SelectItem>
-                  <SelectItem value="8weeks">Últimas 8 semanas</SelectItem>
-                  <SelectItem value="month">Este mês</SelectItem>
-                  <SelectItem value="lastmonth">Mês passado</SelectItem>
-                  <SelectItem value="custom">Personalizado</SelectItem>
-                </SelectContent>
-              </Select>
-              
-              {analysisPeriod === "custom" && (
+            <div className="space-y-4">
+              {/* Period Row */}
+              <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <Input 
-                    type="date" 
-                    value={analysisStartDate}
-                    onChange={(e) => setAnalysisStartDate(e.target.value)}
-                    className="h-9 w-[150px]"
-                  />
-                  <span className="text-muted-foreground">até</span>
-                  <Input 
-                    type="date" 
-                    value={analysisEndDate}
-                    onChange={(e) => setAnalysisEndDate(e.target.value)}
-                    className="h-9 w-[150px]"
-                  />
+                  <Filter className="w-4 h-4 text-muted-foreground" />
+                  <Label className="text-sm font-medium">Período:</Label>
                 </div>
-              )}
-              
-              <Badge variant="outline" className="ml-auto">
-                {filteredProductions.length} registros no período
-              </Badge>
+                <Select value={analysisPeriod} onValueChange={setAnalysisPeriod}>
+                  <SelectTrigger className="w-[180px] h-9">
+                    <SelectValue placeholder="Selecione o período" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1week">Última semana</SelectItem>
+                    <SelectItem value="2weeks">Últimas 2 semanas</SelectItem>
+                    <SelectItem value="4weeks">Últimas 4 semanas</SelectItem>
+                    <SelectItem value="8weeks">Últimas 8 semanas</SelectItem>
+                    <SelectItem value="month">Este mês</SelectItem>
+                    <SelectItem value="lastmonth">Mês passado</SelectItem>
+                    <SelectItem value="custom">Personalizado</SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                {analysisPeriod === "custom" && (
+                  <div className="flex items-center gap-2">
+                    <Input 
+                      type="date" 
+                      value={analysisStartDate}
+                      onChange={(e) => setAnalysisStartDate(e.target.value)}
+                      className="h-9 w-[150px]"
+                    />
+                    <span className="text-muted-foreground">até</span>
+                    <Input 
+                      type="date" 
+                      value={analysisEndDate}
+                      onChange={(e) => setAnalysisEndDate(e.target.value)}
+                      className="h-9 w-[150px]"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Additional Filters Row */}
+              <div className="flex flex-wrap items-center gap-3 pt-2 border-t">
+                <div className="flex items-center gap-2">
+                  <Home className="w-4 h-4 text-muted-foreground" />
+                  <Label className="text-sm">Casa:</Label>
+                  <Select value={analysisHouseFilter} onValueChange={setAnalysisHouseFilter}>
+                    <SelectTrigger className="w-[100px] h-8">
+                      <SelectValue placeholder="Todas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Todas</SelectItem>
+                      {houses.map(house => (
+                        <SelectItem key={house.id} value={house.id.toString()}>
+                          Casa {house.id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm">Etapa:</Label>
+                  <Select value={analysisMacroFilter} onValueChange={(v) => { setAnalysisMacroFilter(v); setAnalysisScopeFilter(""); }}>
+                    <SelectTrigger className="w-[150px] h-8">
+                      <SelectValue placeholder="Todas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Todas</SelectItem>
+                      {macros.map(macro => (
+                        <SelectItem key={macro.id} value={macro.id}>
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: macro.color }} />
+                            {macro.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm">Serviço:</Label>
+                  <Select value={analysisScopeFilter} onValueChange={setAnalysisScopeFilter}>
+                    <SelectTrigger className="w-[180px] h-8">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Todos</SelectItem>
+                      {(analysisMacroFilter 
+                        ? allScopes.filter(s => s.macroId === analysisMacroFilter)
+                        : allScopes
+                      ).map(scope => (
+                        <SelectItem key={scope.id} value={scope.id}>
+                          {scope.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {(analysisHouseFilter || analysisMacroFilter || analysisScopeFilter) && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => {
+                      setAnalysisHouseFilter("");
+                      setAnalysisMacroFilter("");
+                      setAnalysisScopeFilter("");
+                    }}
+                    className="h-8 text-xs"
+                  >
+                    Limpar filtros
+                  </Button>
+                )}
+
+                <Badge variant="outline" className="ml-auto">
+                  {filteredProductions.length} registros
+                </Badge>
+              </div>
             </div>
           </Card>
 
