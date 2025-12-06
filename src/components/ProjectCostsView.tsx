@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { Plus, Pencil, Trash2, DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator } from "lucide-react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { Plus, Pencil, Trash2, DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Upload, FileText, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { toast } from "sonner";
 import {
@@ -41,6 +42,8 @@ export function ProjectCostsView() {
   const [scopeCosts, setScopeCosts] = useState<ScopeCost[]>([]);
   const [editingScope, setEditingScope] = useState<ScopeCost | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "details">("overview");
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
@@ -91,6 +94,26 @@ export function ProjectCostsView() {
     saveCosts(updated);
     setEditingScope(null);
     toast.success("Custos atualizados!");
+  };
+
+  // Handle PDF import
+  const handlePdfImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast.error("Por favor, selecione um arquivo PDF");
+      return;
+    }
+
+    setIsImporting(true);
+    toast.info("Funcionalidade de leitura de PDF em desenvolvimento. Por enquanto, cadastre os valores manualmente.");
+    setIsImporting(false);
+    
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   // Calculate progress for each scope from houses
@@ -389,13 +412,44 @@ export function ProjectCostsView() {
         <TabsContent value="details" className="flex-1 overflow-auto mt-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Calculator className="w-5 h-5" />
-                Custos por Serviço
-                <Badge variant="outline" className="ml-auto">
-                  Valores por unidade
-                </Badge>
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Calculator className="w-5 h-5" />
+                  Custos por Serviço
+                  <Badge variant="outline" className="ml-2">
+                    Valores por unidade
+                  </Badge>
+                </CardTitle>
+                <div className="flex gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf"
+                    onChange={handlePdfImport}
+                    className="hidden"
+                  />
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="gap-2"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isImporting}
+                  >
+                    {isImporting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Upload className="w-4 h-4" />
+                    )}
+                    Importar PDF
+                  </Button>
+                </div>
+              </div>
+              <Alert className="mt-3 border-blue-500/50 bg-blue-500/10">
+                <FileText className="h-4 w-4 text-blue-500" />
+                <AlertDescription className="text-xs">
+                  Você pode importar um orçamento em PDF ou cadastrar os valores manualmente abaixo.
+                </AlertDescription>
+              </Alert>
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-[calc(100vh-350px)] min-h-[400px]">

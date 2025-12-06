@@ -9,7 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Plus, 
@@ -129,12 +128,6 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
     setSelectedHouseIds(getUnassignedHouses());
   };
 
-  const selectRangeUnassigned = (start: number, end: number) => {
-    const unassigned = getUnassignedHouses();
-    const range = unassigned.filter(id => id >= start && id <= end);
-    setSelectedHouseIds(range);
-  };
-
   if (!currentProject) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -154,119 +147,119 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 text-lg">
             <Grid3X3 className="h-5 w-5" />
             Cadastro de Quadras - {currentProject.name}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-hidden flex flex-col gap-4">
-          {/* Summary */}
-          <div className="flex gap-4 text-sm">
-            <Badge variant="outline" className="gap-1">
-              <Home className="h-3 w-3" />
-              Total: {currentProject.houses.length} casas
-            </Badge>
-            <Badge variant="outline" className="gap-1">
-              <Grid3X3 className="h-3 w-3" />
-              {currentProject.quadras.length} quadras
-            </Badge>
-            <Badge variant="secondary" className="gap-1">
-              {unassignedHouses.length} casas sem quadra
-            </Badge>
-          </div>
+        <ScrollArea className="flex-1 max-h-[calc(90vh-100px)]">
+          <div className="space-y-4 pr-4">
+            {/* Summary */}
+            <div className="flex gap-4 text-sm">
+              <Badge variant="outline" className="gap-1">
+                <Home className="h-3 w-3" />
+                Total: {currentProject.houses.length} casas
+              </Badge>
+              <Badge variant="outline" className="gap-1">
+                <Grid3X3 className="h-3 w-3" />
+                {currentProject.quadras.length} quadras
+              </Badge>
+              <Badge variant="secondary" className="gap-1">
+                {unassignedHouses.length} casas sem quadra
+              </Badge>
+            </div>
 
-          {/* Add New Quadra Button */}
-          {!isAdding && (
-            <Button onClick={() => setIsAdding(true)} className="w-fit gap-2">
-              <Plus className="h-4 w-4" />
-              Nova Quadra
-            </Button>
-          )}
+            {/* Add New Quadra Button */}
+            {!isAdding && (
+              <Button onClick={() => setIsAdding(true)} className="w-fit gap-2">
+                <Plus className="h-4 w-4" />
+                Nova Quadra
+              </Button>
+            )}
 
-          {/* Add New Quadra Form */}
-          {isAdding && (
-            <Card className="border-primary">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Nova Quadra</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Nome da Quadra</Label>
-                  <Input
-                    value={newQuadraName}
-                    onChange={(e) => setNewQuadraName(e.target.value)}
-                    placeholder="Ex: Quadra A, Bloco 1..."
-                  />
-                </div>
+            {/* Add New Quadra Form */}
+            {isAdding && (
+              <Card className="border-primary">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Nova Quadra</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Nome da Quadra</Label>
+                    <Input
+                      value={newQuadraName}
+                      onChange={(e) => setNewQuadraName(e.target.value)}
+                      placeholder="Ex: Quadra A, Bloco 1..."
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Label>Casas ({selectedHouseIds.length} selecionadas)</Label>
-                    {unassignedHouses.length > 0 && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={selectAllUnassigned}
-                      >
-                        Selecionar todas
-                      </Button>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Casas ({selectedHouseIds.length} selecionadas)</Label>
+                      {unassignedHouses.length > 0 && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={selectAllUnassigned}
+                        >
+                          Selecionar todas
+                        </Button>
+                      )}
+                    </div>
+                    
+                    {unassignedHouses.length === 0 ? (
+                      <div className="text-sm text-muted-foreground p-4 bg-muted rounded-md">
+                        Todas as casas já estão atribuídas a quadras
+                      </div>
+                    ) : (
+                      <ScrollArea className="h-40 border rounded-md p-3">
+                        <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-1">
+                          {unassignedHouses.map(houseId => (
+                            <button
+                              key={houseId}
+                              onClick={() => toggleHouseSelection(houseId, false)}
+                              className={`
+                                h-8 w-8 text-xs rounded border transition-colors
+                                ${selectedHouseIds.includes(houseId)
+                                  ? 'bg-primary text-primary-foreground border-primary'
+                                  : 'bg-card hover:bg-accent border-border'
+                                }
+                              `}
+                            >
+                              {houseId}
+                            </button>
+                          ))}
+                        </div>
+                      </ScrollArea>
                     )}
                   </div>
-                  
-                  {unassignedHouses.length === 0 ? (
-                    <div className="text-sm text-muted-foreground p-4 bg-muted rounded-md">
-                      Todas as casas já estão atribuídas a quadras
-                    </div>
-                  ) : (
-                    <ScrollArea className="h-32 border rounded-md p-3">
-                      <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-1">
-                        {unassignedHouses.map(houseId => (
-                          <button
-                            key={houseId}
-                            onClick={() => toggleHouseSelection(houseId, false)}
-                            className={`
-                              h-8 w-8 text-xs rounded border transition-colors
-                              ${selectedHouseIds.includes(houseId)
-                                ? 'bg-primary text-primary-foreground border-primary'
-                                : 'bg-card hover:bg-accent border-border'
-                              }
-                            `}
-                          >
-                            {houseId}
-                          </button>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  )}
-                </div>
 
-                <div className="flex gap-2">
-                  <Button onClick={handleAddQuadra} className="gap-2">
-                    <Save className="h-4 w-4" />
-                    Salvar
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => {
-                      setIsAdding(false);
-                      setNewQuadraName("");
-                      setSelectedHouseIds([]);
-                    }}
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Cancelar
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                  <div className="flex gap-2">
+                    <Button onClick={handleAddQuadra} className="gap-2">
+                      <Save className="h-4 w-4" />
+                      Salvar
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setIsAdding(false);
+                        setNewQuadraName("");
+                        setSelectedHouseIds([]);
+                      }}
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Cancelar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-          {/* Existing Quadras */}
-          <ScrollArea className="flex-1">
-            <div className="space-y-3 pr-4">
+            {/* Existing Quadras */}
+            <div className="space-y-3">
               {currentProject.quadras.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8">
                   Nenhuma quadra cadastrada
@@ -288,7 +281,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
 
                           <div className="space-y-2">
                             <Label>Casas ({editingHouseIds.length} selecionadas)</Label>
-                            <ScrollArea className="h-32 border rounded-md p-3">
+                            <ScrollArea className="h-40 border rounded-md p-3">
                               <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-1">
                                 {/* Show current houses + unassigned houses */}
                                 {[...quadra.houses, ...unassignedHouses]
@@ -334,7 +327,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                               </Badge>
                             </div>
                             <div className="flex flex-wrap gap-1">
-                              {quadra.houses.slice(0, 20).map(houseId => (
+                              {quadra.houses.slice(0, 30).map(houseId => (
                                 <span 
                                   key={houseId}
                                   className="inline-flex items-center justify-center h-6 w-6 text-xs bg-muted rounded"
@@ -342,9 +335,9 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                                   {houseId}
                                 </span>
                               ))}
-                              {quadra.houses.length > 20 && (
-                                <span className="text-xs text-muted-foreground ml-1">
-                                  +{quadra.houses.length - 20} mais
+                              {quadra.houses.length > 30 && (
+                                <span className="text-xs text-muted-foreground ml-1 flex items-center">
+                                  +{quadra.houses.length - 30} mais
                                 </span>
                               )}
                             </div>
@@ -374,8 +367,8 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                 ))
               )}
             </div>
-          </ScrollArea>
-        </div>
+          </div>
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );
