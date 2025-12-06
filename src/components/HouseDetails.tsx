@@ -1,0 +1,119 @@
+import { X, Edit, Tag, Home, User, Clock, Calendar } from "lucide-react";
+import { useConstruction } from "@/contexts/ConstructionContext";
+import { calculateHouseProgress, getStatusFromProgress, getStatusLabel } from "@/data/constructionData";
+import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import { ScopesList } from "./ScopesList";
+import { useState } from "react";
+import { EditHouseDialog } from "./EditHouseDialog";
+import { Building2 } from "lucide-react";
+
+export function HouseDetails() {
+  const { selectedHouse, setSelectedHouse } = useConstruction();
+  const [editOpen, setEditOpen] = useState(false);
+  
+  if (!selectedHouse) {
+    return (
+      <div className="w-full lg:w-96 bg-card rounded-xl border border-border p-6 flex flex-col items-center justify-center min-h-[400px] animate-fade-in">
+        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+          <Building2 className="w-8 h-8 text-primary" />
+        </div>
+        <h3 className="text-lg font-semibold text-foreground mb-2">Selecione uma Casa</h3>
+        <p className="text-sm text-muted-foreground text-center">
+          Clique em qualquer casa no mapa para ver os detalhes do andamento da obra.
+        </p>
+      </div>
+    );
+  }
+  
+  const progress = calculateHouseProgress(selectedHouse);
+  const status = getStatusFromProgress(progress);
+  
+  const statusColors: Record<string, string> = {
+    "not-started": "bg-secondary text-muted-foreground",
+    "foundation": "bg-status-foundation text-primary-foreground",
+    "structure": "bg-status-structure text-primary-foreground",
+    "finishing": "bg-status-finishing text-primary-foreground",
+    "completed": "bg-status-completed text-primary-foreground",
+  };
+
+  return (
+    <div className="w-full lg:w-96 bg-card rounded-xl border border-border animate-slide-in-right flex flex-col max-h-[calc(100vh-8rem)] overflow-hidden">
+      <div className="p-4 border-b border-border flex items-start justify-between shrink-0">
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">
+            Quadra {selectedHouse.quadra} - Casa {selectedHouse.id}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Última atualização: {selectedHouse.lastUpdate}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" size="icon" onClick={() => setEditOpen(true)}>
+            <Edit className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => setSelectedHouse(null)}>
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+      
+      <div className="p-4 space-y-4 overflow-y-auto scrollbar-thin flex-1">
+        <div className="flex items-center gap-3">
+          <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[status]}`}>
+            {getStatusLabel(status)}
+          </span>
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm text-muted-foreground">Progresso Geral</span>
+              <span className="text-lg font-bold text-foreground">{progress}%</span>
+            </div>
+            <Progress value={progress} className="h-2" />
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-3 bg-secondary rounded-lg">
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <Tag className="w-4 h-4" />
+              <span className="text-xs">Área</span>
+            </div>
+            <p className="text-sm font-semibold text-foreground">{selectedHouse.area} m²</p>
+          </div>
+          
+          <div className="p-3 bg-secondary rounded-lg">
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <Home className="w-4 h-4" />
+              <span className="text-xs">Tipo</span>
+            </div>
+            <p className="text-sm font-semibold text-foreground">{selectedHouse.type}</p>
+          </div>
+          
+          <div className="p-3 bg-secondary rounded-lg">
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <User className="w-4 h-4" />
+              <span className="text-xs">Construtora</span>
+            </div>
+            <p className="text-sm font-semibold text-foreground">{selectedHouse.constructorName}</p>
+          </div>
+          
+          <div className="p-3 bg-secondary rounded-lg">
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <Calendar className="w-4 h-4" />
+              <span className="text-xs">Previsão</span>
+            </div>
+            <p className="text-sm font-semibold text-foreground">{selectedHouse.expectedDate}</p>
+          </div>
+        </div>
+        
+        <ScopesList house={selectedHouse} />
+      </div>
+      
+      <EditHouseDialog 
+        open={editOpen} 
+        onOpenChange={setEditOpen} 
+        house={selectedHouse}
+      />
+    </div>
+  );
+}

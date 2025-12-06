@@ -3,6 +3,14 @@ import * as ProgressPrimitive from "@radix-ui/react-progress";
 
 import { cn } from "@/lib/utils";
 
+function getProgressColor(value: number): string {
+  if (value === 0) return "bg-muted-foreground/30";
+  if (value < 30) return "bg-progress-low";
+  if (value < 60) return "bg-progress-medium";
+  if (value < 100) return "bg-progress-high";
+  return "bg-progress-complete";
+}
+
 const Progress = React.forwardRef<
   React.ElementRef<typeof ProgressPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root>
@@ -13,7 +21,7 @@ const Progress = React.forwardRef<
     {...props}
   >
     <ProgressPrimitive.Indicator
-      className="h-full w-full flex-1 bg-primary transition-all"
+      className={cn("h-full w-full flex-1 transition-all", getProgressColor(value || 0))}
       style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
     />
   </ProgressPrimitive.Root>
