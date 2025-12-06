@@ -50,14 +50,11 @@ function IndexContent() {
               {viewTitles[activeView]}
             </h2>
             
-            {activeView !== "production" && (
-              <div className="flex-1 flex items-center justify-center">
-                <FilterBar />
-              </div>
-            )}
+            <div className="flex-1" />
             
-            <div className="shrink-0 ml-auto">
+            <div className="flex items-center gap-3 shrink-0">
               <ProjectSelector />
+              {activeView !== "production" && <FilterBar />}
             </div>
           </header>
 
