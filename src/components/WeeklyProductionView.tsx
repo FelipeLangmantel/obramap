@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ interface WeeklyProduction {
 
 export function WeeklyProductionView() {
   const { currentProject, updateScopeProgress } = useConstruction();
+  const { canEdit } = useAuth();
   const [activeTab, setActiveTab] = useState<"register" | "analysis">("register");
   const [selectedMacro, setSelectedMacro] = useState<string>("");
   const [selectedScope, setSelectedScope] = useState<string>("");
@@ -324,10 +326,10 @@ export function WeeklyProductionView() {
                 <Button 
                   className="w-full gap-2" 
                   onClick={handleSave}
-                  disabled={!selectedScope || selectedHouses.length === 0 || isSaving}
+                  disabled={!selectedScope || selectedHouses.length === 0 || isSaving || !canEdit}
                 >
                   <Save className="w-4 h-4" />
-                  {isSaving ? "Salvando..." : "Registrar Produção"}
+                  {!canEdit ? "Sem permissão" : isSaving ? "Salvando..." : "Registrar Produção"}
                 </Button>
               </CardContent>
             </Card>

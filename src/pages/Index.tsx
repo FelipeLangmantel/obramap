@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { ConstructionProvider, useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Header } from "@/components/Header";
 import { StatsCards } from "@/components/StatsCards";
 import { FilterBar } from "@/components/FilterBar";
@@ -28,9 +30,9 @@ function IndexContent() {
 
   if (projects.length === 0) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background flex flex-col">
         <Header />
-        <main className="p-4 lg:p-6">
+        <main className="flex-1 p-4 lg:p-6">
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <div className="text-6xl">🏗️</div>
             <h2 className="text-2xl font-semibold text-foreground">Nenhuma obra cadastrada</h2>
@@ -39,15 +41,16 @@ function IndexContent() {
             </p>
           </div>
         </main>
+        <Footer />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Header />
       
-      <main className="p-4 lg:p-6 space-y-4 lg:space-y-6">
+      <main className="flex-1 p-4 lg:p-6 space-y-4 lg:space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <ViewTabs activeView={activeView} onViewChange={setActiveView} />
           {activeView !== "production" && <FilterBar />}
@@ -71,11 +74,42 @@ function IndexContent() {
         
         {activeView === "production" && <WeeklyProductionView />}
       </main>
+
+      <Footer />
     </div>
   );
 }
 
+function Footer() {
+  return (
+    <footer className="py-4 text-center text-sm text-muted-foreground border-t border-border/50 bg-card/50">
+      <p>Desenvolvido e produzido por <span className="font-semibold text-foreground">Felipe Langmantel</span></p>
+    </footer>
+  );
+}
+
 const Index = () => {
+  const navigate = useNavigate();
+  const { user, isLoading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/auth");
+    }
+  }, [user, authLoading, navigate]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
   return (
     <ConstructionProvider>
       <IndexContent />
