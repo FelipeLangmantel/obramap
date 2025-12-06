@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, Home, Grid3X3, Plus, Trash2, Edit2, Check, X } from "lucide-react";
+import { Building2, Home, Grid3X3, Plus, Trash2, Edit2, Check, X, Settings, ImagePlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
@@ -196,7 +196,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
         </DialogHeader>
         
         <Tabs defaultValue="info" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="info" className="gap-2">
               <Home className="h-4 w-4" />
               Informações
@@ -204,6 +204,10 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
             <TabsTrigger value="quadras" className="gap-2">
               <Grid3X3 className="h-4 w-4" />
               Quadras
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="gap-2">
+              <Settings className="h-4 w-4" />
+              Configurações
             </TabsTrigger>
           </TabsList>
           
@@ -402,6 +406,29 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
                   Nenhuma quadra cadastrada. Adicione quadras para organizar as casas.
                 </div>
               )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="settings" className="space-y-4 mt-4">
+            <div className="space-y-4">
+              <div className="p-4 border rounded-lg space-y-4">
+                <div className="flex items-center gap-2">
+                  <ImagePlus className="h-5 w-5 text-muted-foreground" />
+                  <Label className="font-medium">Logotipo da Empresa</Label>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Para alterar o logotipo do sistema, entre em contato com o administrador ou envie a imagem do logotipo desejado.
+                </p>
+                <div className="flex items-center gap-4">
+                  <div className="h-16 w-16 rounded-lg bg-primary/10 flex items-center justify-center border-2 border-dashed border-muted-foreground/30">
+                    <ImagePlus className="h-6 w-6 text-muted-foreground/50" />
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    <p>Formatos aceitos: PNG, JPG, SVG</p>
+                    <p>Tamanho recomendado: 200x200px</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </TabsContent>
         </Tabs>

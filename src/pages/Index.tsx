@@ -37,7 +37,7 @@ function IndexContent() {
 
   return (
     <SidebarProvider defaultOpen={false}>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full overflow-hidden">
         <AppSidebar 
           activeView={activeView} 
           onViewChange={setActiveView}
