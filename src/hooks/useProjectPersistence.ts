@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { House, Macro, Quadra, MACROS_TEMPLATE } from "@/data/constructionData";
-import { Project } from "@/contexts/ConstructionContext";
+import { Project, LegendItem, DEFAULT_LEGEND_ITEMS } from "@/contexts/ConstructionContext";
 import { Json } from "@/integrations/supabase/types";
 
 // Helper to convert Macro[] to Json
@@ -76,6 +76,8 @@ export function useProjectPersistence() {
         macrosTemplate: jsonToMacros(p.macros_template),
         createdAt: p.created_at,
         setupComplete: p.setup_complete,
+        legendFollowMacros: p.legend_follow_macros ?? false,
+        customLegendItems: (p.custom_legend_items as unknown as LegendItem[]) || DEFAULT_LEGEND_ITEMS,
       });
     }
 
@@ -98,6 +100,8 @@ export function useProjectPersistence() {
         project_type: project.projectType,
         macros_template: macrosToJson(project.macrosTemplate),
         setup_complete: project.setupComplete,
+        legend_follow_macros: project.legendFollowMacros,
+        custom_legend_items: project.customLegendItems as unknown as Json,
       })
       .select()
       .single();
@@ -147,6 +151,8 @@ export function useProjectPersistence() {
         project_type: project.projectType,
         macros_template: macrosToJson(project.macrosTemplate),
         setup_complete: project.setupComplete,
+        legend_follow_macros: project.legendFollowMacros,
+        custom_legend_items: project.customLegendItems as unknown as Json,
       })
       .eq('id', project.id);
 

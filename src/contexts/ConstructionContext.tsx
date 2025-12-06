@@ -4,6 +4,22 @@ import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 
+export interface LegendItem {
+  id: string;
+  name: string;
+  color: string;
+  minPercent: number;
+  maxPercent: number;
+}
+
+export const DEFAULT_LEGEND_ITEMS: LegendItem[] = [
+  { id: "nao_iniciado", name: "Não Iniciado", color: "#9ca3af", minPercent: 0, maxPercent: 0 },
+  { id: "fundacao", name: "Fundação", color: "#ef4444", minPercent: 1, maxPercent: 25 },
+  { id: "estrutura", name: "Estrutura", color: "#f59e0b", minPercent: 26, maxPercent: 60 },
+  { id: "acabamento", name: "Acabamento", color: "#3b82f6", minPercent: 61, maxPercent: 99 },
+  { id: "concluido", name: "Concluído", color: "#22c55e", minPercent: 99.1, maxPercent: 100 },
+];
+
 export interface Project {
   id: string;
   name: string;
@@ -19,6 +35,8 @@ export interface Project {
   macrosTemplate: Macro[];
   createdAt: string;
   setupComplete: boolean;
+  legendFollowMacros: boolean;
+  customLegendItems: LegendItem[];
 }
 
 interface ConstructionContextType {
@@ -26,7 +44,7 @@ interface ConstructionContextType {
   projects: Project[];
   currentProject: Project | null;
   setCurrentProject: (projectId: string | null) => void;
-  addProject: (project: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete">) => Promise<string>;
+  addProject: (project: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete" | "legendFollowMacros" | "customLegendItems">) => Promise<string>;
   updateProject: (projectId: string, updates: Partial<Project>) => void;
   deleteProject: (projectId: string) => void;
   completeProjectSetup: (projectId: string) => void;
@@ -56,6 +74,9 @@ interface ConstructionContextType {
   updateMacro: (macroId: string, name: string, color?: string) => void;
   deleteMacro: (macroId: string) => void;
   resetProjectData: () => void;
+  
+  // Legend management
+  updateLegendSettings: (followMacros: boolean, legendItems?: LegendItem[]) => void;
   
   // Scope management
   addScope: (macroId: string, name: string, weight: number) => void;
@@ -160,6 +181,8 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             macrosTemplate: jsonToMacros(p.macros_template),
             createdAt: p.created_at,
             setupComplete: p.setup_complete,
+            legendFollowMacros: p.legend_follow_macros ?? false,
+            customLegendItems: (p.custom_legend_items as unknown as LegendItem[]) || DEFAULT_LEGEND_ITEMS,
           });
         }
 
@@ -183,7 +206,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     setFilterStatus("all");
   }, []);
 
-  const addProject = useCallback(async (projectData: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete">): Promise<string> => {
+  const addProject = useCallback(async (projectData: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete" | "legendFollowMacros" | "customLegendItems">): Promise<string> => {
     const macrosTemplate = JSON.parse(JSON.stringify(MACROS_TEMPLATE));
     
     // Insert project to database first to get real UUID
@@ -263,6 +286,8 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       macrosTemplate,
       createdAt: newProjectData.created_at,
       setupComplete: false,
+      legendFollowMacros: false,
+      customLegendItems: DEFAULT_LEGEND_ITEMS,
     };
 
     setProjects(prev => [newProject, ...prev]);
@@ -985,6 +1010,37 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     setSelectedHouse(null);
   }, [currentProject]);
 
+  // Legend settings management
+  const updateLegendSettings = useCallback(async (followMacros: boolean, legendItems?: LegendItem[]) => {
+    if (!currentProject) return;
+
+    const updates: Partial<Project> = {
+      legendFollowMacros: followMacros,
+    };
+
+    if (legendItems !== undefined) {
+      updates.customLegendItems = legendItems;
+    }
+
+    setProjects(prev => prev.map(p => 
+      p.id === currentProject.id ? { ...p, ...updates } : p
+    ));
+
+    // Update in database
+    const dbUpdates: Record<string, unknown> = {
+      legend_follow_macros: followMacros,
+    };
+
+    if (legendItems !== undefined) {
+      dbUpdates.custom_legend_items = legendItems as unknown as Json;
+    }
+
+    await supabase
+      .from('projects')
+      .update(dbUpdates)
+      .eq('id', currentProject.id);
+  }, [currentProject]);
+
   return (
     <ConstructionContext.Provider
       value={{
@@ -1017,6 +1073,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         deleteScope,
         getDaysRemaining,
         resetProjectData,
+        updateLegendSettings,
         isLoading,
       }}
     >

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useConstruction } from "@/contexts/ConstructionContext";
+import { useState } from "react";
+import { useConstruction, LegendItem, DEFAULT_LEGEND_ITEMS } from "@/contexts/ConstructionContext";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -11,63 +11,18 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 
-export interface DefaultLegendItem {
-  id: string;
-  name: string;
-  color: string;
-  minPercent: number;
-  maxPercent: number;
-}
-
-const DEFAULT_LEGEND_ITEMS: DefaultLegendItem[] = [
-  { id: "nao_iniciado", name: "Não Iniciado", color: "#9ca3af", minPercent: 0, maxPercent: 0 },
-  { id: "fundacao", name: "Fundação", color: "#ef4444", minPercent: 1, maxPercent: 25 },
-  { id: "estrutura", name: "Estrutura", color: "#f59e0b", minPercent: 26, maxPercent: 60 },
-  { id: "acabamento", name: "Acabamento", color: "#3b82f6", minPercent: 61, maxPercent: 99 },
-  { id: "concluido", name: "Concluído", color: "#22c55e", minPercent: 99.1, maxPercent: 100 },
-];
-
-// Load from localStorage or use defaults
-const getStoredLegend = (): DefaultLegendItem[] => {
-  try {
-    const stored = localStorage.getItem("default_legend_items");
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (e) {
-    console.error("Error loading legend from localStorage:", e);
-  }
-  return DEFAULT_LEGEND_ITEMS;
-};
-
-const getStoredLegendMode = (): boolean => {
-  try {
-    const stored = localStorage.getItem("legend_follow_macros");
-    if (stored !== null) {
-      return JSON.parse(stored);
-    }
-  } catch (e) {
-    console.error("Error loading legend mode from localStorage:", e);
-  }
-  return false; // Default: use standard legend
-};
-
 export function Legend() {
-  const { currentProject } = useConstruction();
-  const [followMacros, setFollowMacros] = useState(getStoredLegendMode);
-  const [legendItems, setLegendItems] = useState<DefaultLegendItem[]>(getStoredLegend);
+  const { currentProject, updateLegendSettings } = useConstruction();
   const [isEditing, setIsEditing] = useState(false);
-  const [editingItems, setEditingItems] = useState<DefaultLegendItem[]>([]);
+  const [editingItems, setEditingItems] = useState<LegendItem[]>([]);
 
-  // Save followMacros to localStorage
-  useEffect(() => {
-    localStorage.setItem("legend_follow_macros", JSON.stringify(followMacros));
-  }, [followMacros]);
+  const followMacros = currentProject?.legendFollowMacros ?? false;
+  const legendItems = currentProject?.customLegendItems ?? DEFAULT_LEGEND_ITEMS;
+  const macros = currentProject?.macrosTemplate || [];
 
-  // Save legendItems to localStorage
-  useEffect(() => {
-    localStorage.setItem("default_legend_items", JSON.stringify(legendItems));
-  }, [legendItems]);
+  const handleFollowMacrosChange = (checked: boolean) => {
+    updateLegendSettings(checked);
+  };
 
   const handleEditClick = () => {
     setEditingItems([...legendItems]);
@@ -75,7 +30,7 @@ export function Legend() {
   };
 
   const handleSaveEdit = () => {
-    setLegendItems(editingItems);
+    updateLegendSettings(followMacros, editingItems);
     setIsEditing(false);
   };
 
@@ -84,7 +39,7 @@ export function Legend() {
     setEditingItems([]);
   };
 
-  const updateEditingItem = (id: string, field: keyof DefaultLegendItem, value: string | number) => {
+  const updateEditingItem = (id: string, field: keyof LegendItem, value: string | number) => {
     setEditingItems(prev =>
       prev.map(item =>
         item.id === id ? { ...item, [field]: value } : item
@@ -92,17 +47,11 @@ export function Legend() {
     );
   };
 
-  // Use macros from current project when following macros mode
-  const macros = currentProject?.macrosTemplate || [];
-
-  // Determine what to display
-  const displayItems = followMacros ? macros : legendItems;
-
-  if (!followMacros && legendItems.length === 0) {
+  if (!currentProject) {
     return (
       <div className="flex flex-wrap items-center gap-4 p-4 bg-card rounded-xl border border-border">
         <span className="text-sm font-medium text-foreground">Legenda</span>
-        <span className="text-sm text-muted-foreground">Nenhuma etapa configurada</span>
+        <span className="text-sm text-muted-foreground">Selecione um projeto</span>
       </div>
     );
   }
@@ -127,7 +76,7 @@ export function Legend() {
                 <Switch
                   id="follow-macros"
                   checked={followMacros}
-                  onCheckedChange={setFollowMacros}
+                  onCheckedChange={handleFollowMacrosChange}
                 />
               </div>
 
@@ -243,10 +192,8 @@ export function Legend() {
   );
 }
 
-// Export helper function to get legend color based on progress
-export function getLegendColorByProgress(progress: number): string {
-  const legendItems = getStoredLegend();
-  
+// Export helper function to get legend color based on progress (for a specific project)
+export function getLegendColorByProgress(progress: number, legendItems: LegendItem[]): string {
   for (const item of legendItems) {
     if (progress >= item.minPercent && progress <= item.maxPercent) {
       return item.color;
@@ -255,9 +202,4 @@ export function getLegendColorByProgress(progress: number): string {
   
   // Fallback
   return "#9ca3af";
-}
-
-// Export helper to check if following macros mode
-export function isFollowingMacrosMode(): boolean {
-  return getStoredLegendMode();
 }

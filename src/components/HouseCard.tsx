@@ -1,8 +1,8 @@
-import { useConstruction } from "@/contexts/ConstructionContext";
+import { useConstruction, DEFAULT_LEGEND_ITEMS } from "@/contexts/ConstructionContext";
 import { calculateHouseProgress } from "@/data/constructionData";
 import { cn } from "@/lib/utils";
-import { DragEvent, useMemo, useState, useEffect } from "react";
-import { getLegendColorByProgress, isFollowingMacrosMode } from "./Legend";
+import { DragEvent, useMemo } from "react";
+import { getLegendColorByProgress } from "./Legend";
 
 interface HouseCardProps {
   houseId: number;
@@ -10,23 +10,6 @@ interface HouseCardProps {
 
 export function HouseCard({ houseId }: HouseCardProps) {
   const { currentProject, selectedHouse, setSelectedHouse } = useConstruction();
-  const [followMacros, setFollowMacros] = useState(isFollowingMacrosMode);
-  
-  // Listen to localStorage changes
-  useEffect(() => {
-    const handleStorageChange = () => {
-      setFollowMacros(isFollowingMacrosMode());
-    };
-    
-    // Check periodically for changes (since we're in the same tab)
-    const interval = setInterval(handleStorageChange, 500);
-    window.addEventListener('storage', handleStorageChange);
-    
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, []);
   
   if (!currentProject) return null;
   
@@ -35,12 +18,14 @@ export function HouseCard({ houseId }: HouseCardProps) {
   if (!house) return null;
   
   const progress = calculateHouseProgress(house);
+  const followMacros = currentProject.legendFollowMacros;
+  const legendItems = currentProject.customLegendItems || DEFAULT_LEGEND_ITEMS;
   
   // Get the card style based on legend mode
   const cardStyle = useMemo(() => {
     if (!followMacros) {
       // Use default legend based on percentage
-      const legendColor = getLegendColorByProgress(progress);
+      const legendColor = getLegendColorByProgress(progress, legendItems);
       return { 
         backgroundColor: legendColor + '20', 
         borderColor: legendColor, 
@@ -100,7 +85,7 @@ export function HouseCard({ houseId }: HouseCardProps) {
     }
     
     return { backgroundColor: '#f3f4f6', borderColor: '#d1d5db', color: '#6b7280' };
-  }, [house.macros, progress, followMacros]);
+  }, [house.macros, progress, followMacros, legendItems]);
 
   const isSelected = selectedHouse?.id === houseId;
 
