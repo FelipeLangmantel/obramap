@@ -8,6 +8,7 @@ import { useConstruction } from "@/contexts/ConstructionContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Building2, Home, Grid3X3, Plus, Trash2, Edit2, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 interface ProjectSettingsDialogProps {
   open: boolean;
@@ -67,6 +68,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
     if (!currentProject) return;
     
     const newTotalHouses = parseInt(totalHouses) || currentProject.totalHouses;
+    const newUnitSize = parseFloat(unitSize) || 45;
     
     // updateProject now handles house regeneration automatically
     updateProject(currentProject.id, { 
@@ -76,8 +78,12 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
       startDate, 
       expectedEndDate,
       totalHouses: newTotalHouses,
-      unitSize: parseFloat(unitSize) || 45,
+      unitSize: newUnitSize,
       projectType,
+    });
+    
+    toast.success("Informações da obra salvas com sucesso!", {
+      description: `${name} - ${newTotalHouses} casas`
     });
   };
 
