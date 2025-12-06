@@ -15,14 +15,14 @@ export function ProjectSelector() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="gap-1.5 min-w-[140px] max-w-[180px] justify-between h-7 text-[11px] px-2">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <Building2 className="h-3 w-3 shrink-0" />
+        <Button variant="outline" className="gap-2 min-w-[150px] max-w-[200px] justify-between h-8 text-xs px-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <Building2 className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">
               {currentProject?.name || "Selecionar"}
             </span>
           </div>
-          <ChevronDown className="h-3 w-3 shrink-0" />
+          <ChevronDown className="h-3.5 w-3.5 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[240px] z-50">

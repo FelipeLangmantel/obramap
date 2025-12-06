@@ -12,10 +12,11 @@ import { QuadrasGrid } from "@/components/QuadrasGrid";
 import { HouseDetails } from "@/components/HouseDetails";
 import { ChartsView } from "@/components/ChartsView";
 import { WeeklyProductionView } from "@/components/WeeklyProductionView";
+import { ProjectCostsView } from "@/components/ProjectCostsView";
 import { Loader2 } from "lucide-react";
 
 function IndexContent() {
-  const [activeView, setActiveView] = useState<"map" | "charts" | "production">("map");
+  const [activeView, setActiveView] = useState<"map" | "charts" | "production" | "costs">("map");
   const { selectedHouse, isLoading, projects } = useConstruction();
 
   if (isLoading) {
@@ -23,7 +24,7 @@ function IndexContent() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
-          <p className="text-muted-foreground">Carregando obras...</p>
+          <p className="text-muted-foreground text-base">Carregando obras...</p>
         </div>
       </div>
     );
@@ -32,7 +33,8 @@ function IndexContent() {
   const viewTitles = {
     map: "Mapa de Obras",
     charts: "Gráficos e Análises",
-    production: "Produção Semanal"
+    production: "Produção Semanal",
+    costs: "Custos da Obra"
   };
 
   return (
@@ -45,54 +47,68 @@ function IndexContent() {
         
         <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
           {/* Top Header */}
-          <header className="h-14 bg-card border-b border-border px-3 md:px-4 flex items-center gap-2 md:gap-4 shrink-0">
-            <h2 className="text-base md:text-lg font-semibold text-foreground whitespace-nowrap shrink-0">
+          <header className="h-14 bg-card border-b border-border px-4 md:px-6 flex items-center gap-4 shrink-0">
+            <h2 className="text-lg md:text-xl font-semibold text-foreground whitespace-nowrap shrink-0">
               {viewTitles[activeView]}
             </h2>
             
             <div className="flex-1 min-w-0" />
             
-            <div className="flex items-center gap-2 shrink-0 overflow-x-auto max-w-[60%] md:max-w-none">
+            <div className="flex items-center gap-3 shrink-0">
               <ProjectSelector />
-              {activeView !== "production" && <FilterBar />}
+              {(activeView === "map" || activeView === "charts") && <FilterBar />}
             </div>
           </header>
 
           {/* Main Content */}
-          <main className="flex-1 p-3 md:p-4 lg:p-6 space-y-3 md:space-y-4 lg:space-y-6 overflow-auto">
+          <main className="flex-1 p-4 md:p-5 lg:p-6 overflow-auto">
             {projects.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-4">
                 <div className="text-6xl">🏗️</div>
                 <h2 className="text-2xl font-semibold text-foreground">Nenhuma obra cadastrada</h2>
-                <p className="text-muted-foreground text-center max-w-md">
+                <p className="text-muted-foreground text-center max-w-md text-base">
                   Clique em "Nova Obra" no menu lateral para cadastrar seu primeiro empreendimento.
                 </p>
               </div>
             ) : (
-              <>
-                {activeView !== "production" && <StatsCards />}
+              <div className="h-full flex flex-col">
+                {(activeView === "map" || activeView === "charts") && <StatsCards />}
                 
                 {activeView === "map" && (
-                  <>
+                  <div className="flex-1 flex flex-col gap-4 mt-4">
                     <Legend />
-                    <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
+                    <div className="flex-1 flex flex-col lg:flex-row gap-4">
                       <div className={`min-w-0 transition-all duration-300 ${selectedHouse ? 'flex-1' : 'w-full'}`}>
                         <QuadrasGrid />
                       </div>
                       {selectedHouse && <HouseDetails />}
                     </div>
-                  </>
+                  </div>
                 )}
                 
-                {activeView === "charts" && <ChartsView />}
+                {activeView === "charts" && (
+                  <div className="mt-4 flex-1">
+                    <ChartsView />
+                  </div>
+                )}
                 
-                {activeView === "production" && <WeeklyProductionView />}
-              </>
+                {activeView === "production" && (
+                  <div className="flex-1">
+                    <WeeklyProductionView />
+                  </div>
+                )}
+
+                {activeView === "costs" && (
+                  <div className="flex-1">
+                    <ProjectCostsView />
+                  </div>
+                )}
+              </div>
             )}
           </main>
 
           {/* Footer */}
-          <footer className="py-2 text-center text-xs md:text-sm text-muted-foreground border-t border-border/50 bg-card/50 shrink-0">
+          <footer className="py-2.5 text-center text-sm text-muted-foreground border-t border-border/50 bg-card/50 shrink-0">
             <p>Desenvolvido por <span className="font-semibold text-foreground">Felipe Langmantel</span></p>
           </footer>
         </div>
