@@ -21,8 +21,10 @@ import {
   LogOut,
   ChevronRight,
   Building,
-  ChevronLeft,
-  Plus
+  Plus,
+  Settings,
+  PanelLeftClose,
+  PanelLeft
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -94,144 +96,150 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
 
   return (
     <>
-      <Sidebar 
-        className="border-r border-sidebar-border relative"
-        collapsible="icon"
-      >
-        {/* Toggle Button */}
-        <button
-          onClick={handleToggleSidebar}
-          className={cn(
-            "absolute -right-3 top-6 z-50 flex h-6 w-6 items-center justify-center rounded-full border bg-background shadow-md transition-colors hover:bg-accent",
-            collapsed ? "rotate-0" : "rotate-180"
-          )}
+      <div className="relative flex">
+        <Sidebar 
+          className="border-r border-sidebar-border bg-sidebar transition-all duration-300"
+          collapsible="icon"
         >
-          <ChevronRight className="h-3 w-3" />
-        </button>
-
-        <SidebarHeader className="p-4 border-b border-sidebar-border">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
-              <img src={obraMapLogo} alt="ObraMap" className="h-8 w-8 object-contain" />
-            </div>
-            {!collapsed && (
-              <div className="overflow-hidden">
-                <h1 className="text-base font-bold text-sidebar-foreground truncate">ObraMap</h1>
-                <p className="text-xs text-sidebar-foreground/60">Sistema de Gestão</p>
+          <SidebarHeader className="p-4 border-b border-sidebar-border">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
+                <img src={obraMapLogo} alt="ObraMap" className="h-8 w-8 object-contain" />
               </div>
-            )}
-          </div>
-        </SidebarHeader>
-
-        <SidebarContent className="px-2">
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider px-2">
-              Menu Principal
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {mainMenuItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      onClick={() => handleViewChange(item.view)}
-                      isActive={activeView === item.view}
-                      tooltip={collapsed ? item.title : undefined}
-                      className={cn(
-                        "w-full justify-start gap-3 px-3 py-2.5 rounded-lg transition-colors",
-                        activeView === item.view 
-                          ? "bg-primary text-primary-foreground hover:bg-primary/90" 
-                          : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                      )}
-                    >
-                      <item.icon className="h-5 w-5 shrink-0" />
-                      {!collapsed && <span className="truncate">{item.title}</span>}
-                      {!collapsed && activeView === item.view && (
-                        <ChevronRight className="ml-auto h-4 w-4" />
-                      )}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-
-          <SidebarGroup className="mt-4">
-            <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider px-2">
-              Gerenciamento
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setNewProjectOpen(true)}
-                    tooltip={collapsed ? "Nova Obra" : undefined}
-                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
-                  >
-                    <Plus className="h-5 w-5 shrink-0" />
-                    {!collapsed && <span className="truncate">Nova Obra</span>}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setSettingsOpen(true)}
-                    tooltip={collapsed ? "Cadastro de Obras" : undefined}
-                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
-                  >
-                    <Building className="h-5 w-5 shrink-0" />
-                    {!collapsed && <span className="truncate">Cadastro de Obras</span>}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                {isAdmin && (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      onClick={() => setUsersDialogOpen(true)}
-                      tooltip={collapsed ? "Gerenciar Acessos" : undefined}
-                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
-                    >
-                      <Users className="h-5 w-5 shrink-0" />
-                      {!collapsed && <span className="truncate">Gerenciar Acessos</span>}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
-
-        <SidebarFooter className="p-3 border-t border-sidebar-border">
-          {profile && (
-            <div className={cn(
-              "flex items-center gap-3 p-2 rounded-lg",
-              collapsed ? "justify-center" : ""
-            )}>
-              <Avatar className="h-9 w-9 shrink-0">
-                <AvatarFallback className="bg-primary/20 text-primary text-sm">
-                  {getInitials(profile.display_name)}
-                </AvatarFallback>
-              </Avatar>
               {!collapsed && (
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-sidebar-foreground truncate">
-                    {profile.display_name}
-                  </p>
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-sidebar-foreground/60 border-sidebar-border">
-                    {getRoleLabel()}
-                  </Badge>
+                <div className="overflow-hidden">
+                  <h1 className="text-lg font-bold text-sidebar-foreground truncate">ObraMap</h1>
                 </div>
               )}
-              {!collapsed && (
-                <button
-                  onClick={() => signOut()}
-                  className="p-1.5 rounded-md text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
-                  title="Sair"
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
-              )}
             </div>
-          )}
-        </SidebarFooter>
-      </Sidebar>
+          </SidebarHeader>
+
+          <SidebarContent className="px-2 py-4">
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider px-3 mb-2">
+                Menu Principal
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {mainMenuItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        onClick={() => handleViewChange(item.view)}
+                        isActive={activeView === item.view}
+                        tooltip={collapsed ? item.title : undefined}
+                        className={cn(
+                          "w-full justify-start gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                          activeView === item.view 
+                            ? "bg-primary/10 text-primary font-medium" 
+                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                        )}
+                      >
+                        <item.icon className="h-5 w-5 shrink-0" />
+                        {!collapsed && <span className="truncate">{item.title}</span>}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarGroup className="mt-6">
+              <SidebarGroupLabel className="text-sidebar-foreground/50 text-xs uppercase tracking-wider px-3 mb-2">
+                Gerenciamento
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setNewProjectOpen(true)}
+                      tooltip={collapsed ? "Nova Obra" : undefined}
+                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all duration-200"
+                    >
+                      <Plus className="h-5 w-5 shrink-0" />
+                      {!collapsed && <span className="truncate">Nova Obra</span>}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setSettingsOpen(true)}
+                      tooltip={collapsed ? "Cadastro de Obras" : undefined}
+                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all duration-200"
+                    >
+                      <Building className="h-5 w-5 shrink-0" />
+                      {!collapsed && <span className="truncate">Cadastro de Obras</span>}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  {isAdmin && (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        onClick={() => setUsersDialogOpen(true)}
+                        tooltip={collapsed ? "Gerenciar Usuários" : undefined}
+                        className="w-full justify-start gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all duration-200"
+                      >
+                        <Users className="h-5 w-5 shrink-0" />
+                        {!collapsed && <span className="truncate">Gerenciar Usuários</span>}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setSettingsOpen(true)}
+                      tooltip={collapsed ? "Configurações" : undefined}
+                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-all duration-200"
+                    >
+                      <Settings className="h-5 w-5 shrink-0" />
+                      {!collapsed && <span className="truncate">Configurações</span>}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+
+          <SidebarFooter className="p-3 border-t border-sidebar-border">
+            {profile && (
+              <div className={cn(
+                "flex items-center gap-3 p-2 rounded-lg",
+                collapsed ? "justify-center" : ""
+              )}>
+                <Avatar className="h-9 w-9 shrink-0">
+                  <AvatarFallback className="bg-primary/20 text-primary text-sm">
+                    {getInitials(profile.display_name)}
+                  </AvatarFallback>
+                </Avatar>
+                {!collapsed && (
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-sidebar-foreground truncate">
+                      {profile.display_name}
+                    </p>
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-sidebar-foreground/60 border-sidebar-border">
+                      {getRoleLabel()}
+                    </Badge>
+                  </div>
+                )}
+                {!collapsed && (
+                  <button
+                    onClick={() => signOut()}
+                    className="p-1.5 rounded-md text-sidebar-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    title="Sair"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            )}
+          </SidebarFooter>
+        </Sidebar>
+
+        {/* Toggle Bar */}
+        <button
+          onClick={handleToggleSidebar}
+          className="h-full w-4 flex items-center justify-center bg-sidebar border-r border-sidebar-border hover:bg-sidebar-accent transition-colors cursor-pointer group"
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
+        >
+          <div className="h-8 w-1 rounded-full bg-sidebar-border group-hover:bg-primary/50 transition-colors" />
+        </button>
+      </div>
 
       <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
