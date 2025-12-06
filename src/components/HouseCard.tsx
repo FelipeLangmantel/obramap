@@ -8,8 +8,11 @@ interface HouseCardProps {
 }
 
 export function HouseCard({ houseId }: HouseCardProps) {
-  const { houses, selectedHouse, setSelectedHouse } = useConstruction();
-  const house = houses.find(h => h.id === houseId);
+  const { currentProject, selectedHouse, setSelectedHouse } = useConstruction();
+  
+  if (!currentProject) return null;
+  
+  const house = currentProject.houses.find(h => h.id === houseId);
   
   if (!house) return null;
   

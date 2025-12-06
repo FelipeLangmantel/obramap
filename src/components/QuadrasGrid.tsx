@@ -2,7 +2,26 @@ import { useConstruction } from "@/contexts/ConstructionContext";
 import { QuadraCard } from "./QuadraCard";
 
 export function QuadrasGrid() {
-  const { filterQuadra, quadras } = useConstruction();
+  const { currentProject, filterQuadra } = useConstruction();
+  
+  if (!currentProject) {
+    return (
+      <div className="flex items-center justify-center h-64 text-muted-foreground">
+        Selecione uma obra para visualizar o mapa
+      </div>
+    );
+  }
+
+  const quadras = currentProject.quadras;
+  
+  if (quadras.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-muted-foreground gap-2">
+        <p>Nenhuma quadra cadastrada.</p>
+        <p className="text-sm">Configure as quadras nas configurações da obra.</p>
+      </div>
+    );
+  }
   
   const filteredQuadras = filterQuadra === "all" 
     ? quadras 

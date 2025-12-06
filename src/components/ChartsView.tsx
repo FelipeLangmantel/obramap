@@ -20,9 +20,16 @@ const STATUS_LABELS = {
 };
 
 export function ChartsView() {
-  const { houses, quadras } = useConstruction();
+  const { currentProject } = useConstruction();
 
-  const pieData = useMemo(() => {
+  const { pieData, barData, summaryData } = useMemo(() => {
+    if (!currentProject) {
+      return { pieData: [], barData: [], summaryData: [] };
+    }
+
+    const houses = currentProject.houses;
+    const quadras = currentProject.quadras;
+
     const counts: Record<string, number> = {
       "not-started": 0,
       "foundation": 0,
@@ -37,17 +44,15 @@ export function ChartsView() {
       counts[status]++;
     });
 
-    return Object.entries(counts)
+    const pieData = Object.entries(counts)
       .filter(([_, value]) => value > 0)
       .map(([key, value]) => ({
         name: STATUS_LABELS[key as keyof typeof STATUS_LABELS],
         value,
         color: STATUS_COLORS[key as keyof typeof STATUS_COLORS],
       }));
-  }, [houses]);
 
-  const barData = useMemo(() => {
-    return quadras.map(quadra => {
+    const barData = quadras.map(quadra => {
       const quadraHouses = houses.filter(h => h.quadra === quadra.id);
       const avgProgress = quadraHouses.length > 0 
         ? Math.round(quadraHouses.reduce((sum, h) => sum + calculateHouseProgress(h), 0) / quadraHouses.length)
@@ -57,31 +62,25 @@ export function ChartsView() {
         progress: avgProgress,
       };
     });
-  }, [houses, quadras]);
 
-  const summaryData = useMemo(() => {
-    const counts: Record<string, number> = {
-      "not-started": 0,
-      "foundation": 0,
-      "structure": 0,
-      "finishing": 0,
-      "completed": 0,
-    };
-
-    houses.forEach(house => {
-      const progress = calculateHouseProgress(house);
-      const status = getStatusFromProgress(progress);
-      counts[status]++;
-    });
-
-    return [
+    const summaryData = [
       { label: "Não Iniciado", value: counts["not-started"], color: "bg-status-not-started text-foreground" },
       { label: "Fundação", value: counts["foundation"], color: "bg-status-foundation text-primary-foreground" },
       { label: "Estrutura", value: counts["structure"], color: "bg-status-structure text-primary-foreground" },
       { label: "Acabamento", value: counts["finishing"], color: "bg-status-finishing text-primary-foreground" },
       { label: "Concluído", value: counts["completed"], color: "bg-status-completed text-primary-foreground" },
     ];
-  }, [houses]);
+
+    return { pieData, barData, summaryData };
+  }, [currentProject]);
+
+  if (!currentProject) {
+    return (
+      <div className="flex items-center justify-center h-64 text-muted-foreground">
+        Selecione uma obra para visualizar os gráficos
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

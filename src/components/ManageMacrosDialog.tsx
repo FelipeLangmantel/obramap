@@ -3,10 +3,9 @@ import { Plus, Pencil, Trash2, GripVertical } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useConstruction } from "@/contexts/ConstructionContext";
-import { Macro, Scope } from "@/data/constructionData";
+import { Scope } from "@/data/constructionData";
 
 interface ManageMacrosDialogProps {
   open: boolean;
@@ -14,7 +13,7 @@ interface ManageMacrosDialogProps {
 }
 
 export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogProps) {
-  const { macrosTemplate, addMacro, updateMacro, deleteMacro, addScope, updateScope, deleteScope } = useConstruction();
+  const { currentProject, addMacro, updateMacro, deleteMacro, addScope, updateScope, deleteScope } = useConstruction();
   
   const [editingMacro, setEditingMacro] = useState<{ id: string; name: string } | null>(null);
   const [newMacroName, setNewMacroName] = useState("");
@@ -22,6 +21,10 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
   
   const [editingScope, setEditingScope] = useState<{ macroId: string; scope: Scope } | null>(null);
   const [newScope, setNewScope] = useState<{ macroId: string; name: string; weight: string } | null>(null);
+
+  if (!currentProject) return null;
+
+  const macrosTemplate = currentProject.macrosTemplate;
 
   const handleAddMacro = () => {
     if (newMacroName.trim()) {
