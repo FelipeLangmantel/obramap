@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -18,9 +18,17 @@ interface EditScopeDialogProps {
 export function EditScopeDialog({ open, onOpenChange, houseId, macroId, scope }: EditScopeDialogProps) {
   const { updateScopeProgress } = useConstruction();
   const [progress, setProgress] = useState(scope.progress);
+  const [startDate, setStartDate] = useState(scope.startDate || "");
+  const [endDate, setEndDate] = useState(scope.endDate || "");
+
+  useEffect(() => {
+    setProgress(scope.progress);
+    setStartDate(scope.startDate || "");
+    setEndDate(scope.endDate || "");
+  }, [scope, open]);
 
   const handleSave = () => {
-    updateScopeProgress(houseId, macroId, scope.id, progress);
+    updateScopeProgress(houseId, macroId, scope.id, progress, startDate || null, endDate || null);
     onOpenChange(false);
   };
 
@@ -73,19 +81,19 @@ export function EditScopeDialog({ open, onOpenChange, houseId, macroId, scope }:
           
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label className="text-muted-foreground">Data de Início</Label>
+              <Label>Data de Início</Label>
               <Input 
-                value={scope.startDate || "—"} 
-                disabled 
-                className="bg-secondary"
+                type="date"
+                value={startDate} 
+                onChange={(e) => setStartDate(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-muted-foreground">Data de Término</Label>
+              <Label>Data de Término</Label>
               <Input 
-                value={scope.endDate || "—"} 
-                disabled 
-                className="bg-secondary"
+                type="date"
+                value={endDate} 
+                onChange={(e) => setEndDate(e.target.value)}
               />
             </div>
           </div>

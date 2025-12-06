@@ -1,6 +1,7 @@
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { calculateHouseProgress, getStatusFromProgress } from "@/data/constructionData";
 import { cn } from "@/lib/utils";
+import { DragEvent } from "react";
 
 interface HouseCardProps {
   houseId: number;
@@ -25,11 +26,18 @@ export function HouseCard({ houseId }: HouseCardProps) {
 
   const isSelected = selectedHouse?.id === houseId;
 
+  const handleDragStart = (e: DragEvent<HTMLButtonElement>) => {
+    e.dataTransfer.setData("houseId", houseId.toString());
+    e.dataTransfer.effectAllowed = "move";
+  };
+
   return (
     <button
+      draggable
+      onDragStart={handleDragStart}
       onClick={() => setSelectedHouse(house)}
       className={cn(
-        "w-14 h-14 rounded-lg border-2 flex flex-col items-center justify-center transition-all duration-200 hover:scale-105 hover:shadow-md",
+        "w-14 h-14 rounded-lg border-2 flex flex-col items-center justify-center transition-all duration-200 hover:scale-105 hover:shadow-md cursor-grab active:cursor-grabbing",
         statusStyles[status],
         isSelected && "ring-2 ring-primary ring-offset-2"
       )}

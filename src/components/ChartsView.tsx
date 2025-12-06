@@ -1,10 +1,7 @@
-import { useMemo, useState } from "react";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { Settings2 } from "lucide-react";
+import { useMemo } from "react";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { useConstruction } from "@/contexts/ConstructionContext";
-import { QUADRAS, calculateHouseProgress, getStatusFromProgress } from "@/data/constructionData";
-import { Button } from "@/components/ui/button";
-import { ManageMacrosDialog } from "./ManageMacrosDialog";
+import { calculateHouseProgress, getStatusFromProgress } from "@/data/constructionData";
 
 const STATUS_COLORS = {
   "not-started": "hsl(220 14% 90%)",
@@ -23,8 +20,7 @@ const STATUS_LABELS = {
 };
 
 export function ChartsView() {
-  const { houses } = useConstruction();
-  const [showManageMacros, setShowManageMacros] = useState(false);
+  const { houses, quadras } = useConstruction();
 
   const pieData = useMemo(() => {
     const counts: Record<string, number> = {
@@ -51,17 +47,17 @@ export function ChartsView() {
   }, [houses]);
 
   const barData = useMemo(() => {
-    return QUADRAS.map(quadra => {
+    return quadras.map(quadra => {
       const quadraHouses = houses.filter(h => h.quadra === quadra.id);
-      const avgProgress = Math.round(
-        quadraHouses.reduce((sum, h) => sum + calculateHouseProgress(h), 0) / quadraHouses.length
-      );
+      const avgProgress = quadraHouses.length > 0 
+        ? Math.round(quadraHouses.reduce((sum, h) => sum + calculateHouseProgress(h), 0) / quadraHouses.length)
+        : 0;
       return {
         name: quadra.id,
         progress: avgProgress,
       };
     });
-  }, [houses]);
+  }, [houses, quadras]);
 
   const summaryData = useMemo(() => {
     const counts: Record<string, number> = {
@@ -89,18 +85,6 @@ export function ChartsView() {
 
   return (
     <div className="space-y-6">
-      {/* Manage Macros Button */}
-      <div className="flex justify-end">
-        <Button 
-          variant="outline" 
-          onClick={() => setShowManageMacros(true)}
-          className="gap-2"
-        >
-          <Settings2 className="w-4 h-4" />
-          Gerenciar Etapas e Serviços
-        </Button>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-card rounded-xl border border-border p-6 animate-fade-in">
           <h3 className="text-lg font-semibold text-foreground mb-4">Status por Fase</h3>
@@ -169,8 +153,6 @@ export function ChartsView() {
           ))}
         </div>
       </div>
-
-      <ManageMacrosDialog open={showManageMacros} onOpenChange={setShowManageMacros} />
     </div>
   );
 }

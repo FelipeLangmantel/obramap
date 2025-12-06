@@ -1,10 +1,9 @@
 import { Grid3X3, Filter } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useConstruction } from "@/contexts/ConstructionContext";
-import { QUADRAS } from "@/data/constructionData";
 
 export function FilterBar() {
-  const { filterQuadra, setFilterQuadra, filterStatus, setFilterStatus } = useConstruction();
+  const { filterQuadra, setFilterQuadra, filterStatus, setFilterStatus, quadras } = useConstruction();
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -16,7 +15,7 @@ export function FilterBar() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas Quadras</SelectItem>
-            {QUADRAS.map(q => (
+            {quadras.map(q => (
               <SelectItem key={q.id} value={q.id}>{q.name}</SelectItem>
             ))}
           </SelectContent>
