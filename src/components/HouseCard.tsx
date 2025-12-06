@@ -1,7 +1,7 @@
 import { useConstruction } from "@/contexts/ConstructionContext";
-import { calculateHouseProgress, getStatusFromProgress } from "@/data/constructionData";
+import { calculateHouseProgress } from "@/data/constructionData";
 import { cn } from "@/lib/utils";
-import { DragEvent } from "react";
+import { DragEvent, useMemo } from "react";
 
 interface HouseCardProps {
   houseId: number;
@@ -17,15 +17,61 @@ export function HouseCard({ houseId }: HouseCardProps) {
   if (!house) return null;
   
   const progress = calculateHouseProgress(house);
-  const status = getStatusFromProgress(progress);
   
-  const statusStyles: Record<string, string> = {
-    "not-started": "bg-secondary border-border text-muted-foreground",
-    "foundation": "bg-progress-low-bg border-progress-low text-progress-low",
-    "structure": "bg-progress-medium-bg border-progress-medium text-progress-medium",
-    "finishing": "bg-progress-high-bg border-progress-high text-progress-high",
-    "completed": "bg-progress-complete-bg border-progress-complete text-progress-complete",
-  };
+  // Get the dominant color based on macro progress
+  const cardStyle = useMemo(() => {
+    if (progress === 0) {
+      return { backgroundColor: '#f3f4f6', borderColor: '#d1d5db', color: '#6b7280' };
+    }
+    
+    if (progress === 100) {
+      return { backgroundColor: '#dcfce7', borderColor: '#22c55e', color: '#22c55e' };
+    }
+    
+    // Find the current active macro (first one not complete)
+    for (const macro of house.macros) {
+      const macroProgress = macro.scopes.reduce((sum, s) => sum + s.progress, 0) / (macro.scopes.length || 1);
+      if (macroProgress < 100 && macroProgress > 0) {
+        // This macro is in progress
+        const hexColor = macro.color;
+        return { 
+          backgroundColor: hexColor + '20', 
+          borderColor: hexColor, 
+          color: hexColor 
+        };
+      } else if (macroProgress === 0) {
+        // This is the next macro to start - show previous color or first macro
+        const macroIndex = house.macros.indexOf(macro);
+        if (macroIndex > 0) {
+          const prevMacro = house.macros[macroIndex - 1];
+          const hexColor = prevMacro.color;
+          return { 
+            backgroundColor: hexColor + '20', 
+            borderColor: hexColor, 
+            color: hexColor 
+          };
+        }
+        const hexColor = macro.color;
+        return { 
+          backgroundColor: hexColor + '20', 
+          borderColor: hexColor, 
+          color: hexColor 
+        };
+      }
+    }
+    
+    // Default: use first macro color
+    const firstMacro = house.macros[0];
+    if (firstMacro) {
+      return { 
+        backgroundColor: firstMacro.color + '20', 
+        borderColor: firstMacro.color, 
+        color: firstMacro.color 
+      };
+    }
+    
+    return { backgroundColor: '#f3f4f6', borderColor: '#d1d5db', color: '#6b7280' };
+  }, [house.macros, progress]);
 
   const isSelected = selectedHouse?.id === houseId;
 
@@ -41,9 +87,9 @@ export function HouseCard({ houseId }: HouseCardProps) {
       onClick={() => setSelectedHouse(house)}
       className={cn(
         "w-14 h-14 rounded-lg border-2 flex flex-col items-center justify-center transition-all duration-200 hover:scale-105 hover:shadow-md cursor-grab active:cursor-grabbing",
-        statusStyles[status],
         isSelected && "ring-2 ring-primary ring-offset-2"
       )}
+      style={cardStyle}
     >
       <span className="text-xs font-medium opacity-70">{houseId}</span>
       <span className="text-sm font-bold">{progress}%</span>

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from "react";
-import { House, Macro, Scope, Quadra, MACROS_TEMPLATE, calculateHouseProgress } from "@/data/constructionData";
+import { House, Macro, Scope, Quadra, MACROS_TEMPLATE, calculateHouseProgress, DEFAULT_MACRO_COLORS } from "@/data/constructionData";
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 import { toast } from "sonner";
@@ -53,8 +53,9 @@ interface ConstructionContextType {
   
   // Macro management
   addMacro: (name: string) => void;
-  updateMacro: (macroId: string, name: string) => void;
+  updateMacro: (macroId: string, name: string, color?: string) => void;
   deleteMacro: (macroId: string) => void;
+  resetProjectData: () => void;
   
   // Scope management
   addScope: (macroId: string, name: string, weight: number) => void;
@@ -720,9 +721,14 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   const addMacro = useCallback((name: string) => {
     if (!currentProject) return;
     
+    // Get next available color
+    const usedColors = currentProject.macrosTemplate.map(m => m.color);
+    const availableColor = DEFAULT_MACRO_COLORS.find(c => !usedColors.includes(c)) || DEFAULT_MACRO_COLORS[0];
+    
     const newMacro: Macro = {
       id: `macro_${Date.now()}`,
       name,
+      color: availableColor,
       scopes: [],
     };
     
@@ -736,11 +742,11 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       .eq('id', currentProject.id);
   }, [currentProject, syncMacrosToHouses]);
 
-  const updateMacro = useCallback((macroId: string, name: string) => {
+  const updateMacro = useCallback((macroId: string, name: string, color?: string) => {
     if (!currentProject) return;
     
     const newTemplate = currentProject.macrosTemplate.map(m => 
-      m.id === macroId ? { ...m, name } : m
+      m.id === macroId ? { ...m, name, ...(color !== undefined && { color }) } : m
     );
     syncMacrosToHouses(newTemplate);
 
@@ -942,6 +948,43 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     return Math.max(0, diffDays);
   }, [currentProject]);
 
+  // Reset all house progress data
+  const resetProjectData = useCallback(async () => {
+    if (!currentProject) return;
+    
+    const resetHouses = currentProject.houses.map(house => ({
+      ...house,
+      macros: currentProject.macrosTemplate.map(macro => ({
+        ...macro,
+        scopes: macro.scopes.map(scope => ({
+          ...scope,
+          progress: 0,
+          startDate: null,
+          endDate: null,
+        })),
+      })),
+      lastUpdate: new Date().toLocaleDateString("pt-BR"),
+    }));
+
+    setProjects(prev => prev.map(p => 
+      p.id === currentProject.id ? { ...p, houses: resetHouses } : p
+    ));
+
+    // Update houses in database
+    for (const house of resetHouses) {
+      await supabase
+        .from('houses')
+        .update({ 
+          macros: macrosToJson(house.macros),
+          last_update: new Date().toISOString().split('T')[0]
+        })
+        .eq('project_id', currentProject.id)
+        .eq('house_number', house.id);
+    }
+
+    setSelectedHouse(null);
+  }, [currentProject]);
+
   return (
     <ConstructionContext.Provider
       value={{
@@ -973,6 +1016,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         updateScope,
         deleteScope,
         getDaysRemaining,
+        resetProjectData,
         isLoading,
       }}
     >
