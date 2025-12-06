@@ -68,6 +68,12 @@ interface ConstructionContextType {
   setFilterQuadra: (quadra: string) => void;
   filterStatus: string;
   setFilterStatus: (status: string) => void;
+  filterMode: "status" | "macro" | "scope";
+  setFilterMode: (mode: "status" | "macro" | "scope") => void;
+  filterMacro: string;
+  setFilterMacro: (macroId: string) => void;
+  filterScope: string;
+  setFilterScope: (scopeId: string) => void;
   
   // Macro management
   addMacro: (name: string) => void;
@@ -109,6 +115,9 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
   const [filterQuadra, setFilterQuadra] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterMode, setFilterMode] = useState<"status" | "macro" | "scope">("status");
+  const [filterMacro, setFilterMacro] = useState<string>("all");
+  const [filterScope, setFilterScope] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
   const initialLoadDone = useRef(false);
 
@@ -1065,6 +1074,12 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         setFilterQuadra,
         filterStatus,
         setFilterStatus,
+        filterMode,
+        setFilterMode,
+        filterMacro,
+        setFilterMacro,
+        filterScope,
+        setFilterScope,
         addMacro,
         updateMacro,
         deleteMacro,
