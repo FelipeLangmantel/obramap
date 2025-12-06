@@ -23,7 +23,8 @@ import {
   Plus,
   Settings,
   Layers,
-  DollarSign
+  DollarSign,
+  Grid3X3
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -38,7 +39,7 @@ import { ProjectsListDialog } from "@/components/ProjectsListDialog";
 import { NewProjectDialog } from "@/components/NewProjectDialog";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
-import { ProjectCostsDialog } from "@/components/ProjectCostsDialog";
+import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import obraMapLogo from "@/assets/obramap-logo.png";
 
 interface AppSidebarProps {
@@ -55,6 +56,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [macrosDialogOpen, setMacrosDialogOpen] = useState(false);
+  const [quadrasDialogOpen, setQuadrasDialogOpen] = useState(false);
 
   const getInitials = (name: string) => {
     return name
@@ -174,6 +176,15 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
+                    onClick={() => setQuadrasDialogOpen(true)}
+                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                  >
+                    <Grid3X3 className="h-5 w-5 shrink-0" />
+                    <span className="text-sm">Cadastro de Quadras</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
                     onClick={() => setMacrosDialogOpen(true)}
                     className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
                   >
@@ -248,6 +259,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} />
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <ManageMacrosDialog open={macrosDialogOpen} onOpenChange={setMacrosDialogOpen} />
+      <ManageQuadrasDialog open={quadrasDialogOpen} onOpenChange={setQuadrasDialogOpen} />
     </>
   );
 }
