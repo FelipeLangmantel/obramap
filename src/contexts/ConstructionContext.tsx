@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from "react";
-import { House, generateInitialHouses, calculateHouseProgress } from "@/data/constructionData";
+import { House, Macro, Scope, MACROS_TEMPLATE, generateInitialHouses, calculateHouseProgress } from "@/data/constructionData";
 
 interface ConstructionContextType {
   houses: House[];
@@ -12,15 +12,123 @@ interface ConstructionContextType {
   setFilterQuadra: (quadra: string) => void;
   filterStatus: string;
   setFilterStatus: (status: string) => void;
+  // Macro management
+  macrosTemplate: Macro[];
+  addMacro: (name: string) => void;
+  updateMacro: (macroId: string, name: string) => void;
+  deleteMacro: (macroId: string) => void;
+  // Scope management
+  addScope: (macroId: string, name: string, weight: number) => void;
+  updateScope: (macroId: string, scopeId: string, updates: Partial<Pick<Scope, "name" | "weight">>) => void;
+  deleteScope: (macroId: string, scopeId: string) => void;
 }
 
 const ConstructionContext = createContext<ConstructionContextType | undefined>(undefined);
 
 export function ConstructionProvider({ children }: { children: ReactNode }) {
+  const [macrosTemplate, setMacrosTemplate] = useState<Macro[]>(() => 
+    JSON.parse(JSON.stringify(MACROS_TEMPLATE))
+  );
   const [houses, setHouses] = useState<House[]>(() => generateInitialHouses());
   const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
   const [filterQuadra, setFilterQuadra] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+
+  // Helper to sync changes to all houses
+  const syncMacrosToHouses = useCallback((newTemplate: Macro[]) => {
+    setHouses(prev => prev.map(house => {
+      const updatedMacros = newTemplate.map(templateMacro => {
+        const existingMacro = house.macros.find(m => m.id === templateMacro.id);
+        if (existingMacro) {
+          // Keep existing progress data, update structure
+          const updatedScopes = templateMacro.scopes.map(templateScope => {
+            const existingScope = existingMacro.scopes.find(s => s.id === templateScope.id);
+            return existingScope ? { ...templateScope, progress: existingScope.progress, startDate: existingScope.startDate, endDate: existingScope.endDate } : { ...templateScope };
+          });
+          return { ...templateMacro, scopes: updatedScopes };
+        }
+        // New macro - add with zero progress
+        return { ...templateMacro, scopes: templateMacro.scopes.map(s => ({ ...s, progress: 0, startDate: null, endDate: null })) };
+      });
+      return { ...house, macros: updatedMacros, lastUpdate: new Date().toLocaleDateString("pt-BR") };
+    }));
+
+    // Update selected house if exists
+    setSelectedHouse(prev => {
+      if (!prev) return null;
+      const updatedMacros = newTemplate.map(templateMacro => {
+        const existingMacro = prev.macros.find(m => m.id === templateMacro.id);
+        if (existingMacro) {
+          const updatedScopes = templateMacro.scopes.map(templateScope => {
+            const existingScope = existingMacro.scopes.find(s => s.id === templateScope.id);
+            return existingScope ? { ...templateScope, progress: existingScope.progress, startDate: existingScope.startDate, endDate: existingScope.endDate } : { ...templateScope };
+          });
+          return { ...templateMacro, scopes: updatedScopes };
+        }
+        return { ...templateMacro, scopes: templateMacro.scopes.map(s => ({ ...s, progress: 0, startDate: null, endDate: null })) };
+      });
+      return { ...prev, macros: updatedMacros };
+    });
+  }, []);
+
+  // Macro management
+  const addMacro = useCallback((name: string) => {
+    const newMacro: Macro = {
+      id: `macro_${Date.now()}`,
+      name,
+      scopes: [],
+    };
+    const newTemplate = [...macrosTemplate, newMacro];
+    setMacrosTemplate(newTemplate);
+    syncMacrosToHouses(newTemplate);
+  }, [macrosTemplate, syncMacrosToHouses]);
+
+  const updateMacro = useCallback((macroId: string, name: string) => {
+    const newTemplate = macrosTemplate.map(m => m.id === macroId ? { ...m, name } : m);
+    setMacrosTemplate(newTemplate);
+    syncMacrosToHouses(newTemplate);
+  }, [macrosTemplate, syncMacrosToHouses]);
+
+  const deleteMacro = useCallback((macroId: string) => {
+    const newTemplate = macrosTemplate.filter(m => m.id !== macroId);
+    setMacrosTemplate(newTemplate);
+    syncMacrosToHouses(newTemplate);
+  }, [macrosTemplate, syncMacrosToHouses]);
+
+  // Scope management
+  const addScope = useCallback((macroId: string, name: string, weight: number) => {
+    const newScope: Scope = {
+      id: `scope_${Date.now()}`,
+      name,
+      weight,
+      progress: 0,
+      startDate: null,
+      endDate: null,
+    };
+    const newTemplate = macrosTemplate.map(m => 
+      m.id === macroId ? { ...m, scopes: [...m.scopes, newScope] } : m
+    );
+    setMacrosTemplate(newTemplate);
+    syncMacrosToHouses(newTemplate);
+  }, [macrosTemplate, syncMacrosToHouses]);
+
+  const updateScope = useCallback((macroId: string, scopeId: string, updates: Partial<Pick<Scope, "name" | "weight">>) => {
+    const newTemplate = macrosTemplate.map(m => 
+      m.id === macroId 
+        ? { ...m, scopes: m.scopes.map(s => s.id === scopeId ? { ...s, ...updates } : s) }
+        : m
+    );
+    setMacrosTemplate(newTemplate);
+    syncMacrosToHouses(newTemplate);
+  }, [macrosTemplate, syncMacrosToHouses]);
+
+  const deleteScope = useCallback((macroId: string, scopeId: string) => {
+    const newTemplate = macrosTemplate.map(m => 
+      m.id === macroId ? { ...m, scopes: m.scopes.filter(s => s.id !== scopeId) } : m
+    );
+    setMacrosTemplate(newTemplate);
+    syncMacrosToHouses(newTemplate);
+  }, [macrosTemplate, syncMacrosToHouses]);
 
   const updateScopeProgress = useCallback((houseId: number, macroId: string, scopeId: string, progress: number) => {
     setHouses(prev => prev.map(house => {
@@ -94,6 +202,13 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         setFilterQuadra,
         filterStatus,
         setFilterStatus,
+        macrosTemplate,
+        addMacro,
+        updateMacro,
+        deleteMacro,
+        addScope,
+        updateScope,
+        deleteScope,
       }}
     >
       {children}
