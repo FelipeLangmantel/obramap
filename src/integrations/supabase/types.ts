@@ -75,8 +75,10 @@ export type Database = {
         Row: {
           contractor: string
           created_at: string
+          custom_legend_items: Json
           expected_end_date: string
           id: string
+          legend_follow_macros: boolean
           location: string
           macros_template: Json
           name: string
@@ -90,8 +92,10 @@ export type Database = {
         Insert: {
           contractor: string
           created_at?: string
+          custom_legend_items?: Json
           expected_end_date: string
           id?: string
+          legend_follow_macros?: boolean
           location: string
           macros_template?: Json
           name: string
@@ -105,8 +109,10 @@ export type Database = {
         Update: {
           contractor?: string
           created_at?: string
+          custom_legend_items?: Json
           expected_end_date?: string
           id?: string
+          legend_follow_macros?: boolean
           location?: string
           macros_template?: Json
           name?: string
