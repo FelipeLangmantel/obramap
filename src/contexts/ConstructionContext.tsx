@@ -110,19 +110,95 @@ const jsonToMacros = (json: Json): Macro[] => {
   return json as unknown as Macro[];
 };
 
+const FILTER_STORAGE_KEY = "obramap_main_filters";
+
 export function ConstructionProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
-  const [filterQuadra, setFilterQuadra] = useState<string>("all");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [filterMode, setFilterMode] = useState<"status" | "macro" | "scope">("status");
-  const [filterMacro, setFilterMacro] = useState<string>("all");
-  const [filterScope, setFilterScope] = useState<string>("all");
+  const [filterQuadra, setFilterQuadraState] = useState<string>("all");
+  const [filterStatus, setFilterStatusState] = useState<string>("all");
+  const [filterMode, setFilterModeState] = useState<"status" | "macro" | "scope">("status");
+  const [filterMacro, setFilterMacroState] = useState<string>("all");
+  const [filterScope, setFilterScopeState] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
   const initialLoadDone = useRef(false);
+  const filtersLoadedRef = useRef(false);
 
   const currentProject = projects.find(p => p.id === currentProjectId) || null;
+
+  // Load filters from localStorage when project changes
+  useEffect(() => {
+    if (!currentProjectId) return;
+    
+    const savedFilters = localStorage.getItem(`${FILTER_STORAGE_KEY}_${currentProjectId}`);
+    if (savedFilters) {
+      try {
+        const filters = JSON.parse(savedFilters);
+        if (filters.filterQuadra) setFilterQuadraState(filters.filterQuadra);
+        if (filters.filterStatus) setFilterStatusState(filters.filterStatus);
+        if (filters.filterMode) setFilterModeState(filters.filterMode);
+        if (filters.filterMacro) setFilterMacroState(filters.filterMacro);
+        if (filters.filterScope) setFilterScopeState(filters.filterScope);
+      } catch (e) {
+        console.error("Error loading filters:", e);
+      }
+    } else {
+      // Reset to defaults if no saved filters
+      setFilterQuadraState("all");
+      setFilterStatusState("all");
+      setFilterModeState("status");
+      setFilterMacroState("all");
+      setFilterScopeState("all");
+    }
+    filtersLoadedRef.current = true;
+  }, [currentProjectId]);
+
+  // Persist filters with setters
+  const setFilterQuadra = useCallback((value: string) => {
+    setFilterQuadraState(value);
+    if (currentProjectId) {
+      const current = localStorage.getItem(`${FILTER_STORAGE_KEY}_${currentProjectId}`);
+      const filters = current ? JSON.parse(current) : {};
+      localStorage.setItem(`${FILTER_STORAGE_KEY}_${currentProjectId}`, JSON.stringify({ ...filters, filterQuadra: value }));
+    }
+  }, [currentProjectId]);
+
+  const setFilterStatus = useCallback((value: string) => {
+    setFilterStatusState(value);
+    if (currentProjectId) {
+      const current = localStorage.getItem(`${FILTER_STORAGE_KEY}_${currentProjectId}`);
+      const filters = current ? JSON.parse(current) : {};
+      localStorage.setItem(`${FILTER_STORAGE_KEY}_${currentProjectId}`, JSON.stringify({ ...filters, filterStatus: value }));
+    }
+  }, [currentProjectId]);
+
+  const setFilterMode = useCallback((value: "status" | "macro" | "scope") => {
+    setFilterModeState(value);
+    if (currentProjectId) {
+      const current = localStorage.getItem(`${FILTER_STORAGE_KEY}_${currentProjectId}`);
+      const filters = current ? JSON.parse(current) : {};
+      localStorage.setItem(`${FILTER_STORAGE_KEY}_${currentProjectId}`, JSON.stringify({ ...filters, filterMode: value }));
+    }
+  }, [currentProjectId]);
+
+  const setFilterMacro = useCallback((value: string) => {
+    setFilterMacroState(value);
+    if (currentProjectId) {
+      const current = localStorage.getItem(`${FILTER_STORAGE_KEY}_${currentProjectId}`);
+      const filters = current ? JSON.parse(current) : {};
+      localStorage.setItem(`${FILTER_STORAGE_KEY}_${currentProjectId}`, JSON.stringify({ ...filters, filterMacro: value }));
+    }
+  }, [currentProjectId]);
+
+  const setFilterScope = useCallback((value: string) => {
+    setFilterScopeState(value);
+    if (currentProjectId) {
+      const current = localStorage.getItem(`${FILTER_STORAGE_KEY}_${currentProjectId}`);
+      const filters = current ? JSON.parse(current) : {};
+      localStorage.setItem(`${FILTER_STORAGE_KEY}_${currentProjectId}`, JSON.stringify({ ...filters, filterScope: value }));
+    }
+  }, [currentProjectId]);
 
   // Load projects from database on mount
   useEffect(() => {
@@ -213,8 +289,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   const setCurrentProject = useCallback((projectId: string | null) => {
     setCurrentProjectId(projectId);
     setSelectedHouse(null);
-    setFilterQuadra("all");
-    setFilterStatus("all");
+    // Don't reset filters here - they are loaded from localStorage per project
   }, []);
 
   const addProject = useCallback(async (projectData: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete" | "legendFollowMacros" | "customLegendItems">): Promise<string> => {

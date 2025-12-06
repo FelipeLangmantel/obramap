@@ -25,9 +25,11 @@ import {
   Minus,
   Filter,
   CalendarDays,
-  Pencil
+  Pencil,
+  Target
 } from "lucide-react";
 import { EditProductionDialog } from "./EditProductionDialog";
+import { PlannedProductionTab } from "./PlannedProductionTab";
 import { format, startOfWeek, endOfWeek, subWeeks, parseISO, isWithinInterval, addWeeks, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -48,11 +50,22 @@ interface WeeklyProduction {
 }
 
 const FILTER_STORAGE_KEY = "obramap_production_filters";
+const TAB_STORAGE_KEY = "obramap_production_tab";
 
 export function WeeklyProductionView() {
   const { currentProject, updateScopeProgress } = useConstruction();
   const { canEdit } = useAuth();
-  const [activeTab, setActiveTab] = useState<"register" | "analysis">("register");
+  
+  // Load saved tab from localStorage
+  const [activeTab, setActiveTab] = useState<"register" | "analysis" | "planning">(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(TAB_STORAGE_KEY);
+      if (saved === "register" || saved === "analysis" || saved === "planning") {
+        return saved;
+      }
+    }
+    return "register";
+  });
   const [selectedMacro, setSelectedMacro] = useState<string>("");
   const [selectedScope, setSelectedScope] = useState<string>("");
   const [selectedHouses, setSelectedHouses] = useState<number[]>([]);
@@ -355,10 +368,17 @@ export function WeeklyProductionView() {
     );
   }
 
+  // Handle tab change with persistence
+  const handleTabChange = (value: string) => {
+    const tab = value as "register" | "analysis" | "planning";
+    setActiveTab(tab);
+    localStorage.setItem(TAB_STORAGE_KEY, tab);
+  };
+
   return (
     <div className="space-y-4 h-full flex flex-col">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "register" | "analysis")} className="flex flex-col h-full">
-        <TabsList className="grid w-full max-w-lg grid-cols-2 h-10">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full">
+        <TabsList className="grid w-full max-w-2xl grid-cols-3 h-10">
           <TabsTrigger value="register" className="gap-2 text-sm">
             <ClipboardList className="w-4 h-4" />
             Registrar Produção
@@ -366,6 +386,10 @@ export function WeeklyProductionView() {
           <TabsTrigger value="analysis" className="gap-2 text-sm">
             <TrendingUp className="w-4 h-4" />
             Análise Semanal
+          </TabsTrigger>
+          <TabsTrigger value="planning" className="gap-2 text-sm">
+            <Target className="w-4 h-4" />
+            Produção Futura
           </TabsTrigger>
         </TabsList>
 
@@ -831,6 +855,10 @@ export function WeeklyProductionView() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="planning" className="flex-1 overflow-auto mt-4">
+          <PlannedProductionTab />
         </TabsContent>
       </Tabs>
 

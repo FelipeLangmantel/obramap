@@ -36,12 +36,21 @@ interface ScopeCost {
 }
 
 const COSTS_STORAGE_KEY = "obramap_scope_costs";
+const COSTS_TAB_STORAGE_KEY = "obramap_costs_tab";
 
 export function ProjectCostsView() {
   const { currentProject } = useConstruction();
   const [scopeCosts, setScopeCosts] = useState<ScopeCost[]>([]);
   const [editingScope, setEditingScope] = useState<ScopeCost | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "details">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "details">(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(COSTS_TAB_STORAGE_KEY);
+      if (saved === "overview" || saved === "details") {
+        return saved;
+      }
+    }
+    return "overview";
+  });
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -235,7 +244,11 @@ export function ProjectCostsView() {
 
   return (
     <div className="space-y-4 h-full flex flex-col">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "overview" | "details")} className="flex flex-col h-full">
+      <Tabs value={activeTab} onValueChange={(v) => { 
+        const tab = v as "overview" | "details";
+        setActiveTab(tab);
+        localStorage.setItem(COSTS_TAB_STORAGE_KEY, tab);
+      }} className="flex flex-col h-full">
         <TabsList className="grid w-full max-w-lg grid-cols-2 h-10">
           <TabsTrigger value="overview" className="gap-2 text-sm">
             <PieChart className="w-4 h-4" />
