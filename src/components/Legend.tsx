@@ -1,19 +1,30 @@
+import { useConstruction } from "@/contexts/ConstructionContext";
+
 export function Legend() {
-  const items = [
-    { color: "bg-status-not-started", label: "Não Iniciado" },
-    { color: "bg-status-foundation", label: "Fundação" },
-    { color: "bg-status-structure", label: "Estrutura" },
-    { color: "bg-status-finishing", label: "Acabamento" },
-    { color: "bg-status-completed", label: "Concluído" },
-  ];
+  const { currentProject } = useConstruction();
+  
+  // Use macros from current project, or show empty state
+  const macros = currentProject?.macrosTemplate || [];
+  
+  if (macros.length === 0) {
+    return (
+      <div className="flex flex-wrap items-center gap-4 p-4 bg-card rounded-xl border border-border">
+        <span className="text-sm font-medium text-foreground">Legenda</span>
+        <span className="text-sm text-muted-foreground">Nenhuma etapa configurada</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-4 p-4 bg-card rounded-xl border border-border">
       <span className="text-sm font-medium text-foreground">Legenda</span>
-      {items.map((item, index) => (
-        <div key={index} className="flex items-center gap-2">
-          <div className={`w-4 h-4 rounded-full ${item.color}`} />
-          <span className="text-sm text-muted-foreground">{item.label}</span>
+      {macros.map((macro) => (
+        <div key={macro.id} className="flex items-center gap-2">
+          <div 
+            className="w-4 h-4 rounded-full flex-shrink-0"
+            style={{ backgroundColor: macro.color }}
+          />
+          <span className="text-sm text-muted-foreground">{macro.name}</span>
         </div>
       ))}
     </div>

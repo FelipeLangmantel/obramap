@@ -10,6 +10,7 @@ export interface Scope {
 export interface Macro {
   id: string;
   name: string;
+  color: string;
   scopes: Scope[];
 }
 
@@ -30,10 +31,23 @@ export interface Quadra {
   houses: number[];
 }
 
+// Default colors for macros
+export const DEFAULT_MACRO_COLORS = [
+  "#9ca3af", // gray - Não Iniciado
+  "#ef4444", // red - Fundação
+  "#f59e0b", // amber - Estrutura
+  "#3b82f6", // blue - Acabamento
+  "#22c55e", // green - Concluído
+  "#8b5cf6", // purple
+  "#ec4899", // pink
+  "#14b8a6", // teal
+];
+
 export const MACROS_TEMPLATE: Macro[] = [
   {
     id: "macro1",
     name: "Estrutura",
+    color: "#ef4444",
     scopes: [
       { id: "radier", name: "Radier", weight: 8, progress: 0, startDate: null, endDate: null },
       { id: "paredes", name: "Paredes", weight: 12, progress: 0, startDate: null, endDate: null },
@@ -44,6 +58,7 @@ export const MACROS_TEMPLATE: Macro[] = [
   {
     id: "macro2",
     name: "Cobertura / Fechamento",
+    color: "#f59e0b",
     scopes: [
       { id: "telha", name: "Telha", weight: 5, progress: 0, startDate: null, endDate: null },
       { id: "calha_rufo", name: "Calha + Rufo", weight: 3, progress: 0, startDate: null, endDate: null },
@@ -54,6 +69,7 @@ export const MACROS_TEMPLATE: Macro[] = [
   {
     id: "macro3",
     name: "Instalações Hidrossanitárias",
+    color: "#3b82f6",
     scopes: [
       { id: "agua_fria", name: "Água Fria", weight: 4, progress: 0, startDate: null, endDate: null },
       { id: "barrilete", name: "Barrilete", weight: 2, progress: 0, startDate: null, endDate: null },
@@ -65,6 +81,7 @@ export const MACROS_TEMPLATE: Macro[] = [
   {
     id: "macro4",
     name: "Instalações Elétricas",
+    color: "#22c55e",
     scopes: [
       { id: "afiacao_tomadas", name: "Afiação + Tomadas", weight: 5, progress: 0, startDate: null, endDate: null },
       { id: "entrada_energia", name: "Entrada de Energia", weight: 3, progress: 0, startDate: null, endDate: null },
@@ -73,6 +90,7 @@ export const MACROS_TEMPLATE: Macro[] = [
   {
     id: "macro5",
     name: "Impermeabilizações",
+    color: "#8b5cf6",
     scopes: [
       { id: "imp_banheiro", name: "Imp. Banheiro", weight: 3, progress: 0, startDate: null, endDate: null },
       { id: "imp_laje", name: "Imp. Laje", weight: 3, progress: 0, startDate: null, endDate: null },
@@ -81,6 +99,7 @@ export const MACROS_TEMPLATE: Macro[] = [
   {
     id: "macro6",
     name: "Acabamentos Internos",
+    color: "#ec4899",
     scopes: [
       { id: "nivelamento", name: "Niv. Interna", weight: 4, progress: 0, startDate: null, endDate: null },
       { id: "contrapiso", name: "Contrapiso", weight: 4, progress: 0, startDate: null, endDate: null },
@@ -94,6 +113,7 @@ export const MACROS_TEMPLATE: Macro[] = [
   {
     id: "macro7",
     name: "Entrega e Finalização",
+    color: "#14b8a6",
     scopes: [
       { id: "limpeza_final", name: "Limpeza Final", weight: 1, progress: 0, startDate: null, endDate: null },
     ],
