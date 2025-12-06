@@ -158,6 +158,18 @@ export function WeeklyProductionView() {
     setSelectedHouses([]);
   };
 
+  // Reload productions helper
+  const reloadProductions = async () => {
+    if (!currentProject) return;
+    const { data: newData } = await supabase
+      .from('weekly_productions')
+      .select('*')
+      .eq('project_id', currentProject.id)
+      .order('week_start', { ascending: false });
+    
+    setProductions(newData || []);
+  };
+
   // Save production record
   const handleSave = async () => {
     if (!currentProject || !selectedScope || selectedHouses.length === 0) {
@@ -190,21 +202,15 @@ export function WeeklyProductionView() {
 
       if (error) throw error;
 
-      // Update progress for each selected house
+      // Update progress for each selected house - this updates the map automatically
       for (const houseId of selectedHouses) {
         await updateScopeProgress(houseId, macro.id, scope.id, 100);
       }
 
-      toast.success(`Produção registrada: ${scope.name} em ${selectedHouses.length} casas`);
+      toast.success(`Produção registrada: ${scope.name} em ${selectedHouses.length} casas. Mapa atualizado!`);
       
       // Reload productions
-      const { data: newData } = await supabase
-        .from('weekly_productions')
-        .select('*')
-        .eq('project_id', currentProject.id)
-        .order('week_start', { ascending: false });
-      
-      setProductions(newData || []);
+      await reloadProductions();
       setSelectedHouses([]);
       setSelectedScope("");
     } catch (error) {
@@ -212,6 +218,11 @@ export function WeeklyProductionView() {
       toast.error("Erro ao salvar produção");
     }
     setIsSaving(false);
+  };
+
+  // Handle edit dialog save
+  const handleEditSave = async () => {
+    await reloadProductions();
   };
 
   // Filter productions by analysis period
@@ -693,17 +704,7 @@ export function WeeklyProductionView() {
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         production={editingProduction}
-        onSave={async () => {
-          // Reload productions
-          if (currentProject) {
-            const { data } = await supabase
-              .from('weekly_productions')
-              .select('*')
-              .eq('project_id', currentProject.id)
-              .order('week_start', { ascending: false });
-            setProductions(data || []);
-          }
-        }}
+        onSave={handleEditSave}
       />
     </div>
   );
