@@ -1,4 +1,4 @@
-import { Grid3X3, Filter, Layers, Wrench } from "lucide-react";
+import { Grid3X3 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useConstruction } from "@/contexts/ConstructionContext";
@@ -50,15 +50,15 @@ export function FilterBar() {
   };
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className="flex items-center gap-1.5 flex-nowrap">
       {/* Quadra filter */}
       <Select value={filterQuadra} onValueChange={setFilterQuadra}>
-        <SelectTrigger className="w-auto min-w-[100px] max-w-[140px] bg-card h-8 text-xs">
+        <SelectTrigger className="w-auto min-w-[80px] max-w-[110px] bg-card h-7 text-[11px] px-2">
           <Grid3X3 className="w-3 h-3 mr-1 shrink-0" />
           <SelectValue placeholder="Quadras" />
         </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todas Quadras</SelectItem>
+        <SelectContent className="z-50">
+          <SelectItem value="all">Todas</SelectItem>
           {quadras.map(q => (
             <SelectItem key={q.id} value={q.id}>{q.name}</SelectItem>
           ))}
@@ -67,16 +67,14 @@ export function FilterBar() {
       
       {/* Filter mode tabs */}
       <Tabs value={filterMode} onValueChange={handleModeChange} className="w-auto">
-        <TabsList className="h-8 p-0.5">
-          <TabsTrigger value="status" className="text-xs px-2 h-7">
+        <TabsList className="h-7 p-0.5 gap-0">
+          <TabsTrigger value="status" className="text-[11px] px-1.5 h-6">
             Status
           </TabsTrigger>
-          <TabsTrigger value="macro" className="text-xs px-2 h-7">
-            <Layers className="w-3 h-3 mr-1" />
+          <TabsTrigger value="macro" className="text-[11px] px-1.5 h-6">
             Etapas
           </TabsTrigger>
-          <TabsTrigger value="scope" className="text-xs px-2 h-7">
-            <Wrench className="w-3 h-3 mr-1" />
+          <TabsTrigger value="scope" className="text-[11px] px-1.5 h-6">
             Serviços
           </TabsTrigger>
         </TabsList>
@@ -85,11 +83,11 @@ export function FilterBar() {
       {/* Dynamic filter based on mode */}
       {filterMode === "status" && (
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-auto min-w-[100px] max-w-[140px] bg-card h-8 text-xs">
+          <SelectTrigger className="w-auto min-w-[80px] max-w-[110px] bg-card h-7 text-[11px] px-2">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos Status</SelectItem>
+          <SelectContent className="z-50">
+            <SelectItem value="all">Todos</SelectItem>
             <SelectItem value="not-started">Não Iniciado</SelectItem>
             <SelectItem value="foundation">Fundação</SelectItem>
             <SelectItem value="structure">Estrutura</SelectItem>
@@ -101,19 +99,19 @@ export function FilterBar() {
 
       {filterMode === "macro" && (
         <Select value={filterMacro} onValueChange={setFilterMacro}>
-          <SelectTrigger className="w-auto min-w-[100px] max-w-[160px] bg-card h-8 text-xs">
+          <SelectTrigger className="w-auto min-w-[80px] max-w-[120px] bg-card h-7 text-[11px] px-2">
             <SelectValue placeholder="Etapas" />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas Etapas</SelectItem>
+          <SelectContent className="z-50">
+            <SelectItem value="all">Todas</SelectItem>
             {macros.map(macro => (
               <SelectItem key={macro.id} value={macro.id}>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <div 
                     className="w-2 h-2 rounded-full shrink-0" 
                     style={{ backgroundColor: macro.color }}
                   />
-                  <span className="truncate">{macro.name}</span>
+                  <span className="truncate text-[11px]">{macro.name}</span>
                 </div>
               </SelectItem>
             ))}
@@ -123,19 +121,19 @@ export function FilterBar() {
 
       {filterMode === "scope" && (
         <Select value={filterScope} onValueChange={setFilterScope}>
-          <SelectTrigger className="w-auto min-w-[100px] max-w-[180px] bg-card h-8 text-xs">
+          <SelectTrigger className="w-auto min-w-[80px] max-w-[130px] bg-card h-7 text-[11px] px-2">
             <SelectValue placeholder="Serviços" />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos Serviços</SelectItem>
+          <SelectContent className="z-50">
+            <SelectItem value="all">Todos</SelectItem>
             {allScopes.map(scope => (
               <SelectItem key={scope.id} value={scope.id}>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <div 
                     className="w-2 h-2 rounded-full shrink-0" 
                     style={{ backgroundColor: scope.color }}
                   />
-                  <span className="truncate">{scope.name}</span>
+                  <span className="truncate text-[11px]">{scope.name}</span>
                 </div>
               </SelectItem>
             ))}

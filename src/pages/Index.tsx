@@ -37,35 +37,35 @@ function IndexContent() {
 
   return (
     <SidebarProvider defaultOpen={false}>
-      <div className="min-h-screen flex w-full overflow-hidden">
+      <div className="h-screen flex w-full overflow-hidden">
         <AppSidebar 
           activeView={activeView} 
           onViewChange={setActiveView}
         />
         
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
           {/* Top Header */}
-          <header className="h-14 bg-card border-b border-border px-4 flex items-center gap-4 shrink-0">
-            <h2 className="text-lg font-semibold text-foreground whitespace-nowrap shrink-0">
+          <header className="h-14 bg-card border-b border-border px-3 md:px-4 flex items-center gap-2 md:gap-4 shrink-0">
+            <h2 className="text-base md:text-lg font-semibold text-foreground whitespace-nowrap shrink-0">
               {viewTitles[activeView]}
             </h2>
             
-            <div className="flex-1" />
+            <div className="flex-1 min-w-0" />
             
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 overflow-x-auto max-w-[60%] md:max-w-none">
               <ProjectSelector />
               {activeView !== "production" && <FilterBar />}
             </div>
           </header>
 
           {/* Main Content */}
-          <main className="flex-1 p-4 lg:p-6 space-y-4 lg:space-y-6 overflow-auto">
+          <main className="flex-1 p-3 md:p-4 lg:p-6 space-y-3 md:space-y-4 lg:space-y-6 overflow-auto">
             {projects.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 gap-4">
                 <div className="text-6xl">🏗️</div>
                 <h2 className="text-2xl font-semibold text-foreground">Nenhuma obra cadastrada</h2>
                 <p className="text-muted-foreground text-center max-w-md">
-                  Clique em "Cadastro de Obras" no menu lateral para cadastrar seu primeiro empreendimento.
+                  Clique em "Nova Obra" no menu lateral para cadastrar seu primeiro empreendimento.
                 </p>
               </div>
             ) : (
@@ -92,12 +92,11 @@ function IndexContent() {
           </main>
 
           {/* Footer */}
-          <footer className="py-3 text-center text-sm text-muted-foreground border-t border-border/50 bg-card/50 shrink-0">
-            <p>Desenvolvido e produzido por <span className="font-semibold text-foreground">Felipe Langmantel</span></p>
+          <footer className="py-2 text-center text-xs md:text-sm text-muted-foreground border-t border-border/50 bg-card/50 shrink-0">
+            <p>Desenvolvido por <span className="font-semibold text-foreground">Felipe Langmantel</span></p>
           </footer>
         </div>
       </div>
-
     </SidebarProvider>
   );
 }
