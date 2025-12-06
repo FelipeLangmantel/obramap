@@ -24,8 +24,10 @@ import {
   ArrowDownRight,
   Minus,
   Filter,
-  CalendarDays
+  CalendarDays,
+  Pencil
 } from "lucide-react";
+import { EditProductionDialog } from "./EditProductionDialog";
 import { format, startOfWeek, endOfWeek, subWeeks, parseISO, isWithinInterval, addWeeks, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -66,6 +68,8 @@ export function WeeklyProductionView() {
   const [productions, setProductions] = useState<WeeklyProduction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [editingProduction, setEditingProduction] = useState<WeeklyProduction | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
@@ -643,7 +647,7 @@ export function WeeklyProductionView() {
                   ) : (
                     <div className="space-y-2">
                       {filteredProductions.slice(0, 20).map(prod => (
-                        <div key={prod.id} className="flex items-center gap-3 p-2.5 rounded-lg border">
+                        <div key={prod.id} className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-accent/30 transition-colors group">
                           <div 
                             className="w-3 h-3 rounded-full flex-shrink-0" 
                             style={{ backgroundColor: prod.macro_color }}
@@ -651,15 +655,28 @@ export function WeeklyProductionView() {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{prod.scope_name}</p>
                             <p className="text-xs text-muted-foreground">
-                              {prod.macro_name} • {format(parseISO(prod.week_start), "dd/MM", { locale: ptBR })}
+                              {prod.macro_name} • {format(parseISO(prod.week_start), "dd/MM", { locale: ptBR })} - {format(parseISO(prod.week_end), "dd/MM", { locale: ptBR })}
                             </p>
                           </div>
-                          <div className="text-right">
-                            <Badge variant="secondary" className="text-xs">{prod.houses_count} casas</Badge>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">
-                              {prod.house_ids.slice(0, 4).join(", ")}
-                              {prod.house_ids.length > 4 && `... +${prod.house_ids.length - 4}`}
-                            </p>
+                          <div className="text-right flex items-center gap-2">
+                            <div>
+                              <Badge variant="secondary" className="text-xs">{prod.houses_count} casas</Badge>
+                              <p className="text-[10px] text-muted-foreground mt-0.5">
+                                {prod.house_ids.slice(0, 4).join(", ")}
+                                {prod.house_ids.length > 4 && `... +${prod.house_ids.length - 4}`}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => {
+                                setEditingProduction(prod);
+                                setEditDialogOpen(true);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
                           </div>
                         </div>
                       ))}
@@ -671,6 +688,23 @@ export function WeeklyProductionView() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <EditProductionDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        production={editingProduction}
+        onSave={async () => {
+          // Reload productions
+          if (currentProject) {
+            const { data } = await supabase
+              .from('weekly_productions')
+              .select('*')
+              .eq('project_id', currentProject.id)
+              .order('week_start', { ascending: false });
+            setProductions(data || []);
+          }
+        }}
+      />
     </div>
   );
 }
