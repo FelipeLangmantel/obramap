@@ -4,7 +4,7 @@ import { calculateHouseProgress } from "@/data/constructionData";
 import { useMemo } from "react";
 
 export function StatsCards() {
-  const { currentProject, getDaysRemaining } = useConstruction();
+  const { currentProject } = useConstruction();
   
   const stats = useMemo(() => {
     if (!currentProject) return { total: 0, avgProgress: 0, completed: 0, inProgress: 0 };
@@ -21,7 +21,20 @@ export function StatsCards() {
     return { total, avgProgress, completed, inProgress };
   }, [currentProject]);
 
-  const daysRemaining = getDaysRemaining();
+  // Calculate days remaining based on current project's expected end date
+  const daysRemaining = useMemo(() => {
+    if (!currentProject?.expectedEndDate) return null;
+    
+    const endDate = new Date(currentProject.expectedEndDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time for accurate day calculation
+    endDate.setHours(0, 0, 0, 0);
+    
+    const diffTime = endDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays;
+  }, [currentProject?.expectedEndDate]);
 
   if (!currentProject) return null;
 
