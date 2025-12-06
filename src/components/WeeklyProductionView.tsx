@@ -22,9 +22,11 @@ import {
   BarChart3,
   ArrowUpRight,
   ArrowDownRight,
-  Minus
+  Minus,
+  Filter,
+  CalendarDays
 } from "lucide-react";
-import { format, startOfWeek, endOfWeek, subWeeks, parseISO } from "date-fns";
+import { format, startOfWeek, endOfWeek, subWeeks, parseISO, isWithinInterval, addWeeks, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface WeeklyProduction {
@@ -50,7 +52,17 @@ export function WeeklyProductionView() {
   const [selectedMacro, setSelectedMacro] = useState<string>("");
   const [selectedScope, setSelectedScope] = useState<string>("");
   const [selectedHouses, setSelectedHouses] = useState<number[]>([]);
-  const [weekDate, setWeekDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  
+  // Registration period dates
+  const [measurementStartDate, setMeasurementStartDate] = useState<string>(format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
+  const [measurementEndDate, setMeasurementEndDate] = useState<string>(format(endOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
+  const [registrationDate, setRegistrationDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  
+  // Analysis period filter
+  const [analysisPeriod, setAnalysisPeriod] = useState<string>("4weeks");
+  const [analysisStartDate, setAnalysisStartDate] = useState<string>(format(subWeeks(new Date(), 4), "yyyy-MM-dd"));
+  const [analysisEndDate, setAnalysisEndDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  
   const [productions, setProductions] = useState<WeeklyProduction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -65,9 +77,40 @@ export function WeeklyProductionView() {
     return macro?.scopes || [];
   }, [selectedMacro, macros]);
 
-  // Get current week boundaries
-  const weekStart = useMemo(() => startOfWeek(parseISO(weekDate), { weekStartsOn: 1 }), [weekDate]);
-  const weekEnd = useMemo(() => endOfWeek(parseISO(weekDate), { weekStartsOn: 1 }), [weekDate]);
+  // Handle period filter change
+  useEffect(() => {
+    const now = new Date();
+    switch (analysisPeriod) {
+      case "1week":
+        setAnalysisStartDate(format(subWeeks(now, 1), "yyyy-MM-dd"));
+        setAnalysisEndDate(format(now, "yyyy-MM-dd"));
+        break;
+      case "2weeks":
+        setAnalysisStartDate(format(subWeeks(now, 2), "yyyy-MM-dd"));
+        setAnalysisEndDate(format(now, "yyyy-MM-dd"));
+        break;
+      case "4weeks":
+        setAnalysisStartDate(format(subWeeks(now, 4), "yyyy-MM-dd"));
+        setAnalysisEndDate(format(now, "yyyy-MM-dd"));
+        break;
+      case "8weeks":
+        setAnalysisStartDate(format(subWeeks(now, 8), "yyyy-MM-dd"));
+        setAnalysisEndDate(format(now, "yyyy-MM-dd"));
+        break;
+      case "month":
+        setAnalysisStartDate(format(startOfMonth(now), "yyyy-MM-dd"));
+        setAnalysisEndDate(format(endOfMonth(now), "yyyy-MM-dd"));
+        break;
+      case "lastmonth":
+        const lastMonth = subMonths(now, 1);
+        setAnalysisStartDate(format(startOfMonth(lastMonth), "yyyy-MM-dd"));
+        setAnalysisEndDate(format(endOfMonth(lastMonth), "yyyy-MM-dd"));
+        break;
+      case "custom":
+        // Keep current dates
+        break;
+    }
+  }, [analysisPeriod]);
 
   // Load productions
   useEffect(() => {
@@ -130,8 +173,8 @@ export function WeeklyProductionView() {
         .from('weekly_productions')
         .insert({
           project_id: currentProject.id,
-          week_start: format(weekStart, "yyyy-MM-dd"),
-          week_end: format(weekEnd, "yyyy-MM-dd"),
+          week_start: measurementStartDate,
+          week_end: measurementEndDate,
           scope_id: scope.id,
           scope_name: scope.name,
           macro_id: macro.id,
@@ -167,11 +210,24 @@ export function WeeklyProductionView() {
     setIsSaving(false);
   };
 
+  // Filter productions by analysis period
+  const filteredProductions = useMemo(() => {
+    if (!analysisStartDate || !analysisEndDate) return productions;
+    
+    const start = parseISO(analysisStartDate);
+    const end = parseISO(analysisEndDate);
+    
+    return productions.filter(prod => {
+      const prodDate = parseISO(prod.week_start);
+      return isWithinInterval(prodDate, { start, end });
+    });
+  }, [productions, analysisStartDate, analysisEndDate]);
+
   // Weekly stats
   const weeklyStats = useMemo(() => {
     const weeks: { [key: string]: { total: number; scopes: { [key: string]: number } } } = {};
     
-    productions.forEach(prod => {
+    filteredProductions.forEach(prod => {
       const weekKey = prod.week_start;
       if (!weeks[weekKey]) {
         weeks[weekKey] = { total: 0, scopes: {} };
@@ -182,13 +238,12 @@ export function WeeklyProductionView() {
 
     return Object.entries(weeks)
       .sort((a, b) => b[0].localeCompare(a[0]))
-      .slice(0, 8)
       .map(([week, data]) => ({
         week,
         weekFormatted: format(parseISO(week), "dd/MM", { locale: ptBR }),
         ...data
       }));
-  }, [productions]);
+  }, [filteredProductions]);
 
   // Calculate trend
   const trend = useMemo(() => {
@@ -231,46 +286,71 @@ export function WeeklyProductionView() {
   }
 
   return (
-    <div className="space-y-6">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "register" | "analysis")}>
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="register" className="gap-2">
+    <div className="space-y-4 h-full flex flex-col">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "register" | "analysis")} className="flex flex-col h-full">
+        <TabsList className="grid w-full max-w-lg grid-cols-2 h-10">
+          <TabsTrigger value="register" className="gap-2 text-sm">
             <ClipboardList className="w-4 h-4" />
             Registrar Produção
           </TabsTrigger>
-          <TabsTrigger value="analysis" className="gap-2">
+          <TabsTrigger value="analysis" className="gap-2 text-sm">
             <TrendingUp className="w-4 h-4" />
             Análise Semanal
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="register" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <TabsContent value="register" className="flex-1 overflow-auto mt-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
             {/* Selection Panel */}
             <Card className="lg:col-span-1">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
                   <Calendar className="w-5 h-5" />
-                  Configuração
+                  Configuração do Registro
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Semana de Referência</Label>
-                  <Input 
-                    type="date" 
-                    value={weekDate}
-                    onChange={(e) => setWeekDate(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Semana: {format(weekStart, "dd/MM", { locale: ptBR })} - {format(weekEnd, "dd/MM/yyyy", { locale: ptBR })}
-                  </p>
+                {/* Period of measurement */}
+                <div className="p-3 bg-secondary/30 rounded-lg space-y-3">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4" />
+                    Período de Medição
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Início</Label>
+                      <Input 
+                        type="date" 
+                        value={measurementStartDate}
+                        onChange={(e) => setMeasurementStartDate(e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Fim</Label>
+                      <Input 
+                        type="date" 
+                        value={measurementEndDate}
+                        onChange={(e) => setMeasurementEndDate(e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Data de Lançamento</Label>
+                    <Input 
+                      type="date" 
+                      value={registrationDate}
+                      onChange={(e) => setRegistrationDate(e.target.value)}
+                      className="h-9"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Etapa (Macro)</Label>
+                  <Label className="text-sm">Etapa (Macro)</Label>
                   <Select value={selectedMacro} onValueChange={(v) => { setSelectedMacro(v); setSelectedScope(""); }}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-9">
                       <SelectValue placeholder="Selecione a etapa" />
                     </SelectTrigger>
                     <SelectContent>
@@ -287,13 +367,13 @@ export function WeeklyProductionView() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Serviço</Label>
+                  <Label className="text-sm">Serviço</Label>
                   <Select 
                     value={selectedScope} 
                     onValueChange={setSelectedScope}
                     disabled={!selectedMacro}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="h-9">
                       <SelectValue placeholder="Selecione o serviço" />
                     </SelectTrigger>
                     <SelectContent>
@@ -307,7 +387,7 @@ export function WeeklyProductionView() {
                 </div>
 
                 {selectedScope && (
-                  <div className="pt-2 border-t">
+                  <div className="pt-3 border-t">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium">Casas Selecionadas</span>
                       <Badge variant="secondary">{selectedHouses.length}</Badge>
@@ -324,7 +404,7 @@ export function WeeklyProductionView() {
                 )}
 
                 <Button 
-                  className="w-full gap-2" 
+                  className="w-full gap-2 h-10" 
                   onClick={handleSave}
                   disabled={!selectedScope || selectedHouses.length === 0 || isSaving || !canEdit}
                 >
@@ -336,12 +416,12 @@ export function WeeklyProductionView() {
 
             {/* Houses Grid */}
             <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
                   <Home className="w-5 h-5" />
                   Selecionar Casas
                   {selectedScope && (
-                    <Badge variant="outline" className="ml-auto">
+                    <Badge variant="outline" className="ml-auto text-xs">
                       {completedHouses.length} já concluídas
                     </Badge>
                   )}
@@ -353,7 +433,7 @@ export function WeeklyProductionView() {
                     Selecione uma etapa e um serviço para ver as casas
                   </div>
                 ) : (
-                  <ScrollArea className="h-[400px]">
+                  <ScrollArea className="h-[calc(100vh-400px)] min-h-[300px]">
                     <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2">
                       {houses.map(house => {
                         const isCompleted = completedHouses.includes(house.id);
@@ -391,155 +471,204 @@ export function WeeklyProductionView() {
           </div>
         </TabsContent>
 
-        <TabsContent value="analysis" className="space-y-4">
+        <TabsContent value="analysis" className="flex-1 overflow-auto mt-4 space-y-4">
+          {/* Period Filter */}
+          <Card className="p-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-muted-foreground" />
+                <Label className="text-sm font-medium">Período:</Label>
+              </div>
+              <Select value={analysisPeriod} onValueChange={setAnalysisPeriod}>
+                <SelectTrigger className="w-[180px] h-9">
+                  <SelectValue placeholder="Selecione o período" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1week">Última semana</SelectItem>
+                  <SelectItem value="2weeks">Últimas 2 semanas</SelectItem>
+                  <SelectItem value="4weeks">Últimas 4 semanas</SelectItem>
+                  <SelectItem value="8weeks">Últimas 8 semanas</SelectItem>
+                  <SelectItem value="month">Este mês</SelectItem>
+                  <SelectItem value="lastmonth">Mês passado</SelectItem>
+                  <SelectItem value="custom">Personalizado</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              {analysisPeriod === "custom" && (
+                <div className="flex items-center gap-2">
+                  <Input 
+                    type="date" 
+                    value={analysisStartDate}
+                    onChange={(e) => setAnalysisStartDate(e.target.value)}
+                    className="h-9 w-[150px]"
+                  />
+                  <span className="text-muted-foreground">até</span>
+                  <Input 
+                    type="date" 
+                    value={analysisEndDate}
+                    onChange={(e) => setAnalysisEndDate(e.target.value)}
+                    className="h-9 w-[150px]"
+                  />
+                </div>
+              )}
+              
+              <Badge variant="outline" className="ml-auto">
+                {filteredProductions.length} registros no período
+              </Badge>
+            </div>
+          </Card>
+
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="pt-4 pb-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Esta Semana</p>
+                    <p className="text-xs text-muted-foreground">Esta Semana</p>
                     <p className="text-2xl font-bold">{weeklyStats[0]?.total || 0}</p>
-                    <p className="text-xs text-muted-foreground">serviços executados</p>
+                    <p className="text-xs text-muted-foreground">serviços</p>
                   </div>
-                  <BarChart3 className="w-8 h-8 text-muted-foreground" />
+                  <BarChart3 className="w-7 h-7 text-muted-foreground" />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="pt-4 pb-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Tendência</p>
+                    <p className="text-xs text-muted-foreground">Tendência</p>
                     <div className="flex items-center gap-1">
                       <p className="text-2xl font-bold">{trend.percentage}%</p>
                       {trend.direction === 'up' && <ArrowUpRight className="w-5 h-5 text-green-600" />}
                       {trend.direction === 'down' && <ArrowDownRight className="w-5 h-5 text-red-600" />}
                       {trend.direction === 'neutral' && <Minus className="w-5 h-5 text-muted-foreground" />}
                     </div>
-                    <p className="text-xs text-muted-foreground">vs semana anterior</p>
+                    <p className="text-xs text-muted-foreground">vs anterior</p>
                   </div>
-                  <TrendingUp className="w-8 h-8 text-muted-foreground" />
+                  <TrendingUp className="w-7 h-7 text-muted-foreground" />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="pt-4 pb-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Média Semanal</p>
+                    <p className="text-xs text-muted-foreground">Média Semanal</p>
                     <p className="text-2xl font-bold">
                       {weeklyStats.length > 0 
                         ? Math.round(weeklyStats.reduce((sum, w) => sum + w.total, 0) / weeklyStats.length)
                         : 0
                       }
                     </p>
-                    <p className="text-xs text-muted-foreground">últimas {weeklyStats.length} semanas</p>
+                    <p className="text-xs text-muted-foreground">{weeklyStats.length} semanas</p>
                   </div>
-                  <Calendar className="w-8 h-8 text-muted-foreground" />
+                  <Calendar className="w-7 h-7 text-muted-foreground" />
                 </div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="pt-4 pb-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Registrado</p>
+                    <p className="text-xs text-muted-foreground">Total Período</p>
                     <p className="text-2xl font-bold">
-                      {productions.reduce((sum, p) => sum + p.houses_count, 0)}
+                      {filteredProductions.reduce((sum, p) => sum + p.houses_count, 0)}
                     </p>
-                    <p className="text-xs text-muted-foreground">serviços executados</p>
+                    <p className="text-xs text-muted-foreground">serviços</p>
                   </div>
-                  <CheckCircle2 className="w-8 h-8 text-muted-foreground" />
+                  <CheckCircle2 className="w-7 h-7 text-muted-foreground" />
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Weekly Evolution */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Evolução Semanal</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {weeklyStats.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  Nenhuma produção registrada ainda
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {weeklyStats.map((week, index) => (
-                    <div key={week.week} className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">Semana {week.weekFormatted}</span>
-                        <Badge variant={index === 0 ? "default" : "secondary"}>
-                          {week.total} serviços
-                        </Badge>
-                      </div>
-                      <div className="h-6 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-primary transition-all"
-                          style={{ 
-                            width: `${Math.min(100, (week.total / Math.max(...weeklyStats.map(w => w.total))) * 100)}%` 
-                          }}
-                        />
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {Object.entries(week.scopes).map(([scopeName, count]) => (
-                          <Badge key={scopeName} variant="outline" className="text-xs">
-                            {scopeName}: {count}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Recent Productions */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Últimos Registros</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[300px]">
-                {productions.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Nenhuma produção registrada
+          {/* Weekly Evolution and Recent Productions */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card className="flex flex-col">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Evolução Semanal</CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1">
+                {weeklyStats.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    Nenhuma produção registrada no período
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {productions.slice(0, 20).map(prod => (
-                      <div key={prod.id} className="flex items-center gap-3 p-3 rounded-lg border">
-                        <div 
-                          className="w-3 h-3 rounded-full flex-shrink-0" 
-                          style={{ backgroundColor: prod.macro_color }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{prod.scope_name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {prod.macro_name} • Semana {format(parseISO(prod.week_start), "dd/MM", { locale: ptBR })}
-                          </p>
+                  <ScrollArea className="h-[300px]">
+                    <div className="space-y-3">
+                      {weeklyStats.map((week, index) => (
+                        <div key={week.week} className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">Semana {week.weekFormatted}</span>
+                            <Badge variant={index === 0 ? "default" : "secondary"} className="text-xs">
+                              {week.total} serviços
+                            </Badge>
+                          </div>
+                          <div className="h-5 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-primary transition-all"
+                              style={{ 
+                                width: `${Math.min(100, (week.total / Math.max(...weeklyStats.map(w => w.total))) * 100)}%` 
+                              }}
+                            />
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {Object.entries(week.scopes).map(([scopeName, count]) => (
+                              <Badge key={scopeName} variant="outline" className="text-[10px] px-1.5 py-0">
+                                {scopeName}: {count}
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <Badge variant="secondary">{prod.houses_count} casas</Badge>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {prod.house_ids.slice(0, 5).join(", ")}
-                            {prod.house_ids.length > 5 && `... +${prod.house_ids.length - 5}`}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 )}
-              </ScrollArea>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            <Card className="flex flex-col">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Últimos Registros</CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1">
+                <ScrollArea className="h-[300px]">
+                  {filteredProductions.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground text-sm">
+                      Nenhuma produção no período
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {filteredProductions.slice(0, 20).map(prod => (
+                        <div key={prod.id} className="flex items-center gap-3 p-2.5 rounded-lg border">
+                          <div 
+                            className="w-3 h-3 rounded-full flex-shrink-0" 
+                            style={{ backgroundColor: prod.macro_color }}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{prod.scope_name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {prod.macro_name} • {format(parseISO(prod.week_start), "dd/MM", { locale: ptBR })}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <Badge variant="secondary" className="text-xs">{prod.houses_count} casas</Badge>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              {prod.house_ids.slice(0, 4).join(", ")}
+                              {prod.house_ids.length > 4 && `... +${prod.house_ids.length - 4}`}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

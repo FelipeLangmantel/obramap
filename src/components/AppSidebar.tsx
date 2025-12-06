@@ -42,8 +42,8 @@ import { ProjectCostsDialog } from "@/components/ProjectCostsDialog";
 import obraMapLogo from "@/assets/obramap-logo.png";
 
 interface AppSidebarProps {
-  activeView: "map" | "charts" | "production";
-  onViewChange: (view: "map" | "charts" | "production") => void;
+  activeView: "map" | "charts" | "production" | "costs";
+  onViewChange: (view: "map" | "charts" | "production" | "costs") => void;
 }
 
 export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
@@ -55,7 +55,6 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [macrosDialogOpen, setMacrosDialogOpen] = useState(false);
-  const [costsDialogOpen, setCostsDialogOpen] = useState(false);
 
   const getInitials = (name: string) => {
     return name
@@ -88,9 +87,14 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       view: "production" as const, 
       icon: ClipboardList 
     },
+    { 
+      title: "Custos da Obra", 
+      view: "costs" as const, 
+      icon: DollarSign 
+    },
   ];
 
-  const handleViewChange = (view: "map" | "charts" | "production") => {
+  const handleViewChange = (view: "map" | "charts" | "production" | "costs") => {
     onViewChange(view);
   };
 
@@ -117,7 +121,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         <SidebarContent className="px-3">
           {/* Menu Principal */}
           <SidebarGroup>
-            <SidebarGroupLabel className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wider px-3 mb-1">
+            <SidebarGroupLabel className="text-muted-foreground/70 text-xs font-medium uppercase tracking-wider px-3 mb-1">
               Menu Principal
             </SidebarGroupLabel>
             <SidebarGroupContent>
@@ -128,13 +132,13 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                       onClick={() => handleViewChange(item.view)}
                       isActive={activeView === item.view}
                       className={cn(
-                        "w-full justify-start gap-3 px-3 py-2 rounded-md transition-all duration-150",
+                        "w-full justify-start gap-3 px-3 py-2.5 rounded-md transition-all duration-150",
                         activeView === item.view 
                           ? "bg-accent text-accent-foreground font-medium" 
                           : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                       )}
                     >
-                      <item.icon className="h-[18px] w-[18px] shrink-0" />
+                      <item.icon className="h-5 w-5 shrink-0" />
                       <span className="text-sm">{item.title}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -144,8 +148,8 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
           </SidebarGroup>
 
           {/* Gerenciamento */}
-          <SidebarGroup className="mt-8">
-            <SidebarGroupLabel className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wider px-3 mb-1">
+          <SidebarGroup className="mt-6">
+            <SidebarGroupLabel className="text-muted-foreground/70 text-xs font-medium uppercase tracking-wider px-3 mb-1">
               Gerenciamento
             </SidebarGroupLabel>
             <SidebarGroupContent>
@@ -153,46 +157,37 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     onClick={() => setNewProjectOpen(true)}
-                    className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
                   >
-                    <Plus className="h-[18px] w-[18px] shrink-0" />
+                    <Plus className="h-5 w-5 shrink-0" />
                     <span className="text-sm">Nova Obra</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     onClick={() => setProjectsListOpen(true)}
-                    className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
                   >
-                    <Building2 className="h-[18px] w-[18px] shrink-0" />
+                    <Building2 className="h-5 w-5 shrink-0" />
                     <span className="text-sm">Cadastro de Obras</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     onClick={() => setMacrosDialogOpen(true)}
-                    className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
                   >
-                    <Layers className="h-[18px] w-[18px] shrink-0" />
+                    <Layers className="h-5 w-5 shrink-0" />
                     <span className="text-sm">Etapas e Serviços</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setCostsDialogOpen(true)}
-                    className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
-                  >
-                    <DollarSign className="h-[18px] w-[18px] shrink-0" />
-                    <span className="text-sm">Custos da Obra</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 {isAdmin && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => setUsersDialogOpen(true)}
-                      className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
                     >
-                      <Users className="h-[18px] w-[18px] shrink-0" />
+                      <Users className="h-5 w-5 shrink-0" />
                       <span className="text-sm">Gerenciar Usuários</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -200,9 +195,9 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     onClick={() => setSettingsOpen(true)}
-                    className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
                   >
-                    <Settings className="h-[18px] w-[18px] shrink-0" />
+                    <Settings className="h-5 w-5 shrink-0" />
                     <span className="text-sm">Configurações</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -215,8 +210,8 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         <SidebarFooter className="p-3 border-t border-border/40 mt-auto">
           {profile && (
             <div className="flex items-center gap-3 p-2 rounded-lg">
-              <Avatar className="h-8 w-8 shrink-0">
-                <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+              <Avatar className="h-9 w-9 shrink-0">
+                <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
                   {getInitials(profile.display_name)}
                 </AvatarFallback>
               </Avatar>
@@ -224,13 +219,13 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                 <p className="text-sm font-medium text-foreground truncate">
                   {profile.display_name}
                 </p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {getRoleLabel()}
                 </p>
               </div>
               <button
                 onClick={() => signOut()}
-                className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                 title="Sair"
               >
                 <LogOut className="h-4 w-4" />
@@ -253,7 +248,6 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} />
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <ManageMacrosDialog open={macrosDialogOpen} onOpenChange={setMacrosDialogOpen} />
-      <ProjectCostsDialog open={costsDialogOpen} onOpenChange={setCostsDialogOpen} />
     </>
   );
 }
