@@ -1,20 +1,26 @@
-import { useMemo } from "react";
+import { useMemo, useState, DragEvent } from "react";
 import { useConstruction } from "@/contexts/ConstructionContext";
-import { Quadra, calculateHouseProgress, getStatusFromProgress } from "@/data/constructionData";
+import { calculateHouseProgress, getStatusFromProgress } from "@/data/constructionData";
 import { HouseCard } from "./HouseCard";
 import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 
 interface QuadraCardProps {
-  quadra: Quadra;
+  quadraId: string;
 }
 
-export function QuadraCard({ quadra }: QuadraCardProps) {
-  const { houses, filterStatus } = useConstruction();
+export function QuadraCard({ quadraId }: QuadraCardProps) {
+  const { houses, filterStatus, quadras, moveHouseToQuadra } = useConstruction();
+  const [isDragOver, setIsDragOver] = useState(false);
+  
+  const quadra = quadras.find(q => q.id === quadraId);
+  
+  if (!quadra) return null;
   
   const { avgProgress, filteredHouses } = useMemo(() => {
     const quadraHouses = houses.filter(h => h.quadra === quadra.id);
     const progresses = quadraHouses.map(h => calculateHouseProgress(h));
-    const avg = Math.round(progresses.reduce((a, b) => a + b, 0) / progresses.length);
+    const avg = progresses.length > 0 ? Math.round(progresses.reduce((a, b) => a + b, 0) / progresses.length) : 0;
     
     let filtered = quadra.houses;
     if (filterStatus !== "all") {
@@ -30,10 +36,37 @@ export function QuadraCard({ quadra }: QuadraCardProps) {
     return { avgProgress: avg, filteredHouses: filtered };
   }, [houses, quadra, filterStatus]);
 
-  if (filteredHouses.length === 0) return null;
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const houseId = parseInt(e.dataTransfer.getData("houseId"));
+    if (houseId) {
+      moveHouseToQuadra(houseId, quadra.id);
+    }
+  };
+
+  if (filteredHouses.length === 0 && !isDragOver) return null;
 
   return (
-    <div className="bg-card rounded-xl border border-border p-4 animate-fade-in">
+    <div 
+      className={cn(
+        "bg-card rounded-xl border-2 p-4 animate-fade-in transition-all duration-200",
+        isDragOver ? "border-primary bg-primary/5" : "border-border"
+      )}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-semibold text-foreground">{quadra.name}</h3>
         <div className="flex items-center gap-3">
@@ -42,10 +75,15 @@ export function QuadraCard({ quadra }: QuadraCardProps) {
         </div>
       </div>
       
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 min-h-[60px]">
         {filteredHouses.map(houseId => (
           <HouseCard key={houseId} houseId={houseId} />
         ))}
+        {isDragOver && filteredHouses.length === 0 && (
+          <div className="w-14 h-14 rounded-lg border-2 border-dashed border-primary flex items-center justify-center">
+            <span className="text-xs text-primary">Soltar</span>
+          </div>
+        )}
       </div>
     </div>
   );

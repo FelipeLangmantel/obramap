@@ -13,17 +13,7 @@ export function HouseDetails() {
   const [editOpen, setEditOpen] = useState(false);
   
   if (!selectedHouse) {
-    return (
-      <div className="w-full lg:w-96 bg-card rounded-xl border border-border p-6 flex flex-col items-center justify-center min-h-[400px] animate-fade-in">
-        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-          <Building2 className="w-8 h-8 text-primary" />
-        </div>
-        <h3 className="text-lg font-semibold text-foreground mb-2">Selecione uma Casa</h3>
-        <p className="text-sm text-muted-foreground text-center">
-          Clique em qualquer casa no mapa para ver os detalhes do andamento da obra.
-        </p>
-      </div>
-    );
+    return null;
   }
   
   const progress = calculateHouseProgress(selectedHouse);
