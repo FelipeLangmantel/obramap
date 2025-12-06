@@ -21,10 +21,11 @@ import {
   LogOut,
   Building2,
   Plus,
-  Settings
+  Settings,
+  Layers,
+  DollarSign
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { UserManagement } from "@/components/UserManagement";
 import {
@@ -33,8 +34,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
+import { ProjectsListDialog } from "@/components/ProjectsListDialog";
 import { NewProjectDialog } from "@/components/NewProjectDialog";
+import { SettingsDialog } from "@/components/SettingsDialog";
+import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
+import { ProjectCostsDialog } from "@/components/ProjectCostsDialog";
 import obraMapLogo from "@/assets/obramap-logo.png";
 
 interface AppSidebarProps {
@@ -47,8 +51,11 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const collapsed = state === "collapsed";
   const { profile, role, signOut, isAdmin } = useAuth();
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
+  const [projectsListOpen, setProjectsListOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [macrosDialogOpen, setMacrosDialogOpen] = useState(false);
+  const [costsDialogOpen, setCostsDialogOpen] = useState(false);
 
   const getInitials = (name: string) => {
     return name
@@ -154,11 +161,29 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    onClick={() => setSettingsOpen(true)}
+                    onClick={() => setProjectsListOpen(true)}
                     className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
                   >
                     <Building2 className="h-[18px] w-[18px] shrink-0" />
                     <span className="text-sm">Cadastro de Obras</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setMacrosDialogOpen(true)}
+                    className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                  >
+                    <Layers className="h-[18px] w-[18px] shrink-0" />
+                    <span className="text-sm">Etapas e Serviços</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setCostsDialogOpen(true)}
+                    className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                  >
+                    <DollarSign className="h-[18px] w-[18px] shrink-0" />
+                    <span className="text-sm">Custos da Obra</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 {isAdmin && (
@@ -224,8 +249,11 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         </DialogContent>
       </Dialog>
 
-      <ProjectSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <ProjectsListDialog open={projectsListOpen} onOpenChange={setProjectsListOpen} />
       <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <ManageMacrosDialog open={macrosDialogOpen} onOpenChange={setMacrosDialogOpen} />
+      <ProjectCostsDialog open={costsDialogOpen} onOpenChange={setCostsDialogOpen} />
     </>
   );
 }
