@@ -5,10 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, Home, Grid3X3, Plus, Trash2, Edit2, Check, X } from "lucide-react";
+import { Building2, Home, Grid3X3, Plus, Trash2, Edit2, Check, X, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { UserManagement } from "@/components/UserManagement";
 
 interface ProjectSettingsDialogProps {
   open: boolean;
@@ -34,6 +36,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
     generateHousesForProject,
     completeProjectSetup 
   } = useConstruction();
+  const { isAdmin } = useAuth();
   
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
@@ -196,7 +199,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
         </DialogHeader>
         
         <Tabs defaultValue="info" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'}`}>
             <TabsTrigger value="info" className="gap-2">
               <Home className="h-4 w-4" />
               Informações
@@ -205,6 +208,12 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
               <Grid3X3 className="h-4 w-4" />
               Quadras
             </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="users" className="gap-2">
+                <Users className="h-4 w-4" />
+                Acessos
+              </TabsTrigger>
+            )}
           </TabsList>
           
           <TabsContent value="info" className="space-y-4 mt-4">
@@ -404,6 +413,12 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
               )}
             </div>
           </TabsContent>
+
+          {isAdmin && (
+            <TabsContent value="users" className="mt-4">
+              <UserManagement />
+            </TabsContent>
+          )}
         </Tabs>
         
         <DialogFooter>
