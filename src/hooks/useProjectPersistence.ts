@@ -31,11 +31,12 @@ export function useProjectPersistence() {
     const projects: Project[] = [];
 
     for (const p of projectsData || []) {
-      // Load quadras for this project
+      // Load quadras for this project (ordered by display_order)
       const { data: quadrasData } = await supabase
         .from('quadras')
         .select('*')
-        .eq('project_id', p.id);
+        .eq('project_id', p.id)
+        .order('display_order', { ascending: true });
 
       // Load houses for this project
       const { data: housesData } = await supabase

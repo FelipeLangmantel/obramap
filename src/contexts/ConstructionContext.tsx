@@ -146,11 +146,12 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         const loadedProjects: Project[] = [];
 
         for (const p of projectsData || []) {
-          // Load quadras for this project
+          // Load quadras for this project (ordered by display_order)
           const { data: quadrasData } = await supabase
             .from('quadras')
             .select('*')
-            .eq('project_id', p.id);
+            .eq('project_id', p.id)
+            .order('display_order', { ascending: true });
 
           // Load houses for this project
           const { data: housesData } = await supabase
@@ -477,12 +478,17 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   const addQuadra = useCallback(async (name: string, houseIds: number[]) => {
     if (!currentProjectId) return;
     
+    // Get the next display_order
+    const project = projects.find(p => p.id === currentProjectId);
+    const nextOrder = project ? project.quadras.length : 0;
+
     const { data: quadraData, error } = await supabase
       .from('quadras')
       .insert({
         project_id: currentProjectId,
         name,
         house_ids: houseIds,
+        display_order: nextOrder,
       })
       .select()
       .single();
@@ -625,8 +631,13 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       return { ...p, quadras: reorderedQuadras };
     }));
 
-    // Note: The order is maintained in the local state
-    // If needed, add an 'order' column to the quadras table for persistence
+    // Persist order to database
+    for (let i = 0; i < orderedIds.length; i++) {
+      await supabase
+        .from('quadras')
+        .update({ display_order: i })
+        .eq('id', orderedIds[i]);
+    }
   }, [currentProjectId]);
 
   const generateHousesForProject = useCallback(async () => {
