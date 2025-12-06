@@ -77,18 +77,18 @@ interface ConstructionContextType {
   setFilterScope: (scopeId: string) => void;
   
   // Macro management
-  addMacro: (name: string) => void;
-  updateMacro: (macroId: string, name: string, color?: string) => void;
-  deleteMacro: (macroId: string) => void;
+  addMacro: (name: string) => Promise<void>;
+  updateMacro: (macroId: string, name: string, color?: string) => Promise<void>;
+  deleteMacro: (macroId: string) => Promise<void>;
   resetProjectData: () => void;
   
   // Legend management
   updateLegendSettings: (followMacros: boolean, legendItems?: LegendItem[]) => void;
   
   // Scope management
-  addScope: (macroId: string, name: string, weight: number) => void;
-  updateScope: (macroId: string, scopeId: string, updates: Partial<Pick<Scope, "name" | "weight">>) => void;
-  deleteScope: (macroId: string, scopeId: string) => void;
+  addScope: (macroId: string, name: string, weight: number) => Promise<void>;
+  updateScope: (macroId: string, scopeId: string, updates: Partial<Pick<Scope, "name" | "weight">>) => Promise<void>;
+  deleteScope: (macroId: string, scopeId: string) => Promise<void>;
   
   // Time calculations
   getDaysRemaining: () => number;
@@ -811,9 +811,11 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     }
   }, [currentProjectId, selectedHouse, projects]);
 
-  // Sync macros to houses helper
-  const syncMacrosToHouses = useCallback((newTemplate: Macro[]) => {
+  // Sync macros to houses helper - now also persists to database
+  const syncMacrosToHouses = useCallback(async (newTemplate: Macro[]) => {
     if (!currentProjectId) return;
+    
+    let updatedHousesForDb: { houseId: number; macros: Macro[] }[] = [];
     
     setProjects(prev => prev.map(p => {
       if (p.id !== currentProjectId) return p;
@@ -832,11 +834,22 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
           }
           return { ...templateMacro, scopes: templateMacro.scopes.map(s => ({ ...s, progress: 0, startDate: null, endDate: null })) };
         });
+        
+        updatedHousesForDb.push({ houseId: house.id, macros: updatedMacros });
         return { ...house, macros: updatedMacros, lastUpdate: new Date().toLocaleDateString("pt-BR") };
       });
       
       return { ...p, houses: updatedHouses, macrosTemplate: newTemplate };
     }));
+
+    // Persist houses macros to database
+    for (const house of updatedHousesForDb) {
+      await supabase
+        .from('houses')
+        .update({ macros: macrosToJson(house.macros), last_update: new Date().toISOString().split('T')[0] })
+        .eq('project_id', currentProjectId)
+        .eq('house_number', house.houseId);
+    }
 
     if (selectedHouse) {
       const updatedMacros = newTemplate.map(templateMacro => {
@@ -856,8 +869,8 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     }
   }, [currentProjectId, selectedHouse]);
 
-  // Macro management
-  const addMacro = useCallback((name: string) => {
+  // Macro management - with proper await for database persistence
+  const addMacro = useCallback(async (name: string) => {
     if (!currentProject) return;
     
     // Get next available color
@@ -872,45 +885,71 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     };
     
     const newTemplate = [...currentProject.macrosTemplate, newMacro];
-    syncMacrosToHouses(newTemplate);
-
-    // Update in database
-    supabase
+    
+    // Update in database first
+    const { error } = await supabase
       .from('projects')
       .update({ macros_template: macrosToJson(newTemplate) })
       .eq('id', currentProject.id);
+
+    if (error) {
+      console.error('Error adding macro:', error);
+      toast.error("Erro ao adicionar etapa");
+      return;
+    }
+
+    // Then sync to houses (which also persists)
+    await syncMacrosToHouses(newTemplate);
+    toast.success("Etapa adicionada!");
   }, [currentProject, syncMacrosToHouses]);
 
-  const updateMacro = useCallback((macroId: string, name: string, color?: string) => {
+  const updateMacro = useCallback(async (macroId: string, name: string, color?: string) => {
     if (!currentProject) return;
     
     const newTemplate = currentProject.macrosTemplate.map(m => 
       m.id === macroId ? { ...m, name, ...(color !== undefined && { color }) } : m
     );
-    syncMacrosToHouses(newTemplate);
 
-    // Update in database
-    supabase
+    // Update in database first
+    const { error } = await supabase
       .from('projects')
       .update({ macros_template: macrosToJson(newTemplate) })
       .eq('id', currentProject.id);
+
+    if (error) {
+      console.error('Error updating macro:', error);
+      toast.error("Erro ao atualizar etapa");
+      return;
+    }
+
+    // Then sync to houses
+    await syncMacrosToHouses(newTemplate);
   }, [currentProject, syncMacrosToHouses]);
 
-  const deleteMacro = useCallback((macroId: string) => {
+  const deleteMacro = useCallback(async (macroId: string) => {
     if (!currentProject) return;
     
     const newTemplate = currentProject.macrosTemplate.filter(m => m.id !== macroId);
-    syncMacrosToHouses(newTemplate);
 
-    // Update in database
-    supabase
+    // Update in database first
+    const { error } = await supabase
       .from('projects')
       .update({ macros_template: macrosToJson(newTemplate) })
       .eq('id', currentProject.id);
+
+    if (error) {
+      console.error('Error deleting macro:', error);
+      toast.error("Erro ao remover etapa");
+      return;
+    }
+
+    // Then sync to houses
+    await syncMacrosToHouses(newTemplate);
+    toast.success("Etapa removida!");
   }, [currentProject, syncMacrosToHouses]);
 
-  // Scope management
-  const addScope = useCallback((macroId: string, name: string, weight: number) => {
+  // Scope management - with proper await for database persistence
+  const addScope = useCallback(async (macroId: string, name: string, weight: number) => {
     if (!currentProject) return;
     
     const newScope: Scope = {
@@ -927,16 +966,25 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         ? { ...m, scopes: [...m.scopes, newScope] }
         : m
     );
-    syncMacrosToHouses(newTemplate);
 
-    // Update in database
-    supabase
+    // Update in database first
+    const { error } = await supabase
       .from('projects')
       .update({ macros_template: macrosToJson(newTemplate) })
       .eq('id', currentProject.id);
+
+    if (error) {
+      console.error('Error adding scope:', error);
+      toast.error("Erro ao adicionar serviço");
+      return;
+    }
+
+    // Then sync to houses
+    await syncMacrosToHouses(newTemplate);
+    toast.success("Serviço adicionado!");
   }, [currentProject, syncMacrosToHouses]);
 
-  const updateScope = useCallback((macroId: string, scopeId: string, updates: Partial<Pick<Scope, "name" | "weight">>) => {
+  const updateScope = useCallback(async (macroId: string, scopeId: string, updates: Partial<Pick<Scope, "name" | "weight">>) => {
     if (!currentProject) return;
     
     const newTemplate = currentProject.macrosTemplate.map(m => 
@@ -944,16 +992,24 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         ? { ...m, scopes: m.scopes.map(s => s.id === scopeId ? { ...s, ...updates } : s) }
         : m
     );
-    syncMacrosToHouses(newTemplate);
 
-    // Update in database
-    supabase
+    // Update in database first
+    const { error } = await supabase
       .from('projects')
       .update({ macros_template: macrosToJson(newTemplate) })
       .eq('id', currentProject.id);
+
+    if (error) {
+      console.error('Error updating scope:', error);
+      toast.error("Erro ao atualizar serviço");
+      return;
+    }
+
+    // Then sync to houses
+    await syncMacrosToHouses(newTemplate);
   }, [currentProject, syncMacrosToHouses]);
 
-  const deleteScope = useCallback((macroId: string, scopeId: string) => {
+  const deleteScope = useCallback(async (macroId: string, scopeId: string) => {
     if (!currentProject) return;
     
     const newTemplate = currentProject.macrosTemplate.map(m => 
@@ -961,13 +1017,22 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         ? { ...m, scopes: m.scopes.filter(s => s.id !== scopeId) }
         : m
     );
-    syncMacrosToHouses(newTemplate);
 
-    // Update in database
-    supabase
+    // Update in database first
+    const { error } = await supabase
       .from('projects')
       .update({ macros_template: macrosToJson(newTemplate) })
       .eq('id', currentProject.id);
+
+    if (error) {
+      console.error('Error deleting scope:', error);
+      toast.error("Erro ao remover serviço");
+      return;
+    }
+
+    // Then sync to houses
+    await syncMacrosToHouses(newTemplate);
+    toast.success("Serviço removido!");
   }, [currentProject, syncMacrosToHouses]);
 
   // House updates
