@@ -164,12 +164,37 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
 
   const addProject = useCallback((projectData: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete">) => {
     const newId = `project_${Date.now()}`;
+    const macrosTemplate = JSON.parse(JSON.stringify(MACROS_TEMPLATE));
+    
+    // Generate houses immediately with 0% progress
+    const houses: House[] = [];
+    for (let i = 1; i <= projectData.totalHouses; i++) {
+      houses.push({
+        id: i,
+        quadra: "",
+        area: projectData.unitSize,
+        type: projectData.projectType,
+        constructorName: projectData.contractor,
+        expectedDate: projectData.expectedEndDate,
+        lastUpdate: new Date().toLocaleDateString("pt-BR"),
+        macros: macrosTemplate.map((macro: Macro) => ({
+          ...macro,
+          scopes: macro.scopes.map((scope: Scope) => ({
+            ...scope,
+            progress: 0,
+            startDate: null,
+            endDate: null,
+          })),
+        })),
+      });
+    }
+    
     const newProject: Project = {
       ...projectData,
       id: newId,
-      houses: [],
+      houses,
       quadras: [],
-      macrosTemplate: JSON.parse(JSON.stringify(MACROS_TEMPLATE)),
+      macrosTemplate,
       createdAt: new Date().toISOString(),
       setupComplete: false,
     };
@@ -179,9 +204,77 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateProject = useCallback((projectId: string, updates: Partial<Project>) => {
-    setProjects(prev => prev.map(p => 
-      p.id === projectId ? { ...p, ...updates } : p
-    ));
+    setProjects(prev => prev.map(p => {
+      if (p.id !== projectId) return p;
+      
+      const updatedProject = { ...p, ...updates };
+      
+      // If totalHouses, unitSize, projectType, contractor or expectedEndDate changed, update all houses
+      if (updates.totalHouses !== undefined || updates.unitSize !== undefined || 
+          updates.projectType !== undefined || updates.contractor !== undefined ||
+          updates.expectedEndDate !== undefined) {
+        
+        const targetTotal = updates.totalHouses ?? p.totalHouses;
+        const unitSize = updates.unitSize ?? p.unitSize;
+        const projectType = updates.projectType ?? p.projectType;
+        const contractor = updates.contractor ?? p.contractor;
+        const expectedEndDate = updates.expectedEndDate ?? p.expectedEndDate;
+        
+        // If total houses changed, regenerate
+        if (targetTotal !== p.houses.length) {
+          const newHouses: House[] = [];
+          for (let i = 1; i <= targetTotal; i++) {
+            const existingHouse = p.houses.find(h => h.id === i);
+            if (existingHouse) {
+              newHouses.push({
+                ...existingHouse,
+                area: unitSize,
+                type: projectType,
+                constructorName: contractor,
+                expectedDate: expectedEndDate,
+              });
+            } else {
+              newHouses.push({
+                id: i,
+                quadra: "",
+                area: unitSize,
+                type: projectType,
+                constructorName: contractor,
+                expectedDate: expectedEndDate,
+                lastUpdate: new Date().toLocaleDateString("pt-BR"),
+                macros: p.macrosTemplate.map(macro => ({
+                  ...macro,
+                  scopes: macro.scopes.map(scope => ({
+                    ...scope,
+                    progress: 0,
+                    startDate: null,
+                    endDate: null,
+                  })),
+                })),
+              });
+            }
+          }
+          updatedProject.houses = newHouses;
+          
+          // Clean up quadras that reference houses beyond the new total
+          updatedProject.quadras = p.quadras.map(q => ({
+            ...q,
+            houses: q.houses.filter(hId => hId <= targetTotal),
+          }));
+        } else {
+          // Just update existing houses with new project data
+          updatedProject.houses = p.houses.map(h => ({
+            ...h,
+            area: unitSize,
+            type: projectType,
+            constructorName: contractor,
+            expectedDate: expectedEndDate,
+          }));
+        }
+      }
+      
+      return updatedProject;
+    }));
   }, []);
 
   const deleteProject = useCallback((projectId: string) => {

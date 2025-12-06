@@ -9,14 +9,17 @@ import { EditHouseDialog } from "./EditHouseDialog";
 import { Building2 } from "lucide-react";
 
 export function HouseDetails() {
-  const { selectedHouse, setSelectedHouse } = useConstruction();
+  const { selectedHouse, setSelectedHouse, currentProject } = useConstruction();
   const [editOpen, setEditOpen] = useState(false);
   
-  if (!selectedHouse) {
+  if (!selectedHouse || !currentProject) {
     return null;
   }
   
-  const progress = calculateHouseProgress(selectedHouse);
+  // Get fresh house data from currentProject to ensure it's always up to date
+  const house = currentProject.houses.find(h => h.id === selectedHouse.id) || selectedHouse;
+  
+  const progress = calculateHouseProgress(house);
   const status = getStatusFromProgress(progress);
   
   const statusColors: Record<string, string> = {
@@ -32,10 +35,10 @@ export function HouseDetails() {
       <div className="p-4 border-b border-border flex items-start justify-between shrink-0">
         <div>
           <h3 className="text-lg font-semibold text-foreground">
-            Quadra {selectedHouse.quadra} - Casa {selectedHouse.id}
+            Quadra {house.quadra} - Casa {house.id}
           </h3>
           <p className="text-sm text-muted-foreground">
-            Última atualização: {selectedHouse.lastUpdate}
+            Última atualização: {house.lastUpdate}
           </p>
         </div>
         <div className="flex gap-2">
@@ -68,7 +71,7 @@ export function HouseDetails() {
               <Tag className="w-4 h-4" />
               <span className="text-xs">Área</span>
             </div>
-            <p className="text-sm font-semibold text-foreground">{selectedHouse.area} m²</p>
+            <p className="text-sm font-semibold text-foreground">{currentProject.unitSize} m²</p>
           </div>
           
           <div className="p-3 bg-secondary rounded-lg">
@@ -76,7 +79,7 @@ export function HouseDetails() {
               <Home className="w-4 h-4" />
               <span className="text-xs">Tipo</span>
             </div>
-            <p className="text-sm font-semibold text-foreground">{selectedHouse.type}</p>
+            <p className="text-sm font-semibold text-foreground">{currentProject.projectType}</p>
           </div>
           
           <div className="p-3 bg-secondary rounded-lg">
@@ -84,7 +87,7 @@ export function HouseDetails() {
               <User className="w-4 h-4" />
               <span className="text-xs">Construtora</span>
             </div>
-            <p className="text-sm font-semibold text-foreground">{selectedHouse.constructorName}</p>
+            <p className="text-sm font-semibold text-foreground">{currentProject.contractor}</p>
           </div>
           
           <div className="p-3 bg-secondary rounded-lg">
@@ -92,17 +95,17 @@ export function HouseDetails() {
               <Calendar className="w-4 h-4" />
               <span className="text-xs">Previsão</span>
             </div>
-            <p className="text-sm font-semibold text-foreground">{selectedHouse.expectedDate}</p>
+            <p className="text-sm font-semibold text-foreground">{currentProject.expectedEndDate}</p>
           </div>
         </div>
         
-        <ScopesList house={selectedHouse} />
+        <ScopesList house={house} />
       </div>
       
       <EditHouseDialog 
         open={editOpen} 
         onOpenChange={setEditOpen} 
-        house={selectedHouse}
+        house={house}
       />
     </div>
   );

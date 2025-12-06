@@ -68,6 +68,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
     
     const newTotalHouses = parseInt(totalHouses) || currentProject.totalHouses;
     
+    // updateProject now handles house regeneration automatically
     updateProject(currentProject.id, { 
       name, 
       location, 
@@ -78,27 +79,38 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
       unitSize: parseFloat(unitSize) || 45,
       projectType,
     });
-    
-    // Regenerate houses if total changed
-    if (newTotalHouses !== currentProject.totalHouses) {
-      generateHousesForProject();
-    }
   };
 
   const handleAddQuadra = () => {
-    if (!newQuadraName.trim()) return;
+    if (!newQuadraName.trim() || !currentProject) return;
     
     const houseIds = parseHouseRange(newQuadraHouses);
-    addQuadra(newQuadraName, houseIds);
+    // Filter out houses that are already assigned to other quadras
+    const alreadyAssigned = currentProject.quadras.flatMap(q => q.houses);
+    const validHouseIds = houseIds.filter(id => 
+      !alreadyAssigned.includes(id) && id <= currentProject.totalHouses
+    );
+    
+    if (validHouseIds.length > 0) {
+      addQuadra(newQuadraName, validHouseIds);
+    }
     setNewQuadraName("");
     setNewQuadraHouses("");
   };
 
   const handleUpdateQuadra = (quadraId: string) => {
-    if (!editQuadraName.trim()) return;
+    if (!editQuadraName.trim() || !currentProject) return;
     
     const houseIds = parseHouseRange(editQuadraHouses);
-    updateQuadra(quadraId, editQuadraName, houseIds);
+    // Filter out houses that are already assigned to OTHER quadras
+    const alreadyAssigned = currentProject.quadras
+      .filter(q => q.id !== quadraId)
+      .flatMap(q => q.houses);
+    const validHouseIds = houseIds.filter(id => 
+      !alreadyAssigned.includes(id) && id <= currentProject.totalHouses
+    );
+    
+    updateQuadra(quadraId, editQuadraName, validHouseIds);
     setEditingQuadra(null);
   };
 
