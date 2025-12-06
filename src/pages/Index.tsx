@@ -12,12 +12,10 @@ import { QuadrasGrid } from "@/components/QuadrasGrid";
 import { HouseDetails } from "@/components/HouseDetails";
 import { ChartsView } from "@/components/ChartsView";
 import { WeeklyProductionView } from "@/components/WeeklyProductionView";
-import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
 import { Loader2 } from "lucide-react";
 
 function IndexContent() {
   const [activeView, setActiveView] = useState<"map" | "charts" | "production">("map");
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const { selectedHouse, isLoading, projects } = useConstruction();
 
   if (isLoading) {
@@ -38,23 +36,26 @@ function IndexContent() {
   };
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <div className="min-h-screen flex w-full">
         <AppSidebar 
           activeView={activeView} 
           onViewChange={setActiveView}
-          onOpenSettings={() => setSettingsOpen(true)}
         />
         
         <div className="flex-1 flex flex-col min-w-0">
           {/* Top Header */}
-          <header className="h-14 bg-card border-b border-border px-4 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-3">
+          <header className="h-14 bg-card border-b border-border px-4 flex items-center gap-4 shrink-0">
+            <div className="flex items-center gap-3 shrink-0">
               <SidebarTrigger className="lg:hidden" />
-              <h2 className="text-lg font-semibold text-foreground">{viewTitles[activeView]}</h2>
+              <h2 className="text-lg font-semibold text-foreground whitespace-nowrap">{viewTitles[activeView]}</h2>
             </div>
-            <div className="flex items-center gap-3">
-              {activeView !== "production" && <FilterBar />}
+            {activeView !== "production" && (
+              <div className="flex-1 flex items-center justify-start overflow-x-auto">
+                <FilterBar />
+              </div>
+            )}
+            <div className="shrink-0 ml-auto">
               <ProjectSelector />
             </div>
           </header>
@@ -99,7 +100,6 @@ function IndexContent() {
         </div>
       </div>
 
-      <ProjectSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </SidebarProvider>
   );
 }
