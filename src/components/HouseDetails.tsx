@@ -1,4 +1,4 @@
-import { X, Edit, Tag, Home, User, Clock, Calendar } from "lucide-react";
+import { X, Edit, Tag, Home, User, Calendar } from "lucide-react";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { calculateHouseProgress, getStatusFromProgress, getStatusLabel } from "@/data/constructionData";
 import { Progress } from "@/components/ui/progress";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ScopesList } from "./ScopesList";
 import { useState } from "react";
 import { EditHouseDialog } from "./EditHouseDialog";
-import { Building2 } from "lucide-react";
+import { format, parseISO } from "date-fns";
 
 export function HouseDetails() {
   const { selectedHouse, setSelectedHouse, currentProject } = useConstruction();
@@ -95,7 +95,9 @@ export function HouseDetails() {
               <Calendar className="w-4 h-4" />
               <span className="text-xs">Previsão</span>
             </div>
-            <p className="text-sm font-semibold text-foreground">{currentProject.expectedEndDate}</p>
+            <p className="text-sm font-semibold text-foreground">
+              {currentProject.expectedEndDate ? format(parseISO(currentProject.expectedEndDate), "dd/MM/yyyy") : "-"}
+            </p>
           </div>
         </div>
         
