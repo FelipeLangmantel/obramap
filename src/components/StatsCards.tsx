@@ -1,10 +1,10 @@
-import { Home, TrendingUp, CheckCircle2, Clock } from "lucide-react";
+import { Home, TrendingUp, CheckCircle2, Clock, Calendar } from "lucide-react";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { calculateHouseProgress } from "@/data/constructionData";
 import { useMemo } from "react";
 
 export function StatsCards() {
-  const { currentProject } = useConstruction();
+  const { currentProject, getDaysRemaining } = useConstruction();
   
   const stats = useMemo(() => {
     if (!currentProject) return { total: 0, avgProgress: 0, completed: 0, inProgress: 0 };
@@ -20,6 +20,8 @@ export function StatsCards() {
     
     return { total, avgProgress, completed, inProgress };
   }, [currentProject]);
+
+  const daysRemaining = getDaysRemaining();
 
   if (!currentProject) return null;
 
@@ -48,10 +50,18 @@ export function StatsCards() {
       label: "Em Andamento",
       color: "bg-chart-orange/10 text-chart-orange",
     },
+    {
+      icon: Calendar,
+      value: daysRemaining !== null ? (daysRemaining > 0 ? daysRemaining : 0) : "-",
+      label: daysRemaining !== null && daysRemaining > 0 ? "Dias Restantes" : "Prazo Encerrado",
+      color: daysRemaining !== null && daysRemaining > 0 
+        ? "bg-chart-purple/10 text-chart-purple" 
+        : "bg-destructive/10 text-destructive",
+    },
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
       {cards.map((card, index) => (
         <div
           key={index}
