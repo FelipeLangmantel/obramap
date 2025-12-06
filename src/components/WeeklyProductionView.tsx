@@ -590,12 +590,12 @@ export function WeeklyProductionView() {
                 <div className="flex items-center gap-2">
                   <Home className="w-4 h-4 text-muted-foreground" />
                   <Label className="text-sm">Casa:</Label>
-                  <Select value={analysisHouseFilter} onValueChange={setAnalysisHouseFilter}>
+                  <Select value={analysisHouseFilter || "all"} onValueChange={(v) => setAnalysisHouseFilter(v === "all" ? "" : v)}>
                     <SelectTrigger className="w-[100px] h-8">
                       <SelectValue placeholder="Todas" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Todas</SelectItem>
+                      <SelectItem value="all">Todas</SelectItem>
                       {houses.map(house => (
                         <SelectItem key={house.id} value={house.id.toString()}>
                           Casa {house.id}
@@ -607,12 +607,12 @@ export function WeeklyProductionView() {
 
                 <div className="flex items-center gap-2">
                   <Label className="text-sm">Etapa:</Label>
-                  <Select value={analysisMacroFilter} onValueChange={(v) => { setAnalysisMacroFilter(v); setAnalysisScopeFilter(""); }}>
+                  <Select value={analysisMacroFilter || "all"} onValueChange={(v) => { setAnalysisMacroFilter(v === "all" ? "" : v); setAnalysisScopeFilter(""); }}>
                     <SelectTrigger className="w-[150px] h-8">
                       <SelectValue placeholder="Todas" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Todas</SelectItem>
+                      <SelectItem value="all">Todas</SelectItem>
                       {macros.map(macro => (
                         <SelectItem key={macro.id} value={macro.id}>
                           <div className="flex items-center gap-2">
@@ -627,12 +627,12 @@ export function WeeklyProductionView() {
 
                 <div className="flex items-center gap-2">
                   <Label className="text-sm">Serviço:</Label>
-                  <Select value={analysisScopeFilter} onValueChange={setAnalysisScopeFilter}>
+                  <Select value={analysisScopeFilter || "all"} onValueChange={(v) => setAnalysisScopeFilter(v === "all" ? "" : v)}>
                     <SelectTrigger className="w-[180px] h-8">
                       <SelectValue placeholder="Todos" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Todos</SelectItem>
+                      <SelectItem value="all">Todos</SelectItem>
                       {(analysisMacroFilter 
                         ? allScopes.filter(s => s.macroId === analysisMacroFilter)
                         : allScopes
