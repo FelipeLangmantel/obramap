@@ -11,7 +11,6 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
-  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { 
@@ -21,7 +20,9 @@ import {
   Users,
   LogOut,
   ChevronRight,
-  Building
+  Building,
+  ChevronLeft,
+  Plus
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +35,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
+import { NewProjectDialog } from "@/components/NewProjectDialog";
 import obraMapLogo from "@/assets/obramap-logo.png";
 
 interface AppSidebarProps {
@@ -47,6 +49,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const { profile, role, signOut, isAdmin } = useAuth();
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
 
   const getInitials = (name: string) => {
     return name
@@ -83,7 +86,6 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
 
   const handleViewChange = (view: "map" | "charts" | "production") => {
     onViewChange(view);
-    setOpen(false);
   };
 
   const handleToggleSidebar = () => {
@@ -93,14 +95,22 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   return (
     <>
       <Sidebar 
-        className="border-r border-sidebar-border"
+        className="border-r border-sidebar-border relative"
         collapsible="icon"
       >
+        {/* Toggle Button */}
+        <button
+          onClick={handleToggleSidebar}
+          className={cn(
+            "absolute -right-3 top-6 z-50 flex h-6 w-6 items-center justify-center rounded-full border bg-background shadow-md transition-colors hover:bg-accent",
+            collapsed ? "rotate-0" : "rotate-180"
+          )}
+        >
+          <ChevronRight className="h-3 w-3" />
+        </button>
+
         <SidebarHeader className="p-4 border-b border-sidebar-border">
-          <div 
-            className="flex items-center gap-3 cursor-pointer" 
-            onClick={handleToggleSidebar}
-          >
+          <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 overflow-hidden">
               <img src={obraMapLogo} alt="ObraMap" className="h-8 w-8 object-contain" />
             </div>
@@ -151,6 +161,16 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setNewProjectOpen(true)}
+                    tooltip={collapsed ? "Nova Obra" : undefined}
+                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+                  >
+                    <Plus className="h-5 w-5 shrink-0" />
+                    {!collapsed && <span className="truncate">Nova Obra</span>}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     onClick={() => setSettingsOpen(true)}
@@ -223,6 +243,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       </Dialog>
 
       <ProjectSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} />
     </>
   );
 }
