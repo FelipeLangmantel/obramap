@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,7 +27,12 @@ import {
   BarChart3,
   ClipboardList,
   AlertCircle,
-  ArrowRight
+  ArrowRight,
+  Printer,
+  FileText,
+  Edit3,
+  X,
+  Check
 } from "lucide-react";
 import { format, startOfWeek, endOfWeek, addWeeks, parseISO, isBefore, isAfter, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -88,6 +93,7 @@ const DEVIATION_REASONS = [
 export function PlannedProductionTab() {
   const { currentProject } = useConstruction();
   const { canEdit } = useAuth();
+  const printRef = useRef<HTMLDivElement>(null);
   
   const [selectedMacro, setSelectedMacro] = useState<string>("");
   const [selectedScope, setSelectedScope] = useState<string>("");
@@ -108,6 +114,15 @@ export function PlannedProductionTab() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
+  // Editing state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState<{
+    week_start: string;
+    week_end: string;
+    planned_houses: string;
+    notes: string;
+  }>({ week_start: "", week_end: "", planned_houses: "", notes: "" });
+  
   // Deviation dialog
   const [deviationDialogOpen, setDeviationDialogOpen] = useState(false);
   const [selectedDeviation, setSelectedDeviation] = useState<{
@@ -117,6 +132,10 @@ export function PlannedProductionTab() {
   } | null>(null);
   const [deviationReason, setDeviationReason] = useState<string>("");
   const [correctiveAction, setCorrectiveAction] = useState<string>("");
+  
+  // Print dialog
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [selectedWeekForPrint, setSelectedWeekForPrint] = useState<string>("");
 
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
@@ -126,6 +145,28 @@ export function PlannedProductionTab() {
     const macro = macros.find(m => m.id === selectedMacro);
     return macro?.scopes || [];
   }, [selectedMacro, macros]);
+
+  // Group future plans by week
+  const groupedFuturePlans = useMemo(() => {
+    const futurePlans = plannedProductions.filter(p => isAfter(parseISO(p.week_end), new Date()));
+    const grouped: Record<string, PlannedProduction[]> = {};
+    
+    futurePlans.forEach(plan => {
+      const weekKey = `${plan.week_start}_${plan.week_end}`;
+      if (!grouped[weekKey]) {
+        grouped[weekKey] = [];
+      }
+      grouped[weekKey].push(plan);
+    });
+    
+    return Object.entries(grouped)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([key, plans]) => ({
+        weekStart: plans[0].week_start,
+        weekEnd: plans[0].week_end,
+        plans
+      }));
+  }, [plannedProductions]);
 
   // Load data
   useEffect(() => {
@@ -220,6 +261,65 @@ export function PlannedProductionTab() {
     setIsSaving(false);
   };
 
+  // Start editing
+  const handleStartEdit = (plan: PlannedProduction) => {
+    setEditingId(plan.id);
+    setEditFormData({
+      week_start: plan.week_start,
+      week_end: plan.week_end,
+      planned_houses: plan.planned_houses.toString(),
+      notes: plan.notes || ""
+    });
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditFormData({ week_start: "", week_end: "", planned_houses: "", notes: "" });
+  };
+
+  // Save edit
+  const handleSaveEdit = async (id: string) => {
+    const count = parseInt(editFormData.planned_houses);
+    if (isNaN(count) || count <= 0) {
+      toast.error("Quantidade inválida");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('planned_productions')
+        .update({
+          week_start: editFormData.week_start,
+          week_end: editFormData.week_end,
+          planned_houses: count,
+          notes: editFormData.notes || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setPlannedProductions(prev => prev.map(p => 
+        p.id === id 
+          ? { 
+              ...p, 
+              week_start: editFormData.week_start,
+              week_end: editFormData.week_end,
+              planned_houses: count,
+              notes: editFormData.notes || null
+            } 
+          : p
+      ));
+      
+      toast.success("Planejamento atualizado!");
+      handleCancelEdit();
+    } catch (error) {
+      console.error('Error updating planned production:', error);
+      toast.error("Erro ao atualizar");
+    }
+  };
+
   // Delete planned production
   const handleDelete = async (id: string) => {
     try {
@@ -277,6 +377,212 @@ export function PlannedProductionTab() {
       console.error('Error saving deviation:', error);
       toast.error("Erro ao registrar desvio");
     }
+  };
+
+  // Print weekly plan
+  const handlePrint = (weekStart: string, weekEnd: string) => {
+    setSelectedWeekForPrint(`${weekStart}_${weekEnd}`);
+    setPrintDialogOpen(true);
+  };
+
+  const generatePDF = () => {
+    const [weekStart, weekEnd] = selectedWeekForPrint.split('_');
+    const plansForWeek = plannedProductions.filter(
+      p => p.week_start === weekStart && p.week_end === weekEnd
+    );
+
+    const totalHouses = plansForWeek.reduce((sum, p) => sum + p.planned_houses, 0);
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Planejamento Semanal - ${currentProject?.name}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            padding: 40px; 
+            color: #1a1a1a;
+            line-height: 1.5;
+          }
+          .header { 
+            text-align: center; 
+            margin-bottom: 30px; 
+            padding-bottom: 20px;
+            border-bottom: 3px solid #2563eb;
+          }
+          .header h1 { 
+            font-size: 24px; 
+            color: #2563eb;
+            margin-bottom: 8px;
+          }
+          .header h2 {
+            font-size: 18px;
+            color: #374151;
+            font-weight: 500;
+          }
+          .period { 
+            background: #f3f4f6; 
+            padding: 15px 20px; 
+            border-radius: 8px; 
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .period-label { font-weight: 600; color: #374151; }
+          .period-dates { font-size: 18px; font-weight: 700; color: #1f2937; }
+          .summary {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 25px;
+          }
+          .summary-card {
+            flex: 1;
+            background: #dbeafe;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+          }
+          .summary-card.total {
+            background: #2563eb;
+            color: white;
+          }
+          .summary-value { font-size: 28px; font-weight: 700; }
+          .summary-label { font-size: 12px; margin-top: 4px; }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 20px;
+          }
+          th { 
+            background: #2563eb; 
+            color: white; 
+            padding: 12px 15px; 
+            text-align: left;
+            font-size: 14px;
+          }
+          td { 
+            padding: 12px 15px; 
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 14px;
+          }
+          tr:nth-child(even) { background: #f9fafb; }
+          .color-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: middle;
+          }
+          .houses-count {
+            font-weight: 700;
+            font-size: 16px;
+            color: #2563eb;
+          }
+          .notes { 
+            font-size: 12px; 
+            color: #6b7280; 
+            font-style: italic;
+          }
+          .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #6b7280;
+          }
+          .signature-line {
+            margin-top: 60px;
+            padding-top: 10px;
+            border-top: 1px solid #1a1a1a;
+            width: 200px;
+            text-align: center;
+            font-size: 12px;
+          }
+          @media print {
+            body { padding: 20px; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>PLANEJAMENTO DE PRODUÇÃO SEMANAL</h1>
+          <h2>${currentProject?.name}</h2>
+        </div>
+        
+        <div class="period">
+          <span class="period-label">Período:</span>
+          <span class="period-dates">
+            ${format(parseISO(weekStart), "dd/MM/yyyy", { locale: ptBR })} a ${format(parseISO(weekEnd), "dd/MM/yyyy", { locale: ptBR })}
+          </span>
+        </div>
+        
+        <div class="summary">
+          <div class="summary-card">
+            <div class="summary-value">${plansForWeek.length}</div>
+            <div class="summary-label">Atividades Planejadas</div>
+          </div>
+          <div class="summary-card total">
+            <div class="summary-value">${totalHouses}</div>
+            <div class="summary-label">Total de Casas</div>
+          </div>
+        </div>
+        
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 25%">Etapa</th>
+              <th style="width: 35%">Serviço</th>
+              <th style="width: 15%; text-align: center">Meta</th>
+              <th style="width: 25%">Observações</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${plansForWeek.map(p => `
+              <tr>
+                <td>
+                  <span class="color-dot" style="background: ${p.macro_color}"></span>
+                  ${p.macro_name}
+                </td>
+                <td>${p.scope_name}</td>
+                <td style="text-align: center">
+                  <span class="houses-count">${p.planned_houses} casas</span>
+                </td>
+                <td class="notes">${p.notes || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        
+        <div class="footer">
+          <div>Emitido em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</div>
+          <div>Contratante: ${currentProject?.contractor}</div>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; margin-top: 60px;">
+          <div class="signature-line">Responsável Técnico</div>
+          <div class="signature-line">Encarregado da Obra</div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    }
+    
+    setPrintDialogOpen(false);
   };
 
   // Calculate comparisons for past weeks
@@ -578,14 +884,6 @@ export function PlannedProductionTab() {
                               Justificado
                             </Badge>
                           )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => handleDelete(comp.planned.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
                         </div>
                       </div>
                     </div>
@@ -661,8 +959,8 @@ export function PlannedProductionTab() {
         </Card>
       )}
 
-      {/* Future Plans */}
-      {plannedProductions.filter(p => isAfter(parseISO(p.week_end), new Date())).length > 0 && (
+      {/* Future Plans - Grouped by Week */}
+      {groupedFuturePlans.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -671,39 +969,151 @@ export function PlannedProductionTab() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {plannedProductions
-                .filter(p => isAfter(parseISO(p.week_end), new Date()))
-                .map(p => (
-                  <div key={p.id} className="p-3 rounded-lg border bg-card">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: p.macro_color }}
-                        />
-                        <span className="text-sm font-medium">{p.scope_name}</span>
+            <div className="space-y-4">
+              {groupedFuturePlans.map(group => {
+                const totalHouses = group.plans.reduce((sum, p) => sum + p.planned_houses, 0);
+                
+                return (
+                  <div key={`${group.weekStart}_${group.weekEnd}`} className="border rounded-lg overflow-hidden">
+                    {/* Week Header */}
+                    <div className="bg-secondary/50 p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Calendar className="w-5 h-5 text-primary" />
+                        <div>
+                          <p className="font-semibold">
+                            {format(parseISO(group.weekStart), "dd/MM/yyyy", { locale: ptBR })} - {format(parseISO(group.weekEnd), "dd/MM/yyyy", { locale: ptBR })}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {group.plans.length} atividade(s) • {totalHouses} casas no total
+                          </p>
+                        </div>
                       </div>
                       <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => handleDelete(p.id)}
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => handlePrint(group.weekStart, group.weekEnd)}
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Printer className="w-4 h-4" />
+                        Imprimir
                       </Button>
                     </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>
-                        {format(parseISO(p.week_start), "dd/MM", { locale: ptBR })} - {format(parseISO(p.week_end), "dd/MM", { locale: ptBR })}
-                      </span>
-                      <Badge variant="secondary">{p.planned_houses} casas</Badge>
+                    
+                    {/* Plans Table */}
+                    <div className="divide-y">
+                      {group.plans.map(p => (
+                        <div key={p.id} className="p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                          {editingId === p.id ? (
+                            // Edit Mode
+                            <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
+                              <div className="space-y-1">
+                                <Label className="text-xs">Início</Label>
+                                <Input
+                                  type="date"
+                                  value={editFormData.week_start}
+                                  onChange={(e) => setEditFormData(prev => ({ ...prev, week_start: e.target.value }))}
+                                  className="h-8"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Fim</Label>
+                                <Input
+                                  type="date"
+                                  value={editFormData.week_end}
+                                  onChange={(e) => setEditFormData(prev => ({ ...prev, week_end: e.target.value }))}
+                                  className="h-8"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Casas</Label>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  value={editFormData.planned_houses}
+                                  onChange={(e) => setEditFormData(prev => ({ ...prev, planned_houses: e.target.value }))}
+                                  className="h-8"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">Obs.</Label>
+                                <Input
+                                  value={editFormData.notes}
+                                  onChange={(e) => setEditFormData(prev => ({ ...prev, notes: e.target.value }))}
+                                  className="h-8"
+                                  placeholder="Observações"
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            // View Mode
+                            <div className="flex items-center gap-3 flex-1">
+                              <div 
+                                className="w-4 h-4 rounded-full shrink-0" 
+                                style={{ backgroundColor: p.macro_color }}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium text-sm">{p.scope_name}</span>
+                                  <Badge variant="outline" className="text-xs">{p.macro_name}</Badge>
+                                </div>
+                                {p.notes && (
+                                  <p className="text-xs text-muted-foreground truncate mt-0.5">{p.notes}</p>
+                                )}
+                              </div>
+                              <Badge className="shrink-0">{p.planned_houses} casas</Badge>
+                            </div>
+                          )}
+                          
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-1 ml-3">
+                            {editingId === p.id ? (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                  onClick={() => handleSaveEdit(p.id)}
+                                >
+                                  <Check className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                  onClick={handleCancelEdit}
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => handleStartEdit(p)}
+                                  disabled={!canEdit}
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  onClick={() => handleDelete(p.id)}
+                                  disabled={!canEdit}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    {p.notes && (
-                      <p className="text-xs text-muted-foreground mt-2 italic">{p.notes}</p>
-                    )}
                   </div>
-                ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -765,6 +1175,46 @@ export function PlannedProductionTab() {
             </Button>
             <Button onClick={handleSaveDeviation} disabled={!deviationReason}>
               Salvar Desvio
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Print Preview Dialog */}
+      <Dialog open={printDialogOpen} onOpenChange={setPrintDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-5 h-5" />
+              Gerar PDF do Planejamento
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              O PDF será gerado com todas as atividades planejadas para a semana selecionada, 
+              incluindo etapas, serviços e metas de produção.
+            </p>
+            
+            <div className="p-4 bg-secondary/30 rounded-lg">
+              <p className="text-sm font-medium mb-2">Conteúdo do PDF:</p>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• Cabeçalho com nome do projeto</li>
+                <li>• Período do planejamento</li>
+                <li>• Lista de atividades e metas</li>
+                <li>• Totais por etapa</li>
+                <li>• Espaço para assinaturas</li>
+              </ul>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPrintDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={generatePDF} className="gap-2">
+              <Printer className="w-4 h-4" />
+              Gerar e Imprimir
             </Button>
           </DialogFooter>
         </DialogContent>
