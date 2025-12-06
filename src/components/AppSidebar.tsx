@@ -21,9 +21,7 @@ import {
   LogOut,
   Building2,
   Plus,
-  Settings,
-  ChevronLeft,
-  ChevronRight
+  Settings
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -95,160 +93,127 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
 
   return (
     <>
-      <div className="relative flex h-screen">
-        <Sidebar 
-          className="border-r border-border/40 bg-card transition-all duration-300"
-          collapsible="icon"
-        >
-          {/* Header with Logo */}
-          <SidebarHeader className="px-4 py-5">
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
-                <img src={obraMapLogo} alt="ObraMap" className="h-9 w-9 object-contain" />
-              </div>
-              {!collapsed && (
-                <h1 className="text-xl font-bold text-foreground tracking-tight">ObraMap</h1>
-              )}
+      <Sidebar 
+        className="border-r border-border/40 bg-card h-screen"
+        collapsible="none"
+      >
+        {/* Header with Logo */}
+        <SidebarHeader className="px-4 py-5">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
+              <img src={obraMapLogo} alt="ObraMap" className="h-9 w-9 object-contain" />
             </div>
-          </SidebarHeader>
+            <h1 className="text-xl font-bold text-foreground tracking-tight">ObraMap</h1>
+          </div>
+        </SidebarHeader>
 
-          <SidebarContent className="px-3">
-            {/* Menu Principal */}
-            <SidebarGroup>
-              {!collapsed && (
-                <SidebarGroupLabel className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wider px-3 mb-1">
-                  Menu Principal
-                </SidebarGroupLabel>
-              )}
-              <SidebarGroupContent>
-                <SidebarMenu className="space-y-0.5">
-                  {mainMenuItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton
-                        onClick={() => handleViewChange(item.view)}
-                        isActive={activeView === item.view}
-                        tooltip={collapsed ? item.title : undefined}
-                        className={cn(
-                          "w-full justify-start gap-3 px-3 py-2 rounded-md transition-all duration-150",
-                          activeView === item.view 
-                            ? "bg-accent text-accent-foreground font-medium" 
-                            : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                        )}
-                      >
-                        <item.icon className="h-[18px] w-[18px] shrink-0" />
-                        {!collapsed && <span className="text-sm">{item.title}</span>}
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-
-            {/* Gerenciamento */}
-            <SidebarGroup className="mt-8">
-              {!collapsed && (
-                <SidebarGroupLabel className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wider px-3 mb-1">
-                  Gerenciamento
-                </SidebarGroupLabel>
-              )}
-              <SidebarGroupContent>
-                <SidebarMenu className="space-y-0.5">
-                  <SidebarMenuItem>
+        <SidebarContent className="px-3">
+          {/* Menu Principal */}
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wider px-3 mb-1">
+              Menu Principal
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="space-y-0.5">
+                {mainMenuItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
-                      onClick={() => setNewProjectOpen(true)}
-                      tooltip={collapsed ? "Nova Obra" : undefined}
-                      className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                      onClick={() => handleViewChange(item.view)}
+                      isActive={activeView === item.view}
+                      className={cn(
+                        "w-full justify-start gap-3 px-3 py-2 rounded-md transition-all duration-150",
+                        activeView === item.view 
+                          ? "bg-accent text-accent-foreground font-medium" 
+                          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                      )}
                     >
-                      <Plus className="h-[18px] w-[18px] shrink-0" />
-                      {!collapsed && <span className="text-sm">Nova Obra</span>}
+                      <item.icon className="h-[18px] w-[18px] shrink-0" />
+                      <span className="text-sm">{item.title}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      onClick={() => setSettingsOpen(true)}
-                      tooltip={collapsed ? "Cadastro de Obras" : undefined}
-                      className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
-                    >
-                      <Building2 className="h-[18px] w-[18px] shrink-0" />
-                      {!collapsed && <span className="text-sm">Cadastro de Obras</span>}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  {isAdmin && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        onClick={() => setUsersDialogOpen(true)}
-                        tooltip={collapsed ? "Gerenciar Usuários" : undefined}
-                        className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
-                      >
-                        <Users className="h-[18px] w-[18px] shrink-0" />
-                        {!collapsed && <span className="text-sm">Gerenciar Usuários</span>}
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )}
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      onClick={() => setSettingsOpen(true)}
-                      tooltip={collapsed ? "Configurações" : undefined}
-                      className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
-                    >
-                      <Settings className="h-[18px] w-[18px] shrink-0" />
-                      {!collapsed && <span className="text-sm">Configurações</span>}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
 
-          {/* Footer with User Info */}
-          <SidebarFooter className="p-3 border-t border-border/40 mt-auto">
-            {profile && (
-              <div className={cn(
-                "flex items-center gap-3 p-2 rounded-lg",
-                collapsed ? "justify-center" : ""
-              )}>
-                <Avatar className="h-8 w-8 shrink-0">
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
-                    {getInitials(profile.display_name)}
-                  </AvatarFallback>
-                </Avatar>
-                {!collapsed && (
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
-                      {profile.display_name}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {getRoleLabel()}
-                    </p>
-                  </div>
-                )}
-                {!collapsed && (
-                  <button
-                    onClick={() => signOut()}
-                    className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                    title="Sair"
+          {/* Gerenciamento */}
+          <SidebarGroup className="mt-8">
+            <SidebarGroupLabel className="text-muted-foreground/70 text-[11px] font-medium uppercase tracking-wider px-3 mb-1">
+              Gerenciamento
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="space-y-0.5">
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setNewProjectOpen(true)}
+                    className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
                   >
-                    <LogOut className="h-4 w-4" />
-                  </button>
+                    <Plus className="h-[18px] w-[18px] shrink-0" />
+                    <span className="text-sm">Nova Obra</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setSettingsOpen(true)}
+                    className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                  >
+                    <Building2 className="h-[18px] w-[18px] shrink-0" />
+                    <span className="text-sm">Cadastro de Obras</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {isAdmin && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setUsersDialogOpen(true)}
+                      className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                    >
+                      <Users className="h-[18px] w-[18px] shrink-0" />
+                      <span className="text-sm">Gerenciar Usuários</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 )}
-              </div>
-            )}
-          </SidebarFooter>
-        </Sidebar>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setSettingsOpen(true)}
+                    className="w-full justify-start gap-3 px-3 py-2 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                  >
+                    <Settings className="h-[18px] w-[18px] shrink-0" />
+                    <span className="text-sm">Configurações</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
 
-        {/* Toggle Button - Thin bar on the right edge */}
-        <button
-          onClick={handleToggleSidebar}
-          className="h-full w-5 flex items-center justify-center bg-card border-r border-border/40 hover:bg-accent/30 transition-colors cursor-pointer group"
-          title={collapsed ? "Expandir menu" : "Recolher menu"}
-        >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-          ) : (
-            <ChevronLeft className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+        {/* Footer with User Info */}
+        <SidebarFooter className="p-3 border-t border-border/40 mt-auto">
+          {profile && (
+            <div className="flex items-center gap-3 p-2 rounded-lg">
+              <Avatar className="h-8 w-8 shrink-0">
+                <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+                  {getInitials(profile.display_name)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground truncate">
+                  {profile.display_name}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {getRoleLabel()}
+                </p>
+              </div>
+              <button
+                onClick={() => signOut()}
+                className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                title="Sair"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
           )}
-        </button>
-      </div>
+        </SidebarFooter>
+      </Sidebar>
 
       <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
