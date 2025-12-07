@@ -412,16 +412,19 @@ export function InteractiveMapView() {
       const deltaX = newX - quadra.x;
       const deltaY = newY - quadra.y;
       
-      // Update quadra position
-      setEditingQuadras(prev => prev.map(q => {
-        if (q.id !== draggingItem.id) return q;
-        return { ...q, x: newX, y: newY };
-      }));
+      // If no movement, skip
+      if (deltaX === 0 && deltaY === 0) return;
       
-      // If quadra is visible, move houses inside it together
+      // If quadra is visible, move houses inside it together - update both in one batch
       if (quadra.visible) {
         const projectQuadra = currentProject?.quadras.find(q => q.id === draggingItem.id);
         const houseIdsInQuadra = projectQuadra?.houses || [];
+        
+        // Update both quadra and houses atomically
+        setEditingQuadras(prev => prev.map(q => {
+          if (q.id !== draggingItem.id) return q;
+          return { ...q, x: newX, y: newY };
+        }));
         
         setEditingHouses(prev => prev.map(house => {
           if (!houseIdsInQuadra.includes(house.id)) return house;
@@ -430,6 +433,12 @@ export function InteractiveMapView() {
             x: house.x + deltaX,
             y: house.y + deltaY,
           };
+        }));
+      } else {
+        // Quadra hidden - only update quadra position
+        setEditingQuadras(prev => prev.map(q => {
+          if (q.id !== draggingItem.id) return q;
+          return { ...q, x: newX, y: newY };
         }));
       }
     } else if (draggingItem.type === 'resize' && draggingItem.corner) {
