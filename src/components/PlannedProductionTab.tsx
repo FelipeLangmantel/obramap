@@ -32,7 +32,9 @@ import {
   FileText,
   Edit3,
   X,
-  Check
+  Check,
+  FileDown,
+  DollarSign
 } from "lucide-react";
 import { format, startOfWeek, endOfWeek, addWeeks, parseISO, isBefore, isAfter, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -56,6 +58,9 @@ interface PlannedProduction {
 interface ActualProduction {
   id: string;
   scope_id: string;
+  scope_name: string;
+  macro_id: string;
+  macro_name: string;
   week_start: string;
   week_end: string;
   houses_count: number;
@@ -78,6 +83,16 @@ interface Deviation {
   corrective_action: string | null;
 }
 
+interface ScopeCost {
+  scopeId: string;
+  scopeName: string;
+  macroId: string;
+  macroName: string;
+  materialCost: number;
+  laborCost: number;
+  equipmentCost: number;
+}
+
 const DEVIATION_REASONS = [
   "Falta de material",
   "Falta de mão de obra",
@@ -89,6 +104,8 @@ const DEVIATION_REASONS = [
   "Equipamento indisponível",
   "Outros"
 ];
+
+const COSTS_STORAGE_KEY = "obramap_scope_costs";
 
 export function PlannedProductionTab() {
   const { currentProject } = useConstruction();
@@ -110,8 +127,13 @@ export function PlannedProductionTab() {
   const [plannedProductions, setPlannedProductions] = useState<PlannedProduction[]>([]);
   const [actualProductions, setActualProductions] = useState<ActualProduction[]>([]);
   const [deviations, setDeviations] = useState<Deviation[]>([]);
+  const [scopeCosts, setScopeCosts] = useState<ScopeCost[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Report dialog
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportPeriod, setReportPeriod] = useState<"week" | "month" | "all">("week");
   
   // Editing state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -199,7 +221,7 @@ export function PlannedProductionTab() {
       // Load actual productions for comparison
       const { data: actualData } = await supabase
         .from('weekly_productions')
-        .select('id, scope_id, week_start, week_end, houses_count, house_ids')
+        .select('id, scope_id, scope_name, macro_id, macro_name, week_start, week_end, houses_count, house_ids')
         .eq('project_id', currentProject.id);
       
       // Load deviations
@@ -209,6 +231,12 @@ export function PlannedProductionTab() {
         .eq('project_id', currentProject.id)
         .order('created_at', { ascending: false });
       
+      // Load scope costs from localStorage
+      const savedCosts = localStorage.getItem(`${COSTS_STORAGE_KEY}_${currentProject.id}`);
+      if (savedCosts) {
+        setScopeCosts(JSON.parse(savedCosts));
+      }
+      
       setPlannedProductions((plannedData || []) as PlannedProduction[]);
       setActualProductions((actualData || []) as ActualProduction[]);
       setDeviations((deviationData || []) as Deviation[]);
@@ -216,6 +244,32 @@ export function PlannedProductionTab() {
     };
 
     loadData();
+
+    // Subscribe to realtime updates on weekly_productions
+    const channel = supabase
+      .channel('planned-productions-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'weekly_productions',
+          filter: `project_id=eq.${currentProject.id}`
+        },
+        async () => {
+          // Reload actual productions when changes occur
+          const { data: actualData } = await supabase
+            .from('weekly_productions')
+            .select('id, scope_id, scope_name, macro_id, macro_name, week_start, week_end, houses_count, house_ids')
+            .eq('project_id', currentProject.id);
+          setActualProductions((actualData || []) as ActualProduction[]);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [currentProject]);
 
   // Save planned production
@@ -669,6 +723,369 @@ export function PlannedProductionTab() {
     };
   }, [comparisons]);
 
+  // Calculate costs - planned vs realized
+  const costAnalysis = useMemo(() => {
+    let plannedCost = 0;
+    let realizedCost = 0;
+    
+    comparisons.forEach(comp => {
+      const cost = scopeCosts.find(c => c.scopeId === comp.planned.scope_id);
+      if (cost) {
+        const unitCost = cost.materialCost + cost.laborCost + cost.equipmentCost;
+        plannedCost += unitCost * comp.planned.planned_houses;
+        realizedCost += unitCost * comp.actualCount;
+      }
+    });
+    
+    return {
+      plannedCost,
+      realizedCost,
+      costDeviation: plannedCost > 0 ? (((realizedCost - plannedCost) / plannedCost) * 100).toFixed(1) : "0"
+    };
+  }, [comparisons, scopeCosts]);
+
+  // Count pending justifications (negative deviations without reason)
+  const pendingJustifications = comparisons.filter(c => c.isNegative && !c.hasDeviation).length;
+
+  // Format currency
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(value);
+  };
+
+  // Generate complete report PDF
+  const generateReportPDF = () => {
+    const reportData = comparisons.map(comp => {
+      const cost = scopeCosts.find(c => c.scopeId === comp.planned.scope_id);
+      const unitCost = cost ? (cost.materialCost + cost.laborCost + cost.equipmentCost) : 0;
+      const deviationInfo = deviations.find(d => d.planned_production_id === comp.planned.id);
+      
+      return {
+        ...comp,
+        plannedCost: unitCost * comp.planned.planned_houses,
+        realizedCost: unitCost * comp.actualCount,
+        costDeviation: unitCost * comp.deviation,
+        deviationReason: deviationInfo?.deviation_reason || null,
+        correctiveAction: deviationInfo?.corrective_action || null
+      };
+    });
+
+    // Group by week for the report
+    const byWeek: Record<string, typeof reportData> = {};
+    reportData.forEach(item => {
+      const weekKey = `${item.planned.week_start}_${item.planned.week_end}`;
+      if (!byWeek[weekKey]) byWeek[weekKey] = [];
+      byWeek[weekKey].push(item);
+    });
+
+    const weeklyData = Object.entries(byWeek).map(([key, items]) => {
+      const [weekStart, weekEnd] = key.split('_');
+      return {
+        weekStart,
+        weekEnd,
+        items,
+        totalPlanned: items.reduce((sum, i) => sum + i.planned.planned_houses, 0),
+        totalActual: items.reduce((sum, i) => sum + i.actualCount, 0),
+        plannedCost: items.reduce((sum, i) => sum + i.plannedCost, 0),
+        realizedCost: items.reduce((sum, i) => sum + i.realizedCost, 0)
+      };
+    }).sort((a, b) => b.weekStart.localeCompare(a.weekStart));
+
+    // Get next actions from recent corrective actions
+    const nextActions = deviations
+      .filter(d => d.corrective_action)
+      .slice(0, 5)
+      .map(d => ({ scope: d.scope_name, action: d.corrective_action }));
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Relatório Planejado x Realizado - ${currentProject?.name}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            padding: 30px; 
+            color: #1a1a1a;
+            line-height: 1.4;
+            font-size: 11px;
+          }
+          .header { 
+            text-align: center; 
+            margin-bottom: 20px; 
+            padding-bottom: 15px;
+            border-bottom: 3px solid #2563eb;
+          }
+          .header h1 { 
+            font-size: 20px; 
+            color: #2563eb;
+            margin-bottom: 5px;
+          }
+          .header h2 { font-size: 14px; color: #374151; font-weight: 500; }
+          .header p { font-size: 10px; color: #6b7280; margin-top: 5px; }
+          .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+          }
+          .summary-card {
+            background: #f3f4f6;
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+          }
+          .summary-card.highlight { background: #dbeafe; }
+          .summary-card.success { background: #dcfce7; }
+          .summary-card.danger { background: #fee2e2; }
+          .summary-value { font-size: 20px; font-weight: 700; }
+          .summary-label { font-size: 9px; color: #6b7280; margin-top: 2px; }
+          .section { margin-bottom: 20px; }
+          .section-title { 
+            font-size: 13px; 
+            font-weight: 600; 
+            margin-bottom: 10px; 
+            padding-bottom: 5px;
+            border-bottom: 2px solid #e5e7eb;
+            color: #1f2937;
+          }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 15px;
+            font-size: 10px;
+          }
+          th { 
+            background: #2563eb; 
+            color: white; 
+            padding: 8px 6px; 
+            text-align: left;
+            font-size: 9px;
+            font-weight: 600;
+          }
+          td { 
+            padding: 6px; 
+            border-bottom: 1px solid #e5e7eb;
+          }
+          tr:nth-child(even) { background: #f9fafb; }
+          .text-right { text-align: right; }
+          .text-center { text-align: center; }
+          .text-success { color: #16a34a; }
+          .text-danger { color: #dc2626; }
+          .text-warning { color: #d97706; }
+          .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 9px;
+            font-weight: 600;
+          }
+          .badge-success { background: #dcfce7; color: #16a34a; }
+          .badge-danger { background: #fee2e2; color: #dc2626; }
+          .badge-neutral { background: #f3f4f6; color: #374151; }
+          .week-header {
+            background: #1f2937;
+            color: white;
+            padding: 8px 10px;
+            font-weight: 600;
+            font-size: 11px;
+          }
+          .deviation-box {
+            background: #fef2f2;
+            border-left: 3px solid #dc2626;
+            padding: 8px;
+            margin: 5px 0;
+            font-size: 10px;
+          }
+          .deviation-box strong { color: #dc2626; }
+          .action-box {
+            background: #f0fdf4;
+            border-left: 3px solid #16a34a;
+            padding: 8px;
+            margin: 5px 0;
+            font-size: 10px;
+          }
+          .action-box strong { color: #16a34a; }
+          .footer {
+            margin-top: 30px;
+            padding-top: 15px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: #6b7280;
+          }
+          .signature-line {
+            margin-top: 50px;
+            padding-top: 8px;
+            border-top: 1px solid #1a1a1a;
+            width: 180px;
+            text-align: center;
+            font-size: 10px;
+          }
+          @media print {
+            body { padding: 15px; }
+            .page-break { page-break-before: always; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>RELATÓRIO PLANEJADO x REALIZADO</h1>
+          <h2>${currentProject?.name}</h2>
+          <p>Contratante: ${currentProject?.contractor} | Local: ${currentProject?.location}</p>
+        </div>
+        
+        <!-- Summary Cards -->
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-value">${stats.totalPlanned}</div>
+            <div class="summary-label">CASAS PLANEJADAS</div>
+          </div>
+          <div class="summary-card highlight">
+            <div class="summary-value">${stats.totalActual}</div>
+            <div class="summary-label">CASAS REALIZADAS</div>
+          </div>
+          <div class="summary-card ${parseFloat(stats.overallDeviation) < 0 ? 'danger' : 'success'}">
+            <div class="summary-value">${stats.overallDeviation}%</div>
+            <div class="summary-label">DESVIO PRODUÇÃO</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-value">${stats.accuracy}%</div>
+            <div class="summary-label">ACURÁCIA</div>
+          </div>
+        </div>
+        
+        <!-- Cost Summary -->
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-value" style="font-size: 14px;">${formatCurrency(costAnalysis.plannedCost)}</div>
+            <div class="summary-label">CUSTO PLANEJADO</div>
+          </div>
+          <div class="summary-card highlight">
+            <div class="summary-value" style="font-size: 14px;">${formatCurrency(costAnalysis.realizedCost)}</div>
+            <div class="summary-label">CUSTO REALIZADO</div>
+          </div>
+          <div class="summary-card ${parseFloat(costAnalysis.costDeviation) < 0 ? 'success' : parseFloat(costAnalysis.costDeviation) > 0 ? 'danger' : ''}">
+            <div class="summary-value" style="font-size: 14px;">${formatCurrency(costAnalysis.realizedCost - costAnalysis.plannedCost)}</div>
+            <div class="summary-label">DIFERENÇA DE CUSTO</div>
+          </div>
+          <div class="summary-card ${parseFloat(costAnalysis.costDeviation) < 0 ? 'success' : parseFloat(costAnalysis.costDeviation) > 0 ? 'danger' : ''}">
+            <div class="summary-value">${costAnalysis.costDeviation}%</div>
+            <div class="summary-label">DESVIO CUSTO</div>
+          </div>
+        </div>
+        
+        <!-- Weekly Details -->
+        <div class="section">
+          <div class="section-title">DETALHAMENTO POR SEMANA</div>
+          ${weeklyData.map(week => `
+            <div class="week-header">
+              Semana: ${format(parseISO(week.weekStart), "dd/MM/yyyy", { locale: ptBR })} a ${format(parseISO(week.weekEnd), "dd/MM/yyyy", { locale: ptBR })}
+              | Plan: ${week.totalPlanned} | Real: ${week.totalActual} | Custo Plan: ${formatCurrency(week.plannedCost)} | Custo Real: ${formatCurrency(week.realizedCost)}
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 25%">Serviço</th>
+                  <th style="width: 10%" class="text-center">Plan</th>
+                  <th style="width: 10%" class="text-center">Real</th>
+                  <th style="width: 10%" class="text-center">Desvio</th>
+                  <th style="width: 15%" class="text-right">Custo Plan</th>
+                  <th style="width: 15%" class="text-right">Custo Real</th>
+                  <th style="width: 15%">Motivo</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${week.items.map(item => `
+                  <tr>
+                    <td>
+                      <strong>${item.planned.scope_name}</strong>
+                      <br><span style="color: #6b7280; font-size: 9px;">${item.planned.macro_name}</span>
+                    </td>
+                    <td class="text-center">${item.planned.planned_houses}</td>
+                    <td class="text-center">${item.actualCount}</td>
+                    <td class="text-center">
+                      <span class="badge ${item.deviation >= 0 ? 'badge-success' : 'badge-danger'}">
+                        ${item.deviation > 0 ? '+' : ''}${item.deviation}
+                      </span>
+                    </td>
+                    <td class="text-right">${formatCurrency(item.plannedCost)}</td>
+                    <td class="text-right">${formatCurrency(item.realizedCost)}</td>
+                    <td style="font-size: 9px;">${item.deviationReason || '-'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `).join('')}
+        </div>
+        
+        <!-- Deviation Analysis -->
+        ${deviationAnalysis.length > 0 ? `
+          <div class="section">
+            <div class="section-title">ANÁLISE DE DESVIOS - FREQUÊNCIA POR MOTIVO</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 50%">Motivo</th>
+                  <th style="width: 25%" class="text-center">Ocorrências</th>
+                  <th style="width: 25%" class="text-center">Total Casas Afetadas</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${deviationAnalysis.map(item => `
+                  <tr>
+                    <td><strong>${item.reason}</strong></td>
+                    <td class="text-center">${item.count}x</td>
+                    <td class="text-center text-danger">${item.totalDeviation}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        ` : ''}
+        
+        <!-- Next Actions -->
+        ${nextActions.length > 0 ? `
+          <div class="section">
+            <div class="section-title">AÇÕES CORRETIVAS PARA PRÓXIMAS SEMANAS</div>
+            ${nextActions.map((action, idx) => `
+              <div class="action-box">
+                <strong>${idx + 1}. ${action.scope}:</strong> ${action.action}
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+        
+        <div class="footer">
+          <div>Emitido em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</div>
+          <div>Total de registros: ${comparisons.length} atividades analisadas</div>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; margin-top: 40px;">
+          <div class="signature-line">Responsável Técnico</div>
+          <div class="signature-line">Gerente de Projeto</div>
+          <div class="signature-line">Encarregado da Obra</div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.onload = () => {
+        printWindow.print();
+      };
+    }
+    
+    setReportDialogOpen(false);
+  };
+
   if (!currentProject) {
     return (
       <Card>
@@ -852,14 +1269,41 @@ export function PlannedProductionTab() {
         {/* Comparisons and Stats */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <BarChart3 className="w-5 h-5" />
-              Planejado vs Realizado
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <BarChart3 className="w-5 h-5" />
+                Planejado vs Realizado
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setReportDialogOpen(true)}
+                disabled={comparisons.length === 0}
+              >
+                <FileDown className="w-4 h-4" />
+                Gerar Relatório PDF
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
-            {/* Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            {/* Pending Justifications Alert */}
+            {pendingJustifications > 0 && (
+              <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-red-700 dark:text-red-400">
+                    {pendingJustifications} desvio(s) pendente(s) de justificativa
+                  </p>
+                  <p className="text-xs text-red-600 dark:text-red-500">
+                    Registre o motivo dos desvios negativos para gerar o relatório completo
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Production Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
               <div className="p-3 bg-secondary/30 rounded-lg">
                 <p className="text-xs text-muted-foreground">Total Planejado</p>
                 <p className="text-xl font-bold">{stats.totalPlanned}</p>
@@ -869,7 +1313,7 @@ export function PlannedProductionTab() {
                 <p className="text-xl font-bold">{stats.totalActual}</p>
               </div>
               <div className="p-3 bg-secondary/30 rounded-lg">
-                <p className="text-xs text-muted-foreground">Desvio Geral</p>
+                <p className="text-xs text-muted-foreground">Desvio Produção</p>
                 <p className={`text-xl font-bold ${parseFloat(stats.overallDeviation) < 0 ? 'text-red-500' : parseFloat(stats.overallDeviation) > 0 ? 'text-green-500' : ''}`}>
                   {stats.overallDeviation}%
                 </p>
@@ -879,6 +1323,32 @@ export function PlannedProductionTab() {
                 <p className="text-xl font-bold">{stats.accuracy}%</p>
               </div>
             </div>
+
+            {/* Cost Stats */}
+            {(costAnalysis.plannedCost > 0 || costAnalysis.realizedCost > 0) && (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                <div>
+                  <div className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400 mb-1">
+                    <DollarSign className="w-3 h-3" />
+                    Custo Planejado
+                  </div>
+                  <p className="text-lg font-bold text-amber-800 dark:text-amber-300">{formatCurrency(costAnalysis.plannedCost)}</p>
+                </div>
+                <div>
+                  <div className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400 mb-1">
+                    <DollarSign className="w-3 h-3" />
+                    Custo Realizado
+                  </div>
+                  <p className="text-lg font-bold text-amber-800 dark:text-amber-300">{formatCurrency(costAnalysis.realizedCost)}</p>
+                </div>
+                <div>
+                  <div className="text-xs text-amber-700 dark:text-amber-400 mb-1">Desvio Custo</div>
+                  <p className={`text-lg font-bold ${parseFloat(costAnalysis.costDeviation) < 0 ? 'text-green-600' : parseFloat(costAnalysis.costDeviation) > 0 ? 'text-red-600' : 'text-amber-800 dark:text-amber-300'}`}>
+                    {costAnalysis.costDeviation}%
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Comparisons List */}
             <ScrollArea className="h-[300px]">
@@ -1285,6 +1755,83 @@ export function PlannedProductionTab() {
             <Button onClick={generatePDF} className="gap-2">
               <Printer className="w-4 h-4" />
               Gerar e Imprimir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Report PDF Dialog */}
+      <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileDown className="w-5 h-5 text-primary" />
+              Gerar Relatório Planejado x Realizado
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              O relatório completo incluirá análise de produção e custos, desvios registrados e ações corretivas.
+            </p>
+            
+            <div className="p-4 bg-secondary/30 rounded-lg">
+              <p className="text-sm font-medium mb-3">Conteúdo do Relatório:</p>
+              <ul className="text-sm text-muted-foreground space-y-2">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  Resumo geral de produção (planejado x realizado)
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  Análise de custos (planejado x realizado)
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  Detalhamento semanal por serviço
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  Motivos dos desvios registrados
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  Ações corretivas para próximas semanas
+                </li>
+              </ul>
+            </div>
+
+            {pendingJustifications > 0 && (
+              <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  <strong>Atenção:</strong> {pendingJustifications} desvio(s) sem justificativa
+                </p>
+                <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                  O relatório será gerado, mas alguns itens aparecerão sem motivo registrado.
+                </p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 text-center">
+              <div className="p-3 bg-secondary/30 rounded-lg">
+                <p className="text-xs text-muted-foreground">Atividades Analisadas</p>
+                <p className="text-xl font-bold">{comparisons.length}</p>
+              </div>
+              <div className="p-3 bg-secondary/30 rounded-lg">
+                <p className="text-xs text-muted-foreground">Desvios Registrados</p>
+                <p className="text-xl font-bold">{deviations.length}</p>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReportDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={generateReportPDF} className="gap-2">
+              <FileDown className="w-4 h-4" />
+              Gerar e Imprimir Relatório
             </Button>
           </DialogFooter>
         </DialogContent>
