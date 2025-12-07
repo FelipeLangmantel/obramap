@@ -20,7 +20,8 @@ import {
   AlertCircle,
   Lightbulb,
   Calendar,
-  Trash2
+  Trash2,
+  Edit3
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -141,6 +142,10 @@ export function PlannedVsActualView({
   } | null>(null);
   const [deviationReason, setDeviationReason] = useState("");
   const [correctiveAction, setCorrectiveAction] = useState("");
+  const [editingDeviation, setEditingDeviation] = useState<Deviation | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editReason, setEditReason] = useState("");
+  const [editAction, setEditAction] = useState("");
 
   const pendingJustifications = comparisons.filter(c => c.isNegative && !c.hasDeviation).length;
 
@@ -206,6 +211,42 @@ export function PlannedVsActualView({
     } catch (error) {
       console.error('Error saving deviation:', error);
       toast.error("Erro ao registrar desvio");
+    }
+  };
+
+  const handleEditDeviation = (deviation: Deviation) => {
+    setEditingDeviation(deviation);
+    setEditReason(deviation.deviation_reason);
+    setEditAction(deviation.corrective_action || "");
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdateDeviation = async () => {
+    if (!editingDeviation || !editReason) {
+      toast.error("Selecione um motivo");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('production_deviations')
+        .update({
+          deviation_reason: editReason,
+          corrective_action: editAction || null,
+        })
+        .eq('id', editingDeviation.id);
+
+      if (error) throw error;
+
+      toast.success("Justificativa atualizada!");
+      setEditDialogOpen(false);
+      setEditingDeviation(null);
+      setEditReason("");
+      setEditAction("");
+      onDeviationSaved();
+    } catch (error) {
+      console.error('Error updating deviation:', error);
+      toast.error("Erro ao atualizar justificativa");
     }
   };
 
@@ -393,7 +434,22 @@ export function PlannedVsActualView({
                           <AlertTriangle className="w-3 h-3" />Justificar
                         </Button>
                       )}
-                      {comp.hasDeviation && <Badge variant="secondary" className="text-xs gap-1"><CheckCircle2 className="w-3 h-3" />Justificado</Badge>}
+                      {comp.hasDeviation && (
+                        <div className="flex items-center gap-1">
+                          <Badge variant="secondary" className="text-xs gap-1"><CheckCircle2 className="w-3 h-3" />Justificado</Badge>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-7 w-7"
+                            onClick={() => {
+                              const deviation = deviations.find(d => d.planned_production_id === comp.planned?.id);
+                              if (deviation) handleEditDeviation(deviation);
+                            }}
+                          >
+                            <Edit3 className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      )}
                       {comp.isUnplanned && comp.actualProductionId && (
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteUnplanned(comp.actualProductionId!)}>
                           <Trash2 className="w-4 h-4" />
@@ -425,6 +481,46 @@ export function PlannedVsActualView({
                       <div className="flex items-center gap-2">
                         <Badge variant="destructive" className="text-xs">{comp.deviation}</Badge>
                         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setSelectedDeviation({ planned: comp.planned!, actual: comp.actualCount, deviation: comp.deviation }); setDeviationDialogOpen(true); }}>Justificar</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {deviations.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-green-500" />Justificativas Registradas ({deviations.length})</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {deviations.map((deviation) => (
+                    <div key={deviation.id} className="flex items-center justify-between p-3 bg-secondary/20 rounded-lg border">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{deviation.scope_name}</span>
+                          <Badge variant="outline" className="text-xs">{deviation.macro_name}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {format(parseISO(deviation.week_start), "dd/MM", { locale: ptBR })} - {format(parseISO(deviation.week_end), "dd/MM", { locale: ptBR })}
+                        </p>
+                        <div className="mt-2 space-y-1">
+                          <p className="text-xs"><span className="font-medium">Motivo:</span> {deviation.deviation_reason}</p>
+                          {deviation.corrective_action && (
+                            <p className="text-xs"><span className="font-medium">Ação:</span> {deviation.corrective_action}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="destructive" className="text-xs">{deviation.deviation}</Badge>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-7 gap-1"
+                          onClick={() => handleEditDeviation(deviation)}
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          Editar
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -494,6 +590,41 @@ export function PlannedVsActualView({
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeviationDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSaveDeviation} disabled={!deviationReason}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Deviation Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Edit3 className="w-5 h-5 text-primary" />Editar Justificativa</DialogTitle></DialogHeader>
+          {editingDeviation && (
+            <div className="space-y-4">
+              <div className="p-3 bg-secondary/30 rounded-lg">
+                <p className="text-sm font-medium">{editingDeviation.scope_name}</p>
+                <p className="text-xs text-muted-foreground mt-1">{editingDeviation.macro_name}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <Badge variant="outline">Plan: {editingDeviation.planned_count}</Badge>
+                  <Badge variant="destructive">Real: {editingDeviation.actual_count}</Badge>
+                  <Badge variant="secondary">Desvio: {editingDeviation.deviation}</Badge>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Motivo *</Label>
+                <Select value={editReason} onValueChange={setEditReason}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>{DEVIATION_REASONS.map(reason => <SelectItem key={reason} value={reason}>{reason}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Ação Corretiva</Label>
+                <Textarea value={editAction} onChange={(e) => setEditAction(e.target.value)} placeholder="Descreva..." />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleUpdateDeviation} disabled={!editReason}>Atualizar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
