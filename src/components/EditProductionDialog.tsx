@@ -38,6 +38,7 @@ interface WeeklyProduction {
   houses_count: number;
   created_at: string;
   notes: string | null;
+  is_initial_database?: boolean;
 }
 
 interface EditProductionDialogProps {
@@ -53,6 +54,7 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
   const [weekEnd, setWeekEnd] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedHouses, setSelectedHouses] = useState<number[]>([]);
+  const [isInitialDatabase, setIsInitialDatabase] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -64,6 +66,7 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
       setWeekEnd(production.week_end);
       setNotes(production.notes || "");
       setSelectedHouses(production.house_ids || []);
+      setIsInitialDatabase(production.is_initial_database || false);
     }
   }, [production]);
 
@@ -117,6 +120,7 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
           house_ids: selectedHouses,
           houses_count: selectedHouses.length,
           notes: notes || null,
+          is_initial_database: isInitialDatabase,
           updated_at: new Date().toISOString()
         })
         .eq('id', production.id);
@@ -204,9 +208,29 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
                   className="w-3 h-3 rounded-full" 
                   style={{ backgroundColor: production.macro_color }}
                 />
-                <span className="font-medium text-sm">{production.macro_name}</span>
+                <span className="font-medium text-sm uppercase">{production.macro_name}</span>
               </div>
               <p className="text-sm text-muted-foreground">{production.scope_name}</p>
+            </div>
+
+            {/* Initial Database Toggle */}
+            <div className="flex items-center space-x-2 p-3 bg-muted/30 rounded-lg">
+              <Checkbox
+                id="edit-initial-database"
+                checked={isInitialDatabase}
+                onCheckedChange={(checked) => setIsInitialDatabase(checked as boolean)}
+              />
+              <Label 
+                htmlFor="edit-initial-database" 
+                className="text-sm cursor-pointer"
+              >
+                Banco de Atividades Iniciais
+              </Label>
+              {isInitialDatabase && (
+                <Badge variant="outline" className="ml-auto text-xs text-amber-600">
+                  Não afeta análises
+                </Badge>
+              )}
             </div>
 
             {/* Period */}
