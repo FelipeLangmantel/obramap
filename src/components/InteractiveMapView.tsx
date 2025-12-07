@@ -899,11 +899,42 @@ export function InteractiveMapView() {
     }
   };
 
-  // Get house color based on progress
+  // Get house color based on progress - respects active filters
   const getHouseColor = useCallback((houseId: number): string => {
     const house = houses.find(h => h.id === houseId);
     if (!house) return "hsl(var(--muted))";
     
+    // When filtering by scope, use the scope's macro color
+    if (filterScope !== "all") {
+      // Find the macro that contains this scope
+      for (const macro of house.macros) {
+        const scope = macro.scopes.find(s => s.id === filterScope);
+        if (scope) {
+          // Use macro color for this scope, with opacity based on progress
+          const macroTemplate = macrosTemplate.find(m => m.id === macro.id);
+          if (scope.progress > 0) {
+            return macroTemplate?.color || "hsl(var(--muted))";
+          }
+          return "hsl(var(--muted))";
+        }
+      }
+      return "hsl(var(--muted))";
+    }
+    
+    // When filtering by macro, use that macro's color
+    if (filterMacro !== "all") {
+      const macro = house.macros.find(m => m.id === filterMacro);
+      const macroTemplate = macrosTemplate.find(m => m.id === filterMacro);
+      if (macro && macroTemplate) {
+        const hasProgress = macro.scopes.some(s => s.progress > 0);
+        if (hasProgress) {
+          return macroTemplate.color || "hsl(var(--muted))";
+        }
+      }
+      return "hsl(var(--muted))";
+    }
+    
+    // Default behavior - use legend or macro colors
     const progress = calculateHouseProgress(house);
     
     if (legendFollowMacros && macrosTemplate.length > 0) {
@@ -926,13 +957,37 @@ export function InteractiveMapView() {
     }
     
     return "hsl(var(--muted))";
-  }, [houses, legendItems, legendFollowMacros, macrosTemplate]);
+  }, [houses, legendItems, legendFollowMacros, macrosTemplate, filterMacro, filterScope]);
 
+  // Get house progress - respects active filters
   const getHouseProgress = useCallback((houseId: number): number => {
     const house = houses.find(h => h.id === houseId);
     if (!house) return 0;
+    
+    // When filtering by scope, return that scope's progress
+    if (filterScope !== "all") {
+      for (const macro of house.macros) {
+        const scope = macro.scopes.find(s => s.id === filterScope);
+        if (scope) {
+          return scope.progress;
+        }
+      }
+      return 0;
+    }
+    
+    // When filtering by macro, return that macro's progress
+    if (filterMacro !== "all") {
+      const macro = house.macros.find(m => m.id === filterMacro);
+      if (macro) {
+        const totalWeight = macro.scopes.reduce((sum, s) => sum + s.weight, 0);
+        if (totalWeight === 0) return 0;
+        return macro.scopes.reduce((sum, s) => sum + s.progress * s.weight, 0) / totalWeight;
+      }
+      return 0;
+    }
+    
     return calculateHouseProgress(house);
-  }, [houses]);
+  }, [houses, filterMacro, filterScope]);
 
   const getHouseStatus = useCallback((houseId: number): string => {
     const house = houses.find(h => h.id === houseId);
@@ -946,13 +1001,14 @@ export function InteractiveMapView() {
     return "nao_iniciado";
   }, [houses, legendItems]);
 
+  // Filter houses by macro/scope - only show houses with progress in selected item
   const houseMatchesMacroFilter = useCallback((houseId: number): boolean => {
     if (filterMacro === "all" && filterScope === "all") return true;
     const house = houses.find(h => h.id === houseId);
     if (!house) return false;
     
-    // If only scope filter is set (macro is "all"), search across all macros
-    if (filterMacro === "all" && filterScope !== "all") {
+    // If scope filter is set, only show houses with progress > 0 in that scope
+    if (filterScope !== "all") {
       for (const macro of house.macros) {
         const scope = macro.scopes.find(s => s.id === filterScope);
         if (scope && scope.progress > 0) return true;
@@ -960,16 +1016,13 @@ export function InteractiveMapView() {
       return false;
     }
     
-    // If macro filter is set
+    // If macro filter is set, only show houses with progress > 0 in any scope of that macro
     if (filterMacro !== "all") {
       const macro = house.macros.find(m => m.id === filterMacro);
       if (!macro) return false;
-      if (filterScope !== "all") {
-        const scope = macro.scopes.find(s => s.id === filterScope);
-        return scope ? scope.progress > 0 : false;
-      }
       return macro.scopes.some(s => s.progress > 0);
     }
+    
     return true;
   }, [houses, filterMacro, filterScope]);
 
