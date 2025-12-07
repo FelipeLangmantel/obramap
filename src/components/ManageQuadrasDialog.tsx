@@ -195,15 +195,11 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
     setSelectedHouseIds(getUnassignedHouses());
   };
 
-  // Drag selection handlers for house selection (right-click drag)
+  // Drag selection handlers for house selection (left-click drag)
   const handleHouseMouseDown = useCallback((houseId: number, isEditing: boolean, event: React.MouseEvent) => {
-    // Prevent context menu on right click
-    if (event.button === 2) {
+    // Start drag on left mouse button
+    if (event.button === 0) {
       event.preventDefault();
-    }
-    
-    // Start drag on right mouse button
-    if (event.button === 2) {
       setIsDragging(true);
       dragStartRef.current = houseId;
       isEditingRef.current = isEditing;
@@ -246,20 +242,11 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
       dragStartRef.current = null;
     };
     
-    const handleContextMenu = (e: MouseEvent) => {
-      // Prevent context menu when dragging
-      if (isDragging) {
-        e.preventDefault();
-      }
-    };
-    
     window.addEventListener('mouseup', handleGlobalMouseUp);
-    window.addEventListener('contextmenu', handleContextMenu);
     return () => {
       window.removeEventListener('mouseup', handleGlobalMouseUp);
-      window.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [isDragging]);
+  }, []);
 
   // Drag and drop handlers
   const handleDragStart = (index: number) => {
@@ -423,7 +410,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                           ))}
                         </div>
                         <p className="text-xs text-muted-foreground mt-2 text-center">
-                          💡 Segure o botão direito e arraste para selecionar várias casas
+                          💡 Segure o botão esquerdo e arraste para selecionar várias casas
                         </p>
                       </ScrollArea>
                     )}
@@ -518,7 +505,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                                     ))}
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-2 text-center">
-                                  💡 Segure o botão direito e arraste para selecionar várias casas
+                                  💡 Segure o botão esquerdo e arraste para selecionar várias casas
                                 </p>
                               </ScrollArea>
                             </div>
