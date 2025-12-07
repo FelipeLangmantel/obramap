@@ -479,71 +479,64 @@ export function WeeklyProductionView() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Period of measurement */}
-                <div className="p-3 bg-secondary/30 rounded-lg space-y-3">
-                  <Label className="text-sm font-medium flex items-center gap-2">
-                    <CalendarDays className="w-4 h-4" />
-                    Período de Medição
+                {/* Initial Database Mode - Moved to top */}
+                <div className="flex items-center space-x-2 p-3 bg-muted/30 rounded-lg">
+                  <Checkbox
+                    id="initial-database"
+                    checked={isInitialDatabase}
+                    onCheckedChange={(checked) => handleInitialDatabaseChange(checked as boolean)}
+                  />
+                  <Label 
+                    htmlFor="initial-database" 
+                    className="text-sm cursor-pointer"
+                  >
+                    Banco de Atividades Iniciais
                   </Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Início</Label>
-                      <Input 
-                        type="date" 
-                        value={measurementStartDate}
-                        onChange={(e) => setMeasurementStartDate(e.target.value)}
-                        className="h-9"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Fim</Label>
-                      <Input 
-                        type="date" 
-                        value={measurementEndDate}
-                        onChange={(e) => setMeasurementEndDate(e.target.value)}
-                        className="h-9"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Data de Lançamento</Label>
-                    <Input 
-                      type="date" 
-                      value={registrationDate}
-                      onChange={(e) => setRegistrationDate(e.target.value)}
-                      className="h-9"
-                    />
-                  </div>
+                  {isInitialDatabase && (
+                    <Badge variant="outline" className="ml-auto text-xs text-amber-600 border-amber-500/50">
+                      Não afeta análises
+                    </Badge>
+                  )}
                 </div>
 
-                {/* Initial Database Mode - Collapsible */}
-                <details className="group">
-                  <summary className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors">
-                    <span className="group-open:hidden">▶</span>
-                    <span className="hidden group-open:inline">▼</span>
-                    Opções avançadas
-                  </summary>
-                  <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="initial-database"
-                        checked={isInitialDatabase}
-                        onCheckedChange={(checked) => handleInitialDatabaseChange(checked as boolean)}
-                      />
-                      <Label 
-                        htmlFor="initial-database" 
-                        className="text-xs cursor-pointer"
-                      >
-                        Banco de Atividades Iniciais
-                      </Label>
+                {/* Period of measurement - Hidden when initial database */}
+                {!isInitialDatabase && (
+                  <div className="p-3 bg-secondary/30 rounded-lg space-y-3">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <CalendarDays className="w-4 h-4" />
+                      Período de Medição
+                    </Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Início</Label>
+                        <Input 
+                          type="date" 
+                          value={measurementStartDate}
+                          onChange={(e) => setMeasurementStartDate(e.target.value)}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Fim</Label>
+                        <Input 
+                          type="date" 
+                          value={measurementEndDate}
+                          onChange={(e) => setMeasurementEndDate(e.target.value)}
+                          className="h-9"
+                        />
+                      </div>
                     </div>
-                    {isInitialDatabase && (
-                      <p className="text-[10px] text-muted-foreground pl-6">
-                        Atividades para cadastro inicial não afetam análises.
-                      </p>
-                    )}
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Data de Lançamento</Label>
+                      <Input 
+                        type="date" 
+                        value={registrationDate}
+                        onChange={(e) => setRegistrationDate(e.target.value)}
+                        className="h-9"
+                      />
+                    </div>
                   </div>
-                </details>
+                )}
 
                 <div className="space-y-2">
                   <Label className="text-sm">Etapa (Macro)</Label>
