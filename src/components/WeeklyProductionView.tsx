@@ -995,7 +995,7 @@ export function WeeklyProductionView() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-8 w-8"
                               onClick={() => {
                                 setEditingProduction(prod);
                                 setEditDialogOpen(true);
@@ -1006,7 +1006,7 @@ export function WeeklyProductionView() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                              className="h-8 w-8 text-destructive hover:text-destructive"
                               onClick={async () => {
                                 if (confirm("Deseja excluir este registro de produção?")) {
                                   try {
