@@ -968,7 +968,14 @@ export function WeeklyProductionView() {
                   ) : (
                     <div className="space-y-2">
                       {filteredProductions.slice(0, 20).map(prod => (
-                        <div key={prod.id} className={`flex items-center gap-3 p-2.5 rounded-lg border hover:bg-accent/30 transition-colors group ${prod.is_initial_database ? 'border-amber-500/30 bg-amber-500/5' : ''}`}>
+                        <div 
+                          key={prod.id} 
+                          className={`flex items-center gap-3 p-2.5 rounded-lg border hover:bg-accent/30 transition-colors cursor-pointer ${prod.is_initial_database ? 'border-amber-500/30 bg-amber-500/5' : ''}`}
+                          onClick={() => {
+                            setEditingProduction(prod);
+                            setEditDialogOpen(true);
+                          }}
+                        >
                           <div 
                             className="w-3 h-3 rounded-full flex-shrink-0" 
                             style={{ backgroundColor: prod.macro_color }}
@@ -995,8 +1002,9 @@ export function WeeklyProductionView() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8"
-                              onClick={() => {
+                              className="h-8 w-8 text-primary hover:text-primary"
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setEditingProduction(prod);
                                 setEditDialogOpen(true);
                               }}
@@ -1007,7 +1015,8 @@ export function WeeklyProductionView() {
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-destructive hover:text-destructive"
-                              onClick={async () => {
+                              onClick={async (e) => {
+                                e.stopPropagation();
                                 if (confirm("Deseja excluir este registro de produção?")) {
                                   try {
                                     await supabase.from('weekly_productions').delete().eq('id', prod.id);
