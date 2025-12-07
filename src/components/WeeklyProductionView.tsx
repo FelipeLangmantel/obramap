@@ -342,9 +342,10 @@ export function WeeklyProductionView() {
     setIsSaving(false);
   };
 
-  // Handle edit dialog save
+  // Handle edit dialog save - also refresh map
   const handleEditSave = async () => {
     await reloadProductions();
+    await refreshHouses();
   };
 
   // Drag selection handlers
