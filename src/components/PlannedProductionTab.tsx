@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { 
@@ -35,11 +36,15 @@ import {
   Check,
   FileDown,
   DollarSign,
-  ChartLine
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { PlannedVsActualDialog } from "./PlannedVsActualDialog";
+import { PlannedVsActualView } from "./PlannedVsActualView";
 import { format, startOfWeek, endOfWeek, addWeeks, parseISO, isBefore, isAfter, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+const PLANNING_TAB_STORAGE_KEY = "obramap_planning_tab";
 
 interface PlannedProduction {
   id: string;
@@ -160,8 +165,19 @@ export function PlannedProductionTab() {
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [selectedWeekForPrint, setSelectedWeekForPrint] = useState<string>("");
   
-  // Analysis dialog
-  const [analysisDialogOpen, setAnalysisDialogOpen] = useState(false);
+  // Tab state
+  const [activeTab, setActiveTab] = useState<"planning" | "analysis">(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(PLANNING_TAB_STORAGE_KEY);
+      if (saved === "planning" || saved === "analysis") {
+        return saved;
+      }
+    }
+    return "planning";
+  });
+  
+  // Expanded weeks state
+  const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
 
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
@@ -1183,10 +1199,41 @@ export function PlannedProductionTab() {
     );
   }
 
+  const handleTabChange = (value: string) => {
+    const tab = value as "planning" | "analysis";
+    setActiveTab(tab);
+    localStorage.setItem(PLANNING_TAB_STORAGE_KEY, tab);
+  };
+
+  const toggleWeekExpanded = (weekKey: string) => {
+    setExpandedWeeks(prev => {
+      const next = new Set(prev);
+      if (next.has(weekKey)) {
+        next.delete(weekKey);
+      } else {
+        next.add(weekKey);
+      }
+      return next;
+    });
+  };
+
   return (
-    <div className="space-y-4">
-      {/* Planning Form */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div className="space-y-4 h-full flex flex-col">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2 h-10">
+          <TabsTrigger value="planning" className="gap-2 text-sm">
+            <ClipboardList className="w-4 h-4" />
+            Planejamento Semanal
+          </TabsTrigger>
+          <TabsTrigger value="analysis" className="gap-2 text-sm">
+            <TrendingUp className="w-4 h-4" />
+            Planejado x Realizado
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="planning" className="flex-1 overflow-auto mt-4">
+          {/* Planning Form */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-1">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -1356,21 +1403,10 @@ export function PlannedProductionTab() {
         {/* Future Plans - Side Panel */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                <ClipboardList className="w-5 h-5" />
-                Planejamentos Futuros
-              </CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 border-primary/30 hover:border-primary hover:bg-primary/5"
-                onClick={() => setAnalysisDialogOpen(true)}
-              >
-                <TrendingUp className="w-4 h-4" />
-                Planejado x Realizado
-              </Button>
-            </div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <ClipboardList className="w-5 h-5" />
+              Planejamentos Futuros
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {groupedFuturePlans.length === 0 ? (
@@ -1532,7 +1568,36 @@ export function PlannedProductionTab() {
           </CardContent>
         </Card>
       </div>
+        </TabsContent>
 
+        <TabsContent value="analysis" className="flex-1 overflow-auto mt-4">
+          <PlannedVsActualView
+            comparisons={comparisons}
+            stats={stats}
+            costAnalysis={costAnalysis}
+            deviationAnalysis={deviationAnalysis}
+            deviations={deviations}
+            projectId={currentProject.id}
+            projectName={currentProject.name}
+            contractor={currentProject.contractor}
+            onDeviationSaved={async () => {
+              const { data } = await supabase
+                .from('production_deviations')
+                .select('*')
+                .eq('project_id', currentProject.id)
+                .order('created_at', { ascending: false });
+              setDeviations((data || []) as Deviation[]);
+            }}
+            onProductionDeleted={async () => {
+              const { data: actualData } = await supabase
+                .from('weekly_productions')
+                .select('id, scope_id, scope_name, macro_id, macro_name, week_start, week_end, houses_count, house_ids')
+                .eq('project_id', currentProject.id);
+              setActualProductions((actualData || []) as ActualProduction[]);
+            }}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Deviation Dialog */}
       <Dialog open={deviationDialogOpen} onOpenChange={setDeviationDialogOpen}>
@@ -1711,35 +1776,6 @@ export function PlannedProductionTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Analysis Dialog */}
-      <PlannedVsActualDialog
-        open={analysisDialogOpen}
-        onOpenChange={setAnalysisDialogOpen}
-        comparisons={comparisons}
-        stats={stats}
-        costAnalysis={costAnalysis}
-        deviationAnalysis={deviationAnalysis}
-        deviations={deviations}
-        projectId={currentProject.id}
-        projectName={currentProject.name}
-        contractor={currentProject.contractor}
-        onDeviationSaved={async () => {
-          const { data } = await supabase
-            .from('production_deviations')
-            .select('*')
-            .eq('project_id', currentProject.id)
-            .order('created_at', { ascending: false });
-          setDeviations((data || []) as Deviation[]);
-        }}
-        onProductionDeleted={async () => {
-          const { data: actualData } = await supabase
-            .from('weekly_productions')
-            .select('id, scope_id, scope_name, macro_id, macro_name, week_start, week_end, houses_count, house_ids')
-            .eq('project_id', currentProject.id);
-          setActualProductions((actualData || []) as ActualProduction[]);
-        }}
-      />
     </div>
   );
 }
