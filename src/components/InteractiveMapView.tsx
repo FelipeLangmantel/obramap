@@ -36,6 +36,8 @@ import {
   Grid3X3,
   Eye,
   EyeOff,
+  Trash,
+  Palette,
   Undo2,
   AlignCenter
 } from "lucide-react";
@@ -948,6 +950,17 @@ export function InteractiveMapView() {
     if (filterMacro === "all" && filterScope === "all") return true;
     const house = houses.find(h => h.id === houseId);
     if (!house) return false;
+    
+    // If only scope filter is set (macro is "all"), search across all macros
+    if (filterMacro === "all" && filterScope !== "all") {
+      for (const macro of house.macros) {
+        const scope = macro.scopes.find(s => s.id === filterScope);
+        if (scope && scope.progress > 0) return true;
+      }
+      return false;
+    }
+    
+    // If macro filter is set
     if (filterMacro !== "all") {
       const macro = house.macros.find(m => m.id === filterMacro);
       if (!macro) return false;
@@ -1051,6 +1064,39 @@ export function InteractiveMapView() {
     return macro?.scopes || [];
   }, [filterMacro, macrosTemplate]);
 
+  // Get all scopes from all macros for independent scope filter
+  const allScopes = useMemo(() => {
+    const scopes: { id: string; name: string; macroId: string; macroName: string; color: string }[] = [];
+    macrosTemplate.forEach(macro => {
+      macro.scopes.forEach(scope => {
+        scopes.push({
+          id: scope.id,
+          name: scope.name,
+          macroId: macro.id,
+          macroName: macro.name,
+          color: macro.color
+        });
+      });
+    });
+    return scopes;
+  }, [macrosTemplate]);
+
+  // Delete selected houses from editing
+  const deleteSelectedHouses = useCallback(() => {
+    if (selectedHouseIds.size === 0) return;
+    saveToHistory();
+    setEditingHouses(prev => prev.filter(h => !selectedHouseIds.has(h.id)));
+    toast.success(`${selectedHouseIds.size} casa(s) removida(s) do mapa`);
+    setSelectedHouseIds(new Set());
+  }, [selectedHouseIds, saveToHistory]);
+
+  // Delete a specific quadra from editing
+  const deleteQuadra = useCallback((quadraId: string) => {
+    saveToHistory();
+    setEditingQuadras(prev => prev.filter(q => q.id !== quadraId));
+    toast.success("Quadra removida do mapa");
+  }, [saveToHistory]);
+
   // Get display data
   const displayData = useMemo(() => {
     if (isEditMode) {
@@ -1140,9 +1186,14 @@ export function InteractiveMapView() {
                 <AlignCenter className="h-3 w-3" />Autoajuste
               </Button>
               {selectedHouseIds.size > 0 && (
-                <Button variant="ghost" size="sm" onClick={clearSelection} className="gap-1.5 h-8 text-xs">
-                  Limpar seleção ({selectedHouseIds.size})
-                </Button>
+                <>
+                  <Button variant="ghost" size="sm" onClick={clearSelection} className="gap-1.5 h-8 text-xs">
+                    Limpar seleção ({selectedHouseIds.size})
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={deleteSelectedHouses} className="gap-1.5 h-8 text-xs" title="Remover casas selecionadas do mapa">
+                    <Trash className="h-3 w-3" />Excluir
+                  </Button>
+                </>
               )}
               <Button variant="outline" size="sm" onClick={reorganizeHouses} className="gap-1.5 h-8 text-xs">
                 <RotateCcw className="h-3 w-3" />Reorganizar
@@ -1221,15 +1272,24 @@ export function InteractiveMapView() {
             </SelectContent>
           </Select>
 
-          {filterMacro !== "all" && (
-            <Select value={filterScope} onValueChange={setFilterScope}>
-              <SelectTrigger className="w-32 h-7 text-xs"><SelectValue placeholder="Serviço" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {availableScopes.map(scope => <SelectItem key={scope.id} value={scope.id}>{scope.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          )}
+          <Select value={filterScope} onValueChange={setFilterScope}>
+            <SelectTrigger className="w-36 h-7 text-xs"><SelectValue placeholder="Serviço" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos Serviços</SelectItem>
+              {filterMacro !== "all" ? (
+                availableScopes.map(scope => <SelectItem key={scope.id} value={scope.id}>{scope.name}</SelectItem>)
+              ) : (
+                allScopes.map(scope => (
+                  <SelectItem key={scope.id} value={scope.id}>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: scope.color }} />
+                      <span className="truncate text-xs">{scope.name}</span>
+                    </div>
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
 
           {(filterStatus !== "all" || filterMacro !== "all") && (
             <Button variant="ghost" size="sm" onClick={() => { setFilterStatus("all"); setFilterMacro("all"); setFilterScope("all"); }} className="text-xs h-7 px-2">
@@ -1244,7 +1304,7 @@ export function InteractiveMapView() {
         <div className="flex items-center gap-2 flex-wrap p-2 bg-muted/30 border-b shrink-0">
           <span className="text-xs font-medium">Quadras:</span>
           {editingQuadras.map(q => (
-            <div key={q.id} className="flex items-center gap-1">
+            <div key={q.id} className="flex items-center gap-0.5 bg-background/50 rounded px-1">
               <Button
                 variant={q.visible ? "secondary" : "ghost"}
                 size="sm"
@@ -1259,6 +1319,15 @@ export function InteractiveMapView() {
                   <Grid3X3 className="h-3 w-3" />
                 </Button>
               )}
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10" 
+                onClick={() => deleteQuadra(q.id)} 
+                title="Remover quadra do mapa"
+              >
+                <Trash className="h-3 w-3" />
+              </Button>
             </div>
           ))}
         </div>
