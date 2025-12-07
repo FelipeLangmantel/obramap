@@ -27,7 +27,8 @@ import {
   CalendarDays,
   Pencil,
   Target,
-  Trash2
+  Trash2,
+  ListChecks
 } from "lucide-react";
 import { EditProductionDialog } from "./EditProductionDialog";
 import { format, startOfWeek, endOfWeek, subWeeks, parseISO, isWithinInterval, addWeeks, startOfMonth, endOfMonth, subMonths } from "date-fns";
@@ -48,6 +49,14 @@ interface WeeklyProduction {
   created_at: string;
   notes: string | null;
   is_initial_database: boolean;
+}
+
+interface PlannedPeriod {
+  id: string;
+  week_start: string;
+  week_end: string;
+  scope_name: string;
+  macro_name: string;
 }
 
 const FILTER_STORAGE_KEY = "obramap_production_filters";
@@ -94,6 +103,7 @@ export function WeeklyProductionView() {
   const [analysisScopeFilter, setAnalysisScopeFilter] = useState<string>("");
   
   const [productions, setProductions] = useState<WeeklyProduction[]>([]);
+  const [plannedPeriods, setPlannedPeriods] = useState<PlannedPeriod[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingProduction, setEditingProduction] = useState<WeeklyProduction | null>(null);
@@ -194,27 +204,44 @@ export function WeeklyProductionView() {
     }
   }, [analysisPeriod, currentProject]);
 
-  // Load productions
+  // Load productions and planned periods
   useEffect(() => {
     if (!currentProject) return;
     
-    const loadProductions = async () => {
+    const loadData = async () => {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from('weekly_productions')
-        .select('*')
-        .eq('project_id', currentProject.id)
-        .order('week_start', { ascending: false });
+      
+      // Load productions and planned periods in parallel
+      const [productionsResult, plannedResult] = await Promise.all([
+        supabase
+          .from('weekly_productions')
+          .select('*')
+          .eq('project_id', currentProject.id)
+          .order('week_start', { ascending: false }),
+        supabase
+          .from('planned_productions')
+          .select('id, week_start, week_end, scope_name, macro_name')
+          .eq('project_id', currentProject.id)
+          .gte('week_start', format(new Date(), 'yyyy-MM-dd'))
+          .order('week_start', { ascending: true })
+      ]);
 
-      if (error) {
-        console.error('Error loading productions:', error);
+      if (productionsResult.error) {
+        console.error('Error loading productions:', productionsResult.error);
       } else {
-        setProductions(data || []);
+        setProductions(productionsResult.data || []);
       }
+
+      if (plannedResult.error) {
+        console.error('Error loading planned periods:', plannedResult.error);
+      } else {
+        setPlannedPeriods(plannedResult.data || []);
+      }
+      
       setIsLoading(false);
     };
 
-    loadProductions();
+    loadData();
   }, [currentProject]);
 
   // Toggle house selection
@@ -246,6 +273,16 @@ export function WeeklyProductionView() {
       .order('week_start', { ascending: false });
     
     setProductions(newData || []);
+  };
+
+  // Apply planned period to measurement dates
+  const applyPlannedPeriod = (periodId: string) => {
+    const period = plannedPeriods.find(p => p.id === periodId);
+    if (period) {
+      setMeasurementStartDate(period.week_start);
+      setMeasurementEndDate(period.week_end);
+      toast.success(`Período aplicado: ${format(parseISO(period.week_start), 'dd/MM', { locale: ptBR })} - ${format(parseISO(period.week_end), 'dd/MM', { locale: ptBR })}`);
+    }
   };
 
   // Save production record
@@ -568,10 +605,34 @@ export function WeeklyProductionView() {
                 {/* Period of measurement - Hidden when initial database */}
                 {!isInitialDatabase && (
                   <div className="p-3 bg-secondary/30 rounded-lg space-y-3">
-                    <Label className="text-sm font-medium flex items-center gap-2">
-                      <CalendarDays className="w-4 h-4" />
-                      Período de Medição
-                    </Label>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium flex items-center gap-2">
+                        <CalendarDays className="w-4 h-4" />
+                        Período de Medição
+                      </Label>
+                      {plannedPeriods.length > 0 && (
+                        <Select onValueChange={applyPlannedPeriod}>
+                          <SelectTrigger className="h-7 w-auto gap-1 text-xs px-2">
+                            <ListChecks className="w-3 h-3" />
+                            <span>Do Planejamento</span>
+                          </SelectTrigger>
+                          <SelectContent position="popper" sideOffset={4} className="max-h-[300px] overflow-y-auto z-50">
+                            {plannedPeriods.map(period => (
+                              <SelectItem key={period.id} value={period.id}>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">
+                                    {format(parseISO(period.week_start), 'dd/MM', { locale: ptBR })} - {format(parseISO(period.week_end), 'dd/MM', { locale: ptBR })}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {period.macro_name} • {period.scope_name}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
                         <Label className="text-xs text-muted-foreground">Início</Label>
