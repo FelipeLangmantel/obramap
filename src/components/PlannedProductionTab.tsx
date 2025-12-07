@@ -34,8 +34,10 @@ import {
   X,
   Check,
   FileDown,
-  DollarSign
+  DollarSign,
+  ChartLine
 } from "lucide-react";
+import { PlannedVsActualDialog } from "./PlannedVsActualDialog";
 import { format, startOfWeek, endOfWeek, addWeeks, parseISO, isBefore, isAfter, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -157,6 +159,9 @@ export function PlannedProductionTab() {
   // Print dialog
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [selectedWeekForPrint, setSelectedWeekForPrint] = useState<string>("");
+  
+  // Analysis dialog
+  const [analysisDialogOpen, setAnalysisDialogOpen] = useState(false);
 
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
@@ -1349,10 +1354,21 @@ export function PlannedProductionTab() {
         {/* Future Plans - Side Panel */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <ClipboardList className="w-5 h-5" />
-              Planejamentos Futuros
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <ClipboardList className="w-5 h-5" />
+                Planejamentos Futuros
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setAnalysisDialogOpen(true)}
+              >
+                <ChartLine className="w-4 h-4" />
+                Planejado x Realizado
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {groupedFuturePlans.length === 0 ? (
@@ -1693,6 +1709,28 @@ export function PlannedProductionTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Analysis Dialog */}
+      <PlannedVsActualDialog
+        open={analysisDialogOpen}
+        onOpenChange={setAnalysisDialogOpen}
+        comparisons={comparisons}
+        stats={stats}
+        costAnalysis={costAnalysis}
+        deviationAnalysis={deviationAnalysis}
+        deviations={deviations}
+        projectId={currentProject.id}
+        projectName={currentProject.name}
+        contractor={currentProject.contractor}
+        onDeviationSaved={async () => {
+          const { data } = await supabase
+            .from('production_deviations')
+            .select('*')
+            .eq('project_id', currentProject.id)
+            .order('created_at', { ascending: false });
+          setDeviations((data || []) as Deviation[]);
+        }}
+      />
     </div>
   );
 }
