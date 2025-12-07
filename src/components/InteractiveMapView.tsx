@@ -15,6 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { 
   ZoomIn, 
   ZoomOut, 
@@ -29,7 +35,8 @@ import {
   Loader2,
   Edit3,
   Save,
-  XCircle
+  XCircle,
+  Grid3X3
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -68,17 +75,18 @@ export function InteractiveMapView() {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [hoveredHouse, setHoveredHouse] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [mapImage, setMapImage] = useState<string | null>(null);
   const [customLayout, setCustomLayout] = useState<MapLayout | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   
   // Edit mode states
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingQuadras, setEditingQuadras] = useState<QuadraLayout[]>([]);
   const [draggingItem, setDraggingItem] = useState<{ type: 'quadra' | 'house' | 'resize'; id: string; houseId?: number; corner?: string } | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [initialDragPos, setInitialDragPos] = useState({ x: 0, y: 0 });
   
   // Filters
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -91,9 +99,9 @@ export function InteractiveMapView() {
   const macrosTemplate = currentProject?.macrosTemplate || [];
 
   // Map dimensions
-  const MAP_WIDTH = 1200;
-  const MAP_HEIGHT = 900;
-  const HOUSE_RADIUS = 16;
+  const MAP_WIDTH = 1600;
+  const MAP_HEIGHT = 1200;
+  const HOUSE_RADIUS = 14;
   const MIN_QUADRA_SIZE = 80;
 
   // Load saved map layout for current project
@@ -121,13 +129,11 @@ export function InteractiveMapView() {
       const projectQuadras = currentProject.quadras || [];
       
       if (customLayout?.quadras && customLayout.quadras.length > 0) {
-        // Use existing custom layout
         setEditingQuadras(customLayout.quadras.map(q => ({
           ...q,
           id: projectQuadras.find(pq => pq.name === q.name)?.id || q.id || q.name,
         })));
       } else {
-        // Create default layout from project quadras
         const defaultLayout = generateDefaultLayout(projectQuadras, houses);
         setEditingQuadras(defaultLayout);
       }
@@ -137,8 +143,8 @@ export function InteractiveMapView() {
   // Generate default layout
   const generateDefaultLayout = (quadras: any[], allHouses: any[]): QuadraLayout[] => {
     const layouts: QuadraLayout[] = [];
-    const PADDING = 30;
-    const QUADRA_GAP = 40;
+    const PADDING = 40;
+    const QUADRA_GAP = 30;
     let currentX = PADDING;
     let currentY = PADDING;
     let rowMaxHeight = 0;
@@ -150,8 +156,8 @@ export function InteractiveMapView() {
       const cols = Math.ceil(Math.sqrt(houseCount));
       const rows = Math.ceil(houseCount / cols);
       
-      const quadraWidth = Math.max(MIN_QUADRA_SIZE, cols * (HOUSE_RADIUS * 2 + 20) + 40);
-      const quadraHeight = Math.max(MIN_QUADRA_SIZE, rows * (HOUSE_RADIUS * 2 + 20) + 50);
+      const quadraWidth = Math.max(MIN_QUADRA_SIZE, cols * (HOUSE_RADIUS * 2.5 + 12) + 30);
+      const quadraHeight = Math.max(MIN_QUADRA_SIZE, rows * (HOUSE_RADIUS * 2.5 + 12) + 40);
 
       if (currentX + quadraWidth > maxWidth) {
         currentX = PADDING;
@@ -161,17 +167,16 @@ export function InteractiveMapView() {
 
       rowMaxHeight = Math.max(rowMaxHeight, quadraHeight);
 
-      // Generate house positions within quadra
       const housePositions = houseIds.map((houseId: number, idx: number) => {
         const row = Math.floor(idx / cols);
         const col = idx % cols;
-        const cellWidth = (quadraWidth - 40) / cols;
-        const cellHeight = (quadraHeight - 50) / rows;
+        const cellWidth = (quadraWidth - 30) / Math.max(cols, 1);
+        const cellHeight = (quadraHeight - 40) / Math.max(rows, 1);
         
         return {
           id: houseId,
-          x: 20 + col * cellWidth + cellWidth / 2,
-          y: 35 + row * cellHeight + cellHeight / 2,
+          x: 15 + col * cellWidth + cellWidth / 2,
+          y: 30 + row * cellHeight + cellHeight / 2,
         };
       });
 
@@ -191,62 +196,90 @@ export function InteractiveMapView() {
     return layouts;
   };
 
+  // Auto-distribute houses in a quadra
+  const autoDistributeHouses = (quadraId: string) => {
+    setEditingQuadras(prev => prev.map(quadra => {
+      if (quadra.id !== quadraId) return quadra;
+      
+      const houseCount = quadra.houses.length;
+      if (houseCount === 0) return quadra;
+      
+      const cols = Math.ceil(Math.sqrt(houseCount));
+      const rows = Math.ceil(houseCount / cols);
+      const cellWidth = (quadra.width - 30) / Math.max(cols, 1);
+      const cellHeight = (quadra.height - 40) / Math.max(rows, 1);
+      
+      return {
+        ...quadra,
+        houses: quadra.houses.map((house, idx) => {
+          const row = Math.floor(idx / cols);
+          const col = idx % cols;
+          return {
+            ...house,
+            x: 15 + col * cellWidth + cellWidth / 2,
+            y: 30 + row * cellHeight + cellHeight / 2,
+          };
+        }),
+      };
+    }));
+  };
+
+  // Get SVG coordinates from mouse event
+  const getSvgCoords = useCallback((e: React.MouseEvent) => {
+    const svgRect = svgRef.current?.getBoundingClientRect();
+    if (!svgRect) return { x: 0, y: 0 };
+    return {
+      x: (e.clientX - svgRect.left - position.x) / scale,
+      y: (e.clientY - svgRect.top - position.y) / scale,
+    };
+  }, [position, scale]);
+
   // Handle mouse down for editing
   const handleEditMouseDown = (e: React.MouseEvent, type: 'quadra' | 'house' | 'resize', quadraId: string, houseId?: number, corner?: string) => {
     if (!isEditMode) return;
+    e.preventDefault();
     e.stopPropagation();
     
-    const svgRect = svgRef.current?.getBoundingClientRect();
-    if (!svgRect) return;
-
-    const mouseX = (e.clientX - svgRect.left - position.x) / scale;
-    const mouseY = (e.clientY - svgRect.top - position.y) / scale;
+    const coords = getSvgCoords(e);
 
     if (type === 'quadra') {
       const quadra = editingQuadras.find(q => q.id === quadraId);
       if (quadra) {
-        setDragOffset({ x: mouseX - quadra.x, y: mouseY - quadra.y });
+        setDragOffset({ x: coords.x - quadra.x, y: coords.y - quadra.y });
       }
     } else if (type === 'house' && houseId !== undefined) {
       const quadra = editingQuadras.find(q => q.id === quadraId);
       const house = quadra?.houses.find(h => h.id === houseId);
-      if (house) {
-        setDragOffset({ x: mouseX - (quadra!.x + house.x), y: mouseY - (quadra!.y + house.y) });
+      if (house && quadra) {
+        setDragOffset({ x: coords.x - (quadra.x + house.x), y: coords.y - (quadra.y + house.y) });
       }
     }
 
+    setInitialDragPos(coords);
     setDraggingItem({ type, id: quadraId, houseId, corner });
   };
 
   // Handle mouse move for editing
-  const handleEditMouseMove = (e: React.MouseEvent) => {
+  const handleEditMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isEditMode || !draggingItem) return;
 
-    const svgRect = svgRef.current?.getBoundingClientRect();
-    if (!svgRect) return;
-
-    const mouseX = (e.clientX - svgRect.left - position.x) / scale;
-    const mouseY = (e.clientY - svgRect.top - position.y) / scale;
+    const coords = getSvgCoords(e);
 
     setEditingQuadras(prev => prev.map(quadra => {
       if (quadra.id !== draggingItem.id) return quadra;
 
       if (draggingItem.type === 'quadra') {
-        return {
-          ...quadra,
-          x: Math.max(0, Math.min(MAP_WIDTH - quadra.width, mouseX - dragOffset.x)),
-          y: Math.max(0, Math.min(MAP_HEIGHT - quadra.height, mouseY - dragOffset.y)),
-        };
+        const newX = Math.max(0, Math.min(MAP_WIDTH - quadra.width, coords.x - dragOffset.x));
+        const newY = Math.max(0, Math.min(MAP_HEIGHT - quadra.height, coords.y - dragOffset.y));
+        return { ...quadra, x: newX, y: newY };
       } else if (draggingItem.type === 'house' && draggingItem.houseId !== undefined) {
         return {
           ...quadra,
           houses: quadra.houses.map(house => {
             if (house.id !== draggingItem.houseId) return house;
-            return {
-              ...house,
-              x: Math.max(HOUSE_RADIUS, Math.min(quadra.width - HOUSE_RADIUS, mouseX - quadra.x)),
-              y: Math.max(HOUSE_RADIUS + 20, Math.min(quadra.height - HOUSE_RADIUS, mouseY - quadra.y)),
-            };
+            const newX = Math.max(HOUSE_RADIUS, Math.min(quadra.width - HOUSE_RADIUS, coords.x - quadra.x));
+            const newY = Math.max(HOUSE_RADIUS + 20, Math.min(quadra.height - HOUSE_RADIUS, coords.y - quadra.y));
+            return { ...house, x: newX, y: newY };
           }),
         };
       } else if (draggingItem.type === 'resize' && draggingItem.corner) {
@@ -257,38 +290,38 @@ export function InteractiveMapView() {
 
         switch (draggingItem.corner) {
           case 'se':
-            newWidth = Math.max(MIN_QUADRA_SIZE, mouseX - quadra.x);
-            newHeight = Math.max(MIN_QUADRA_SIZE, mouseY - quadra.y);
+            newWidth = Math.max(MIN_QUADRA_SIZE, coords.x - quadra.x);
+            newHeight = Math.max(MIN_QUADRA_SIZE, coords.y - quadra.y);
             break;
           case 'sw':
-            newWidth = Math.max(MIN_QUADRA_SIZE, quadra.x + quadra.width - mouseX);
-            newX = Math.min(quadra.x + quadra.width - MIN_QUADRA_SIZE, mouseX);
-            newHeight = Math.max(MIN_QUADRA_SIZE, mouseY - quadra.y);
+            newWidth = Math.max(MIN_QUADRA_SIZE, quadra.x + quadra.width - coords.x);
+            newX = Math.min(quadra.x + quadra.width - MIN_QUADRA_SIZE, coords.x);
+            newHeight = Math.max(MIN_QUADRA_SIZE, coords.y - quadra.y);
             break;
           case 'ne':
-            newWidth = Math.max(MIN_QUADRA_SIZE, mouseX - quadra.x);
-            newHeight = Math.max(MIN_QUADRA_SIZE, quadra.y + quadra.height - mouseY);
-            newY = Math.min(quadra.y + quadra.height - MIN_QUADRA_SIZE, mouseY);
+            newWidth = Math.max(MIN_QUADRA_SIZE, coords.x - quadra.x);
+            newHeight = Math.max(MIN_QUADRA_SIZE, quadra.y + quadra.height - coords.y);
+            newY = Math.min(quadra.y + quadra.height - MIN_QUADRA_SIZE, coords.y);
             break;
           case 'nw':
-            newWidth = Math.max(MIN_QUADRA_SIZE, quadra.x + quadra.width - mouseX);
-            newX = Math.min(quadra.x + quadra.width - MIN_QUADRA_SIZE, mouseX);
-            newHeight = Math.max(MIN_QUADRA_SIZE, quadra.y + quadra.height - mouseY);
-            newY = Math.min(quadra.y + quadra.height - MIN_QUADRA_SIZE, mouseY);
+            newWidth = Math.max(MIN_QUADRA_SIZE, quadra.x + quadra.width - coords.x);
+            newX = Math.min(quadra.x + quadra.width - MIN_QUADRA_SIZE, coords.x);
+            newHeight = Math.max(MIN_QUADRA_SIZE, quadra.y + quadra.height - coords.y);
+            newY = Math.min(quadra.y + quadra.height - MIN_QUADRA_SIZE, coords.y);
             break;
           case 'e':
-            newWidth = Math.max(MIN_QUADRA_SIZE, mouseX - quadra.x);
+            newWidth = Math.max(MIN_QUADRA_SIZE, coords.x - quadra.x);
             break;
           case 'w':
-            newWidth = Math.max(MIN_QUADRA_SIZE, quadra.x + quadra.width - mouseX);
-            newX = Math.min(quadra.x + quadra.width - MIN_QUADRA_SIZE, mouseX);
+            newWidth = Math.max(MIN_QUADRA_SIZE, quadra.x + quadra.width - coords.x);
+            newX = Math.min(quadra.x + quadra.width - MIN_QUADRA_SIZE, coords.x);
             break;
           case 's':
-            newHeight = Math.max(MIN_QUADRA_SIZE, mouseY - quadra.y);
+            newHeight = Math.max(MIN_QUADRA_SIZE, coords.y - quadra.y);
             break;
           case 'n':
-            newHeight = Math.max(MIN_QUADRA_SIZE, quadra.y + quadra.height - mouseY);
-            newY = Math.min(quadra.y + quadra.height - MIN_QUADRA_SIZE, mouseY);
+            newHeight = Math.max(MIN_QUADRA_SIZE, quadra.y + quadra.height - coords.y);
+            newY = Math.min(quadra.y + quadra.height - MIN_QUADRA_SIZE, coords.y);
             break;
         }
 
@@ -297,7 +330,7 @@ export function InteractiveMapView() {
 
       return quadra;
     }));
-  };
+  }, [isEditMode, draggingItem, dragOffset, getSvgCoords]);
 
   // Handle mouse up for editing
   const handleEditMouseUp = () => {
@@ -353,17 +386,20 @@ export function InteractiveMapView() {
           pq.name.toLowerCase() === q.name.toLowerCase()
         );
         
+        const quadraWidth = (q.width / 100) * MAP_WIDTH;
+        const quadraHeight = (q.height / 100) * MAP_HEIGHT;
+        
         return {
           id: projectQuadra?.id || q.name,
           name: q.name,
           x: (q.x / 100) * MAP_WIDTH,
           y: (q.y / 100) * MAP_HEIGHT,
-          width: (q.width / 100) * MAP_WIDTH,
-          height: (q.height / 100) * MAP_HEIGHT,
+          width: quadraWidth,
+          height: quadraHeight,
           houses: (q.houses || []).map((h: any) => ({
             id: h.id,
-            x: (h.x / 100) * ((q.width / 100) * MAP_WIDTH),
-            y: (h.y / 100) * ((q.height / 100) * MAP_HEIGHT),
+            x: (h.x / 100) * quadraWidth,
+            y: (h.y / 100) * quadraHeight,
           })),
         };
       });
@@ -377,15 +413,16 @@ export function InteractiveMapView() {
 
       setCustomLayout(layout);
       localStorage.setItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject?.id}`, JSON.stringify(layout));
-      toast.success("Planta analisada! Entre no modo de edição para ajustar.");
+      toast.success("Planta analisada e casas distribuídas automaticamente!");
     } catch (error) {
       console.error("Error analyzing floor plan:", error);
-      toast.error("Erro ao analisar. Importe a imagem e desenhe manualmente.");
+      toast.error("Erro ao analisar. Entre no modo de edição para desenhar manualmente.");
       
-      // Save image without AI analysis
+      // Save image without AI analysis, generate default layout
+      const defaultLayout = generateDefaultLayout(currentProject?.quadras || [], houses);
       const layout: MapLayout = {
         imageUrl: imageBase64,
-        quadras: [],
+        quadras: defaultLayout,
         mapWidth: MAP_WIDTH,
         mapHeight: MAP_HEIGHT,
       };
@@ -495,7 +532,7 @@ export function InteractiveMapView() {
   // Pan handlers
   const handleMouseDown = (e: React.MouseEvent) => {
     if (isEditMode && draggingItem) return;
-    if (e.button === 0) {
+    if (e.button === 0 && !isEditMode) {
       setIsDragging(true);
       setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
     }
@@ -522,12 +559,15 @@ export function InteractiveMapView() {
     setScale(s => Math.max(0.3, Math.min(4, s + delta)));
   };
 
-  // Select house
+  // Select house - show dialog with details
   const handleHouseClick = (houseId: number, e: React.MouseEvent) => {
     if (isEditMode) return;
     e.stopPropagation();
     const house = houses.find(h => h.id === houseId);
-    if (house) setSelectedHouse(house);
+    if (house) {
+      setSelectedHouse(house);
+      setShowDetailsDialog(true);
+    }
   };
 
   // Get available scopes
@@ -543,7 +583,6 @@ export function InteractiveMapView() {
     if (customLayout?.quadras && customLayout.quadras.length > 0) {
       return customLayout.quadras;
     }
-    // Generate default layout
     return generateDefaultLayout(currentProject?.quadras || [], houses);
   }, [isEditMode, editingQuadras, customLayout, currentProject?.quadras, houses]);
 
@@ -580,20 +619,20 @@ export function InteractiveMapView() {
   }
 
   return (
-    <div className="flex flex-col h-full gap-4">
-      {/* Controls */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={handleZoomIn}>
+    <div className="flex flex-col h-full">
+      {/* Controls - compact bar */}
+      <div className="flex items-center justify-between gap-3 p-2 bg-background/80 backdrop-blur border-b flex-wrap">
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleZoomIn}>
             <ZoomIn className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon" onClick={handleZoomOut}>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleZoomOut}>
             <ZoomOut className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon" onClick={handleReset}>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleReset}>
             <RotateCcw className="h-4 w-4" />
           </Button>
-          <Badge variant="secondary" className="ml-2">
+          <Badge variant="outline" className="text-xs h-6">
             {Math.round(scale * 100)}%
           </Badge>
         </div>
@@ -614,18 +653,18 @@ export function InteractiveMapView() {
                 variant="outline" 
                 size="sm"
                 onClick={() => fileInputRef.current?.click()}
-                className="gap-2"
+                className="gap-1.5 h-8 text-xs"
                 disabled={isAnalyzing}
               >
                 {isAnalyzing ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-3 w-3 animate-spin" />
                     Analisando...
                   </>
                 ) : (
                   <>
-                    <Upload className="h-4 w-4" />
-                    Importar Planta
+                    <Upload className="h-3 w-3" />
+                    Importar
                   </>
                 )}
               </Button>
@@ -634,21 +673,20 @@ export function InteractiveMapView() {
                 variant="default" 
                 size="sm"
                 onClick={enterEditMode}
-                className="gap-2"
+                className="gap-1.5 h-8 text-xs"
               >
-                <Edit3 className="h-4 w-4" />
-                Editar Layout
+                <Edit3 className="h-3 w-3" />
+                Editar
               </Button>
 
               {mapImage && (
                 <Button 
-                  variant="outline" 
+                  variant="ghost" 
                   size="sm"
                   onClick={handleRemoveImage}
-                  className="gap-2 text-destructive hover:text-destructive"
+                  className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive"
                 >
-                  <Trash2 className="h-4 w-4" />
-                  Resetar
+                  <Trash2 className="h-3 w-3" />
                 </Button>
               )}
             </>
@@ -658,18 +696,18 @@ export function InteractiveMapView() {
                 variant="default" 
                 size="sm"
                 onClick={saveLayout}
-                className="gap-2"
+                className="gap-1.5 h-8 text-xs"
               >
-                <Save className="h-4 w-4" />
-                Salvar Layout
+                <Save className="h-3 w-3" />
+                Salvar
               </Button>
               <Button 
                 variant="outline" 
                 size="sm"
                 onClick={cancelEdit}
-                className="gap-2"
+                className="gap-1.5 h-8 text-xs"
               >
-                <XCircle className="h-4 w-4" />
+                <XCircle className="h-3 w-3" />
                 Cancelar
               </Button>
             </>
@@ -677,27 +715,27 @@ export function InteractiveMapView() {
         </div>
 
         {!isEditMode && (
-          <div className="relative w-48">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="relative w-40">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
             <Input
               placeholder="Buscar casa..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 h-9"
+              className="pl-7 h-8 text-xs"
             />
           </div>
         )}
         
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {isEditMode ? (
-            <Badge variant="secondary" className="bg-primary/20 text-primary">
+            <Badge variant="secondary" className="bg-primary/20 text-primary text-xs">
               <Edit3 className="h-3 w-3 mr-1" />
-              Modo Edição - Arraste quadras e casas
+              Modo Edição
             </Badge>
           ) : (
             <>
-              <Move className="h-4 w-4" />
-              <span>Arraste para navegar • Scroll para zoom</span>
+              <Move className="h-3 w-3" />
+              <span>Arraste para navegar</span>
             </>
           )}
         </div>
@@ -705,355 +743,359 @@ export function InteractiveMapView() {
 
       {/* Filters Row (hidden in edit mode) */}
       {!isEditMode && (
-        <div className="flex items-center gap-4 flex-wrap p-3 bg-muted/30 rounded-lg">
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Filtros:</span>
+        <div className="flex items-center gap-3 flex-wrap p-2 bg-muted/20 border-b">
+          <div className="flex items-center gap-1.5">
+            <Filter className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs font-medium">Filtros:</span>
           </div>
           
-          <div className="flex items-center gap-2">
-            <Label className="text-sm text-muted-foreground">Status:</Label>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-40 h-8">
-                <SelectValue placeholder="Todos" />
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-32 h-7 text-xs">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {legendItems.map(item => (
+                <SelectItem key={item.id} value={item.id}>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                    {item.name}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={filterMacro} onValueChange={(v) => { setFilterMacro(v); setFilterScope("all"); }}>
+            <SelectTrigger className="w-32 h-7 text-xs">
+              <SelectValue placeholder="Etapa" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              {macrosTemplate.map(macro => (
+                <SelectItem key={macro.id} value={macro.id}>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: macro.color }} />
+                    {macro.name}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {filterMacro !== "all" && (
+            <Select value={filterScope} onValueChange={setFilterScope}>
+              <SelectTrigger className="w-32 h-7 text-xs">
+                <SelectValue placeholder="Serviço" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
-                {legendItems.map(item => (
-                  <SelectItem key={item.id} value={item.id}>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                      {item.name}
-                    </div>
-                  </SelectItem>
+                {availableScopes.map(scope => (
+                  <SelectItem key={scope.id} value={scope.id}>{scope.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Label className="text-sm text-muted-foreground">Etapa:</Label>
-            <Select value={filterMacro} onValueChange={(v) => { setFilterMacro(v); setFilterScope("all"); }}>
-              <SelectTrigger className="w-40 h-8">
-                <SelectValue placeholder="Todas" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas</SelectItem>
-                {macrosTemplate.map(macro => (
-                  <SelectItem key={macro.id} value={macro.id}>
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: macro.color }} />
-                      {macro.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {filterMacro !== "all" && (
-            <div className="flex items-center gap-2">
-              <Label className="text-sm text-muted-foreground">Serviço:</Label>
-              <Select value={filterScope} onValueChange={setFilterScope}>
-                <SelectTrigger className="w-40 h-8">
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {availableScopes.map(scope => (
-                    <SelectItem key={scope.id} value={scope.id}>{scope.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           )}
 
           {(filterStatus !== "all" || filterMacro !== "all") && (
-            <Button variant="ghost" size="sm" onClick={() => { setFilterStatus("all"); setFilterMacro("all"); setFilterScope("all"); }} className="text-muted-foreground">
-              Limpar filtros
+            <Button variant="ghost" size="sm" onClick={() => { setFilterStatus("all"); setFilterMacro("all"); setFilterScope("all"); }} className="text-xs h-7 px-2">
+              Limpar
             </Button>
           )}
         </div>
       )}
 
-      {/* Map Container */}
-      <div className="flex-1 flex gap-4 min-h-0">
-        <Card 
-          ref={containerRef}
-          className={`flex-1 relative overflow-hidden ${isEditMode ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'} bg-muted/20`}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onWheel={handleWheel}
-        >
-          {isAnalyzing && (
-            <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-50">
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <span className="text-sm font-medium">Analisando planta...</span>
-              </div>
+      {/* Full-screen Map Container */}
+      <div 
+        ref={containerRef}
+        className={`flex-1 relative overflow-hidden ${isEditMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'} bg-muted/10`}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onWheel={handleWheel}
+      >
+        {isAnalyzing && (
+          <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-50">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="text-sm font-medium">Analisando planta e distribuindo casas...</span>
             </div>
-          )}
-          
-          <div
-            className="absolute inset-0"
-            style={{
-              transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
-              transformOrigin: "0 0",
-            }}
-          >
-            {/* Background image */}
-            {mapImage && (
-              <img 
-                src={mapImage} 
-                alt="Planta"
-                className="absolute inset-0 pointer-events-none"
-                style={{ 
-                  maxWidth: 'none',
-                  width: svgDimensions.width,
-                  height: svgDimensions.height,
-                  objectFit: 'contain',
-                  opacity: isEditMode ? 0.5 : 0.35,
-                }}
-              />
-            )}
-
-            <svg 
-              ref={svgRef}
-              width={svgDimensions.width} 
-              height={svgDimensions.height}
-              className="select-none relative z-10"
-            >
-              {/* Grid */}
-              <defs>
-                <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
-                  <path d="M 50 0 L 0 0 0 50" fill="none" stroke="hsl(var(--border))" strokeWidth="0.5" opacity="0.4"/>
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill={mapImage ? "transparent" : "url(#grid)"} />
-              
-              {/* Quadras */}
-              {(isEditMode ? editingQuadras : filteredQuadras).map((quadra) => (
-                <g key={quadra.id}>
-                  {/* Quadra rectangle */}
-                  <rect
-                    x={quadra.x}
-                    y={quadra.y}
-                    width={quadra.width}
-                    height={quadra.height}
-                    fill={isEditMode ? "hsl(var(--card) / 0.6)" : "hsl(var(--card) / 0.8)"}
-                    stroke={isEditMode ? "hsl(var(--primary))" : "hsl(var(--border))"}
-                    strokeWidth={isEditMode ? 2 : 1}
-                    strokeDasharray={isEditMode ? "5,5" : "none"}
-                    rx="8"
-                    style={{ cursor: isEditMode ? 'move' : 'default' }}
-                    onMouseDown={(e) => handleEditMouseDown(e as any, 'quadra', quadra.id)}
-                  />
-                  
-                  {/* Quadra name */}
-                  <text
-                    x={quadra.x + 12}
-                    y={quadra.y + 18}
-                    fill="hsl(var(--foreground))"
-                    fontSize="13"
-                    fontWeight="600"
-                    style={{ pointerEvents: 'none' }}
-                  >
-                    {quadra.name}
-                  </text>
-
-                  {/* Resize handles (edit mode only) */}
-                  {isEditMode && (
-                    <>
-                      {/* Corner handles */}
-                      {['nw', 'ne', 'sw', 'se'].map(corner => {
-                        const cx = corner.includes('w') ? quadra.x : quadra.x + quadra.width;
-                        const cy = corner.includes('n') ? quadra.y : quadra.y + quadra.height;
-                        return (
-                          <circle
-                            key={corner}
-                            cx={cx}
-                            cy={cy}
-                            r={6}
-                            fill="hsl(var(--primary))"
-                            stroke="white"
-                            strokeWidth={2}
-                            style={{ cursor: `${corner}-resize` }}
-                            onMouseDown={(e) => handleEditMouseDown(e as any, 'resize', quadra.id, undefined, corner)}
-                          />
-                        );
-                      })}
-                      {/* Edge handles */}
-                      {[
-                        { key: 'n', x: quadra.x + quadra.width / 2, y: quadra.y },
-                        { key: 's', x: quadra.x + quadra.width / 2, y: quadra.y + quadra.height },
-                        { key: 'e', x: quadra.x + quadra.width, y: quadra.y + quadra.height / 2 },
-                        { key: 'w', x: quadra.x, y: quadra.y + quadra.height / 2 },
-                      ].map(({ key, x, y }) => (
-                        <circle
-                          key={key}
-                          cx={x}
-                          cy={y}
-                          r={5}
-                          fill="hsl(var(--secondary))"
-                          stroke="hsl(var(--primary))"
-                          strokeWidth={1.5}
-                          style={{ cursor: key === 'n' || key === 's' ? 'ns-resize' : 'ew-resize' }}
-                          onMouseDown={(e) => handleEditMouseDown(e as any, 'resize', quadra.id, undefined, key)}
-                        />
-                      ))}
-                    </>
-                  )}
-                  
-                  {/* Houses as circles */}
-                  {quadra.houses.map((house) => {
-                    const progress = getHouseProgress(house.id);
-                    const color = getHouseColor(house.id);
-                    const isSelected = selectedHouse?.id === house.id;
-                    const isHovered = hoveredHouse === house.id;
-                    const cx = quadra.x + house.x;
-                    const cy = quadra.y + house.y;
-                    
-                    return (
-                      <g 
-                        key={house.id}
-                        style={{ cursor: isEditMode ? 'move' : 'pointer' }}
-                        onClick={(e) => handleHouseClick(house.id, e as any)}
-                        onMouseDown={(e) => isEditMode && handleEditMouseDown(e as any, 'house', quadra.id, house.id)}
-                        onMouseEnter={() => !isEditMode && setHoveredHouse(house.id)}
-                        onMouseLeave={() => setHoveredHouse(null)}
-                      >
-                        {/* House circle */}
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={HOUSE_RADIUS}
-                          fill={color}
-                          stroke={isSelected ? "hsl(var(--primary))" : isHovered ? "white" : "hsl(var(--border))"}
-                          strokeWidth={isSelected ? 3 : isHovered ? 2 : 1}
-                          className="transition-all duration-150"
-                        />
-                        
-                        {/* House number */}
-                        <text
-                          x={cx}
-                          y={cy + 4}
-                          fill="white"
-                          fontSize="10"
-                          fontWeight="bold"
-                          textAnchor="middle"
-                          style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)', pointerEvents: 'none' }}
-                        >
-                          {house.id}
-                        </text>
-                        
-                        {/* Progress ring */}
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={HOUSE_RADIUS + 3}
-                          fill="none"
-                          stroke="rgba(255,255,255,0.3)"
-                          strokeWidth={2}
-                          strokeDasharray={`${(progress / 100) * (2 * Math.PI * (HOUSE_RADIUS + 3))} ${2 * Math.PI * (HOUSE_RADIUS + 3)}`}
-                          strokeDashoffset={0.25 * 2 * Math.PI * (HOUSE_RADIUS + 3)}
-                          style={{ pointerEvents: 'none' }}
-                        />
-                        
-                        {/* Tooltip */}
-                        {(isHovered || isSelected) && !isEditMode && (
-                          <g>
-                            <rect
-                              x={cx - 40}
-                              y={cy - 45}
-                              width={80}
-                              height={32}
-                              fill="hsl(var(--popover))"
-                              stroke="hsl(var(--border))"
-                              rx="4"
-                            />
-                            <text x={cx} y={cy - 28} fill="hsl(var(--popover-foreground))" fontSize="10" fontWeight="600" textAnchor="middle">
-                              Casa {house.id}
-                            </text>
-                            <text x={cx} y={cy - 16} fill="hsl(var(--muted-foreground))" fontSize="9" textAnchor="middle">
-                              {progress.toFixed(1)}% concluído
-                            </text>
-                          </g>
-                        )}
-                      </g>
-                    );
-                  })}
-                </g>
-              ))}
-              
-              {/* Legend */}
-              {!isEditMode && (
-                <g transform={`translate(${svgDimensions.width - 150}, 20)`}>
-                  <rect x="0" y="0" width="140" height={legendItems.length * 20 + 30} fill="hsl(var(--card))" stroke="hsl(var(--border))" rx="4" />
-                  <text x="10" y="18" fill="hsl(var(--foreground))" fontSize="11" fontWeight="600">Legenda</text>
-                  {legendItems.map((item, idx) => (
-                    <g key={item.id} transform={`translate(10, ${30 + idx * 18})`}>
-                      <circle cx="6" cy="6" r="6" fill={item.color} />
-                      <text x="18" y="10" fill="hsl(var(--muted-foreground))" fontSize="9">{item.name}</text>
-                    </g>
-                  ))}
-                </g>
-              )}
-            </svg>
           </div>
-        </Card>
+        )}
+        
+        <div
+          className="absolute inset-0"
+          style={{
+            transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+            transformOrigin: "0 0",
+          }}
+        >
+          {/* Background image */}
+          {mapImage && (
+            <img 
+              src={mapImage} 
+              alt="Planta"
+              className="absolute inset-0 pointer-events-none"
+              style={{ 
+                maxWidth: 'none',
+                width: svgDimensions.width,
+                height: svgDimensions.height,
+                objectFit: 'contain',
+                opacity: isEditMode ? 0.6 : 0.4,
+              }}
+            />
+          )}
 
-        {/* Side Panel */}
-        {!isEditMode && (
-          <Card className="w-72 shrink-0 flex flex-col">
-            <div className="p-3 border-b">
-              <h3 className="font-semibold flex items-center gap-2 text-sm">
-                <MapPin className="h-4 w-4" />
-                Detalhes da Casa
-              </h3>
-            </div>
+          <svg 
+            ref={svgRef}
+            width={svgDimensions.width} 
+            height={svgDimensions.height}
+            className="select-none relative z-10"
+          >
+            {/* Grid */}
+            <defs>
+              <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                <path d="M 50 0 L 0 0 0 50" fill="none" stroke="hsl(var(--border))" strokeWidth="0.5" opacity="0.3"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill={mapImage ? "transparent" : "url(#grid)"} />
             
-            <ScrollArea className="flex-1">
-              {selectedHouse ? (
-                <div className="p-4 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold text-lg">Casa {selectedHouse.id}</h4>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setSelectedHouse(null)}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
+            {/* Quadras */}
+            {(isEditMode ? editingQuadras : filteredQuadras).map((quadra) => (
+              <g key={quadra.id}>
+                {/* Quadra rectangle */}
+                <rect
+                  x={quadra.x}
+                  y={quadra.y}
+                  width={quadra.width}
+                  height={quadra.height}
+                  fill={isEditMode ? "hsl(var(--card) / 0.7)" : "hsl(var(--card) / 0.85)"}
+                  stroke={isEditMode ? "hsl(var(--primary))" : "hsl(var(--border))"}
+                  strokeWidth={isEditMode ? 2 : 1}
+                  strokeDasharray={isEditMode ? "5,5" : "none"}
+                  rx="6"
+                  style={{ cursor: isEditMode ? 'move' : 'default' }}
+                  onMouseDown={(e) => handleEditMouseDown(e, 'quadra', quadra.id)}
+                />
+                
+                {/* Quadra name + auto-distribute button */}
+                <text
+                  x={quadra.x + 10}
+                  y={quadra.y + 16}
+                  fill="hsl(var(--foreground))"
+                  fontSize="12"
+                  fontWeight="600"
+                  style={{ pointerEvents: 'none' }}
+                >
+                  {quadra.name}
+                </text>
+
+                {/* Auto-distribute button in edit mode */}
+                {isEditMode && (
+                  <g
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => autoDistributeHouses(quadra.id)}
+                  >
+                    <rect
+                      x={quadra.x + quadra.width - 24}
+                      y={quadra.y + 4}
+                      width={20}
+                      height={18}
+                      fill="hsl(var(--secondary))"
+                      stroke="hsl(var(--border))"
+                      rx="3"
+                    />
+                    <text
+                      x={quadra.x + quadra.width - 14}
+                      y={quadra.y + 17}
+                      fill="hsl(var(--foreground))"
+                      fontSize="10"
+                      textAnchor="middle"
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      ⊞
+                    </text>
+                  </g>
+                )}
+
+                {/* Resize handles (edit mode only) */}
+                {isEditMode && (
+                  <>
+                    {['nw', 'ne', 'sw', 'se'].map(corner => {
+                      const cx = corner.includes('w') ? quadra.x : quadra.x + quadra.width;
+                      const cy = corner.includes('n') ? quadra.y : quadra.y + quadra.height;
+                      return (
+                        <circle
+                          key={corner}
+                          cx={cx}
+                          cy={cy}
+                          r={6}
+                          fill="hsl(var(--primary))"
+                          stroke="white"
+                          strokeWidth={2}
+                          style={{ cursor: `${corner}-resize` }}
+                          onMouseDown={(e) => handleEditMouseDown(e, 'resize', quadra.id, undefined, corner)}
+                        />
+                      );
+                    })}
+                    {[
+                      { key: 'n', x: quadra.x + quadra.width / 2, y: quadra.y },
+                      { key: 's', x: quadra.x + quadra.width / 2, y: quadra.y + quadra.height },
+                      { key: 'e', x: quadra.x + quadra.width, y: quadra.y + quadra.height / 2 },
+                      { key: 'w', x: quadra.x, y: quadra.y + quadra.height / 2 },
+                    ].map(({ key, x, y }) => (
+                      <circle
+                        key={key}
+                        cx={x}
+                        cy={y}
+                        r={5}
+                        fill="hsl(var(--secondary))"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={1.5}
+                        style={{ cursor: key === 'n' || key === 's' ? 'ns-resize' : 'ew-resize' }}
+                        onMouseDown={(e) => handleEditMouseDown(e, 'resize', quadra.id, undefined, key)}
+                      />
+                    ))}
+                  </>
+                )}
+                
+                {/* Houses as circles */}
+                {quadra.houses.map((house) => {
+                  const progress = getHouseProgress(house.id);
+                  const color = getHouseColor(house.id);
+                  const isSelected = selectedHouse?.id === house.id;
+                  const cx = quadra.x + house.x;
+                  const cy = quadra.y + house.y;
                   
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Quadra:</span>
-                      <span className="font-medium">
-                        {currentProject?.quadras.find(q => q.houses?.includes(selectedHouse.id))?.name || "Sem quadra"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Área:</span>
-                      <span className="font-medium">{selectedHouse.area} m²</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Tipo:</span>
-                      <span className="font-medium">{selectedHouse.type}</span>
-                    </div>
+                  return (
+                    <g 
+                      key={`house-${quadra.id}-${house.id}`}
+                      style={{ cursor: isEditMode ? 'move' : 'pointer' }}
+                      onClick={(e) => handleHouseClick(house.id, e)}
+                      onMouseDown={(e) => isEditMode && handleEditMouseDown(e, 'house', quadra.id, house.id)}
+                    >
+                      {/* Progress ring background */}
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={HOUSE_RADIUS + 2}
+                        fill="none"
+                        stroke="hsl(var(--border))"
+                        strokeWidth={2}
+                        opacity={0.3}
+                      />
+                      
+                      {/* Progress ring */}
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={HOUSE_RADIUS + 2}
+                        fill="none"
+                        stroke={color}
+                        strokeWidth={2}
+                        strokeDasharray={`${(progress / 100) * (2 * Math.PI * (HOUSE_RADIUS + 2))} ${2 * Math.PI * (HOUSE_RADIUS + 2)}`}
+                        strokeDashoffset={0.25 * 2 * Math.PI * (HOUSE_RADIUS + 2)}
+                        strokeLinecap="round"
+                        style={{ pointerEvents: 'none' }}
+                      />
+                      
+                      {/* House circle */}
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={HOUSE_RADIUS}
+                        fill={color}
+                        stroke={isSelected ? "white" : "hsl(var(--border))"}
+                        strokeWidth={isSelected ? 3 : 1}
+                        className="transition-all duration-150"
+                      />
+                      
+                      {/* House number */}
+                      <text
+                        x={cx}
+                        y={cy + 4}
+                        fill="white"
+                        fontSize="9"
+                        fontWeight="bold"
+                        textAnchor="middle"
+                        style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)', pointerEvents: 'none' }}
+                      >
+                        {house.id}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
+            ))}
+            
+            {/* Legend - positioned in corner */}
+            {!isEditMode && (
+              <g transform={`translate(20, 20)`}>
+                <rect x="0" y="0" width="120" height={legendItems.length * 18 + 25} fill="hsl(var(--card) / 0.95)" stroke="hsl(var(--border))" rx="4" />
+                <text x="8" y="15" fill="hsl(var(--foreground))" fontSize="10" fontWeight="600">Legenda</text>
+                {legendItems.map((item, idx) => (
+                  <g key={item.id} transform={`translate(8, ${25 + idx * 16})`}>
+                    <circle cx="5" cy="5" r="5" fill={item.color} />
+                    <text x="15" y="8" fill="hsl(var(--muted-foreground))" fontSize="8">{item.name}</text>
+                  </g>
+                ))}
+              </g>
+            )}
+          </svg>
+        </div>
+      </div>
+
+      {/* House Details Dialog */}
+      <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Casa {selectedHouse?.id}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedHouse && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Quadra:</span>
+                  <span className="font-medium">
+                    {currentProject?.quadras.find(q => q.houses?.includes(selectedHouse.id))?.name || "-"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Área:</span>
+                  <span className="font-medium">{selectedHouse.area} m²</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Tipo:</span>
+                  <span className="font-medium">{selectedHouse.type}</span>
+                </div>
+                {selectedHouse.constructorName && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Construtor:</span>
+                    <span className="font-medium">{selectedHouse.constructorName}</span>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">Progresso Geral</span>
-                      <span className="text-sm font-bold">{calculateHouseProgress(selectedHouse).toFixed(1)}%</span>
-                    </div>
-                    <Progress value={calculateHouseProgress(selectedHouse)} className="h-2" />
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <h5 className="font-medium text-sm">Etapas</h5>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Progresso Geral</span>
+                  <span className="text-sm font-bold">{calculateHouseProgress(selectedHouse).toFixed(1)}%</span>
+                </div>
+                <Progress value={calculateHouseProgress(selectedHouse)} className="h-2" />
+              </div>
+              
+              <div className="space-y-3">
+                <h5 className="font-medium text-sm">Etapas</h5>
+                <ScrollArea className="h-48">
+                  <div className="space-y-3 pr-3">
                     {selectedHouse.macros.map((macro) => {
                       const macroProgress = macro.scopes.reduce((sum, s) => sum + s.progress * s.weight, 0) / 
-                        macro.scopes.reduce((sum, s) => sum + s.weight, 0);
+                        Math.max(macro.scopes.reduce((sum, s) => sum + s.weight, 0), 1);
                       return (
                         <div key={macro.id} className="space-y-1">
                           <div className="flex items-center gap-2">
@@ -1066,17 +1108,12 @@ export function InteractiveMapView() {
                       );
                     })}
                   </div>
-                </div>
-              ) : (
-                <div className="p-4 flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-                  <MapPin className="h-8 w-8 mb-2 opacity-30" />
-                  <p className="text-sm">Clique em uma casa para ver detalhes</p>
-                </div>
-              )}
-            </ScrollArea>
-          </Card>
-        )}
-      </div>
+                </ScrollArea>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
