@@ -910,6 +910,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   const updateMacro = useCallback(async (macroId: string, name: string, color?: string) => {
     if (!currentProject) return;
     
+    const oldMacro = currentProject.macrosTemplate.find(m => m.id === macroId);
     const newTemplate = currentProject.macrosTemplate.map(m => 
       m.id === macroId ? { ...m, name, ...(color !== undefined && { color }) } : m
     );
@@ -924,6 +925,34 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       console.error('Error updating macro:', error);
       toast.error("Erro ao atualizar etapa");
       return;
+    }
+
+    // Propagate name/color changes to related tables
+    if (oldMacro && (oldMacro.name !== name || (color !== undefined && oldMacro.color !== color))) {
+      const updateData: { macro_name?: string; macro_color?: string } = {};
+      if (oldMacro.name !== name) updateData.macro_name = name;
+      if (color !== undefined && oldMacro.color !== color) updateData.macro_color = color;
+      
+      // Update weekly_productions
+      await supabase
+        .from('weekly_productions')
+        .update(updateData)
+        .eq('project_id', currentProject.id)
+        .eq('macro_id', macroId);
+      
+      // Update planned_productions
+      await supabase
+        .from('planned_productions')
+        .update(updateData)
+        .eq('project_id', currentProject.id)
+        .eq('macro_id', macroId);
+      
+      // Update production_deviations
+      await supabase
+        .from('production_deviations')
+        .update({ macro_name: name })
+        .eq('project_id', currentProject.id)
+        .eq('macro_id', macroId);
     }
 
     // Then sync to houses
@@ -991,6 +1020,9 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   const updateScope = useCallback(async (macroId: string, scopeId: string, updates: Partial<Pick<Scope, "name" | "weight">>) => {
     if (!currentProject) return;
     
+    const macro = currentProject.macrosTemplate.find(m => m.id === macroId);
+    const oldScope = macro?.scopes.find(s => s.id === scopeId);
+    
     const newTemplate = currentProject.macrosTemplate.map(m => 
       m.id === macroId 
         ? { ...m, scopes: m.scopes.map(s => s.id === scopeId ? { ...s, ...updates } : s) }
@@ -1007,6 +1039,30 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       console.error('Error updating scope:', error);
       toast.error("Erro ao atualizar serviço");
       return;
+    }
+
+    // Propagate name changes to related tables
+    if (oldScope && updates.name && oldScope.name !== updates.name) {
+      // Update weekly_productions
+      await supabase
+        .from('weekly_productions')
+        .update({ scope_name: updates.name })
+        .eq('project_id', currentProject.id)
+        .eq('scope_id', scopeId);
+      
+      // Update planned_productions
+      await supabase
+        .from('planned_productions')
+        .update({ scope_name: updates.name })
+        .eq('project_id', currentProject.id)
+        .eq('scope_id', scopeId);
+      
+      // Update production_deviations
+      await supabase
+        .from('production_deviations')
+        .update({ scope_name: updates.name })
+        .eq('project_id', currentProject.id)
+        .eq('scope_id', scopeId);
     }
 
     // Then sync to houses
