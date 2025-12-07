@@ -49,7 +49,7 @@ interface EditProductionDialogProps {
 }
 
 export function EditProductionDialog({ open, onOpenChange, production, onSave }: EditProductionDialogProps) {
-  const { currentProject, updateScopeProgress } = useConstruction();
+  const { currentProject, updateScopeProgress, refreshHouses } = useConstruction();
   const [weekStart, setWeekStart] = useState("");
   const [weekEnd, setWeekEnd] = useState("");
   const [notes, setNotes] = useState("");
@@ -142,6 +142,9 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
         await updateScopeProgress(houseId, production.macro_id, production.scope_id, 100);
       }
 
+      // Refresh houses from database to ensure map updates
+      await refreshHouses();
+
       toast.success("Registro atualizado com sucesso");
       onSave();
       onOpenChange(false);
@@ -168,6 +171,9 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
       for (const houseId of production.house_ids) {
         await updateScopeProgress(houseId, production.macro_id, production.scope_id, 0);
       }
+
+      // Refresh houses from database to ensure map updates
+      await refreshHouses();
 
       toast.success("Registro excluído e mapa atualizado");
       onSave();

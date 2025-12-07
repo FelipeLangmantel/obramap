@@ -92,6 +92,9 @@ interface ConstructionContextType {
   updateScope: (macroId: string, scopeId: string, updates: Partial<Pick<Scope, "name" | "weight">>) => Promise<void>;
   deleteScope: (macroId: string, scopeId: string) => Promise<void>;
   
+  // Refresh houses from database
+  refreshHouses: () => Promise<void>;
+  
   // Reorder macros and scopes
   reorderMacros: (orderedMacroIds: string[]) => Promise<void>;
   reorderScopes: (macroId: string, orderedScopeIds: string[]) => Promise<void>;
@@ -1284,6 +1287,46 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     return Math.max(0, diffDays);
   }, [currentProject]);
 
+  // Refresh houses from database to sync map after bulk updates
+  const refreshHouses = useCallback(async () => {
+    if (!currentProjectId) return;
+    
+    try {
+      const { data: housesData } = await supabase
+        .from('houses')
+        .select('*')
+        .eq('project_id', currentProjectId)
+        .order('house_number', { ascending: true });
+
+      if (housesData) {
+        const houses: House[] = housesData.map(h => ({
+          id: h.house_number,
+          quadra: h.quadra_id || "",
+          area: h.area,
+          type: h.type,
+          constructorName: h.constructor_name || "",
+          expectedDate: h.expected_date || "",
+          lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
+          macros: jsonToMacros(h.macros),
+        }));
+
+        setProjects(prev => prev.map(p => 
+          p.id === currentProjectId ? { ...p, houses } : p
+        ));
+
+        // Update selected house if it exists
+        if (selectedHouse) {
+          const updatedSelectedHouse = houses.find(h => h.id === selectedHouse.id);
+          if (updatedSelectedHouse) {
+            setSelectedHouse(updatedSelectedHouse);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing houses:', error);
+    }
+  }, [currentProjectId, selectedHouse]);
+
   // Reset all house progress data
   const resetProjectData = useCallback(async () => {
     if (!currentProject) return;
@@ -1422,6 +1465,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         resetProjectData,
         updateLegendSettings,
         reorderProjects,
+        refreshHouses,
         isLoading,
       }}
     >
