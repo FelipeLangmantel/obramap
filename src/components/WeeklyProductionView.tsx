@@ -26,7 +26,8 @@ import {
   Filter,
   CalendarDays,
   Pencil,
-  Target
+  Target,
+  Trash2
 } from "lucide-react";
 import { EditProductionDialog } from "./EditProductionDialog";
 import { format, startOfWeek, endOfWeek, subWeeks, parseISO, isWithinInterval, addWeeks, startOfMonth, endOfMonth, subMonths } from "date-fns";
@@ -515,26 +516,34 @@ export function WeeklyProductionView() {
                   </div>
                 </div>
 
-                {/* Initial Database Mode */}
-                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="initial-database"
-                      checked={isInitialDatabase}
-                      onCheckedChange={(checked) => handleInitialDatabaseChange(checked as boolean)}
-                    />
-                    <Label 
-                      htmlFor="initial-database" 
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      Banco de Atividades Iniciais
-                    </Label>
+                {/* Initial Database Mode - Collapsible */}
+                <details className="group">
+                  <summary className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground transition-colors">
+                    <span className="group-open:hidden">▶</span>
+                    <span className="hidden group-open:inline">▼</span>
+                    Opções avançadas
+                  </summary>
+                  <div className="mt-2 p-3 bg-muted/30 rounded-lg space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="initial-database"
+                        checked={isInitialDatabase}
+                        onCheckedChange={(checked) => handleInitialDatabaseChange(checked as boolean)}
+                      />
+                      <Label 
+                        htmlFor="initial-database" 
+                        className="text-xs cursor-pointer"
+                      >
+                        Banco de Atividades Iniciais
+                      </Label>
+                    </div>
+                    {isInitialDatabase && (
+                      <p className="text-[10px] text-muted-foreground pl-6">
+                        Atividades para cadastro inicial não afetam análises.
+                      </p>
+                    )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Marque esta opção para lançamentos de atividades já realizadas antes do início do acompanhamento. 
-                    Estas atividades <strong>não</strong> serão incluídas na análise Planejado x Realizado e não afetarão os dados de análise semanal.
-                  </p>
-                </div>
+                </details>
 
                 <div className="space-y-2">
                   <Label className="text-sm">Etapa (Macro)</Label>
@@ -982,6 +991,24 @@ export function WeeklyProductionView() {
                               }}
                             >
                               <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                              onClick={async () => {
+                                if (confirm("Deseja excluir este registro de produção?")) {
+                                  try {
+                                    await supabase.from('weekly_productions').delete().eq('id', prod.id);
+                                    await reloadProductions();
+                                    toast.success("Registro excluído");
+                                  } catch (error) {
+                                    toast.error("Erro ao excluir registro");
+                                  }
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </div>
