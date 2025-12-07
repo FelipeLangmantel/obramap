@@ -83,7 +83,11 @@ function IndexContent() {
                       <div className={`min-w-0 transition-all duration-300 ${selectedHouse ? 'flex-1' : 'w-full'}`}>
                         <QuadrasGrid />
                       </div>
-                      {selectedHouse && <HouseDetails />}
+                      {selectedHouse && (
+                        <div className="lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-12rem)]">
+                          <HouseDetails />
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
