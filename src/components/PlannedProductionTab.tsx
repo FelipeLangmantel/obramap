@@ -1279,7 +1279,7 @@ export function PlannedProductionTab() {
                         {planStartDate ? format(parseISO(planStartDate), "dd/MM/yyyy", { locale: ptBR }) : "Selecionar"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 z-[100]" align="start">
                       <Calendar
                         mode="single"
                         selected={planStartDate ? parseISO(planStartDate) : undefined}
@@ -1291,7 +1291,7 @@ export function PlannedProductionTab() {
                           }
                         }}
                         initialFocus
-                        className={cn("p-3 pointer-events-auto")}
+                        className="p-3 pointer-events-auto"
                         locale={ptBR}
                       />
                     </PopoverContent>
@@ -1312,13 +1312,13 @@ export function PlannedProductionTab() {
                         {planEndDate ? format(parseISO(planEndDate), "dd/MM/yyyy", { locale: ptBR }) : "Selecionar"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 z-[100]" align="start">
                       <Calendar
                         mode="single"
                         selected={planEndDate ? parseISO(planEndDate) : undefined}
                         onSelect={(date) => date && setPlanEndDate(format(date, "yyyy-MM-dd"))}
                         initialFocus
-                        className={cn("p-3 pointer-events-auto")}
+                        className="p-3 pointer-events-auto"
                         locale={ptBR}
                       />
                     </PopoverContent>
