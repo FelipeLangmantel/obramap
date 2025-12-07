@@ -364,10 +364,14 @@ export function WeeklyProductionView() {
   }, []);
 
   // Filter productions by analysis period and other filters
+  // IMPORTANT: Exclude initial database records from analysis (they don't affect trends/averages)
   const filteredProductions = useMemo(() => {
+    // First, filter out initial database records for analysis purposes
+    const nonInitialProductions = productions.filter(prod => !prod.is_initial_database);
+    
     // For "all" period, don't filter by date
     if (analysisPeriod === "all") {
-      return productions.filter(prod => {
+      return nonInitialProductions.filter(prod => {
         // Filter by house - show only productions that include this house
         const houseMatch = !analysisHouseFilter || 
           prod.house_ids.includes(parseInt(analysisHouseFilter));
@@ -382,12 +386,12 @@ export function WeeklyProductionView() {
       });
     }
     
-    if (!analysisStartDate || !analysisEndDate) return productions;
+    if (!analysisStartDate || !analysisEndDate) return nonInitialProductions;
     
     const start = parseISO(analysisStartDate);
     const end = parseISO(analysisEndDate);
     
-    return productions.filter(prod => {
+    return nonInitialProductions.filter(prod => {
       const prodDate = parseISO(prod.week_start);
       const inDateRange = isWithinInterval(prodDate, { start, end });
       
