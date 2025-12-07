@@ -1420,9 +1420,22 @@ export function PlannedProductionTab() {
                 <div className="space-y-4">
                   {groupedFuturePlans.map(group => {
                     const totalHouses = group.plans.reduce((sum, p) => sum + p.planned_houses, 0);
-                    const allHouseIds = group.plans.flatMap(p => p.planned_house_ids || []);
+                    const allHouseIds = [...new Set(group.plans.flatMap(p => p.planned_house_ids || []))];
                     const weekKey = `${group.weekStart}_${group.weekEnd}`;
                     const isExpanded = expandedWeeks.has(weekKey);
+                    
+                    // Group services by macro for better visualization
+                    const servicesByMacro: Record<string, { macroName: string; macroColor: string; services: typeof group.plans }> = {};
+                    group.plans.forEach(p => {
+                      if (!servicesByMacro[p.macro_id]) {
+                        servicesByMacro[p.macro_id] = {
+                          macroName: p.macro_name,
+                          macroColor: p.macro_color,
+                          services: []
+                        };
+                      }
+                      servicesByMacro[p.macro_id].services.push(p);
+                    });
                     
                     return (
                       <Card key={weekKey} className="overflow-hidden">
@@ -1433,17 +1446,17 @@ export function PlannedProductionTab() {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-                                <Calendar className="w-5 h-5 text-primary" />
+                              <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center">
+                                <Calendar className="w-6 h-6 text-primary" />
                               </div>
                               <div>
-                                <p className="font-semibold text-base">
-                                  {format(parseISO(group.weekStart), "dd 'de' MMMM", { locale: ptBR })} - {format(parseISO(group.weekEnd), "dd 'de' MMMM", { locale: ptBR })}
+                                <p className="font-bold text-lg">
+                                  {format(parseISO(group.weekStart), "dd", { locale: ptBR })} a {format(parseISO(group.weekEnd), "dd 'de' MMMM", { locale: ptBR })}
                                 </p>
                                 <div className="flex items-center gap-3 mt-1">
                                   <Badge variant="secondary" className="text-xs gap-1">
                                     <ClipboardList className="w-3 h-3" />
-                                    {group.plans.length} {group.plans.length === 1 ? 'atividade' : 'atividades'}
+                                    {group.plans.length} {group.plans.length === 1 ? 'serviço' : 'serviços'}
                                   </Badge>
                                   <Badge variant="outline" className="text-xs gap-1">
                                     <Home className="w-3 h-3" />
@@ -1468,22 +1481,48 @@ export function PlannedProductionTab() {
                             </div>
                           </div>
                           
-                          {/* Compact house numbers preview */}
-                          {!isExpanded && allHouseIds.length > 0 && (
-                            <div className="mt-3 flex items-center gap-2 flex-wrap">
-                              <span className="text-xs text-muted-foreground">Casas:</span>
-                              {allHouseIds.slice(0, 15).sort((a, b) => a - b).map(id => (
-                                <Badge key={id} variant="outline" className="h-5 text-xs px-1.5">
-                                  {id}
+                          {/* Services summary - always visible */}
+                          <div className="mt-3 space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">Serviços planejados:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {group.plans.map(p => (
+                                <Badge 
+                                  key={p.id}
+                                  variant="secondary"
+                                  className="gap-1.5 py-1"
+                                  style={{ 
+                                    backgroundColor: `${p.macro_color}20`,
+                                    borderColor: p.macro_color,
+                                    border: '1px solid'
+                                  }}
+                                >
+                                  <div 
+                                    className="w-2 h-2 rounded-full" 
+                                    style={{ backgroundColor: p.macro_color }}
+                                  />
+                                  <span className="text-xs">{p.scope_name}</span>
+                                  <span className="text-xs text-muted-foreground">({p.planned_houses})</span>
                                 </Badge>
                               ))}
-                              {allHouseIds.length > 15 && (
-                                <Badge variant="secondary" className="h-5 text-xs px-1.5">
-                                  +{allHouseIds.length - 15}
-                                </Badge>
-                              )}
                             </div>
-                          )}
+                            
+                            {/* Compact house numbers preview when collapsed */}
+                            {!isExpanded && allHouseIds.length > 0 && (
+                              <div className="pt-2 flex items-center gap-2 flex-wrap border-t border-border/50 mt-2">
+                                <span className="text-xs text-muted-foreground">Casas:</span>
+                                {allHouseIds.slice(0, 20).sort((a, b) => a - b).map(id => (
+                                  <span key={id} className="text-xs font-medium text-muted-foreground">
+                                    {id}
+                                  </span>
+                                ))}
+                                {allHouseIds.length > 20 && (
+                                  <span className="text-xs text-muted-foreground">
+                                    ... +{allHouseIds.length - 20} mais
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                         
                         {/* Expanded Content */}
