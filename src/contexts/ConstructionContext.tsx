@@ -1162,79 +1162,64 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   const updateScopeProgress = useCallback(async (houseId: number, macroId: string, scopeId: string, progress: number, startDate?: string | null, endDate?: string | null) => {
     if (!currentProjectId) return;
 
-    // Update local state first for immediate UI response
-    setProjects(prev => {
-      const newProjects = prev.map(p => {
-        if (p.id !== currentProjectId) return p;
-        
-        const updatedHouses = p.houses.map(house => {
-          if (house.id !== houseId) return house;
-          
-          const updatedMacros = house.macros.map(macro => {
-            if (macro.id !== macroId) return macro;
-            
-            const updatedScopes = macro.scopes.map(scope => {
-              if (scope.id !== scopeId) return scope;
-              return {
-                ...scope,
-                progress,
-                startDate: startDate !== undefined ? startDate : scope.startDate,
-                endDate: endDate !== undefined ? endDate : scope.endDate,
-              };
-            });
-            
-            return { ...macro, scopes: updatedScopes };
-          });
-          
-          return { ...house, macros: updatedMacros, lastUpdate: new Date().toLocaleDateString("pt-BR") };
-        });
-        
-        return { ...p, houses: updatedHouses };
-      });
+    // Build the updated macros for this house
+    const project = projects.find(p => p.id === currentProjectId);
+    if (!project) return;
 
-      // Update database asynchronously
-      const updatedProject = newProjects.find(p => p.id === currentProjectId);
-      if (updatedProject) {
-        const updatedHouse = updatedProject.houses.find(h => h.id === houseId);
-        if (updatedHouse) {
-          supabase
-            .from('houses')
-            .update({ 
-              macros: macrosToJson(updatedHouse.macros),
-              last_update: new Date().toISOString().split('T')[0]
-            })
-            .eq('project_id', currentProjectId)
-            .eq('house_number', houseId)
-            .then(({ error }) => {
-              if (error) console.error('Error updating house progress:', error);
-            });
-        }
-      }
+    const house = project.houses.find(h => h.id === houseId);
+    if (!house) return;
+
+    const updatedMacros = house.macros.map(macro => {
+      if (macro.id !== macroId) return macro;
       
-      return newProjects;
+      const updatedScopes = macro.scopes.map(scope => {
+        if (scope.id !== scopeId) return scope;
+        return {
+          ...scope,
+          progress,
+          startDate: startDate !== undefined ? startDate : scope.startDate,
+          endDate: endDate !== undefined ? endDate : scope.endDate,
+        };
+      });
+      
+      return { ...macro, scopes: updatedScopes };
     });
+
+    // Update database FIRST and wait for it
+    const { error } = await supabase
+      .from('houses')
+      .update({ 
+        macros: macrosToJson(updatedMacros),
+        last_update: new Date().toISOString().split('T')[0]
+      })
+      .eq('project_id', currentProjectId)
+      .eq('house_number', houseId);
+
+    if (error) {
+      console.error('Error updating house progress:', error);
+      return;
+    }
+
+    // Then update local state for immediate UI response
+    setProjects(prev => prev.map(p => {
+      if (p.id !== currentProjectId) return p;
+      
+      const updatedHouses = p.houses.map(h => {
+        if (h.id !== houseId) return h;
+        return { ...h, macros: updatedMacros, lastUpdate: new Date().toLocaleDateString("pt-BR") };
+      });
+      
+      return { ...p, houses: updatedHouses };
+    }));
 
     // Also update selected house if it's the one being modified
     if (selectedHouse?.id === houseId) {
       setSelectedHouse(prev => {
         if (!prev) return null;
-        const updatedMacros = prev.macros.map(macro => {
-          if (macro.id !== macroId) return macro;
-          const updatedScopes = macro.scopes.map(scope => {
-            if (scope.id !== scopeId) return scope;
-            return {
-              ...scope,
-              progress,
-              startDate: startDate !== undefined ? startDate : scope.startDate,
-              endDate: endDate !== undefined ? endDate : scope.endDate,
-            };
-          });
-          return { ...macro, scopes: updatedScopes };
-        });
         return { ...prev, macros: updatedMacros, lastUpdate: new Date().toLocaleDateString("pt-BR") };
       });
     }
-  }, [currentProjectId, selectedHouse]);
+  }, [currentProjectId, selectedHouse, projects]);
 
   const updateHouseInfo = useCallback(async (houseId: number, updates: Partial<Pick<House, "area" | "constructorName" | "type" | "expectedDate">>) => {
     if (!currentProjectId) return;
