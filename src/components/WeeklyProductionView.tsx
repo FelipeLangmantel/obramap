@@ -28,11 +28,22 @@ import {
   Pencil,
   Target,
   Trash2,
-  ListChecks
+  ListChecks,
+  AlertTriangle
 } from "lucide-react";
 import { EditProductionDialog } from "./EditProductionDialog";
 import { format, startOfWeek, endOfWeek, subWeeks, parseISO, isWithinInterval, addWeeks, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface WeeklyProduction {
   id: string;
@@ -108,6 +119,9 @@ export function WeeklyProductionView() {
   const [isSaving, setIsSaving] = useState(false);
   const [editingProduction, setEditingProduction] = useState<WeeklyProduction | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [productionToDelete, setProductionToDelete] = useState<WeeklyProduction | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Drag selection state
   const [isDragging, setIsDragging] = useState(false);
@@ -340,6 +354,39 @@ export function WeeklyProductionView() {
   // Handle edit dialog save
   const handleEditSave = async () => {
     await reloadProductions();
+  };
+
+  // Handle delete production with map revert
+  const handleDeleteProduction = async () => {
+    if (!productionToDelete || !currentProject) return;
+    
+    setIsDeleting(true);
+    try {
+      // Revert progress for all houses in this production
+      await updateBatchScopeProgress(
+        productionToDelete.house_ids, 
+        productionToDelete.macro_id, 
+        productionToDelete.scope_id, 
+        0
+      );
+
+      // Delete the production record
+      const { error } = await supabase
+        .from('weekly_productions')
+        .delete()
+        .eq('id', productionToDelete.id);
+
+      if (error) throw error;
+
+      await reloadProductions();
+      toast.success(`Registro excluído. ${productionToDelete.houses_count} casas tiveram o progresso de "${productionToDelete.scope_name}" revertido para 0%.`);
+      setDeleteDialogOpen(false);
+      setProductionToDelete(null);
+    } catch (error) {
+      console.error('Error deleting production:', error);
+      toast.error("Erro ao excluir registro");
+    }
+    setIsDeleting(false);
   };
 
   // Drag selection handlers
@@ -1147,17 +1194,10 @@ export function WeeklyProductionView() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-destructive hover:text-destructive"
-                                  onClick={async (e) => {
+                                  onClick={(e) => {
                                     e.stopPropagation();
-                                    if (confirm("Deseja excluir este registro de produção?")) {
-                                      try {
-                                        await supabase.from('weekly_productions').delete().eq('id', prod.id);
-                                        await reloadProductions();
-                                        toast.success("Registro excluído");
-                                      } catch (error) {
-                                        toast.error("Erro ao excluir registro");
-                                      }
-                                    }
+                                    setProductionToDelete(prod);
+                                    setDeleteDialogOpen(true);
                                   }}
                                 >
                                   <Trash2 className="h-4 w-4" />
@@ -1183,6 +1223,49 @@ export function WeeklyProductionView() {
         production={editingProduction}
         onSave={handleEditSave}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Confirmar Exclusão
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>Tem certeza que deseja excluir este registro de produção?</p>
+                {productionToDelete && (
+                  <>
+                    <p className="font-medium text-foreground">
+                      {productionToDelete.scope_name} - {productionToDelete.houses_count} casas
+                    </p>
+                    <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-md">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-amber-700 dark:text-amber-400">
+                        O mapa de obras será atualizado: todas as {productionToDelete.houses_count} casas terão o progresso do serviço "{productionToDelete.scope_name}" revertido para 0%.
+                      </p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Esta ação não pode ser desfeita.
+                    </p>
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteProduction}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Excluindo..." : "Excluir e Reverter Mapa"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
