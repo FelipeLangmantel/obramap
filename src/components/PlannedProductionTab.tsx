@@ -1285,7 +1285,7 @@ export function PlannedProductionTab() {
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Selecione a etapa" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[280px] overflow-y-auto">
                   {macros.map(macro => (
                     <SelectItem key={macro.id} value={macro.id}>
                       <div className="flex items-center gap-2">
@@ -1308,7 +1308,7 @@ export function PlannedProductionTab() {
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Selecione o serviço" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-[280px] overflow-y-auto">
                   {scopes.map(scope => (
                     <SelectItem key={scope.id} value={scope.id}>
                       {scope.name}
