@@ -418,44 +418,67 @@ export function InteractiveMapView() {
         };
       }));
     } else if (draggingItem.type === 'quadra') {
-      setEditingQuadras(prev => prev.map(quadra => {
-        if (quadra.id !== draggingItem.id) return quadra;
-        return {
-          ...quadra,
-          x: Math.max(0, Math.min(MAP_WIDTH - quadra.width, coords.x - dragOffset.x)),
-          y: Math.max(0, Math.min(MAP_HEIGHT - quadra.height, coords.y - dragOffset.y)),
-        };
+      const quadra = editingQuadras.find(q => q.id === draggingItem.id);
+      if (!quadra) return;
+      
+      const newX = Math.max(0, Math.min(MAP_WIDTH - quadra.width, coords.x - dragOffset.x));
+      const newY = Math.max(0, Math.min(MAP_HEIGHT - quadra.height, coords.y - dragOffset.y));
+      const deltaX = newX - quadra.x;
+      const deltaY = newY - quadra.y;
+      
+      // Update quadra position
+      setEditingQuadras(prev => prev.map(q => {
+        if (q.id !== draggingItem.id) return q;
+        return { ...q, x: newX, y: newY };
       }));
-    } else if (draggingItem.type === 'resize' && draggingItem.corner) {
-      setEditingQuadras(prev => prev.map(quadra => {
-        if (quadra.id !== draggingItem.id) return quadra;
+      
+      // If quadra is visible, move houses inside it together
+      if (quadra.visible) {
+        const projectQuadra = currentProject?.quadras.find(q => q.id === draggingItem.id);
+        const houseIdsInQuadra = projectQuadra?.houses || [];
         
-        let newX = quadra.x, newY = quadra.y;
-        let newWidth = quadra.width, newHeight = quadra.height;
+        setEditingHouses(prev => prev.map(house => {
+          if (!houseIdsInQuadra.includes(house.id)) return house;
+          return {
+            ...house,
+            x: house.x + deltaX,
+            y: house.y + deltaY,
+          };
+        }));
+      }
+    } else if (draggingItem.type === 'resize' && draggingItem.corner) {
+      const quadra = editingQuadras.find(q => q.id === draggingItem.id);
+      if (!quadra) return;
+      
+      let newX = quadra.x, newY = quadra.y;
+      let newWidth = quadra.width, newHeight = quadra.height;
 
-        switch (draggingItem.corner) {
-          case 'se':
-            newWidth = Math.max(MIN_QUADRA_SIZE, coords.x - quadra.x);
-            newHeight = Math.max(MIN_QUADRA_SIZE, coords.y - quadra.y);
-            break;
-          case 'sw':
-            newWidth = Math.max(MIN_QUADRA_SIZE, quadra.x + quadra.width - coords.x);
-            newX = Math.min(quadra.x + quadra.width - MIN_QUADRA_SIZE, coords.x);
-            newHeight = Math.max(MIN_QUADRA_SIZE, coords.y - quadra.y);
-            break;
-          case 'ne':
-            newWidth = Math.max(MIN_QUADRA_SIZE, coords.x - quadra.x);
-            newHeight = Math.max(MIN_QUADRA_SIZE, quadra.y + quadra.height - coords.y);
-            newY = Math.min(quadra.y + quadra.height - MIN_QUADRA_SIZE, coords.y);
-            break;
-          case 'nw':
-            newWidth = Math.max(MIN_QUADRA_SIZE, quadra.x + quadra.width - coords.x);
-            newX = Math.min(quadra.x + quadra.width - MIN_QUADRA_SIZE, coords.x);
-            newHeight = Math.max(MIN_QUADRA_SIZE, quadra.y + quadra.height - coords.y);
-            newY = Math.min(quadra.y + quadra.height - MIN_QUADRA_SIZE, coords.y);
-            break;
-        }
-        return { ...quadra, x: newX, y: newY, width: newWidth, height: newHeight };
+      switch (draggingItem.corner) {
+        case 'se':
+          newWidth = Math.max(MIN_QUADRA_SIZE, coords.x - quadra.x);
+          newHeight = Math.max(MIN_QUADRA_SIZE, coords.y - quadra.y);
+          break;
+        case 'sw':
+          newWidth = Math.max(MIN_QUADRA_SIZE, quadra.x + quadra.width - coords.x);
+          newX = Math.min(quadra.x + quadra.width - MIN_QUADRA_SIZE, coords.x);
+          newHeight = Math.max(MIN_QUADRA_SIZE, coords.y - quadra.y);
+          break;
+        case 'ne':
+          newWidth = Math.max(MIN_QUADRA_SIZE, coords.x - quadra.x);
+          newHeight = Math.max(MIN_QUADRA_SIZE, quadra.y + quadra.height - coords.y);
+          newY = Math.min(quadra.y + quadra.height - MIN_QUADRA_SIZE, coords.y);
+          break;
+        case 'nw':
+          newWidth = Math.max(MIN_QUADRA_SIZE, quadra.x + quadra.width - coords.x);
+          newX = Math.min(quadra.x + quadra.width - MIN_QUADRA_SIZE, coords.x);
+          newHeight = Math.max(MIN_QUADRA_SIZE, quadra.y + quadra.height - coords.y);
+          newY = Math.min(quadra.y + quadra.height - MIN_QUADRA_SIZE, coords.y);
+          break;
+      }
+      
+      setEditingQuadras(prev => prev.map(q => {
+        if (q.id !== draggingItem.id) return q;
+        return { ...q, x: newX, y: newY, width: newWidth, height: newHeight };
       }));
     }
   }, [isEditMode, draggingItem, dragOffset, getSvgCoords, isSelecting, dragStart, selectedHouseIds, multiDragOffset]);
@@ -479,9 +502,36 @@ export function InteractiveMapView() {
       setIsSelecting(false);
     }
     
+    // When finishing resize, redistribute houses in the quadra
+    if (draggingItem?.type === 'resize' && draggingItem.id) {
+      const quadra = editingQuadras.find(q => q.id === draggingItem.id);
+      if (quadra && quadra.visible) {
+        const projectQuadra = currentProject?.quadras.find(q => q.id === draggingItem.id);
+        const houseIds = projectQuadra?.houses || [];
+        const houseCount = houseIds.length;
+        
+        if (houseCount > 0) {
+          const cols = Math.max(1, Math.ceil(Math.sqrt(houseCount)));
+          const rows = Math.ceil(houseCount / cols);
+          const cellWidth = (quadra.width - 40) / cols;
+          const cellHeight = (quadra.height - 50) / rows;
+          
+          setEditingHouses(prev => {
+            const otherHouses = prev.filter(h => !houseIds.includes(h.id));
+            const newHouses = houseIds.map((id: number, idx: number) => ({
+              id,
+              x: quadra.x + 20 + (idx % cols) * cellWidth + cellWidth / 2,
+              y: quadra.y + 35 + Math.floor(idx / cols) * cellHeight + cellHeight / 2,
+            }));
+            return [...otherHouses, ...newHouses];
+          });
+        }
+      }
+    }
+    
     setDraggingItem(null);
     setMultiDragOffset(new Map());
-  }, [isSelecting, selectionStart, selectionEnd, editingHouses]);
+  }, [isSelecting, selectionStart, selectionEnd, editingHouses, draggingItem, editingQuadras, currentProject]);
 
   // Toggle quadra visibility
   const toggleQuadraVisibility = (quadraId: string) => {
