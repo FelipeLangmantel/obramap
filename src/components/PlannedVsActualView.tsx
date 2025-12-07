@@ -491,73 +491,79 @@ export function PlannedVsActualView() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+    <div className="flex flex-col h-full gap-4">
+      {/* Stats Cards - Compact */}
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
         <Card className="bg-primary/5">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-              <Target className="w-4 h-4" />
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1 text-muted-foreground text-xs mb-0.5">
+              <Target className="w-3 h-3" />
               Planejado
             </div>
-            <div className="text-2xl font-bold">{stats.totalPlanned}</div>
-            <div className="text-xs text-muted-foreground">casas</div>
+            <div className="text-xl font-bold">{stats.totalPlanned}</div>
           </CardContent>
         </Card>
 
         <Card className="bg-green-500/10">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-              <CheckCircle2 className="w-4 h-4" />
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1 text-muted-foreground text-xs mb-0.5">
+              <CheckCircle2 className="w-3 h-3" />
               Realizado
             </div>
-            <div className="text-2xl font-bold">{stats.totalActual}</div>
-            <div className="text-xs text-muted-foreground">casas</div>
+            <div className="text-xl font-bold">{stats.totalActual}</div>
           </CardContent>
         </Card>
 
         <Card className={stats.totalDeviation >= 0 ? "bg-green-500/10" : "bg-red-500/10"}>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-              {stats.totalDeviation >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1 text-muted-foreground text-xs mb-0.5">
+              {stats.totalDeviation >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
               Desvio
             </div>
-            <div className={`text-2xl font-bold ${stats.totalDeviation >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <div className={`text-xl font-bold ${stats.totalDeviation >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {stats.totalDeviation >= 0 ? '+' : ''}{stats.totalDeviation}
             </div>
-            <div className="text-xs text-muted-foreground">casas</div>
           </CardContent>
         </Card>
 
         <Card className="bg-blue-500/10">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-              <DollarSign className="w-4 h-4" />
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1 text-muted-foreground text-xs mb-0.5">
+              <DollarSign className="w-3 h-3" />
               Custo Plan.
             </div>
-            <div className="text-lg font-bold">R$ {costAnalysis.plannedCost.toLocaleString('pt-BR')}</div>
+            <div className="text-sm font-bold">R$ {costAnalysis.plannedCost.toLocaleString('pt-BR')}</div>
           </CardContent>
         </Card>
 
         <Card className="bg-blue-500/10">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-              <DollarSign className="w-4 h-4" />
+          <CardContent className="p-3">
+            <div className="flex items-center gap-1 text-muted-foreground text-xs mb-0.5">
+              <DollarSign className="w-3 h-3" />
               Custo Real.
             </div>
-            <div className="text-lg font-bold">R$ {costAnalysis.actualCost.toLocaleString('pt-BR')}</div>
+            <div className="text-sm font-bold">R$ {costAnalysis.actualCost.toLocaleString('pt-BR')}</div>
           </CardContent>
         </Card>
 
-        {stats.pendingJustifications > 0 && (
+        {stats.pendingJustifications > 0 ? (
           <Card className="bg-amber-500/10 border-amber-500/30">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-amber-600 text-sm mb-1">
-                <AlertTriangle className="w-4 h-4" />
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1 text-amber-600 text-xs mb-0.5">
+                <AlertTriangle className="w-3 h-3" />
                 Pendentes
               </div>
-              <div className="text-2xl font-bold text-amber-600">{stats.pendingJustifications}</div>
-              <div className="text-xs text-amber-600">justificativas</div>
+              <div className="text-xl font-bold text-amber-600">{stats.pendingJustifications}</div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="bg-green-500/10">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1 text-muted-foreground text-xs mb-0.5">
+                <CheckCircle2 className="w-3 h-3" />
+                Status
+              </div>
+              <div className="text-sm font-bold text-green-600">Em dia</div>
             </CardContent>
           </Card>
         )}
@@ -565,29 +571,29 @@ export function PlannedVsActualView() {
 
       {/* Actions */}
       <div className="flex justify-end">
-        <Button onClick={generateReportPDF} variant="outline" className="gap-2">
+        <Button onClick={generateReportPDF} variant="outline" size="sm" className="gap-2">
           <FileText className="w-4 h-4" />
-          Gerar Relatório PDF
+          Gerar PDF
         </Button>
       </div>
 
-      {/* Comparisons List */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Target className="w-5 h-5" />
+      {/* Comparisons List - Flex grow to fill space */}
+      <Card className="flex-1 flex flex-col min-h-0">
+        <CardHeader className="py-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Target className="w-4 h-4" />
             Análise Planejado x Realizado
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex-1 min-h-0 pb-3">
           {comparisons.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <Target className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>Nenhuma produção registrada para comparação</p>
-              <p className="text-sm mt-1">Registre atividades em "Registrar Produção" para ver a análise</p>
+              <Target className="w-10 h-10 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Nenhuma produção registrada para comparação</p>
+              <p className="text-xs mt-1">Registre atividades para ver a análise</p>
             </div>
           ) : (
-            <ScrollArea className="h-[400px]">
+            <ScrollArea className="h-full">
               <div className="space-y-2">
                 {comparisons.map((comp, index) => (
                   <div
