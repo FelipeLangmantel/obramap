@@ -24,14 +24,27 @@ import {
   MapPin,
   Search,
   Upload,
-  Image as ImageIcon,
   Trash2,
-  Filter
+  Filter,
+  Loader2
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+interface QuadraPosition {
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  houseCount: number;
+}
 
 interface MapLayout {
   imageUrl: string | null;
-  quadraPositions: Record<string, { x: number; y: number; width: number; height: number }>;
+  quadraPositions: Record<string, QuadraPosition>;
+  mapWidth: number;
+  mapHeight: number;
 }
 
 const MAP_LAYOUT_STORAGE_KEY = "obramap_interactive_map_layout";
@@ -47,6 +60,8 @@ export function InteractiveMapView() {
   const [hoveredHouse, setHoveredHouse] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [mapImage, setMapImage] = useState<string | null>(null);
+  const [quadraPositions, setQuadraPositions] = useState<Record<string, QuadraPosition>>({});
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   
   // Filters
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -58,7 +73,7 @@ export function InteractiveMapView() {
   const legendFollowMacros = currentProject?.legendFollowMacros || false;
   const macrosTemplate = currentProject?.macrosTemplate || [];
 
-  // Load saved map image for current project
+  // Load saved map layout for current project
   useEffect(() => {
     if (currentProject?.id) {
       const savedLayout = localStorage.getItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject.id}`);
@@ -66,30 +81,113 @@ export function InteractiveMapView() {
         try {
           const layout: MapLayout = JSON.parse(savedLayout);
           setMapImage(layout.imageUrl);
+          setQuadraPositions(layout.quadraPositions || {});
         } catch (e) {
           console.error("Error loading map layout:", e);
         }
       } else {
         setMapImage(null);
+        setQuadraPositions({});
       }
     }
   }, [currentProject?.id]);
 
+  // Analyze floor plan with AI
+  const analyzeFloorPlan = async (imageBase64: string) => {
+    setIsAnalyzing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("analyze-floor-plan", {
+        body: {
+          imageBase64,
+          existingQuadras: currentProject?.quadras || [],
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Map AI-detected quadras to existing quadras
+      const newPositions: Record<string, QuadraPosition> = {};
+      const projectQuadras = currentProject?.quadras || [];
+      
+      // Match detected quadras with existing ones
+      data.quadras.forEach((detected: QuadraPosition, index: number) => {
+        // Try to find matching quadra by name
+        const matchingQuadra = projectQuadras.find(q => 
+          q.name.toLowerCase().includes(detected.name.toLowerCase()) ||
+          detected.name.toLowerCase().includes(q.name.toLowerCase())
+        );
+        
+        if (matchingQuadra) {
+          newPositions[matchingQuadra.id] = {
+            ...detected,
+            name: matchingQuadra.name,
+            houseCount: matchingQuadra.houses?.length || 0,
+          };
+        } else if (index < projectQuadras.length) {
+          // Fallback: assign to quadras by order
+          const quadra = projectQuadras[index];
+          newPositions[quadra.id] = {
+            ...detected,
+            name: quadra.name,
+            houseCount: quadra.houses?.length || 0,
+          };
+        }
+      });
+
+      // Assign remaining quadras that weren't matched
+      projectQuadras.forEach((quadra, index) => {
+        if (!newPositions[quadra.id]) {
+          // Auto-position unmatched quadras
+          const row = Math.floor(index / 3);
+          const col = index % 3;
+          newPositions[quadra.id] = {
+            name: quadra.name,
+            x: 5 + col * 32,
+            y: 5 + row * 30,
+            width: 28,
+            height: 25,
+            houseCount: quadra.houses?.length || 0,
+          };
+        }
+      });
+
+      setQuadraPositions(newPositions);
+      
+      // Save to localStorage
+      const layout: MapLayout = {
+        imageUrl: imageBase64,
+        quadraPositions: newPositions,
+        mapWidth: data.mapWidth || 800,
+        mapHeight: data.mapHeight || 600,
+      };
+      localStorage.setItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject?.id}`, JSON.stringify(layout));
+      
+      toast.success("Planta analisada com sucesso! Layout reconfigurado automaticamente.");
+    } catch (error) {
+      console.error("Error analyzing floor plan:", error);
+      toast.error("Erro ao analisar a planta. Tente novamente.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   // Handle image upload
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && currentProject) {
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         const imageUrl = event.target?.result as string;
         setMapImage(imageUrl);
         
-        // Save to localStorage
-        const layout: MapLayout = {
-          imageUrl,
-          quadraPositions: {},
-        };
-        localStorage.setItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject.id}`, JSON.stringify(layout));
+        // Analyze the floor plan with AI
+        await analyzeFloorPlan(imageUrl);
       };
       reader.readAsDataURL(file);
     }
@@ -99,6 +197,7 @@ export function InteractiveMapView() {
   const handleRemoveImage = () => {
     if (currentProject) {
       setMapImage(null);
+      setQuadraPositions({});
       localStorage.removeItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject.id}`);
     }
   };
@@ -170,11 +269,9 @@ export function InteractiveMapView() {
       if (filterScope !== "all") {
         const scope = macro.scopes.find(s => s.id === filterScope);
         if (!scope) return false;
-        // Show houses where this scope has started (progress > 0)
         return scope.progress > 0;
       }
       
-      // Show houses where this macro has started
       return macro.scopes.some(s => s.progress > 0);
     }
     
@@ -226,7 +323,7 @@ export function InteractiveMapView() {
     }
   };
 
-  // Get house by ID from current project
+  // Get house by ID
   const getHouseById = (houseId: number) => {
     return houses.find(h => h.id === houseId);
   };
@@ -238,14 +335,20 @@ export function InteractiveMapView() {
     return macro?.scopes || [];
   }, [filterMacro, macrosTemplate]);
 
-  // Organize houses by quadra for layout
+  // Map dimensions
+  const mapWidth = 900;
+  const mapHeight = 700;
+
+  // Calculate quadra layouts with custom positions
   const quadraLayouts = useMemo(() => {
     const projectQuadras = currentProject?.quadras || [];
+    const hasCustomPositions = Object.keys(quadraPositions).length > 0;
     
-    // Sort quadras by name
-    const sortedQuadras = [...projectQuadras].sort((a, b) => a.name.localeCompare(b.name));
-    
-    // Calculate layout positions for each quadra
+    const HOUSE_SIZE = 32;
+    const HOUSE_GAP = 6;
+    const HOUSES_PER_ROW = 5;
+    const PADDING = 15;
+
     const layouts: Array<{
       quadra: typeof projectQuadras[0];
       x: number;
@@ -254,87 +357,120 @@ export function InteractiveMapView() {
       height: number;
       housePositions: Array<{ houseId: number; x: number; y: number }>;
     }> = [];
-    
-    const QUADRA_MARGIN = 30;
-    const HOUSE_SIZE = 40;
-    const HOUSE_GAP = 8;
-    const HOUSES_PER_ROW = 5;
-    
-    let currentY = 40;
-    let currentX = 40;
-    let rowMaxHeight = 0;
-    const maxWidth = 800;
-    
-    sortedQuadras.forEach((quadra) => {
-      const houseIds = quadra.houses || [];
-      const rows = Math.ceil(houseIds.length / HOUSES_PER_ROW);
-      const cols = Math.min(houseIds.length, HOUSES_PER_ROW);
-      
-      const quadraWidth = cols * (HOUSE_SIZE + HOUSE_GAP) + QUADRA_MARGIN;
-      const quadraHeight = rows * (HOUSE_SIZE + HOUSE_GAP) + QUADRA_MARGIN + 20;
-      
-      // Check if we need to wrap to next row
-      if (currentX + quadraWidth > maxWidth) {
-        currentX = 40;
-        currentY += rowMaxHeight + QUADRA_MARGIN;
-        rowMaxHeight = 0;
-      }
-      
-      rowMaxHeight = Math.max(rowMaxHeight, quadraHeight);
-      
-      // Calculate house positions within quadra
-      const housePositions = houseIds.map((houseId, idx) => {
-        const row = Math.floor(idx / HOUSES_PER_ROW);
-        const col = idx % HOUSES_PER_ROW;
-        return {
-          houseId,
-          x: currentX + QUADRA_MARGIN / 2 + col * (HOUSE_SIZE + HOUSE_GAP),
-          y: currentY + QUADRA_MARGIN / 2 + 20 + row * (HOUSE_SIZE + HOUSE_GAP),
-        };
+
+    if (hasCustomPositions) {
+      // Use custom positions from AI analysis
+      projectQuadras.forEach((quadra) => {
+        const customPos = quadraPositions[quadra.id];
+        if (!customPos) return;
+
+        const houseIds = quadra.houses || [];
+        const x = (customPos.x / 100) * mapWidth;
+        const y = (customPos.y / 100) * mapHeight;
+        const width = (customPos.width / 100) * mapWidth;
+        const height = (customPos.height / 100) * mapHeight;
+
+        // Calculate house positions within the quadra
+        const availableWidth = width - PADDING * 2;
+        const housesPerRow = Math.max(1, Math.floor(availableWidth / (HOUSE_SIZE + HOUSE_GAP)));
+        
+        const housePositions = houseIds.map((houseId, idx) => {
+          const row = Math.floor(idx / housesPerRow);
+          const col = idx % housesPerRow;
+          return {
+            houseId,
+            x: x + PADDING + col * (HOUSE_SIZE + HOUSE_GAP),
+            y: y + PADDING + 20 + row * (HOUSE_SIZE + HOUSE_GAP),
+          };
+        });
+
+        layouts.push({
+          quadra,
+          x,
+          y,
+          width,
+          height,
+          housePositions,
+        });
       });
+    } else {
+      // Default auto-layout
+      const sortedQuadras = [...projectQuadras].sort((a, b) => a.name.localeCompare(b.name));
       
-      layouts.push({
-        quadra,
-        x: currentX,
-        y: currentY,
-        width: quadraWidth,
-        height: quadraHeight,
-        housePositions,
+      const QUADRA_MARGIN = 30;
+      let currentY = 40;
+      let currentX = 40;
+      let rowMaxHeight = 0;
+      const maxWidth = 800;
+
+      sortedQuadras.forEach((quadra) => {
+        const houseIds = quadra.houses || [];
+        const rows = Math.ceil(houseIds.length / HOUSES_PER_ROW);
+        const cols = Math.min(houseIds.length, HOUSES_PER_ROW);
+        
+        const quadraWidth = cols * (HOUSE_SIZE + HOUSE_GAP) + QUADRA_MARGIN;
+        const quadraHeight = rows * (HOUSE_SIZE + HOUSE_GAP) + QUADRA_MARGIN + 20;
+        
+        if (currentX + quadraWidth > maxWidth) {
+          currentX = 40;
+          currentY += rowMaxHeight + QUADRA_MARGIN;
+          rowMaxHeight = 0;
+        }
+        
+        rowMaxHeight = Math.max(rowMaxHeight, quadraHeight);
+        
+        const housePositions = houseIds.map((houseId, idx) => {
+          const row = Math.floor(idx / HOUSES_PER_ROW);
+          const col = idx % HOUSES_PER_ROW;
+          return {
+            houseId,
+            x: currentX + QUADRA_MARGIN / 2 + col * (HOUSE_SIZE + HOUSE_GAP),
+            y: currentY + QUADRA_MARGIN / 2 + 20 + row * (HOUSE_SIZE + HOUSE_GAP),
+          };
+        });
+        
+        layouts.push({
+          quadra,
+          x: currentX,
+          y: currentY,
+          width: quadraWidth,
+          height: quadraHeight,
+          housePositions,
+        });
+        
+        currentX += quadraWidth + QUADRA_MARGIN;
       });
-      
-      currentX += quadraWidth + QUADRA_MARGIN;
-    });
-    
+    }
+
     // Handle houses without quadra
     const allQuadraHouseIds = new Set(projectQuadras.flatMap(q => q.houses || []));
     const housesWithoutQuadra = houses.filter(h => !allQuadraHouseIds.has(h.id));
     
     if (housesWithoutQuadra.length > 0) {
+      const lastLayout = layouts[layouts.length - 1];
+      const startX = lastLayout ? lastLayout.x + lastLayout.width + 30 : 40;
+      const startY = 40;
+      
       const rows = Math.ceil(housesWithoutQuadra.length / HOUSES_PER_ROW);
       const cols = Math.min(housesWithoutQuadra.length, HOUSES_PER_ROW);
       
-      const quadraWidth = cols * (HOUSE_SIZE + HOUSE_GAP) + QUADRA_MARGIN;
-      const quadraHeight = rows * (HOUSE_SIZE + HOUSE_GAP) + QUADRA_MARGIN + 20;
-      
-      if (currentX + quadraWidth > maxWidth) {
-        currentX = 40;
-        currentY += rowMaxHeight + QUADRA_MARGIN;
-      }
+      const quadraWidth = cols * (HOUSE_SIZE + HOUSE_GAP) + 30;
+      const quadraHeight = rows * (HOUSE_SIZE + HOUSE_GAP) + 50;
       
       const housePositions = housesWithoutQuadra.map((house, idx) => {
         const row = Math.floor(idx / HOUSES_PER_ROW);
         const col = idx % HOUSES_PER_ROW;
         return {
           houseId: house.id,
-          x: currentX + QUADRA_MARGIN / 2 + col * (HOUSE_SIZE + HOUSE_GAP),
-          y: currentY + QUADRA_MARGIN / 2 + 20 + row * (HOUSE_SIZE + HOUSE_GAP),
+          x: startX + 15 + col * (HOUSE_SIZE + HOUSE_GAP),
+          y: startY + 35 + row * (HOUSE_SIZE + HOUSE_GAP),
         };
       });
       
       layouts.push({
         quadra: { id: 'sem-quadra', name: 'Sem Quadra', houses: housesWithoutQuadra.map(h => h.id) },
-        x: currentX,
-        y: currentY,
+        x: startX,
+        y: startY,
         width: quadraWidth,
         height: quadraHeight,
         housePositions,
@@ -342,19 +478,19 @@ export function InteractiveMapView() {
     }
     
     return layouts;
-  }, [currentProject?.quadras, houses]);
+  }, [currentProject?.quadras, houses, quadraPositions, mapWidth, mapHeight]);
 
-  // Calculate SVG dimensions based on layouts
+  // Calculate SVG dimensions
   const svgDimensions = useMemo(() => {
-    if (quadraLayouts.length === 0) return { width: 800, height: 600 };
+    if (quadraLayouts.length === 0) return { width: mapWidth, height: mapHeight };
     
     const maxX = Math.max(...quadraLayouts.map(l => l.x + l.width)) + 40;
     const maxY = Math.max(...quadraLayouts.map(l => l.y + l.height)) + 40;
     
-    return { width: Math.max(800, maxX), height: Math.max(600, maxY) };
-  }, [quadraLayouts]);
+    return { width: Math.max(mapWidth, maxX), height: Math.max(mapHeight, maxY) };
+  }, [quadraLayouts, mapWidth, mapHeight]);
 
-  // Filter houses by search, status, and macro/scope
+  // Filter houses
   const filteredLayouts = useMemo(() => {
     return quadraLayouts.map(layout => ({
       ...layout,
@@ -406,17 +542,28 @@ export function InteractiveMapView() {
             accept="image/*"
             onChange={handleImageUpload}
             className="hidden"
+            disabled={isAnalyzing}
           />
           <Button 
             variant="outline" 
             size="sm"
             onClick={() => fileInputRef.current?.click()}
             className="gap-2"
+            disabled={isAnalyzing}
           >
-            <Upload className="h-4 w-4" />
-            Importar Planta
+            {isAnalyzing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Analisando...
+              </>
+            ) : (
+              <>
+                <Upload className="h-4 w-4" />
+                Importar Planta
+              </>
+            )}
           </Button>
-          {mapImage && (
+          {mapImage && !isAnalyzing && (
             <Button 
               variant="outline" 
               size="sm"
@@ -424,7 +571,7 @@ export function InteractiveMapView() {
               className="gap-2 text-destructive hover:text-destructive"
             >
               <Trash2 className="h-4 w-4" />
-              Remover Imagem
+              Remover
             </Button>
           )}
         </div>
@@ -551,6 +698,16 @@ export function InteractiveMapView() {
           onMouseLeave={handleMouseUp}
           onWheel={handleWheel}
         >
+          {isAnalyzing && (
+            <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-50">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="text-sm font-medium">Analisando planta com IA...</span>
+                <span className="text-xs text-muted-foreground">Reconhecendo quadras e layout</span>
+              </div>
+            </div>
+          )}
+          
           <div
             className="absolute inset-0"
             style={{
@@ -563,7 +720,7 @@ export function InteractiveMapView() {
               <img 
                 src={mapImage} 
                 alt="Planta do loteamento"
-                className="absolute inset-0 opacity-30 pointer-events-none"
+                className="absolute inset-0 opacity-40 pointer-events-none"
                 style={{ 
                   maxWidth: 'none',
                   width: svgDimensions.width,
@@ -595,8 +752,8 @@ export function InteractiveMapView() {
                     y={layout.y}
                     width={layout.width}
                     height={layout.height}
-                    fill={mapImage ? "hsl(var(--card) / 0.8)" : "hsl(var(--card))"}
-                    stroke="hsl(var(--border))"
+                    fill={mapImage ? "hsl(var(--card) / 0.85)" : "hsl(var(--card))"}
+                    stroke="hsl(var(--primary) / 0.5)"
                     strokeWidth="2"
                     rx="8"
                   />
@@ -614,7 +771,6 @@ export function InteractiveMapView() {
                   
                   {/* Houses in quadra */}
                   {layout.housePositions.map(({ houseId, x, y }) => {
-                    const house = getHouseById(houseId);
                     const progress = getHouseProgress(houseId);
                     const color = getHouseColor(houseId);
                     const isSelected = selectedHouse?.id === houseId;
@@ -624,7 +780,7 @@ export function InteractiveMapView() {
                       <g 
                         key={houseId}
                         style={{ cursor: 'pointer' }}
-                        onClick={(e) => handleHouseClick(houseId, e as any)}
+                        onClick={(e) => handleHouseClick(houseId, e as React.MouseEvent)}
                         onMouseEnter={() => setHoveredHouse(houseId)}
                         onMouseLeave={() => setHoveredHouse(null)}
                       >
@@ -632,8 +788,8 @@ export function InteractiveMapView() {
                         <rect
                           x={x}
                           y={y}
-                          width={36}
-                          height={36}
+                          width={30}
+                          height={30}
                           fill={color}
                           stroke={isSelected ? "hsl(var(--primary))" : isHovered ? "hsl(var(--foreground))" : "hsl(var(--border))"}
                           strokeWidth={isSelected ? 3 : isHovered ? 2 : 1}
@@ -643,10 +799,10 @@ export function InteractiveMapView() {
                         
                         {/* House number */}
                         <text
-                          x={x + 18}
-                          y={y + 22}
+                          x={x + 15}
+                          y={y + 18}
                           fill="white"
-                          fontSize="11"
+                          fontSize="10"
                           fontWeight="bold"
                           textAnchor="middle"
                           style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}
@@ -657,16 +813,16 @@ export function InteractiveMapView() {
                         {/* Progress bar */}
                         <rect
                           x={x + 2}
-                          y={y + 30}
-                          width={32}
+                          y={y + 25}
+                          width={26}
                           height={3}
                           fill="rgba(0,0,0,0.3)"
                           rx="1.5"
                         />
                         <rect
                           x={x + 2}
-                          y={y + 30}
-                          width={32 * (progress / 100)}
+                          y={y + 25}
+                          width={26 * (progress / 100)}
                           height={3}
                           fill="white"
                           rx="1.5"
