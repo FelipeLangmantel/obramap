@@ -37,6 +37,7 @@ export interface Project {
   setupComplete: boolean;
   legendFollowMacros: boolean;
   customLegendItems: LegendItem[];
+  displayOrder: number;
 }
 
 interface ConstructionContextType {
@@ -44,7 +45,8 @@ interface ConstructionContextType {
   projects: Project[];
   currentProject: Project | null;
   setCurrentProject: (projectId: string | null) => void;
-  addProject: (project: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete" | "legendFollowMacros" | "customLegendItems">) => Promise<string>;
+  addProject: (project: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete" | "legendFollowMacros" | "customLegendItems" | "displayOrder">) => Promise<string>;
+  reorderProjects: (orderedProjectIds: string[]) => Promise<void>;
   updateProject: (projectId: string, updates: Partial<Project>) => void;
   deleteProject: (projectId: string) => void;
   completeProjectSetup: (projectId: string) => void;
@@ -215,7 +217,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         const { data: projectsData, error: projectsError } = await supabase
           .from('projects')
           .select('*')
-          .order('created_at', { ascending: false });
+          .order('display_order', { ascending: true });
 
         if (projectsError) {
           console.error('Error loading projects:', projectsError);
@@ -274,6 +276,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             setupComplete: p.setup_complete,
             legendFollowMacros: p.legend_follow_macros ?? false,
             customLegendItems: (p.custom_legend_items as unknown as LegendItem[]) || DEFAULT_LEGEND_ITEMS,
+            displayOrder: p.display_order ?? 0,
           });
         }
 
@@ -378,6 +381,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       setupComplete: false,
       legendFollowMacros: false,
       customLegendItems: DEFAULT_LEGEND_ITEMS,
+      displayOrder: 0,
     };
 
     setProjects(prev => [newProject, ...prev]);
@@ -1348,6 +1352,33 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       .eq('id', currentProject.id);
   }, [currentProject]);
 
+  // Reorder projects
+  const reorderProjects = useCallback(async (orderedProjectIds: string[]) => {
+    // Update local state immediately
+    setProjects(prev => {
+      const projectMap = new Map(prev.map(p => [p.id, p]));
+      return orderedProjectIds
+        .map((id, index) => {
+          const project = projectMap.get(id);
+          return project ? { ...project, displayOrder: index } : null;
+        })
+        .filter((p): p is Project => p !== null);
+    });
+
+    // Update database
+    try {
+      for (let i = 0; i < orderedProjectIds.length; i++) {
+        await supabase
+          .from('projects')
+          .update({ display_order: i })
+          .eq('id', orderedProjectIds[i]);
+      }
+    } catch (error) {
+      console.error('Error reordering projects:', error);
+      toast.error('Erro ao reordenar obras');
+    }
+  }, []);
+
   return (
     <ConstructionContext.Provider
       value={{
@@ -1390,6 +1421,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         getDaysRemaining,
         resetProjectData,
         updateLegendSettings,
+        reorderProjects,
         isLoading,
       }}
     >

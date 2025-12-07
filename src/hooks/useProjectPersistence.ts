@@ -21,7 +21,7 @@ export function useProjectPersistence() {
     const { data: projectsData, error: projectsError } = await supabase
       .from('projects')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('display_order', { ascending: true });
 
     if (projectsError) {
       console.error('Error loading projects:', projectsError);
@@ -79,6 +79,7 @@ export function useProjectPersistence() {
         setupComplete: p.setup_complete,
         legendFollowMacros: p.legend_follow_macros ?? false,
         customLegendItems: (p.custom_legend_items as unknown as LegendItem[]) || DEFAULT_LEGEND_ITEMS,
+        displayOrder: p.display_order ?? 0,
       });
     }
 
