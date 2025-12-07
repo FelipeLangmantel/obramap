@@ -1408,7 +1408,7 @@ export function PlannedProductionTab() {
               disabled={!selectedScope || selectedHouseIds.length === 0 || isSaving || !canEdit}
             >
               <Save className="w-4 h-4" />
-              {isSaving ? "Salvando..." : `Salvar Planejamento (${selectedHouseIds.length} casas)`}
+              {isSaving ? "Salvando..." : "Salvar"}
             </Button>
           </CardContent>
         </Card>
