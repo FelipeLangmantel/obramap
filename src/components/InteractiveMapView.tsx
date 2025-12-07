@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { useConstruction, DEFAULT_LEGEND_ITEMS } from "@/contexts/ConstructionContext";
 import { calculateHouseProgress } from "@/data/constructionData";
 import { Card } from "@/components/ui/card";
@@ -7,6 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { 
   ZoomIn, 
   ZoomOut, 
@@ -14,23 +22,102 @@ import {
   Move, 
   X,
   MapPin,
-  Search
+  Search,
+  Upload,
+  Image as ImageIcon,
+  Trash2,
+  Filter
 } from "lucide-react";
+
+interface MapLayout {
+  imageUrl: string | null;
+  quadraPositions: Record<string, { x: number; y: number; width: number; height: number }>;
+}
+
+const MAP_LAYOUT_STORAGE_KEY = "obramap_interactive_map_layout";
 
 export function InteractiveMapView() {
   const { currentProject, selectedHouse, setSelectedHouse } = useConstruction();
   const containerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hoveredHouse, setHoveredHouse] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [mapImage, setMapImage] = useState<string | null>(null);
+  
+  // Filters
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterMacro, setFilterMacro] = useState<string>("all");
+  const [filterScope, setFilterScope] = useState<string>("all");
 
   const houses = currentProject?.houses || [];
   const legendItems = currentProject?.customLegendItems || DEFAULT_LEGEND_ITEMS;
   const legendFollowMacros = currentProject?.legendFollowMacros || false;
   const macrosTemplate = currentProject?.macrosTemplate || [];
+
+  // Load saved map image for current project
+  useEffect(() => {
+    if (currentProject?.id) {
+      const savedLayout = localStorage.getItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject.id}`);
+      if (savedLayout) {
+        try {
+          const layout: MapLayout = JSON.parse(savedLayout);
+          setMapImage(layout.imageUrl);
+        } catch (e) {
+          console.error("Error loading map layout:", e);
+        }
+      } else {
+        setMapImage(null);
+      }
+    }
+  }, [currentProject?.id]);
+
+  // Handle image upload
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && currentProject) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const imageUrl = event.target?.result as string;
+        setMapImage(imageUrl);
+        
+        // Save to localStorage
+        const layout: MapLayout = {
+          imageUrl,
+          quadraPositions: {},
+        };
+        localStorage.setItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject.id}`, JSON.stringify(layout));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Remove image
+  const handleRemoveImage = () => {
+    if (currentProject) {
+      setMapImage(null);
+      localStorage.removeItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject.id}`);
+    }
+  };
+
+  // Get house status based on progress
+  const getHouseStatus = useCallback((houseId: number): string => {
+    const house = houses.find(h => h.id === houseId);
+    if (!house) return "nao_iniciado";
+    
+    const progress = calculateHouseProgress(house);
+    
+    for (const item of legendItems) {
+      if (progress >= item.minPercent && progress <= item.maxPercent) {
+        return item.id;
+      }
+    }
+    
+    return "nao_iniciado";
+  }, [houses, legendItems]);
 
   // Get house color based on progress
   const getHouseColor = useCallback((houseId: number): string => {
@@ -68,6 +155,31 @@ export function InteractiveMapView() {
     if (!house) return 0;
     return calculateHouseProgress(house);
   }, [houses]);
+
+  // Check if house matches current macro/scope filter
+  const houseMatchesMacroFilter = useCallback((houseId: number): boolean => {
+    if (filterMacro === "all" && filterScope === "all") return true;
+    
+    const house = houses.find(h => h.id === houseId);
+    if (!house) return false;
+    
+    if (filterMacro !== "all") {
+      const macro = house.macros.find(m => m.id === filterMacro);
+      if (!macro) return false;
+      
+      if (filterScope !== "all") {
+        const scope = macro.scopes.find(s => s.id === filterScope);
+        if (!scope) return false;
+        // Show houses where this scope has started (progress > 0)
+        return scope.progress > 0;
+      }
+      
+      // Show houses where this macro has started
+      return macro.scopes.some(s => s.progress > 0);
+    }
+    
+    return true;
+  }, [houses, filterMacro, filterScope]);
 
   // Zoom handlers
   const handleZoomIn = () => setScale(s => Math.min(s + 0.25, 4));
@@ -118,6 +230,13 @@ export function InteractiveMapView() {
   const getHouseById = (houseId: number) => {
     return houses.find(h => h.id === houseId);
   };
+
+  // Get available scopes for selected macro
+  const availableScopes = useMemo(() => {
+    if (filterMacro === "all") return [];
+    const macro = macrosTemplate.find(m => m.id === filterMacro);
+    return macro?.scopes || [];
+  }, [filterMacro, macrosTemplate]);
 
   // Organize houses by quadra for layout
   const quadraLayouts = useMemo(() => {
@@ -235,19 +354,23 @@ export function InteractiveMapView() {
     return { width: Math.max(800, maxX), height: Math.max(600, maxY) };
   }, [quadraLayouts]);
 
-  // Filter houses by search
+  // Filter houses by search, status, and macro/scope
   const filteredLayouts = useMemo(() => {
-    if (!searchTerm) return quadraLayouts;
-    
-    const term = searchTerm.toLowerCase();
     return quadraLayouts.map(layout => ({
       ...layout,
-      housePositions: layout.housePositions.filter(hp => 
-        hp.houseId.toString().includes(term) ||
-        layout.quadra.name.toLowerCase().includes(term)
-      )
+      housePositions: layout.housePositions.filter(hp => {
+        const term = searchTerm.toLowerCase();
+        const matchesSearch = !searchTerm || 
+          hp.houseId.toString().includes(term) ||
+          layout.quadra.name.toLowerCase().includes(term);
+        
+        const matchesStatus = filterStatus === "all" || getHouseStatus(hp.houseId) === filterStatus;
+        const matchesMacroScope = houseMatchesMacroFilter(hp.houseId);
+        
+        return matchesSearch && matchesStatus && matchesMacroScope;
+      })
     })).filter(layout => layout.housePositions.length > 0);
-  }, [quadraLayouts, searchTerm]);
+  }, [quadraLayouts, searchTerm, filterStatus, getHouseStatus, houseMatchesMacroFilter]);
 
   if (!currentProject) {
     return (
@@ -276,6 +399,36 @@ export function InteractiveMapView() {
           </Badge>
         </div>
 
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageUpload}
+            className="hidden"
+          />
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            className="gap-2"
+          >
+            <Upload className="h-4 w-4" />
+            Importar Planta
+          </Button>
+          {mapImage && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleRemoveImage}
+              className="gap-2 text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+              Remover Imagem
+            </Button>
+          )}
+        </div>
+
         <div className="relative w-48">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -290,6 +443,100 @@ export function InteractiveMapView() {
           <Move className="h-4 w-4" />
           <span>Arraste para navegar • Scroll para zoom</span>
         </div>
+      </div>
+
+      {/* Filters Row */}
+      <div className="flex items-center gap-4 flex-wrap p-3 bg-muted/30 rounded-lg">
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Filtros:</span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Label className="text-sm text-muted-foreground">Status:</Label>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-40 h-8">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {legendItems.map(item => (
+                <SelectItem key={item.id} value={item.id}>
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-3 h-3 rounded-full" 
+                      style={{ backgroundColor: item.color }}
+                    />
+                    {item.name}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Label className="text-sm text-muted-foreground">Etapa:</Label>
+          <Select 
+            value={filterMacro} 
+            onValueChange={(value) => {
+              setFilterMacro(value);
+              setFilterScope("all");
+            }}
+          >
+            <SelectTrigger className="w-40 h-8">
+              <SelectValue placeholder="Todas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              {macrosTemplate.map(macro => (
+                <SelectItem key={macro.id} value={macro.id}>
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-3 h-3 rounded-full" 
+                      style={{ backgroundColor: macro.color }}
+                    />
+                    {macro.name}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {filterMacro !== "all" && (
+          <div className="flex items-center gap-2">
+            <Label className="text-sm text-muted-foreground">Serviço:</Label>
+            <Select value={filterScope} onValueChange={setFilterScope}>
+              <SelectTrigger className="w-40 h-8">
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {availableScopes.map(scope => (
+                  <SelectItem key={scope.id} value={scope.id}>
+                    {scope.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {(filterStatus !== "all" || filterMacro !== "all") && (
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => {
+              setFilterStatus("all");
+              setFilterMacro("all");
+              setFilterScope("all");
+            }}
+            className="text-muted-foreground"
+          >
+            Limpar filtros
+          </Button>
+        )}
       </div>
 
       {/* Map Container */}
@@ -311,10 +558,25 @@ export function InteractiveMapView() {
               transformOrigin: "0 0",
             }}
           >
+            {/* Background image if uploaded */}
+            {mapImage && (
+              <img 
+                src={mapImage} 
+                alt="Planta do loteamento"
+                className="absolute inset-0 opacity-30 pointer-events-none"
+                style={{ 
+                  maxWidth: 'none',
+                  width: svgDimensions.width,
+                  height: svgDimensions.height,
+                  objectFit: 'contain'
+                }}
+              />
+            )}
+
             <svg 
               width={svgDimensions.width} 
               height={svgDimensions.height}
-              className="select-none"
+              className="select-none relative z-10"
             >
               {/* Grid pattern background */}
               <defs>
@@ -322,7 +584,7 @@ export function InteractiveMapView() {
                   <path d="M 40 0 L 0 0 0 40" fill="none" stroke="hsl(var(--border))" strokeWidth="0.5" opacity="0.3"/>
                 </pattern>
               </defs>
-              <rect width="100%" height="100%" fill="url(#grid)" />
+              {!mapImage && <rect width="100%" height="100%" fill="url(#grid)" />}
               
               {/* Quadras */}
               {filteredLayouts.map((layout) => (
@@ -333,7 +595,7 @@ export function InteractiveMapView() {
                     y={layout.y}
                     width={layout.width}
                     height={layout.height}
-                    fill="hsl(var(--card))"
+                    fill={mapImage ? "hsl(var(--card) / 0.8)" : "hsl(var(--card))"}
                     stroke="hsl(var(--border))"
                     strokeWidth="2"
                     rx="8"
@@ -486,83 +748,83 @@ export function InteractiveMapView() {
           </div>
           
           <ScrollArea className="flex-1">
-            <div className="p-3">
-              {selectedHouse ? (
+            {selectedHouse ? (
+              <div className="p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-lg">Casa {selectedHouse.id}</h4>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6"
+                    onClick={() => setSelectedHouse(null)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Quadra:</span>
+                    <span className="font-medium">
+                      {currentProject?.quadras.find(q => q.houses?.includes(selectedHouse.id))?.name || "Sem quadra"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Área:</span>
+                    <span className="font-medium">{selectedHouse.area} m²</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Tipo:</span>
+                    <span className="font-medium">{selectedHouse.type}</span>
+                  </div>
+                  {selectedHouse.constructorName && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Construtor:</span>
+                      <span className="font-medium">{selectedHouse.constructorName}</span>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Progresso Geral</span>
+                    <span className="text-sm font-bold">
+                      {calculateHouseProgress(selectedHouse).toFixed(1)}%
+                    </span>
+                  </div>
+                  <Progress value={calculateHouseProgress(selectedHouse)} className="h-2" />
+                </div>
+                
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-xl font-bold">Casa {selectedHouse.id}</h4>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedHouse.type}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setSelectedHouse(null)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Progresso Geral</span>
-                      <span className="font-medium">
-                        {calculateHouseProgress(selectedHouse).toFixed(1)}%
-                      </span>
-                    </div>
-                    <Progress value={calculateHouseProgress(selectedHouse)} className="h-2" />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-muted/50 rounded-md p-2">
-                      <p className="text-muted-foreground text-[10px]">Área</p>
-                      <p className="font-semibold">{selectedHouse.area} m²</p>
-                    </div>
-                    <div className="bg-muted/50 rounded-md p-2">
-                      <p className="text-muted-foreground text-[10px]">Construtora</p>
-                      <p className="font-semibold truncate">{selectedHouse.constructorName || "-"}</p>
-                    </div>
-                  </div>
-                  
-                  {/* Macros Progress */}
-                  <div className="space-y-2">
-                    <h5 className="font-medium text-xs">Etapas</h5>
-                    {selectedHouse.macros.map(macro => {
-                      const macroProgress = macro.scopes.reduce((sum, s) => sum + s.progress * s.weight, 0) / 
-                        macro.scopes.reduce((sum, s) => sum + s.weight, 0) || 0;
-                      
-                      return (
-                        <div key={macro.id} className="space-y-1">
-                          <div className="flex justify-between text-xs">
-                            <span className="truncate flex-1" style={{ color: macro.color }}>
-                              {macro.name}
-                            </span>
-                            <span className="text-muted-foreground ml-2">
-                              {macroProgress.toFixed(0)}%
-                            </span>
-                          </div>
-                          <Progress 
-                            value={macroProgress} 
-                            className="h-1.5"
-                            style={{ 
-                              '--progress-color': macro.color 
-                            } as React.CSSProperties}
+                  <h5 className="font-medium text-sm">Etapas</h5>
+                  {selectedHouse.macros.map((macro) => {
+                    const macroProgress = macro.scopes.reduce((sum, s) => sum + s.progress * s.weight, 0) / 
+                      macro.scopes.reduce((sum, s) => sum + s.weight, 0);
+                    
+                    return (
+                      <div key={macro.id} className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="w-3 h-3 rounded-full shrink-0" 
+                            style={{ backgroundColor: macro.color }}
                           />
+                          <span className="text-xs font-medium flex-1">{macro.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {macroProgress.toFixed(0)}%
+                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
+                        <Progress value={macroProgress} className="h-1" />
+                      </div>
+                    );
+                  })}
                 </div>
-              ) : (
-                <div className="text-center text-muted-foreground py-8">
-                  <MapPin className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Clique em uma casa no mapa para ver os detalhes</p>
-                </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="p-4 flex flex-col items-center justify-center h-full text-center text-muted-foreground">
+                <MapPin className="h-8 w-8 mb-2 opacity-30" />
+                <p className="text-sm">Clique em uma casa no mapa para ver os detalhes</p>
+              </div>
+            )}
           </ScrollArea>
         </Card>
       </div>
