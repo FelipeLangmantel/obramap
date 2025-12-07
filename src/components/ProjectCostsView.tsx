@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Plus, Pencil, Trash2, DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Upload, FileText, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Upload, FileText, Loader2, Target } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   PieChart as RechartsPieChart,
@@ -35,12 +36,22 @@ interface ScopeCost {
   equipmentCost: number;
 }
 
+interface PlannedProduction {
+  id: string;
+  scope_id: string;
+  scope_name: string;
+  macro_id: string;
+  macro_name: string;
+  planned_houses: number;
+}
+
 const COSTS_STORAGE_KEY = "obramap_scope_costs";
 const COSTS_TAB_STORAGE_KEY = "obramap_costs_tab";
 
 export function ProjectCostsView() {
   const { currentProject } = useConstruction();
   const [scopeCosts, setScopeCosts] = useState<ScopeCost[]>([]);
+  const [plannedProductions, setPlannedProductions] = useState<PlannedProduction[]>([]);
   const [editingScope, setEditingScope] = useState<ScopeCost | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "details">(() => {
     if (typeof window !== 'undefined') {
@@ -84,6 +95,24 @@ export function ProjectCostsView() {
       }
     }
   }, [currentProject?.id, macros]);
+
+  // Load planned productions for projected costs
+  useEffect(() => {
+    if (!currentProject?.id) return;
+    
+    const loadPlannedProductions = async () => {
+      const { data, error } = await supabase
+        .from('planned_productions')
+        .select('id, scope_id, scope_name, macro_id, macro_name, planned_houses')
+        .eq('project_id', currentProject.id);
+      
+      if (!error && data) {
+        setPlannedProductions(data);
+      }
+    };
+    
+    loadPlannedProductions();
+  }, [currentProject?.id]);
 
   // Save costs
   const saveCosts = (costs: ScopeCost[]) => {
@@ -146,7 +175,7 @@ export function ProjectCostsView() {
     return progress;
   }, [houses]);
 
-  // Calculate costs based on progress
+  // Calculate costs based on progress (Realized costs from actual work)
   const costCalculations = useMemo(() => {
     let totalMaterial = 0;
     let totalLabor = 0;
@@ -156,24 +185,24 @@ export function ProjectCostsView() {
     let executedEquipment = 0;
 
     const byScopeData: { name: string; material: number; labor: number; equipment: number; color: string }[] = [];
-    const byMacroData: { [macroId: string]: { name: string; projected: number; executed: number; color: string } } = {};
+    const byMacroData: { [macroId: string]: { name: string; total: number; executed: number; color: string } } = {};
 
     scopeCosts.forEach(cost => {
       const progress = scopeProgress[cost.scopeId];
       const totalHouses = progress?.total || houses.length;
       const completedHouses = progress?.completed || 0;
 
-      const projectedMaterial = cost.materialCost * totalHouses;
-      const projectedLabor = cost.laborCost * totalHouses;
-      const projectedEquipment = cost.equipmentCost * totalHouses;
+      const totalScopeMaterial = cost.materialCost * totalHouses;
+      const totalScopeLabor = cost.laborCost * totalHouses;
+      const totalScopeEquipment = cost.equipmentCost * totalHouses;
 
       const execMaterial = cost.materialCost * completedHouses;
       const execLabor = cost.laborCost * completedHouses;
       const execEquipment = cost.equipmentCost * completedHouses;
 
-      totalMaterial += projectedMaterial;
-      totalLabor += projectedLabor;
-      totalEquipment += projectedEquipment;
+      totalMaterial += totalScopeMaterial;
+      totalLabor += totalScopeLabor;
+      totalEquipment += totalScopeEquipment;
       executedMaterial += execMaterial;
       executedLabor += execLabor;
       executedEquipment += execEquipment;
@@ -181,9 +210,9 @@ export function ProjectCostsView() {
       if (cost.materialCost > 0 || cost.laborCost > 0 || cost.equipmentCost > 0) {
         byScopeData.push({
           name: cost.scopeName,
-          material: projectedMaterial,
-          labor: projectedLabor,
-          equipment: projectedEquipment,
+          material: execMaterial,
+          labor: execLabor,
+          equipment: execEquipment,
           color: cost.macroColor
         });
       }
@@ -192,17 +221,17 @@ export function ProjectCostsView() {
       if (!byMacroData[cost.macroId]) {
         byMacroData[cost.macroId] = {
           name: cost.macroName,
-          projected: 0,
+          total: 0,
           executed: 0,
           color: cost.macroColor
         };
       }
-      byMacroData[cost.macroId].projected += projectedMaterial + projectedLabor + projectedEquipment;
+      byMacroData[cost.macroId].total += totalScopeMaterial + totalScopeLabor + totalScopeEquipment;
       byMacroData[cost.macroId].executed += execMaterial + execLabor + execEquipment;
     });
 
     return {
-      projected: {
+      total: {
         material: totalMaterial,
         labor: totalLabor,
         equipment: totalEquipment,
@@ -215,9 +244,33 @@ export function ProjectCostsView() {
         total: executedMaterial + executedLabor + executedEquipment
       },
       byScopeData: byScopeData.sort((a, b) => (b.material + b.labor + b.equipment) - (a.material + a.labor + a.equipment)).slice(0, 10),
-      byMacroData: Object.values(byMacroData).filter(m => m.projected > 0)
+      byMacroData: Object.values(byMacroData).filter(m => m.total > 0)
     };
   }, [scopeCosts, scopeProgress, houses.length]);
+
+  // Calculate projected costs based on planned production (future)
+  const projectedCosts = useMemo(() => {
+    let projectedMaterial = 0;
+    let projectedLabor = 0;
+    let projectedEquipment = 0;
+
+    // Sum up costs from planned productions
+    plannedProductions.forEach(planned => {
+      const cost = scopeCosts.find(c => c.scopeId === planned.scope_id);
+      if (cost) {
+        projectedMaterial += cost.materialCost * planned.planned_houses;
+        projectedLabor += cost.laborCost * planned.planned_houses;
+        projectedEquipment += cost.equipmentCost * planned.planned_houses;
+      }
+    });
+
+    return {
+      material: projectedMaterial,
+      labor: projectedLabor,
+      equipment: projectedEquipment,
+      total: projectedMaterial + projectedLabor + projectedEquipment
+    };
+  }, [plannedProductions, scopeCosts]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -227,9 +280,9 @@ export function ProjectCostsView() {
   };
 
   const pieData = [
-    { name: "Material", value: costCalculations.projected.material, color: "#3b82f6" },
-    { name: "Mão de Obra", value: costCalculations.projected.labor, color: "#f97316" },
-    { name: "Equipamentos", value: costCalculations.projected.equipment, color: "#22c55e" }
+    { name: "Material", value: costCalculations.executed.material, color: "#3b82f6" },
+    { name: "Mão de Obra", value: costCalculations.executed.labor, color: "#f97316" },
+    { name: "Equipamentos", value: costCalculations.executed.equipment, color: "#22c55e" }
   ].filter(d => d.value > 0);
 
   if (!currentProject) {
@@ -261,17 +314,17 @@ export function ProjectCostsView() {
         </TabsList>
 
         <TabsContent value="overview" className="flex-1 overflow-auto mt-4 space-y-4">
-          {/* Summary Cards */}
+          {/* Summary Cards - Realized Costs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5">
               <CardContent className="pt-4 pb-3">
                 <div className="flex items-center gap-2 mb-1">
                   <Package className="w-4 h-4 text-blue-500" />
-                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Material Projetado</span>
+                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Material Realizado</span>
                 </div>
-                <p className="text-xl font-bold">{formatCurrency(costCalculations.projected.material)}</p>
+                <p className="text-xl font-bold">{formatCurrency(costCalculations.executed.material)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Executado: {formatCurrency(costCalculations.executed.material)}
+                  Total Obra: {formatCurrency(costCalculations.total.material)}
                 </p>
               </CardContent>
             </Card>
@@ -280,11 +333,11 @@ export function ProjectCostsView() {
               <CardContent className="pt-4 pb-3">
                 <div className="flex items-center gap-2 mb-1">
                   <Hammer className="w-4 h-4 text-orange-500" />
-                  <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Mão de Obra Projetada</span>
+                  <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Mão de Obra Realizada</span>
                 </div>
-                <p className="text-xl font-bold">{formatCurrency(costCalculations.projected.labor)}</p>
+                <p className="text-xl font-bold">{formatCurrency(costCalculations.executed.labor)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Executado: {formatCurrency(costCalculations.executed.labor)}
+                  Total Obra: {formatCurrency(costCalculations.total.labor)}
                 </p>
               </CardContent>
             </Card>
@@ -293,11 +346,11 @@ export function ProjectCostsView() {
               <CardContent className="pt-4 pb-3">
                 <div className="flex items-center gap-2 mb-1">
                   <Wrench className="w-4 h-4 text-green-500" />
-                  <span className="text-xs font-medium text-green-600 dark:text-green-400">Equipamentos Projetado</span>
+                  <span className="text-xs font-medium text-green-600 dark:text-green-400">Equipamentos Realizado</span>
                 </div>
-                <p className="text-xl font-bold">{formatCurrency(costCalculations.projected.equipment)}</p>
+                <p className="text-xl font-bold">{formatCurrency(costCalculations.executed.equipment)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Executado: {formatCurrency(costCalculations.executed.equipment)}
+                  Total Obra: {formatCurrency(costCalculations.total.equipment)}
                 </p>
               </CardContent>
             </Card>
@@ -306,15 +359,50 @@ export function ProjectCostsView() {
               <CardContent className="pt-4 pb-3">
                 <div className="flex items-center gap-2 mb-1">
                   <DollarSign className="w-4 h-4 text-primary" />
-                  <span className="text-xs font-medium text-primary">Total Geral</span>
+                  <span className="text-xs font-medium text-primary">Total Realizado</span>
                 </div>
-                <p className="text-xl font-bold">{formatCurrency(costCalculations.projected.total)}</p>
+                <p className="text-xl font-bold">{formatCurrency(costCalculations.executed.total)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Executado: {formatCurrency(costCalculations.executed.total)}
+                  Total Obra: {formatCurrency(costCalculations.total.total)}
                 </p>
               </CardContent>
             </Card>
           </div>
+
+          {/* Projected Costs from Planned Production */}
+          {projectedCosts.total > 0 && (
+            <Card className="border-dashed border-2 border-amber-300/50 bg-amber-50/30 dark:bg-amber-900/10">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Target className="w-5 h-5 text-amber-600" />
+                  Custos Projetados (Produção Futura)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Material</p>
+                    <p className="text-lg font-semibold text-amber-700 dark:text-amber-400">{formatCurrency(projectedCosts.material)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Mão de Obra</p>
+                    <p className="text-lg font-semibold text-amber-700 dark:text-amber-400">{formatCurrency(projectedCosts.labor)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Equipamentos</p>
+                    <p className="text-lg font-semibold text-amber-700 dark:text-amber-400">{formatCurrency(projectedCosts.equipment)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Projetado</p>
+                    <p className="text-lg font-bold text-amber-700 dark:text-amber-400">{formatCurrency(projectedCosts.total)}</p>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-3">
+                  Baseado nos planejamentos registrados na aba "Produção Futura"
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Progress Indicator */}
           <Card>
@@ -327,10 +415,10 @@ export function ProjectCostsView() {
             <CardContent>
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Custo Executado vs Projetado</span>
+                  <span className="text-muted-foreground">Custo Realizado vs Total da Obra</span>
                   <span className="font-medium">
-                    {costCalculations.projected.total > 0 
-                      ? Math.round((costCalculations.executed.total / costCalculations.projected.total) * 100)
+                    {costCalculations.total.total > 0 
+                      ? Math.round((costCalculations.executed.total / costCalculations.total.total) * 100)
                       : 0
                     }%
                   </span>
@@ -339,16 +427,16 @@ export function ProjectCostsView() {
                   <div 
                     className="h-full bg-primary transition-all duration-500"
                     style={{ 
-                      width: `${costCalculations.projected.total > 0 
-                        ? Math.min(100, (costCalculations.executed.total / costCalculations.projected.total) * 100)
+                      width: `${costCalculations.total.total > 0 
+                        ? Math.min(100, (costCalculations.executed.total / costCalculations.total.total) * 100)
                         : 0
                       }%` 
                     }}
                   />
                 </div>
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Executado: {formatCurrency(costCalculations.executed.total)}</span>
-                  <span>Projetado: {formatCurrency(costCalculations.projected.total)}</span>
+                  <span>Realizado: {formatCurrency(costCalculations.executed.total)}</span>
+                  <span>Total Obra: {formatCurrency(costCalculations.total.total)}</span>
                 </div>
               </div>
             </CardContent>
@@ -407,8 +495,8 @@ export function ProjectCostsView() {
                         <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12 }} />
                         <Tooltip formatter={(value) => formatCurrency(Number(value))} />
                         <Legend />
-                        <Bar dataKey="projected" name="Projetado" fill="hsl(var(--muted-foreground))" opacity={0.5} />
-                        <Bar dataKey="executed" name="Executado" fill="hsl(var(--primary))" />
+                        <Bar dataKey="total" name="Total Obra" fill="hsl(var(--muted-foreground))" opacity={0.5} />
+                        <Bar dataKey="executed" name="Realizado" fill="hsl(var(--primary))" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>

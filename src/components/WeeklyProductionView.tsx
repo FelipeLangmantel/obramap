@@ -306,14 +306,19 @@ export function WeeklyProductionView() {
     });
   }, [productions, analysisStartDate, analysisEndDate, analysisHouseFilter, analysisMacroFilter, analysisScopeFilter]);
 
-  // Weekly stats
+  // Weekly stats - with proper week calculation considering the period
   const weeklyStats = useMemo(() => {
-    const weeks: { [key: string]: { total: number; scopes: { [key: string]: number } } } = {};
+    const weeks: { [key: string]: { total: number; scopes: { [key: string]: number }; weekStart: Date; weekEnd: Date } } = {};
     
     filteredProductions.forEach(prod => {
       const weekKey = prod.week_start;
       if (!weeks[weekKey]) {
-        weeks[weekKey] = { total: 0, scopes: {} };
+        weeks[weekKey] = { 
+          total: 0, 
+          scopes: {}, 
+          weekStart: parseISO(prod.week_start), 
+          weekEnd: parseISO(prod.week_end) 
+        };
       }
       weeks[weekKey].total += prod.houses_count;
       weeks[weekKey].scopes[prod.scope_name] = (weeks[weekKey].scopes[prod.scope_name] || 0) + prod.houses_count;
@@ -327,6 +332,27 @@ export function WeeklyProductionView() {
         ...data
       }));
   }, [filteredProductions]);
+
+  // Calculate number of weeks in the analysis period for accurate average
+  const numberOfWeeksInPeriod = useMemo(() => {
+    if (!analysisStartDate || !analysisEndDate) return 1;
+    const start = parseISO(analysisStartDate);
+    const end = parseISO(analysisEndDate);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.max(1, Math.ceil(diffDays / 7));
+  }, [analysisStartDate, analysisEndDate]);
+
+  // Calculate weekly average considering the actual period span
+  const weeklyAverage = useMemo(() => {
+    const totalProduction = filteredProductions.reduce((sum, p) => sum + p.houses_count, 0);
+    // If we have data, calculate based on actual weeks with data or period weeks (whichever is more accurate)
+    const weeksWithData = weeklyStats.length;
+    if (weeksWithData === 0) return 0;
+    // Use the greater of weeks with data or period weeks to avoid inflated averages
+    const divisor = Math.max(weeksWithData, numberOfWeeksInPeriod);
+    return Math.round(totalProduction / divisor);
+  }, [filteredProductions, weeklyStats.length, numberOfWeeksInPeriod]);
 
   // Calculate trend
   const trend = useMemo(() => {
@@ -729,13 +755,10 @@ export function WeeklyProductionView() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs text-muted-foreground">Média Semanal</p>
-                    <p className="text-2xl font-bold">
-                      {weeklyStats.length > 0 
-                        ? Math.round(weeklyStats.reduce((sum, w) => sum + w.total, 0) / weeklyStats.length)
-                        : 0
-                      }
+                    <p className="text-2xl font-bold">{weeklyAverage}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {numberOfWeeksInPeriod} semana{numberOfWeeksInPeriod > 1 ? 's' : ''} no período
                     </p>
-                    <p className="text-xs text-muted-foreground">{weeklyStats.length} semanas</p>
                   </div>
                   <Calendar className="w-7 h-7 text-muted-foreground" />
                 </div>
