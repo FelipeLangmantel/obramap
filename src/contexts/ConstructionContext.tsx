@@ -61,7 +61,8 @@ interface ConstructionContextType {
   // Houses
   selectedHouse: House | null;
   setSelectedHouse: (house: House | null) => void;
-  updateScopeProgress: (houseId: number, macroId: string, scopeId: string, progress: number, startDate?: string | null, endDate?: string | null) => void;
+  updateScopeProgress: (houseId: number, macroId: string, scopeId: string, progress: number, startDate?: string | null, endDate?: string | null) => Promise<void>;
+  updateMultipleHousesProgress: (houseIds: number[], macroId: string, scopeId: string, progress: number) => Promise<void>;
   updateHouseInfo: (houseId: number, updates: Partial<Pick<House, "area" | "constructorName" | "type" | "expectedDate">>) => void;
   getHouseProgress: (houseId: number) => number;
   moveHouseToQuadra: (houseId: number, newQuadraId: string) => void;
@@ -1221,6 +1222,83 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     }
   }, [currentProjectId, selectedHouse, projects]);
 
+  // Refresh houses from database to sync map after bulk updates
+  const refreshHouses = useCallback(async () => {
+    if (!currentProjectId) return;
+    
+    try {
+      const { data: housesData } = await supabase
+        .from('houses')
+        .select('*')
+        .eq('project_id', currentProjectId)
+        .order('house_number', { ascending: true });
+
+      if (housesData) {
+        const houses: House[] = housesData.map(h => ({
+          id: h.house_number,
+          quadra: h.quadra_id || "",
+          area: h.area,
+          type: h.type,
+          constructorName: h.constructor_name || "",
+          expectedDate: h.expected_date || "",
+          lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
+          macros: jsonToMacros(h.macros),
+        }));
+
+        setProjects(prev => prev.map(p => 
+          p.id === currentProjectId ? { ...p, houses } : p
+        ));
+
+        // Update selected house if it exists
+        if (selectedHouse) {
+          const updatedSelectedHouse = houses.find(h => h.id === selectedHouse.id);
+          if (updatedSelectedHouse) {
+            setSelectedHouse(updatedSelectedHouse);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing houses:', error);
+    }
+  }, [currentProjectId, selectedHouse]);
+
+  // Update multiple houses at once - more efficient for bulk operations
+  const updateMultipleHousesProgress = useCallback(async (houseIds: number[], macroId: string, scopeId: string, progress: number) => {
+    if (!currentProjectId) return;
+    
+    const project = projects.find(p => p.id === currentProjectId);
+    if (!project) return;
+
+    // Update each house in the database
+    for (const houseId of houseIds) {
+      const house = project.houses.find(h => h.id === houseId);
+      if (!house) continue;
+
+      const updatedMacros = house.macros.map(macro => {
+        if (macro.id !== macroId) return macro;
+        
+        const updatedScopes = macro.scopes.map(scope => {
+          if (scope.id !== scopeId) return scope;
+          return { ...scope, progress };
+        });
+        
+        return { ...macro, scopes: updatedScopes };
+      });
+
+      await supabase
+        .from('houses')
+        .update({ 
+          macros: macrosToJson(updatedMacros),
+          last_update: new Date().toISOString().split('T')[0]
+        })
+        .eq('project_id', currentProjectId)
+        .eq('house_number', houseId);
+    }
+
+    // After all DB updates, refresh houses from database to sync state
+    await refreshHouses();
+  }, [currentProjectId, projects, refreshHouses]);
+
   const updateHouseInfo = useCallback(async (houseId: number, updates: Partial<Pick<House, "area" | "constructorName" | "type" | "expectedDate">>) => {
     if (!currentProjectId) return;
     
@@ -1271,46 +1349,6 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     
     return Math.max(0, diffDays);
   }, [currentProject]);
-
-  // Refresh houses from database to sync map after bulk updates
-  const refreshHouses = useCallback(async () => {
-    if (!currentProjectId) return;
-    
-    try {
-      const { data: housesData } = await supabase
-        .from('houses')
-        .select('*')
-        .eq('project_id', currentProjectId)
-        .order('house_number', { ascending: true });
-
-      if (housesData) {
-        const houses: House[] = housesData.map(h => ({
-          id: h.house_number,
-          quadra: h.quadra_id || "",
-          area: h.area,
-          type: h.type,
-          constructorName: h.constructor_name || "",
-          expectedDate: h.expected_date || "",
-          lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
-          macros: jsonToMacros(h.macros),
-        }));
-
-        setProjects(prev => prev.map(p => 
-          p.id === currentProjectId ? { ...p, houses } : p
-        ));
-
-        // Update selected house if it exists
-        if (selectedHouse) {
-          const updatedSelectedHouse = houses.find(h => h.id === selectedHouse.id);
-          if (updatedSelectedHouse) {
-            setSelectedHouse(updatedSelectedHouse);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error refreshing houses:', error);
-    }
-  }, [currentProjectId, selectedHouse]);
 
   // Reset all house progress data
   const resetProjectData = useCallback(async () => {
@@ -1424,6 +1462,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         selectedHouse,
         setSelectedHouse,
         updateScopeProgress,
+        updateMultipleHousesProgress,
         updateHouseInfo,
         getHouseProgress,
         moveHouseToQuadra,

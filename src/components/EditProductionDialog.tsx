@@ -49,7 +49,7 @@ interface EditProductionDialogProps {
 }
 
 export function EditProductionDialog({ open, onOpenChange, production, onSave }: EditProductionDialogProps) {
-  const { currentProject, updateScopeProgress, refreshHouses } = useConstruction();
+  const { currentProject, updateMultipleHousesProgress } = useConstruction();
   const [weekStart, setWeekStart] = useState("");
   const [weekEnd, setWeekEnd] = useState("");
   const [notes, setNotes] = useState("");
@@ -132,18 +132,15 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
 
       // Update map: Remove progress from removed houses
       const removedHouses = getRemovedHouses();
-      for (const houseId of removedHouses) {
-        await updateScopeProgress(houseId, production.macro_id, production.scope_id, 0);
+      if (removedHouses.length > 0) {
+        await updateMultipleHousesProgress(removedHouses, production.macro_id, production.scope_id, 0);
       }
 
       // Update map: Add progress to added houses
       const addedHouses = getAddedHouses();
-      for (const houseId of addedHouses) {
-        await updateScopeProgress(houseId, production.macro_id, production.scope_id, 100);
+      if (addedHouses.length > 0) {
+        await updateMultipleHousesProgress(addedHouses, production.macro_id, production.scope_id, 100);
       }
-
-      // Refresh houses from database to ensure map updates
-      await refreshHouses();
 
       toast.success("Registro atualizado com sucesso");
       onSave();
@@ -168,12 +165,7 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
       if (error) throw error;
 
       // Revert progress: Set all houses back to 0%
-      for (const houseId of production.house_ids) {
-        await updateScopeProgress(houseId, production.macro_id, production.scope_id, 0);
-      }
-
-      // Refresh houses from database to ensure map updates
-      await refreshHouses();
+      await updateMultipleHousesProgress(production.house_ids, production.macro_id, production.scope_id, 0);
 
       toast.success("Registro excluído e mapa atualizado");
       onSave();
