@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Plus, Pencil, Trash2, DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Upload, FileText, Loader2, Target, Cloud, CloudOff } from "lucide-react";
+import { Plus, Pencil, Trash2, DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Upload, FileText, Loader2, Target, Cloud, CloudOff, ChevronDown, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -70,7 +71,20 @@ export function ProjectCostsView() {
   const [isImporting, setIsImporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [expandedMacros, setExpandedMacros] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const toggleMacro = (macroId: string) => {
+    setExpandedMacros(prev => {
+      const next = new Set(prev);
+      if (next.has(macroId)) {
+        next.delete(macroId);
+      } else {
+        next.add(macroId);
+      }
+      return next;
+    });
+  };
 
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
@@ -724,155 +738,188 @@ export function ProjectCostsView() {
           )}
 
           <ScrollArea className="h-[calc(100vh-320px)]">
-            <div className="space-y-6">
+            <div className="space-y-3">
               {macros.map(macro => {
                 const macroScopeCosts = scopeCosts.filter(c => c.macroId === macro.id);
                 const macroTotal = macroScopeCosts.reduce((sum, c) => sum + c.materialCost + c.laborCost + c.equipmentCost, 0);
+                const isExpanded = expandedMacros.has(macro.id);
                 
                 return (
-                  <Card key={macro.id}>
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: macro.color }}
-                          />
-                          {macro.name}
-                        </CardTitle>
-                        <Badge variant="secondary" className="text-xs">
-                          {formatCurrency(macroTotal)} / casa
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        {macro.scopes.map(scope => {
-                          const cost = scopeCosts.find(c => c.scopeId === scope.id);
-                          const isEditing = editingScope?.scopeId === scope.id;
-                          const scopeTotal = cost ? cost.materialCost + cost.laborCost + cost.equipmentCost : 0;
-
-                          return (
-                            <div
-                              key={scope.id}
-                              className={`p-3 rounded-lg border transition-colors ${
-                                isEditing ? 'bg-accent border-primary' : 'bg-muted/30 hover:bg-muted/50'
-                              }`}
-                            >
-                              {isEditing && editingScope ? (
-                                <div className="space-y-3">
-                                  <div className="flex items-center justify-between">
-                                    <p className="font-medium text-sm">{scope.name}</p>
-                                    <div className="flex gap-2">
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => setEditingScope(null)}
-                                      >
-                                        Cancelar
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        onClick={handleUpdateCost}
-                                        disabled={isSaving}
-                                      >
-                                        {isSaving ? (
-                                          <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                          'Salvar'
-                                        )}
-                                      </Button>
-                                    </div>
-                                  </div>
-                                  <div className="grid grid-cols-3 gap-3">
-                                    <div>
-                                      <Label className="text-xs">Material (R$)</Label>
-                                      <Input
-                                        type="number"
-                                        value={editingScope.materialCost}
-                                        onChange={(e) => setEditingScope({
-                                          ...editingScope,
-                                          materialCost: Number(e.target.value) || 0
-                                        })}
-                                        className="h-8 text-sm"
-                                      />
-                                    </div>
-                                    <div>
-                                      <Label className="text-xs">Mão de Obra (R$)</Label>
-                                      <Input
-                                        type="number"
-                                        value={editingScope.laborCost}
-                                        onChange={(e) => setEditingScope({
-                                          ...editingScope,
-                                          laborCost: Number(e.target.value) || 0
-                                        })}
-                                        className="h-8 text-sm"
-                                      />
-                                    </div>
-                                    <div>
-                                      <Label className="text-xs">Equipamentos (R$)</Label>
-                                      <Input
-                                        type="number"
-                                        value={editingScope.equipmentCost}
-                                        onChange={(e) => setEditingScope({
-                                          ...editingScope,
-                                          equipmentCost: Number(e.target.value) || 0
-                                        })}
-                                        className="h-8 text-sm"
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
+                  <Collapsible key={macro.id} open={isExpanded} onOpenChange={() => toggleMacro(macro.id)}>
+                    <Card className="overflow-hidden">
+                      <CollapsibleTrigger asChild>
+                        <CardHeader className="pb-2 cursor-pointer hover:bg-muted/50 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-base flex items-center gap-2">
+                              {isExpanded ? (
+                                <ChevronDown className="w-4 h-4 text-muted-foreground" />
                               ) : (
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-3">
-                                    <p className="text-sm font-medium">{scope.name}</p>
-                                    {scopeTotal > 0 && (
-                                      <div className="flex gap-2 text-xs text-muted-foreground">
-                                        {cost && cost.materialCost > 0 && (
-                                          <span className="flex items-center gap-1">
-                                            <Package className="w-3 h-3 text-blue-500" />
-                                            {formatCurrency(cost.materialCost)}
-                                          </span>
-                                        )}
-                                        {cost && cost.laborCost > 0 && (
-                                          <span className="flex items-center gap-1">
-                                            <Hammer className="w-3 h-3 text-orange-500" />
-                                            {formatCurrency(cost.laborCost)}
-                                          </span>
-                                        )}
-                                        {cost && cost.equipmentCost > 0 && (
-                                          <span className="flex items-center gap-1">
-                                            <Wrench className="w-3 h-3 text-green-500" />
-                                            {formatCurrency(cost.equipmentCost)}
-                                          </span>
+                                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                              )}
+                              <div 
+                                className="w-3 h-3 rounded-full" 
+                                style={{ backgroundColor: macro.color }}
+                              />
+                              {macro.name}
+                              <Badge variant="outline" className="ml-2 text-xs font-normal">
+                                {macro.scopes.length} serviços
+                              </Badge>
+                            </CardTitle>
+                            <Badge variant="secondary" className="text-xs">
+                              {formatCurrency(macroTotal)} / casa
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <CardContent className="pt-0">
+                          <div className="space-y-2">
+                            {macro.scopes.map(scope => {
+                              const cost = scopeCosts.find(c => c.scopeId === scope.id);
+                              const isEditing = editingScope?.scopeId === scope.id;
+                              const scopeTotal = cost ? cost.materialCost + cost.laborCost + cost.equipmentCost : 0;
+
+                              return (
+                                <div
+                                  key={scope.id}
+                                  className={`p-3 rounded-lg border transition-colors ${
+                                    isEditing ? 'bg-accent border-primary' : 'bg-muted/30 hover:bg-muted/50'
+                                  }`}
+                                >
+                                  {isEditing && editingScope ? (
+                                    <div className="space-y-3">
+                                      <div className="flex items-center justify-between">
+                                        <p className="font-medium text-sm">{scope.name}</p>
+                                        <div className="flex gap-2">
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => setEditingScope(null)}
+                                          >
+                                            Cancelar
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            onClick={handleUpdateCost}
+                                            disabled={isSaving}
+                                          >
+                                            {isSaving ? (
+                                              <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : (
+                                              'Salvar'
+                                            )}
+                                          </Button>
+                                        </div>
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-3">
+                                        <div>
+                                          <Label className="text-xs">Material (R$)</Label>
+                                          <Input
+                                            type="number"
+                                            value={editingScope.materialCost}
+                                            onChange={(e) => setEditingScope({
+                                              ...editingScope,
+                                              materialCost: Number(e.target.value) || 0
+                                            })}
+                                            className="h-8 text-sm"
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-xs">Mão de Obra (R$)</Label>
+                                          <Input
+                                            type="number"
+                                            value={editingScope.laborCost}
+                                            onChange={(e) => setEditingScope({
+                                              ...editingScope,
+                                              laborCost: Number(e.target.value) || 0
+                                            })}
+                                            className="h-8 text-sm"
+                                          />
+                                        </div>
+                                        <div>
+                                          <Label className="text-xs">Equipamentos (R$)</Label>
+                                          <Input
+                                            type="number"
+                                            value={editingScope.equipmentCost}
+                                            onChange={(e) => setEditingScope({
+                                              ...editingScope,
+                                              equipmentCost: Number(e.target.value) || 0
+                                            })}
+                                            className="h-8 text-sm"
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <p className="text-sm font-medium">{scope.name}</p>
+                                        {scopeTotal > 0 && (
+                                          <div className="flex gap-2 text-xs text-muted-foreground">
+                                            {cost && cost.materialCost > 0 && (
+                                              <span className="flex items-center gap-1">
+                                                <Package className="w-3 h-3 text-blue-500" />
+                                                {formatCurrency(cost.materialCost)}
+                                              </span>
+                                            )}
+                                            {cost && cost.laborCost > 0 && (
+                                              <span className="flex items-center gap-1">
+                                                <Hammer className="w-3 h-3 text-orange-500" />
+                                                {formatCurrency(cost.laborCost)}
+                                              </span>
+                                            )}
+                                            {cost && cost.equipmentCost > 0 && (
+                                              <span className="flex items-center gap-1">
+                                                <Wrench className="w-3 h-3 text-green-500" />
+                                                {formatCurrency(cost.equipmentCost)}
+                                              </span>
+                                            )}
+                                          </div>
                                         )}
                                       </div>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Badge variant={scopeTotal > 0 ? "default" : "secondary"} className="text-xs">
-                                      {formatCurrency(scopeTotal)}
-                                    </Badge>
-                                    {canEdit && (
-                                      <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-7 w-7"
-                                        onClick={() => cost && setEditingScope(cost)}
-                                      >
-                                        <Pencil className="w-3 h-3" />
-                                      </Button>
-                                    )}
-                                  </div>
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant={scopeTotal > 0 ? "default" : "secondary"} className="text-xs">
+                                          {formatCurrency(scopeTotal)}
+                                        </Badge>
+                                        {canEdit && (
+                                          <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="h-7 w-7"
+                                            onClick={() => {
+                                              if (cost) {
+                                                setEditingScope(cost);
+                                              } else {
+                                                // Create new cost entry if doesn't exist
+                                                const newCost: ScopeCost = {
+                                                  scopeId: scope.id,
+                                                  scopeName: scope.name,
+                                                  macroId: macro.id,
+                                                  macroName: macro.name,
+                                                  macroColor: macro.color,
+                                                  materialCost: 0,
+                                                  laborCost: 0,
+                                                  equipmentCost: 0
+                                                };
+                                                setScopeCosts(prev => [...prev, newCost]);
+                                                setEditingScope(newCost);
+                                              }
+                                            }}
+                                          >
+                                            <Pencil className="w-3 h-3" />
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </CardContent>
-                  </Card>
+                              );
+                            })}
+                          </div>
+                        </CardContent>
+                      </CollapsibleContent>
+                    </Card>
+                  </Collapsible>
                 );
               })}
             </div>
