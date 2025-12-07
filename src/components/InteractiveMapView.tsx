@@ -231,13 +231,14 @@ export function InteractiveMapView() {
     }
   }, [isEditMode, currentProject, customLayout, generateDefaultLayout, houses]);
 
-  // Get SVG coordinates from mouse event
+  // Get SVG coordinates from mouse event - corrigido para funcionar com zoom
   const getSvgCoords = useCallback((e: React.MouseEvent) => {
-    const svgRect = svgRef.current?.getBoundingClientRect();
-    if (!svgRect) return { x: 0, y: 0 };
+    const container = containerRef.current;
+    if (!container) return { x: 0, y: 0 };
+    const rect = container.getBoundingClientRect();
     return {
-      x: (e.clientX - svgRect.left - position.x) / scale,
-      y: (e.clientY - svgRect.top - position.y) / scale,
+      x: (e.clientX - rect.left - position.x) / scale,
+      y: (e.clientY - rect.top - position.y) / scale,
     };
   }, [position, scale]);
 
@@ -499,6 +500,17 @@ export function InteractiveMapView() {
   
   const clearSelection = () => {
     setSelectedHouseIds(new Set());
+  };
+
+  // Reorganizar casas para layout inicial
+  const reorganizeHouses = () => {
+    if (!currentProject) return;
+    const projectQuadras = currentProject.quadras || [];
+    const { quadras, houses: defaultHouses } = generateDefaultLayout(projectQuadras, houses);
+    setEditingQuadras(quadras);
+    setEditingHouses(defaultHouses);
+    setSelectedHouseIds(new Set());
+    toast.success("Casas reorganizadas para layout inicial!");
   };
 
   // Analyze floor plan with AI
@@ -833,13 +845,16 @@ export function InteractiveMapView() {
             <>
               {selectedHouseIds.size > 0 && (
                 <Button variant="ghost" size="sm" onClick={clearSelection} className="gap-1.5 h-8 text-xs">
-                  Limpar seleção
+                  Limpar seleção ({selectedHouseIds.size})
                 </Button>
               )}
+              <Button variant="outline" size="sm" onClick={reorganizeHouses} className="gap-1.5 h-8 text-xs">
+                <RotateCcw className="h-3 w-3" />Reorganizar
+              </Button>
               <Button variant="default" size="sm" onClick={saveLayout} className="gap-1.5 h-8 text-xs">
                 <Save className="h-3 w-3" />Salvar
               </Button>
-              <Button variant="outline" size="sm" onClick={cancelEdit} className="gap-1.5 h-8 text-xs">
+              <Button variant="ghost" size="sm" onClick={cancelEdit} className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive">
                 <XCircle className="h-3 w-3" />Cancelar
               </Button>
             </>
