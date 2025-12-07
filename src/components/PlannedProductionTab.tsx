@@ -97,7 +97,6 @@ export function PlannedProductionTab() {
   
   const [selectedMacro, setSelectedMacro] = useState<string>("");
   const [selectedScope, setSelectedScope] = useState<string>("");
-  const [plannedHousesCount, setPlannedHousesCount] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   
   // Planning period dates (next week by default)
@@ -145,6 +144,21 @@ export function PlannedProductionTab() {
     const macro = macros.find(m => m.id === selectedMacro);
     return macro?.scopes || [];
   }, [selectedMacro, macros]);
+
+  // Calculate houses not yet executed for the selected scope
+  const availableHousesForScope = useMemo(() => {
+    if (!selectedScope || !selectedMacro) return [];
+    
+    return houses.filter(house => {
+      const macro = house.macros.find(m => m.id === selectedMacro);
+      if (!macro) return true; // House doesn't have this macro yet
+      const scope = macro.scopes.find(s => s.id === selectedScope);
+      return !scope || scope.progress < 100; // Not executed or partially executed
+    });
+  }, [houses, selectedMacro, selectedScope]);
+
+  // Selected house IDs for planning
+  const [selectedHouseIds, setSelectedHouseIds] = useState<number[]>([]);
 
   // Group future plans by week
   const groupedFuturePlans = useMemo(() => {
@@ -206,20 +220,14 @@ export function PlannedProductionTab() {
 
   // Save planned production
   const handleSave = async () => {
-    if (!currentProject || !selectedScope || !plannedHousesCount) {
-      toast.error("Preencha todos os campos obrigatórios");
+    if (!currentProject || !selectedScope || selectedHouseIds.length === 0) {
+      toast.error("Selecione ao menos uma casa para planejar");
       return;
     }
 
     const macro = macros.find(m => m.id === selectedMacro);
     const scope = scopes.find(s => s.id === selectedScope);
     if (!macro || !scope) return;
-
-    const count = parseInt(plannedHousesCount);
-    if (isNaN(count) || count <= 0) {
-      toast.error("Quantidade de casas inválida");
-      return;
-    }
 
     setIsSaving(true);
     try {
@@ -234,8 +242,8 @@ export function PlannedProductionTab() {
           macro_id: macro.id,
           macro_name: macro.name,
           macro_color: macro.color,
-          planned_houses: count,
-          planned_house_ids: [],
+          planned_houses: selectedHouseIds.length,
+          planned_house_ids: selectedHouseIds,
           notes: notes || null,
         });
 
@@ -251,7 +259,7 @@ export function PlannedProductionTab() {
         .order('week_start', { ascending: false });
       
       setPlannedProductions((data || []) as PlannedProduction[]);
-      setPlannedHousesCount("");
+      setSelectedHouseIds([]);
       setNotes("");
       setSelectedScope("");
     } catch (error) {
@@ -537,10 +545,11 @@ export function PlannedProductionTab() {
         <table>
           <thead>
             <tr>
-              <th style="width: 25%">Etapa</th>
-              <th style="width: 35%">Serviço</th>
-              <th style="width: 15%; text-align: center">Meta</th>
-              <th style="width: 25%">Observações</th>
+              <th style="width: 20%">Etapa</th>
+              <th style="width: 25%">Serviço</th>
+              <th style="width: 10%; text-align: center">Qtd</th>
+              <th style="width: 25%">Casas</th>
+              <th style="width: 20%">Observações</th>
             </tr>
           </thead>
           <tbody>
@@ -552,7 +561,10 @@ export function PlannedProductionTab() {
                 </td>
                 <td>${p.scope_name}</td>
                 <td style="text-align: center">
-                  <span class="houses-count">${p.planned_houses} casas</span>
+                  <span class="houses-count">${p.planned_houses}</span>
+                </td>
+                <td style="font-size: 11px; color: #374151;">
+                  ${p.planned_house_ids.length > 0 ? p.planned_house_ids.join(', ') : '-'}
                 </td>
                 <td class="notes">${p.notes || '-'}</td>
               </tr>
@@ -745,18 +757,76 @@ export function PlannedProductionTab() {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-sm">Quantidade de Casas Planejadas</Label>
-              <Input 
-                type="number"
-                min="1"
-                max={houses.length}
-                value={plannedHousesCount}
-                onChange={(e) => setPlannedHousesCount(e.target.value)}
-                placeholder={`Máx: ${houses.length}`}
-                className="h-9"
-              />
-            </div>
+            {/* Houses Selection */}
+            {selectedScope && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">Casas Disponíveis (não executadas)</Label>
+                  <Badge variant="outline" className="text-xs">
+                    {availableHousesForScope.length} disponíveis
+                  </Badge>
+                </div>
+                
+                {availableHousesForScope.length > 0 ? (
+                  <>
+                    <div className="flex gap-2 mb-2">
+                      <Button 
+                        type="button"
+                        variant="outline" 
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => setSelectedHouseIds(availableHousesForScope.map(h => h.id))}
+                      >
+                        Selecionar Todas
+                      </Button>
+                      <Button 
+                        type="button"
+                        variant="outline" 
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => setSelectedHouseIds([])}
+                      >
+                        Limpar
+                      </Button>
+                    </div>
+                    <ScrollArea className="h-[120px] border rounded-lg p-2">
+                      <div className="grid grid-cols-5 gap-1">
+                        {availableHousesForScope.map(house => {
+                          const isSelected = selectedHouseIds.includes(house.id);
+                          return (
+                            <button
+                              key={house.id}
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSelectedHouseIds(prev => prev.filter(id => id !== house.id));
+                                } else {
+                                  setSelectedHouseIds(prev => [...prev, house.id]);
+                                }
+                              }}
+                              className={`p-1.5 text-xs rounded border transition-colors ${
+                                isSelected 
+                                  ? 'bg-primary text-primary-foreground border-primary' 
+                                  : 'bg-card border-border hover:border-primary/50'
+                              }`}
+                            >
+                              {house.id}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
+                    <p className="text-xs text-muted-foreground text-center">
+                      {selectedHouseIds.length} casas selecionadas
+                    </p>
+                  </>
+                ) : (
+                  <div className="p-3 text-center text-xs text-muted-foreground bg-secondary/30 rounded-lg">
+                    Todas as casas já foram executadas para este serviço
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label className="text-sm">Observações (opcional)</Label>
@@ -771,10 +841,10 @@ export function PlannedProductionTab() {
             <Button 
               className="w-full gap-2 h-10" 
               onClick={handleSave}
-              disabled={!selectedScope || !plannedHousesCount || isSaving || !canEdit}
+              disabled={!selectedScope || selectedHouseIds.length === 0 || isSaving || !canEdit}
             >
               <Save className="w-4 h-4" />
-              {isSaving ? "Salvando..." : "Salvar Planejamento"}
+              {isSaving ? "Salvando..." : `Salvar Planejamento (${selectedHouseIds.length} casas)`}
             </Button>
           </CardContent>
         </Card>

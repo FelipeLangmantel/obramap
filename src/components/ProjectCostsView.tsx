@@ -43,6 +43,9 @@ interface PlannedProduction {
   macro_id: string;
   macro_name: string;
   planned_houses: number;
+  planned_house_ids: number[];
+  week_start: string;
+  week_end: string;
 }
 
 const COSTS_STORAGE_KEY = "obramap_scope_costs";
@@ -96,15 +99,17 @@ export function ProjectCostsView() {
     }
   }, [currentProject?.id, macros]);
 
-  // Load planned productions for projected costs
+  // Load planned productions for projected costs (only future ones)
   useEffect(() => {
     if (!currentProject?.id) return;
     
     const loadPlannedProductions = async () => {
+      const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('planned_productions')
-        .select('id, scope_id, scope_name, macro_id, macro_name, planned_houses')
-        .eq('project_id', currentProject.id);
+        .select('id, scope_id, scope_name, macro_id, macro_name, planned_houses, planned_house_ids, week_start, week_end')
+        .eq('project_id', currentProject.id)
+        .gte('week_end', today); // Only future productions
       
       if (!error && data) {
         setPlannedProductions(data);
@@ -253,14 +258,30 @@ export function ProjectCostsView() {
     let projectedMaterial = 0;
     let projectedLabor = 0;
     let projectedEquipment = 0;
+    const byPlanData: { week: string; scope: string; houses: number; houseIds: number[]; material: number; labor: number; equipment: number; total: number }[] = [];
 
     // Sum up costs from planned productions
     plannedProductions.forEach(planned => {
       const cost = scopeCosts.find(c => c.scopeId === planned.scope_id);
       if (cost) {
-        projectedMaterial += cost.materialCost * planned.planned_houses;
-        projectedLabor += cost.laborCost * planned.planned_houses;
-        projectedEquipment += cost.equipmentCost * planned.planned_houses;
+        const material = cost.materialCost * planned.planned_houses;
+        const labor = cost.laborCost * planned.planned_houses;
+        const equipment = cost.equipmentCost * planned.planned_houses;
+        
+        projectedMaterial += material;
+        projectedLabor += labor;
+        projectedEquipment += equipment;
+        
+        byPlanData.push({
+          week: `${planned.week_start.split('-').reverse().slice(0, 2).join('/')} - ${planned.week_end.split('-').reverse().slice(0, 2).join('/')}`,
+          scope: planned.scope_name,
+          houses: planned.planned_houses,
+          houseIds: planned.planned_house_ids || [],
+          material,
+          labor,
+          equipment,
+          total: material + labor + equipment
+        });
       }
     });
 
@@ -268,7 +289,8 @@ export function ProjectCostsView() {
       material: projectedMaterial,
       labor: projectedLabor,
       equipment: projectedEquipment,
-      total: projectedMaterial + projectedLabor + projectedEquipment
+      total: projectedMaterial + projectedLabor + projectedEquipment,
+      byPlanData
     };
   }, [plannedProductions, scopeCosts]);
 
@@ -371,35 +393,67 @@ export function ProjectCostsView() {
 
           {/* Projected Costs from Planned Production */}
           {projectedCosts.total > 0 && (
-            <Card className="border-dashed border-2 border-amber-300/50 bg-amber-50/30 dark:bg-amber-900/10">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
+            <Card className="border-2 border-amber-400/50 bg-gradient-to-br from-amber-50/50 to-amber-100/30 dark:from-amber-900/20 dark:to-amber-800/10">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
                   <Target className="w-5 h-5 text-amber-600" />
                   Custos Projetados (Produção Futura)
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Material</p>
-                    <p className="text-lg font-semibold text-amber-700 dark:text-amber-400">{formatCurrency(projectedCosts.material)}</p>
+                  <div className="p-3 bg-background/80 rounded-lg">
+                    <p className="text-xs text-muted-foreground font-medium">Material</p>
+                    <p className="text-xl font-bold text-amber-700 dark:text-amber-400">{formatCurrency(projectedCosts.material)}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Mão de Obra</p>
-                    <p className="text-lg font-semibold text-amber-700 dark:text-amber-400">{formatCurrency(projectedCosts.labor)}</p>
+                  <div className="p-3 bg-background/80 rounded-lg">
+                    <p className="text-xs text-muted-foreground font-medium">Mão de Obra</p>
+                    <p className="text-xl font-bold text-amber-700 dark:text-amber-400">{formatCurrency(projectedCosts.labor)}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Equipamentos</p>
-                    <p className="text-lg font-semibold text-amber-700 dark:text-amber-400">{formatCurrency(projectedCosts.equipment)}</p>
+                  <div className="p-3 bg-background/80 rounded-lg">
+                    <p className="text-xs text-muted-foreground font-medium">Equipamentos</p>
+                    <p className="text-xl font-bold text-amber-700 dark:text-amber-400">{formatCurrency(projectedCosts.equipment)}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Total Projetado</p>
-                    <p className="text-lg font-bold text-amber-700 dark:text-amber-400">{formatCurrency(projectedCosts.total)}</p>
+                  <div className="p-3 bg-amber-200/50 dark:bg-amber-700/30 rounded-lg">
+                    <p className="text-xs text-muted-foreground font-medium">Total Projetado</p>
+                    <p className="text-xl font-bold text-amber-800 dark:text-amber-300">{formatCurrency(projectedCosts.total)}</p>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground mt-3">
-                  Baseado nos planejamentos registrados na aba "Produção Futura"
-                </p>
+                
+                {/* Detailed breakdown by plan */}
+                {projectedCosts.byPlanData.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm font-semibold mb-3 flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4" />
+                      Detalhamento por Planejamento
+                    </p>
+                    <ScrollArea className="h-[180px]">
+                      <div className="space-y-2">
+                        {projectedCosts.byPlanData.map((plan, idx) => (
+                          <div key={idx} className="p-3 bg-background/60 rounded-lg border border-amber-200/50">
+                            <div className="flex items-center justify-between mb-2">
+                              <div>
+                                <p className="text-sm font-medium">{plan.scope}</p>
+                                <p className="text-xs text-muted-foreground">{plan.week}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-bold text-amber-700 dark:text-amber-400">{formatCurrency(plan.total)}</p>
+                                <p className="text-xs text-muted-foreground">{plan.houses} casas</p>
+                              </div>
+                            </div>
+                            {plan.houseIds.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-border/50">
+                                <p className="text-xs text-muted-foreground">
+                                  <span className="font-medium">Casas:</span> {plan.houseIds.join(', ')}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -447,33 +501,42 @@ export function ProjectCostsView() {
             {/* Pie Chart */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Distribuição por Categoria</CardTitle>
+                <CardTitle className="text-base font-semibold">Distribuição por Categoria</CardTitle>
               </CardHeader>
               <CardContent>
                 {pieData.length > 0 ? (
-                  <div className="h-[250px]">
+                  <div className="h-[280px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <RechartsPieChart>
                         <Pie
                           data={pieData}
                           cx="50%"
                           cy="50%"
-                          innerRadius={60}
-                          outerRadius={90}
-                          paddingAngle={3}
+                          innerRadius={65}
+                          outerRadius={95}
+                          paddingAngle={4}
                           dataKey="value"
                           label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          labelLine={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1 }}
                         >
                           {pieData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
+                            <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={2} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                        <Tooltip 
+                          formatter={(value) => formatCurrency(Number(value))}
+                          contentStyle={{ 
+                            backgroundColor: 'hsl(var(--popover))', 
+                            borderColor: 'hsl(var(--border))',
+                            borderRadius: '8px',
+                            fontSize: '12px'
+                          }}
+                        />
                       </RechartsPieChart>
                     </ResponsiveContainer>
                   </div>
                 ) : (
-                  <div className="h-[250px] flex items-center justify-center text-muted-foreground text-sm">
+                  <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
                     Configure os custos dos serviços para ver o gráfico
                   </div>
                 )}
@@ -483,25 +546,44 @@ export function ProjectCostsView() {
             {/* Bar Chart by Macro */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Custos por Etapa</CardTitle>
+                <CardTitle className="text-base font-semibold">Custos por Etapa</CardTitle>
               </CardHeader>
               <CardContent>
                 {costCalculations.byMacroData.length > 0 ? (
-                  <div className="h-[250px]">
+                  <div className="h-[280px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={costCalculations.byMacroData} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis type="number" tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
-                        <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(value) => formatCurrency(Number(value))} />
-                        <Legend />
-                        <Bar dataKey="total" name="Total Obra" fill="hsl(var(--muted-foreground))" opacity={0.5} />
-                        <Bar dataKey="executed" name="Realizado" fill="hsl(var(--primary))" />
+                      <BarChart data={costCalculations.byMacroData} layout="vertical" margin={{ left: 10, right: 30 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis 
+                          type="number" 
+                          tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`}
+                          tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                        />
+                        <YAxis 
+                          dataKey="name" 
+                          type="category" 
+                          width={120} 
+                          tick={{ fontSize: 11, fill: 'hsl(var(--foreground))' }}
+                        />
+                        <Tooltip 
+                          formatter={(value) => formatCurrency(Number(value))}
+                          contentStyle={{ 
+                            backgroundColor: 'hsl(var(--popover))', 
+                            borderColor: 'hsl(var(--border))',
+                            borderRadius: '8px',
+                            fontSize: '12px'
+                          }}
+                        />
+                        <Legend 
+                          wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
+                        />
+                        <Bar dataKey="total" name="Total Obra" fill="hsl(var(--muted))" opacity={0.6} radius={[0, 4, 4, 0]} />
+                        <Bar dataKey="executed" name="Realizado" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 ) : (
-                  <div className="h-[250px] flex items-center justify-center text-muted-foreground text-sm">
+                  <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
                     Configure os custos dos serviços para ver o gráfico
                   </div>
                 )}
