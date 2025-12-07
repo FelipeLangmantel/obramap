@@ -1,5 +1,6 @@
 import { X, Edit, Tag, Home, User, Calendar } from "lucide-react";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { calculateHouseProgress, getStatusFromProgress, getStatusLabel } from "@/data/constructionData";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { format, parseISO } from "date-fns";
 
 export function HouseDetails() {
   const { selectedHouse, setSelectedHouse, currentProject } = useConstruction();
+  const { canEdit } = useAuth();
   const [editOpen, setEditOpen] = useState(false);
   
   if (!selectedHouse || !currentProject) {
@@ -42,9 +44,11 @@ export function HouseDetails() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" size="icon" onClick={() => setEditOpen(true)}>
-            <Edit className="w-4 h-4" />
-          </Button>
+          {canEdit && (
+            <Button variant="ghost" size="icon" onClick={() => setEditOpen(true)}>
+              <Edit className="w-4 h-4" />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" onClick={() => setSelectedHouse(null)}>
             <X className="w-4 h-4" />
           </Button>

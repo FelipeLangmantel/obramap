@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Calendar } from "lucide-react";
 import { House, Scope } from "@/data/constructionData";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Progress } from "@/components/ui/progress";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { EditScopeDialog } from "./EditScopeDialog";
@@ -11,6 +12,7 @@ interface ScopesListProps {
 }
 
 export function ScopesList({ house }: ScopesListProps) {
+  const { canEdit } = useAuth();
   const [editScope, setEditScope] = useState<{ macroId: string; scope: Scope } | null>(null);
 
   const getProgressColor = (progress: number) => {
@@ -49,12 +51,14 @@ export function ScopesList({ house }: ScopesListProps) {
             <AccordionContent className="px-3 pb-3">
               <div className="space-y-2">
                 {macro.scopes.map(scope => (
-                  <button
+                  <div
                     key={scope.id}
-                    onClick={() => setEditScope({ macroId: macro.id, scope })}
-                    className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-secondary/50 transition-colors group"
+                    onClick={() => canEdit && setEditScope({ macroId: macro.id, scope })}
+                    className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors group ${
+                      canEdit ? "cursor-pointer hover:bg-secondary/50" : "cursor-default"
+                    }`}
                   >
-                    <span className="text-sm text-muted-foreground group-hover:text-foreground">
+                    <span className={`text-sm text-muted-foreground ${canEdit ? "group-hover:text-foreground" : ""}`}>
                       {scope.name}
                     </span>
                     <div className="flex items-center gap-2 w-32">
@@ -66,7 +70,7 @@ export function ScopesList({ house }: ScopesListProps) {
                         {scope.progress}%
                       </span>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             </AccordionContent>
