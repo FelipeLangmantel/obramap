@@ -4,22 +4,81 @@ import { calculateHouseProgress } from "@/data/constructionData";
 import { useMemo } from "react";
 
 export function StatsCards() {
-  const { currentProject } = useConstruction();
+  const { currentProject, filterMode, filterMacro, filterScope } = useConstruction();
   
   const stats = useMemo(() => {
-    if (!currentProject) return { total: 0, avgProgress: 0, completed: 0, inProgress: 0 };
+    if (!currentProject) return { total: 0, avgProgress: 0, completed: 0, inProgress: 0, label: "Progresso Médio" };
     
     const houses = currentProject.houses;
     const total = houses.length;
-    if (total === 0) return { total: 0, avgProgress: 0, completed: 0, inProgress: 0 };
+    if (total === 0) return { total: 0, avgProgress: 0, completed: 0, inProgress: 0, label: "Progresso Médio" };
     
-    const progresses = houses.map(h => calculateHouseProgress(h));
-    const avgProgress = Math.round(progresses.reduce((a, b) => a + b, 0) / total);
-    const completed = progresses.filter(p => p === 100).length;
-    const inProgress = progresses.filter(p => p > 0 && p < 100).length;
+    let avgProgress: number;
+    let label = "Progresso Médio";
+    let completed: number;
+    let inProgress: number;
+
+    // Calculate based on filter selection
+    if (filterMode === "macro" && filterMacro !== "all") {
+      // Calculate average for specific macro
+      const macro = currentProject.macrosTemplate.find(m => m.id === filterMacro);
+      const macroName = macro?.name || "Etapa";
+      label = `Média: ${macroName}`;
+      
+      const macroProgresses = houses.map(house => {
+        const houseMacro = house.macros.find(m => m.id === filterMacro);
+        if (!houseMacro) return 0;
+        
+        const totalWeight = houseMacro.scopes.reduce((sum, s) => sum + s.weight, 0);
+        if (totalWeight === 0) return 0;
+        
+        const weightedProgress = houseMacro.scopes.reduce((sum, s) => sum + (s.progress * s.weight), 0);
+        return weightedProgress / totalWeight;
+      });
+      
+      avgProgress = Math.round(macroProgresses.reduce((a, b) => a + b, 0) / total);
+      completed = macroProgresses.filter(p => p === 100).length;
+      inProgress = macroProgresses.filter(p => p > 0 && p < 100).length;
+      
+    } else if (filterMode === "scope" && filterScope !== "all") {
+      // Calculate average for specific scope
+      let scopeName = "Serviço";
+      
+      // Find the scope name from macros template
+      for (const macro of currentProject.macrosTemplate) {
+        const scope = macro.scopes.find(s => s.id === filterScope);
+        if (scope) {
+          scopeName = scope.name;
+          break;
+        }
+      }
+      
+      label = `Média: ${scopeName}`;
+      
+      const scopeProgresses = houses.map(house => {
+        for (const macro of house.macros) {
+          const scope = macro.scopes.find(s => s.id === filterScope);
+          if (scope) {
+            return scope.progress;
+          }
+        }
+        return 0;
+      });
+      
+      avgProgress = Math.round(scopeProgresses.reduce((a, b) => a + b, 0) / total);
+      completed = scopeProgresses.filter(p => p === 100).length;
+      inProgress = scopeProgresses.filter(p => p > 0 && p < 100).length;
+      
+    } else {
+      // Default: calculate overall house progress
+      const progresses = houses.map(h => calculateHouseProgress(h));
+      avgProgress = Math.round(progresses.reduce((a, b) => a + b, 0) / total);
+      completed = progresses.filter(p => p === 100).length;
+      inProgress = progresses.filter(p => p > 0 && p < 100).length;
+    }
     
-    return { total, avgProgress, completed, inProgress };
-  }, [currentProject]);
+    return { total, avgProgress, completed, inProgress, label };
+  }, [currentProject, filterMode, filterMacro, filterScope]);
 
   // Calculate days remaining based on current project's expected end date
   const daysRemaining = useMemo(() => {
@@ -48,7 +107,7 @@ export function StatsCards() {
     {
       icon: TrendingUp,
       value: `${stats.avgProgress}%`,
-      label: "Progresso Médio",
+      label: stats.label,
       color: "bg-chart-blue/10 text-chart-blue",
     },
     {
@@ -87,7 +146,7 @@ export function StatsCards() {
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">{card.value}</p>
-              <p className="text-sm text-muted-foreground">{card.label}</p>
+              <p className="text-sm text-muted-foreground truncate max-w-[120px]" title={card.label}>{card.label}</p>
             </div>
           </div>
         </div>
