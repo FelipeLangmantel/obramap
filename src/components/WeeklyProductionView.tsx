@@ -64,7 +64,7 @@ const TAB_STORAGE_KEY = "obramap_production_tab";
 const INITIAL_DB_STORAGE_KEY = "obramap_initial_database_mode";
 
 export function WeeklyProductionView() {
-  const { currentProject, updateScopeProgress } = useConstruction();
+  const { currentProject, updateBatchScopeProgress } = useConstruction();
   const { canEdit } = useAuth();
   
   // Load saved tab from localStorage
@@ -318,10 +318,8 @@ export function WeeklyProductionView() {
 
       if (error) throw error;
 
-      // Update progress for each selected house - this updates the map automatically
-      for (const houseId of selectedHouses) {
-        await updateScopeProgress(houseId, macro.id, scope.id, 100);
-      }
+      // Update progress for all selected houses at once - batch update for performance
+      await updateBatchScopeProgress(selectedHouses, macro.id, scope.id, 100);
 
       const message = isInitialDatabase 
         ? `Banco de atividades atualizado: ${scope.name} em ${selectedHouses.length} casas.`

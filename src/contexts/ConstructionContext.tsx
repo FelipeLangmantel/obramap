@@ -62,9 +62,11 @@ interface ConstructionContextType {
   selectedHouse: House | null;
   setSelectedHouse: (house: House | null) => void;
   updateScopeProgress: (houseId: number, macroId: string, scopeId: string, progress: number, startDate?: string | null, endDate?: string | null) => void;
+  updateBatchScopeProgress: (houseIds: number[], macroId: string, scopeId: string, progress: number) => Promise<void>;
   updateHouseInfo: (houseId: number, updates: Partial<Pick<House, "area" | "constructorName" | "type" | "expectedDate">>) => void;
   getHouseProgress: (houseId: number) => number;
   moveHouseToQuadra: (houseId: number, newQuadraId: string) => void;
+  refreshHousesFromDB: () => Promise<void>;
   
   // Filters
   filterQuadra: string;
@@ -1299,6 +1301,124 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     }
   }, [currentProjectId, selectedHouse]);
 
+  // Batch update scope progress for multiple houses - optimized for performance
+  const updateBatchScopeProgress = useCallback(async (houseIds: number[], macroId: string, scopeId: string, progress: number) => {
+    if (!currentProjectId || houseIds.length === 0) return;
+
+    try {
+      // Fetch all houses data in one query
+      const { data: housesData, error: fetchError } = await supabase
+        .from('houses')
+        .select('house_number, macros')
+        .eq('project_id', currentProjectId)
+        .in('house_number', houseIds);
+
+      if (fetchError || !housesData) {
+        console.error('Error fetching houses data:', fetchError);
+        return;
+      }
+
+      // Prepare all updates
+      const updates: { houseNumber: number; updatedMacros: Macro[] }[] = [];
+      
+      for (const houseData of housesData) {
+        const currentMacros = jsonToMacros(houseData.macros);
+        const updatedMacros = currentMacros.map(macro => {
+          if (macro.id !== macroId) return macro;
+          return {
+            ...macro,
+            scopes: macro.scopes.map(scope => {
+              if (scope.id !== scopeId) return scope;
+              return { ...scope, progress };
+            })
+          };
+        });
+        updates.push({ houseNumber: houseData.house_number, updatedMacros });
+      }
+
+      // Execute all database updates in parallel
+      const updatePromises = updates.map(({ houseNumber, updatedMacros }) =>
+        supabase
+          .from('houses')
+          .update({ 
+            macros: macrosToJson(updatedMacros),
+            last_update: new Date().toISOString().split('T')[0]
+          })
+          .eq('project_id', currentProjectId)
+          .eq('house_number', houseNumber)
+      );
+
+      await Promise.all(updatePromises);
+
+      // Update local state with all changes at once
+      setProjects(prev => prev.map(p => {
+        if (p.id !== currentProjectId) return p;
+        
+        const updatedHouses = p.houses.map(h => {
+          const update = updates.find(u => u.houseNumber === h.id);
+          if (!update) return h;
+          return { ...h, macros: update.updatedMacros, lastUpdate: new Date().toLocaleDateString("pt-BR") };
+        });
+        
+        return { ...p, houses: updatedHouses };
+      }));
+
+      // Update selected house if it was modified
+      if (selectedHouse && houseIds.includes(selectedHouse.id)) {
+        const update = updates.find(u => u.houseNumber === selectedHouse.id);
+        if (update) {
+          setSelectedHouse(prev => prev ? { ...prev, macros: update.updatedMacros, lastUpdate: new Date().toLocaleDateString("pt-BR") } : null);
+        }
+      }
+    } catch (error) {
+      console.error('Error batch updating scope progress:', error);
+    }
+  }, [currentProjectId, selectedHouse]);
+
+  // Refresh houses from database - sync local state with DB
+  const refreshHousesFromDB = useCallback(async () => {
+    if (!currentProjectId) return;
+
+    try {
+      const { data: housesData, error } = await supabase
+        .from('houses')
+        .select('*')
+        .eq('project_id', currentProjectId)
+        .order('house_number', { ascending: true });
+
+      if (error) {
+        console.error('Error refreshing houses:', error);
+        return;
+      }
+
+      const refreshedHouses: House[] = (housesData || []).map(h => ({
+        id: h.house_number,
+        quadra: h.quadra_id || "",
+        area: h.area,
+        type: h.type,
+        constructorName: h.constructor_name || "",
+        expectedDate: h.expected_date || "",
+        lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
+        macros: jsonToMacros(h.macros),
+      }));
+
+      setProjects(prev => prev.map(p => {
+        if (p.id !== currentProjectId) return p;
+        return { ...p, houses: refreshedHouses };
+      }));
+
+      // Update selected house if present
+      if (selectedHouse) {
+        const updatedHouse = refreshedHouses.find(h => h.id === selectedHouse.id);
+        if (updatedHouse) {
+          setSelectedHouse(updatedHouse);
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing houses from DB:', error);
+    }
+  }, [currentProjectId, selectedHouse]);
+
   const updateHouseInfo = useCallback(async (houseId: number, updates: Partial<Pick<House, "area" | "constructorName" | "type" | "expectedDate">>) => {
     if (!currentProjectId) return;
     
@@ -1462,9 +1582,11 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         selectedHouse,
         setSelectedHouse,
         updateScopeProgress,
+        updateBatchScopeProgress,
         updateHouseInfo,
         getHouseProgress,
         moveHouseToQuadra,
+        refreshHousesFromDB,
         reorderQuadras,
         filterQuadra,
         setFilterQuadra,
