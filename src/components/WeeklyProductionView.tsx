@@ -617,7 +617,12 @@ export function WeeklyProductionView() {
                             <span>Do Planejamento</span>
                           </SelectTrigger>
                           <SelectContent position="popper" sideOffset={4} className="max-h-[300px] overflow-y-auto z-50">
-                            {plannedPeriods.map(period => (
+                            {/* Remove duplicate periods by using unique week_start + week_end combination */}
+                            {Array.from(
+                              new Map(
+                                plannedPeriods.map(p => [`${p.week_start}_${p.week_end}`, p])
+                              ).values()
+                            ).map(period => (
                               <SelectItem key={period.id} value={period.id}>
                                 {format(parseISO(period.week_start), 'dd/MM', { locale: ptBR })} a {format(parseISO(period.week_end), 'dd/MM', { locale: ptBR })}
                               </SelectItem>

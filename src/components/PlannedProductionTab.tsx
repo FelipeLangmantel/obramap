@@ -13,10 +13,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import { 
   Target,
   Save,
-  Calendar,
+  CalendarIcon,
   Home,
   TrendingUp,
   TrendingDown,
@@ -1263,21 +1266,63 @@ export function PlannedProductionTab() {
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Início</Label>
-                  <Input 
-                    type="date" 
-                    value={planStartDate}
-                    onChange={(e) => setPlanStartDate(e.target.value)}
-                    className="h-9"
-                  />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full h-9 justify-start text-left font-normal",
+                          !planStartDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {planStartDate ? format(parseISO(planStartDate), "dd/MM/yyyy", { locale: ptBR }) : "Selecionar"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={planStartDate ? parseISO(planStartDate) : undefined}
+                        onSelect={(date) => {
+                          if (date) {
+                            setPlanStartDate(format(date, "yyyy-MM-dd"));
+                            // Auto set end date to end of same week
+                            setPlanEndDate(format(endOfWeek(date, { weekStartsOn: 1 }), "yyyy-MM-dd"));
+                          }
+                        }}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                        locale={ptBR}
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Fim</Label>
-                  <Input 
-                    type="date" 
-                    value={planEndDate}
-                    onChange={(e) => setPlanEndDate(e.target.value)}
-                    className="h-9"
-                  />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full h-9 justify-start text-left font-normal",
+                          !planEndDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {planEndDate ? format(parseISO(planEndDate), "dd/MM/yyyy", { locale: ptBR }) : "Selecionar"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={planEndDate ? parseISO(planEndDate) : undefined}
+                        onSelect={(date) => date && setPlanEndDate(format(date, "yyyy-MM-dd"))}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                        locale={ptBR}
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
             </div>
