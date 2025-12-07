@@ -308,19 +308,38 @@ export function ChartsView() {
         </CardHeader>
         <CardContent>
           {macroProgressData.length > 0 ? (
-            <div className="h-[280px]">
+            <div className="h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart 
                   data={macroProgressData} 
-                  margin={{ left: 10, right: 20, top: 10, bottom: 100 }}
+                  margin={{ left: 10, right: 10, top: 10, bottom: 120 }}
+                  barCategoryGap="15%"
                 >
                   <XAxis 
                     dataKey="name"
-                    tick={{ fontSize: 9 }}
+                    tick={(props) => {
+                      const { x, y, payload } = props;
+                      const name = payload.value;
+                      const abbreviated = name.length > 10 ? name.slice(0, 10) + '...' : name;
+                      return (
+                        <g transform={`translate(${x},${y})`}>
+                          <title>{name}</title>
+                          <text
+                            x={0}
+                            y={0}
+                            dy={8}
+                            textAnchor="end"
+                            fill="hsl(var(--muted-foreground))"
+                            fontSize={10}
+                            transform="rotate(-55)"
+                          >
+                            {abbreviated}
+                          </text>
+                        </g>
+                      );
+                    }}
                     interval={0}
-                    angle={-45}
-                    textAnchor="end"
-                    height={100}
+                    height={120}
                   />
                   <YAxis 
                     domain={[0, 100]} 
@@ -330,11 +349,13 @@ export function ChartsView() {
                   />
                   <Tooltip 
                     formatter={(value: number) => [`${value}%`, "Progresso Médio"]}
+                    labelFormatter={(label) => label}
                     contentStyle={{ fontSize: '12px' }}
                   />
                   <Bar 
                     dataKey="progress" 
                     radius={[4, 4, 0, 0]}
+                    minPointSize={3}
                   >
                     {macroProgressData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
