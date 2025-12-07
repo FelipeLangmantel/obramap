@@ -33,7 +33,7 @@ export function HouseDetails() {
   };
 
   return (
-    <div className="w-full lg:w-96 bg-card rounded-xl border border-border animate-slide-in-right flex flex-col max-h-[calc(100vh-8rem)] overflow-hidden">
+    <div className="w-full lg:w-96 bg-card rounded-xl border border-border animate-slide-in-right flex flex-col max-h-[calc(100vh-12rem)] overflow-hidden">
       <div className="p-4 border-b border-border flex items-start justify-between shrink-0">
         <div>
           <h3 className="text-lg font-semibold text-foreground">
