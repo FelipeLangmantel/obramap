@@ -354,12 +354,19 @@ export function InteractiveMapView() {
     setSelectedHouseIds(new Set());
   };
 
-  // Handle background mouse down for selection box only (no panning in edit mode)
+  // Handle background mouse down for selection box or panning in edit mode
   const handleBackgroundMouseDown = (e: React.MouseEvent) => {
     if (!isEditMode) return;
     
-    // In edit mode, only allow selection box with left click (no panning)
-    // Left click for selection box (only if not shift)
+    // Middle mouse button or Ctrl+left click for panning
+    if (e.button === 1 || (e.button === 0 && e.ctrlKey)) {
+      e.preventDefault();
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+      return;
+    }
+    
+    // Left click for selection box (only if not shift and not ctrl)
     if (e.button === 0 && !e.shiftKey && !e.ctrlKey) {
       const coords = getSvgCoords(e);
       setIsSelecting(true);
@@ -888,12 +895,10 @@ export function InteractiveMapView() {
     return displayData.quadras.filter(q => q.visible !== false);
   }, [displayData.quadras]);
 
+  // Fixed SVG dimensions - quadras overlay the map, don't expand it
   const svgDimensions = useMemo(() => {
-    if (displayData.quadras.length === 0) return { width: MAP_WIDTH, height: MAP_HEIGHT };
-    const maxX = Math.max(...displayData.quadras.map(q => q.x + q.width), ...displayData.houses.map(h => h.x)) + 50;
-    const maxY = Math.max(...displayData.quadras.map(q => q.y + q.height), ...displayData.houses.map(h => h.y)) + 50;
-    return { width: Math.max(MAP_WIDTH, maxX), height: Math.max(MAP_HEIGHT, maxY) };
-  }, [displayData]);
+    return { width: MAP_WIDTH, height: MAP_HEIGHT };
+  }, []);
 
   if (!currentProject) {
     return (
@@ -970,7 +975,7 @@ export function InteractiveMapView() {
               <Badge variant="secondary" className="bg-primary/20 text-primary text-xs">
                 <Edit3 className="h-3 w-3 mr-1" />Modo Edição
               </Badge>
-              <span className="text-muted-foreground">Scroll: mover | Ctrl+Scroll: zoom | Shift+Click: multi-seleção</span>
+              <span className="text-muted-foreground">Ctrl+Arrastar: mover mapa | Scroll: zoom | Shift+Click: multi-seleção</span>
               {selectedHouseIds.size > 0 && (
                 <Badge variant="outline" className="text-xs">
                   {selectedHouseIds.size} casa{selectedHouseIds.size > 1 ? 's' : ''} selecionada{selectedHouseIds.size > 1 ? 's' : ''}
