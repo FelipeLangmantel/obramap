@@ -248,16 +248,88 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             houses: q.house_ids || [],
           }));
 
-          const houses: House[] = (housesData || []).map(h => ({
-            id: h.house_number,
-            quadra: h.quadra_id || "",
-            area: h.area,
-            type: h.type,
-            constructorName: h.constructor_name || "",
-            expectedDate: h.expected_date || "",
-            lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
-            macros: jsonToMacros(h.macros),
-          }));
+          const projectTemplate = jsonToMacros(p.macros_template);
+
+          // Sync houses with project template - preserve progress but use template IDs
+          const houses: House[] = (housesData || []).map(h => {
+            const houseMacros = jsonToMacros(h.macros);
+            
+            // Check if house macros match template structure
+            const needsSync = projectTemplate.length > 0 && (
+              houseMacros.length !== projectTemplate.length ||
+              !projectTemplate.every(tm => houseMacros.some(hm => hm.id === tm.id))
+            );
+
+            if (needsSync) {
+              // Sync house macros to match template, preserving progress by name matching
+              const syncedMacros = projectTemplate.map(templateMacro => {
+                // Try to find by ID first, then by name
+                const existingMacro = houseMacros.find(m => m.id === templateMacro.id) ||
+                  houseMacros.find(m => m.name.toLowerCase() === templateMacro.name.toLowerCase());
+                
+                if (existingMacro) {
+                  const syncedScopes = templateMacro.scopes.map(templateScope => {
+                    // Try to find by ID first, then by name
+                    const existingScope = existingMacro.scopes.find(s => s.id === templateScope.id) ||
+                      existingMacro.scopes.find(s => s.name.toLowerCase() === templateScope.name.toLowerCase());
+                    
+                    return existingScope
+                      ? { ...templateScope, progress: existingScope.progress, startDate: existingScope.startDate, endDate: existingScope.endDate }
+                      : { ...templateScope, progress: 0, startDate: null, endDate: null };
+                  });
+                  return { ...templateMacro, scopes: syncedScopes };
+                }
+                return { ...templateMacro, scopes: templateMacro.scopes.map(s => ({ ...s, progress: 0, startDate: null, endDate: null })) };
+              });
+              
+              return {
+                id: h.house_number,
+                quadra: h.quadra_id || "",
+                area: h.area,
+                type: h.type,
+                constructorName: h.constructor_name || "",
+                expectedDate: h.expected_date || "",
+                lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
+                macros: syncedMacros,
+              };
+            }
+
+            return {
+              id: h.house_number,
+              quadra: h.quadra_id || "",
+              area: h.area,
+              type: h.type,
+              constructorName: h.constructor_name || "",
+              expectedDate: h.expected_date || "",
+              lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
+              macros: houseMacros,
+            };
+          });
+
+          // If houses needed sync, persist to database
+          const housesToSync = (housesData || []).filter((h, i) => {
+            const houseMacros = jsonToMacros(h.macros);
+            return projectTemplate.length > 0 && (
+              houseMacros.length !== projectTemplate.length ||
+              !projectTemplate.every(tm => houseMacros.some(hm => hm.id === tm.id))
+            );
+          });
+
+          if (housesToSync.length > 0) {
+            console.log(`Syncing ${housesToSync.length} houses with project template...`);
+            for (const house of houses) {
+              if (housesToSync.some(h => h.house_number === house.id)) {
+                supabase
+                  .from('houses')
+                  .update({ macros: macrosToJson(house.macros) })
+                  .eq('project_id', p.id)
+                  .eq('house_number', house.id)
+                  .then(({ error }) => {
+                    if (error) console.error('Error syncing house:', error);
+                  });
+              }
+            }
+          }
 
           loadedProjects.push({
             id: p.id,
@@ -271,7 +343,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             projectType: p.project_type,
             houses,
             quadras,
-            macrosTemplate: jsonToMacros(p.macros_template),
+            macrosTemplate: projectTemplate,
             createdAt: p.created_at,
             setupComplete: p.setup_complete,
             legendFollowMacros: p.legend_follow_macros ?? false,
