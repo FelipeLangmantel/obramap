@@ -698,29 +698,30 @@ export function InteractiveMapView() {
     handleEditMouseUp();
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    
-    // Shift+scroll para pan horizontal
-    if (e.shiftKey && !e.ctrlKey && !e.metaKey) {
-      setPosition(prev => ({
-        x: prev.x - e.deltaY,
-        y: prev.y
-      }));
-      return;
-    }
-    
-    // Pinch zoom (trackpad) ou Ctrl+scroll para zoom
-    const isPinchZoom = e.ctrlKey || e.metaKey || Math.abs(e.deltaY) < 50;
-    
-    if (isPinchZoom || e.ctrlKey || e.metaKey) {
-      const zoomIntensity = 0.002;
+  // Zoom handler usando useEffect para prevenir scroll da página
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheelEvent = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      // Shift+scroll para pan horizontal
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        setPosition(prev => ({
+          x: prev.x - e.deltaY,
+          y: prev.y
+        }));
+        return;
+      }
+      
+      // Scroll normal = zoom (comportamento principal pedido pelo usuário)
+      const zoomIntensity = 0.001;
       const delta = -e.deltaY * zoomIntensity;
       const newScale = Math.max(0.15, Math.min(6, scale * (1 + delta)));
       
@@ -731,15 +732,11 @@ export function InteractiveMapView() {
         y: mouseY - (mouseY - prev.y) * scaleRatio
       }));
       setScale(newScale);
-      return;
-    }
-    
-    // Scroll normal para pan
-    setPosition(prev => ({
-      x: prev.x - e.deltaX,
-      y: prev.y - e.deltaY
-    }));
-  };
+    };
+
+    container.addEventListener('wheel', handleWheelEvent, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheelEvent);
+  }, [scale]);
 
   const handleHouseClick = (houseId: number, e: React.MouseEvent) => {
     if (isEditMode) return;
@@ -964,7 +961,6 @@ export function InteractiveMapView() {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
         onContextMenu={(e) => e.preventDefault()}
       >
         {isAnalyzing && (
