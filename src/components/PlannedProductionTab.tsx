@@ -1286,8 +1286,6 @@ export function PlannedProductionTab() {
                         onSelect={(date) => {
                           if (date) {
                             setPlanStartDate(format(date, "yyyy-MM-dd"));
-                            // Auto set end date to end of same week
-                            setPlanEndDate(format(endOfWeek(date, { weekStartsOn: 1 }), "yyyy-MM-dd"));
                           }
                         }}
                         initialFocus
