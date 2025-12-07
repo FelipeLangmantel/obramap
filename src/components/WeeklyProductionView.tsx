@@ -29,7 +29,6 @@ import {
   Target
 } from "lucide-react";
 import { EditProductionDialog } from "./EditProductionDialog";
-import { PlannedProductionTab } from "./PlannedProductionTab";
 import { format, startOfWeek, endOfWeek, subWeeks, parseISO, isWithinInterval, addWeeks, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -47,24 +46,34 @@ interface WeeklyProduction {
   houses_count: number;
   created_at: string;
   notes: string | null;
+  is_initial_database: boolean;
 }
 
 const FILTER_STORAGE_KEY = "obramap_production_filters";
 const TAB_STORAGE_KEY = "obramap_production_tab";
+const INITIAL_DB_STORAGE_KEY = "obramap_initial_database_mode";
 
 export function WeeklyProductionView() {
   const { currentProject, updateScopeProgress } = useConstruction();
   const { canEdit } = useAuth();
   
   // Load saved tab from localStorage
-  const [activeTab, setActiveTab] = useState<"register" | "analysis" | "planning">(() => {
+  const [activeTab, setActiveTab] = useState<"register" | "analysis">(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(TAB_STORAGE_KEY);
-      if (saved === "register" || saved === "analysis" || saved === "planning") {
+      if (saved === "register" || saved === "analysis") {
         return saved;
       }
     }
     return "register";
+  });
+  
+  // Initial database mode - for activities already done before tracking started
+  const [isInitialDatabase, setIsInitialDatabase] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(INITIAL_DB_STORAGE_KEY) === 'true';
+    }
+    return false;
   });
   const [selectedMacro, setSelectedMacro] = useState<string>("");
   const [selectedScope, setSelectedScope] = useState<string>("");
@@ -261,6 +270,7 @@ export function WeeklyProductionView() {
           macro_color: macro.color,
           house_ids: selectedHouses,
           houses_count: selectedHouses.length,
+          is_initial_database: isInitialDatabase,
         });
 
       if (error) throw error;
@@ -270,7 +280,10 @@ export function WeeklyProductionView() {
         await updateScopeProgress(houseId, macro.id, scope.id, 100);
       }
 
-      toast.success(`Produção registrada: ${scope.name} em ${selectedHouses.length} casas. Mapa atualizado!`);
+      const message = isInitialDatabase 
+        ? `Banco de atividades atualizado: ${scope.name} em ${selectedHouses.length} casas.`
+        : `Produção registrada: ${scope.name} em ${selectedHouses.length} casas. Mapa atualizado!`;
+      toast.success(message);
       
       // Reload productions
       await reloadProductions();
@@ -429,15 +442,21 @@ export function WeeklyProductionView() {
 
   // Handle tab change with persistence
   const handleTabChange = (value: string) => {
-    const tab = value as "register" | "analysis" | "planning";
+    const tab = value as "register" | "analysis";
     setActiveTab(tab);
     localStorage.setItem(TAB_STORAGE_KEY, tab);
+  };
+
+  // Handle initial database mode change
+  const handleInitialDatabaseChange = (checked: boolean) => {
+    setIsInitialDatabase(checked);
+    localStorage.setItem(INITIAL_DB_STORAGE_KEY, checked.toString());
   };
 
   return (
     <div className="space-y-4 h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full">
-        <TabsList className="grid w-full max-w-2xl grid-cols-3 h-10">
+        <TabsList className="grid w-full max-w-md grid-cols-2 h-10">
           <TabsTrigger value="register" className="gap-2 text-sm">
             <ClipboardList className="w-4 h-4" />
             Registrar Produção
@@ -445,10 +464,6 @@ export function WeeklyProductionView() {
           <TabsTrigger value="analysis" className="gap-2 text-sm">
             <TrendingUp className="w-4 h-4" />
             Análise Semanal
-          </TabsTrigger>
-          <TabsTrigger value="planning" className="gap-2 text-sm">
-            <Target className="w-4 h-4" />
-            Produção Futura
           </TabsTrigger>
         </TabsList>
 
@@ -498,6 +513,27 @@ export function WeeklyProductionView() {
                       className="h-9"
                     />
                   </div>
+                </div>
+
+                {/* Initial Database Mode */}
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="initial-database"
+                      checked={isInitialDatabase}
+                      onCheckedChange={(checked) => handleInitialDatabaseChange(checked as boolean)}
+                    />
+                    <Label 
+                      htmlFor="initial-database" 
+                      className="text-sm font-medium cursor-pointer"
+                    >
+                      Banco de Atividades Iniciais
+                    </Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Marque esta opção para lançamentos de atividades já realizadas antes do início do acompanhamento. 
+                    Estas atividades <strong>não</strong> serão incluídas na análise Planejado x Realizado e não afetarão os dados de análise semanal.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -958,9 +994,6 @@ export function WeeklyProductionView() {
           </div>
         </TabsContent>
 
-        <TabsContent value="planning" className="flex-1 overflow-auto mt-4">
-          <PlannedProductionTab />
-        </TabsContent>
       </Tabs>
 
       <EditProductionDialog
