@@ -1420,48 +1420,52 @@ export function PlannedProductionTab() {
                 <div className="space-y-4">
                   {groupedFuturePlans.map(group => {
                     const totalHouses = group.plans.reduce((sum, p) => sum + p.planned_houses, 0);
-                    const allHouseIds = [...new Set(group.plans.flatMap(p => p.planned_house_ids || []))];
+                    const allHouseIds = [...new Set(group.plans.flatMap(p => p.planned_house_ids || []))].sort((a, b) => a - b);
                     const weekKey = `${group.weekStart}_${group.weekEnd}`;
                     const isExpanded = expandedWeeks.has(weekKey);
                     
-                    // Group services by macro for better visualization
-                    const servicesByMacro: Record<string, { macroName: string; macroColor: string; services: typeof group.plans }> = {};
+                    // Group services by macro for combined display
+                    const servicesByMacro: Record<string, { macroName: string; macroColor: string; scopeNames: string[]; totalHouses: number; plans: typeof group.plans }> = {};
                     group.plans.forEach(p => {
                       if (!servicesByMacro[p.macro_id]) {
                         servicesByMacro[p.macro_id] = {
                           macroName: p.macro_name,
                           macroColor: p.macro_color,
-                          services: []
+                          scopeNames: [],
+                          totalHouses: 0,
+                          plans: []
                         };
                       }
-                      servicesByMacro[p.macro_id].services.push(p);
+                      servicesByMacro[p.macro_id].scopeNames.push(p.scope_name);
+                      servicesByMacro[p.macro_id].totalHouses += p.planned_houses;
+                      servicesByMacro[p.macro_id].plans.push(p);
                     });
                     
                     return (
-                      <Card key={weekKey} className="overflow-hidden">
+                      <Card key={weekKey} className="overflow-hidden border-2">
                         {/* Week Header */}
                         <div 
-                          className="bg-primary/10 p-4 cursor-pointer hover:bg-primary/15 transition-colors"
+                          className="bg-blue-50 dark:bg-blue-950/30 p-4 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors"
                           onClick={() => toggleWeekExpanded(weekKey)}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center">
-                                <Calendar className="w-6 h-6 text-primary" />
+                              <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+                                <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                               </div>
                               <div>
-                                <p className="font-bold text-lg">
+                                <p className="font-bold text-lg text-foreground">
                                   {format(parseISO(group.weekStart), "dd", { locale: ptBR })} a {format(parseISO(group.weekEnd), "dd 'de' MMMM", { locale: ptBR })}
                                 </p>
                                 <div className="flex items-center gap-3 mt-1">
-                                  <Badge variant="secondary" className="text-xs gap-1">
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
                                     <ClipboardList className="w-3 h-3" />
                                     {group.plans.length} {group.plans.length === 1 ? 'serviço' : 'serviços'}
-                                  </Badge>
-                                  <Badge variant="outline" className="text-xs gap-1">
+                                  </span>
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
                                     <Home className="w-3 h-3" />
-                                    {totalHouses} {totalHouses === 1 ? 'casa' : 'casas'}
-                                  </Badge>
+                                    {allHouseIds.length} {allHouseIds.length === 1 ? 'casa' : 'casas'}
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -1475,53 +1479,43 @@ export function PlannedProductionTab() {
                                 <Printer className="w-4 h-4" />
                                 Imprimir
                               </Button>
-                              <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
+                              <div className="w-6 h-6 flex items-center justify-center">
                                 {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                               </div>
                             </div>
                           </div>
                           
-                          {/* Services summary - always visible */}
+                          {/* Services grouped by macro */}
                           <div className="mt-3 space-y-2">
-                            <p className="text-xs font-medium text-muted-foreground">Serviços planejados:</p>
+                            <p className="text-xs text-muted-foreground">Serviços planejados:</p>
                             <div className="flex flex-wrap gap-2">
-                              {group.plans.map(p => (
+                              {Object.entries(servicesByMacro).map(([macroId, data]) => (
                                 <Badge 
-                                  key={p.id}
-                                  variant="secondary"
-                                  className="gap-1.5 py-1"
-                                  style={{ 
-                                    backgroundColor: `${p.macro_color}20`,
-                                    borderColor: p.macro_color,
-                                    border: '1px solid'
-                                  }}
+                                  key={macroId}
+                                  variant="outline"
+                                  className="gap-1.5 py-1.5 px-3 bg-background"
                                 >
                                   <div 
-                                    className="w-2 h-2 rounded-full" 
-                                    style={{ backgroundColor: p.macro_color }}
+                                    className="w-2.5 h-2.5 rounded-full" 
+                                    style={{ backgroundColor: data.macroColor }}
                                   />
-                                  <span className="text-xs">{p.scope_name}</span>
-                                  <span className="text-xs text-muted-foreground">({p.planned_houses})</span>
+                                  <span className="text-sm font-medium">
+                                    {data.scopeNames.join(' + ')}
+                                  </span>
+                                  <span className="text-sm text-muted-foreground">({data.totalHouses})</span>
                                 </Badge>
                               ))}
                             </div>
                             
-                            {/* Compact house numbers preview when collapsed */}
-                            {!isExpanded && allHouseIds.length > 0 && (
-                              <div className="pt-2 flex items-center gap-2 flex-wrap border-t border-border/50 mt-2">
-                                <span className="text-xs text-muted-foreground">Casas:</span>
-                                {allHouseIds.slice(0, 20).sort((a, b) => a - b).map(id => (
-                                  <span key={id} className="text-xs font-medium text-muted-foreground">
-                                    {id}
-                                  </span>
-                                ))}
-                                {allHouseIds.length > 20 && (
-                                  <span className="text-xs text-muted-foreground">
-                                    ... +{allHouseIds.length - 20} mais
-                                  </span>
-                                )}
-                              </div>
-                            )}
+                            {/* House numbers */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs text-muted-foreground">Casas:</span>
+                              {allHouseIds.map((id, idx) => (
+                                <span key={id} className="text-xs text-primary font-medium">
+                                  {id}{idx < allHouseIds.length - 1 ? '' : ''}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         </div>
                         
