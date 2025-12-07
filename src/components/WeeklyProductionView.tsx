@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -98,6 +98,11 @@ export function WeeklyProductionView() {
   const [isSaving, setIsSaving] = useState(false);
   const [editingProduction, setEditingProduction] = useState<WeeklyProduction | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  
+  // Drag selection state
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragMode, setDragMode] = useState<'select' | 'deselect'>('select');
+  const dragStartRef = useRef<number | null>(null);
 
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
@@ -301,6 +306,62 @@ export function WeeklyProductionView() {
   const handleEditSave = async () => {
     await reloadProductions();
   };
+
+  // Drag selection handlers
+  const handleMouseDown = useCallback((houseId: number, isCompleted: boolean, event: React.MouseEvent) => {
+    if (isCompleted) return;
+    
+    // Prevent context menu on right click
+    if (event.button === 2) {
+      event.preventDefault();
+    }
+    
+    // Start drag on left or right mouse button
+    if (event.button === 0 || event.button === 2) {
+      setIsDragging(true);
+      dragStartRef.current = houseId;
+      
+      // Determine drag mode based on current selection state
+      const isCurrentlySelected = selectedHouses.includes(houseId);
+      setDragMode(isCurrentlySelected ? 'deselect' : 'select');
+      
+      // Toggle the initial house
+      if (isCurrentlySelected) {
+        setSelectedHouses(prev => prev.filter(id => id !== houseId));
+      } else {
+        setSelectedHouses(prev => [...prev, houseId].sort((a, b) => a - b));
+      }
+    }
+  }, [selectedHouses]);
+
+  const handleMouseEnter = useCallback((houseId: number, isCompleted: boolean) => {
+    if (!isDragging || isCompleted) return;
+    
+    if (dragMode === 'select') {
+      setSelectedHouses(prev => {
+        if (prev.includes(houseId)) return prev;
+        return [...prev, houseId].sort((a, b) => a - b);
+      });
+    } else {
+      setSelectedHouses(prev => prev.filter(id => id !== houseId));
+    }
+  }, [isDragging, dragMode]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+    dragStartRef.current = null;
+  }, []);
+
+  // Add global mouse up listener to handle mouse up outside grid
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      setIsDragging(false);
+      dragStartRef.current = null;
+    };
+    
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+  }, []);
 
   // Filter productions by analysis period and other filters
   const filteredProductions = useMemo(() => {
@@ -624,38 +685,50 @@ export function WeeklyProductionView() {
                     Selecione uma etapa e um serviço para ver as casas
                   </div>
                 ) : (
-                  <ScrollArea className="h-[calc(100vh-400px)] min-h-[300px]">
-                    <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2">
-                      {houses.map(house => {
-                        const isCompleted = completedHouses.includes(house.id);
-                        const isSelected = selectedHouses.includes(house.id);
-                        const macro = macros.find(m => m.id === selectedMacro);
-                        
-                        return (
-                          <button
-                            key={house.id}
-                            onClick={() => !isCompleted && toggleHouse(house.id)}
-                            disabled={isCompleted}
-                            className={`
-                              relative w-10 h-10 rounded-lg border-2 flex items-center justify-center text-xs font-medium transition-all
-                              ${isCompleted 
-                                ? 'bg-green-100 border-green-500 text-green-700 cursor-not-allowed opacity-60' 
-                                : isSelected 
-                                  ? 'border-primary bg-primary/20 text-primary' 
-                                  : 'border-border bg-card hover:border-primary/50'
-                              }
-                            `}
-                            style={isSelected && macro ? { borderColor: macro.color, backgroundColor: macro.color + '20' } : undefined}
-                          >
-                            {house.id}
-                            {isCompleted && (
-                              <CheckCircle2 className="absolute -top-1 -right-1 w-3 h-3 text-green-600" />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </ScrollArea>
+                  <>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      💡 Dica: Clique e arraste para selecionar múltiplas casas rapidamente
+                    </p>
+                    <ScrollArea className="h-[calc(100vh-420px)] min-h-[300px]">
+                      <div 
+                        className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2 select-none"
+                        onContextMenu={(e) => e.preventDefault()}
+                      >
+                        {houses.map(house => {
+                          const isCompleted = completedHouses.includes(house.id);
+                          const isSelected = selectedHouses.includes(house.id);
+                          const macro = macros.find(m => m.id === selectedMacro);
+                          
+                          return (
+                            <button
+                              key={house.id}
+                              onMouseDown={(e) => handleMouseDown(house.id, isCompleted, e)}
+                              onMouseEnter={() => handleMouseEnter(house.id, isCompleted)}
+                              onMouseUp={handleMouseUp}
+                              onContextMenu={(e) => e.preventDefault()}
+                              disabled={isCompleted}
+                              className={`
+                                relative w-10 h-10 rounded-lg border-2 flex items-center justify-center text-xs font-medium transition-all
+                                ${isCompleted 
+                                  ? 'bg-green-100 border-green-500 text-green-700 cursor-not-allowed opacity-60' 
+                                  : isSelected 
+                                    ? 'border-primary bg-primary/20 text-primary cursor-pointer' 
+                                    : 'border-border bg-card hover:border-primary/50 cursor-pointer'
+                                }
+                                ${isDragging && !isCompleted ? 'cursor-crosshair' : ''}
+                              `}
+                              style={isSelected && macro ? { borderColor: macro.color, backgroundColor: macro.color + '20' } : undefined}
+                            >
+                              {house.id}
+                              {isCompleted && (
+                                <CheckCircle2 className="absolute -top-1 -right-1 w-3 h-3 text-green-600" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </ScrollArea>
+                  </>
                 )}
               </CardContent>
             </Card>
