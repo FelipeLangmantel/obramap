@@ -35,7 +35,9 @@ import {
   XCircle,
   Grid3X3,
   Eye,
-  EyeOff
+  EyeOff,
+  Undo2,
+  AlignCenter
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
@@ -97,6 +99,10 @@ export function InteractiveMapView() {
   const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
   const [selectionEnd, setSelectionEnd] = useState({ x: 0, y: 0 });
   const [multiDragOffset, setMultiDragOffset] = useState<Map<number, { x: number; y: number }>>(new Map());
+  
+  // Undo history states
+  const [editHistory, setEditHistory] = useState<{ quadras: QuadraLayout[]; houses: HousePosition[] }[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
   
   // Filters
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -266,18 +272,31 @@ export function InteractiveMapView() {
     if (isEditMode && currentProject) {
       const projectQuadras = currentProject.quadras || [];
       
+      let initialQuadras: QuadraLayout[];
+      let initialHouses: HousePosition[];
+      
       if (customLayout?.quadras && customLayout.houses) {
-        setEditingQuadras(customLayout.quadras.map(q => ({
+        initialQuadras = customLayout.quadras.map(q => ({
           ...q,
           id: projectQuadras.find(pq => pq.name === q.name)?.id || q.id,
           visible: q.visible !== false,
-        })));
-        setEditingHouses(customLayout.houses);
+        }));
+        initialHouses = customLayout.houses;
       } else {
         const { quadras, houses: defaultHouses } = generateDefaultLayout(projectQuadras, houses);
-        setEditingQuadras(quadras);
-        setEditingHouses(defaultHouses);
+        initialQuadras = quadras;
+        initialHouses = defaultHouses;
       }
+      
+      setEditingQuadras(initialQuadras);
+      setEditingHouses(initialHouses);
+      // Initialize history with initial state
+      setEditHistory([{ quadras: initialQuadras, houses: initialHouses }]);
+      setHistoryIndex(0);
+    } else {
+      // Reset history when exiting edit mode
+      setEditHistory([]);
+      setHistoryIndex(-1);
     }
   }, [isEditMode, currentProject, customLayout, generateDefaultLayout, houses]);
 
@@ -485,6 +504,9 @@ export function InteractiveMapView() {
 
   // Handle mouse up for editing
   const handleEditMouseUp = useCallback(() => {
+    // Save to history if we were dragging something (not just selecting)
+    const wasDragging = draggingItem && (draggingItem.type === 'house' || draggingItem.type === 'quadra' || draggingItem.type === 'resize');
+    
     // Finalize selection box
     if (isSelecting) {
       const minX = Math.min(selectionStart.x, selectionEnd.x);
@@ -529,9 +551,23 @@ export function InteractiveMapView() {
       }
     }
     
+    // Save to history after any drag operation
+    if (wasDragging) {
+      // Use setTimeout to ensure state is updated before saving
+      setTimeout(() => {
+        setEditHistory(prev => {
+          const newHistory = prev.slice(0, historyIndex + 1);
+          newHistory.push({ quadras: [...editingQuadras], houses: [...editingHouses] });
+          if (newHistory.length > 50) newHistory.shift();
+          return newHistory;
+        });
+        setHistoryIndex(prev => Math.min(prev + 1, 49));
+      }, 0);
+    }
+    
     setDraggingItem(null);
     setMultiDragOffset(new Map());
-  }, [isSelecting, selectionStart, selectionEnd, editingHouses, draggingItem, editingQuadras, currentProject]);
+  }, [isSelecting, selectionStart, selectionEnd, editingHouses, draggingItem, editingQuadras, currentProject, historyIndex]);
 
   // Toggle quadra visibility
   const toggleQuadraVisibility = (quadraId: string) => {
@@ -619,8 +655,138 @@ export function InteractiveMapView() {
     setSelectedHouseIds(new Set());
   };
 
+  // Save current state to history
+  const saveToHistory = useCallback(() => {
+    const currentState = { quadras: [...editingQuadras], houses: [...editingHouses] };
+    setEditHistory(prev => {
+      // Remove any future states if we're not at the end
+      const newHistory = prev.slice(0, historyIndex + 1);
+      newHistory.push(currentState);
+      // Keep only last 50 states
+      if (newHistory.length > 50) newHistory.shift();
+      return newHistory;
+    });
+    setHistoryIndex(prev => Math.min(prev + 1, 49));
+  }, [editingQuadras, editingHouses, historyIndex]);
+
+  // Undo last change
+  const undoLastChange = useCallback(() => {
+    if (historyIndex <= 0) {
+      toast.info("Nenhuma alteração para desfazer");
+      return;
+    }
+    const prevState = editHistory[historyIndex - 1];
+    if (prevState) {
+      setEditingQuadras(prevState.quadras);
+      setEditingHouses(prevState.houses);
+      setHistoryIndex(prev => prev - 1);
+      toast.success("Alteração desfeita!");
+    }
+  }, [historyIndex, editHistory]);
+
+  // Keyboard shortcuts for edit mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isEditMode) return;
+      
+      // Ctrl+Z for undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        undoLastChange();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditMode, undoLastChange]);
+
+  // Auto-align all quadras and houses in a grid
+  const autoAlignLayout = useCallback(() => {
+    saveToHistory();
+    
+    const GRID_SIZE = 20; // Align to 20px grid
+    const QUADRA_PADDING = 30;
+    
+    // Align quadras to grid and distribute evenly
+    const sortedQuadras = [...editingQuadras].sort((a, b) => {
+      const rowA = Math.floor(a.y / 200);
+      const rowB = Math.floor(b.y / 200);
+      if (rowA !== rowB) return rowA - rowB;
+      return a.x - b.x;
+    });
+    
+    let currentX = QUADRA_PADDING;
+    let currentY = QUADRA_PADDING;
+    let rowMaxHeight = 0;
+    const maxWidth = MAP_WIDTH - QUADRA_PADDING * 2;
+    
+    const alignedQuadras: QuadraLayout[] = [];
+    const alignedHouses: HousePosition[] = [];
+    
+    sortedQuadras.forEach((quadra) => {
+      // Snap dimensions to grid
+      const snappedWidth = Math.round(quadra.width / GRID_SIZE) * GRID_SIZE;
+      const snappedHeight = Math.round(quadra.height / GRID_SIZE) * GRID_SIZE;
+      
+      // Check if we need a new row
+      if (currentX + snappedWidth > maxWidth) {
+        currentX = QUADRA_PADDING;
+        currentY += rowMaxHeight + QUADRA_PADDING;
+        rowMaxHeight = 0;
+      }
+      
+      rowMaxHeight = Math.max(rowMaxHeight, snappedHeight);
+      
+      // Calculate delta for this quadra
+      const deltaX = currentX - quadra.x;
+      const deltaY = currentY - quadra.y;
+      
+      alignedQuadras.push({
+        ...quadra,
+        x: currentX,
+        y: currentY,
+        width: snappedWidth,
+        height: snappedHeight,
+      });
+      
+      // Move houses that belong to this quadra
+      const projectQuadra = currentProject?.quadras.find(q => q.id === quadra.id);
+      const houseIdsInQuadra = projectQuadra?.houses || [];
+      
+      editingHouses.forEach(house => {
+        if (houseIdsInQuadra.includes(house.id)) {
+          alignedHouses.push({
+            id: house.id,
+            x: Math.round((house.x + deltaX) / GRID_SIZE) * GRID_SIZE,
+            y: Math.round((house.y + deltaY) / GRID_SIZE) * GRID_SIZE,
+          });
+        }
+      });
+      
+      currentX += snappedWidth + QUADRA_PADDING;
+    });
+    
+    // Add houses that don't belong to any quadra (orphans)
+    const allQuadraHouseIds = currentProject?.quadras.flatMap(q => q.houses) || [];
+    editingHouses.forEach(house => {
+      if (!allQuadraHouseIds.includes(house.id)) {
+        alignedHouses.push({
+          id: house.id,
+          x: Math.round(house.x / GRID_SIZE) * GRID_SIZE,
+          y: Math.round(house.y / GRID_SIZE) * GRID_SIZE,
+        });
+      }
+    });
+    
+    setEditingQuadras(alignedQuadras);
+    setEditingHouses(alignedHouses);
+    setSelectedHouseIds(new Set());
+    toast.success("Layout alinhado automaticamente!");
+  }, [editingQuadras, editingHouses, currentProject, saveToHistory]);
+
   // Reorganizar casas para layout inicial
   const reorganizeHouses = () => {
+    saveToHistory();
     if (!currentProject) return;
     const projectQuadras = currentProject.quadras || [];
     const { quadras, houses: defaultHouses } = generateDefaultLayout(projectQuadras, houses);
@@ -960,6 +1126,19 @@ export function InteractiveMapView() {
             </>
           ) : (
             <>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={undoLastChange} 
+                className="gap-1.5 h-8 text-xs"
+                disabled={historyIndex <= 0}
+                title="Desfazer última alteração (Ctrl+Z)"
+              >
+                <Undo2 className="h-3 w-3" />Desfazer
+              </Button>
+              <Button variant="outline" size="sm" onClick={autoAlignLayout} className="gap-1.5 h-8 text-xs" title="Alinhar quadras e casas em grade">
+                <AlignCenter className="h-3 w-3" />Autoajuste
+              </Button>
               {selectedHouseIds.size > 0 && (
                 <Button variant="ghost" size="sm" onClick={clearSelection} className="gap-1.5 h-8 text-xs">
                   Limpar seleção ({selectedHouseIds.size})
