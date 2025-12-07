@@ -6,33 +6,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, Building2, Eye, EyeOff } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
+import obraMapLogo from "@/assets/obramap-logo.png";
 
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
   password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
 });
 
-const signupSchema = loginSchema.extend({
-  displayName: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Senhas não conferem",
-  path: ["confirmPassword"],
-});
-
 export default function Auth() {
   const navigate = useNavigate();
-  const { user, signIn, signUp, isLoading: authLoading } = useAuth();
-  const [isLogin, setIsLogin] = useState(true);
+  const { user, signIn, isLoading: authLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -47,56 +37,29 @@ export default function Auth() {
     setIsLoading(true);
 
     try {
-      if (isLogin) {
-        const result = loginSchema.safeParse({ email, password });
-        if (!result.success) {
-          const fieldErrors: Record<string, string> = {};
-          result.error.errors.forEach((err) => {
-            if (err.path[0]) {
-              fieldErrors[err.path[0] as string] = err.message;
-            }
-          });
-          setErrors(fieldErrors);
-          setIsLoading(false);
-          return;
-        }
-
-        const { error } = await signIn(email, password);
-        if (error) {
-          if (error.message.includes("Invalid login credentials")) {
-            toast.error("Email ou senha incorretos");
-          } else {
-            toast.error(error.message);
+      const result = loginSchema.safeParse({ email, password });
+      if (!result.success) {
+        const fieldErrors: Record<string, string> = {};
+        result.error.errors.forEach((err) => {
+          if (err.path[0]) {
+            fieldErrors[err.path[0] as string] = err.message;
           }
+        });
+        setErrors(fieldErrors);
+        setIsLoading(false);
+        return;
+      }
+
+      const { error } = await signIn(email, password);
+      if (error) {
+        if (error.message.includes("Invalid login credentials")) {
+          toast.error("Email ou senha incorretos");
         } else {
-          toast.success("Login realizado com sucesso!");
-          navigate("/");
+          toast.error(error.message);
         }
       } else {
-        const result = signupSchema.safeParse({ email, password, confirmPassword, displayName });
-        if (!result.success) {
-          const fieldErrors: Record<string, string> = {};
-          result.error.errors.forEach((err) => {
-            if (err.path[0]) {
-              fieldErrors[err.path[0] as string] = err.message;
-            }
-          });
-          setErrors(fieldErrors);
-          setIsLoading(false);
-          return;
-        }
-
-        const { error } = await signUp(email, password, displayName);
-        if (error) {
-          if (error.message.includes("already registered")) {
-            toast.error("Este email já está cadastrado");
-          } else {
-            toast.error(error.message);
-          }
-        } else {
-          toast.success("Conta criada com sucesso! Você já pode fazer login.");
-          navigate("/");
-        }
+        toast.success("Login realizado com sucesso!");
+        navigate("/");
       }
     } catch (error) {
       toast.error("Erro inesperado. Tente novamente.");
@@ -118,12 +81,16 @@ export default function Auth() {
       <div className="flex-1 flex items-center justify-center p-4">
         <Card className="w-full max-w-md shadow-xl border-border/50">
           <CardHeader className="text-center space-y-4">
-            <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-              <Building2 className="h-8 w-8 text-primary" />
+            <div className="mx-auto w-20 h-20 rounded-full flex items-center justify-center overflow-hidden">
+              <img 
+                src={obraMapLogo} 
+                alt="ObraMap Logo" 
+                className="w-full h-full object-contain"
+              />
             </div>
             <div>
               <CardTitle className="text-2xl font-bold">
-                {isLogin ? "Entrar" : "Criar Conta"}
+                ObraMap
               </CardTitle>
               <CardDescription className="mt-2">
                 Sistema de Gestão de Obras
@@ -132,24 +99,6 @@ export default function Auth() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {!isLogin && (
-                <div className="space-y-2">
-                  <Label htmlFor="displayName">Nome Completo</Label>
-                  <Input
-                    id="displayName"
-                    type="text"
-                    placeholder="Seu nome"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    disabled={isLoading}
-                    className={errors.displayName ? "border-destructive" : ""}
-                  />
-                  {errors.displayName && (
-                    <p className="text-sm text-destructive">{errors.displayName}</p>
-                  )}
-                </div>
-              )}
-
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -191,50 +140,15 @@ export default function Auth() {
                 )}
               </div>
 
-              {!isLogin && (
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirmar Senha</Label>
-                  <Input
-                    id="confirmPassword"
-                    type="password"
-                    placeholder="••••••••"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    disabled={isLoading}
-                    className={errors.confirmPassword ? "border-destructive" : ""}
-                  />
-                  {errors.confirmPassword && (
-                    <p className="text-sm text-destructive">{errors.confirmPassword}</p>
-                  )}
-                </div>
-              )}
-
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {isLogin ? "Entrar" : "Criar Conta"}
+                Entrar
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsLogin(!isLogin);
-                  setErrors({});
-                }}
-                className="text-sm text-muted-foreground hover:text-primary transition-colors"
-              >
-                {isLogin
-                  ? "Não tem conta? Cadastre-se"
-                  : "Já tem conta? Faça login"}
-              </button>
-            </div>
-
-            {!isLogin && (
-              <p className="mt-4 text-xs text-muted-foreground text-center">
-                O primeiro usuário cadastrado será automaticamente o administrador do sistema.
-              </p>
-            )}
+            <p className="mt-6 text-xs text-muted-foreground text-center">
+              Para obter acesso, entre em contato com o administrador do sistema.
+            </p>
           </CardContent>
         </Card>
       </div>
