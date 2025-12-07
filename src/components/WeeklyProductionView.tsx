@@ -471,7 +471,7 @@ export function WeeklyProductionView() {
         <TabsContent value="register" className="flex-1 overflow-auto mt-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
             {/* Selection Panel */}
-            <Card className="lg:col-span-1">
+            <Card className="lg:col-span-1 overflow-visible">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Calendar className="w-5 h-5" />
@@ -544,7 +544,7 @@ export function WeeklyProductionView() {
                     <SelectTrigger className="h-9">
                       <SelectValue placeholder="Selecione a etapa" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" sideOffset={4} className="max-h-[300px] overflow-y-auto z-50">
                       {macros.map(macro => (
                         <SelectItem key={macro.id} value={macro.id}>
                           <div className="flex items-center gap-2">
@@ -567,7 +567,7 @@ export function WeeklyProductionView() {
                     <SelectTrigger className="h-9">
                       <SelectValue placeholder="Selecione o serviço" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent position="popper" sideOffset={4} className="max-h-[300px] overflow-y-auto z-50">
                       {scopes.map(scope => (
                         <SelectItem key={scope.id} value={scope.id}>
                           {scope.name}
