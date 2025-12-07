@@ -1159,15 +1159,23 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   const updateScopeProgress = useCallback(async (houseId: number, macroId: string, scopeId: string, progress: number, startDate?: string | null, endDate?: string | null) => {
     if (!currentProjectId) return;
 
-    // Get the current project to build updated macros
-    const project = projects.find(p => p.id === currentProjectId);
-    if (!project) return;
+    // Fetch current house data from database to avoid stale state issues
+    const { data: houseData, error: fetchError } = await supabase
+      .from('houses')
+      .select('macros')
+      .eq('project_id', currentProjectId)
+      .eq('house_number', houseId)
+      .single();
 
-    const house = project.houses.find(h => h.id === houseId);
-    if (!house) return;
+    if (fetchError || !houseData) {
+      console.error('Error fetching house data:', fetchError);
+      return;
+    }
+
+    const currentMacros = jsonToMacros(houseData.macros);
 
     // Build updated macros for this house
-    const updatedMacros = house.macros.map(macro => {
+    const updatedMacros = currentMacros.map(macro => {
       if (macro.id !== macroId) return macro;
       
       const updatedScopes = macro.scopes.map(scope => {
@@ -1183,7 +1191,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       return { ...macro, scopes: updatedScopes };
     });
 
-    // Update database first to ensure persistence
+    // Update database
     const { error } = await supabase
       .from('houses')
       .update({ 
@@ -1217,7 +1225,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         return { ...prev, macros: updatedMacros, lastUpdate: new Date().toLocaleDateString("pt-BR") };
       });
     }
-  }, [currentProjectId, selectedHouse, projects]);
+  }, [currentProjectId, selectedHouse]);
 
   const updateHouseInfo = useCallback(async (houseId: number, updates: Partial<Pick<House, "area" | "constructorName" | "type" | "expectedDate">>) => {
     if (!currentProjectId) return;
