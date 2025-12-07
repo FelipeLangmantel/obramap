@@ -651,9 +651,31 @@ export function PlannedProductionTab() {
     setPrintDialogOpen(false);
   };
 
-  // Calculate comparisons for all planned productions (allows simulations)
+  // Calculate comparisons: only show when there are actual productions registered
+  // Also includes unplanned activities that were registered
   const comparisons = useMemo(() => {
-    return plannedProductions.map(planned => {
+    const results: {
+      planned: PlannedProduction | null;
+      actualCount: number;
+      actualHouseIds: number[];
+      deviation: number;
+      percentDeviation: string;
+      hasDeviation: boolean;
+      isNegative: boolean;
+      isUnplanned: boolean;
+      scopeId: string;
+      scopeName: string;
+      macroName: string;
+      macroColor: string;
+      weekStart: string;
+      weekEnd: string;
+    }[] = [];
+
+    // Track which actual productions have been matched to planned ones
+    const matchedActualIds = new Set<string>();
+
+    // First, match planned productions with actual ones
+    plannedProductions.forEach(planned => {
       const plannedStart = parseISO(planned.week_start);
       const plannedEnd = parseISO(planned.week_end);
       
@@ -661,11 +683,9 @@ export function PlannedProductionTab() {
       const actual = actualProductions.filter(a => {
         if (a.scope_id !== planned.scope_id) return false;
         
-        // Check for period overlap or exact match
         const actualStart = parseISO(a.week_start);
         const actualEnd = parseISO(a.week_end);
         
-        // Match if periods overlap or are the same
         return (
           (a.week_start === planned.week_start && a.week_end === planned.week_end) ||
           (actualStart >= plannedStart && actualStart <= plannedEnd) ||
@@ -673,38 +693,74 @@ export function PlannedProductionTab() {
           (actualStart <= plannedStart && actualEnd >= plannedEnd)
         );
       });
-      
-      // Count unique houses executed
-      const executedHouseIds = new Set<number>();
-      actual.forEach(a => {
-        (a.house_ids || []).forEach(id => executedHouseIds.add(id));
-      });
-      
-      // If we have planned_house_ids, count how many were actually executed
-      const plannedHouseIdsSet = new Set(planned.planned_house_ids || []);
-      const matchingExecuted = planned.planned_house_ids && planned.planned_house_ids.length > 0
-        ? [...executedHouseIds].filter(id => plannedHouseIdsSet.has(id)).length
-        : actual.reduce((sum, a) => sum + a.houses_count, 0);
-      
-      const actualCount = matchingExecuted;
-      const deviation = actualCount - planned.planned_houses;
-      const percentDeviation = planned.planned_houses > 0 
-        ? ((deviation / planned.planned_houses) * 100).toFixed(1)
-        : "0";
-      
-      // Check if deviation already registered
-      const hasDeviation = deviations.some(d => d.planned_production_id === planned.id);
-      
-      return {
-        planned,
-        actualCount,
-        actualHouseIds: [...executedHouseIds],
-        deviation,
-        percentDeviation,
-        hasDeviation,
-        isNegative: deviation < 0
-      };
+
+      // Only create comparison if there's actual production registered
+      if (actual.length > 0) {
+        actual.forEach(a => matchedActualIds.add(a.id));
+        
+        const executedHouseIds = new Set<number>();
+        actual.forEach(a => {
+          (a.house_ids || []).forEach(id => executedHouseIds.add(id));
+        });
+        
+        const plannedHouseIdsSet = new Set(planned.planned_house_ids || []);
+        const matchingExecuted = planned.planned_house_ids && planned.planned_house_ids.length > 0
+          ? [...executedHouseIds].filter(id => plannedHouseIdsSet.has(id)).length
+          : actual.reduce((sum, a) => sum + a.houses_count, 0);
+        
+        const actualCount = matchingExecuted;
+        const deviation = actualCount - planned.planned_houses;
+        const percentDeviation = planned.planned_houses > 0 
+          ? ((deviation / planned.planned_houses) * 100).toFixed(1)
+          : "0";
+        
+        const hasDeviation = deviations.some(d => d.planned_production_id === planned.id);
+        
+        results.push({
+          planned,
+          actualCount,
+          actualHouseIds: [...executedHouseIds],
+          deviation,
+          percentDeviation,
+          hasDeviation,
+          isNegative: deviation < 0,
+          isUnplanned: false,
+          scopeId: planned.scope_id,
+          scopeName: planned.scope_name,
+          macroName: planned.macro_name,
+          macroColor: planned.macro_color,
+          weekStart: planned.week_start,
+          weekEnd: planned.week_end
+        });
+      }
     });
+
+    // Now add unplanned productions (actual that weren't matched to any planned)
+    actualProductions.forEach(actual => {
+      if (!matchedActualIds.has(actual.id)) {
+        const executedHouseIds = (actual.house_ids || []);
+        
+        results.push({
+          planned: null,
+          actualCount: actual.houses_count,
+          actualHouseIds: executedHouseIds,
+          deviation: actual.houses_count, // All production is "extra" since nothing was planned
+          percentDeviation: "100",
+          hasDeviation: false,
+          isNegative: false,
+          isUnplanned: true,
+          scopeId: actual.scope_id,
+          scopeName: actual.scope_name,
+          macroName: actual.macro_name,
+          macroColor: '#9ca3af',
+          weekStart: actual.week_start,
+          weekEnd: actual.week_end
+        });
+      }
+    });
+
+    // Sort by week start date
+    return results.sort((a, b) => b.weekStart.localeCompare(a.weekStart));
   }, [plannedProductions, actualProductions, deviations]);
 
   // Deviation analysis by reason
@@ -726,11 +782,13 @@ export function PlannedProductionTab() {
 
   // Stats
   const stats = useMemo(() => {
-    const totalPlanned = comparisons.reduce((sum, c) => sum + c.planned.planned_houses, 0);
+    const totalPlanned = comparisons.reduce((sum, c) => sum + (c.planned?.planned_houses || 0), 0);
     const totalActual = comparisons.reduce((sum, c) => sum + c.actualCount, 0);
-    const negativeDeviations = comparisons.filter(c => c.deviation < 0).length;
-    const positiveDeviations = comparisons.filter(c => c.deviation > 0).length;
-    const onTarget = comparisons.filter(c => c.deviation === 0).length;
+    const plannedComparisons = comparisons.filter(c => c.planned !== null);
+    const negativeDeviations = plannedComparisons.filter(c => c.deviation < 0).length;
+    const positiveDeviations = plannedComparisons.filter(c => c.deviation > 0).length;
+    const onTarget = plannedComparisons.filter(c => c.deviation === 0).length;
+    const unplannedCount = comparisons.filter(c => c.isUnplanned).length;
     
     return {
       totalPlanned,
@@ -739,7 +797,8 @@ export function PlannedProductionTab() {
       negativeDeviations,
       positiveDeviations,
       onTarget,
-      accuracy: comparisons.length > 0 ? ((onTarget / comparisons.length) * 100).toFixed(0) : "0"
+      unplannedCount,
+      accuracy: plannedComparisons.length > 0 ? ((onTarget / plannedComparisons.length) * 100).toFixed(0) : "0"
     };
   }, [comparisons]);
 
@@ -749,10 +808,10 @@ export function PlannedProductionTab() {
     let realizedCost = 0;
     
     comparisons.forEach(comp => {
-      const cost = scopeCosts.find(c => c.scopeId === comp.planned.scope_id);
+      const cost = scopeCosts.find(c => c.scopeId === comp.scopeId);
       if (cost) {
         const unitCost = cost.materialCost + cost.laborCost + cost.equipmentCost;
-        plannedCost += unitCost * comp.planned.planned_houses;
+        plannedCost += unitCost * (comp.planned?.planned_houses || 0);
         realizedCost += unitCost * comp.actualCount;
       }
     });
@@ -778,13 +837,13 @@ export function PlannedProductionTab() {
   // Generate complete report PDF
   const generateReportPDF = () => {
     const reportData = comparisons.map(comp => {
-      const cost = scopeCosts.find(c => c.scopeId === comp.planned.scope_id);
+      const cost = scopeCosts.find(c => c.scopeId === comp.scopeId);
       const unitCost = cost ? (cost.materialCost + cost.laborCost + cost.equipmentCost) : 0;
-      const deviationInfo = deviations.find(d => d.planned_production_id === comp.planned.id);
+      const deviationInfo = comp.planned ? deviations.find(d => d.planned_production_id === comp.planned!.id) : null;
       
       return {
         ...comp,
-        plannedCost: unitCost * comp.planned.planned_houses,
+        plannedCost: unitCost * (comp.planned?.planned_houses || 0),
         realizedCost: unitCost * comp.actualCount,
         costDeviation: unitCost * comp.deviation,
         deviationReason: deviationInfo?.deviation_reason || null,
@@ -795,7 +854,7 @@ export function PlannedProductionTab() {
     // Group by week for the report
     const byWeek: Record<string, typeof reportData> = {};
     reportData.forEach(item => {
-      const weekKey = `${item.planned.week_start}_${item.planned.week_end}`;
+      const weekKey = `${item.weekStart}_${item.weekEnd}`;
       if (!byWeek[weekKey]) byWeek[weekKey] = [];
       byWeek[weekKey].push(item);
     });
@@ -806,7 +865,7 @@ export function PlannedProductionTab() {
         weekStart,
         weekEnd,
         items,
-        totalPlanned: items.reduce((sum, i) => sum + i.planned.planned_houses, 0),
+        totalPlanned: items.reduce((sum, i) => sum + (i.planned?.planned_houses || 0), 0),
         totalActual: items.reduce((sum, i) => sum + i.actualCount, 0),
         plannedCost: items.reduce((sum, i) => sum + i.plannedCost, 0),
         realizedCost: items.reduce((sum, i) => sum + i.realizedCost, 0)
@@ -1023,19 +1082,20 @@ export function PlannedProductionTab() {
                 ${week.items.map(item => `
                   <tr>
                     <td>
-                      <strong>${item.planned.scope_name}</strong>
-                      <br><span style="color: #6b7280; font-size: 9px;">${item.planned.macro_name}</span>
+                      <strong>${item.scopeName}</strong>
+                      ${item.isUnplanned ? '<span style="color: #2563eb; font-size: 9px;"> (Não Planejado)</span>' : ''}
+                      <br><span style="color: #6b7280; font-size: 9px;">${item.macroName}</span>
                     </td>
-                    <td class="text-center">${item.planned.planned_houses}</td>
+                    <td class="text-center">${item.planned?.planned_houses || 0}</td>
                     <td class="text-center">${item.actualCount}</td>
                     <td class="text-center">
-                      <span class="badge ${item.deviation >= 0 ? 'badge-success' : 'badge-danger'}">
-                        ${item.deviation > 0 ? '+' : ''}${item.deviation}
+                      <span class="badge ${item.isUnplanned ? 'badge-neutral' : item.deviation >= 0 ? 'badge-success' : 'badge-danger'}">
+                        ${item.isUnplanned ? '+' + item.actualCount : (item.deviation > 0 ? '+' : '') + item.deviation}
                       </span>
                     </td>
                     <td class="text-right">${formatCurrency(item.plannedCost)}</td>
                     <td class="text-right">${formatCurrency(item.realizedCost)}</td>
-                    <td style="font-size: 9px;">${item.deviationReason || '-'}</td>
+                    <td style="font-size: 9px;">${item.isUnplanned ? 'Atividade Extra' : (item.deviationReason || '-')}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -1323,7 +1383,7 @@ export function PlannedProductionTab() {
             )}
 
             {/* Production Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
               <div className="p-3 bg-secondary/30 rounded-lg">
                 <p className="text-xs text-muted-foreground">Total Planejado</p>
                 <p className="text-xl font-bold">{stats.totalPlanned}</p>
@@ -1342,6 +1402,12 @@ export function PlannedProductionTab() {
                 <p className="text-xs text-muted-foreground">Acurácia</p>
                 <p className="text-xl font-bold">{stats.accuracy}%</p>
               </div>
+              {stats.unplannedCount > 0 && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <p className="text-xs text-blue-600 dark:text-blue-400">Não Planejados</p>
+                  <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{stats.unplannedCount}</p>
+                </div>
+              )}
             </div>
 
             {/* Cost Stats */}
@@ -1374,25 +1440,38 @@ export function PlannedProductionTab() {
             <ScrollArea className="h-[300px]">
               {comparisons.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground text-sm">
-                  Nenhum período passado para comparação ainda
+                  Nenhuma produção registrada ainda. Lance produções em "Registrar Produção" para ver o comparativo.
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {comparisons.map(comp => (
+                  {comparisons.map((comp, index) => (
                     <div 
-                      key={comp.planned.id} 
-                      className={`p-3 rounded-lg border ${comp.isNegative && !comp.hasDeviation ? 'border-red-300 bg-red-50 dark:bg-red-950/20' : 'bg-card'}`}
+                      key={comp.planned?.id || `unplanned-${index}`} 
+                      className={`p-3 rounded-lg border ${
+                        comp.isUnplanned 
+                          ? 'border-blue-300 bg-blue-50 dark:bg-blue-950/20' 
+                          : comp.isNegative && !comp.hasDeviation 
+                            ? 'border-red-300 bg-red-50 dark:bg-red-950/20' 
+                            : 'bg-card'
+                      }`}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div 
                             className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: comp.planned.macro_color }}
+                            style={{ backgroundColor: comp.macroColor }}
                           />
                           <div>
-                            <p className="text-sm font-medium">{comp.planned.scope_name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium">{comp.scopeName}</p>
+                              {comp.isUnplanned && (
+                                <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">
+                                  Não Planejado
+                                </Badge>
+                              )}
+                            </div>
                             <p className="text-xs text-muted-foreground">
-                              {format(parseISO(comp.planned.week_start), "dd/MM", { locale: ptBR })} - {format(parseISO(comp.planned.week_end), "dd/MM", { locale: ptBR })}
+                              {format(parseISO(comp.weekStart), "dd/MM", { locale: ptBR })} - {format(parseISO(comp.weekEnd), "dd/MM", { locale: ptBR })}
                             </p>
                           </div>
                         </div>
@@ -1400,34 +1479,36 @@ export function PlannedProductionTab() {
                           <div className="text-right">
                             <div className="flex items-center gap-2">
                               <Badge variant="outline" className="text-xs">
-                                Plan: {comp.planned.planned_houses}
+                                Plan: {comp.planned?.planned_houses || 0}
                               </Badge>
                               <ArrowRight className="w-3 h-3 text-muted-foreground" />
-                              <Badge variant={comp.deviation >= 0 ? "default" : "destructive"} className="text-xs">
+                              <Badge variant={comp.isUnplanned ? "secondary" : comp.deviation >= 0 ? "default" : "destructive"} className="text-xs">
                                 Real: {comp.actualCount}
                               </Badge>
                             </div>
-                            <div className="flex items-center gap-1 mt-1 justify-end">
-                              {comp.deviation > 0 ? (
-                                <TrendingUp className="w-3 h-3 text-green-500" />
-                              ) : comp.deviation < 0 ? (
-                                <TrendingDown className="w-3 h-3 text-red-500" />
-                              ) : (
-                                <CheckCircle2 className="w-3 h-3 text-green-500" />
-                              )}
-                              <span className={`text-xs ${comp.deviation < 0 ? 'text-red-500' : comp.deviation > 0 ? 'text-green-500' : ''}`}>
-                                {comp.deviation > 0 ? '+' : ''}{comp.deviation} ({comp.percentDeviation}%)
-                              </span>
-                            </div>
+                            {!comp.isUnplanned && (
+                              <div className="flex items-center gap-1 mt-1 justify-end">
+                                {comp.deviation > 0 ? (
+                                  <TrendingUp className="w-3 h-3 text-green-500" />
+                                ) : comp.deviation < 0 ? (
+                                  <TrendingDown className="w-3 h-3 text-red-500" />
+                                ) : (
+                                  <CheckCircle2 className="w-3 h-3 text-green-500" />
+                                )}
+                                <span className={`text-xs ${comp.deviation < 0 ? 'text-red-500' : comp.deviation > 0 ? 'text-green-500' : ''}`}>
+                                  {comp.deviation > 0 ? '+' : ''}{comp.deviation} ({comp.percentDeviation}%)
+                                </span>
+                              </div>
+                            )}
                           </div>
-                          {comp.isNegative && !comp.hasDeviation && (
+                          {comp.isNegative && !comp.hasDeviation && comp.planned && (
                             <Button
                               variant="outline"
                               size="sm"
                               className="gap-1 h-8 border-red-300 text-red-600 hover:bg-red-50"
                               onClick={() => {
                                 setSelectedDeviation({
-                                  planned: comp.planned,
+                                  planned: comp.planned!,
                                   actual: comp.actualCount,
                                   deviation: comp.deviation
                                 });
