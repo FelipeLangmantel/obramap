@@ -1266,61 +1266,21 @@ export function PlannedProductionTab() {
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Início</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full h-9 justify-start text-left font-normal",
-                          !planStartDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {planStartDate ? format(parseISO(planStartDate), "dd/MM/yyyy", { locale: ptBR }) : "Selecionar"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 z-[100]" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={planStartDate ? parseISO(planStartDate) : undefined}
-                        onSelect={(date) => {
-                          if (date) {
-                            setPlanStartDate(format(date, "yyyy-MM-dd"));
-                          }
-                        }}
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                        locale={ptBR}
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <Input
+                    type="date"
+                    value={planStartDate}
+                    onChange={(e) => setPlanStartDate(e.target.value)}
+                    className="h-9"
+                  />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Fim</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full h-9 justify-start text-left font-normal",
-                          !planEndDate && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {planEndDate ? format(parseISO(planEndDate), "dd/MM/yyyy", { locale: ptBR }) : "Selecionar"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 z-[100]" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={planEndDate ? parseISO(planEndDate) : undefined}
-                        onSelect={(date) => date && setPlanEndDate(format(date, "yyyy-MM-dd"))}
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                        locale={ptBR}
-                      />
-                    </PopoverContent>
-                  </Popover>
+                  <Input
+                    type="date"
+                    value={planEndDate}
+                    onChange={(e) => setPlanEndDate(e.target.value)}
+                    className="h-9"
+                  />
                 </div>
               </div>
             </div>
@@ -1507,7 +1467,7 @@ export function PlannedProductionTab() {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
-                                <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                <CalendarDays className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                               </div>
                               <div>
                                 <p className="font-bold text-lg text-foreground">
