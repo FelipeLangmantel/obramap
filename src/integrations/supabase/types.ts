@@ -318,6 +318,59 @@ export type Database = {
           },
         ]
       }
+      scope_costs: {
+        Row: {
+          created_at: string
+          equipment_cost: number
+          id: string
+          labor_cost: number
+          macro_color: string
+          macro_id: string
+          macro_name: string
+          material_cost: number
+          project_id: string
+          scope_id: string
+          scope_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          equipment_cost?: number
+          id?: string
+          labor_cost?: number
+          macro_color?: string
+          macro_id: string
+          macro_name: string
+          material_cost?: number
+          project_id: string
+          scope_id: string
+          scope_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          equipment_cost?: number
+          id?: string
+          labor_cost?: number
+          macro_color?: string
+          macro_id?: string
+          macro_name?: string
+          material_cost?: number
+          project_id?: string
+          scope_id?: string
+          scope_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scope_costs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string

@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from "react";
-import { Plus, Pencil, Trash2, DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Upload, FileText, Loader2, Target } from "lucide-react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { Plus, Pencil, Trash2, DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Upload, FileText, Loader2, Target, Cloud, CloudOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
@@ -26,6 +27,7 @@ import {
 } from "recharts";
 
 interface ScopeCost {
+  id?: string;
   scopeId: string;
   scopeName: string;
   macroId: string;
@@ -48,11 +50,11 @@ interface PlannedProduction {
   week_end: string;
 }
 
-const COSTS_STORAGE_KEY = "obramap_scope_costs";
 const COSTS_TAB_STORAGE_KEY = "obramap_costs_tab";
 
 export function ProjectCostsView() {
   const { currentProject } = useConstruction();
+  const { canEdit } = useAuth();
   const [scopeCosts, setScopeCosts] = useState<ScopeCost[]>([]);
   const [plannedProductions, setPlannedProductions] = useState<PlannedProduction[]>([]);
   const [editingScope, setEditingScope] = useState<ScopeCost | null>(null);
@@ -66,19 +68,41 @@ export function ProjectCostsView() {
     return "overview";
   });
   const [isImporting, setIsImporting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
 
-  // Load saved costs
-  useEffect(() => {
-    if (currentProject?.id) {
-      const savedData = localStorage.getItem(`${COSTS_STORAGE_KEY}_${currentProject.id}`);
-      if (savedData) {
-        setScopeCosts(JSON.parse(savedData));
+  // Load costs from database
+  const loadCostsFromDatabase = useCallback(async () => {
+    if (!currentProject?.id) return;
+    
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('scope_costs')
+        .select('*')
+        .eq('project_id', currentProject.id);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const costs: ScopeCost[] = data.map(row => ({
+          id: row.id,
+          scopeId: row.scope_id,
+          scopeName: row.scope_name,
+          macroId: row.macro_id,
+          macroName: row.macro_name,
+          macroColor: row.macro_color,
+          materialCost: Number(row.material_cost) || 0,
+          laborCost: Number(row.labor_cost) || 0,
+          equipmentCost: Number(row.equipment_cost) || 0
+        }));
+        setScopeCosts(costs);
       } else {
-        // Initialize with all scopes from macros
+        // Initialize with all scopes from macros if no data exists
         const initialCosts: ScopeCost[] = [];
         macros.forEach(macro => {
           macro.scopes.forEach(scope => {
@@ -96,8 +120,44 @@ export function ProjectCostsView() {
         });
         setScopeCosts(initialCosts);
       }
+    } catch (error) {
+      console.error('Error loading costs:', error);
+      toast.error('Erro ao carregar custos');
+    } finally {
+      setIsLoading(false);
     }
   }, [currentProject?.id, macros]);
+
+  // Load costs on mount and when project changes
+  useEffect(() => {
+    loadCostsFromDatabase();
+  }, [loadCostsFromDatabase]);
+
+  // Subscribe to realtime updates
+  useEffect(() => {
+    if (!currentProject?.id) return;
+
+    const channel = supabase
+      .channel('scope-costs-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'scope_costs',
+          filter: `project_id=eq.${currentProject.id}`
+        },
+        () => {
+          // Reload costs when any change happens
+          loadCostsFromDatabase();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentProject?.id, loadCostsFromDatabase]);
 
   // Load planned productions for projected costs (only future ones)
   useEffect(() => {
@@ -109,7 +169,7 @@ export function ProjectCostsView() {
         .from('planned_productions')
         .select('id, scope_id, scope_name, macro_id, macro_name, planned_houses, planned_house_ids, week_start, week_end')
         .eq('project_id', currentProject.id)
-        .gte('week_end', today); // Only future productions
+        .gte('week_end', today);
       
       if (!error && data) {
         setPlannedProductions(data);
@@ -119,24 +179,49 @@ export function ProjectCostsView() {
     loadPlannedProductions();
   }, [currentProject?.id]);
 
-  // Save costs
-  const saveCosts = (costs: ScopeCost[]) => {
-    if (currentProject?.id) {
-      localStorage.setItem(`${COSTS_STORAGE_KEY}_${currentProject.id}`, JSON.stringify(costs));
-      setScopeCosts(costs);
+  // Save cost to database
+  const saveCostToDatabase = async (cost: ScopeCost) => {
+    if (!currentProject?.id) return;
+    
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('scope_costs')
+        .upsert({
+          project_id: currentProject.id,
+          scope_id: cost.scopeId,
+          scope_name: cost.scopeName,
+          macro_id: cost.macroId,
+          macro_name: cost.macroName,
+          macro_color: cost.macroColor,
+          material_cost: cost.materialCost,
+          labor_cost: cost.laborCost,
+          equipment_cost: cost.equipmentCost
+        }, {
+          onConflict: 'project_id,scope_id'
+        });
+
+      if (error) throw error;
+      
+      toast.success("Custos salvos e sincronizados!");
+    } catch (error) {
+      console.error('Error saving cost:', error);
+      toast.error('Erro ao salvar custos');
+    } finally {
+      setIsSaving(false);
     }
   };
 
   // Update scope cost
-  const handleUpdateCost = () => {
+  const handleUpdateCost = async () => {
     if (!editingScope) return;
     
     const updated = scopeCosts.map(c => 
       c.scopeId === editingScope.scopeId ? editingScope : c
     );
-    saveCosts(updated);
+    setScopeCosts(updated);
+    await saveCostToDatabase(editingScope);
     setEditingScope(null);
-    toast.success("Custos atualizados!");
   };
 
   // Handle PDF import
@@ -153,7 +238,6 @@ export function ProjectCostsView() {
     toast.info("Funcionalidade de leitura de PDF em desenvolvimento. Por enquanto, cadastre os valores manualmente.");
     setIsImporting(false);
     
-    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -260,7 +344,6 @@ export function ProjectCostsView() {
     let projectedEquipment = 0;
     const byPlanData: { week: string; scope: string; houses: number; houseIds: number[]; material: number; labor: number; equipment: number; total: number }[] = [];
 
-    // Sum up costs from planned productions
     plannedProductions.forEach(planned => {
       const cost = scopeCosts.find(c => c.scopeId === planned.scope_id);
       if (cost) {
@@ -317,8 +400,34 @@ export function ProjectCostsView() {
     );
   }
 
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-8 flex items-center justify-center gap-2">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          <span>Carregando custos...</span>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-4 h-full flex flex-col">
+      {/* Sync indicator */}
+      <div className="flex items-center justify-end gap-2">
+        {isSaving ? (
+          <Badge variant="outline" className="gap-1">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Salvando...
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="gap-1 text-green-600">
+            <Cloud className="w-3 h-3" />
+            Sincronizado
+          </Badge>
+        )}
+      </div>
+
       <Tabs value={activeTab} onValueChange={(v) => { 
         const tab = v as "overview" | "details";
         setActiveTab(tab);
@@ -442,10 +551,17 @@ export function ProjectCostsView() {
                               </div>
                             </div>
                             {plan.houseIds.length > 0 && (
-                              <div className="mt-2 pt-2 border-t border-border/50">
-                                <p className="text-xs text-muted-foreground">
-                                  <span className="font-medium">Casas:</span> {plan.houseIds.join(', ')}
-                                </p>
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {plan.houseIds.slice(0, 10).map(id => (
+                                  <Badge key={id} variant="outline" className="text-xs px-1.5 py-0">
+                                    {id}
+                                  </Badge>
+                                ))}
+                                {plan.houseIds.length > 10 && (
+                                  <Badge variant="outline" className="text-xs px-1.5 py-0">
+                                    +{plan.houseIds.length - 10}
+                                  </Badge>
+                                )}
                               </div>
                             )}
                           </div>
@@ -458,302 +574,309 @@ export function ProjectCostsView() {
             </Card>
           )}
 
-          {/* Progress Indicator */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <TrendingUp className="w-5 h-5" />
-                Progresso dos Custos
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Custo Realizado vs Total da Obra</span>
-                  <span className="font-medium">
-                    {costCalculations.total.total > 0 
-                      ? Math.round((costCalculations.executed.total / costCalculations.total.total) * 100)
-                      : 0
-                    }%
-                  </span>
-                </div>
-                <div className="h-4 bg-muted rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-primary transition-all duration-500"
-                    style={{ 
-                      width: `${costCalculations.total.total > 0 
-                        ? Math.min(100, (costCalculations.executed.total / costCalculations.total.total) * 100)
-                        : 0
-                      }%` 
-                    }}
-                  />
-                </div>
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Realizado: {formatCurrency(costCalculations.executed.total)}</span>
-                  <span>Total Obra: {formatCurrency(costCalculations.total.total)}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Pie Chart */}
+          {/* Progress Indicators */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold">Distribuição por Categoria</CardTitle>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  Progresso do Orçamento
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                {pieData.length > 0 ? (
-                  <div className="h-[280px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RechartsPieChart>
-                        <Pie
-                          data={pieData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={65}
-                          outerRadius={95}
-                          paddingAngle={4}
-                          dataKey="value"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                          labelLine={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1 }}
-                        >
-                          {pieData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={2} />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          formatter={(value) => formatCurrency(Number(value))}
-                          contentStyle={{ 
-                            backgroundColor: 'hsl(var(--popover))', 
-                            borderColor: 'hsl(var(--border))',
-                            borderRadius: '8px',
-                            fontSize: '12px'
-                          }}
-                        />
-                      </RechartsPieChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : (
-                  <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
-                    Configure os custos dos serviços para ver o gráfico
-                  </div>
-                )}
+                <div className="space-y-4">
+                  {costCalculations.total.total > 0 && (
+                    <>
+                      <div>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span>Executado</span>
+                          <span className="font-medium">
+                            {((costCalculations.executed.total / costCalculations.total.total) * 100).toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-primary rounded-full transition-all"
+                            style={{ width: `${Math.min((costCalculations.executed.total / costCalculations.total.total) * 100, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-muted-foreground">Restante</p>
+                          <p className="font-bold text-lg">{formatCurrency(costCalculations.total.total - costCalculations.executed.total)}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Total Orçado</p>
+                          <p className="font-bold text-lg">{formatCurrency(costCalculations.total.total)}</p>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  {costCalculations.total.total === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      Cadastre os custos por serviço para ver o progresso
+                    </p>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
-            {/* Bar Chart by Macro */}
+            {/* Pie Chart */}
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold">Custos por Etapa</CardTitle>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <PieChart className="w-4 h-4" />
+                  Distribuição de Custos Realizados
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                {costCalculations.byMacroData.length > 0 ? (
-                  <div className="h-[280px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={costCalculations.byMacroData} layout="vertical" margin={{ left: 10, right: 30 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis 
-                          type="number" 
-                          tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`}
-                          tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                        />
-                        <YAxis 
-                          dataKey="name" 
-                          type="category" 
-                          width={120} 
-                          tick={{ fontSize: 11, fill: 'hsl(var(--foreground))' }}
-                        />
-                        <Tooltip 
-                          formatter={(value) => formatCurrency(Number(value))}
-                          contentStyle={{ 
-                            backgroundColor: 'hsl(var(--popover))', 
-                            borderColor: 'hsl(var(--border))',
-                            borderRadius: '8px',
-                            fontSize: '12px'
-                          }}
-                        />
-                        <Legend 
-                          wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
-                        />
-                        <Bar dataKey="total" name="Total Obra" fill="hsl(var(--muted))" opacity={0.6} radius={[0, 4, 4, 0]} />
-                        <Bar dataKey="executed" name="Realizado" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                {pieData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <RechartsPieChart>
+                      <Pie
+                        data={pieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={80}
+                        paddingAngle={2}
+                        dataKey="value"
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        labelLine={false}
+                      >
+                        {pieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                    </RechartsPieChart>
+                  </ResponsiveContainer>
                 ) : (
-                  <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
-                    Configure os custos dos serviços para ver o gráfico
+                  <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
+                    Nenhum custo executado ainda
                   </div>
                 )}
               </CardContent>
             </Card>
           </div>
+
+          {/* Bar Chart by Macro */}
+          {costCalculations.byMacroData.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4" />
+                  Custos por Etapa
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={costCalculations.byMacroData} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" tickFormatter={(v) => formatCurrency(v)} fontSize={10} />
+                    <YAxis type="category" dataKey="name" width={120} fontSize={11} />
+                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                    <Legend />
+                    <Bar dataKey="executed" name="Executado" fill="#22c55e" radius={[0, 4, 4, 0]} />
+                    <Bar dataKey="total" name="Total" fill="#94a3b8" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
-        <TabsContent value="details" className="flex-1 overflow-auto mt-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Calculator className="w-5 h-5" />
-                  Custos por Serviço
-                  <Badge variant="outline" className="ml-2">
-                    Valores por unidade
-                  </Badge>
-                </CardTitle>
-                <div className="flex gap-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf"
-                    onChange={handlePdfImport}
-                    className="hidden"
-                  />
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="gap-2"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isImporting}
-                  >
-                    {isImporting ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Upload className="w-4 h-4" />
-                    )}
-                    Importar PDF
-                  </Button>
-                </div>
-              </div>
-              <Alert className="mt-3 border-blue-500/50 bg-blue-500/10">
-                <FileText className="h-4 w-4 text-blue-500" />
-                <AlertDescription className="text-xs">
-                  Você pode importar um orçamento em PDF ou cadastrar os valores manualmente abaixo.
-                </AlertDescription>
-              </Alert>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[calc(100vh-350px)] min-h-[400px]">
-                <div className="space-y-4">
-                  {macros.map(macro => (
-                    <div key={macro.id} className="space-y-2">
-                      <div className="flex items-center gap-2 px-2 py-1.5 bg-secondary/30 rounded-lg">
-                        <div 
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: macro.color }}
-                        />
-                        <span className="text-sm font-medium">{macro.name}</span>
+        <TabsContent value="details" className="flex-1 overflow-auto mt-4 space-y-4">
+          {!canEdit && (
+            <Alert>
+              <AlertDescription className="flex items-center gap-2">
+                <CloudOff className="w-4 h-4" />
+                Você está no modo visualização. Somente editores podem alterar os custos.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {canEdit && (
+            <div className="flex gap-2 mb-4">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                onChange={handlePdfImport}
+                className="hidden"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isImporting}
+                className="gap-2"
+              >
+                {isImporting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Upload className="w-4 h-4" />
+                )}
+                Importar PDF
+              </Button>
+            </div>
+          )}
+
+          <ScrollArea className="h-[calc(100vh-320px)]">
+            <div className="space-y-6">
+              {macros.map(macro => {
+                const macroScopeCosts = scopeCosts.filter(c => c.macroId === macro.id);
+                const macroTotal = macroScopeCosts.reduce((sum, c) => sum + c.materialCost + c.laborCost + c.equipmentCost, 0);
+                
+                return (
+                  <Card key={macro.id}>
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <div 
+                            className="w-3 h-3 rounded-full" 
+                            style={{ backgroundColor: macro.color }}
+                          />
+                          {macro.name}
+                        </CardTitle>
+                        <Badge variant="secondary" className="text-xs">
+                          {formatCurrency(macroTotal)} / casa
+                        </Badge>
                       </div>
-                      
-                      <div className="space-y-1.5 pl-3">
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
                         {macro.scopes.map(scope => {
                           const cost = scopeCosts.find(c => c.scopeId === scope.id);
                           const isEditing = editingScope?.scopeId === scope.id;
-                          const progress = scopeProgress[scope.id];
-                          const totalCostPerUnit = (cost?.materialCost || 0) + (cost?.laborCost || 0) + (cost?.equipmentCost || 0);
-                          
+                          const scopeTotal = cost ? cost.materialCost + cost.laborCost + cost.equipmentCost : 0;
+
                           return (
-                            <div 
+                            <div
                               key={scope.id}
-                              className="flex items-center gap-3 p-3 rounded-lg bg-card border hover:border-primary/30 transition-colors"
+                              className={`p-3 rounded-lg border transition-colors ${
+                                isEditing ? 'bg-accent border-primary' : 'bg-muted/30 hover:bg-muted/50'
+                              }`}
                             >
-                              {isEditing ? (
-                                <div className="flex-1 flex items-center gap-2 flex-wrap">
-                                  <span className="text-sm font-medium min-w-[120px]">{scope.name}</span>
-                                  <div className="flex items-center gap-1">
-                                    <Package className="w-3.5 h-3.5 text-blue-500" />
-                                    <Input
-                                      type="number"
-                                      value={editingScope.materialCost}
-                                      onChange={(e) => setEditingScope({
-                                        ...editingScope,
-                                        materialCost: parseFloat(e.target.value) || 0
-                                      })}
-                                      className="h-8 w-24"
-                                      placeholder="Material"
-                                    />
+                              {isEditing && editingScope ? (
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <p className="font-medium text-sm">{scope.name}</p>
+                                    <div className="flex gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setEditingScope(null)}
+                                      >
+                                        Cancelar
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        onClick={handleUpdateCost}
+                                        disabled={isSaving}
+                                      >
+                                        {isSaving ? (
+                                          <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                          'Salvar'
+                                        )}
+                                      </Button>
+                                    </div>
                                   </div>
-                                  <div className="flex items-center gap-1">
-                                    <Hammer className="w-3.5 h-3.5 text-orange-500" />
-                                    <Input
-                                      type="number"
-                                      value={editingScope.laborCost}
-                                      onChange={(e) => setEditingScope({
-                                        ...editingScope,
-                                        laborCost: parseFloat(e.target.value) || 0
-                                      })}
-                                      className="h-8 w-24"
-                                      placeholder="M.O."
-                                    />
+                                  <div className="grid grid-cols-3 gap-3">
+                                    <div>
+                                      <Label className="text-xs">Material (R$)</Label>
+                                      <Input
+                                        type="number"
+                                        value={editingScope.materialCost}
+                                        onChange={(e) => setEditingScope({
+                                          ...editingScope,
+                                          materialCost: Number(e.target.value) || 0
+                                        })}
+                                        className="h-8 text-sm"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs">Mão de Obra (R$)</Label>
+                                      <Input
+                                        type="number"
+                                        value={editingScope.laborCost}
+                                        onChange={(e) => setEditingScope({
+                                          ...editingScope,
+                                          laborCost: Number(e.target.value) || 0
+                                        })}
+                                        className="h-8 text-sm"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="text-xs">Equipamentos (R$)</Label>
+                                      <Input
+                                        type="number"
+                                        value={editingScope.equipmentCost}
+                                        onChange={(e) => setEditingScope({
+                                          ...editingScope,
+                                          equipmentCost: Number(e.target.value) || 0
+                                        })}
+                                        className="h-8 text-sm"
+                                      />
+                                    </div>
                                   </div>
-                                  <div className="flex items-center gap-1">
-                                    <Wrench className="w-3.5 h-3.5 text-green-500" />
-                                    <Input
-                                      type="number"
-                                      value={editingScope.equipmentCost}
-                                      onChange={(e) => setEditingScope({
-                                        ...editingScope,
-                                        equipmentCost: parseFloat(e.target.value) || 0
-                                      })}
-                                      className="h-8 w-24"
-                                      placeholder="Equip."
-                                    />
-                                  </div>
-                                  <Button size="sm" onClick={handleUpdateCost}>Salvar</Button>
-                                  <Button size="sm" variant="ghost" onClick={() => setEditingScope(null)}>X</Button>
                                 </div>
                               ) : (
-                                <>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm font-medium">{scope.name}</span>
-                                      {progress && (
-                                        <Badge variant="secondary" className="text-[10px]">
-                                          {progress.completed}/{progress.total}
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                                      <span className="flex items-center gap-1">
-                                        <Package className="w-3 h-3 text-blue-500" />
-                                        {formatCurrency(cost?.materialCost || 0)}
-                                      </span>
-                                      <span className="flex items-center gap-1">
-                                        <Hammer className="w-3 h-3 text-orange-500" />
-                                        {formatCurrency(cost?.laborCost || 0)}
-                                      </span>
-                                      <span className="flex items-center gap-1">
-                                        <Wrench className="w-3 h-3 text-green-500" />
-                                        {formatCurrency(cost?.equipmentCost || 0)}
-                                      </span>
-                                    </div>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <p className="text-sm font-medium">{scope.name}</p>
+                                    {scopeTotal > 0 && (
+                                      <div className="flex gap-2 text-xs text-muted-foreground">
+                                        {cost && cost.materialCost > 0 && (
+                                          <span className="flex items-center gap-1">
+                                            <Package className="w-3 h-3 text-blue-500" />
+                                            {formatCurrency(cost.materialCost)}
+                                          </span>
+                                        )}
+                                        {cost && cost.laborCost > 0 && (
+                                          <span className="flex items-center gap-1">
+                                            <Hammer className="w-3 h-3 text-orange-500" />
+                                            {formatCurrency(cost.laborCost)}
+                                          </span>
+                                        )}
+                                        {cost && cost.equipmentCost > 0 && (
+                                          <span className="flex items-center gap-1">
+                                            <Wrench className="w-3 h-3 text-green-500" />
+                                            {formatCurrency(cost.equipmentCost)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
-                                  <div className="text-right">
-                                    <p className="text-sm font-semibold">{formatCurrency(totalCostPerUnit)}</p>
-                                    <p className="text-[10px] text-muted-foreground">por unidade</p>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant={scopeTotal > 0 ? "default" : "secondary"} className="text-xs">
+                                      {formatCurrency(scopeTotal)}
+                                    </Badge>
+                                    {canEdit && (
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-7 w-7"
+                                        onClick={() => cost && setEditingScope(cost)}
+                                      >
+                                        <Pencil className="w-3 h-3" />
+                                      </Button>
+                                    )}
                                   </div>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8 shrink-0"
-                                    onClick={() => cost && setEditingScope({ ...cost })}
-                                  >
-                                    <Pencil className="w-4 h-4" />
-                                  </Button>
-                                </>
+                                </div>
                               )}
                             </div>
                           );
                         })}
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </ScrollArea>
         </TabsContent>
       </Tabs>
     </div>
