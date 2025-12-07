@@ -71,6 +71,50 @@ export type Database = {
           },
         ]
       }
+      map_layouts: {
+        Row: {
+          created_at: string
+          houses: Json
+          id: string
+          image_url: string | null
+          map_height: number
+          map_width: number
+          project_id: string
+          quadras: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          houses?: Json
+          id?: string
+          image_url?: string | null
+          map_height?: number
+          map_width?: number
+          project_id: string
+          quadras?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          houses?: Json
+          id?: string
+          image_url?: string | null
+          map_height?: number
+          map_width?: number
+          project_id?: string
+          quadras?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "map_layouts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planned_productions: {
         Row: {
           created_at: string
