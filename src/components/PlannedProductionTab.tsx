@@ -1279,7 +1279,7 @@ export function PlannedProductionTab() {
                         {planStartDate ? format(parseISO(planStartDate), "dd/MM/yyyy", { locale: ptBR }) : "Selecionar"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 z-[100] bg-popover" align="start">
                       <Calendar
                         mode="single"
                         selected={planStartDate ? parseISO(planStartDate) : undefined}
@@ -1312,7 +1312,7 @@ export function PlannedProductionTab() {
                         {planEndDate ? format(parseISO(planEndDate), "dd/MM/yyyy", { locale: ptBR }) : "Selecionar"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
+                    <PopoverContent className="w-auto p-0 z-[100] bg-popover" align="start">
                       <Calendar
                         mode="single"
                         selected={planEndDate ? parseISO(planEndDate) : undefined}
