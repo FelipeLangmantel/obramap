@@ -111,12 +111,11 @@ export function InteractiveMapView() {
   const BASE_HOUSE_RADIUS = 14;
   const MIN_QUADRA_SIZE = 80;
   
-  // Dynamic house radius that adjusts with zoom
-  const houseRadius = useMemo(() => {
-    // Ajusta o raio para manter tamanho visual consistente
-    const adjustedRadius = BASE_HOUSE_RADIUS / Math.sqrt(scale);
-    return Math.max(8, Math.min(24, adjustedRadius));
-  }, [scale]);
+  // Dynamic house radius - mantém tamanho visual consistente ao fazer zoom
+  const displayRadius = useMemo(() => {
+    // Raio base no SVG, sem compensação de zoom (o SVG já escala)
+    return BASE_HOUSE_RADIUS;
+  }, []);
 
   // Load saved map layout for current project
   useEffect(() => {
@@ -702,8 +701,14 @@ export function InteractiveMapView() {
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     
-    // Shift+scroll para pan horizontal em ambos os modos
-    if (e.shiftKey) {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // Shift+scroll para pan horizontal
+    if (e.shiftKey && !e.ctrlKey && !e.metaKey) {
       setPosition(prev => ({
         x: prev.x - e.deltaY,
         y: prev.y
@@ -711,28 +716,25 @@ export function InteractiveMapView() {
       return;
     }
     
-    // Ctrl+scroll para zoom em ambos os modos (incluindo edição)
-    if (e.ctrlKey || e.metaKey) {
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (rect) {
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-        
-        const delta = e.deltaY > 0 ? -0.15 : 0.15;
-        const newScale = Math.max(0.2, Math.min(5, scale + delta));
-        
-        // Zoom centrado no mouse
-        const scaleRatio = newScale / scale;
-        setPosition(prev => ({
-          x: mouseX - (mouseX - prev.x) * scaleRatio,
-          y: mouseY - (mouseY - prev.y) * scaleRatio
-        }));
-        setScale(newScale);
-      }
+    // Pinch zoom (trackpad) ou Ctrl+scroll para zoom
+    const isPinchZoom = e.ctrlKey || e.metaKey || Math.abs(e.deltaY) < 50;
+    
+    if (isPinchZoom || e.ctrlKey || e.metaKey) {
+      const zoomIntensity = 0.002;
+      const delta = -e.deltaY * zoomIntensity;
+      const newScale = Math.max(0.15, Math.min(6, scale * (1 + delta)));
+      
+      // Zoom centrado no mouse
+      const scaleRatio = newScale / scale;
+      setPosition(prev => ({
+        x: mouseX - (mouseX - prev.x) * scaleRatio,
+        y: mouseY - (mouseY - prev.y) * scaleRatio
+      }));
+      setScale(newScale);
       return;
     }
     
-    // Scroll normal para pan vertical
+    // Scroll normal para pan
     setPosition(prev => ({
       x: prev.x - e.deltaX,
       y: prev.y - e.deltaY
@@ -1058,7 +1060,7 @@ export function InteractiveMapView() {
               const color = getHouseColor(house.id);
               const isSelectedHouse = selectedHouse?.id === house.id;
               const isMultiSelected = isEditMode && selectedHouseIds.has(house.id);
-              const r = houseRadius;
+              const r = displayRadius;
               
               return (
                 <g 
