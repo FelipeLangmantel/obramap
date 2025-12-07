@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Save, Trash2, CalendarDays, AlertCircle, Home } from "lucide-react";
+import { Save, Trash2, CalendarDays, AlertCircle, Home, Eye } from "lucide-react";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -50,6 +51,7 @@ interface EditProductionDialogProps {
 
 export function EditProductionDialog({ open, onOpenChange, production, onSave }: EditProductionDialogProps) {
   const { currentProject, updateBatchScopeProgress, refreshHousesFromDB } = useConstruction();
+  const { canEdit } = useAuth();
   const [weekStart, setWeekStart] = useState("");
   const [weekEnd, setWeekEnd] = useState("");
   const [notes, setNotes] = useState("");
@@ -350,6 +352,14 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
               />
             </div>
 
+            {/* Viewer Mode Notice */}
+            {!canEdit && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground p-3 bg-muted/50 rounded-lg">
+                <Eye className="w-4 h-4" />
+                Modo visualização - você pode interagir mas não salvar alterações
+              </div>
+            )}
+
             {/* Actions */}
             <div className="flex justify-between gap-2 pt-2 border-t">
               <Button 
@@ -357,6 +367,8 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
                 size="sm"
                 onClick={() => setShowDeleteConfirm(true)}
                 className="gap-2"
+                disabled={!canEdit}
+                title={!canEdit ? "Você não tem permissão para excluir" : ""}
               >
                 <Trash2 className="w-4 h-4" />
                 Excluir
@@ -370,11 +382,12 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
                 </Button>
                 <Button 
                   onClick={handleSave}
-                  disabled={isSaving || selectedHouses.length === 0}
+                  disabled={isSaving || selectedHouses.length === 0 || !canEdit}
                   className="gap-2"
+                  title={!canEdit ? "Você pode simular, mas não tem permissão para salvar" : ""}
                 >
                   <Save className="w-4 h-4" />
-                  {isSaving ? "Salvando..." : "Salvar Alterações"}
+                  {!canEdit ? "Modo Visualização" : isSaving ? "Salvando..." : "Salvar Alterações"}
                 </Button>
               </div>
             </div>

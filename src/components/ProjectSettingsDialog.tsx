@@ -5,9 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, Home, Grid3X3, Plus, Trash2, Edit2, Check, X, Settings, ImagePlus } from "lucide-react";
+import { Building2, Home, Grid3X3, Plus, Trash2, Edit2, Check, X, Settings, ImagePlus, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 
 interface ProjectSettingsDialogProps {
@@ -34,6 +36,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
     generateHousesForProject,
     completeProjectSetup 
   } = useConstruction();
+  const { canEdit } = useAuth();
   
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
@@ -212,12 +215,22 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
           </TabsList>
           
           <TabsContent value="info" className="space-y-4 mt-4">
+            {!canEdit && (
+              <Alert>
+                <Eye className="h-4 w-4" />
+                <AlertDescription>
+                  Modo visualização - você pode ver as informações mas não salvar alterações
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="space-y-2">
               <Label>Nome do Empreendimento</Label>
               <Input 
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ex: Loteamento Tapejara"
+                disabled={!canEdit}
               />
             </div>
             
@@ -228,6 +241,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   placeholder="Ex: Cidade - UF"
+                  disabled={!canEdit}
                 />
               </div>
               <div className="space-y-2">
@@ -236,6 +250,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
                   value={contractor}
                   onChange={(e) => setContractor(e.target.value)}
                   placeholder="Ex: Construtora Alpha"
+                  disabled={!canEdit}
                 />
               </div>
             </div>
@@ -247,6 +262,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
+                  disabled={!canEdit}
                 />
               </div>
               <div className="space-y-2">
@@ -255,6 +271,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
                   type="date"
                   value={expectedEndDate}
                   onChange={(e) => setExpectedEndDate(e.target.value)}
+                  disabled={!canEdit}
                 />
               </div>
             </div>
@@ -267,6 +284,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
                   value={totalHouses}
                   onChange={(e) => setTotalHouses(e.target.value)}
                   min="1"
+                  disabled={!canEdit}
                 />
               </div>
               <div className="space-y-2">
@@ -276,11 +294,12 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
                   value={unitSize}
                   onChange={(e) => setUnitSize(e.target.value)}
                   min="1"
+                  disabled={!canEdit}
                 />
               </div>
               <div className="space-y-2">
                 <Label>Tipo</Label>
-                <Select value={projectType} onValueChange={setProjectType}>
+                <Select value={projectType} onValueChange={setProjectType} disabled={!canEdit}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
@@ -295,12 +314,21 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
               </div>
             </div>
 
-            <Button onClick={handleSaveInfo} className="w-full">
-              Salvar Informações
+            <Button onClick={handleSaveInfo} className="w-full" disabled={!canEdit}>
+              {!canEdit ? "Modo Visualização" : "Salvar Informações"}
             </Button>
           </TabsContent>
           
           <TabsContent value="quadras" className="space-y-4 mt-4">
+            {!canEdit && (
+              <Alert>
+                <Eye className="h-4 w-4" />
+                <AlertDescription>
+                  Modo visualização - você pode ver as quadras mas não salvar alterações
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="flex items-center justify-between">
               <div className="text-sm text-muted-foreground">
                 {currentProject.houses.length} casas cadastradas
@@ -320,16 +348,18 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
                   value={newQuadraName}
                   onChange={(e) => setNewQuadraName(e.target.value)}
                   placeholder="Nome da quadra (ex: Quadra A)"
+                  disabled={!canEdit}
                 />
                 <Input 
                   value={newQuadraHouses}
                   onChange={(e) => setNewQuadraHouses(e.target.value)}
                   placeholder="Casas: 1-10, 15, 20-25"
+                  disabled={!canEdit}
                 />
               </div>
-              <Button onClick={handleAddQuadra} size="sm" className="gap-2">
+              <Button onClick={handleAddQuadra} size="sm" className="gap-2" disabled={!canEdit}>
                 <Plus className="h-4 w-4" />
-                Adicionar Quadra
+                {!canEdit ? "Modo Visualização" : "Adicionar Quadra"}
               </Button>
             </div>
 
@@ -380,21 +410,25 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
                         </span>
                       </div>
                       <div className="flex gap-1">
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => startEditQuadra(quadra.id)}
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => deleteQuadra(quadra.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {canEdit && (
+                          <>
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              onClick={() => startEditQuadra(quadra.id)}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => deleteQuadra(quadra.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
