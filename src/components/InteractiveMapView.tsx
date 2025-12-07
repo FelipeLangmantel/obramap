@@ -83,6 +83,7 @@ export function InteractiveMapView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [mapImage, setMapImage] = useState<string | null>(null);
   const [customLayout, setCustomLayout] = useState<MapLayout | null>(null);
+  const [isLayoutLoaded, setIsLayoutLoaded] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   
@@ -130,10 +131,13 @@ export function InteractiveMapView() {
 
   // Load saved map layout from database for current project
   useEffect(() => {
+    setIsLayoutLoaded(false);
+    
     const loadLayout = async () => {
       if (!currentProject?.id) {
         setMapImage(null);
         setCustomLayout(null);
+        setIsLayoutLoaded(true);
         return;
       }
 
@@ -146,6 +150,7 @@ export function InteractiveMapView() {
 
         if (error) {
           console.error("Error loading map layout:", error);
+          setIsLayoutLoaded(true);
           return;
         }
 
@@ -186,8 +191,10 @@ export function InteractiveMapView() {
             setCustomLayout(null);
           }
         }
+        setIsLayoutLoaded(true);
       } catch (e) {
         console.error("Error loading map layout:", e);
+        setIsLayoutLoaded(true);
       }
     };
 
@@ -215,20 +222,20 @@ export function InteractiveMapView() {
     }
   }, []);
 
-  // Fit image to container on load or when mapImage changes
+  // Fit to container when layout is loaded
   useEffect(() => {
-    if (mapImage) {
+    if (isLayoutLoaded) {
       // Use requestAnimationFrame to ensure the container is rendered
       requestAnimationFrame(() => {
         fitToContainer();
       });
     }
-  }, [mapImage, fitToContainer]);
+  }, [isLayoutLoaded, fitToContainer, currentProject?.id]);
 
   // Re-fit when container becomes visible (e.g., tab change)
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container || !isLayoutLoaded) return;
 
     // Use ResizeObserver to detect when container becomes visible/resized
     const resizeObserver = new ResizeObserver((entries) => {
@@ -249,7 +256,7 @@ export function InteractiveMapView() {
     return () => {
       resizeObserver.disconnect();
     };
-  }, [fitToContainer, currentProject?.id]);
+  }, [fitToContainer, currentProject?.id, isLayoutLoaded]);
 
   // Generate default layout with absolute house positions
   const generateDefaultLayout = useCallback((quadras: any[], allHouses: any[]): { quadras: QuadraLayout[], houses: HousePosition[] } => {
