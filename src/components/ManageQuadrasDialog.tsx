@@ -393,7 +393,6 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                           {unassignedHouses.map(houseId => (
                             <button
                               key={houseId}
-                              onClick={() => toggleHouseSelection(houseId, false)}
                               onMouseDown={(e) => handleHouseMouseDown(houseId, false, e)}
                               onMouseEnter={() => handleHouseMouseEnter(houseId, false)}
                               onContextMenu={(e) => e.preventDefault()}
@@ -488,7 +487,6 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                                     .map(houseId => (
                                       <button
                                         key={houseId}
-                                        onClick={() => toggleHouseSelection(houseId, true)}
                                         onMouseDown={(e) => handleHouseMouseDown(houseId, true, e)}
                                         onMouseEnter={() => handleHouseMouseEnter(houseId, true)}
                                         onContextMenu={(e) => e.preventDefault()}
