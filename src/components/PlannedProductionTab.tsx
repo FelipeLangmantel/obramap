@@ -182,6 +182,10 @@ export function PlannedProductionTab() {
   
   // Expanded weeks state
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
+  
+  // Calendar popover state
+  const [startCalendarOpen, setStartCalendarOpen] = useState(false);
+  const [endCalendarOpen, setEndCalendarOpen] = useState(false);
 
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
@@ -1266,7 +1270,7 @@ export function PlannedProductionTab() {
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Início</Label>
-                  <Popover>
+                  <Popover open={startCalendarOpen} onOpenChange={setStartCalendarOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
@@ -1286,8 +1290,8 @@ export function PlannedProductionTab() {
                         onSelect={(date) => {
                           if (date) {
                             setPlanStartDate(format(date, "yyyy-MM-dd"));
-                            // Auto set end date to end of same week
                             setPlanEndDate(format(endOfWeek(date, { weekStartsOn: 1 }), "yyyy-MM-dd"));
+                            setStartCalendarOpen(false);
                           }
                         }}
                         initialFocus
@@ -1299,7 +1303,7 @@ export function PlannedProductionTab() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Fim</Label>
-                  <Popover>
+                  <Popover open={endCalendarOpen} onOpenChange={setEndCalendarOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
@@ -1316,7 +1320,12 @@ export function PlannedProductionTab() {
                       <Calendar
                         mode="single"
                         selected={planEndDate ? parseISO(planEndDate) : undefined}
-                        onSelect={(date) => date && setPlanEndDate(format(date, "yyyy-MM-dd"))}
+                        onSelect={(date) => {
+                          if (date) {
+                            setPlanEndDate(format(date, "yyyy-MM-dd"));
+                            setEndCalendarOpen(false);
+                          }
+                        }}
                         initialFocus
                         className={cn("p-3 pointer-events-auto")}
                         locale={ptBR}
