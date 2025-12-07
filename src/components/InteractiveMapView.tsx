@@ -88,6 +88,8 @@ export function InteractiveMapView() {
   const [editingHouses, setEditingHouses] = useState<HousePosition[]>([]);
   const [draggingItem, setDraggingItem] = useState<{ type: 'quadra' | 'house' | 'resize' | 'pan'; id: string; houseId?: number; corner?: string } | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [dragStartQuadraPos, setDragStartQuadraPos] = useState({ x: 0, y: 0 });
+  const [dragStartHousePositions, setDragStartHousePositions] = useState<Map<number, { x: number; y: number }>>(new Map());
   
   // Multi-select states
   const [selectedHouseIds, setSelectedHouseIds] = useState<Set<number>>(new Set());
@@ -347,6 +349,19 @@ export function InteractiveMapView() {
         setDraggingItem({ type: 'resize', id: quadraId, corner });
       } else {
         setDragOffset({ x: coords.x - quadra.x, y: coords.y - quadra.y });
+        setDragStartQuadraPos({ x: quadra.x, y: quadra.y });
+        
+        // Store initial positions of all houses in this quadra
+        const projectQuadra = currentProject?.quadras.find(q => q.id === quadraId);
+        const houseIdsInQuadra = projectQuadra?.houses || [];
+        const initialPositions = new Map<number, { x: number; y: number }>();
+        editingHouses.forEach(house => {
+          if (houseIdsInQuadra.includes(house.id)) {
+            initialPositions.set(house.id, { x: house.x, y: house.y });
+          }
+        });
+        setDragStartHousePositions(initialPositions);
+        
         setDraggingItem({ type: 'quadra', id: quadraId });
       }
     }
@@ -408,35 +423,29 @@ export function InteractiveMapView() {
       const newX = Math.max(0, Math.min(MAP_WIDTH - 100, coords.x - dragOffset.x));
       const newY = Math.max(0, Math.min(MAP_HEIGHT - 100, coords.y - dragOffset.y));
       
-      // If quadra is visible, move houses inside it together
-      const projectQuadra = currentProject?.quadras.find(q => q.id === draggingItem.id);
-      const houseIdsInQuadra = projectQuadra?.houses || [];
+      // Calculate total displacement from start position
+      const totalDeltaX = newX - dragStartQuadraPos.x;
+      const totalDeltaY = newY - dragStartQuadraPos.y;
       
-      // Update quadra and calculate house positions in a single batch update
-      setEditingQuadras(prev => {
-        const oldQuadra = prev.find(q => q.id === draggingItem.id);
-        if (!oldQuadra) return prev;
-        
-        const deltaX = newX - oldQuadra.x;
-        const deltaY = newY - oldQuadra.y;
-        
-        // Only move houses if there's actual movement and quadra is visible
-        if ((deltaX !== 0 || deltaY !== 0) && oldQuadra.visible && houseIdsInQuadra.length > 0) {
-          setEditingHouses(prevHouses => prevHouses.map(house => {
-            if (!houseIdsInQuadra.includes(house.id)) return house;
-            return {
-              ...house,
-              x: house.x + deltaX,
-              y: house.y + deltaY,
-            };
-          }));
-        }
-        
-        return prev.map(q => {
-          if (q.id !== draggingItem.id) return q;
-          return { ...q, x: newX, y: newY };
-        });
-      });
+      // Update quadra position
+      setEditingQuadras(prev => prev.map(q => {
+        if (q.id !== draggingItem.id) return q;
+        return { ...q, x: newX, y: newY };
+      }));
+      
+      // Update houses using initial positions + total delta (not incremental)
+      const quadra = editingQuadras.find(q => q.id === draggingItem.id);
+      if (quadra?.visible && dragStartHousePositions.size > 0) {
+        setEditingHouses(prev => prev.map(house => {
+          const startPos = dragStartHousePositions.get(house.id);
+          if (!startPos) return house;
+          return {
+            ...house,
+            x: startPos.x + totalDeltaX,
+            y: startPos.y + totalDeltaY,
+          };
+        }));
+      }
     } else if (draggingItem.type === 'resize' && draggingItem.corner) {
       const quadra = editingQuadras.find(q => q.id === draggingItem.id);
       if (!quadra) return;
