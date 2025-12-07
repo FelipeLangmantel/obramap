@@ -306,32 +306,32 @@ export function ChartsView() {
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">Progresso por Etapa (Macro)</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pb-4">
           {macroProgressData.length > 0 ? (
-            <div className="h-[320px]">
+            <div className="h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart 
                   data={macroProgressData} 
-                  margin={{ left: 10, right: 10, top: 10, bottom: 120 }}
-                  barCategoryGap="15%"
+                  margin={{ left: 0, right: 10, top: 5, bottom: 70 }}
+                  barCategoryGap="8%"
                 >
                   <XAxis 
                     dataKey="name"
                     tick={(props) => {
                       const { x, y, payload } = props;
                       const name = payload.value;
-                      const abbreviated = name.length > 10 ? name.slice(0, 10) + '...' : name;
+                      const abbreviated = name.length > 8 ? name.slice(0, 8) + '..' : name;
                       return (
                         <g transform={`translate(${x},${y})`}>
                           <title>{name}</title>
                           <text
                             x={0}
                             y={0}
-                            dy={8}
+                            dy={6}
                             textAnchor="end"
                             fill="hsl(var(--muted-foreground))"
-                            fontSize={10}
-                            transform="rotate(-55)"
+                            fontSize={9}
+                            transform="rotate(-50)"
                           >
                             {abbreviated}
                           </text>
@@ -339,13 +339,17 @@ export function ChartsView() {
                       );
                     }}
                     interval={0}
-                    height={120}
+                    height={70}
+                    axisLine={false}
+                    tickLine={false}
                   />
                   <YAxis 
                     domain={[0, 100]} 
                     tickFormatter={(v) => `${v}%`}
-                    tick={{ fontSize: 10 }}
-                    width={35}
+                    tick={{ fontSize: 9 }}
+                    width={32}
+                    axisLine={false}
+                    tickLine={false}
                   />
                   <Tooltip 
                     formatter={(value: number) => [`${value}%`, "Progresso Médio"]}
@@ -354,8 +358,8 @@ export function ChartsView() {
                   />
                   <Bar 
                     dataKey="progress" 
-                    radius={[4, 4, 0, 0]}
-                    minPointSize={3}
+                    radius={[3, 3, 0, 0]}
+                    minPointSize={2}
                   >
                     {macroProgressData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
@@ -365,7 +369,7 @@ export function ChartsView() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-[180px] flex items-center justify-center text-muted-foreground text-sm">
+            <div className="h-[150px] flex items-center justify-center text-muted-foreground text-sm">
               Nenhuma etapa configurada
             </div>
           )}
