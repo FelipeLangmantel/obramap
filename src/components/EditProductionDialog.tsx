@@ -49,7 +49,7 @@ interface EditProductionDialogProps {
 }
 
 export function EditProductionDialog({ open, onOpenChange, production, onSave }: EditProductionDialogProps) {
-  const { currentProject, updateBatchScopeProgress } = useConstruction();
+  const { currentProject, updateBatchScopeProgress, refreshHousesFromDB } = useConstruction();
   const [weekStart, setWeekStart] = useState("");
   const [weekEnd, setWeekEnd] = useState("");
   const [notes, setNotes] = useState("");
@@ -142,6 +142,9 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
         await updateBatchScopeProgress(addedHouses, production.macro_id, production.scope_id, 100);
       }
 
+      // Force refresh houses from database to ensure UI is synced
+      await refreshHousesFromDB();
+
       toast.success("Registro atualizado com sucesso");
       onSave();
       onOpenChange(false);
@@ -156,6 +159,11 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
     if (!production || !currentProject) return;
 
     try {
+      // Revert progress first: Set all houses back to 0% (batch)
+      if (production.house_ids.length > 0) {
+        await updateBatchScopeProgress(production.house_ids, production.macro_id, production.scope_id, 0);
+      }
+
       // Delete production record
       const { error } = await supabase
         .from('weekly_productions')
@@ -164,10 +172,8 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
 
       if (error) throw error;
 
-      // Revert progress: Set all houses back to 0% (batch)
-      if (production.house_ids.length > 0) {
-        await updateBatchScopeProgress(production.house_ids, production.macro_id, production.scope_id, 0);
-      }
+      // Force refresh houses from database to ensure UI is synced
+      await refreshHousesFromDB();
 
       toast.success("Registro excluído e mapa atualizado");
       onSave();
