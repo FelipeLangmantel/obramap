@@ -234,6 +234,7 @@ export type Database = {
           contractor: string
           created_at: string
           custom_legend_items: Json
+          display_order: number
           expected_end_date: string
           id: string
           legend_follow_macros: boolean
@@ -251,6 +252,7 @@ export type Database = {
           contractor: string
           created_at?: string
           custom_legend_items?: Json
+          display_order?: number
           expected_end_date: string
           id?: string
           legend_follow_macros?: boolean
@@ -268,6 +270,7 @@ export type Database = {
           contractor?: string
           created_at?: string
           custom_legend_items?: Json
+          display_order?: number
           expected_end_date?: string
           id?: string
           legend_follow_macros?: boolean
