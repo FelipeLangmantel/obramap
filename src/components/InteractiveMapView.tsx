@@ -1,13 +1,11 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { useConstruction, DEFAULT_LEGEND_ITEMS } from "@/contexts/ConstructionContext";
 import { calculateHouseProgress } from "@/data/constructionData";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -26,7 +24,6 @@ import {
   ZoomOut, 
   RotateCcw, 
   Move, 
-  X,
   MapPin,
   Search,
   Upload,
@@ -36,7 +33,9 @@ import {
   Edit3,
   Save,
   XCircle,
-  Grid3X3
+  Grid3X3,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -54,12 +53,13 @@ interface QuadraLayout {
   y: number;
   width: number;
   height: number;
-  houses: HousePosition[];
+  visible: boolean;
 }
 
 interface MapLayout {
   imageUrl: string | null;
   quadras: QuadraLayout[];
+  houses: HousePosition[];
   mapWidth: number;
   mapHeight: number;
 }
@@ -84,9 +84,9 @@ export function InteractiveMapView() {
   // Edit mode states
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingQuadras, setEditingQuadras] = useState<QuadraLayout[]>([]);
+  const [editingHouses, setEditingHouses] = useState<HousePosition[]>([]);
   const [draggingItem, setDraggingItem] = useState<{ type: 'quadra' | 'house' | 'resize'; id: string; houseId?: number; corner?: string } | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [initialDragPos, setInitialDragPos] = useState({ x: 0, y: 0 });
   
   // Filters
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -101,8 +101,13 @@ export function InteractiveMapView() {
   // Map dimensions
   const MAP_WIDTH = 1600;
   const MAP_HEIGHT = 1200;
-  const HOUSE_RADIUS = 14;
+  const BASE_HOUSE_RADIUS = 14;
   const MIN_QUADRA_SIZE = 80;
+  
+  // Dynamic house radius that adjusts with zoom
+  const houseRadius = useMemo(() => {
+    return Math.max(10, Math.min(20, BASE_HOUSE_RADIUS));
+  }, []);
 
   // Load saved map layout for current project
   useEffect(() => {
@@ -123,26 +128,27 @@ export function InteractiveMapView() {
     }
   }, [currentProject?.id]);
 
-  // Initialize editing quadras when entering edit mode
+  // Fit image to container on load
   useEffect(() => {
-    if (isEditMode && currentProject) {
-      const projectQuadras = currentProject.quadras || [];
-      
-      if (customLayout?.quadras && customLayout.quadras.length > 0) {
-        setEditingQuadras(customLayout.quadras.map(q => ({
-          ...q,
-          id: projectQuadras.find(pq => pq.name === q.name)?.id || q.id || q.name,
-        })));
-      } else {
-        const defaultLayout = generateDefaultLayout(projectQuadras, houses);
-        setEditingQuadras(defaultLayout);
-      }
+    if (mapImage && containerRef.current) {
+      const container = containerRef.current;
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+      const scaleX = containerWidth / MAP_WIDTH;
+      const scaleY = containerHeight / MAP_HEIGHT;
+      const newScale = Math.min(scaleX, scaleY, 1) * 0.95;
+      setScale(newScale);
+      setPosition({
+        x: (containerWidth - MAP_WIDTH * newScale) / 2,
+        y: (containerHeight - MAP_HEIGHT * newScale) / 2
+      });
     }
-  }, [isEditMode, currentProject, customLayout]);
+  }, [mapImage]);
 
-  // Generate default layout
-  const generateDefaultLayout = (quadras: any[], allHouses: any[]): QuadraLayout[] => {
+  // Generate default layout with absolute house positions
+  const generateDefaultLayout = useCallback((quadras: any[], allHouses: any[]): { quadras: QuadraLayout[], houses: HousePosition[] } => {
     const layouts: QuadraLayout[] = [];
+    const housePositions: HousePosition[] = [];
     const PADDING = 40;
     const QUADRA_GAP = 30;
     let currentX = PADDING;
@@ -153,11 +159,11 @@ export function InteractiveMapView() {
     quadras.forEach((quadra) => {
       const houseIds = quadra.houses || [];
       const houseCount = houseIds.length;
-      const cols = Math.ceil(Math.sqrt(houseCount));
-      const rows = Math.ceil(houseCount / cols);
+      const cols = Math.max(1, Math.ceil(Math.sqrt(houseCount)));
+      const rows = Math.max(1, Math.ceil(houseCount / cols));
       
-      const quadraWidth = Math.max(MIN_QUADRA_SIZE, cols * (HOUSE_RADIUS * 2.5 + 12) + 30);
-      const quadraHeight = Math.max(MIN_QUADRA_SIZE, rows * (HOUSE_RADIUS * 2.5 + 12) + 40);
+      const quadraWidth = Math.max(MIN_QUADRA_SIZE, cols * (BASE_HOUSE_RADIUS * 3) + 40);
+      const quadraHeight = Math.max(MIN_QUADRA_SIZE, rows * (BASE_HOUSE_RADIUS * 3) + 50);
 
       if (currentX + quadraWidth > maxWidth) {
         currentX = PADDING;
@@ -167,17 +173,18 @@ export function InteractiveMapView() {
 
       rowMaxHeight = Math.max(rowMaxHeight, quadraHeight);
 
-      const housePositions = houseIds.map((houseId: number, idx: number) => {
+      // Calculate absolute positions for houses
+      houseIds.forEach((houseId: number, idx: number) => {
         const row = Math.floor(idx / cols);
         const col = idx % cols;
-        const cellWidth = (quadraWidth - 30) / Math.max(cols, 1);
-        const cellHeight = (quadraHeight - 40) / Math.max(rows, 1);
+        const cellWidth = (quadraWidth - 40) / Math.max(cols, 1);
+        const cellHeight = (quadraHeight - 50) / Math.max(rows, 1);
         
-        return {
+        housePositions.push({
           id: houseId,
-          x: 15 + col * cellWidth + cellWidth / 2,
-          y: 30 + row * cellHeight + cellHeight / 2,
-        };
+          x: currentX + 20 + col * cellWidth + cellWidth / 2,
+          y: currentY + 35 + row * cellHeight + cellHeight / 2,
+        });
       });
 
       layouts.push({
@@ -187,42 +194,34 @@ export function InteractiveMapView() {
         y: currentY,
         width: quadraWidth,
         height: quadraHeight,
-        houses: housePositions,
+        visible: true,
       });
 
       currentX += quadraWidth + QUADRA_GAP;
     });
 
-    return layouts;
-  };
+    return { quadras: layouts, houses: housePositions };
+  }, []);
 
-  // Auto-distribute houses in a quadra
-  const autoDistributeHouses = (quadraId: string) => {
-    setEditingQuadras(prev => prev.map(quadra => {
-      if (quadra.id !== quadraId) return quadra;
+  // Initialize editing when entering edit mode
+  useEffect(() => {
+    if (isEditMode && currentProject) {
+      const projectQuadras = currentProject.quadras || [];
       
-      const houseCount = quadra.houses.length;
-      if (houseCount === 0) return quadra;
-      
-      const cols = Math.ceil(Math.sqrt(houseCount));
-      const rows = Math.ceil(houseCount / cols);
-      const cellWidth = (quadra.width - 30) / Math.max(cols, 1);
-      const cellHeight = (quadra.height - 40) / Math.max(rows, 1);
-      
-      return {
-        ...quadra,
-        houses: quadra.houses.map((house, idx) => {
-          const row = Math.floor(idx / cols);
-          const col = idx % cols;
-          return {
-            ...house,
-            x: 15 + col * cellWidth + cellWidth / 2,
-            y: 30 + row * cellHeight + cellHeight / 2,
-          };
-        }),
-      };
-    }));
-  };
+      if (customLayout?.quadras && customLayout.houses) {
+        setEditingQuadras(customLayout.quadras.map(q => ({
+          ...q,
+          id: projectQuadras.find(pq => pq.name === q.name)?.id || q.id,
+          visible: q.visible !== false,
+        })));
+        setEditingHouses(customLayout.houses);
+      } else {
+        const { quadras, houses: defaultHouses } = generateDefaultLayout(projectQuadras, houses);
+        setEditingQuadras(quadras);
+        setEditingHouses(defaultHouses);
+      }
+    }
+  }, [isEditMode, currentProject, customLayout, generateDefaultLayout, houses]);
 
   // Get SVG coordinates from mouse event
   const getSvgCoords = useCallback((e: React.MouseEvent) => {
@@ -234,59 +233,69 @@ export function InteractiveMapView() {
     };
   }, [position, scale]);
 
-  // Handle mouse down for editing
-  const handleEditMouseDown = (e: React.MouseEvent, type: 'quadra' | 'house' | 'resize', quadraId: string, houseId?: number, corner?: string) => {
+  // Handle mouse down for editing houses (absolute positioning)
+  const handleHouseEditMouseDown = (e: React.MouseEvent, houseId: number) => {
     if (!isEditMode) return;
     e.preventDefault();
     e.stopPropagation();
     
     const coords = getSvgCoords(e);
+    const house = editingHouses.find(h => h.id === houseId);
+    if (house) {
+      setDragOffset({ x: coords.x - house.x, y: coords.y - house.y });
+    }
+    setDraggingItem({ type: 'house', id: 'global', houseId });
+  };
 
-    if (type === 'quadra') {
-      const quadra = editingQuadras.find(q => q.id === quadraId);
-      if (quadra) {
+  // Handle mouse down for editing quadras
+  const handleQuadraEditMouseDown = (e: React.MouseEvent, quadraId: string, corner?: string) => {
+    if (!isEditMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const coords = getSvgCoords(e);
+    const quadra = editingQuadras.find(q => q.id === quadraId);
+    
+    if (quadra) {
+      if (corner) {
+        setDraggingItem({ type: 'resize', id: quadraId, corner });
+      } else {
         setDragOffset({ x: coords.x - quadra.x, y: coords.y - quadra.y });
-      }
-    } else if (type === 'house' && houseId !== undefined) {
-      const quadra = editingQuadras.find(q => q.id === quadraId);
-      const house = quadra?.houses.find(h => h.id === houseId);
-      if (house && quadra) {
-        setDragOffset({ x: coords.x - (quadra.x + house.x), y: coords.y - (quadra.y + house.y) });
+        setDraggingItem({ type: 'quadra', id: quadraId });
       }
     }
-
-    setInitialDragPos(coords);
-    setDraggingItem({ type, id: quadraId, houseId, corner });
   };
 
   // Handle mouse move for editing
   const handleEditMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isEditMode || !draggingItem) return;
-
     const coords = getSvgCoords(e);
 
-    setEditingQuadras(prev => prev.map(quadra => {
-      if (quadra.id !== draggingItem.id) return quadra;
-
-      if (draggingItem.type === 'quadra') {
-        const newX = Math.max(0, Math.min(MAP_WIDTH - quadra.width, coords.x - dragOffset.x));
-        const newY = Math.max(0, Math.min(MAP_HEIGHT - quadra.height, coords.y - dragOffset.y));
-        return { ...quadra, x: newX, y: newY };
-      } else if (draggingItem.type === 'house' && draggingItem.houseId !== undefined) {
+    if (draggingItem.type === 'house' && draggingItem.houseId !== undefined) {
+      // Move house with absolute positioning
+      setEditingHouses(prev => prev.map(house => {
+        if (house.id !== draggingItem.houseId) return house;
+        return {
+          ...house,
+          x: Math.max(houseRadius, Math.min(MAP_WIDTH - houseRadius, coords.x - dragOffset.x)),
+          y: Math.max(houseRadius, Math.min(MAP_HEIGHT - houseRadius, coords.y - dragOffset.y)),
+        };
+      }));
+    } else if (draggingItem.type === 'quadra') {
+      setEditingQuadras(prev => prev.map(quadra => {
+        if (quadra.id !== draggingItem.id) return quadra;
         return {
           ...quadra,
-          houses: quadra.houses.map(house => {
-            if (house.id !== draggingItem.houseId) return house;
-            const newX = Math.max(HOUSE_RADIUS, Math.min(quadra.width - HOUSE_RADIUS, coords.x - quadra.x));
-            const newY = Math.max(HOUSE_RADIUS + 20, Math.min(quadra.height - HOUSE_RADIUS, coords.y - quadra.y));
-            return { ...house, x: newX, y: newY };
-          }),
+          x: Math.max(0, Math.min(MAP_WIDTH - quadra.width, coords.x - dragOffset.x)),
+          y: Math.max(0, Math.min(MAP_HEIGHT - quadra.height, coords.y - dragOffset.y)),
         };
-      } else if (draggingItem.type === 'resize' && draggingItem.corner) {
-        let newX = quadra.x;
-        let newY = quadra.y;
-        let newWidth = quadra.width;
-        let newHeight = quadra.height;
+      }));
+    } else if (draggingItem.type === 'resize' && draggingItem.corner) {
+      setEditingQuadras(prev => prev.map(quadra => {
+        if (quadra.id !== draggingItem.id) return quadra;
+        
+        let newX = quadra.x, newY = quadra.y;
+        let newWidth = quadra.width, newHeight = quadra.height;
 
         switch (draggingItem.corner) {
           case 'se':
@@ -309,32 +318,45 @@ export function InteractiveMapView() {
             newHeight = Math.max(MIN_QUADRA_SIZE, quadra.y + quadra.height - coords.y);
             newY = Math.min(quadra.y + quadra.height - MIN_QUADRA_SIZE, coords.y);
             break;
-          case 'e':
-            newWidth = Math.max(MIN_QUADRA_SIZE, coords.x - quadra.x);
-            break;
-          case 'w':
-            newWidth = Math.max(MIN_QUADRA_SIZE, quadra.x + quadra.width - coords.x);
-            newX = Math.min(quadra.x + quadra.width - MIN_QUADRA_SIZE, coords.x);
-            break;
-          case 's':
-            newHeight = Math.max(MIN_QUADRA_SIZE, coords.y - quadra.y);
-            break;
-          case 'n':
-            newHeight = Math.max(MIN_QUADRA_SIZE, quadra.y + quadra.height - coords.y);
-            newY = Math.min(quadra.y + quadra.height - MIN_QUADRA_SIZE, coords.y);
-            break;
         }
-
         return { ...quadra, x: newX, y: newY, width: newWidth, height: newHeight };
-      }
+      }));
+    }
+  }, [isEditMode, draggingItem, dragOffset, getSvgCoords, houseRadius]);
 
-      return quadra;
-    }));
-  }, [isEditMode, draggingItem, dragOffset, getSvgCoords]);
+  const handleEditMouseUp = () => setDraggingItem(null);
 
-  // Handle mouse up for editing
-  const handleEditMouseUp = () => {
-    setDraggingItem(null);
+  // Toggle quadra visibility
+  const toggleQuadraVisibility = (quadraId: string) => {
+    setEditingQuadras(prev => prev.map(q => 
+      q.id === quadraId ? { ...q, visible: !q.visible } : q
+    ));
+  };
+
+  // Auto-distribute houses in a quadra
+  const autoDistributeHousesInQuadra = (quadraId: string) => {
+    const quadra = editingQuadras.find(q => q.id === quadraId);
+    if (!quadra) return;
+    
+    const projectQuadra = currentProject?.quadras.find(q => q.id === quadraId);
+    const houseIds = projectQuadra?.houses || [];
+    const houseCount = houseIds.length;
+    if (houseCount === 0) return;
+    
+    const cols = Math.max(1, Math.ceil(Math.sqrt(houseCount)));
+    const rows = Math.ceil(houseCount / cols);
+    const cellWidth = (quadra.width - 40) / cols;
+    const cellHeight = (quadra.height - 50) / rows;
+    
+    setEditingHouses(prev => {
+      const otherHouses = prev.filter(h => !houseIds.includes(h.id));
+      const newHouses = houseIds.map((id: number, idx: number) => ({
+        id,
+        x: quadra.x + 20 + (idx % cols) * cellWidth + cellWidth / 2,
+        y: quadra.y + 35 + Math.floor(idx / cols) * cellHeight + cellHeight / 2,
+      }));
+      return [...otherHouses, ...newHouses];
+    });
   };
 
   // Save the edited layout
@@ -344,6 +366,7 @@ export function InteractiveMapView() {
     const layout: MapLayout = {
       imageUrl: mapImage,
       quadras: editingQuadras,
+      houses: editingHouses,
       mapWidth: MAP_WIDTH,
       mapHeight: MAP_HEIGHT,
     };
@@ -354,16 +377,13 @@ export function InteractiveMapView() {
     toast.success("Layout salvo com sucesso!");
   };
 
-  // Cancel editing
   const cancelEdit = () => {
     setIsEditMode(false);
     setEditingQuadras([]);
+    setEditingHouses([]);
   };
 
-  // Enter edit mode
-  const enterEditMode = () => {
-    setIsEditMode(true);
-  };
+  const enterEditMode = () => setIsEditMode(true);
 
   // Analyze floor plan with AI
   const analyzeFloorPlan = async (imageBase64: string) => {
@@ -379,34 +399,43 @@ export function InteractiveMapView() {
       if (error) throw error;
       if (data.error) throw new Error(data.error);
 
-      // Convert AI result to our format
       const projectQuadras = currentProject?.quadras || [];
-      const quadraLayouts: QuadraLayout[] = (data.quadras || []).map((q: any) => {
+      const quadraLayouts: QuadraLayout[] = [];
+      const housePositions: HousePosition[] = [];
+
+      (data.quadras || []).forEach((q: any) => {
         const projectQuadra = projectQuadras.find(pq => 
           pq.name.toLowerCase() === q.name.toLowerCase()
         );
         
+        const quadraX = (q.x / 100) * MAP_WIDTH;
+        const quadraY = (q.y / 100) * MAP_HEIGHT;
         const quadraWidth = (q.width / 100) * MAP_WIDTH;
         const quadraHeight = (q.height / 100) * MAP_HEIGHT;
         
-        return {
+        quadraLayouts.push({
           id: projectQuadra?.id || q.name,
           name: q.name,
-          x: (q.x / 100) * MAP_WIDTH,
-          y: (q.y / 100) * MAP_HEIGHT,
+          x: quadraX,
+          y: quadraY,
           width: quadraWidth,
           height: quadraHeight,
-          houses: (q.houses || []).map((h: any) => ({
+          visible: true,
+        });
+
+        (q.houses || []).forEach((h: any) => {
+          housePositions.push({
             id: h.id,
-            x: (h.x / 100) * quadraWidth,
-            y: (h.y / 100) * quadraHeight,
-          })),
-        };
+            x: quadraX + (h.x / 100) * quadraWidth,
+            y: quadraY + (h.y / 100) * quadraHeight,
+          });
+        });
       });
 
       const layout: MapLayout = {
         imageUrl: imageBase64,
         quadras: quadraLayouts,
+        houses: housePositions,
         mapWidth: MAP_WIDTH,
         mapHeight: MAP_HEIGHT,
       };
@@ -418,11 +447,11 @@ export function InteractiveMapView() {
       console.error("Error analyzing floor plan:", error);
       toast.error("Erro ao analisar. Entre no modo de edição para desenhar manualmente.");
       
-      // Save image without AI analysis, generate default layout
-      const defaultLayout = generateDefaultLayout(currentProject?.quadras || [], houses);
+      const { quadras, houses: defaultHouses } = generateDefaultLayout(currentProject?.quadras || [], houses);
       const layout: MapLayout = {
         imageUrl: imageBase64,
-        quadras: defaultLayout,
+        quadras,
+        houses: defaultHouses,
         mapWidth: MAP_WIDTH,
         mapHeight: MAP_HEIGHT,
       };
@@ -433,7 +462,6 @@ export function InteractiveMapView() {
     }
   };
 
-  // Handle image upload
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && currentProject) {
@@ -447,12 +475,12 @@ export function InteractiveMapView() {
     }
   };
 
-  // Remove image and reset layout
   const handleRemoveImage = () => {
     if (currentProject) {
       setMapImage(null);
       setCustomLayout(null);
       setEditingQuadras([]);
+      setEditingHouses([]);
       localStorage.removeItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject.id}`);
       toast.success("Layout resetado.");
     }
@@ -487,14 +515,12 @@ export function InteractiveMapView() {
     return "hsl(var(--muted))";
   }, [houses, legendItems, legendFollowMacros, macrosTemplate]);
 
-  // Get house progress
   const getHouseProgress = useCallback((houseId: number): number => {
     const house = houses.find(h => h.id === houseId);
     if (!house) return 0;
     return calculateHouseProgress(house);
   }, [houses]);
 
-  // Get house status
   const getHouseStatus = useCallback((houseId: number): string => {
     const house = houses.find(h => h.id === houseId);
     if (!house) return "nao_iniciado";
@@ -507,7 +533,6 @@ export function InteractiveMapView() {
     return "nao_iniciado";
   }, [houses, legendItems]);
 
-  // Check if house matches filter
   const houseMatchesMacroFilter = useCallback((houseId: number): boolean => {
     if (filterMacro === "all" && filterScope === "all") return true;
     const house = houses.find(h => h.id === houseId);
@@ -559,7 +584,6 @@ export function InteractiveMapView() {
     setScale(s => Math.max(0.3, Math.min(4, s + delta)));
   };
 
-  // Select house - show dialog with details
   const handleHouseClick = (houseId: number, e: React.MouseEvent) => {
     if (isEditMode) return;
     e.stopPropagation();
@@ -570,45 +594,44 @@ export function InteractiveMapView() {
     }
   };
 
-  // Get available scopes
   const availableScopes = useMemo(() => {
     if (filterMacro === "all") return [];
     const macro = macrosTemplate.find(m => m.id === filterMacro);
     return macro?.scopes || [];
   }, [filterMacro, macrosTemplate]);
 
-  // Get display quadras (editing or custom layout or default)
-  const displayQuadras = useMemo(() => {
-    if (isEditMode) return editingQuadras;
-    if (customLayout?.quadras && customLayout.quadras.length > 0) {
-      return customLayout.quadras;
+  // Get display data
+  const displayData = useMemo(() => {
+    if (isEditMode) {
+      return { quadras: editingQuadras, houses: editingHouses };
+    }
+    if (customLayout?.quadras && customLayout.houses) {
+      return { quadras: customLayout.quadras, houses: customLayout.houses };
     }
     return generateDefaultLayout(currentProject?.quadras || [], houses);
-  }, [isEditMode, editingQuadras, customLayout, currentProject?.quadras, houses]);
+  }, [isEditMode, editingQuadras, editingHouses, customLayout, currentProject?.quadras, houses, generateDefaultLayout]);
 
-  // Filter quadras
-  const filteredQuadras = useMemo(() => {
-    return displayQuadras.map(quadra => ({
-      ...quadra,
-      houses: quadra.houses.filter(hp => {
-        const term = searchTerm.toLowerCase();
-        const matchesSearch = !searchTerm || 
-          hp.id.toString().includes(term) ||
-          quadra.name.toLowerCase().includes(term);
-        const matchesStatus = filterStatus === "all" || getHouseStatus(hp.id) === filterStatus;
-        const matchesMacroScope = houseMatchesMacroFilter(hp.id);
-        return matchesSearch && matchesStatus && matchesMacroScope;
-      })
-    })).filter(q => q.houses.length > 0 || isEditMode);
-  }, [displayQuadras, searchTerm, filterStatus, getHouseStatus, houseMatchesMacroFilter, isEditMode]);
+  // Filter houses for display
+  const filteredHouses = useMemo(() => {
+    return displayData.houses.filter(hp => {
+      const term = searchTerm.toLowerCase();
+      const matchesSearch = !searchTerm || hp.id.toString().includes(term);
+      const matchesStatus = filterStatus === "all" || getHouseStatus(hp.id) === filterStatus;
+      const matchesMacroScope = houseMatchesMacroFilter(hp.id);
+      return matchesSearch && matchesStatus && matchesMacroScope;
+    });
+  }, [displayData.houses, searchTerm, filterStatus, getHouseStatus, houseMatchesMacroFilter]);
 
-  // SVG dimensions
+  const visibleQuadras = useMemo(() => {
+    return displayData.quadras.filter(q => q.visible !== false);
+  }, [displayData.quadras]);
+
   const svgDimensions = useMemo(() => {
-    if (displayQuadras.length === 0) return { width: MAP_WIDTH, height: MAP_HEIGHT };
-    const maxX = Math.max(...displayQuadras.map(q => q.x + q.width)) + 50;
-    const maxY = Math.max(...displayQuadras.map(q => q.y + q.height)) + 50;
+    if (displayData.quadras.length === 0) return { width: MAP_WIDTH, height: MAP_HEIGHT };
+    const maxX = Math.max(...displayData.quadras.map(q => q.x + q.width), ...displayData.houses.map(h => h.x)) + 50;
+    const maxY = Math.max(...displayData.quadras.map(q => q.y + q.height), ...displayData.houses.map(h => h.y)) + 50;
     return { width: Math.max(MAP_WIDTH, maxX), height: Math.max(MAP_HEIGHT, maxY) };
-  }, [displayQuadras]);
+  }, [displayData]);
 
   if (!currentProject) {
     return (
@@ -619,9 +642,9 @@ export function InteractiveMapView() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Controls - compact bar */}
-      <div className="flex items-center justify-between gap-3 p-2 bg-background/80 backdrop-blur border-b flex-wrap">
+    <div className="flex flex-col h-[calc(100vh-4rem)] w-full">
+      {/* Controls bar */}
+      <div className="flex items-center justify-between gap-3 p-2 bg-background/80 backdrop-blur border-b flex-wrap shrink-0">
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleZoomIn}>
             <ZoomIn className="h-4 w-4" />
@@ -632,83 +655,33 @@ export function InteractiveMapView() {
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleReset}>
             <RotateCcw className="h-4 w-4" />
           </Button>
-          <Badge variant="outline" className="text-xs h-6">
-            {Math.round(scale * 100)}%
-          </Badge>
+          <Badge variant="outline" className="text-xs h-6">{Math.round(scale * 100)}%</Badge>
         </div>
 
         <div className="flex items-center gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageUpload}
-            className="hidden"
-            disabled={isAnalyzing || isEditMode}
-          />
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" disabled={isAnalyzing || isEditMode} />
           
           {!isEditMode ? (
             <>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                className="gap-1.5 h-8 text-xs"
-                disabled={isAnalyzing}
-              >
-                {isAnalyzing ? (
-                  <>
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Analisando...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-3 w-3" />
-                    Importar
-                  </>
-                )}
+              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="gap-1.5 h-8 text-xs" disabled={isAnalyzing}>
+                {isAnalyzing ? <><Loader2 className="h-3 w-3 animate-spin" />Analisando...</> : <><Upload className="h-3 w-3" />Importar</>}
               </Button>
-              
-              <Button 
-                variant="default" 
-                size="sm"
-                onClick={enterEditMode}
-                className="gap-1.5 h-8 text-xs"
-              >
-                <Edit3 className="h-3 w-3" />
-                Editar
+              <Button variant="default" size="sm" onClick={enterEditMode} className="gap-1.5 h-8 text-xs">
+                <Edit3 className="h-3 w-3" />Editar
               </Button>
-
               {mapImage && (
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={handleRemoveImage}
-                  className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive"
-                >
+                <Button variant="ghost" size="sm" onClick={handleRemoveImage} className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive">
                   <Trash2 className="h-3 w-3" />
                 </Button>
               )}
             </>
           ) : (
             <>
-              <Button 
-                variant="default" 
-                size="sm"
-                onClick={saveLayout}
-                className="gap-1.5 h-8 text-xs"
-              >
-                <Save className="h-3 w-3" />
-                Salvar
+              <Button variant="default" size="sm" onClick={saveLayout} className="gap-1.5 h-8 text-xs">
+                <Save className="h-3 w-3" />Salvar
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={cancelEdit}
-                className="gap-1.5 h-8 text-xs"
-              >
-                <XCircle className="h-3 w-3" />
-                Cancelar
+              <Button variant="outline" size="sm" onClick={cancelEdit} className="gap-1.5 h-8 text-xs">
+                <XCircle className="h-3 w-3" />Cancelar
               </Button>
             </>
           )}
@@ -717,42 +690,31 @@ export function InteractiveMapView() {
         {!isEditMode && (
           <div className="relative w-40">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-            <Input
-              placeholder="Buscar casa..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-7 h-8 text-xs"
-            />
+            <Input placeholder="Buscar casa..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-7 h-8 text-xs" />
           </div>
         )}
         
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {isEditMode ? (
             <Badge variant="secondary" className="bg-primary/20 text-primary text-xs">
-              <Edit3 className="h-3 w-3 mr-1" />
-              Modo Edição
+              <Edit3 className="h-3 w-3 mr-1" />Modo Edição - Arraste casas livremente
             </Badge>
           ) : (
-            <>
-              <Move className="h-3 w-3" />
-              <span>Arraste para navegar</span>
-            </>
+            <><Move className="h-3 w-3" /><span>Arraste para navegar</span></>
           )}
         </div>
       </div>
 
-      {/* Filters Row (hidden in edit mode) */}
+      {/* Filters Row */}
       {!isEditMode && (
-        <div className="flex items-center gap-3 flex-wrap p-2 bg-muted/20 border-b">
+        <div className="flex items-center gap-3 flex-wrap p-2 bg-muted/20 border-b shrink-0">
           <div className="flex items-center gap-1.5">
             <Filter className="h-3 w-3 text-muted-foreground" />
             <span className="text-xs font-medium">Filtros:</span>
           </div>
           
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-32 h-7 text-xs">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
+            <SelectTrigger className="w-32 h-7 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
               {legendItems.map(item => (
@@ -767,9 +729,7 @@ export function InteractiveMapView() {
           </Select>
 
           <Select value={filterMacro} onValueChange={(v) => { setFilterMacro(v); setFilterScope("all"); }}>
-            <SelectTrigger className="w-32 h-7 text-xs">
-              <SelectValue placeholder="Etapa" />
-            </SelectTrigger>
+            <SelectTrigger className="w-32 h-7 text-xs"><SelectValue placeholder="Etapa" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas</SelectItem>
               {macrosTemplate.map(macro => (
@@ -785,14 +745,10 @@ export function InteractiveMapView() {
 
           {filterMacro !== "all" && (
             <Select value={filterScope} onValueChange={setFilterScope}>
-              <SelectTrigger className="w-32 h-7 text-xs">
-                <SelectValue placeholder="Serviço" />
-              </SelectTrigger>
+              <SelectTrigger className="w-32 h-7 text-xs"><SelectValue placeholder="Serviço" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
-                {availableScopes.map(scope => (
-                  <SelectItem key={scope.id} value={scope.id}>{scope.name}</SelectItem>
-                ))}
+                {availableScopes.map(scope => <SelectItem key={scope.id} value={scope.id}>{scope.name}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
@@ -802,6 +758,31 @@ export function InteractiveMapView() {
               Limpar
             </Button>
           )}
+        </div>
+      )}
+
+      {/* Edit mode: Quadra visibility controls */}
+      {isEditMode && (
+        <div className="flex items-center gap-2 flex-wrap p-2 bg-muted/30 border-b shrink-0">
+          <span className="text-xs font-medium">Quadras:</span>
+          {editingQuadras.map(q => (
+            <div key={q.id} className="flex items-center gap-1">
+              <Button
+                variant={q.visible ? "secondary" : "ghost"}
+                size="sm"
+                className="h-6 text-xs gap-1 px-2"
+                onClick={() => toggleQuadraVisibility(q.id)}
+              >
+                {q.visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                {q.name}
+              </Button>
+              {q.visible && (
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => autoDistributeHousesInQuadra(q.id)} title="Auto-distribuir casas">
+                  <Grid3X3 className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
@@ -831,7 +812,7 @@ export function InteractiveMapView() {
             transformOrigin: "0 0",
           }}
         >
-          {/* Background image */}
+          {/* Background image - auto-fit */}
           {mapImage && (
             <img 
               src={mapImage} 
@@ -847,12 +828,7 @@ export function InteractiveMapView() {
             />
           )}
 
-          <svg 
-            ref={svgRef}
-            width={svgDimensions.width} 
-            height={svgDimensions.height}
-            className="select-none relative z-10"
-          >
+          <svg ref={svgRef} width={svgDimensions.width} height={svgDimensions.height} className="select-none relative z-10">
             {/* Grid */}
             <defs>
               <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
@@ -861,65 +837,28 @@ export function InteractiveMapView() {
             </defs>
             <rect width="100%" height="100%" fill={mapImage ? "transparent" : "url(#grid)"} />
             
-            {/* Quadras */}
-            {(isEditMode ? editingQuadras : filteredQuadras).map((quadra) => (
+            {/* Visible Quadras */}
+            {visibleQuadras.map((quadra) => (
               <g key={quadra.id}>
-                {/* Quadra rectangle */}
                 <rect
                   x={quadra.x}
                   y={quadra.y}
                   width={quadra.width}
                   height={quadra.height}
-                  fill={isEditMode ? "hsl(var(--card) / 0.7)" : "hsl(var(--card) / 0.85)"}
-                  stroke={isEditMode ? "hsl(var(--primary))" : "hsl(var(--border))"}
+                  fill={isEditMode ? "hsl(var(--card) / 0.5)" : "hsl(var(--card) / 0.3)"}
+                  stroke={isEditMode ? "hsl(var(--primary))" : "hsl(var(--border) / 0.5)"}
                   strokeWidth={isEditMode ? 2 : 1}
                   strokeDasharray={isEditMode ? "5,5" : "none"}
                   rx="6"
                   style={{ cursor: isEditMode ? 'move' : 'default' }}
-                  onMouseDown={(e) => handleEditMouseDown(e, 'quadra', quadra.id)}
+                  onMouseDown={(e) => handleQuadraEditMouseDown(e, quadra.id)}
                 />
                 
-                {/* Quadra name + auto-distribute button */}
-                <text
-                  x={quadra.x + 10}
-                  y={quadra.y + 16}
-                  fill="hsl(var(--foreground))"
-                  fontSize="12"
-                  fontWeight="600"
-                  style={{ pointerEvents: 'none' }}
-                >
+                <text x={quadra.x + 10} y={quadra.y + 16} fill="hsl(var(--foreground))" fontSize="12" fontWeight="600" style={{ pointerEvents: 'none' }}>
                   {quadra.name}
                 </text>
 
-                {/* Auto-distribute button in edit mode */}
-                {isEditMode && (
-                  <g
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => autoDistributeHouses(quadra.id)}
-                  >
-                    <rect
-                      x={quadra.x + quadra.width - 24}
-                      y={quadra.y + 4}
-                      width={20}
-                      height={18}
-                      fill="hsl(var(--secondary))"
-                      stroke="hsl(var(--border))"
-                      rx="3"
-                    />
-                    <text
-                      x={quadra.x + quadra.width - 14}
-                      y={quadra.y + 17}
-                      fill="hsl(var(--foreground))"
-                      fontSize="10"
-                      textAnchor="middle"
-                      style={{ pointerEvents: 'none' }}
-                    >
-                      ⊞
-                    </text>
-                  </g>
-                )}
-
-                {/* Resize handles (edit mode only) */}
+                {/* Resize handles in edit mode */}
                 {isEditMode && (
                   <>
                     {['nw', 'ne', 'sw', 'se'].map(corner => {
@@ -935,101 +874,74 @@ export function InteractiveMapView() {
                           stroke="white"
                           strokeWidth={2}
                           style={{ cursor: `${corner}-resize` }}
-                          onMouseDown={(e) => handleEditMouseDown(e, 'resize', quadra.id, undefined, corner)}
+                          onMouseDown={(e) => handleQuadraEditMouseDown(e, quadra.id, corner)}
                         />
                       );
                     })}
-                    {[
-                      { key: 'n', x: quadra.x + quadra.width / 2, y: quadra.y },
-                      { key: 's', x: quadra.x + quadra.width / 2, y: quadra.y + quadra.height },
-                      { key: 'e', x: quadra.x + quadra.width, y: quadra.y + quadra.height / 2 },
-                      { key: 'w', x: quadra.x, y: quadra.y + quadra.height / 2 },
-                    ].map(({ key, x, y }) => (
-                      <circle
-                        key={key}
-                        cx={x}
-                        cy={y}
-                        r={5}
-                        fill="hsl(var(--secondary))"
-                        stroke="hsl(var(--primary))"
-                        strokeWidth={1.5}
-                        style={{ cursor: key === 'n' || key === 's' ? 'ns-resize' : 'ew-resize' }}
-                        onMouseDown={(e) => handleEditMouseDown(e, 'resize', quadra.id, undefined, key)}
-                      />
-                    ))}
                   </>
                 )}
-                
-                {/* Houses as circles */}
-                {quadra.houses.map((house) => {
-                  const progress = getHouseProgress(house.id);
-                  const color = getHouseColor(house.id);
-                  const isSelected = selectedHouse?.id === house.id;
-                  const cx = quadra.x + house.x;
-                  const cy = quadra.y + house.y;
-                  
-                  return (
-                    <g 
-                      key={`house-${quadra.id}-${house.id}`}
-                      style={{ cursor: isEditMode ? 'move' : 'pointer' }}
-                      onClick={(e) => handleHouseClick(house.id, e)}
-                      onMouseDown={(e) => isEditMode && handleEditMouseDown(e, 'house', quadra.id, house.id)}
-                    >
-                      {/* Progress ring background */}
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={HOUSE_RADIUS + 2}
-                        fill="none"
-                        stroke="hsl(var(--border))"
-                        strokeWidth={2}
-                        opacity={0.3}
-                      />
-                      
-                      {/* Progress ring */}
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={HOUSE_RADIUS + 2}
-                        fill="none"
-                        stroke={color}
-                        strokeWidth={2}
-                        strokeDasharray={`${(progress / 100) * (2 * Math.PI * (HOUSE_RADIUS + 2))} ${2 * Math.PI * (HOUSE_RADIUS + 2)}`}
-                        strokeDashoffset={0.25 * 2 * Math.PI * (HOUSE_RADIUS + 2)}
-                        strokeLinecap="round"
-                        style={{ pointerEvents: 'none' }}
-                      />
-                      
-                      {/* House circle */}
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={HOUSE_RADIUS}
-                        fill={color}
-                        stroke={isSelected ? "white" : "hsl(var(--border))"}
-                        strokeWidth={isSelected ? 3 : 1}
-                        className="transition-all duration-150"
-                      />
-                      
-                      {/* House number */}
-                      <text
-                        x={cx}
-                        y={cy + 4}
-                        fill="white"
-                        fontSize="9"
-                        fontWeight="bold"
-                        textAnchor="middle"
-                        style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)', pointerEvents: 'none' }}
-                      >
-                        {house.id}
-                      </text>
-                    </g>
-                  );
-                })}
               </g>
             ))}
             
-            {/* Legend - positioned in corner */}
+            {/* Houses - all rendered with absolute positions */}
+            {(isEditMode ? editingHouses : filteredHouses).map((house) => {
+              const progress = getHouseProgress(house.id);
+              const color = getHouseColor(house.id);
+              const isSelected = selectedHouse?.id === house.id;
+              const r = houseRadius;
+              
+              return (
+                <g 
+                  key={`house-${house.id}`}
+                  style={{ cursor: isEditMode ? 'move' : 'pointer' }}
+                  onClick={(e) => handleHouseClick(house.id, e)}
+                  onMouseDown={(e) => isEditMode && handleHouseEditMouseDown(e, house.id)}
+                >
+                  {/* Progress ring background */}
+                  <circle cx={house.x} cy={house.y} r={r + 2} fill="none" stroke="hsl(var(--border))" strokeWidth={2} opacity={0.3} />
+                  
+                  {/* Progress ring */}
+                  <circle
+                    cx={house.x}
+                    cy={house.y}
+                    r={r + 2}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={2}
+                    strokeDasharray={`${(progress / 100) * (2 * Math.PI * (r + 2))} ${2 * Math.PI * (r + 2)}`}
+                    strokeDashoffset={0.25 * 2 * Math.PI * (r + 2)}
+                    strokeLinecap="round"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                  
+                  {/* House circle */}
+                  <circle
+                    cx={house.x}
+                    cy={house.y}
+                    r={r}
+                    fill={color}
+                    stroke={isSelected ? "white" : "hsl(var(--border))"}
+                    strokeWidth={isSelected ? 3 : 1}
+                    className="transition-all duration-150"
+                  />
+                  
+                  {/* House number */}
+                  <text
+                    x={house.x}
+                    y={house.y + 4}
+                    fill="white"
+                    fontSize={Math.max(8, r * 0.6)}
+                    fontWeight="bold"
+                    textAnchor="middle"
+                    style={{ textShadow: '0 1px 2px rgba(0,0,0,0.5)', pointerEvents: 'none' }}
+                  >
+                    {house.id}
+                  </text>
+                </g>
+              );
+            })}
+            
+            {/* Legend */}
             {!isEditMode && (
               <g transform={`translate(20, 20)`}>
                 <rect x="0" y="0" width="120" height={legendItems.length * 18 + 25} fill="hsl(var(--card) / 0.95)" stroke="hsl(var(--border))" rx="4" />
@@ -1061,9 +973,7 @@ export function InteractiveMapView() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Quadra:</span>
-                  <span className="font-medium">
-                    {currentProject?.quadras.find(q => q.houses?.includes(selectedHouse.id))?.name || "-"}
-                  </span>
+                  <span className="font-medium">{currentProject?.quadras.find(q => q.houses?.includes(selectedHouse.id))?.name || "-"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Área:</span>
