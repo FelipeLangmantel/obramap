@@ -72,6 +72,7 @@ interface ActualProduction {
   week_end: string;
   houses_count: number;
   house_ids: number[];
+  is_initial_database: boolean;
 }
 
 interface Deviation {
@@ -239,11 +240,12 @@ export function PlannedProductionTab() {
         .eq('project_id', currentProject.id)
         .order('week_start', { ascending: false });
       
-      // Load actual productions for comparison
+      // Load actual productions for comparison (excluding initial database entries)
       const { data: actualData } = await supabase
         .from('weekly_productions')
-        .select('id, scope_id, scope_name, macro_id, macro_name, week_start, week_end, houses_count, house_ids')
-        .eq('project_id', currentProject.id);
+        .select('id, scope_id, scope_name, macro_id, macro_name, week_start, week_end, houses_count, house_ids, is_initial_database')
+        .eq('project_id', currentProject.id)
+        .eq('is_initial_database', false);
       
       // Load deviations
       const { data: deviationData } = await supabase
@@ -278,11 +280,12 @@ export function PlannedProductionTab() {
           filter: `project_id=eq.${currentProject.id}`
         },
         async () => {
-          // Reload actual productions when changes occur
+          // Reload actual productions when changes occur (excluding initial database entries)
           const { data: actualData } = await supabase
             .from('weekly_productions')
-            .select('id, scope_id, scope_name, macro_id, macro_name, week_start, week_end, houses_count, house_ids')
-            .eq('project_id', currentProject.id);
+            .select('id, scope_id, scope_name, macro_id, macro_name, week_start, week_end, houses_count, house_ids, is_initial_database')
+            .eq('project_id', currentProject.id)
+            .eq('is_initial_database', false);
           setActualProductions((actualData || []) as ActualProduction[]);
         }
       )
