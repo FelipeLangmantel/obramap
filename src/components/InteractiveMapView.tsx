@@ -194,22 +194,62 @@ export function InteractiveMapView() {
     loadLayout();
   }, [currentProject?.id]);
 
-  // Fit image to container on load
-  useEffect(() => {
-    if (mapImage && containerRef.current) {
+  // Fit map to container - recalculates when container becomes visible
+  const fitToContainer = useCallback(() => {
+    if (containerRef.current) {
       const container = containerRef.current;
       const containerWidth = container.clientWidth;
       const containerHeight = container.clientHeight;
-      const scaleX = containerWidth / MAP_WIDTH;
-      const scaleY = containerHeight / MAP_HEIGHT;
-      const newScale = Math.min(scaleX, scaleY, 1) * 0.95;
-      setScale(newScale);
-      setPosition({
-        x: (containerWidth - MAP_WIDTH * newScale) / 2,
-        y: (containerHeight - MAP_HEIGHT * newScale) / 2
+      
+      // Only fit if container has dimensions (is visible)
+      if (containerWidth > 0 && containerHeight > 0) {
+        const scaleX = containerWidth / MAP_WIDTH;
+        const scaleY = containerHeight / MAP_HEIGHT;
+        const newScale = Math.min(scaleX, scaleY, 1) * 0.95;
+        setScale(newScale);
+        setPosition({
+          x: (containerWidth - MAP_WIDTH * newScale) / 2,
+          y: (containerHeight - MAP_HEIGHT * newScale) / 2
+        });
+      }
+    }
+  }, []);
+
+  // Fit image to container on load or when mapImage changes
+  useEffect(() => {
+    if (mapImage) {
+      // Use requestAnimationFrame to ensure the container is rendered
+      requestAnimationFrame(() => {
+        fitToContainer();
       });
     }
-  }, [mapImage]);
+  }, [mapImage, fitToContainer]);
+
+  // Re-fit when container becomes visible (e.g., tab change)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Use ResizeObserver to detect when container becomes visible/resized
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+          fitToContainer();
+        }
+      }
+    });
+
+    resizeObserver.observe(container);
+
+    // Also fit on initial mount
+    requestAnimationFrame(() => {
+      fitToContainer();
+    });
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [fitToContainer, currentProject?.id]);
 
   // Generate default layout with absolute house positions
   const generateDefaultLayout = useCallback((quadras: any[], allHouses: any[]): { quadras: QuadraLayout[], houses: HousePosition[] } => {
