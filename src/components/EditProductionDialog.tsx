@@ -94,14 +94,17 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
   const handleSave = async () => {
     if (!production || !currentProject) return;
     
-    if (!weekStart || !weekEnd) {
-      toast.error("Preencha as datas do período");
-      return;
-    }
+    // Only validate dates if NOT initial database
+    if (!isInitialDatabase) {
+      if (!weekStart || !weekEnd) {
+        toast.error("Preencha as datas do período");
+        return;
+      }
 
-    if (new Date(weekEnd) < new Date(weekStart)) {
-      toast.error("A data final deve ser maior que a inicial");
-      return;
+      if (new Date(weekEnd) < new Date(weekStart)) {
+        toast.error("A data final deve ser maior que a inicial");
+        return;
+      }
     }
 
     if (selectedHouses.length === 0) {
@@ -233,39 +236,41 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
               )}
             </div>
 
-            {/* Period */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium flex items-center gap-2">
-                <CalendarDays className="w-4 h-4" />
-                Período de Medição
-              </Label>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Data Início</Label>
-                  <Input 
-                    type="date" 
-                    value={weekStart}
-                    onChange={(e) => setWeekStart(e.target.value)}
-                    className="h-9"
-                  />
+            {/* Period - Only show when NOT initial database */}
+            {!isInitialDatabase && (
+              <div className="space-y-3">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <CalendarDays className="w-4 h-4" />
+                  Período de Medição
+                </Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Data Início</Label>
+                    <Input 
+                      type="date" 
+                      value={weekStart}
+                      onChange={(e) => setWeekStart(e.target.value)}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Data Fim</Label>
+                    <Input 
+                      type="date" 
+                      value={weekEnd}
+                      onChange={(e) => setWeekEnd(e.target.value)}
+                      className="h-9"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Data Fim</Label>
-                  <Input 
-                    type="date" 
-                    value={weekEnd}
-                    onChange={(e) => setWeekEnd(e.target.value)}
-                    className="h-9"
-                  />
-                </div>
+                {periodDays > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Período: {periodDays} dia{periodDays > 1 ? 's' : ''} • 
+                    Média: {(selectedHouses.length / periodDays).toFixed(2)} casas/dia
+                  </p>
+                )}
               </div>
-              {periodDays > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Período: {periodDays} dia{periodDays > 1 ? 's' : ''} • 
-                  Média: {(selectedHouses.length / periodDays).toFixed(2)} casas/dia
-                </p>
-              )}
-            </div>
+            )}
 
             {/* Houses Selection */}
             <div className="space-y-3">
