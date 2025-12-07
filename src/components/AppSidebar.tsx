@@ -25,7 +25,8 @@ import {
   Layers,
   DollarSign,
   Grid3X3,
-  Target
+  Target,
+  Map
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -44,8 +45,8 @@ import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import obraMapLogo from "@/assets/obramap-logo.png";
 
 interface AppSidebarProps {
-  activeView: "map" | "charts" | "production" | "costs" | "planning";
-  onViewChange: (view: "map" | "charts" | "production" | "costs" | "planning") => void;
+  activeView: "map" | "charts" | "production" | "costs" | "planning" | "interactive-map";
+  onViewChange: (view: "map" | "charts" | "production" | "costs" | "planning" | "interactive-map") => void;
 }
 
 export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
@@ -81,6 +82,11 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       icon: LayoutDashboard 
     },
     { 
+      title: "Mapa Interativo", 
+      view: "interactive-map" as const, 
+      icon: Map 
+    },
+    { 
       title: "Gráficos", 
       view: "charts" as const, 
       icon: BarChart3 
@@ -102,7 +108,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     },
   ];
 
-  const handleViewChange = (view: "map" | "charts" | "production" | "costs" | "planning") => {
+  const handleViewChange = (view: "map" | "charts" | "production" | "costs" | "planning" | "interactive-map") => {
     onViewChange(view);
   };
 
