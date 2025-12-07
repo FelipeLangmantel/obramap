@@ -1,5 +1,6 @@
 import { useState, DragEvent } from "react";
-import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy } from "lucide-react";
+import { CopyMacrosDialog } from "./CopyMacrosDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,7 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
 
   const [showResetWarning, setShowResetWarning] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [showCopyDialog, setShowCopyDialog] = useState(false);
   
   // Drag state for macros
   const [draggedMacroId, setDraggedMacroId] = useState<string | null>(null);
@@ -239,30 +241,41 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
           </p>
           
           <div className="space-y-4 py-4">
-            {/* Add Macro Button */}
-            {!showAddMacro ? (
-              <Button 
-                variant="outline" 
-                className="w-full border-dashed"
-                onClick={() => setShowAddMacro(true)}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Adicionar Nova Etapa
-              </Button>
-            ) : (
-              <div className="flex gap-2 p-3 bg-secondary/50 rounded-lg">
-                <Input
-                  placeholder="Nome da etapa..."
-                  value={newMacroName}
-                  onChange={(e) => setNewMacroName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAddMacro()}
-                />
-                <Button size="sm" onClick={handleAddMacro}>Adicionar</Button>
-                <Button size="sm" variant="ghost" onClick={() => { setShowAddMacro(false); setNewMacroName(""); }}>
-                  Cancelar
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              {!showAddMacro ? (
+                <Button 
+                  variant="outline" 
+                  className="flex-1 border-dashed"
+                  onClick={() => setShowAddMacro(true)}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Adicionar Nova Etapa
                 </Button>
-              </div>
-            )}
+              ) : (
+                <div className="flex gap-2 p-3 bg-secondary/50 rounded-lg flex-1">
+                  <Input
+                    placeholder="Nome da etapa..."
+                    value={newMacroName}
+                    onChange={(e) => setNewMacroName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddMacro()}
+                  />
+                  <Button size="sm" onClick={handleAddMacro}>Adicionar</Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setShowAddMacro(false); setNewMacroName(""); }}>
+                    Cancelar
+                  </Button>
+                </div>
+              )}
+              {!showAddMacro && (
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowCopyDialog(true)}
+                >
+                  <Copy className="w-4 h-4 mr-2" />
+                  Copiar de Outra Obra
+                </Button>
+              )}
+            </div>
 
             {/* Macros List */}
             <div className="space-y-2">
@@ -518,6 +531,11 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CopyMacrosDialog 
+        open={showCopyDialog} 
+        onOpenChange={setShowCopyDialog} 
+      />
     </>
   );
 }
