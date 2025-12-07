@@ -1346,263 +1346,8 @@ export function PlannedProductionTab() {
           </CardContent>
         </Card>
 
-        {/* Comparisons and Stats */}
+        {/* Future Plans - Side Panel */}
         <Card className="lg:col-span-2">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                <BarChart3 className="w-5 h-5" />
-                Planejado vs Realizado
-              </CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => setReportDialogOpen(true)}
-                disabled={comparisons.length === 0}
-              >
-                <FileDown className="w-4 h-4" />
-                Gerar Relatório PDF
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {/* Pending Justifications Alert */}
-            {pendingJustifications > 0 && (
-              <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-3">
-                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-red-700 dark:text-red-400">
-                    {pendingJustifications} desvio(s) pendente(s) de justificativa
-                  </p>
-                  <p className="text-xs text-red-600 dark:text-red-500">
-                    Registre o motivo dos desvios negativos para gerar o relatório completo
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Production Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
-              <div className="p-3 bg-secondary/30 rounded-lg">
-                <p className="text-xs text-muted-foreground">Total Planejado</p>
-                <p className="text-xl font-bold">{stats.totalPlanned}</p>
-              </div>
-              <div className="p-3 bg-secondary/30 rounded-lg">
-                <p className="text-xs text-muted-foreground">Total Realizado</p>
-                <p className="text-xl font-bold">{stats.totalActual}</p>
-              </div>
-              <div className="p-3 bg-secondary/30 rounded-lg">
-                <p className="text-xs text-muted-foreground">Desvio Produção</p>
-                <p className={`text-xl font-bold ${parseFloat(stats.overallDeviation) < 0 ? 'text-red-500' : parseFloat(stats.overallDeviation) > 0 ? 'text-green-500' : ''}`}>
-                  {stats.overallDeviation}%
-                </p>
-              </div>
-              <div className="p-3 bg-secondary/30 rounded-lg">
-                <p className="text-xs text-muted-foreground">Acurácia</p>
-                <p className="text-xl font-bold">{stats.accuracy}%</p>
-              </div>
-              {stats.unplannedCount > 0 && (
-                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <p className="text-xs text-blue-600 dark:text-blue-400">Não Planejados</p>
-                  <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{stats.unplannedCount}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Cost Stats */}
-            {(costAnalysis.plannedCost > 0 || costAnalysis.realizedCost > 0) && (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4 p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                <div>
-                  <div className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400 mb-1">
-                    <DollarSign className="w-3 h-3" />
-                    Custo Planejado
-                  </div>
-                  <p className="text-lg font-bold text-amber-800 dark:text-amber-300">{formatCurrency(costAnalysis.plannedCost)}</p>
-                </div>
-                <div>
-                  <div className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400 mb-1">
-                    <DollarSign className="w-3 h-3" />
-                    Custo Realizado
-                  </div>
-                  <p className="text-lg font-bold text-amber-800 dark:text-amber-300">{formatCurrency(costAnalysis.realizedCost)}</p>
-                </div>
-                <div>
-                  <div className="text-xs text-amber-700 dark:text-amber-400 mb-1">Desvio Custo</div>
-                  <p className={`text-lg font-bold ${parseFloat(costAnalysis.costDeviation) < 0 ? 'text-green-600' : parseFloat(costAnalysis.costDeviation) > 0 ? 'text-red-600' : 'text-amber-800 dark:text-amber-300'}`}>
-                    {costAnalysis.costDeviation}%
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Comparisons List */}
-            <ScrollArea className="h-[300px]">
-              {comparisons.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground text-sm">
-                  Nenhuma produção registrada ainda. Lance produções em "Registrar Produção" para ver o comparativo.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {comparisons.map((comp, index) => (
-                    <div 
-                      key={comp.planned?.id || `unplanned-${index}`} 
-                      className={`p-3 rounded-lg border ${
-                        comp.isUnplanned 
-                          ? 'border-blue-300 bg-blue-50 dark:bg-blue-950/20' 
-                          : comp.isNegative && !comp.hasDeviation 
-                            ? 'border-red-300 bg-red-50 dark:bg-red-950/20' 
-                            : 'bg-card'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: comp.macroColor }}
-                          />
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium">{comp.scopeName}</p>
-                              {comp.isUnplanned && (
-                                <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">
-                                  Não Planejado
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              {format(parseISO(comp.weekStart), "dd/MM", { locale: ptBR })} - {format(parseISO(comp.weekEnd), "dd/MM", { locale: ptBR })}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-xs">
-                                Plan: {comp.planned?.planned_houses || 0}
-                              </Badge>
-                              <ArrowRight className="w-3 h-3 text-muted-foreground" />
-                              <Badge variant={comp.isUnplanned ? "secondary" : comp.deviation >= 0 ? "default" : "destructive"} className="text-xs">
-                                Real: {comp.actualCount}
-                              </Badge>
-                            </div>
-                            {!comp.isUnplanned && (
-                              <div className="flex items-center gap-1 mt-1 justify-end">
-                                {comp.deviation > 0 ? (
-                                  <TrendingUp className="w-3 h-3 text-green-500" />
-                                ) : comp.deviation < 0 ? (
-                                  <TrendingDown className="w-3 h-3 text-red-500" />
-                                ) : (
-                                  <CheckCircle2 className="w-3 h-3 text-green-500" />
-                                )}
-                                <span className={`text-xs ${comp.deviation < 0 ? 'text-red-500' : comp.deviation > 0 ? 'text-green-500' : ''}`}>
-                                  {comp.deviation > 0 ? '+' : ''}{comp.deviation} ({comp.percentDeviation}%)
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          {comp.isNegative && !comp.hasDeviation && comp.planned && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-1 h-8 border-red-300 text-red-600 hover:bg-red-50"
-                              onClick={() => {
-                                setSelectedDeviation({
-                                  planned: comp.planned!,
-                                  actual: comp.actualCount,
-                                  deviation: comp.deviation
-                                });
-                                setDeviationDialogOpen(true);
-                              }}
-                            >
-                              <AlertTriangle className="w-3 h-3" />
-                              Justificar
-                            </Button>
-                          )}
-                          {comp.hasDeviation && (
-                            <Badge variant="secondary" className="text-xs gap-1">
-                              <CheckCircle2 className="w-3 h-3" />
-                              Justificado
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Deviation Analysis */}
-      {deviations.length > 0 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <AlertCircle className="w-5 h-5" />
-              Análise de Desvios - Motivos de Não Cumprimento
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* By Reason Chart */}
-              <div className="space-y-3">
-                <p className="text-sm font-medium">Frequência por Motivo</p>
-                {deviationAnalysis.map((item, index) => (
-                  <div key={item.reason} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span>{item.reason}</span>
-                      <Badge variant="outline">{item.count}x</Badge>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-red-500 transition-all"
-                        style={{ 
-                          width: `${(item.count / Math.max(...deviationAnalysis.map(d => d.count))) * 100}%`,
-                          opacity: 1 - (index * 0.15)
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Recent Deviations */}
-              <div className="space-y-3">
-                <p className="text-sm font-medium">Últimos Desvios Registrados</p>
-                <ScrollArea className="h-[200px]">
-                  <div className="space-y-2">
-                    {deviations.slice(0, 10).map(d => (
-                      <div key={d.id} className="p-2 rounded-lg border bg-card text-sm">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">{d.scope_name}</span>
-                          <Badge variant="destructive" className="text-xs">
-                            -{Math.abs(d.deviation)}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          <strong>Motivo:</strong> {d.deviation_reason}
-                        </p>
-                        {d.corrective_action && (
-                          <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                            <strong>Ação:</strong> {d.corrective_action}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Future Plans - Grouped by Week */}
-      {groupedFuturePlans.length > 0 && (
-        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <ClipboardList className="w-5 h-5" />
@@ -1610,155 +1355,166 @@ export function PlannedProductionTab() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {groupedFuturePlans.map(group => {
-                const totalHouses = group.plans.reduce((sum, p) => sum + p.planned_houses, 0);
-                
-                return (
-                  <div key={`${group.weekStart}_${group.weekEnd}`} className="border rounded-lg overflow-hidden">
-                    {/* Week Header */}
-                    <div className="bg-secondary/50 p-3 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Calendar className="w-5 h-5 text-primary" />
-                        <div>
-                          <p className="font-semibold">
-                            {format(parseISO(group.weekStart), "dd/MM/yyyy", { locale: ptBR })} - {format(parseISO(group.weekEnd), "dd/MM/yyyy", { locale: ptBR })}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {group.plans.length} atividade(s) • {totalHouses} casas no total
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                        onClick={() => handlePrint(group.weekStart, group.weekEnd)}
-                      >
-                        <Printer className="w-4 h-4" />
-                        Imprimir
-                      </Button>
-                    </div>
+            {groupedFuturePlans.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground text-sm">
+                <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>Nenhum planejamento futuro cadastrado</p>
+                <p className="text-xs mt-1">Use o formulário ao lado para criar novos planejamentos</p>
+              </div>
+            ) : (
+              <ScrollArea className="h-[500px]">
+                <div className="space-y-4">
+                  {groupedFuturePlans.map(group => {
+                    const totalHouses = group.plans.reduce((sum, p) => sum + p.planned_houses, 0);
                     
-                    {/* Plans Table */}
-                    <div className="divide-y">
-                      {group.plans.map(p => (
-                        <div key={p.id} className="p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
-                          {editingId === p.id ? (
-                            // Edit Mode
-                            <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
-                              <div className="space-y-1">
-                                <Label className="text-xs">Início</Label>
-                                <Input
-                                  type="date"
-                                  value={editFormData.week_start}
-                                  onChange={(e) => setEditFormData(prev => ({ ...prev, week_start: e.target.value }))}
-                                  className="h-8"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-xs">Fim</Label>
-                                <Input
-                                  type="date"
-                                  value={editFormData.week_end}
-                                  onChange={(e) => setEditFormData(prev => ({ ...prev, week_end: e.target.value }))}
-                                  className="h-8"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-xs">Casas</Label>
-                                <Input
-                                  type="number"
-                                  min="1"
-                                  value={editFormData.planned_houses}
-                                  onChange={(e) => setEditFormData(prev => ({ ...prev, planned_houses: e.target.value }))}
-                                  className="h-8"
-                                />
-                              </div>
-                              <div className="space-y-1">
-                                <Label className="text-xs">Obs.</Label>
-                                <Input
-                                  value={editFormData.notes}
-                                  onChange={(e) => setEditFormData(prev => ({ ...prev, notes: e.target.value }))}
-                                  className="h-8"
-                                  placeholder="Observações"
-                                />
-                              </div>
+                    return (
+                      <div key={`${group.weekStart}_${group.weekEnd}`} className="border rounded-lg overflow-hidden">
+                        {/* Week Header */}
+                        <div className="bg-secondary/50 p-3 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Calendar className="w-5 h-5 text-primary" />
+                            <div>
+                              <p className="font-semibold">
+                                {format(parseISO(group.weekStart), "dd/MM/yyyy", { locale: ptBR })} - {format(parseISO(group.weekEnd), "dd/MM/yyyy", { locale: ptBR })}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {group.plans.length} atividade(s) • {totalHouses} casas no total
+                              </p>
                             </div>
-                          ) : (
-                            // View Mode
-                            <div className="flex items-center gap-3 flex-1">
-                              <div 
-                                className="w-4 h-4 rounded-full shrink-0" 
-                                style={{ backgroundColor: p.macro_color }}
-                              />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-medium text-sm">{p.scope_name}</span>
-                                  <Badge variant="outline" className="text-xs">{p.macro_name}</Badge>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                            onClick={() => handlePrint(group.weekStart, group.weekEnd)}
+                          >
+                            <Printer className="w-4 h-4" />
+                            Imprimir
+                          </Button>
+                        </div>
+                        
+                        {/* Plans Table */}
+                        <div className="divide-y">
+                          {group.plans.map(p => (
+                            <div key={p.id} className="p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                              {editingId === p.id ? (
+                                // Edit Mode
+                                <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Início</Label>
+                                    <Input
+                                      type="date"
+                                      value={editFormData.week_start}
+                                      onChange={(e) => setEditFormData(prev => ({ ...prev, week_start: e.target.value }))}
+                                      className="h-8"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Fim</Label>
+                                    <Input
+                                      type="date"
+                                      value={editFormData.week_end}
+                                      onChange={(e) => setEditFormData(prev => ({ ...prev, week_end: e.target.value }))}
+                                      className="h-8"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Casas</Label>
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      value={editFormData.planned_houses}
+                                      onChange={(e) => setEditFormData(prev => ({ ...prev, planned_houses: e.target.value }))}
+                                      className="h-8"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label className="text-xs">Obs.</Label>
+                                    <Input
+                                      value={editFormData.notes}
+                                      onChange={(e) => setEditFormData(prev => ({ ...prev, notes: e.target.value }))}
+                                      className="h-8"
+                                      placeholder="Observações"
+                                    />
+                                  </div>
                                 </div>
-                                {p.notes && (
-                                  <p className="text-xs text-muted-foreground truncate mt-0.5">{p.notes}</p>
+                              ) : (
+                                // View Mode
+                                <div className="flex items-center gap-3 flex-1">
+                                  <div 
+                                    className="w-4 h-4 rounded-full shrink-0" 
+                                    style={{ backgroundColor: p.macro_color }}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-medium text-sm">{p.scope_name}</span>
+                                      <Badge variant="outline" className="text-xs">{p.macro_name}</Badge>
+                                    </div>
+                                    {p.notes && (
+                                      <p className="text-xs text-muted-foreground truncate mt-0.5">{p.notes}</p>
+                                    )}
+                                  </div>
+                                  <Badge className="shrink-0">{p.planned_houses} casas</Badge>
+                                </div>
+                              )}
+                              
+                              {/* Action Buttons */}
+                              <div className="flex items-center gap-1 ml-3">
+                                {editingId === p.id ? (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      onClick={() => handleSaveEdit(p.id)}
+                                    >
+                                      <Check className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                      onClick={handleCancelEdit}
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => handleStartEdit(p)}
+                                      disabled={!canEdit}
+                                    >
+                                      <Edit3 className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive hover:text-destructive"
+                                      onClick={() => handleDelete(p.id)}
+                                      disabled={!canEdit}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </>
                                 )}
                               </div>
-                              <Badge className="shrink-0">{p.planned_houses} casas</Badge>
                             </div>
-                          )}
-                          
-                          {/* Action Buttons */}
-                          <div className="flex items-center gap-1 ml-3">
-                            {editingId === p.id ? (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                  onClick={() => handleSaveEdit(p.id)}
-                                >
-                                  <Check className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                  onClick={handleCancelEdit}
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </>
-                            ) : (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => handleStartEdit(p)}
-                                  disabled={!canEdit}
-                                >
-                                  <Edit3 className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-destructive hover:text-destructive"
-                                  onClick={() => handleDelete(p.id)}
-                                  disabled={!canEdit}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </>
-                            )}
-                          </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            )}
           </CardContent>
         </Card>
-      )}
+      </div>
+
 
       {/* Deviation Dialog */}
       <Dialog open={deviationDialogOpen} onOpenChange={setDeviationDialogOpen}>
