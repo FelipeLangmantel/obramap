@@ -364,50 +364,40 @@ export function WeeklyProductionView() {
   }, []);
 
   // Filter productions by analysis period and other filters
-  // IMPORTANT: Exclude initial database records from analysis (they don't affect trends/averages)
-  const filteredProductions = useMemo(() => {
-    // First, filter out initial database records for analysis purposes
-    const nonInitialProductions = productions.filter(prod => !prod.is_initial_database);
-    
+  // This includes ALL records for display purposes
+  const allFilteredProductions = useMemo(() => {
     // For "all" period, don't filter by date
     if (analysisPeriod === "all") {
-      return nonInitialProductions.filter(prod => {
-        // Filter by house - show only productions that include this house
+      return productions.filter(prod => {
         const houseMatch = !analysisHouseFilter || 
           prod.house_ids.includes(parseInt(analysisHouseFilter));
-        
-        // Filter by macro
         const macroMatch = !analysisMacroFilter || prod.macro_id === analysisMacroFilter;
-        
-        // Filter by scope
         const scopeMatch = !analysisScopeFilter || prod.scope_id === analysisScopeFilter;
-        
         return houseMatch && macroMatch && scopeMatch;
       });
     }
     
-    if (!analysisStartDate || !analysisEndDate) return nonInitialProductions;
+    if (!analysisStartDate || !analysisEndDate) return productions;
     
     const start = parseISO(analysisStartDate);
     const end = parseISO(analysisEndDate);
     
-    return nonInitialProductions.filter(prod => {
+    return productions.filter(prod => {
       const prodDate = parseISO(prod.week_start);
       const inDateRange = isWithinInterval(prodDate, { start, end });
-      
-      // Filter by house - show only productions that include this house
       const houseMatch = !analysisHouseFilter || 
         prod.house_ids.includes(parseInt(analysisHouseFilter));
-      
-      // Filter by macro
       const macroMatch = !analysisMacroFilter || prod.macro_id === analysisMacroFilter;
-      
-      // Filter by scope
       const scopeMatch = !analysisScopeFilter || prod.scope_id === analysisScopeFilter;
-      
       return inDateRange && houseMatch && macroMatch && scopeMatch;
     });
   }, [productions, analysisPeriod, analysisStartDate, analysisEndDate, analysisHouseFilter, analysisMacroFilter, analysisScopeFilter]);
+
+  // For analysis calculations, EXCLUDE initial database records
+  // These don't affect trends/averages
+  const filteredProductions = useMemo(() => {
+    return allFilteredProductions.filter(prod => !prod.is_initial_database);
+  }, [allFilteredProductions]);
 
   // Weekly stats - with proper week calculation considering the period
   // Also include detailed productions for each week for click popup
@@ -1031,13 +1021,13 @@ export function WeeklyProductionView() {
               </CardHeader>
               <CardContent className="flex-1">
                 <ScrollArea className="h-[300px]">
-                  {filteredProductions.length === 0 ? (
+                  {allFilteredProductions.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground text-sm">
                       Nenhuma produção no período
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {filteredProductions.slice(0, 20).map(prod => (
+                      {allFilteredProductions.slice(0, 20).map(prod => (
                         <div 
                           key={prod.id} 
                           className={`flex items-center gap-3 p-2.5 rounded-lg border hover:bg-accent/30 transition-colors cursor-pointer ${prod.is_initial_database ? 'border-amber-500/30 bg-amber-500/5' : ''}`}
