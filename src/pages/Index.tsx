@@ -12,11 +12,12 @@ import { QuadrasGrid } from "@/components/QuadrasGrid";
 import { HouseDetails } from "@/components/HouseDetails";
 import { ChartsView } from "@/components/ChartsView";
 import { WeeklyProductionView } from "@/components/WeeklyProductionView";
+import { PlanningView } from "@/components/PlanningView";
 import { ProjectCostsView } from "@/components/ProjectCostsView";
 import { Loader2 } from "lucide-react";
 
 function IndexContent() {
-  const [activeView, setActiveView] = useState<"map" | "charts" | "production" | "costs">("map");
+  const [activeView, setActiveView] = useState<"map" | "charts" | "production" | "costs" | "planning">("map");
   const { selectedHouse, isLoading, projects } = useConstruction();
 
   if (isLoading) {
@@ -34,6 +35,7 @@ function IndexContent() {
     map: "Mapa de Obras",
     charts: "Gráficos e Análises",
     production: "Produção Semanal",
+    planning: "Planejamento",
     costs: "Custos da Obra"
   };
 
@@ -101,6 +103,12 @@ function IndexContent() {
                 {activeView === "costs" && (
                   <div className="flex-1">
                     <ProjectCostsView />
+                  </div>
+                )}
+
+                {activeView === "planning" && (
+                  <div className="flex-1">
+                    <PlanningView />
                   </div>
                 )}
               </div>

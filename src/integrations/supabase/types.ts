@@ -345,6 +345,7 @@ export type Database = {
           house_ids: number[]
           houses_count: number
           id: string
+          is_initial_database: boolean
           macro_color: string
           macro_id: string
           macro_name: string
@@ -361,6 +362,7 @@ export type Database = {
           house_ids?: number[]
           houses_count?: number
           id?: string
+          is_initial_database?: boolean
           macro_color?: string
           macro_id: string
           macro_name: string
@@ -377,6 +379,7 @@ export type Database = {
           house_ids?: number[]
           houses_count?: number
           id?: string
+          is_initial_database?: boolean
           macro_color?: string
           macro_id?: string
           macro_name?: string
