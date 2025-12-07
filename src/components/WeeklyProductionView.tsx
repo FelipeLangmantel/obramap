@@ -141,6 +141,13 @@ export function WeeklyProductionView() {
   useEffect(() => {
     const now = new Date();
     switch (analysisPeriod) {
+      case "all":
+        // Set to project start and end dates or fallback to wide range
+        if (currentProject) {
+          setAnalysisStartDate(currentProject.startDate || "2020-01-01");
+          setAnalysisEndDate(format(now, "yyyy-MM-dd"));
+        }
+        break;
       case "1week":
         setAnalysisStartDate(format(subWeeks(now, 1), "yyyy-MM-dd"));
         setAnalysisEndDate(format(now, "yyyy-MM-dd"));
@@ -170,7 +177,7 @@ export function WeeklyProductionView() {
         // Keep current dates
         break;
     }
-  }, [analysisPeriod]);
+  }, [analysisPeriod, currentProject]);
 
   // Load productions
   useEffect(() => {
@@ -283,6 +290,23 @@ export function WeeklyProductionView() {
 
   // Filter productions by analysis period and other filters
   const filteredProductions = useMemo(() => {
+    // For "all" period, don't filter by date
+    if (analysisPeriod === "all") {
+      return productions.filter(prod => {
+        // Filter by house - show only productions that include this house
+        const houseMatch = !analysisHouseFilter || 
+          prod.house_ids.includes(parseInt(analysisHouseFilter));
+        
+        // Filter by macro
+        const macroMatch = !analysisMacroFilter || prod.macro_id === analysisMacroFilter;
+        
+        // Filter by scope
+        const scopeMatch = !analysisScopeFilter || prod.scope_id === analysisScopeFilter;
+        
+        return houseMatch && macroMatch && scopeMatch;
+      });
+    }
+    
     if (!analysisStartDate || !analysisEndDate) return productions;
     
     const start = parseISO(analysisStartDate);
@@ -292,7 +316,7 @@ export function WeeklyProductionView() {
       const prodDate = parseISO(prod.week_start);
       const inDateRange = isWithinInterval(prodDate, { start, end });
       
-      // Filter by house
+      // Filter by house - show only productions that include this house
       const houseMatch = !analysisHouseFilter || 
         prod.house_ids.includes(parseInt(analysisHouseFilter));
       
@@ -304,11 +328,18 @@ export function WeeklyProductionView() {
       
       return inDateRange && houseMatch && macroMatch && scopeMatch;
     });
-  }, [productions, analysisStartDate, analysisEndDate, analysisHouseFilter, analysisMacroFilter, analysisScopeFilter]);
+  }, [productions, analysisPeriod, analysisStartDate, analysisEndDate, analysisHouseFilter, analysisMacroFilter, analysisScopeFilter]);
 
   // Weekly stats - with proper week calculation considering the period
+  // Also include detailed productions for each week for click popup
   const weeklyStats = useMemo(() => {
-    const weeks: { [key: string]: { total: number; scopes: { [key: string]: number }; weekStart: Date; weekEnd: Date } } = {};
+    const weeks: { [key: string]: { 
+      total: number; 
+      scopes: { [key: string]: number }; 
+      weekStart: Date; 
+      weekEnd: Date;
+      productions: WeeklyProduction[];
+    } } = {};
     
     filteredProductions.forEach(prod => {
       const weekKey = prod.week_start;
@@ -317,11 +348,13 @@ export function WeeklyProductionView() {
           total: 0, 
           scopes: {}, 
           weekStart: parseISO(prod.week_start), 
-          weekEnd: parseISO(prod.week_end) 
+          weekEnd: parseISO(prod.week_end),
+          productions: []
         };
       }
       weeks[weekKey].total += prod.houses_count;
       weeks[weekKey].scopes[prod.scope_name] = (weeks[weekKey].scopes[prod.scope_name] || 0) + prod.houses_count;
+      weeks[weekKey].productions.push(prod);
     });
 
     return Object.entries(weeks)
@@ -606,6 +639,7 @@ export function WeeklyProductionView() {
                     <SelectValue placeholder="Selecione o período" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="all">Todo Projeto</SelectItem>
                     <SelectItem value="1week">Última semana</SelectItem>
                     <SelectItem value="2weeks">Últimas 2 semanas</SelectItem>
                     <SelectItem value="4weeks">Últimas 4 semanas</SelectItem>
@@ -640,7 +674,13 @@ export function WeeklyProductionView() {
                 <div className="flex items-center gap-2">
                   <Home className="w-4 h-4 text-muted-foreground" />
                   <Label className="text-sm">Casa:</Label>
-                  <Select value={analysisHouseFilter || "all"} onValueChange={(v) => setAnalysisHouseFilter(v === "all" ? "" : v)}>
+                  <Select value={analysisHouseFilter || "all"} onValueChange={(v) => {
+                    setAnalysisHouseFilter(v === "all" ? "" : v);
+                    // When filtering by house, switch to "all" period to show complete history
+                    if (v !== "all") {
+                      setAnalysisPeriod("all");
+                    }
+                  }}>
                     <SelectTrigger className="w-[100px] h-8">
                       <SelectValue placeholder="Todas" />
                     </SelectTrigger>
@@ -796,29 +836,67 @@ export function WeeklyProductionView() {
                   <ScrollArea className="h-[300px]">
                     <div className="space-y-3">
                       {weeklyStats.map((week, index) => (
-                        <div key={week.week} className="space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium">Semana {week.weekFormatted}</span>
-                            <Badge variant={index === 0 ? "default" : "secondary"} className="text-xs">
-                              {week.total} serviços
-                            </Badge>
-                          </div>
-                          <div className="h-5 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-primary transition-all"
-                              style={{ 
-                                width: `${Math.min(100, (week.total / Math.max(...weeklyStats.map(w => w.total))) * 100)}%` 
-                              }}
-                            />
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {Object.entries(week.scopes).map(([scopeName, count]) => (
-                              <Badge key={scopeName} variant="outline" className="text-[10px] px-1.5 py-0">
-                                {scopeName}: {count}
+                        <details key={week.week} className="group cursor-pointer">
+                          <summary className="list-none space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium flex items-center gap-2">
+                                Semana {week.weekFormatted}
+                                <span className="text-[10px] text-muted-foreground group-open:hidden">
+                                  (clique para detalhes)
+                                </span>
+                              </span>
+                              <Badge variant={index === 0 ? "default" : "secondary"} className="text-xs">
+                                {week.total} serviços
                               </Badge>
+                            </div>
+                            <div className="h-5 bg-muted rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-primary transition-all"
+                                style={{ 
+                                  width: `${Math.min(100, (week.total / Math.max(...weeklyStats.map(w => w.total))) * 100)}%` 
+                                }}
+                              />
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {Object.entries(week.scopes).map(([scopeName, count]) => (
+                                <Badge key={scopeName} variant="outline" className="text-[10px] px-1.5 py-0">
+                                  {scopeName}: {count}
+                                </Badge>
+                              ))}
+                            </div>
+                          </summary>
+                          
+                          {/* Detailed productions for this week */}
+                          <div className="mt-2 ml-2 pl-3 border-l-2 border-primary/30 space-y-2">
+                            {week.productions.map(prod => (
+                              <div key={prod.id} className="p-2 rounded-md bg-secondary/30 text-xs">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <div 
+                                    className="w-2 h-2 rounded-full" 
+                                    style={{ backgroundColor: prod.macro_color }}
+                                  />
+                                  <span className="font-medium">{prod.scope_name}</span>
+                                  <Badge variant="outline" className="text-[10px] ml-auto">
+                                    {prod.houses_count} casas
+                                  </Badge>
+                                </div>
+                                <div className="text-muted-foreground">
+                                  <span className="font-medium">Casas executadas:</span>{" "}
+                                  {prod.house_ids.join(", ")}
+                                </div>
+                                <div className="text-muted-foreground mt-0.5">
+                                  <span className="font-medium">Período:</span>{" "}
+                                  {format(parseISO(prod.week_start), "dd/MM/yyyy", { locale: ptBR })} - {format(parseISO(prod.week_end), "dd/MM/yyyy", { locale: ptBR })}
+                                </div>
+                                {prod.notes && (
+                                  <div className="text-muted-foreground mt-0.5 italic">
+                                    {prod.notes}
+                                  </div>
+                                )}
+                              </div>
                             ))}
                           </div>
-                        </div>
+                        </details>
                       ))}
                     </div>
                   </ScrollArea>
