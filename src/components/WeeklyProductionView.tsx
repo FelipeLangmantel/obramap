@@ -602,15 +602,8 @@ export function WeeklyProductionView() {
         </TabsList>
 
         <TabsContent value="register" className="flex-1 overflow-auto mt-4">
-          {!canEdit ? (
-            <Card className="p-8">
-              <div className="text-center text-muted-foreground">
-                <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p className="font-medium">Você não tem permissão para registrar produção</p>
-                <p className="text-sm mt-1">Entre em contato com um administrador para obter acesso de edição.</p>
-              </div>
-            </Card>
-          ) : (
+          {/* Allow viewers to interact but block saving */}
+          {(
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
             {/* Selection Panel */}
             <Card className="lg:col-span-1 overflow-visible">
@@ -762,10 +755,16 @@ export function WeeklyProductionView() {
                   className="w-full gap-2 h-10" 
                   onClick={handleSave}
                   disabled={!selectedScope || selectedHouses.length === 0 || isSaving || !canEdit}
+                  title={!canEdit ? "Você pode simular, mas não tem permissão para salvar" : ""}
                 >
                   <Save className="w-4 h-4" />
-                  {!canEdit ? "Sem permissão" : isSaving ? "Salvando..." : "Registrar Produção"}
+                  {!canEdit ? "Modo Visualização" : isSaving ? "Salvando..." : "Registrar Produção"}
                 </Button>
+                {!canEdit && (
+                  <p className="text-xs text-muted-foreground text-center mt-2">
+                    Modo simulação - você pode interagir mas não salvar
+                  </p>
+                )}
               </CardContent>
             </Card>
 

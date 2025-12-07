@@ -1,5 +1,5 @@
 import { useState, DragEvent } from "react";
-import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy, Eye } from "lucide-react";
 import { CopyMacrosDialog } from "./CopyMacrosDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Scope } from "@/data/constructionData";
 import { DEFAULT_MACRO_COLORS } from "@/data/constructionData";
 
@@ -18,6 +20,7 @@ interface ManageMacrosDialogProps {
 
 export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogProps) {
   const { currentProject, addMacro, updateMacro, deleteMacro, addScope, updateScope, deleteScope, resetProjectData, reorderMacros, reorderScopes } = useConstruction();
+  const { canEdit } = useAuth();
   
   const [editingMacro, setEditingMacro] = useState<{ id: string; name: string; color: string } | null>(null);
   const [newMacroName, setNewMacroName] = useState("");
@@ -227,7 +230,16 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
             <DialogTitle>Gerenciar Etapas e Serviços</DialogTitle>
           </DialogHeader>
           
-          {hasData && (
+          {!canEdit && (
+            <Alert>
+              <Eye className="h-4 w-4" />
+              <AlertDescription>
+                Modo visualização - você pode ver as etapas e serviços mas não pode fazer alterações
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {hasData && canEdit && (
             <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-sm">
               <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
               <span className="text-amber-800 dark:text-amber-200">
@@ -241,41 +253,43 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
           </p>
           
           <div className="space-y-4 py-4">
-            {/* Action Buttons */}
-            <div className="flex gap-2">
-              {!showAddMacro ? (
-                <Button 
-                  variant="outline" 
-                  className="flex-1 border-dashed"
-                  onClick={() => setShowAddMacro(true)}
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Adicionar Nova Etapa
-                </Button>
-              ) : (
-                <div className="flex gap-2 p-3 bg-secondary/50 rounded-lg flex-1">
-                  <Input
-                    placeholder="Nome da etapa..."
-                    value={newMacroName}
-                    onChange={(e) => setNewMacroName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleAddMacro()}
-                  />
-                  <Button size="sm" onClick={handleAddMacro}>Adicionar</Button>
-                  <Button size="sm" variant="ghost" onClick={() => { setShowAddMacro(false); setNewMacroName(""); }}>
-                    Cancelar
+            {/* Action Buttons - Only show if can edit */}
+            {canEdit && (
+              <div className="flex gap-2">
+                {!showAddMacro ? (
+                  <Button 
+                    variant="outline" 
+                    className="flex-1 border-dashed"
+                    onClick={() => setShowAddMacro(true)}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Adicionar Nova Etapa
                   </Button>
-                </div>
-              )}
-              {!showAddMacro && (
-                <Button 
-                  variant="outline"
-                  onClick={() => setShowCopyDialog(true)}
-                >
-                  <Copy className="w-4 h-4 mr-2" />
-                  Copiar de Outra Obra
-                </Button>
-              )}
-            </div>
+                ) : (
+                  <div className="flex gap-2 p-3 bg-secondary/50 rounded-lg flex-1">
+                    <Input
+                      placeholder="Nome da etapa..."
+                      value={newMacroName}
+                      onChange={(e) => setNewMacroName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleAddMacro()}
+                    />
+                    <Button size="sm" onClick={handleAddMacro}>Adicionar</Button>
+                    <Button size="sm" variant="ghost" onClick={() => { setShowAddMacro(false); setNewMacroName(""); }}>
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
+                {!showAddMacro && (
+                  <Button 
+                    variant="outline"
+                    onClick={() => setShowCopyDialog(true)}
+                  >
+                    <Copy className="w-4 h-4 mr-2" />
+                    Copiar de Outra Obra
+                  </Button>
+                )}
+              </div>
+            )}
 
             {/* Macros List */}
             <div className="space-y-2">
@@ -341,42 +355,44 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                                 />
                                 <span className="text-sm font-medium">{macro.name}</span>
                               </div>
-                              <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost" 
-                                  className="h-7 w-7"
-                                  onClick={() => moveMacro(macro.id, "up")}
-                                  disabled={macroIndex === 0}
-                                >
-                                  <ArrowUp className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost" 
-                                  className="h-7 w-7"
-                                  onClick={() => moveMacro(macro.id, "down")}
-                                  disabled={macroIndex === macrosTemplate.length - 1}
-                                >
-                                  <ArrowDown className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost" 
-                                  className="h-7 w-7"
-                                  onClick={() => setEditingMacro({ id: macro.id, name: macro.name, color: macro.color })}
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost" 
-                                  className="h-7 w-7 text-destructive hover:text-destructive"
-                                  onClick={() => handleDeleteMacro(macro.id)}
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
-                              </div>
+                              {canEdit && (
+                                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                                  <Button 
+                                    size="icon" 
+                                    variant="ghost" 
+                                    className="h-7 w-7"
+                                    onClick={() => moveMacro(macro.id, "up")}
+                                    disabled={macroIndex === 0}
+                                  >
+                                    <ArrowUp className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button 
+                                    size="icon" 
+                                    variant="ghost" 
+                                    className="h-7 w-7"
+                                    onClick={() => moveMacro(macro.id, "down")}
+                                    disabled={macroIndex === macrosTemplate.length - 1}
+                                  >
+                                    <ArrowDown className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button 
+                                    size="icon" 
+                                    variant="ghost" 
+                                    className="h-7 w-7"
+                                    onClick={() => setEditingMacro({ id: macro.id, name: macro.name, color: macro.color })}
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button 
+                                    size="icon" 
+                                    variant="ghost" 
+                                    className="h-7 w-7 text-destructive hover:text-destructive"
+                                    onClick={() => handleDeleteMacro(macro.id)}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              )}
                             </>
                           )}
                         </div>
@@ -426,42 +442,44 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                                     <span className="text-sm">{scope.name}</span>
                                     <span className="text-xs text-muted-foreground">(Peso: {scope.weight}%)</span>
                                   </div>
-                                  <div className="flex gap-1">
-                                    <Button 
-                                      size="icon" 
-                                      variant="ghost" 
-                                      className="h-7 w-7"
-                                      onClick={() => moveScope(macro.id, scope.id, "up")}
-                                      disabled={scopeIndex === 0}
-                                    >
-                                      <ArrowUp className="w-3.5 h-3.5" />
-                                    </Button>
-                                    <Button 
-                                      size="icon" 
-                                      variant="ghost" 
-                                      className="h-7 w-7"
-                                      onClick={() => moveScope(macro.id, scope.id, "down")}
-                                      disabled={scopeIndex === macro.scopes.length - 1}
-                                    >
-                                      <ArrowDown className="w-3.5 h-3.5" />
-                                    </Button>
-                                    <Button 
-                                      size="icon" 
-                                      variant="ghost" 
-                                      className="h-7 w-7"
-                                      onClick={() => setEditingScope({ macroId: macro.id, scope: { ...scope } })}
-                                    >
-                                      <Pencil className="w-3.5 h-3.5" />
-                                    </Button>
-                                    <Button 
-                                      size="icon" 
-                                      variant="ghost" 
-                                      className="h-7 w-7 text-destructive hover:text-destructive"
-                                      onClick={() => handleDeleteScope(macro.id, scope.id)}
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </Button>
-                                  </div>
+                                  {canEdit && (
+                                    <div className="flex gap-1">
+                                      <Button 
+                                        size="icon" 
+                                        variant="ghost" 
+                                        className="h-7 w-7"
+                                        onClick={() => moveScope(macro.id, scope.id, "up")}
+                                        disabled={scopeIndex === 0}
+                                      >
+                                        <ArrowUp className="w-3.5 h-3.5" />
+                                      </Button>
+                                      <Button 
+                                        size="icon" 
+                                        variant="ghost" 
+                                        className="h-7 w-7"
+                                        onClick={() => moveScope(macro.id, scope.id, "down")}
+                                        disabled={scopeIndex === macro.scopes.length - 1}
+                                      >
+                                        <ArrowDown className="w-3.5 h-3.5" />
+                                      </Button>
+                                      <Button 
+                                        size="icon" 
+                                        variant="ghost" 
+                                        className="h-7 w-7"
+                                        onClick={() => setEditingScope({ macroId: macro.id, scope: { ...scope } })}
+                                      >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                      </Button>
+                                      <Button 
+                                        size="icon" 
+                                        variant="ghost" 
+                                        className="h-7 w-7 text-destructive hover:text-destructive"
+                                        onClick={() => handleDeleteScope(macro.id, scope.id)}
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </div>
+                                  )}
                                 </>
                               )}
                             </div>
@@ -486,7 +504,7 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                               <Button size="sm" onClick={handleAddScope}>Adicionar</Button>
                               <Button size="sm" variant="ghost" onClick={() => setNewScope(null)}>X</Button>
                             </div>
-                          ) : (
+                          ) : canEdit ? (
                             <Button 
                               variant="ghost" 
                               size="sm"
@@ -496,7 +514,7 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                               <Plus className="w-3.5 h-3.5 mr-1" />
                               Adicionar Serviço
                             </Button>
-                          )}
+                          ) : null}
                         </div>
                       </AccordionContent>
                     </AccordionItem>

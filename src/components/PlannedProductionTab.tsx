@@ -1238,15 +1238,8 @@ export function PlannedProductionTab() {
         </TabsList>
 
         <TabsContent value="planning" className="flex-1 overflow-auto mt-4">
-          {!canEdit ? (
-            <Card className="p-8">
-              <div className="text-center text-muted-foreground">
-                <Target className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p className="font-medium">Você não tem permissão para criar planejamentos</p>
-                <p className="text-sm mt-1">Entre em contato com um administrador para obter acesso de edição.</p>
-              </div>
-            </Card>
-          ) : (
+          {/* Allow viewers to interact but block saving */}
+          {(
           <>
           {/* Planning Form */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -1409,10 +1402,16 @@ export function PlannedProductionTab() {
               className="w-full gap-2 h-10" 
               onClick={handleSave}
               disabled={!selectedScope || selectedHouseIds.length === 0 || isSaving || !canEdit}
+              title={!canEdit ? "Você pode simular, mas não tem permissão para salvar" : ""}
             >
               <Save className="w-4 h-4" />
-              {isSaving ? "Salvando..." : `Salvar Planejamento (${selectedHouseIds.length} casas)`}
+              {!canEdit ? "Modo Visualização" : isSaving ? "Salvando..." : `Salvar Planejamento (${selectedHouseIds.length} casas)`}
             </Button>
+            {!canEdit && (
+              <p className="text-xs text-muted-foreground text-center mt-2">
+                Modo simulação - você pode interagir mas não salvar
+              </p>
+            )}
           </CardContent>
         </Card>
 

@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Scope } from "@/data/constructionData";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { AlertTriangle, Calendar } from "lucide-react";
+import { AlertTriangle, Calendar, Eye } from "lucide-react";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 
 interface EditScopeDialogProps {
@@ -22,6 +23,7 @@ interface EditScopeDialogProps {
 
 export function EditScopeDialog({ open, onOpenChange, houseId, macroId, scope }: EditScopeDialogProps) {
   const { updateScopeProgress, currentProject } = useConstruction();
+  const { canEdit } = useAuth();
   const [progress, setProgress] = useState(scope.progress);
   const [startDate, setStartDate] = useState(scope.startDate || "");
   const [endDate, setEndDate] = useState(scope.endDate || "");
@@ -208,13 +210,25 @@ export function EditScopeDialog({ open, onOpenChange, houseId, macroId, scope }:
           </div>
         </div>
         
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
-            Cancelar
-          </Button>
-          <Button onClick={handleSave} disabled={isSaving || (isCompletingScope && (!startDate || !endDate))}>
-            {isSaving ? "Salvando..." : "Salvar"}
-          </Button>
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          {!canEdit && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mr-auto">
+              <Eye className="w-4 h-4" />
+              Modo visualização - você pode simular mas não salvar
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSave} 
+              disabled={isSaving || (isCompletingScope && (!startDate || !endDate)) || !canEdit}
+              title={!canEdit ? "Você pode simular, mas não tem permissão para salvar" : ""}
+            >
+              {!canEdit ? "Modo Visualização" : isSaving ? "Salvando..." : "Salvar"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
