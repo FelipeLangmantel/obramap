@@ -619,14 +619,7 @@ export function WeeklyProductionView() {
                           <SelectContent position="popper" sideOffset={4} className="max-h-[300px] overflow-y-auto z-50">
                             {plannedPeriods.map(period => (
                               <SelectItem key={period.id} value={period.id}>
-                                <div className="flex flex-col">
-                                  <span className="font-medium">
-                                    {format(parseISO(period.week_start), 'dd/MM', { locale: ptBR })} - {format(parseISO(period.week_end), 'dd/MM', { locale: ptBR })}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {period.macro_name} • {period.scope_name}
-                                  </span>
-                                </div>
+                                {format(parseISO(period.week_start), 'dd/MM', { locale: ptBR })} a {format(parseISO(period.week_end), 'dd/MM', { locale: ptBR })}
                               </SelectItem>
                             ))}
                           </SelectContent>
