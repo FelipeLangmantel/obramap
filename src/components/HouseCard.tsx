@@ -109,12 +109,24 @@ export function HouseCard({ houseId }: HouseCardProps) {
     if (filterMode === "macro" && filterMacro !== "all") {
       const macro = house.macros.find(m => m.id === filterMacro);
       if (!macro) {
-        return { progress: 0, cardStyle: { backgroundColor: '#f3f4f6', borderColor: '#d1d5db', color: '#6b7280' } };
+        return { progress: 0, cardStyle: { backgroundColor: '#e5e7eb', borderColor: '#9ca3af', color: '#6b7280' } };
       }
       
       const macroProgress = macro.scopes.length > 0 
         ? Math.round(macro.scopes.reduce((sum, s) => sum + s.progress, 0) / macro.scopes.length)
         : 0;
+      
+      // If macro is not started (0%), show gray with emphasis
+      if (macroProgress === 0) {
+        return { 
+          progress: 0,
+          cardStyle: { 
+            backgroundColor: '#e5e7eb', // Light gray background
+            borderColor: '#9ca3af', // Gray border
+            color: '#6b7280' // Gray text
+          }
+        };
+      }
       
       return { 
         progress: macroProgress,
@@ -131,6 +143,18 @@ export function HouseCard({ houseId }: HouseCardProps) {
       for (const macro of house.macros) {
         const scope = macro.scopes.find(s => s.id === filterScope);
         if (scope) {
+          // If scope is not executed (0%), show gray with emphasis
+          if (scope.progress === 0) {
+            return { 
+              progress: 0,
+              cardStyle: { 
+                backgroundColor: '#e5e7eb', // Light gray background
+                borderColor: '#9ca3af', // Gray border
+                color: '#6b7280' // Gray text
+              }
+            };
+          }
+          // If partially or fully executed, show with macro color
           return { 
             progress: scope.progress,
             cardStyle: { 
@@ -142,7 +166,8 @@ export function HouseCard({ houseId }: HouseCardProps) {
         }
       }
       
-      return { progress: 0, cardStyle: { backgroundColor: '#f3f4f6', borderColor: '#d1d5db', color: '#6b7280' } };
+      // Scope not found in this house
+      return { progress: 0, cardStyle: { backgroundColor: '#e5e7eb', borderColor: '#9ca3af', color: '#6b7280' } };
     }
     
     return { progress: 0, cardStyle: { backgroundColor: '#f3f4f6', borderColor: '#d1d5db', color: '#6b7280' } };
