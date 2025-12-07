@@ -354,28 +354,13 @@ export function InteractiveMapView() {
     setSelectedHouseIds(new Set());
   };
 
-  // Handle background mouse down for selection box or panning
+  // Handle background mouse down for selection box only (no panning in edit mode)
   const handleBackgroundMouseDown = (e: React.MouseEvent) => {
     if (!isEditMode) return;
     
-    // Middle mouse button or right click for panning
-    if (e.button === 1 || e.button === 2) {
-      e.preventDefault();
-      setDraggingItem({ type: 'pan', id: 'map' });
-      setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
-      return;
-    }
-    
-    // Ctrl+left click for panning
-    if (e.button === 0 && e.ctrlKey) {
-      e.preventDefault();
-      setDraggingItem({ type: 'pan', id: 'map' });
-      setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
-      return;
-    }
-    
+    // In edit mode, only allow selection box with left click (no panning)
     // Left click for selection box (only if not shift)
-    if (e.button === 0 && !e.shiftKey) {
+    if (e.button === 0 && !e.shiftKey && !e.ctrlKey) {
       const coords = getSvgCoords(e);
       setIsSelecting(true);
       setSelectionStart(coords);
@@ -398,12 +383,6 @@ export function InteractiveMapView() {
     }
     
     if (!draggingItem) return;
-
-    // Handle panning
-    if (draggingItem.type === 'pan') {
-      setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
-      return;
-    }
 
     if (draggingItem.type === 'house' && draggingItem.houseId !== undefined) {
       // Sempre arrasta todas as casas selecionadas
