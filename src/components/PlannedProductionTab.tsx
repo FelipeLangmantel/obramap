@@ -1420,146 +1420,215 @@ export function PlannedProductionTab() {
                 <div className="space-y-4">
                   {groupedFuturePlans.map(group => {
                     const totalHouses = group.plans.reduce((sum, p) => sum + p.planned_houses, 0);
+                    const allHouseIds = group.plans.flatMap(p => p.planned_house_ids || []);
+                    const weekKey = `${group.weekStart}_${group.weekEnd}`;
+                    const isExpanded = expandedWeeks.has(weekKey);
                     
                     return (
-                      <div key={`${group.weekStart}_${group.weekEnd}`} className="border rounded-lg overflow-hidden">
+                      <Card key={weekKey} className="overflow-hidden">
                         {/* Week Header */}
-                        <div className="bg-secondary/50 p-3 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <Calendar className="w-5 h-5 text-primary" />
-                            <div>
-                              <p className="font-semibold">
-                                {format(parseISO(group.weekStart), "dd/MM/yyyy", { locale: ptBR })} - {format(parseISO(group.weekEnd), "dd/MM/yyyy", { locale: ptBR })}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {group.plans.length} atividade(s) • {totalHouses} casas no total
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="gap-2"
-                            onClick={() => handlePrint(group.weekStart, group.weekEnd)}
-                          >
-                            <Printer className="w-4 h-4" />
-                            Imprimir
-                          </Button>
-                        </div>
-                        
-                        {/* Plans Table */}
-                        <div className="divide-y">
-                          {group.plans.map(p => (
-                            <div key={p.id} className="p-3 flex items-center justify-between hover:bg-muted/30 transition-colors">
-                              {editingId === p.id ? (
-                                // Edit Mode
-                                <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
-                                  <div className="space-y-1">
-                                    <Label className="text-xs">Início</Label>
-                                    <Input
-                                      type="date"
-                                      value={editFormData.week_start}
-                                      onChange={(e) => setEditFormData(prev => ({ ...prev, week_start: e.target.value }))}
-                                      className="h-8"
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label className="text-xs">Fim</Label>
-                                    <Input
-                                      type="date"
-                                      value={editFormData.week_end}
-                                      onChange={(e) => setEditFormData(prev => ({ ...prev, week_end: e.target.value }))}
-                                      className="h-8"
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label className="text-xs">Casas</Label>
-                                    <Input
-                                      type="number"
-                                      min="1"
-                                      value={editFormData.planned_houses}
-                                      onChange={(e) => setEditFormData(prev => ({ ...prev, planned_houses: e.target.value }))}
-                                      className="h-8"
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label className="text-xs">Obs.</Label>
-                                    <Input
-                                      value={editFormData.notes}
-                                      onChange={(e) => setEditFormData(prev => ({ ...prev, notes: e.target.value }))}
-                                      className="h-8"
-                                      placeholder="Observações"
-                                    />
-                                  </div>
+                        <div 
+                          className="bg-primary/10 p-4 cursor-pointer hover:bg-primary/15 transition-colors"
+                          onClick={() => toggleWeekExpanded(weekKey)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
+                                <Calendar className="w-5 h-5 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-semibold text-base">
+                                  {format(parseISO(group.weekStart), "dd 'de' MMMM", { locale: ptBR })} - {format(parseISO(group.weekEnd), "dd 'de' MMMM", { locale: ptBR })}
+                                </p>
+                                <div className="flex items-center gap-3 mt-1">
+                                  <Badge variant="secondary" className="text-xs gap-1">
+                                    <ClipboardList className="w-3 h-3" />
+                                    {group.plans.length} {group.plans.length === 1 ? 'atividade' : 'atividades'}
+                                  </Badge>
+                                  <Badge variant="outline" className="text-xs gap-1">
+                                    <Home className="w-3 h-3" />
+                                    {totalHouses} {totalHouses === 1 ? 'casa' : 'casas'}
+                                  </Badge>
                                 </div>
-                              ) : (
-                                // View Mode
-                                <div className="flex items-center gap-3 flex-1">
-                                  <div 
-                                    className="w-4 h-4 rounded-full shrink-0" 
-                                    style={{ backgroundColor: p.macro_color }}
-                                  />
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-medium text-sm">{p.scope_name}</span>
-                                      <Badge variant="outline" className="text-xs">{p.macro_name}</Badge>
-                                    </div>
-                                    {p.notes && (
-                                      <p className="text-xs text-muted-foreground truncate mt-0.5">{p.notes}</p>
-                                    )}
-                                  </div>
-                                  <Badge className="shrink-0">{p.planned_houses} casas</Badge>
-                                </div>
-                              )}
-                              
-                              {/* Action Buttons */}
-                              <div className="flex items-center gap-1 ml-3">
-                                {editingId === p.id ? (
-                                  <>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                      onClick={() => handleSaveEdit(p.id)}
-                                    >
-                                      <Check className="w-4 h-4" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                      onClick={handleCancelEdit}
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </Button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8"
-                                      onClick={() => handleStartEdit(p)}
-                                      disabled={!canEdit}
-                                    >
-                                      <Edit3 className="w-4 h-4" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-destructive hover:text-destructive"
-                                      onClick={() => handleDelete(p.id)}
-                                      disabled={!canEdit}
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                  </>
-                                )}
                               </div>
                             </div>
-                          ))}
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-2"
+                                onClick={(e) => { e.stopPropagation(); handlePrint(group.weekStart, group.weekEnd); }}
+                              >
+                                <Printer className="w-4 h-4" />
+                                Imprimir
+                              </Button>
+                              <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
+                                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Compact house numbers preview */}
+                          {!isExpanded && allHouseIds.length > 0 && (
+                            <div className="mt-3 flex items-center gap-2 flex-wrap">
+                              <span className="text-xs text-muted-foreground">Casas:</span>
+                              {allHouseIds.slice(0, 15).sort((a, b) => a - b).map(id => (
+                                <Badge key={id} variant="outline" className="h-5 text-xs px-1.5">
+                                  {id}
+                                </Badge>
+                              ))}
+                              {allHouseIds.length > 15 && (
+                                <Badge variant="secondary" className="h-5 text-xs px-1.5">
+                                  +{allHouseIds.length - 15}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      </div>
+                        
+                        {/* Expanded Content */}
+                        {isExpanded && (
+                          <div className="divide-y border-t">
+                            {group.plans.map(p => (
+                              <div key={p.id} className="p-4 hover:bg-muted/30 transition-colors">
+                                {editingId === p.id ? (
+                                  // Edit Mode
+                                  <div className="space-y-3">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">Início</Label>
+                                        <Input
+                                          type="date"
+                                          value={editFormData.week_start}
+                                          onChange={(e) => setEditFormData(prev => ({ ...prev, week_start: e.target.value }))}
+                                          className="h-8"
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">Fim</Label>
+                                        <Input
+                                          type="date"
+                                          value={editFormData.week_end}
+                                          onChange={(e) => setEditFormData(prev => ({ ...prev, week_end: e.target.value }))}
+                                          className="h-8"
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">Casas</Label>
+                                        <Input
+                                          type="number"
+                                          min="1"
+                                          value={editFormData.planned_houses}
+                                          onChange={(e) => setEditFormData(prev => ({ ...prev, planned_houses: e.target.value }))}
+                                          className="h-8"
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">Obs.</Label>
+                                        <Input
+                                          value={editFormData.notes}
+                                          onChange={(e) => setEditFormData(prev => ({ ...prev, notes: e.target.value }))}
+                                          className="h-8"
+                                          placeholder="Observações"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="flex justify-end gap-2">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleCancelEdit}
+                                      >
+                                        <X className="w-4 h-4 mr-1" />
+                                        Cancelar
+                                      </Button>
+                                      <Button
+                                        variant="default"
+                                        size="sm"
+                                        onClick={() => handleSaveEdit(p.id)}
+                                      >
+                                        <Check className="w-4 h-4 mr-1" />
+                                        Salvar
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  // View Mode
+                                  <div className="space-y-3">
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <div 
+                                          className="w-4 h-4 rounded-full shrink-0" 
+                                          style={{ backgroundColor: p.macro_color }}
+                                        />
+                                        <div>
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="font-medium">{p.scope_name}</span>
+                                            <Badge variant="outline" className="text-xs">{p.macro_name}</Badge>
+                                          </div>
+                                          {p.notes && (
+                                            <p className="text-xs text-muted-foreground mt-1">{p.notes}</p>
+                                          )}
+                                        </div>
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-2">
+                                        <Badge className="gap-1">
+                                          <Home className="w-3 h-3" />
+                                          {p.planned_houses} {p.planned_houses === 1 ? 'casa' : 'casas'}
+                                        </Badge>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-8 w-8"
+                                          onClick={() => handleStartEdit(p)}
+                                          disabled={!canEdit}
+                                        >
+                                          <Edit3 className="w-4 h-4" />
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-8 w-8 text-destructive hover:text-destructive"
+                                          onClick={() => handleDelete(p.id)}
+                                          disabled={!canEdit}
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    
+                                    {/* House Numbers Grid */}
+                                    {p.planned_house_ids && p.planned_house_ids.length > 0 && (
+                                      <div className="bg-secondary/30 rounded-lg p-3">
+                                        <p className="text-xs font-medium text-muted-foreground mb-2">
+                                          Casas planejadas:
+                                        </p>
+                                        <div className="flex flex-wrap gap-1">
+                                          {p.planned_house_ids.sort((a, b) => a - b).map(houseId => (
+                                            <Badge 
+                                              key={houseId} 
+                                              variant="secondary" 
+                                              className="h-6 text-xs font-medium"
+                                              style={{ 
+                                                backgroundColor: `${p.macro_color}20`,
+                                                borderColor: p.macro_color,
+                                                border: '1px solid'
+                                              }}
+                                            >
+                                              {houseId}
+                                            </Badge>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </Card>
                     );
                   })}
                 </div>
