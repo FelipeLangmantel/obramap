@@ -38,6 +38,7 @@ import {
   EyeOff
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Json } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 
 interface HousePosition {
@@ -117,23 +118,70 @@ export function InteractiveMapView() {
     return BASE_HOUSE_RADIUS;
   }, []);
 
-  // Load saved map layout for current project
+  // Load saved map layout from database for current project
   useEffect(() => {
-    if (currentProject?.id) {
-      const savedLayout = localStorage.getItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject.id}`);
-      if (savedLayout) {
-        try {
-          const layout: MapLayout = JSON.parse(savedLayout);
-          setMapImage(layout.imageUrl);
-          setCustomLayout(layout);
-        } catch (e) {
-          console.error("Error loading map layout:", e);
-        }
-      } else {
+    const loadLayout = async () => {
+      if (!currentProject?.id) {
         setMapImage(null);
         setCustomLayout(null);
+        return;
       }
-    }
+
+      try {
+        const { data, error } = await supabase
+          .from('map_layouts')
+          .select('*')
+          .eq('project_id', currentProject.id)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Error loading map layout:", error);
+          return;
+        }
+
+        if (data) {
+          const layout: MapLayout = {
+            imageUrl: data.image_url,
+            quadras: data.quadras as unknown as QuadraLayout[],
+            houses: data.houses as unknown as HousePosition[],
+            mapWidth: data.map_width,
+            mapHeight: data.map_height,
+          };
+          setMapImage(layout.imageUrl);
+          setCustomLayout(layout);
+        } else {
+          // Fallback: try to migrate from localStorage
+          const savedLayout = localStorage.getItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject.id}`);
+          if (savedLayout) {
+            try {
+              const layout: MapLayout = JSON.parse(savedLayout);
+              setMapImage(layout.imageUrl);
+              setCustomLayout(layout);
+              // Migrate to database
+              await supabase.from('map_layouts').upsert([{
+                project_id: currentProject.id,
+                image_url: layout.imageUrl,
+                quadras: layout.quadras as unknown as Json,
+                houses: layout.houses as unknown as Json,
+                map_width: layout.mapWidth,
+                map_height: layout.mapHeight,
+              }], { onConflict: 'project_id' });
+              // Remove from localStorage after successful migration
+              localStorage.removeItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject.id}`);
+            } catch (e) {
+              console.error("Error migrating map layout:", e);
+            }
+          } else {
+            setMapImage(null);
+            setCustomLayout(null);
+          }
+        }
+      } catch (e) {
+        console.error("Error loading map layout:", e);
+      }
+    };
+
+    loadLayout();
   }, [currentProject?.id]);
 
   // Fit image to container on load
@@ -468,8 +516,8 @@ export function InteractiveMapView() {
     });
   };
 
-  // Save the edited layout
-  const saveLayout = () => {
+  // Save the edited layout to database
+  const saveLayout = async () => {
     if (!currentProject) return;
 
     const layout: MapLayout = {
@@ -480,10 +528,29 @@ export function InteractiveMapView() {
       mapHeight: MAP_HEIGHT,
     };
 
-    setCustomLayout(layout);
-    localStorage.setItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject.id}`, JSON.stringify(layout));
-    setIsEditMode(false);
-    toast.success("Layout salvo com sucesso!");
+    try {
+      const { error } = await supabase.from('map_layouts').upsert([{
+        project_id: currentProject.id,
+        image_url: layout.imageUrl,
+        quadras: layout.quadras as unknown as Json,
+        houses: layout.houses as unknown as Json,
+        map_width: layout.mapWidth,
+        map_height: layout.mapHeight,
+      }], { onConflict: 'project_id' });
+
+      if (error) {
+        console.error("Error saving map layout:", error);
+        toast.error("Erro ao salvar layout!");
+        return;
+      }
+
+      setCustomLayout(layout);
+      setIsEditMode(false);
+      toast.success("Layout salvo com sucesso!");
+    } catch (e) {
+      console.error("Error saving map layout:", e);
+      toast.error("Erro ao salvar layout!");
+    }
   };
 
   const cancelEdit = () => {
