@@ -1,7 +1,7 @@
 import { useConstruction, DEFAULT_LEGEND_ITEMS } from "@/contexts/ConstructionContext";
 import { calculateHouseProgress } from "@/data/constructionData";
 import { cn } from "@/lib/utils";
-import { DragEvent, useMemo } from "react";
+import { DragEvent, useMemo, useEffect, useRef } from "react";
 import { getLegendColorByProgress } from "./Legend";
 
 interface HouseCardProps {
@@ -18,6 +18,8 @@ export function HouseCard({ houseId }: HouseCardProps) {
     filterScope
   } = useConstruction();
   
+  const cardRef = useRef<HTMLButtonElement>(null);
+  
   if (!currentProject) return null;
   
   const house = currentProject.houses.find(h => h.id === houseId);
@@ -26,6 +28,18 @@ export function HouseCard({ houseId }: HouseCardProps) {
   
   const followMacros = currentProject.legendFollowMacros;
   const legendItems = currentProject.customLegendItems || DEFAULT_LEGEND_ITEMS;
+  const isSelected = selectedHouse?.id === houseId;
+
+  // Scroll into view when selected
+  useEffect(() => {
+    if (isSelected && cardRef.current) {
+      cardRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'nearest'
+      });
+    }
+  }, [isSelected]);
   
   // Calculate progress and color based on filter mode
   const { progress, cardStyle } = useMemo(() => {
@@ -173,8 +187,6 @@ export function HouseCard({ houseId }: HouseCardProps) {
     return { progress: 0, cardStyle: { backgroundColor: '#f3f4f6', borderColor: '#d1d5db', color: '#6b7280' } };
   }, [house, followMacros, legendItems, filterMode, filterMacro, filterScope]);
 
-  const isSelected = selectedHouse?.id === houseId;
-
   const handleDragStart = (e: DragEvent<HTMLButtonElement>) => {
     e.dataTransfer.setData("houseId", houseId.toString());
     e.dataTransfer.effectAllowed = "move";
@@ -186,6 +198,7 @@ export function HouseCard({ houseId }: HouseCardProps) {
   
   return (
     <button
+      ref={cardRef}
       draggable
       onDragStart={handleDragStart}
       onClick={() => setSelectedHouse(house)}
