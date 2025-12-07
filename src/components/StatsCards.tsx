@@ -140,13 +140,13 @@ export function StatsCards() {
           className="bg-card rounded-xl p-4 border border-border animate-fade-in"
           style={{ animationDelay: `${index * 100}ms` }}
         >
-          <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-xl ${card.color} flex items-center justify-center`}>
-              <card.icon className="w-6 h-6" />
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl ${card.color} flex items-center justify-center flex-shrink-0`}>
+              <card.icon className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground">{card.value}</p>
-              <p className="text-sm text-muted-foreground truncate max-w-[120px]" title={card.label}>{card.label}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-xl sm:text-2xl font-bold text-foreground">{card.value}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground truncate" title={card.label}>{card.label}</p>
             </div>
           </div>
         </div>
