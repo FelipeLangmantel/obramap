@@ -914,16 +914,22 @@ export function WeeklyProductionView() {
                           {/* Detailed productions for this week */}
                           <div className="mt-2 ml-2 pl-3 border-l-2 border-primary/30 space-y-2">
                             {week.productions.map(prod => (
-                              <div key={prod.id} className="p-2 rounded-md bg-secondary/30 text-xs">
+                              <div key={prod.id} className={`p-2 rounded-md bg-secondary/30 text-xs ${prod.is_initial_database ? 'border border-amber-500/30' : ''}`}>
                                 <div className="flex items-center gap-2 mb-1">
                                   <div 
                                     className="w-2 h-2 rounded-full" 
                                     style={{ backgroundColor: prod.macro_color }}
                                   />
                                   <span className="font-medium">{prod.scope_name}</span>
-                                  <Badge variant="outline" className="text-[10px] ml-auto">
-                                    {prod.houses_count} casas
-                                  </Badge>
+                                  <span className="uppercase text-muted-foreground">{prod.macro_name}</span>
+                                  <div className="flex items-center gap-1 ml-auto">
+                                    {prod.is_initial_database && (
+                                      <Badge variant="outline" className="text-[9px] text-amber-600 border-amber-500/50">Inicial</Badge>
+                                    )}
+                                    <Badge variant="outline" className="text-[10px]">
+                                      {prod.houses_count} casas
+                                    </Badge>
+                                  </div>
                                 </div>
                                 <div className="text-muted-foreground">
                                   <span className="font-medium">Casas executadas:</span>{" "}
@@ -962,7 +968,7 @@ export function WeeklyProductionView() {
                   ) : (
                     <div className="space-y-2">
                       {filteredProductions.slice(0, 20).map(prod => (
-                        <div key={prod.id} className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-accent/30 transition-colors group">
+                        <div key={prod.id} className={`flex items-center gap-3 p-2.5 rounded-lg border hover:bg-accent/30 transition-colors group ${prod.is_initial_database ? 'border-amber-500/30 bg-amber-500/5' : ''}`}>
                           <div 
                             className="w-3 h-3 rounded-full flex-shrink-0" 
                             style={{ backgroundColor: prod.macro_color }}
@@ -970,12 +976,17 @@ export function WeeklyProductionView() {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{prod.scope_name}</p>
                             <p className="text-xs text-muted-foreground">
-                              {prod.macro_name} • {format(parseISO(prod.week_start), "dd/MM", { locale: ptBR })} - {format(parseISO(prod.week_end), "dd/MM", { locale: ptBR })}
+                              <span className="uppercase">{prod.macro_name}</span> • {format(parseISO(prod.week_start), "dd/MM", { locale: ptBR })} - {format(parseISO(prod.week_end), "dd/MM", { locale: ptBR })}
                             </p>
                           </div>
                           <div className="text-right flex items-center gap-2">
                             <div>
-                              <Badge variant="secondary" className="text-xs">{prod.houses_count} casas</Badge>
+                              <div className="flex items-center gap-1">
+                                <Badge variant="secondary" className="text-xs">{prod.houses_count} casas</Badge>
+                                {prod.is_initial_database && (
+                                  <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/50">Inicial</Badge>
+                                )}
+                              </div>
                               <p className="text-[10px] text-muted-foreground mt-0.5">
                                 {prod.house_ids.slice(0, 4).join(", ")}
                                 {prod.house_ids.length > 4 && `... +${prod.house_ids.length - 4}`}
