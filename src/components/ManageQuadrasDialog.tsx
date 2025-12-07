@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import {
   Dialog,
@@ -196,7 +196,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
   };
 
   // Drag selection handlers for house selection (left-click drag)
-  const handleHouseMouseDown = useCallback((houseId: number, isEditing: boolean, event: React.MouseEvent) => {
+  const handleHouseMouseDown = (houseId: number, isEditing: boolean, event: React.MouseEvent) => {
     // Start drag on left mouse button
     if (event.button === 0) {
       event.preventDefault();
@@ -212,9 +212,9 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
       // Toggle the initial house
       toggleHouseSelection(houseId, isEditing);
     }
-  }, [selectedHouseIds, editingHouseIds]);
+  };
 
-  const handleHouseMouseEnter = useCallback((houseId: number, isEditing: boolean) => {
+  const handleHouseMouseEnter = (houseId: number, isEditing: boolean) => {
     if (!isDragging || isEditingRef.current !== isEditing) return;
     
     const currentSelection = isEditing ? editingHouseIds : selectedHouseIds;
@@ -228,12 +228,12 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
         toggleHouseSelection(houseId, isEditing);
       }
     }
-  }, [isDragging, dragMode, selectedHouseIds, editingHouseIds]);
+  };
 
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = () => {
     setIsDragging(false);
     dragStartRef.current = null;
-  }, []);
+  };
 
   // Add global mouse up listener to handle mouse up outside grid
   useEffect(() => {
