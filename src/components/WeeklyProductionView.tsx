@@ -64,7 +64,7 @@ const TAB_STORAGE_KEY = "obramap_production_tab";
 const INITIAL_DB_STORAGE_KEY = "obramap_initial_database_mode";
 
 export function WeeklyProductionView() {
-  const { currentProject, updateMultipleHousesProgress } = useConstruction();
+  const { currentProject, updateScopeProgress } = useConstruction();
   const { canEdit } = useAuth();
   
   // Load saved tab from localStorage
@@ -318,8 +318,10 @@ export function WeeklyProductionView() {
 
       if (error) throw error;
 
-      // Update progress for all selected houses at once - this updates the map automatically
-      await updateMultipleHousesProgress(selectedHouses, macro.id, scope.id, 100);
+      // Update progress for each selected house - this updates the map automatically
+      for (const houseId of selectedHouses) {
+        await updateScopeProgress(houseId, macro.id, scope.id, 100);
+      }
 
       const message = isInitialDatabase 
         ? `Banco de atividades atualizado: ${scope.name} em ${selectedHouses.length} casas.`
@@ -337,7 +339,7 @@ export function WeeklyProductionView() {
     setIsSaving(false);
   };
 
-  // Handle edit dialog save - reload productions (map is already refreshed by the dialog)
+  // Handle edit dialog save
   const handleEditSave = async () => {
     await reloadProductions();
   };
