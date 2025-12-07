@@ -19,7 +19,9 @@ import {
   Target,
   AlertCircle,
   Lightbulb,
-  Calendar
+  Calendar,
+  Edit3,
+  Trash2
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -82,6 +84,7 @@ interface ComparisonResult {
   macroColor: string;
   weekStart: string;
   weekEnd: string;
+  actualProductionId?: string; // Added for edit/delete unplanned
 }
 
 interface DeviationAnalysisItem {
@@ -127,6 +130,7 @@ interface PlannedVsActualDialogProps {
   projectName: string;
   contractor: string;
   onDeviationSaved: () => void;
+  onProductionDeleted?: () => void;
 }
 
 export function PlannedVsActualDialog({
@@ -140,7 +144,8 @@ export function PlannedVsActualDialog({
   projectId,
   projectName,
   contractor,
-  onDeviationSaved
+  onDeviationSaved,
+  onProductionDeleted
 }: PlannedVsActualDialogProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "details" | "deviations" | "actions">("overview");
   const [deviationDialogOpen, setDeviationDialogOpen] = useState(false);
@@ -159,6 +164,25 @@ export function PlannedVsActualDialog({
       style: "currency",
       currency: "BRL",
     }).format(value);
+  };
+
+  const handleDeleteUnplanned = async (productionId: string) => {
+    if (!productionId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('weekly_productions')
+        .delete()
+        .eq('id', productionId);
+
+      if (error) throw error;
+
+      toast.success("Produção não planejada removida");
+      onProductionDeleted?.();
+    } catch (error) {
+      console.error('Error deleting production:', error);
+      toast.error("Erro ao remover produção");
+    }
   };
 
   const handleSaveDeviation = async () => {
@@ -753,6 +777,18 @@ export function PlannedVsActualDialog({
                               <CheckCircle2 className="w-3 h-3" />
                               Justificado
                             </Badge>
+                          )}
+                          {comp.isUnplanned && comp.actualProductionId && (
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteUnplanned(comp.actualProductionId!)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
                           )}
                         </div>
                       </div>

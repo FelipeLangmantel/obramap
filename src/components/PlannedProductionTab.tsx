@@ -674,6 +674,7 @@ export function PlannedProductionTab() {
       macroColor: string;
       weekStart: string;
       weekEnd: string;
+      actualProductionId?: string;
     }[] = [];
 
     // Track which actual productions have been matched to planned ones
@@ -759,7 +760,8 @@ export function PlannedProductionTab() {
           macroName: actual.macro_name,
           macroColor: '#9ca3af',
           weekStart: actual.week_start,
-          weekEnd: actual.week_end
+          weekEnd: actual.week_end,
+          actualProductionId: actual.id
         });
       }
     });
@@ -1362,10 +1364,10 @@ export function PlannedProductionTab() {
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-2"
+                className="gap-2 border-primary/30 hover:border-primary hover:bg-primary/5"
                 onClick={() => setAnalysisDialogOpen(true)}
               >
-                <ChartLine className="w-4 h-4" />
+                <TrendingUp className="w-4 h-4" />
                 Planejado x Realizado
               </Button>
             </div>
@@ -1729,6 +1731,13 @@ export function PlannedProductionTab() {
             .eq('project_id', currentProject.id)
             .order('created_at', { ascending: false });
           setDeviations((data || []) as Deviation[]);
+        }}
+        onProductionDeleted={async () => {
+          const { data: actualData } = await supabase
+            .from('weekly_productions')
+            .select('id, scope_id, scope_name, macro_id, macro_name, week_start, week_end, houses_count, house_ids')
+            .eq('project_id', currentProject.id);
+          setActualProductions((actualData || []) as ActualProduction[]);
         }}
       />
     </div>
