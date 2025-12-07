@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import {
   Dialog,
@@ -85,6 +85,12 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
   const [editingHouseIds, setEditingHouseIds] = useState<number[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  
+  // Drag selection state for house selection
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragMode, setDragMode] = useState<'select' | 'deselect'>('select');
+  const dragStartRef = useRef<number | null>(null);
+  const isEditingRef = useRef<boolean>(false);
 
   // Detect current naming pattern
   const namingPattern = useMemo(() => {
@@ -188,6 +194,72 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
   const selectAllUnassigned = () => {
     setSelectedHouseIds(getUnassignedHouses());
   };
+
+  // Drag selection handlers for house selection (right-click drag)
+  const handleHouseMouseDown = useCallback((houseId: number, isEditing: boolean, event: React.MouseEvent) => {
+    // Prevent context menu on right click
+    if (event.button === 2) {
+      event.preventDefault();
+    }
+    
+    // Start drag on right mouse button
+    if (event.button === 2) {
+      setIsDragging(true);
+      dragStartRef.current = houseId;
+      isEditingRef.current = isEditing;
+      
+      // Determine drag mode based on current selection state
+      const currentSelection = isEditing ? editingHouseIds : selectedHouseIds;
+      const isCurrentlySelected = currentSelection.includes(houseId);
+      setDragMode(isCurrentlySelected ? 'deselect' : 'select');
+      
+      // Toggle the initial house
+      toggleHouseSelection(houseId, isEditing);
+    }
+  }, [selectedHouseIds, editingHouseIds]);
+
+  const handleHouseMouseEnter = useCallback((houseId: number, isEditing: boolean) => {
+    if (!isDragging || isEditingRef.current !== isEditing) return;
+    
+    const currentSelection = isEditing ? editingHouseIds : selectedHouseIds;
+    
+    if (dragMode === 'select') {
+      if (!currentSelection.includes(houseId)) {
+        toggleHouseSelection(houseId, isEditing);
+      }
+    } else {
+      if (currentSelection.includes(houseId)) {
+        toggleHouseSelection(houseId, isEditing);
+      }
+    }
+  }, [isDragging, dragMode, selectedHouseIds, editingHouseIds]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+    dragStartRef.current = null;
+  }, []);
+
+  // Add global mouse up listener to handle mouse up outside grid
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      setIsDragging(false);
+      dragStartRef.current = null;
+    };
+    
+    const handleContextMenu = (e: MouseEvent) => {
+      // Prevent context menu when dragging
+      if (isDragging) {
+        e.preventDefault();
+      }
+    };
+    
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener('contextmenu', handleContextMenu);
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+      window.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, [isDragging]);
 
   // Drag and drop handlers
   const handleDragStart = (index: number) => {
@@ -326,13 +398,20 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                       </div>
                     ) : (
                       <ScrollArea className="h-40 border rounded-md p-3">
-                        <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-1">
+                        <div 
+                          className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-1 select-none"
+                          onMouseUp={handleMouseUp}
+                          onContextMenu={(e) => e.preventDefault()}
+                        >
                           {unassignedHouses.map(houseId => (
                             <button
                               key={houseId}
                               onClick={() => toggleHouseSelection(houseId, false)}
+                              onMouseDown={(e) => handleHouseMouseDown(houseId, false, e)}
+                              onMouseEnter={() => handleHouseMouseEnter(houseId, false)}
+                              onContextMenu={(e) => e.preventDefault()}
                               className={`
-                                h-8 w-8 text-xs rounded border transition-colors
+                                h-8 w-8 text-xs rounded border transition-colors cursor-pointer
                                 ${selectedHouseIds.includes(houseId)
                                   ? 'bg-primary text-primary-foreground border-primary'
                                   : 'bg-card hover:bg-accent border-border'
@@ -343,6 +422,9 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                             </button>
                           ))}
                         </div>
+                        <p className="text-xs text-muted-foreground mt-2 text-center">
+                          💡 Segure o botão direito e arraste para selecionar várias casas
+                        </p>
                       </ScrollArea>
                     )}
                   </div>
@@ -408,7 +490,11 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                             <div className="space-y-2">
                               <Label>Casas ({editingHouseIds.length} selecionadas)</Label>
                               <ScrollArea className="h-40 border rounded-md p-3">
-                                <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-1">
+                                <div 
+                                  className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-1 select-none"
+                                  onMouseUp={handleMouseUp}
+                                  onContextMenu={(e) => e.preventDefault()}
+                                >
                                   {/* Show current houses + unassigned houses */}
                                   {[...quadra.houses, ...unassignedHouses]
                                     .sort((a, b) => a - b)
@@ -416,8 +502,11 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                                       <button
                                         key={houseId}
                                         onClick={() => toggleHouseSelection(houseId, true)}
+                                        onMouseDown={(e) => handleHouseMouseDown(houseId, true, e)}
+                                        onMouseEnter={() => handleHouseMouseEnter(houseId, true)}
+                                        onContextMenu={(e) => e.preventDefault()}
                                         className={`
-                                          h-8 w-8 text-xs rounded border transition-colors
+                                          h-8 w-8 text-xs rounded border transition-colors cursor-pointer
                                           ${editingHouseIds.includes(houseId)
                                             ? 'bg-primary text-primary-foreground border-primary'
                                             : 'bg-card hover:bg-accent border-border'
@@ -428,6 +517,9 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                                       </button>
                                     ))}
                                 </div>
+                                <p className="text-xs text-muted-foreground mt-2 text-center">
+                                  💡 Segure o botão direito e arraste para selecionar várias casas
+                                </p>
                               </ScrollArea>
                             </div>
 
