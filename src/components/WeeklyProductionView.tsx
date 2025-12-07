@@ -105,9 +105,14 @@ export function WeeklyProductionView() {
   const [measurementEndDate, setMeasurementEndDate] = useState<string>(format(endOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd"));
   const [registrationDate, setRegistrationDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   
-  // Analysis filters with persistence
-  const [analysisPeriod, setAnalysisPeriod] = useState<string>("4weeks");
-  const [analysisStartDate, setAnalysisStartDate] = useState<string>(format(subWeeks(new Date(), 4), "yyyy-MM-dd"));
+  // Analysis filters with global persistence (same for all projects)
+  const [analysisPeriod, setAnalysisPeriod] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(`${FILTER_STORAGE_KEY}_period`) || "1week_back";
+    }
+    return "1week_back";
+  });
+  const [analysisStartDate, setAnalysisStartDate] = useState<string>(format(subWeeks(new Date(), 1), "yyyy-MM-dd"));
   const [analysisEndDate, setAnalysisEndDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
   const [analysisHouseFilter, setAnalysisHouseFilter] = useState<string>("");
   const [analysisMacroFilter, setAnalysisMacroFilter] = useState<string>("");
@@ -131,32 +136,25 @@ export function WeeklyProductionView() {
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
   
-  // Load saved filters from localStorage
+  // Load saved filters from localStorage (global, not per project)
   useEffect(() => {
-    if (currentProject?.id) {
-      const savedFilters = localStorage.getItem(`${FILTER_STORAGE_KEY}_${currentProject.id}`);
-      if (savedFilters) {
-        const filters = JSON.parse(savedFilters);
-        if (filters.analysisPeriod) setAnalysisPeriod(filters.analysisPeriod);
-        if (filters.analysisHouseFilter) setAnalysisHouseFilter(filters.analysisHouseFilter);
-        if (filters.analysisMacroFilter) setAnalysisMacroFilter(filters.analysisMacroFilter);
-        if (filters.analysisScopeFilter) setAnalysisScopeFilter(filters.analysisScopeFilter);
-      }
+    const savedPeriod = localStorage.getItem(`${FILTER_STORAGE_KEY}_period`);
+    if (savedPeriod) {
+      setAnalysisPeriod(savedPeriod);
     }
-  }, [currentProject?.id]);
+  }, []);
 
-  // Save filters to localStorage
+  // Save period filter to localStorage (global)
   useEffect(() => {
-    if (currentProject?.id) {
-      const filters = {
-        analysisPeriod,
-        analysisHouseFilter,
-        analysisMacroFilter,
-        analysisScopeFilter
-      };
-      localStorage.setItem(`${FILTER_STORAGE_KEY}_${currentProject.id}`, JSON.stringify(filters));
-    }
-  }, [currentProject?.id, analysisPeriod, analysisHouseFilter, analysisMacroFilter, analysisScopeFilter]);
+    localStorage.setItem(`${FILTER_STORAGE_KEY}_period`, analysisPeriod);
+  }, [analysisPeriod]);
+
+  // Reset other filters when project changes
+  useEffect(() => {
+    setAnalysisHouseFilter("");
+    setAnalysisMacroFilter("");
+    setAnalysisScopeFilter("");
+  }, [currentProject?.id]);
   
   // Get scopes for selected macro
   const scopes = useMemo(() => {
@@ -184,28 +182,24 @@ export function WeeklyProductionView() {
         // Set to project start and end dates or fallback to wide range
         if (currentProject) {
           setAnalysisStartDate(currentProject.startDate || "2020-01-01");
-          setAnalysisEndDate(format(now, "yyyy-MM-dd"));
+          setAnalysisEndDate(format(addWeeks(now, 4), "yyyy-MM-dd"));
         }
         break;
-      case "1week":
+      case "1week_forward":
+        setAnalysisStartDate(format(now, "yyyy-MM-dd"));
+        setAnalysisEndDate(format(addWeeks(now, 1), "yyyy-MM-dd"));
+        break;
+      case "2weeks_forward":
+        setAnalysisStartDate(format(now, "yyyy-MM-dd"));
+        setAnalysisEndDate(format(addWeeks(now, 2), "yyyy-MM-dd"));
+        break;
+      case "1week_back":
         setAnalysisStartDate(format(subWeeks(now, 1), "yyyy-MM-dd"));
         setAnalysisEndDate(format(now, "yyyy-MM-dd"));
         break;
-      case "2weeks":
+      case "2weeks_back":
         setAnalysisStartDate(format(subWeeks(now, 2), "yyyy-MM-dd"));
         setAnalysisEndDate(format(now, "yyyy-MM-dd"));
-        break;
-      case "4weeks":
-        setAnalysisStartDate(format(subWeeks(now, 4), "yyyy-MM-dd"));
-        setAnalysisEndDate(format(now, "yyyy-MM-dd"));
-        break;
-      case "8weeks":
-        setAnalysisStartDate(format(subWeeks(now, 8), "yyyy-MM-dd"));
-        setAnalysisEndDate(format(now, "yyyy-MM-dd"));
-        break;
-      case "month":
-        setAnalysisStartDate(format(startOfMonth(now), "yyyy-MM-dd"));
-        setAnalysisEndDate(format(endOfMonth(now), "yyyy-MM-dd"));
         break;
       case "lastmonth":
         const lastMonth = subMonths(now, 1);
@@ -856,16 +850,15 @@ export function WeeklyProductionView() {
                   <Label className="text-sm font-medium">Período:</Label>
                 </div>
                 <Select value={analysisPeriod} onValueChange={setAnalysisPeriod}>
-                  <SelectTrigger className="w-[180px] h-9">
+                  <SelectTrigger className="w-[200px] h-9">
                     <SelectValue placeholder="Selecione o período" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todo Projeto</SelectItem>
-                    <SelectItem value="1week">Última semana</SelectItem>
-                    <SelectItem value="2weeks">Últimas 2 semanas</SelectItem>
-                    <SelectItem value="4weeks">Últimas 4 semanas</SelectItem>
-                    <SelectItem value="8weeks">Últimas 8 semanas</SelectItem>
-                    <SelectItem value="month">Este mês</SelectItem>
+                    <SelectItem value="2weeks_forward">2 semanas à frente</SelectItem>
+                    <SelectItem value="1week_forward">1 semana à frente</SelectItem>
+                    <SelectItem value="1week_back">1 semana atrás</SelectItem>
+                    <SelectItem value="2weeks_back">2 semanas atrás</SelectItem>
                     <SelectItem value="lastmonth">Mês passado</SelectItem>
                     <SelectItem value="custom">Personalizado</SelectItem>
                   </SelectContent>
