@@ -651,40 +651,60 @@ export function PlannedProductionTab() {
     setPrintDialogOpen(false);
   };
 
-  // Calculate comparisons for past weeks
+  // Calculate comparisons for all planned productions (allows simulations)
   const comparisons = useMemo(() => {
-    const now = new Date();
-    
-    return plannedProductions
-      .filter(planned => {
-        const endDate = parseISO(planned.week_end);
-        return isBefore(endDate, now); // Only past weeks
-      })
-      .map(planned => {
-        // Find actual production for same scope and period
-        const actual = actualProductions.filter(a => 
-          a.scope_id === planned.scope_id &&
-          a.week_start === planned.week_start
+    return plannedProductions.map(planned => {
+      const plannedStart = parseISO(planned.week_start);
+      const plannedEnd = parseISO(planned.week_end);
+      
+      // Find actual production for same scope with overlapping period
+      const actual = actualProductions.filter(a => {
+        if (a.scope_id !== planned.scope_id) return false;
+        
+        // Check for period overlap or exact match
+        const actualStart = parseISO(a.week_start);
+        const actualEnd = parseISO(a.week_end);
+        
+        // Match if periods overlap or are the same
+        return (
+          (a.week_start === planned.week_start && a.week_end === planned.week_end) ||
+          (actualStart >= plannedStart && actualStart <= plannedEnd) ||
+          (actualEnd >= plannedStart && actualEnd <= plannedEnd) ||
+          (actualStart <= plannedStart && actualEnd >= plannedEnd)
         );
-        
-        const actualCount = actual.reduce((sum, a) => sum + a.houses_count, 0);
-        const deviation = actualCount - planned.planned_houses;
-        const percentDeviation = planned.planned_houses > 0 
-          ? ((deviation / planned.planned_houses) * 100).toFixed(1)
-          : "0";
-        
-        // Check if deviation already registered
-        const hasDeviation = deviations.some(d => d.planned_production_id === planned.id);
-        
-        return {
-          planned,
-          actualCount,
-          deviation,
-          percentDeviation,
-          hasDeviation,
-          isNegative: deviation < 0
-        };
       });
+      
+      // Count unique houses executed
+      const executedHouseIds = new Set<number>();
+      actual.forEach(a => {
+        (a.house_ids || []).forEach(id => executedHouseIds.add(id));
+      });
+      
+      // If we have planned_house_ids, count how many were actually executed
+      const plannedHouseIdsSet = new Set(planned.planned_house_ids || []);
+      const matchingExecuted = planned.planned_house_ids && planned.planned_house_ids.length > 0
+        ? [...executedHouseIds].filter(id => plannedHouseIdsSet.has(id)).length
+        : actual.reduce((sum, a) => sum + a.houses_count, 0);
+      
+      const actualCount = matchingExecuted;
+      const deviation = actualCount - planned.planned_houses;
+      const percentDeviation = planned.planned_houses > 0 
+        ? ((deviation / planned.planned_houses) * 100).toFixed(1)
+        : "0";
+      
+      // Check if deviation already registered
+      const hasDeviation = deviations.some(d => d.planned_production_id === planned.id);
+      
+      return {
+        planned,
+        actualCount,
+        actualHouseIds: [...executedHouseIds],
+        deviation,
+        percentDeviation,
+        hasDeviation,
+        isNegative: deviation < 0
+      };
+    });
   }, [plannedProductions, actualProductions, deviations]);
 
   // Deviation analysis by reason
