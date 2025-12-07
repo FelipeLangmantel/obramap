@@ -365,6 +365,7 @@ export function WeeklyProductionView() {
 
   // Filter productions by analysis period and other filters
   // This includes ALL records for display purposes
+  // Initial database records are always included regardless of date filter
   const allFilteredProductions = useMemo(() => {
     // For "all" period, don't filter by date
     if (analysisPeriod === "all") {
@@ -389,7 +390,8 @@ export function WeeklyProductionView() {
         prod.house_ids.includes(parseInt(analysisHouseFilter));
       const macroMatch = !analysisMacroFilter || prod.macro_id === analysisMacroFilter;
       const scopeMatch = !analysisScopeFilter || prod.scope_id === analysisScopeFilter;
-      return inDateRange && houseMatch && macroMatch && scopeMatch;
+      // Always include initial database records regardless of date filter
+      return (prod.is_initial_database || inDateRange) && houseMatch && macroMatch && scopeMatch;
     });
   }, [productions, analysisPeriod, analysisStartDate, analysisEndDate, analysisHouseFilter, analysisMacroFilter, analysisScopeFilter]);
 
