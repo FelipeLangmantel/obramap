@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -133,6 +134,7 @@ export function PlannedVsActualView({
   onDeviationSaved,
   onProductionDeleted
 }: PlannedVsActualViewProps) {
+  const { canEdit } = useAuth();
   const [activeTab, setActiveTab] = useState<"overview" | "details" | "deviations" | "actions">("overview");
   const [deviationDialogOpen, setDeviationDialogOpen] = useState(false);
   const [selectedDeviation, setSelectedDeviation] = useState<{
@@ -429,7 +431,7 @@ export function PlannedVsActualView({
                         </div>
                         {!comp.isUnplanned && <div className="mt-1"><span className={`text-xs font-medium ${comp.deviation < 0 ? 'text-red-500' : 'text-green-500'}`}>{comp.deviation > 0 ? '+' : ''}{comp.deviation}</span></div>}
                       </div>
-                      {comp.isNegative && !comp.hasDeviation && comp.planned && (
+                      {canEdit && comp.isNegative && !comp.hasDeviation && comp.planned && (
                         <Button variant="outline" size="sm" className="gap-1 h-8 border-red-300 text-red-600" onClick={() => { setSelectedDeviation({ planned: comp.planned!, actual: comp.actualCount, deviation: comp.deviation }); setDeviationDialogOpen(true); }}>
                           <AlertTriangle className="w-3 h-3" />Justificar
                         </Button>
@@ -437,20 +439,22 @@ export function PlannedVsActualView({
                       {comp.hasDeviation && (
                         <div className="flex items-center gap-1">
                           <Badge variant="secondary" className="text-xs gap-1"><CheckCircle2 className="w-3 h-3" />Justificado</Badge>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-7 w-7"
-                            onClick={() => {
-                              const deviation = deviations.find(d => d.planned_production_id === comp.planned?.id);
-                              if (deviation) handleEditDeviation(deviation);
-                            }}
-                          >
-                            <Edit3 className="w-3 h-3" />
-                          </Button>
+                          {canEdit && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7"
+                              onClick={() => {
+                                const deviation = deviations.find(d => d.planned_production_id === comp.planned?.id);
+                                if (deviation) handleEditDeviation(deviation);
+                              }}
+                            >
+                              <Edit3 className="w-3 h-3" />
+                            </Button>
+                          )}
                         </div>
                       )}
-                      {comp.isUnplanned && comp.actualProductionId && (
+                      {canEdit && comp.isUnplanned && comp.actualProductionId && (
                         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteUnplanned(comp.actualProductionId!)}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -467,7 +471,7 @@ export function PlannedVsActualView({
       {/* Deviations Tab */}
       {activeTab === "deviations" && (
         <div className="space-y-4">
-          {pendingJustifications > 0 && (
+          {canEdit && pendingJustifications > 0 && (
             <Card className="border-red-200 bg-red-50 dark:bg-red-950/20">
               <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2 text-red-700"><AlertTriangle className="w-4 h-4" />Pendentes ({pendingJustifications})</CardTitle></CardHeader>
               <CardContent>
@@ -512,15 +516,17 @@ export function PlannedVsActualView({
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant="destructive" className="text-xs">{deviation.deviation}</Badge>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="h-7 gap-1"
-                          onClick={() => handleEditDeviation(deviation)}
-                        >
-                          <Edit3 className="w-3 h-3" />
-                          Editar
-                        </Button>
+                        {canEdit && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-7 gap-1"
+                            onClick={() => handleEditDeviation(deviation)}
+                          >
+                            <Edit3 className="w-3 h-3" />
+                            Editar
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))}

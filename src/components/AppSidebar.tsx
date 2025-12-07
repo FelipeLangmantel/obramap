@@ -51,7 +51,7 @@ interface AppSidebarProps {
 export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const { state, setOpen } = useSidebar();
   const collapsed = state === "collapsed";
-  const { profile, role, signOut, isAdmin } = useAuth();
+  const { profile, role, signOut, isAdmin, canEdit } = useAuth();
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
   const [projectsListOpen, setProjectsListOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -156,71 +156,73 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
           </SidebarGroup>
 
           {/* Gerenciamento */}
-          <SidebarGroup className="mt-6">
-            <SidebarGroupLabel className="text-muted-foreground/70 text-xs font-medium uppercase tracking-wider px-3 mb-1">
-              Gerenciamento
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu className="space-y-0.5">
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setNewProjectOpen(true)}
-                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
-                  >
-                    <Plus className="h-5 w-5 shrink-0" />
-                    <span className="text-sm">Nova Obra</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setProjectsListOpen(true)}
-                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
-                  >
-                    <Building2 className="h-5 w-5 shrink-0" />
-                    <span className="text-sm">Cadastro de Obras</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setQuadrasDialogOpen(true)}
-                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
-                  >
-                    <Grid3X3 className="h-5 w-5 shrink-0" />
-                    <span className="text-sm">Cadastro de Quadras</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setMacrosDialogOpen(true)}
-                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
-                  >
-                    <Layers className="h-5 w-5 shrink-0" />
-                    <span className="text-sm">Etapas e Serviços</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                {isAdmin && (
+          {canEdit && (
+            <SidebarGroup className="mt-6">
+              <SidebarGroupLabel className="text-muted-foreground/70 text-xs font-medium uppercase tracking-wider px-3 mb-1">
+                Gerenciamento
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu className="space-y-0.5">
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      onClick={() => setUsersDialogOpen(true)}
+                      onClick={() => setNewProjectOpen(true)}
                       className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
                     >
-                      <Users className="h-5 w-5 shrink-0" />
-                      <span className="text-sm">Gerenciar Usuários</span>
+                      <Plus className="h-5 w-5 shrink-0" />
+                      <span className="text-sm">Nova Obra</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                )}
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => setSettingsOpen(true)}
-                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
-                  >
-                    <Settings className="h-5 w-5 shrink-0" />
-                    <span className="text-sm">Configurações</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setProjectsListOpen(true)}
+                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                    >
+                      <Building2 className="h-5 w-5 shrink-0" />
+                      <span className="text-sm">Cadastro de Obras</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setQuadrasDialogOpen(true)}
+                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                    >
+                      <Grid3X3 className="h-5 w-5 shrink-0" />
+                      <span className="text-sm">Cadastro de Quadras</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setMacrosDialogOpen(true)}
+                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                    >
+                      <Layers className="h-5 w-5 shrink-0" />
+                      <span className="text-sm">Etapas e Serviços</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  {isAdmin && (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        onClick={() => setUsersDialogOpen(true)}
+                        className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                      >
+                        <Users className="h-5 w-5 shrink-0" />
+                        <span className="text-sm">Gerenciar Usuários</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setSettingsOpen(true)}
+                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                    >
+                      <Settings className="h-5 w-5 shrink-0" />
+                      <span className="text-sm">Configurações</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
         </SidebarContent>
 
         {/* Footer with User Info */}

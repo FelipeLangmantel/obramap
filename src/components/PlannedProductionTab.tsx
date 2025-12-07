@@ -1232,6 +1232,16 @@ export function PlannedProductionTab() {
         </TabsList>
 
         <TabsContent value="planning" className="flex-1 overflow-auto mt-4">
+          {!canEdit ? (
+            <Card className="p-8">
+              <div className="text-center text-muted-foreground">
+                <Target className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p className="font-medium">Você não tem permissão para criar planejamentos</p>
+                <p className="text-sm mt-1">Entre em contato com um administrador para obter acesso de edição.</p>
+              </div>
+            </Card>
+          ) : (
+          <>
           {/* Planning Form */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-1">
@@ -1670,6 +1680,8 @@ export function PlannedProductionTab() {
           </CardContent>
         </Card>
       </div>
+          </>
+          )}
         </TabsContent>
 
         <TabsContent value="analysis" className="flex-1 overflow-auto mt-4">

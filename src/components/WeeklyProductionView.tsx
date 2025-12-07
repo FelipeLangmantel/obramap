@@ -524,6 +524,15 @@ export function WeeklyProductionView() {
         </TabsList>
 
         <TabsContent value="register" className="flex-1 overflow-auto mt-4">
+          {!canEdit ? (
+            <Card className="p-8">
+              <div className="text-center text-muted-foreground">
+                <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p className="font-medium">Você não tem permissão para registrar produção</p>
+                <p className="text-sm mt-1">Entre em contato com um administrador para obter acesso de edição.</p>
+              </div>
+            </Card>
+          ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
             {/* Selection Panel */}
             <Card className="lg:col-span-1 overflow-visible">
@@ -727,6 +736,7 @@ export function WeeklyProductionView() {
               </CardContent>
             </Card>
           </div>
+          )}
         </TabsContent>
 
         <TabsContent value="analysis" className="flex-1 overflow-auto mt-4 space-y-4">
@@ -1030,8 +1040,9 @@ export function WeeklyProductionView() {
                       {allFilteredProductions.slice(0, 20).map(prod => (
                         <div 
                           key={prod.id} 
-                          className={`flex items-center gap-3 p-2.5 rounded-lg border hover:bg-accent/30 transition-colors cursor-pointer ${prod.is_initial_database ? 'border-amber-500/30 bg-amber-500/5' : ''}`}
+                          className={`flex items-center gap-3 p-2.5 rounded-lg border hover:bg-accent/30 transition-colors ${canEdit ? 'cursor-pointer' : ''} ${prod.is_initial_database ? 'border-amber-500/30 bg-amber-500/5' : ''}`}
                           onClick={() => {
+                            if (!canEdit) return;
                             setEditingProduction(prod);
                             setEditDialogOpen(true);
                           }}
@@ -1059,37 +1070,41 @@ export function WeeklyProductionView() {
                                 {prod.house_ids.length > 4 && `... +${prod.house_ids.length - 4}`}
                               </p>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-primary hover:text-primary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingProduction(prod);
-                                setEditDialogOpen(true);
-                              }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if (confirm("Deseja excluir este registro de produção?")) {
-                                  try {
-                                    await supabase.from('weekly_productions').delete().eq('id', prod.id);
-                                    await reloadProductions();
-                                    toast.success("Registro excluído");
-                                  } catch (error) {
-                                    toast.error("Erro ao excluir registro");
-                                  }
-                                }
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {canEdit && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-primary hover:text-primary"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingProduction(prod);
+                                    setEditDialogOpen(true);
+                                  }}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (confirm("Deseja excluir este registro de produção?")) {
+                                      try {
+                                        await supabase.from('weekly_productions').delete().eq('id', prod.id);
+                                        await reloadProductions();
+                                        toast.success("Registro excluído");
+                                      } catch (error) {
+                                        toast.error("Erro ao excluir registro");
+                                      }
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </div>
                       ))}
