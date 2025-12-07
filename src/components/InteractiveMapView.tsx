@@ -31,18 +31,27 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-interface QuadraPosition {
+interface HousePosition {
+  id: number;
+  x: number;
+  y: number;
+}
+
+interface QuadraLayout {
   name: string;
   x: number;
   y: number;
   width: number;
   height: number;
-  houseCount: number;
+  houses: HousePosition[];
+  rows: number;
+  cols: number;
+  orientation: "horizontal" | "vertical" | "grid";
 }
 
 interface MapLayout {
   imageUrl: string | null;
-  quadraPositions: Record<string, QuadraPosition>;
+  quadras: QuadraLayout[];
   mapWidth: number;
   mapHeight: number;
 }
@@ -60,7 +69,7 @@ export function InteractiveMapView() {
   const [hoveredHouse, setHoveredHouse] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [mapImage, setMapImage] = useState<string | null>(null);
-  const [quadraPositions, setQuadraPositions] = useState<Record<string, QuadraPosition>>({});
+  const [customLayout, setCustomLayout] = useState<MapLayout | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   
   // Filters
@@ -73,6 +82,11 @@ export function InteractiveMapView() {
   const legendFollowMacros = currentProject?.legendFollowMacros || false;
   const macrosTemplate = currentProject?.macrosTemplate || [];
 
+  // Map dimensions
+  const MAP_WIDTH = 1000;
+  const MAP_HEIGHT = 800;
+  const HOUSE_SIZE = 32;
+
   // Load saved map layout for current project
   useEffect(() => {
     if (currentProject?.id) {
@@ -81,13 +95,13 @@ export function InteractiveMapView() {
         try {
           const layout: MapLayout = JSON.parse(savedLayout);
           setMapImage(layout.imageUrl);
-          setQuadraPositions(layout.quadraPositions || {});
+          setCustomLayout(layout);
         } catch (e) {
           console.error("Error loading map layout:", e);
         }
       } else {
         setMapImage(null);
-        setQuadraPositions({});
+        setCustomLayout(null);
       }
     }
   }, [currentProject?.id]);
@@ -111,67 +125,33 @@ export function InteractiveMapView() {
         throw new Error(data.error);
       }
 
-      // Map AI-detected quadras to existing quadras
-      const newPositions: Record<string, QuadraPosition> = {};
-      const projectQuadras = currentProject?.quadras || [];
-      
-      // Match detected quadras with existing ones
-      data.quadras.forEach((detected: QuadraPosition, index: number) => {
-        // Try to find matching quadra by name
-        const matchingQuadra = projectQuadras.find(q => 
-          q.name.toLowerCase().includes(detected.name.toLowerCase()) ||
-          detected.name.toLowerCase().includes(q.name.toLowerCase())
-        );
-        
-        if (matchingQuadra) {
-          newPositions[matchingQuadra.id] = {
-            ...detected,
-            name: matchingQuadra.name,
-            houseCount: matchingQuadra.houses?.length || 0,
-          };
-        } else if (index < projectQuadras.length) {
-          // Fallback: assign to quadras by order
-          const quadra = projectQuadras[index];
-          newPositions[quadra.id] = {
-            ...detected,
-            name: quadra.name,
-            houseCount: quadra.houses?.length || 0,
-          };
-        }
-      });
+      console.log("AI Analysis result:", data);
 
-      // Assign remaining quadras that weren't matched
-      projectQuadras.forEach((quadra, index) => {
-        if (!newPositions[quadra.id]) {
-          // Auto-position unmatched quadras
-          const row = Math.floor(index / 3);
-          const col = index % 3;
-          newPositions[quadra.id] = {
-            name: quadra.name,
-            x: 5 + col * 32,
-            y: 5 + row * 30,
-            width: 28,
-            height: 25,
-            houseCount: quadra.houses?.length || 0,
-          };
-        }
-      });
-
-      setQuadraPositions(newPositions);
-      
-      // Save to localStorage
+      // Create the layout from AI analysis
       const layout: MapLayout = {
         imageUrl: imageBase64,
-        quadraPositions: newPositions,
-        mapWidth: data.mapWidth || 800,
-        mapHeight: data.mapHeight || 600,
+        quadras: data.quadras || [],
+        mapWidth: MAP_WIDTH,
+        mapHeight: MAP_HEIGHT,
       };
+
+      setCustomLayout(layout);
       localStorage.setItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject?.id}`, JSON.stringify(layout));
       
-      toast.success("Planta analisada com sucesso! Layout reconfigurado automaticamente.");
+      toast.success("Planta analisada! O mapa foi reconfigurado conforme o layout detectado.");
     } catch (error) {
       console.error("Error analyzing floor plan:", error);
-      toast.error("Erro ao analisar a planta. Tente novamente.");
+      toast.error("Erro ao analisar a planta. Usando layout padrão.");
+      
+      // Use default layout on error
+      const defaultLayout: MapLayout = {
+        imageUrl: imageBase64,
+        quadras: [],
+        mapWidth: MAP_WIDTH,
+        mapHeight: MAP_HEIGHT,
+      };
+      setCustomLayout(defaultLayout);
+      localStorage.setItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject?.id}`, JSON.stringify(defaultLayout));
     } finally {
       setIsAnalyzing(false);
     }
@@ -185,20 +165,19 @@ export function InteractiveMapView() {
       reader.onload = async (event) => {
         const imageUrl = event.target?.result as string;
         setMapImage(imageUrl);
-        
-        // Analyze the floor plan with AI
         await analyzeFloorPlan(imageUrl);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // Remove image
+  // Remove image and reset layout
   const handleRemoveImage = () => {
     if (currentProject) {
       setMapImage(null);
-      setQuadraPositions({});
+      setCustomLayout(null);
       localStorage.removeItem(`${MAP_LAYOUT_STORAGE_KEY}_${currentProject.id}`);
+      toast.success("Layout resetado para o padrão.");
     }
   };
 
@@ -323,11 +302,6 @@ export function InteractiveMapView() {
     }
   };
 
-  // Get house by ID
-  const getHouseById = (houseId: number) => {
-    return houses.find(h => h.id === houseId);
-  };
-
   // Get available scopes for selected macro
   const availableScopes = useMemo(() => {
     if (filterMacro === "all") return [];
@@ -335,73 +309,130 @@ export function InteractiveMapView() {
     return macro?.scopes || [];
   }, [filterMacro, macrosTemplate]);
 
-  // Map dimensions
-  const mapWidth = 900;
-  const mapHeight = 700;
-
-  // Calculate quadra layouts with custom positions
+  // Calculate quadra layouts based on custom layout or default
   const quadraLayouts = useMemo(() => {
     const projectQuadras = currentProject?.quadras || [];
-    const hasCustomPositions = Object.keys(quadraPositions).length > 0;
-    
-    const HOUSE_SIZE = 32;
-    const HOUSE_GAP = 6;
-    const HOUSES_PER_ROW = 5;
-    const PADDING = 15;
+    const PADDING = 20;
 
-    const layouts: Array<{
+    interface LayoutItem {
       quadra: typeof projectQuadras[0];
       x: number;
       y: number;
       width: number;
       height: number;
       housePositions: Array<{ houseId: number; x: number; y: number }>;
-    }> = [];
+    }
 
-    if (hasCustomPositions) {
-      // Use custom positions from AI analysis
-      projectQuadras.forEach((quadra) => {
-        const customPos = quadraPositions[quadra.id];
-        if (!customPos) return;
+    const layouts: LayoutItem[] = [];
 
-        const houseIds = quadra.houses || [];
-        const x = (customPos.x / 100) * mapWidth;
-        const y = (customPos.y / 100) * mapHeight;
-        const width = (customPos.width / 100) * mapWidth;
-        const height = (customPos.height / 100) * mapHeight;
+    if (customLayout && customLayout.quadras && customLayout.quadras.length > 0) {
+      // Use custom layout from AI analysis
+      customLayout.quadras.forEach((customQuadra) => {
+        // Find matching project quadra
+        const projectQuadra = projectQuadras.find(
+          q => q.name.toLowerCase() === customQuadra.name.toLowerCase()
+        );
 
-        // Calculate house positions within the quadra
-        const availableWidth = width - PADDING * 2;
-        const housesPerRow = Math.max(1, Math.floor(availableWidth / (HOUSE_SIZE + HOUSE_GAP)));
-        
+        if (!projectQuadra) return;
+
+        // Convert percentages to pixels
+        const quadraX = (customQuadra.x / 100) * MAP_WIDTH;
+        const quadraY = (customQuadra.y / 100) * MAP_HEIGHT;
+        const quadraWidth = (customQuadra.width / 100) * MAP_WIDTH;
+        const quadraHeight = (customQuadra.height / 100) * MAP_HEIGHT;
+
+        // Calculate house positions based on AI-detected positions
+        const houseIds = projectQuadra.houses || [];
         const housePositions = houseIds.map((houseId, idx) => {
-          const row = Math.floor(idx / housesPerRow);
-          const col = idx % housesPerRow;
-          return {
-            houseId,
-            x: x + PADDING + col * (HOUSE_SIZE + HOUSE_GAP),
-            y: y + PADDING + 20 + row * (HOUSE_SIZE + HOUSE_GAP),
-          };
+          // Find custom position for this house
+          const customHousePos = customQuadra.houses?.find(h => h.id === houseId);
+          
+          if (customHousePos) {
+            // Use AI-detected position (convert from percentage within quadra to absolute)
+            return {
+              houseId,
+              x: quadraX + PADDING + (customHousePos.x / 100) * (quadraWidth - PADDING * 2 - HOUSE_SIZE),
+              y: quadraY + PADDING + 20 + (customHousePos.y / 100) * (quadraHeight - PADDING * 2 - HOUSE_SIZE - 20),
+            };
+          } else {
+            // Calculate position based on rows/cols layout
+            const rows = customQuadra.rows || Math.ceil(Math.sqrt(houseIds.length));
+            const cols = customQuadra.cols || Math.ceil(houseIds.length / rows);
+            const row = Math.floor(idx / cols);
+            const col = idx % cols;
+            
+            const cellWidth = (quadraWidth - PADDING * 2) / cols;
+            const cellHeight = (quadraHeight - PADDING * 2 - 20) / rows;
+            
+            return {
+              houseId,
+              x: quadraX + PADDING + col * cellWidth + (cellWidth - HOUSE_SIZE) / 2,
+              y: quadraY + PADDING + 20 + row * cellHeight + (cellHeight - HOUSE_SIZE) / 2,
+            };
+          }
         });
 
         layouts.push({
-          quadra,
-          x,
-          y,
-          width,
-          height,
+          quadra: projectQuadra,
+          x: quadraX,
+          y: quadraY,
+          width: quadraWidth,
+          height: quadraHeight,
           housePositions,
         });
+      });
+
+      // Add any quadras not in custom layout
+      const customQuadraNames = new Set(customLayout.quadras.map(q => q.name.toLowerCase()));
+      projectQuadras.forEach((quadra, index) => {
+        if (!customQuadraNames.has(quadra.name.toLowerCase())) {
+          const existingLayouts = layouts.length;
+          const row = Math.floor(existingLayouts / 3);
+          const col = existingLayouts % 3;
+          
+          const quadraWidth = MAP_WIDTH * 0.28;
+          const quadraHeight = MAP_HEIGHT * 0.25;
+          const quadraX = 20 + col * (quadraWidth + 20);
+          const quadraY = 20 + row * (quadraHeight + 20);
+          
+          const houseIds = quadra.houses || [];
+          const rows = Math.ceil(Math.sqrt(houseIds.length));
+          const cols = Math.ceil(houseIds.length / rows);
+          
+          const housePositions = houseIds.map((houseId, idx) => {
+            const r = Math.floor(idx / cols);
+            const c = idx % cols;
+            const cellWidth = (quadraWidth - PADDING * 2) / cols;
+            const cellHeight = (quadraHeight - PADDING * 2 - 20) / rows;
+            
+            return {
+              houseId,
+              x: quadraX + PADDING + c * cellWidth + (cellWidth - HOUSE_SIZE) / 2,
+              y: quadraY + PADDING + 20 + r * cellHeight + (cellHeight - HOUSE_SIZE) / 2,
+            };
+          });
+
+          layouts.push({
+            quadra,
+            x: quadraX,
+            y: quadraY,
+            width: quadraWidth,
+            height: quadraHeight,
+            housePositions,
+          });
+        }
       });
     } else {
       // Default auto-layout
       const sortedQuadras = [...projectQuadras].sort((a, b) => a.name.localeCompare(b.name));
-      
+      const HOUSES_PER_ROW = 5;
+      const HOUSE_GAP = 8;
       const QUADRA_MARGIN = 30;
+      
       let currentY = 40;
       let currentX = 40;
       let rowMaxHeight = 0;
-      const maxWidth = 800;
+      const maxWidth = MAP_WIDTH - 80;
 
       sortedQuadras.forEach((quadra) => {
         const houseIds = quadra.houses || [];
@@ -448,9 +479,11 @@ export function InteractiveMapView() {
     
     if (housesWithoutQuadra.length > 0) {
       const lastLayout = layouts[layouts.length - 1];
-      const startX = lastLayout ? lastLayout.x + lastLayout.width + 30 : 40;
-      const startY = 40;
+      const startX = lastLayout ? Math.min(lastLayout.x + lastLayout.width + 30, MAP_WIDTH - 200) : 40;
+      const startY = lastLayout ? lastLayout.y : 40;
       
+      const HOUSES_PER_ROW = 5;
+      const HOUSE_GAP = 8;
       const rows = Math.ceil(housesWithoutQuadra.length / HOUSES_PER_ROW);
       const cols = Math.min(housesWithoutQuadra.length, HOUSES_PER_ROW);
       
@@ -478,17 +511,17 @@ export function InteractiveMapView() {
     }
     
     return layouts;
-  }, [currentProject?.quadras, houses, quadraPositions, mapWidth, mapHeight]);
+  }, [currentProject?.quadras, houses, customLayout, MAP_WIDTH, MAP_HEIGHT, HOUSE_SIZE]);
 
   // Calculate SVG dimensions
   const svgDimensions = useMemo(() => {
-    if (quadraLayouts.length === 0) return { width: mapWidth, height: mapHeight };
+    if (quadraLayouts.length === 0) return { width: MAP_WIDTH, height: MAP_HEIGHT };
     
     const maxX = Math.max(...quadraLayouts.map(l => l.x + l.width)) + 40;
     const maxY = Math.max(...quadraLayouts.map(l => l.y + l.height)) + 40;
     
-    return { width: Math.max(mapWidth, maxX), height: Math.max(mapHeight, maxY) };
-  }, [quadraLayouts, mapWidth, mapHeight]);
+    return { width: Math.max(MAP_WIDTH, maxX), height: Math.max(MAP_HEIGHT, maxY) };
+  }, [quadraLayouts, MAP_WIDTH, MAP_HEIGHT]);
 
   // Filter houses
   const filteredLayouts = useMemo(() => {
@@ -571,7 +604,7 @@ export function InteractiveMapView() {
               className="gap-2 text-destructive hover:text-destructive"
             >
               <Trash2 className="h-4 w-4" />
-              Remover
+              Resetar
             </Button>
           )}
         </div>
@@ -703,7 +736,7 @@ export function InteractiveMapView() {
               <div className="flex flex-col items-center gap-3">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <span className="text-sm font-medium">Analisando planta com IA...</span>
-                <span className="text-xs text-muted-foreground">Reconhecendo quadras e layout</span>
+                <span className="text-xs text-muted-foreground">Detectando quadras e posições das casas</span>
               </div>
             </div>
           )}
@@ -720,12 +753,13 @@ export function InteractiveMapView() {
               <img 
                 src={mapImage} 
                 alt="Planta do loteamento"
-                className="absolute inset-0 opacity-40 pointer-events-none"
+                className="absolute inset-0 pointer-events-none"
                 style={{ 
                   maxWidth: 'none',
                   width: svgDimensions.width,
                   height: svgDimensions.height,
-                  objectFit: 'contain'
+                  objectFit: 'contain',
+                  opacity: 0.35,
                 }}
               />
             )}
@@ -752,8 +786,8 @@ export function InteractiveMapView() {
                     y={layout.y}
                     width={layout.width}
                     height={layout.height}
-                    fill={mapImage ? "hsl(var(--card) / 0.85)" : "hsl(var(--card))"}
-                    stroke="hsl(var(--primary) / 0.5)"
+                    fill={mapImage ? "hsl(var(--card) / 0.75)" : "hsl(var(--card))"}
+                    stroke="hsl(var(--primary) / 0.6)"
                     strokeWidth="2"
                     rx="8"
                   />
@@ -788,8 +822,8 @@ export function InteractiveMapView() {
                         <rect
                           x={x}
                           y={y}
-                          width={30}
-                          height={30}
+                          width={HOUSE_SIZE}
+                          height={HOUSE_SIZE}
                           fill={color}
                           stroke={isSelected ? "hsl(var(--primary))" : isHovered ? "hsl(var(--foreground))" : "hsl(var(--border))"}
                           strokeWidth={isSelected ? 3 : isHovered ? 2 : 1}
@@ -799,8 +833,8 @@ export function InteractiveMapView() {
                         
                         {/* House number */}
                         <text
-                          x={x + 15}
-                          y={y + 18}
+                          x={x + HOUSE_SIZE / 2}
+                          y={y + HOUSE_SIZE / 2 + 4}
                           fill="white"
                           fontSize="10"
                           fontWeight="bold"
@@ -813,16 +847,16 @@ export function InteractiveMapView() {
                         {/* Progress bar */}
                         <rect
                           x={x + 2}
-                          y={y + 25}
-                          width={26}
+                          y={y + HOUSE_SIZE - 5}
+                          width={HOUSE_SIZE - 4}
                           height={3}
                           fill="rgba(0,0,0,0.3)"
                           rx="1.5"
                         />
                         <rect
                           x={x + 2}
-                          y={y + 25}
-                          width={26 * (progress / 100)}
+                          y={y + HOUSE_SIZE - 5}
+                          width={(HOUSE_SIZE - 4) * (progress / 100)}
                           height={3}
                           fill="white"
                           rx="1.5"
@@ -833,16 +867,16 @@ export function InteractiveMapView() {
                           <g>
                             <rect
                               x={x - 20}
-                              y={y - 35}
+                              y={y - 38}
                               width={80}
-                              height={30}
+                              height={32}
                               fill="hsl(var(--popover))"
                               stroke="hsl(var(--border))"
                               rx="4"
                             />
                             <text
                               x={x + 20}
-                              y={y - 20}
+                              y={y - 22}
                               fill="hsl(var(--popover-foreground))"
                               fontSize="10"
                               fontWeight="600"

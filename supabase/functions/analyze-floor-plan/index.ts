@@ -6,20 +6,30 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface QuadraPosition {
+interface HousePosition {
+  id: number;
+  x: number;
+  y: number;
+}
+
+interface QuadraLayout {
   name: string;
   x: number;
   y: number;
   width: number;
   height: number;
-  houseCount: number;
+  houses: HousePosition[];
+  rows: number;
+  cols: number;
+  orientation: "horizontal" | "vertical" | "grid";
 }
 
 interface AnalysisResult {
-  quadras: QuadraPosition[];
+  quadras: QuadraLayout[];
   mapWidth: number;
   mapHeight: number;
   layout: "horizontal" | "vertical" | "grid";
+  success: boolean;
 }
 
 serve(async (req) => {
@@ -39,45 +49,66 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY not configured");
     }
 
-    // Prepare the prompt for AI analysis
-    const quadraNames = existingQuadras?.map((q: any) => q.name).join(", ") || "Quadras não informadas";
+    // Prepare quadra information for the AI
+    const quadraInfo = existingQuadras?.map((q: any) => ({
+      name: q.name,
+      houseCount: q.houses?.length || 0,
+      houseIds: q.houses || [],
+    })) || [];
+
+    console.log("Quadra info for analysis:", JSON.stringify(quadraInfo));
     
-    const prompt = `Analise esta imagem de uma planta de loteamento/condomínio.
+    const prompt = `Você é um especialista em análise de plantas de loteamentos e condomínios.
 
-Quadras existentes no sistema: ${quadraNames}
+Analise esta imagem de planta baixa de um loteamento/condomínio e identifique:
+1. A disposição geométrica das quadras/blocos
+2. A posição relativa de cada quadra na imagem
+3. A orientação das casas dentro de cada quadra (horizontal, vertical ou grade)
+4. O número de linhas e colunas de lotes em cada quadra
 
-Sua tarefa:
-1. Identifique as quadras/blocos visíveis na planta
-2. Determine a posição relativa de cada quadra (percentual da largura e altura total, de 0 a 100)
-3. Estime o tamanho relativo de cada quadra
-4. Identifique o layout geral (horizontal, vertical ou grid)
+Quadras existentes no sistema:
+${JSON.stringify(quadraInfo, null, 2)}
 
-Responda APENAS com um JSON válido no seguinte formato (sem markdown, sem explicações):
+IMPORTANTE: 
+- Analise a ESTRUTURA VISUAL da planta
+- Identifique onde cada quadra está posicionada na imagem (percentual de 0 a 100)
+- Determine como as casas estão organizadas dentro de cada quadra
+- Associe os nomes das quadras existentes com as áreas identificadas na imagem
+
+Responda APENAS com um JSON válido (sem markdown, sem explicações) no seguinte formato:
 {
   "quadras": [
     {
       "name": "Quadra A",
-      "x": 10,
-      "y": 15,
-      "width": 25,
-      "height": 20,
-      "houseCount": 10
+      "x": 5,
+      "y": 10,
+      "width": 30,
+      "height": 25,
+      "rows": 2,
+      "cols": 5,
+      "orientation": "horizontal",
+      "houses": [
+        {"id": 1, "x": 0, "y": 0},
+        {"id": 2, "x": 20, "y": 0}
+      ]
     }
   ],
-  "mapWidth": 800,
-  "mapHeight": 600,
-  "layout": "grid"
+  "mapWidth": 100,
+  "mapHeight": 100,
+  "layout": "grid",
+  "success": true
 }
 
-Regras importantes:
-- x, y, width, height são percentuais (0-100)
-- Tente associar as quadras identificadas com os nomes existentes no sistema
-- Se não conseguir identificar claramente, use nomes como "Quadra 1", "Quadra 2", etc.
-- O layout pode ser: "horizontal" (quadras lado a lado), "vertical" (quadras empilhadas) ou "grid" (grade mista)
-- Posicione as quadras de forma que não se sobreponham
-- Mantenha margens de pelo menos 5% entre as quadras`;
+Regras:
+- x, y, width, height são percentuais (0-100) da área total da imagem
+- Para "houses", x e y são percentuais DENTRO da quadra (0-100)
+- "rows" e "cols" indicam quantas linhas e colunas de lotes existem na quadra
+- "orientation": como os lotes estão dispostos - "horizontal" (lado a lado), "vertical" (empilhados), "grid" (grade)
+- Mantenha a mesma quantidade de casas que existe em cada quadra
+- Se uma quadra tem 10 casas e está organizada em 2 linhas, seriam 5 colunas
+- Distribua as posições das casas uniformemente baseado em rows e cols`;
 
-    console.log("Calling Lovable AI to analyze floor plan...");
+    console.log("Calling Lovable AI to analyze floor plan with detailed house positions...");
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -86,7 +117,7 @@ Regras importantes:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-pro",
         messages: [
           {
             role: "user",
@@ -104,13 +135,13 @@ Regras importantes:
             ],
           },
         ],
-        max_tokens: 2000,
+        max_tokens: 4000,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("AI API error:", errorText);
+      console.error("AI API error:", response.status, errorText);
       throw new Error(`AI API error: ${response.status}`);
     }
 
@@ -121,13 +152,13 @@ Regras importantes:
       throw new Error("No response from AI");
     }
 
-    console.log("AI response:", content);
+    console.log("AI raw response:", content);
 
     // Parse the JSON response
     let analysisResult: AnalysisResult;
     try {
-      // Remove markdown code blocks if present
       let cleanedContent = content.trim();
+      // Remove markdown code blocks if present
       if (cleanedContent.startsWith("```json")) {
         cleanedContent = cleanedContent.slice(7);
       } else if (cleanedContent.startsWith("```")) {
@@ -141,23 +172,104 @@ Regras importantes:
       analysisResult = JSON.parse(cleanedContent);
     } catch (parseError) {
       console.error("Failed to parse AI response:", content);
-      throw new Error("Failed to parse AI analysis result");
+      // Return a fallback auto-layout
+      analysisResult = generateFallbackLayout(quadraInfo);
     }
 
-    // Validate and normalize the result
+    // Validate and enhance the result
     if (!analysisResult.quadras || !Array.isArray(analysisResult.quadras)) {
-      analysisResult.quadras = [];
+      analysisResult = generateFallbackLayout(quadraInfo);
     }
 
-    // Ensure all values are within valid ranges
-    analysisResult.quadras = analysisResult.quadras.map((q, index) => ({
-      name: q.name || `Quadra ${index + 1}`,
-      x: Math.max(0, Math.min(100, q.x || 0)),
-      y: Math.max(0, Math.min(100, q.y || 0)),
-      width: Math.max(5, Math.min(50, q.width || 20)),
-      height: Math.max(5, Math.min(50, q.height || 20)),
-      houseCount: q.houseCount || 0,
-    }));
+    // Match detected quadras with existing ones and ensure house positions
+    analysisResult.quadras = analysisResult.quadras.map((detectedQuadra, index) => {
+      // Find matching quadra from existing data
+      let matchingQuadra = quadraInfo.find((q: any) => 
+        q.name.toLowerCase().includes(detectedQuadra.name.toLowerCase()) ||
+        detectedQuadra.name.toLowerCase().includes(q.name.toLowerCase())
+      );
+      
+      if (!matchingQuadra && index < quadraInfo.length) {
+        matchingQuadra = quadraInfo[index];
+      }
+
+      const houseIds = matchingQuadra?.houseIds || [];
+      const houseCount = houseIds.length;
+
+      // Calculate house positions based on rows/cols or generate them
+      let houses: HousePosition[] = [];
+      
+      if (detectedQuadra.houses && detectedQuadra.houses.length === houseCount) {
+        houses = detectedQuadra.houses;
+      } else {
+        // Generate positions based on detected layout
+        const rows = detectedQuadra.rows || Math.ceil(Math.sqrt(houseCount));
+        const cols = detectedQuadra.cols || Math.ceil(houseCount / rows);
+        
+        houses = houseIds.map((id: number, idx: number) => {
+          const row = Math.floor(idx / cols);
+          const col = idx % cols;
+          
+          // Calculate position as percentage within quadra
+          const xPercent = cols > 1 ? (col / (cols - 1)) * 80 + 10 : 50;
+          const yPercent = rows > 1 ? (row / (rows - 1)) * 80 + 10 : 50;
+          
+          return {
+            id,
+            x: Math.round(xPercent),
+            y: Math.round(yPercent),
+          };
+        });
+      }
+
+      return {
+        name: matchingQuadra?.name || detectedQuadra.name,
+        x: Math.max(0, Math.min(95, detectedQuadra.x || 0)),
+        y: Math.max(0, Math.min(95, detectedQuadra.y || 0)),
+        width: Math.max(10, Math.min(50, detectedQuadra.width || 25)),
+        height: Math.max(10, Math.min(50, detectedQuadra.height || 25)),
+        rows: detectedQuadra.rows || Math.ceil(Math.sqrt(houseCount)),
+        cols: detectedQuadra.cols || Math.ceil(houseCount / (detectedQuadra.rows || Math.ceil(Math.sqrt(houseCount)))),
+        orientation: detectedQuadra.orientation || "grid",
+        houses,
+      };
+    });
+
+    // Add any missing quadras
+    const processedQuadraNames = new Set(analysisResult.quadras.map(q => q.name.toLowerCase()));
+    quadraInfo.forEach((q: any, index: number) => {
+      if (!processedQuadraNames.has(q.name.toLowerCase())) {
+        const row = Math.floor(analysisResult.quadras.length / 3);
+        const col = analysisResult.quadras.length % 3;
+        
+        const houseCount = q.houseIds.length;
+        const rows = Math.ceil(Math.sqrt(houseCount));
+        const cols = Math.ceil(houseCount / rows);
+        
+        analysisResult.quadras.push({
+          name: q.name,
+          x: 5 + col * 32,
+          y: 5 + row * 30,
+          width: 28,
+          height: 25,
+          rows,
+          cols,
+          orientation: "grid",
+          houses: q.houseIds.map((id: number, idx: number) => {
+            const r = Math.floor(idx / cols);
+            const c = idx % cols;
+            return {
+              id,
+              x: cols > 1 ? Math.round((c / (cols - 1)) * 80 + 10) : 50,
+              y: rows > 1 ? Math.round((r / (rows - 1)) * 80 + 10) : 50,
+            };
+          }),
+        });
+      }
+    });
+
+    analysisResult.success = true;
+    console.log("Final analysis result:", JSON.stringify(analysisResult, null, 2));
 
     return new Response(JSON.stringify(analysisResult), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -166,7 +278,7 @@ Regras importantes:
     console.error("Error in analyze-floor-plan:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: errorMessage, success: false }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -174,3 +286,41 @@ Regras importantes:
     );
   }
 });
+
+function generateFallbackLayout(quadraInfo: any[]): AnalysisResult {
+  const quadras: QuadraLayout[] = quadraInfo.map((q, index) => {
+    const row = Math.floor(index / 3);
+    const col = index % 3;
+    const houseCount = q.houseIds?.length || 0;
+    const rows = Math.ceil(Math.sqrt(houseCount));
+    const cols = Math.ceil(houseCount / rows);
+
+    return {
+      name: q.name,
+      x: 5 + col * 32,
+      y: 5 + row * 30,
+      width: 28,
+      height: 25,
+      rows,
+      cols,
+      orientation: "grid" as const,
+      houses: (q.houseIds || []).map((id: number, idx: number) => {
+        const r = Math.floor(idx / cols);
+        const c = idx % cols;
+        return {
+          id,
+          x: cols > 1 ? Math.round((c / (cols - 1)) * 80 + 10) : 50,
+          y: rows > 1 ? Math.round((r / (rows - 1)) * 80 + 10) : 50,
+        };
+      }),
+    };
+  });
+
+  return {
+    quadras,
+    mapWidth: 100,
+    mapHeight: 100,
+    layout: "grid",
+    success: true,
+  };
+}
