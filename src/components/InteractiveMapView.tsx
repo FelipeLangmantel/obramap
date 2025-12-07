@@ -85,8 +85,15 @@ export function InteractiveMapView() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingQuadras, setEditingQuadras] = useState<QuadraLayout[]>([]);
   const [editingHouses, setEditingHouses] = useState<HousePosition[]>([]);
-  const [draggingItem, setDraggingItem] = useState<{ type: 'quadra' | 'house' | 'resize'; id: string; houseId?: number; corner?: string } | null>(null);
+  const [draggingItem, setDraggingItem] = useState<{ type: 'quadra' | 'house' | 'resize' | 'pan'; id: string; houseId?: number; corner?: string } | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  
+  // Multi-select states
+  const [selectedHouseIds, setSelectedHouseIds] = useState<Set<number>>(new Set());
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
+  const [selectionEnd, setSelectionEnd] = useState({ x: 0, y: 0 });
+  const [multiDragOffset, setMultiDragOffset] = useState<Map<number, { x: number; y: number }>>(new Map());
   
   // Filters
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -240,11 +247,29 @@ export function InteractiveMapView() {
     e.stopPropagation();
     
     const coords = getSvgCoords(e);
-    const house = editingHouses.find(h => h.id === houseId);
-    if (house) {
-      setDragOffset({ x: coords.x - house.x, y: coords.y - house.y });
+    
+    // If this house is already selected in multi-select, drag all selected
+    if (selectedHouseIds.has(houseId) && selectedHouseIds.size > 1) {
+      const offsets = new Map<number, { x: number; y: number }>();
+      editingHouses.forEach(house => {
+        if (selectedHouseIds.has(house.id)) {
+          offsets.set(house.id, { x: coords.x - house.x, y: coords.y - house.y });
+        }
+      });
+      setMultiDragOffset(offsets);
+      setDraggingItem({ type: 'house', id: 'multi', houseId });
+    } else {
+      // Single house drag
+      const house = editingHouses.find(h => h.id === houseId);
+      if (house) {
+        setDragOffset({ x: coords.x - house.x, y: coords.y - house.y });
+      }
+      setDraggingItem({ type: 'house', id: 'global', houseId });
+      // Clear multi-selection if clicking a non-selected house
+      if (!selectedHouseIds.has(houseId)) {
+        setSelectedHouseIds(new Set());
+      }
     }
-    setDraggingItem({ type: 'house', id: 'global', houseId });
   };
 
   // Handle mouse down for editing quadras
@@ -264,23 +289,75 @@ export function InteractiveMapView() {
         setDraggingItem({ type: 'quadra', id: quadraId });
       }
     }
+    // Clear multi-selection when dragging quadra
+    setSelectedHouseIds(new Set());
+  };
+
+  // Handle background mouse down for selection box or panning
+  const handleBackgroundMouseDown = (e: React.MouseEvent) => {
+    if (!isEditMode) return;
+    
+    // Middle mouse button or ctrl+left click for panning
+    if (e.button === 1 || (e.button === 0 && e.ctrlKey)) {
+      e.preventDefault();
+      setDraggingItem({ type: 'pan', id: 'map' });
+      setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+      return;
+    }
+    
+    // Left click for selection box
+    if (e.button === 0) {
+      const coords = getSvgCoords(e);
+      setIsSelecting(true);
+      setSelectionStart(coords);
+      setSelectionEnd(coords);
+    }
   };
 
   // Handle mouse move for editing
   const handleEditMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!isEditMode || !draggingItem) return;
+    if (!isEditMode) return;
+    
     const coords = getSvgCoords(e);
+    
+    // Handle selection box
+    if (isSelecting) {
+      setSelectionEnd(coords);
+      return;
+    }
+    
+    if (!draggingItem) return;
+
+    // Handle panning
+    if (draggingItem.type === 'pan') {
+      setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+      return;
+    }
 
     if (draggingItem.type === 'house' && draggingItem.houseId !== undefined) {
-      // Move house with absolute positioning
-      setEditingHouses(prev => prev.map(house => {
-        if (house.id !== draggingItem.houseId) return house;
-        return {
-          ...house,
-          x: Math.max(houseRadius, Math.min(MAP_WIDTH - houseRadius, coords.x - dragOffset.x)),
-          y: Math.max(houseRadius, Math.min(MAP_HEIGHT - houseRadius, coords.y - dragOffset.y)),
-        };
-      }));
+      // Multi-house drag
+      if (draggingItem.id === 'multi' && selectedHouseIds.size > 1) {
+        setEditingHouses(prev => prev.map(house => {
+          if (!selectedHouseIds.has(house.id)) return house;
+          const offset = multiDragOffset.get(house.id);
+          if (!offset) return house;
+          return {
+            ...house,
+            x: Math.max(houseRadius, Math.min(MAP_WIDTH - houseRadius, coords.x - offset.x)),
+            y: Math.max(houseRadius, Math.min(MAP_HEIGHT - houseRadius, coords.y - offset.y)),
+          };
+        }));
+      } else {
+        // Single house drag
+        setEditingHouses(prev => prev.map(house => {
+          if (house.id !== draggingItem.houseId) return house;
+          return {
+            ...house,
+            x: Math.max(houseRadius, Math.min(MAP_WIDTH - houseRadius, coords.x - dragOffset.x)),
+            y: Math.max(houseRadius, Math.min(MAP_HEIGHT - houseRadius, coords.y - dragOffset.y)),
+          };
+        }));
+      }
     } else if (draggingItem.type === 'quadra') {
       setEditingQuadras(prev => prev.map(quadra => {
         if (quadra.id !== draggingItem.id) return quadra;
@@ -322,9 +399,30 @@ export function InteractiveMapView() {
         return { ...quadra, x: newX, y: newY, width: newWidth, height: newHeight };
       }));
     }
-  }, [isEditMode, draggingItem, dragOffset, getSvgCoords, houseRadius]);
+  }, [isEditMode, draggingItem, dragOffset, getSvgCoords, houseRadius, isSelecting, dragStart, selectedHouseIds, multiDragOffset]);
 
-  const handleEditMouseUp = () => setDraggingItem(null);
+  // Handle mouse up for editing
+  const handleEditMouseUp = useCallback(() => {
+    // Finalize selection box
+    if (isSelecting) {
+      const minX = Math.min(selectionStart.x, selectionEnd.x);
+      const maxX = Math.max(selectionStart.x, selectionEnd.x);
+      const minY = Math.min(selectionStart.y, selectionEnd.y);
+      const maxY = Math.max(selectionStart.y, selectionEnd.y);
+      
+      // Only select if the box has some size
+      if (maxX - minX > 5 && maxY - minY > 5) {
+        const housesInBox = editingHouses.filter(house => 
+          house.x >= minX && house.x <= maxX && house.y >= minY && house.y <= maxY
+        );
+        setSelectedHouseIds(new Set(housesInBox.map(h => h.id)));
+      }
+      setIsSelecting(false);
+    }
+    
+    setDraggingItem(null);
+    setMultiDragOffset(new Map());
+  }, [isSelecting, selectionStart, selectionEnd, editingHouses]);
 
   // Toggle quadra visibility
   const toggleQuadraVisibility = (quadraId: string) => {
@@ -381,9 +479,17 @@ export function InteractiveMapView() {
     setIsEditMode(false);
     setEditingQuadras([]);
     setEditingHouses([]);
+    setSelectedHouseIds(new Set());
   };
 
-  const enterEditMode = () => setIsEditMode(true);
+  const enterEditMode = () => {
+    setIsEditMode(true);
+    setSelectedHouseIds(new Set());
+  };
+  
+  const clearSelection = () => {
+    setSelectedHouseIds(new Set());
+  };
 
   // Analyze floor plan with AI
   const analyzeFloorPlan = async (imageBase64: string) => {
@@ -556,8 +662,12 @@ export function InteractiveMapView() {
 
   // Pan handlers
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (isEditMode && draggingItem) return;
-    if (e.button === 0 && !isEditMode) {
+    if (isEditMode) {
+      // In edit mode, delegate to background handler
+      handleBackgroundMouseDown(e);
+      return;
+    }
+    if (e.button === 0) {
       setIsDragging(true);
       setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
     }
@@ -579,9 +689,20 @@ export function InteractiveMapView() {
   };
 
   const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    setScale(s => Math.max(0.3, Math.min(4, s + delta)));
+    if (isEditMode) {
+      // In edit mode, use scroll wheel to pan the map
+      e.preventDefault();
+      const panSpeed = 1;
+      setPosition(prev => ({
+        x: prev.x - e.deltaX * panSpeed,
+        y: prev.y - e.deltaY * panSpeed
+      }));
+    } else {
+      // In view mode, use scroll wheel to zoom
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      setScale(s => Math.max(0.3, Math.min(4, s + delta)));
+    }
   };
 
   const handleHouseClick = (houseId: number, e: React.MouseEvent) => {
@@ -677,6 +798,11 @@ export function InteractiveMapView() {
             </>
           ) : (
             <>
+              {selectedHouseIds.size > 0 && (
+                <Button variant="ghost" size="sm" onClick={clearSelection} className="gap-1.5 h-8 text-xs">
+                  Limpar seleção
+                </Button>
+              )}
               <Button variant="default" size="sm" onClick={saveLayout} className="gap-1.5 h-8 text-xs">
                 <Save className="h-3 w-3" />Salvar
               </Button>
@@ -696,9 +822,17 @@ export function InteractiveMapView() {
         
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {isEditMode ? (
-            <Badge variant="secondary" className="bg-primary/20 text-primary text-xs">
-              <Edit3 className="h-3 w-3 mr-1" />Modo Edição - Arraste casas livremente
-            </Badge>
+            <div className="flex items-center gap-3">
+              <Badge variant="secondary" className="bg-primary/20 text-primary text-xs">
+                <Edit3 className="h-3 w-3 mr-1" />Modo Edição
+              </Badge>
+              <span className="text-muted-foreground">Scroll: mover mapa | Clique+arraste: selecionar | Ctrl+clique: mover mapa</span>
+              {selectedHouseIds.size > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  {selectedHouseIds.size} casa{selectedHouseIds.size > 1 ? 's' : ''} selecionada{selectedHouseIds.size > 1 ? 's' : ''}
+                </Badge>
+              )}
+            </div>
           ) : (
             <><Move className="h-3 w-3" /><span>Arraste para navegar</span></>
           )}
@@ -887,7 +1021,8 @@ export function InteractiveMapView() {
             {(isEditMode ? editingHouses : filteredHouses).map((house) => {
               const progress = getHouseProgress(house.id);
               const color = getHouseColor(house.id);
-              const isSelected = selectedHouse?.id === house.id;
+              const isSelectedHouse = selectedHouse?.id === house.id;
+              const isMultiSelected = isEditMode && selectedHouseIds.has(house.id);
               const r = houseRadius;
               
               return (
@@ -897,6 +1032,20 @@ export function InteractiveMapView() {
                   onClick={(e) => handleHouseClick(house.id, e)}
                   onMouseDown={(e) => isEditMode && handleHouseEditMouseDown(e, house.id)}
                 >
+                  {/* Multi-selection highlight ring */}
+                  {isMultiSelected && (
+                    <circle 
+                      cx={house.x} 
+                      cy={house.y} 
+                      r={r + 6} 
+                      fill="none" 
+                      stroke="hsl(var(--primary))" 
+                      strokeWidth={3}
+                      strokeDasharray="4,2"
+                      className="animate-pulse"
+                    />
+                  )}
+                  
                   {/* Progress ring background */}
                   <circle cx={house.x} cy={house.y} r={r + 2} fill="none" stroke="hsl(var(--border))" strokeWidth={2} opacity={0.3} />
                   
@@ -920,8 +1069,8 @@ export function InteractiveMapView() {
                     cy={house.y}
                     r={r}
                     fill={color}
-                    stroke={isSelected ? "white" : "hsl(var(--border))"}
-                    strokeWidth={isSelected ? 3 : 1}
+                    stroke={isSelectedHouse || isMultiSelected ? "white" : "hsl(var(--border))"}
+                    strokeWidth={isSelectedHouse || isMultiSelected ? 3 : 1}
                     className="transition-all duration-150"
                   />
                   
@@ -940,6 +1089,21 @@ export function InteractiveMapView() {
                 </g>
               );
             })}
+            
+            {/* Selection box */}
+            {isEditMode && isSelecting && (
+              <rect
+                x={Math.min(selectionStart.x, selectionEnd.x)}
+                y={Math.min(selectionStart.y, selectionEnd.y)}
+                width={Math.abs(selectionEnd.x - selectionStart.x)}
+                height={Math.abs(selectionEnd.y - selectionStart.y)}
+                fill="hsl(var(--primary) / 0.1)"
+                stroke="hsl(var(--primary))"
+                strokeWidth={2}
+                strokeDasharray="5,5"
+                pointerEvents="none"
+              />
+            )}
             
             {/* Legend */}
             {!isEditMode && (
