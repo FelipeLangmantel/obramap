@@ -50,8 +50,23 @@ export function ChartsView() {
       });
     }
     
+    // Filter by macro
+    if (filterMode === "macro" && filterMacro !== "all") {
+      houses = houses.filter(h => {
+        const macro = h.macros.find(m => m.id === filterMacro);
+        return macro !== undefined;
+      });
+    }
+    
+    // Filter by scope
+    if (filterMode === "scope" && filterScope !== "all") {
+      houses = houses.filter(h => {
+        return h.macros.some(m => m.scopes.some(s => s.id === filterScope));
+      });
+    }
+    
     return houses;
-  }, [currentProject, filterQuadra, filterMode, filterStatus]);
+  }, [currentProject, filterQuadra, filterMode, filterStatus, filterMacro, filterScope]);
 
   const { pieData, barData, summaryData, macroProgressData, scopeProgressData } = useMemo(() => {
     if (!currentProject) {
@@ -293,22 +308,24 @@ export function ChartsView() {
         </CardHeader>
         <CardContent>
           {macroProgressData.length > 0 ? (
-            <div className="h-[180px]">
+            <div style={{ height: Math.max(200, macroProgressData.length * 35 + 40) }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={macroProgressData} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
+                <BarChart 
+                  data={macroProgressData} 
+                  layout="vertical"
+                  margin={{ left: 10, right: 30, top: 5, bottom: 5 }}
+                >
                   <XAxis 
-                    dataKey="name" 
-                    tick={{ fontSize: 10 }}
-                    interval={0}
-                    angle={-20}
-                    textAnchor="end"
-                    height={50}
-                  />
-                  <YAxis 
+                    type="number"
                     domain={[0, 100]} 
                     tickFormatter={(v) => `${v}%`}
                     tick={{ fontSize: 10 }}
-                    width={35}
+                  />
+                  <YAxis 
+                    type="category"
+                    dataKey="name"
+                    width={120}
+                    tick={{ fontSize: 10 }}
                   />
                   <Tooltip 
                     formatter={(value: number) => [`${value}%`, "Progresso Médio"]}
@@ -316,7 +333,7 @@ export function ChartsView() {
                   />
                   <Bar 
                     dataKey="progress" 
-                    radius={[4, 4, 0, 0]}
+                    radius={[0, 4, 4, 0]}
                   >
                     {macroProgressData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
@@ -341,14 +358,17 @@ export function ChartsView() {
             {filterMode === "macro" && filterMacro !== "all" && (
               <span className="text-xs text-muted-foreground ml-2">(filtrado pela etapa selecionada)</span>
             )}
+            {filterMode === "scope" && filterScope !== "all" && (
+              <span className="text-xs text-muted-foreground ml-2">(filtrado pelo serviço selecionado)</span>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {scopeProgressData.length > 0 ? (
-            <div className="h-[220px]">
+            <div style={{ height: Math.max(200, scopeProgressData.length * 28 + 40) }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart 
-                  data={scopeProgressData.slice(0, 12)} 
+                  data={scopeProgressData} 
                   layout="vertical" 
                   margin={{ left: 10, right: 30, top: 5, bottom: 5 }}
                 >
@@ -361,7 +381,7 @@ export function ChartsView() {
                   <YAxis 
                     type="category" 
                     dataKey="name" 
-                    width={100}
+                    width={140}
                     tick={{ fontSize: 9 }}
                   />
                   <Tooltip 
@@ -375,7 +395,7 @@ export function ChartsView() {
                     dataKey="progress" 
                     radius={[0, 4, 4, 0]}
                   >
-                    {scopeProgressData.slice(0, 12).map((entry, index) => (
+                    {scopeProgressData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Bar>
@@ -386,11 +406,6 @@ export function ChartsView() {
             <div className="h-[220px] flex items-center justify-center text-muted-foreground text-sm">
               Nenhum serviço configurado
             </div>
-          )}
-          {scopeProgressData.length > 12 && (
-            <p className="text-xs text-muted-foreground text-center mt-2">
-              Mostrando 12 de {scopeProgressData.length} serviços
-            </p>
           )}
         </CardContent>
       </Card>
