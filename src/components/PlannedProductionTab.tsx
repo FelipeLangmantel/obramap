@@ -1467,7 +1467,7 @@ export function PlannedProductionTab() {
           <CardContent>
             {groupedFuturePlans.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground text-sm">
-                <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p>Nenhum planejamento futuro cadastrado</p>
                 <p className="text-xs mt-1">Use o formulário ao lado para criar novos planejamentos</p>
               </div>
