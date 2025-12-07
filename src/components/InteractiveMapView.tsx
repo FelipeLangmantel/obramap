@@ -813,12 +813,14 @@ export function InteractiveMapView() {
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (isEditMode) {
-      handleEditMouseMove(e);
-      return;
-    }
+    // Handle panning in both modes when isDragging is true
     if (isDragging) {
       setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+      return;
+    }
+    
+    if (isEditMode) {
+      handleEditMouseMove(e);
     }
   };
 
@@ -1086,7 +1088,7 @@ export function InteractiveMapView() {
       {/* Full-screen Map Container */}
       <div 
         ref={containerRef}
-        className={`flex-1 relative overflow-hidden ${isEditMode ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'} bg-muted/10`}
+        className={`flex-1 relative overflow-hidden ${isDragging ? 'cursor-grabbing' : isEditMode ? 'cursor-crosshair' : 'cursor-grab'} bg-muted/10`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
