@@ -74,33 +74,45 @@ export type Database = {
       map_layouts: {
         Row: {
           created_at: string
+          house_markers_3d: Json | null
           houses: Json
           id: string
           image_url: string | null
           map_height: number
           map_width: number
+          model_3d_type: string | null
+          model_3d_url: string | null
+          model_mtl_url: string | null
           project_id: string
           quadras: Json
           updated_at: string
         }
         Insert: {
           created_at?: string
+          house_markers_3d?: Json | null
           houses?: Json
           id?: string
           image_url?: string | null
           map_height?: number
           map_width?: number
+          model_3d_type?: string | null
+          model_3d_url?: string | null
+          model_mtl_url?: string | null
           project_id: string
           quadras?: Json
           updated_at?: string
         }
         Update: {
           created_at?: string
+          house_markers_3d?: Json | null
           houses?: Json
           id?: string
           image_url?: string | null
           map_height?: number
           map_width?: number
+          model_3d_type?: string | null
+          model_3d_url?: string | null
+          model_mtl_url?: string | null
           project_id?: string
           quadras?: Json
           updated_at?: string
