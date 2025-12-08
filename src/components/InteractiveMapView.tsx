@@ -1,11 +1,11 @@
 import { useState, useRef, useMemo, useCallback, useEffect } from "react";
-import { useConstruction, DEFAULT_LEGEND_ITEMS } from "@/contexts/ConstructionContext";
+import { useConstruction, DEFAULT_LEGEND_ITEMS, LegendItem } from "@/contexts/ConstructionContext";
 import { calculateHouseProgress } from "@/data/constructionData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Select,
   SelectContent,
@@ -39,7 +39,10 @@ import {
   Trash,
   Palette,
   Undo2,
-  AlignCenter
+  AlignCenter,
+  ChevronDown,
+  ChevronRight,
+  Calendar
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
@@ -70,6 +73,147 @@ interface MapLayout {
 }
 
 const MAP_LAYOUT_STORAGE_KEY = "obramap_interactive_map_layout";
+
+// Helper component for house details dialog content
+function HouseDetailsDialogContent({ 
+  house, 
+  legendItems, 
+  quadraName 
+}: { 
+  house: any; 
+  legendItems: LegendItem[];
+  quadraName?: string;
+}) {
+  const [openMacros, setOpenMacros] = useState<Set<string>>(new Set());
+
+  const getProgressBarColor = (progress: number) => {
+    for (const item of legendItems) {
+      if (progress >= item.minPercent && progress <= item.maxPercent) {
+        return item.color;
+      }
+    }
+    if (progress === 0) return "hsl(var(--muted))";
+    if (progress < 50) return "#ef4444";
+    if (progress < 100) return "#f59e0b";
+    return "#22c55e";
+  };
+
+  const getMacroProgress = (macro: any) => {
+    if (macro.scopes.length === 0) return 0;
+    const totalWeight = macro.scopes.reduce((sum: number, s: any) => sum + s.weight, 0);
+    if (totalWeight === 0) return 0;
+    return Math.round(macro.scopes.reduce((sum: number, s: any) => sum + s.progress * s.weight, 0) / totalWeight);
+  };
+
+  const toggleMacro = (macroId: string) => {
+    setOpenMacros(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(macroId)) {
+        newSet.delete(macroId);
+      } else {
+        newSet.add(macroId);
+      }
+      return newSet;
+    });
+  };
+
+  const overallProgress = calculateHouseProgress(house);
+
+  return (
+    <div className="space-y-4 overflow-y-auto flex-1">
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-muted-foreground">Progresso Geral</span>
+          <span className="text-lg font-bold text-foreground">{overallProgress}%</span>
+        </div>
+        <div className="h-3 bg-muted rounded-full overflow-hidden">
+          <div 
+            className="h-full rounded-full transition-all duration-300"
+            style={{ 
+              width: `${overallProgress}%`,
+              backgroundColor: getProgressBarColor(overallProgress)
+            }}
+          />
+        </div>
+      </div>
+      
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 mb-3">
+          <Calendar className="w-4 h-4 text-muted-foreground" />
+          <h4 className="text-sm font-semibold text-foreground">Etapas</h4>
+        </div>
+        
+        <ScrollArea className="h-60">
+          <div className="space-y-2 pr-3">
+            {house.macros.map((macro: any) => {
+              const macroProgress = getMacroProgress(macro);
+              const isOpen = openMacros.has(macro.id);
+              
+              return (
+                <Collapsible 
+                  key={macro.id} 
+                  open={isOpen} 
+                  onOpenChange={() => toggleMacro(macro.id)}
+                >
+                  <CollapsibleTrigger className="w-full">
+                    <div className="space-y-1 cursor-pointer hover:bg-muted/50 rounded-md p-1 -m-1 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          {isOpen ? (
+                            <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                          )}
+                          <span className="text-sm font-medium text-foreground">{macro.name}</span>
+                        </div>
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {macroProgress}%
+                        </span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden ml-4">
+                        <div 
+                          className="h-full rounded-full transition-all duration-300"
+                          style={{ 
+                            width: `${macroProgress}%`,
+                            backgroundColor: getProgressBarColor(macroProgress)
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </CollapsibleTrigger>
+                  
+                  <CollapsibleContent>
+                    <div className="mt-2 ml-4 space-y-2 border-l-2 border-border pl-3">
+                      {macro.scopes.map((scope: any) => (
+                        <div key={scope.id} className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-muted-foreground">{scope.name}</span>
+                            <span className="text-xs font-medium text-muted-foreground">
+                              {scope.progress}%
+                            </span>
+                          </div>
+                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className="h-full rounded-full transition-all duration-300"
+                              style={{ 
+                                width: `${scope.progress}%`,
+                                backgroundColor: getProgressBarColor(scope.progress)
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
+          </div>
+        </ScrollArea>
+      </div>
+    </div>
+  );
+}
 
 export function InteractiveMapView() {
   const { currentProject, selectedHouse, setSelectedHouse } = useConstruction();
@@ -1637,7 +1781,7 @@ export function InteractiveMapView() {
 
       {/* House Details Dialog */}
       <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <MapPin className="h-5 w-5" />
@@ -1646,58 +1790,11 @@ export function InteractiveMapView() {
           </DialogHeader>
           
           {selectedHouse && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Quadra:</span>
-                  <span className="font-medium">{currentProject?.quadras.find(q => q.houses?.includes(selectedHouse.id))?.name || "-"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Área:</span>
-                  <span className="font-medium">{selectedHouse.area} m²</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Tipo:</span>
-                  <span className="font-medium">{selectedHouse.type}</span>
-                </div>
-                {selectedHouse.constructorName && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Construtor:</span>
-                    <span className="font-medium">{selectedHouse.constructorName}</span>
-                  </div>
-                )}
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Progresso Geral</span>
-                  <span className="text-sm font-bold">{calculateHouseProgress(selectedHouse).toFixed(1)}%</span>
-                </div>
-                <Progress value={calculateHouseProgress(selectedHouse)} className="h-2" />
-              </div>
-              
-              <div className="space-y-3">
-                <h5 className="font-medium text-sm">Etapas</h5>
-                <ScrollArea className="h-48">
-                  <div className="space-y-3 pr-3">
-                    {selectedHouse.macros.map((macro) => {
-                      const macroProgress = macro.scopes.reduce((sum, s) => sum + s.progress * s.weight, 0) / 
-                        Math.max(macro.scopes.reduce((sum, s) => sum + s.weight, 0), 1);
-                      return (
-                        <div key={macro.id} className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: macro.color }} />
-                            <span className="text-xs font-medium flex-1">{macro.name}</span>
-                            <span className="text-xs text-muted-foreground">{macroProgress.toFixed(0)}%</span>
-                          </div>
-                          <Progress value={macroProgress} className="h-1" />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-              </div>
-            </div>
+            <HouseDetailsDialogContent 
+              house={selectedHouse} 
+              legendItems={legendItems}
+              quadraName={currentProject?.quadras.find(q => q.houses?.includes(selectedHouse.id))?.name}
+            />
           )}
         </DialogContent>
       </Dialog>
