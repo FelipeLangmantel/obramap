@@ -1,5 +1,5 @@
 import { X, Edit } from "lucide-react";
-import { useConstruction } from "@/contexts/ConstructionContext";
+import { useConstruction, DEFAULT_LEGEND_ITEMS } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { calculateHouseProgress } from "@/data/constructionData";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ export function HouseDetails() {
   const { canEdit } = useAuth();
   const [editOpen, setEditOpen] = useState(false);
   
+  const legendItems = currentProject?.customLegendItems ?? DEFAULT_LEGEND_ITEMS;
+  
   if (!selectedHouse || !currentProject) {
     return null;
   }
@@ -22,10 +24,16 @@ export function HouseDetails() {
   const progress = calculateHouseProgress(house);
 
   const getProgressBarColor = (progress: number) => {
+    for (const item of legendItems) {
+      if (progress >= item.minPercent && progress <= item.maxPercent) {
+        return item.color;
+      }
+    }
+    // Fallback colors
     if (progress === 0) return "hsl(var(--muted))";
-    if (progress < 50) return "hsl(0, 84%, 60%)"; // Red
-    if (progress < 100) return "hsl(45, 93%, 47%)"; // Yellow/Orange
-    return "hsl(142, 71%, 45%)"; // Green
+    if (progress < 50) return "#ef4444";
+    if (progress < 100) return "#f59e0b";
+    return "#22c55e";
   };
 
   return (

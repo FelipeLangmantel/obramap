@@ -1,22 +1,49 @@
-import { Calendar } from "lucide-react";
+import { Calendar, ChevronDown, ChevronRight } from "lucide-react";
 import { House } from "@/data/constructionData";
+import { useConstruction, DEFAULT_LEGEND_ITEMS } from "@/contexts/ConstructionContext";
+import { useState } from "react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface ScopesListProps {
   house: House;
 }
 
 export function ScopesList({ house }: ScopesListProps) {
+  const { currentProject } = useConstruction();
+  const [openMacros, setOpenMacros] = useState<Set<string>>(new Set());
+  
+  const legendItems = currentProject?.customLegendItems ?? DEFAULT_LEGEND_ITEMS;
+
   const getMacroProgress = (macro: typeof house.macros[0]) => {
-    return macro.scopes.length > 0 
-      ? Math.round(macro.scopes.reduce((sum, s) => sum + s.progress, 0) / macro.scopes.length)
-      : 0;
+    if (macro.scopes.length === 0) return 0;
+    const totalWeight = macro.scopes.reduce((sum, s) => sum + s.weight, 0);
+    if (totalWeight === 0) return 0;
+    return Math.round(macro.scopes.reduce((sum, s) => sum + s.progress * s.weight, 0) / totalWeight);
   };
 
   const getProgressBarColor = (progress: number) => {
+    for (const item of legendItems) {
+      if (progress >= item.minPercent && progress <= item.maxPercent) {
+        return item.color;
+      }
+    }
+    // Fallback colors based on progress
     if (progress === 0) return "hsl(var(--muted))";
-    if (progress < 50) return "hsl(0, 84%, 60%)"; // Red
-    if (progress < 100) return "hsl(45, 93%, 47%)"; // Yellow/Orange
-    return "hsl(142, 71%, 45%)"; // Green
+    if (progress < 50) return "#ef4444"; // Red
+    if (progress < 100) return "#f59e0b"; // Yellow/Orange
+    return "#22c55e"; // Green
+  };
+
+  const toggleMacro = (macroId: string) => {
+    setOpenMacros(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(macroId)) {
+        newSet.delete(macroId);
+      } else {
+        newSet.add(macroId);
+      }
+      return newSet;
+    });
   };
 
   return (
@@ -26,28 +53,68 @@ export function ScopesList({ house }: ScopesListProps) {
         <h4 className="text-sm font-semibold text-foreground">Etapas</h4>
       </div>
       
-      <div className="space-y-3">
+      <div className="space-y-2">
         {house.macros.map(macro => {
           const macroProgress = getMacroProgress(macro);
+          const isOpen = openMacros.has(macro.id);
           
           return (
-            <div key={macro.id} className="space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-foreground">{macro.name}</span>
-                <span className="text-xs font-medium text-muted-foreground">
-                  {macroProgress}%
-                </span>
-              </div>
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div 
-                  className="h-full rounded-full transition-all duration-300"
-                  style={{ 
-                    width: `${macroProgress}%`,
-                    backgroundColor: getProgressBarColor(macroProgress)
-                  }}
-                />
-              </div>
-            </div>
+            <Collapsible 
+              key={macro.id} 
+              open={isOpen} 
+              onOpenChange={() => toggleMacro(macro.id)}
+            >
+              <CollapsibleTrigger className="w-full">
+                <div className="space-y-1 cursor-pointer hover:bg-muted/50 rounded-md p-1 -m-1 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      {isOpen ? (
+                        <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                      )}
+                      <span className="text-sm font-medium text-foreground">{macro.name}</span>
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {macroProgress}%
+                    </span>
+                  </div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden ml-4">
+                    <div 
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{ 
+                        width: `${macroProgress}%`,
+                        backgroundColor: getProgressBarColor(macroProgress)
+                      }}
+                    />
+                  </div>
+                </div>
+              </CollapsibleTrigger>
+              
+              <CollapsibleContent>
+                <div className="mt-2 ml-4 space-y-2 border-l-2 border-border pl-3">
+                  {macro.scopes.map(scope => (
+                    <div key={scope.id} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-muted-foreground">{scope.name}</span>
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {scope.progress}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className="h-full rounded-full transition-all duration-300"
+                          style={{ 
+                            width: `${scope.progress}%`,
+                            backgroundColor: getProgressBarColor(scope.progress)
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           );
         })}
       </div>
