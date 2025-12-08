@@ -62,7 +62,7 @@ interface ConstructionContextType {
   selectedHouse: House | null;
   setSelectedHouse: (house: House | null) => void;
   updateScopeProgress: (houseId: number, macroId: string, scopeId: string, progress: number, startDate?: string | null, endDate?: string | null) => void;
-  updateBatchScopeProgress: (houseIds: number[], macroId: string, scopeId: string, progress: number) => Promise<void>;
+  updateBatchScopeProgress: (houseIds: number[], macroId: string, scopeId: string, progress: number, houseProgressMap?: Record<number, number>) => Promise<void>;
   updateHouseInfo: (houseId: number, updates: Partial<Pick<House, "area" | "constructorName" | "type" | "expectedDate">>) => void;
   getHouseProgress: (houseId: number) => number;
   moveHouseToQuadra: (houseId: number, newQuadraId: string) => void;
@@ -1302,7 +1302,8 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   }, [currentProjectId, selectedHouse]);
 
   // Batch update scope progress for multiple houses - optimized for performance
-  const updateBatchScopeProgress = useCallback(async (houseIds: number[], macroId: string, scopeId: string, progress: number) => {
+  // houseProgressMap allows setting different percentages per house
+  const updateBatchScopeProgress = useCallback(async (houseIds: number[], macroId: string, scopeId: string, progress: number, houseProgressMap?: Record<number, number>) => {
     if (!currentProjectId || houseIds.length === 0) return;
 
     try {
@@ -1322,6 +1323,9 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       const updates: { houseNumber: number; updatedMacros: Macro[] }[] = [];
       
       for (const houseData of housesData) {
+        // Use individual percentage if available, otherwise use the default progress
+        const houseProgress = houseProgressMap?.[houseData.house_number] ?? progress;
+        
         const currentMacros = jsonToMacros(houseData.macros);
         const updatedMacros = currentMacros.map(macro => {
           if (macro.id !== macroId) return macro;
@@ -1329,7 +1333,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             ...macro,
             scopes: macro.scopes.map(scope => {
               if (scope.id !== scopeId) return scope;
-              return { ...scope, progress };
+              return { ...scope, progress: houseProgress };
             })
           };
         });
