@@ -296,8 +296,8 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
               {macrosTemplate.map((macro, macroIndex) => (
                 <div 
                   key={macro.id}
-                  draggable
-                  onDragStart={(e) => handleMacroDragStart(e, macro.id)}
+                  draggable={!editingMacro && !editingScope && !newScope}
+                  onDragStart={(e) => !editingMacro && !editingScope && !newScope && handleMacroDragStart(e, macro.id)}
                   onDragOver={handleMacroDragOver}
                   onDrop={(e) => handleMacroDrop(e, macro.id)}
                   className={`border border-border rounded-lg overflow-hidden transition-all ${
@@ -403,8 +403,8 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                           {macro.scopes.map((scope, scopeIndex) => (
                             <div 
                               key={scope.id}
-                              draggable
-                              onDragStart={(e) => handleScopeDragStart(e, macro.id, scope.id)}
+                              draggable={!editingMacro && !editingScope && !newScope}
+                              onDragStart={(e) => !editingMacro && !editingScope && !newScope && handleScopeDragStart(e, macro.id, scope.id)}
                               onDragOver={handleScopeDragOver}
                               onDrop={(e) => handleScopeDrop(e, macro.id, scope.id)}
                               className={`flex items-center justify-between p-2 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors ${
@@ -429,6 +429,7 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                                       ...editingScope, 
                                       scope: { ...editingScope.scope, weight: parseFloat(e.target.value) || 0 } 
                                     })}
+                                    onFocus={(e) => e.target.select()}
                                     className="h-8 w-20"
                                     placeholder="Peso"
                                   />
@@ -498,6 +499,7 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                                 type="number"
                                 value={newScope.weight}
                                 onChange={(e) => setNewScope({ ...newScope, weight: e.target.value })}
+                                onFocus={(e) => e.target.select()}
                                 className="h-8 w-20"
                                 placeholder="Peso %"
                               />
