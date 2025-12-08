@@ -29,8 +29,12 @@ import {
   Target,
   Trash2,
   ListChecks,
-  AlertTriangle
+  AlertTriangle,
+  Percent,
+  Settings2
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { EditProductionDialog } from "./EditProductionDialog";
 import { format, startOfWeek, endOfWeek, subWeeks, parseISO, isWithinInterval, addWeeks, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -128,11 +132,15 @@ export function WeeklyProductionView() {
   const [productionToDelete, setProductionToDelete] = useState<WeeklyProduction | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   
+  // Custom percentage mode
+  const [customPercentMode, setCustomPercentMode] = useState(false);
+  const [massPercentage, setMassPercentage] = useState(100);
+  const [housePercentages, setHousePercentages] = useState<Record<number, number>>({});
+  
   // Drag selection state
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<'select' | 'deselect'>('select');
   const dragStartRef = useRef<number | null>(null);
-
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
   
@@ -269,6 +277,7 @@ export function WeeklyProductionView() {
   // Clear selection
   const clearSelection = () => {
     setSelectedHouses([]);
+    setHousePercentages({});
   };
 
   // Reload productions helper
@@ -326,8 +335,17 @@ export function WeeklyProductionView() {
 
       if (error) throw error;
 
+      // Build percentage map if custom percent mode is active
+      let progressMap: Record<number, number> | undefined;
+      if (customPercentMode) {
+        progressMap = {};
+        for (const houseId of selectedHouses) {
+          progressMap[houseId] = housePercentages[houseId] ?? massPercentage;
+        }
+      }
+
       // Update progress for all selected houses at once - batch update for performance
-      await updateBatchScopeProgress(selectedHouses, macro.id, scope.id, 100);
+      await updateBatchScopeProgress(selectedHouses, macro.id, scope.id, customPercentMode ? massPercentage : 100, progressMap);
 
       const message = isInitialDatabase 
         ? `Banco de atividades atualizado: ${scope.name} em ${selectedHouses.length} casas.`
@@ -338,6 +356,8 @@ export function WeeklyProductionView() {
       await reloadProductions();
       setSelectedHouses([]);
       setSelectedScope("");
+      setHousePercentages({});
+      setMassPercentage(100);
     } catch (error) {
       console.error('Error saving production:', error);
       toast.error("Erro ao salvar produção");
@@ -735,7 +755,7 @@ export function WeeklyProductionView() {
                 </div>
 
                 {selectedScope && (
-                  <div className="pt-3 border-t">
+                  <div className="pt-3 border-t space-y-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium">Casas Selecionadas</span>
                       <Badge variant="secondary">{selectedHouses.length}</Badge>
@@ -748,6 +768,123 @@ export function WeeklyProductionView() {
                         Limpar
                       </Button>
                     </div>
+                    
+                    {/* Custom Percentage Mode */}
+                    <div className="pt-2 border-t">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Percent className="w-4 h-4 text-muted-foreground" />
+                          <Label className="text-sm">Editar % do Serviço</Label>
+                        </div>
+                        <Switch
+                          checked={customPercentMode}
+                          onCheckedChange={(checked) => {
+                            setCustomPercentMode(checked);
+                            if (!checked) {
+                              setHousePercentages({});
+                              setMassPercentage(100);
+                            }
+                          }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {customPercentMode 
+                          ? "Defina o % de conclusão (por padrão é 100%)"
+                          : "Por padrão, todas as casas são marcadas como 100% concluídas"
+                        }
+                      </p>
+                    </div>
+
+                    {customPercentMode && selectedHouses.length > 0 && (
+                      <div className="space-y-3 pt-2 border-t">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm font-medium">% para todas selecionadas</Label>
+                            <Badge variant="outline">{massPercentage}%</Badge>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <Slider
+                              value={[massPercentage]}
+                              onValueChange={(v) => {
+                                setMassPercentage(v[0]);
+                                // Apply to all houses that don't have individual percentages
+                                const newPercentages: Record<number, number> = {};
+                                selectedHouses.forEach(houseId => {
+                                  if (!(houseId in housePercentages)) {
+                                    newPercentages[houseId] = v[0];
+                                  } else {
+                                    newPercentages[houseId] = housePercentages[houseId];
+                                  }
+                                });
+                                setHousePercentages(newPercentages);
+                              }}
+                              max={100}
+                              min={0}
+                              step={5}
+                              className="flex-1"
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const newPercentages: Record<number, number> = {};
+                                selectedHouses.forEach(houseId => {
+                                  newPercentages[houseId] = massPercentage;
+                                });
+                                setHousePercentages(newPercentages);
+                                toast.success(`Aplicado ${massPercentage}% a ${selectedHouses.length} casas`);
+                              }}
+                            >
+                              Aplicar
+                            </Button>
+                          </div>
+                        </div>
+
+                        {Object.keys(housePercentages).length > 0 && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-sm font-medium flex items-center gap-1">
+                                <Settings2 className="w-3 h-3" />
+                                Ajuste Individual
+                              </Label>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-xs"
+                                onClick={() => setHousePercentages({})}
+                              >
+                                Limpar
+                              </Button>
+                            </div>
+                            <ScrollArea className="h-[100px]">
+                              <div className="space-y-1.5 pr-3">
+                                {selectedHouses.map(houseId => (
+                                  <div key={houseId} className="flex items-center gap-2 text-sm">
+                                    <span className="w-14 font-medium">Casa {houseId}</span>
+                                    <Slider
+                                      value={[housePercentages[houseId] ?? massPercentage]}
+                                      onValueChange={(v) => {
+                                        setHousePercentages(prev => ({
+                                          ...prev,
+                                          [houseId]: v[0]
+                                        }));
+                                      }}
+                                      max={100}
+                                      min={0}
+                                      step={5}
+                                      className="flex-1"
+                                    />
+                                    <span className="w-10 text-right text-muted-foreground">
+                                      {housePercentages[houseId] ?? massPercentage}%
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -800,6 +937,7 @@ export function WeeklyProductionView() {
                           const isCompleted = completedHouses.includes(house.id);
                           const isSelected = selectedHouses.includes(house.id);
                           const macro = macros.find(m => m.id === selectedMacro);
+                          const housePercent = housePercentages[house.id] ?? massPercentage;
                           
                           return (
                             <button
@@ -810,7 +948,7 @@ export function WeeklyProductionView() {
                               onContextMenu={(e) => e.preventDefault()}
                               disabled={isCompleted}
                               className={`
-                                relative w-10 h-10 rounded-lg border-2 flex items-center justify-center text-xs font-medium transition-all
+                                relative w-10 h-10 rounded-lg border-2 flex flex-col items-center justify-center text-xs font-medium transition-all
                                 ${isCompleted 
                                   ? 'bg-green-100 border-green-500 text-green-700 cursor-not-allowed opacity-60' 
                                   : isSelected 
@@ -821,7 +959,10 @@ export function WeeklyProductionView() {
                               `}
                               style={isSelected && macro ? { borderColor: macro.color, backgroundColor: macro.color + '20' } : undefined}
                             >
-                              {house.id}
+                              <span>{house.id}</span>
+                              {customPercentMode && isSelected && (
+                                <span className="text-[8px] leading-tight opacity-80">{housePercent}%</span>
+                              )}
                               {isCompleted && (
                                 <CheckCircle2 className="absolute -top-1 -right-1 w-3 h-3 text-green-600" />
                               )}
