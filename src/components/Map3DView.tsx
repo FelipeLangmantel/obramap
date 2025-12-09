@@ -114,37 +114,32 @@ function CameraController({
   resetTrigger, 
   savedPosition, 
   savedTarget,
-  onCameraChange 
+  onCameraChange,
+  modelLoaded 
 }: { 
   resetTrigger: number;
   savedPosition?: [number, number, number] | null;
   savedTarget?: [number, number, number] | null;
   onCameraChange?: (position: [number, number, number], target: [number, number, number]) => void;
+  modelLoaded?: boolean;
 }) {
   const { camera, scene, controls } = useThree();
   const lastPositionRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const hasInitializedRef = useRef(false);
+  const hasCenteredOnModelRef = useRef(false);
   
-  // Initialize camera from saved position on first load
-  useEffect(() => {
-    if (!hasInitializedRef.current && savedPosition && savedTarget) {
-      camera.position.set(savedPosition[0], savedPosition[1], savedPosition[2]);
-      camera.lookAt(savedTarget[0], savedTarget[1], savedTarget[2]);
-      hasInitializedRef.current = true;
-    }
-  }, [savedPosition, savedTarget, camera]);
-  
-  // Handle camera reset trigger
-  useEffect(() => {
-    if (resetTrigger > 0) {
-      // Calculate bounding box of all objects in scene (excluding grid and lights)
+  // Center camera on scene objects
+  const centerOnScene = useCallback(() => {
+    // Wait a frame for model to be fully loaded in scene
+    setTimeout(() => {
       const box = new THREE.Box3();
       let hasObjects = false;
       
       scene.traverse((child) => {
         if (child instanceof THREE.Mesh && child.geometry) {
+          // Skip grid meshes (they have infinite/very large bounds)
           const childBox = new THREE.Box3().setFromObject(child);
-          if (!childBox.isEmpty()) {
+          if (!childBox.isEmpty() && childBox.getSize(new THREE.Vector3()).length() < 10000) {
             box.union(childBox);
             hasObjects = true;
           }
@@ -152,50 +147,75 @@ function CameraController({
       });
       
       if (!hasObjects || box.isEmpty()) {
-        // Default view for empty scene
         camera.position.set(0, 50, 15);
         camera.lookAt(0, 0, 0);
+        if (controls && (controls as any).target) {
+          (controls as any).target.set(0, 0, 0);
+          (controls as any).update();
+        }
         return;
       }
       
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
       
-      // Calculate optimal distance based on scene size
       const maxDim = Math.max(size.x, size.y, size.z);
       const distance = maxDim > 0 ? maxDim * 2.5 : 50;
       
-      // Position camera for top-down isometric view
       camera.position.set(center.x + distance * 0.3, center.y + distance * 0.8, center.z + distance * 0.5);
       camera.lookAt(center);
       
-      // Update OrbitControls target if available
       if (controls && (controls as any).target) {
         (controls as any).target.copy(center);
         (controls as any).update();
       }
+    }, 100);
+  }, [camera, scene, controls]);
+  
+  // Initialize camera from saved position on first load (only if no model to center on)
+  useEffect(() => {
+    if (!hasInitializedRef.current && savedPosition && savedTarget && !modelLoaded) {
+      camera.position.set(savedPosition[0], savedPosition[1], savedPosition[2]);
+      if (controls && (controls as any).target) {
+        (controls as any).target.set(savedTarget[0], savedTarget[1], savedTarget[2]);
+        (controls as any).update();
+      }
+      hasInitializedRef.current = true;
     }
-  }, [resetTrigger, camera, scene, controls]);
+  }, [savedPosition, savedTarget, camera, controls, modelLoaded]);
+  
+  // Center on model when it's first loaded
+  useEffect(() => {
+    if (modelLoaded && !hasCenteredOnModelRef.current && !savedPosition) {
+      hasCenteredOnModelRef.current = true;
+      centerOnScene();
+    }
+  }, [modelLoaded, savedPosition, centerOnScene]);
+  
+  // Handle manual camera reset trigger
+  useEffect(() => {
+    if (resetTrigger > 0) {
+      centerOnScene();
+    }
+  }, [resetTrigger, centerOnScene]);
 
-  // Track camera position changes for saving
+  // Track camera position changes for auto-saving
   useEffect(() => {
     const interval = setInterval(() => {
       if (camera.position.distanceTo(lastPositionRef.current) > 0.1) {
         lastPositionRef.current.copy(camera.position);
-        if (onCameraChange) {
-          const target = new THREE.Vector3();
-          camera.getWorldDirection(target);
-          target.multiplyScalar(10).add(camera.position);
+        if (onCameraChange && controls && (controls as any).target) {
+          const target = (controls as any).target;
           onCameraChange(
             [camera.position.x, camera.position.y, camera.position.z],
             [target.x, target.y, target.z]
           );
         }
       }
-    }, 1000);
+    }, 500);
     
     return () => clearInterval(interval);
-  }, [camera, onCameraChange]);
+  }, [camera, controls, onCameraChange]);
 
   return null;
 }
@@ -210,7 +230,8 @@ function Scene({
   resetTrigger,
   savedPosition,
   savedTarget,
-  onCameraChange
+  onCameraChange,
+  modelLoaded
 }: { 
   modelData: ModelData | null;
   markers: HouseMarker[];
@@ -221,6 +242,7 @@ function Scene({
   savedPosition?: [number, number, number] | null;
   savedTarget?: [number, number, number] | null;
   onCameraChange?: (position: [number, number, number], target: [number, number, number]) => void;
+  modelLoaded?: boolean;
 }) {
   return (
     <>
@@ -230,8 +252,9 @@ function Scene({
         savedPosition={savedPosition}
         savedTarget={savedTarget}
         onCameraChange={onCameraChange}
+        modelLoaded={modelLoaded}
       />
-      <OrbitControls 
+      <OrbitControls
         enablePan={true}
         enableZoom={true}
         enableRotate={true}
@@ -439,12 +462,55 @@ export function Map3DView() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mtlInputRef = useRef<HTMLInputElement>(null);
   const [pendingObjFile, setPendingObjFile] = useState<File | null>(null);
+  const [modelLoaded, setModelLoaded] = useState(false);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Auto-save camera position when it changes
+  const autoSaveCameraPosition = useCallback(async (position: [number, number, number], target: [number, number, number]) => {
+    if (!projectId) return;
+    
+    try {
+      const { data: existingLayout } = await supabase
+        .from('map_layouts')
+        .select('id')
+        .eq('project_id', projectId)
+        .maybeSingle();
+
+      const updateData = {
+        camera_position: position,
+        camera_target: target
+      };
+
+      if (existingLayout) {
+        await supabase
+          .from('map_layouts')
+          .update(updateData)
+          .eq('project_id', projectId);
+      } else {
+        await supabase
+          .from('map_layouts')
+          .insert([{
+            project_id: projectId,
+            ...updateData
+          }]);
+      }
+    } catch (err) {
+      console.error('Error auto-saving camera position:', err);
+    }
+  }, [projectId]);
   
   const handleCameraChange = useCallback((position: [number, number, number], target: [number, number, number]) => {
     setPendingCameraPosition(position);
     setPendingCameraTarget(target);
-    setHasChanges(true);
-  }, []);
+    
+    // Debounced auto-save
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      autoSaveCameraPosition(position, target);
+    }, 2000);
+  }, [autoSaveCameraPosition]);
 
   // Reset camera when component mounts or project changes
   useEffect(() => {
@@ -650,11 +716,15 @@ export function Map3DView() {
     
     if (fileName.endsWith(".gltf") || fileName.endsWith(".glb")) {
       setIsLoading(true);
+      setModelLoaded(false);
       try {
         const uploadedUrl = await uploadFileToStorage(file, 'gltf');
         if (uploadedUrl) {
           setModelData({ url: uploadedUrl, type: "gltf" });
+          setModelLoaded(true);
           setHasChanges(true);
+          // Trigger centering after model loads
+          setTimeout(() => setCameraResetTrigger(prev => prev + 1), 500);
           toast.success("Modelo glTF carregado com sucesso!");
         }
       } finally {
@@ -678,13 +748,17 @@ export function Map3DView() {
     if (!pendingObjFile) return;
 
     setIsLoading(true);
+    setModelLoaded(false);
     try {
       const objUrl = await uploadFileToStorage(pendingObjFile, 'obj');
       const mtlUrl = file ? await uploadFileToStorage(file, 'mtl') : undefined;
       
       if (objUrl) {
         setModelData({ url: objUrl, type: "obj", mtlUrl: mtlUrl || undefined });
+        setModelLoaded(true);
         setHasChanges(true);
+        // Trigger centering after model loads
+        setTimeout(() => setCameraResetTrigger(prev => prev + 1), 500);
         toast.success("Modelo OBJ carregado com sucesso!");
       }
     } finally {
@@ -700,11 +774,15 @@ export function Map3DView() {
     if (!pendingObjFile) return;
     
     setIsLoading(true);
+    setModelLoaded(false);
     try {
       const objUrl = await uploadFileToStorage(pendingObjFile, 'obj');
       if (objUrl) {
         setModelData({ url: objUrl, type: "obj" });
+        setModelLoaded(true);
         setHasChanges(true);
+        // Trigger centering after model loads
+        setTimeout(() => setCameraResetTrigger(prev => prev + 1), 500);
         toast.success("Modelo OBJ carregado sem materiais");
       }
     } finally {
@@ -876,6 +954,7 @@ export function Map3DView() {
             savedPosition={savedCameraPosition}
             savedTarget={savedCameraTarget}
             onCameraChange={handleCameraChange}
+            modelLoaded={modelLoaded}
           />
         </Canvas>
 
