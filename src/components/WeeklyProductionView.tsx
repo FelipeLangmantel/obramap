@@ -335,17 +335,28 @@ export function WeeklyProductionView() {
 
       if (error) throw error;
 
-      // Build percentage map if custom percent mode is active
-      let progressMap: Record<number, number> | undefined;
-      if (customPercentMode) {
-        progressMap = {};
-        for (const houseId of selectedHouses) {
-          progressMap[houseId] = housePercentages[houseId] ?? massPercentage;
-        }
+      // Build percentage map - add to existing progress instead of replacing
+      const progressMap: Record<number, number> = {};
+      for (const houseId of selectedHouses) {
+        // Get current progress for this house
+        const house = houses.find(h => h.id === houseId);
+        const houseMacros = (house?.macros as any[]) || [];
+        const houseMacro = houseMacros.find(m => m.id === macro.id);
+        const houseScope = houseMacro?.scopes?.find((s: any) => s.id === scope.id);
+        const currentProgress = houseScope?.percentage || 0;
+        const remainingPercent = 100 - currentProgress;
+        
+        // Get the percentage to add (from custom mode or default to remaining)
+        const percentToAdd = customPercentMode 
+          ? Math.min(housePercentages[houseId] ?? massPercentage, remainingPercent)
+          : remainingPercent;
+        
+        // Sum to existing progress
+        progressMap[houseId] = Math.min(100, currentProgress + percentToAdd);
       }
 
       // Update progress for all selected houses at once - batch update for performance
-      await updateBatchScopeProgress(selectedHouses, macro.id, scope.id, customPercentMode ? massPercentage : 100, progressMap);
+      await updateBatchScopeProgress(selectedHouses, macro.id, scope.id, 100, progressMap);
 
       const message = isInitialDatabase 
         ? `Banco de atividades atualizado: ${scope.name} em ${selectedHouses.length} casas.`
@@ -858,27 +869,54 @@ export function WeeklyProductionView() {
                             </div>
                             <ScrollArea className="h-[100px]">
                               <div className="space-y-1.5 pr-3">
-                                {selectedHouses.map(houseId => (
-                                  <div key={houseId} className="flex items-center gap-2 text-sm">
-                                    <span className="w-14 font-medium">Casa {houseId}</span>
-                                    <Slider
-                                      value={[housePercentages[houseId] ?? massPercentage]}
-                                      onValueChange={(v) => {
-                                        setHousePercentages(prev => ({
-                                          ...prev,
-                                          [houseId]: v[0]
-                                        }));
-                                      }}
-                                      max={100}
-                                      min={0}
-                                      step={5}
-                                      className="flex-1"
-                                    />
-                                    <span className="w-10 text-right text-muted-foreground">
-                                      {housePercentages[houseId] ?? massPercentage}%
-                                    </span>
-                                  </div>
-                                ))}
+                                {selectedHouses.map(houseId => {
+                                  // Get current scope progress for this house
+                                  const house = houses.find(h => h.id === houseId);
+                                  const houseMacros = (house?.macros as any[]) || [];
+                                  const houseMacro = houseMacros.find(m => m.id === selectedMacro);
+                                  const houseScope = houseMacro?.scopes?.find((s: any) => s.id === selectedScope);
+                                  const currentProgress = houseScope?.percentage || 0;
+                                  const remainingPercent = 100 - currentProgress;
+                                  const maxAllowed = remainingPercent;
+                                  const currentValue = housePercentages[houseId] ?? Math.min(massPercentage, maxAllowed);
+                                  
+                                  return (
+                                    <div key={houseId} className="flex items-center gap-2 text-sm">
+                                      <span className="w-14 font-medium">Casa {houseId}</span>
+                                      {currentProgress > 0 && (
+                                        <span className="w-10 text-xs text-amber-600">({currentProgress}%)</span>
+                                      )}
+                                      <Slider
+                                        value={[currentValue]}
+                                        onValueChange={(v) => {
+                                          const limitedValue = Math.min(v[0], maxAllowed);
+                                          setHousePercentages(prev => ({
+                                            ...prev,
+                                            [houseId]: limitedValue
+                                          }));
+                                        }}
+                                        max={maxAllowed}
+                                        min={0}
+                                        step={5}
+                                        className="flex-1"
+                                      />
+                                      <Input
+                                        type="number"
+                                        value={currentValue}
+                                        onChange={(e) => {
+                                          const val = Math.min(maxAllowed, Math.max(0, parseInt(e.target.value) || 0));
+                                          setHousePercentages(prev => ({
+                                            ...prev,
+                                            [houseId]: val
+                                          }));
+                                        }}
+                                        className="w-14 h-6 text-xs text-center px-1"
+                                        min={0}
+                                        max={maxAllowed}
+                                      />
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </ScrollArea>
                           </div>
@@ -938,7 +976,6 @@ export function WeeklyProductionView() {
                           const isSelected = selectedHouses.includes(house.id);
                           const macro = macros.find(m => m.id === selectedMacro);
                           const scope = scopes.find(s => s.id === selectedScope);
-                          const housePercent = housePercentages[house.id] ?? massPercentage;
                           
                           // Get current scope progress for this house
                           const houseMacros = (house.macros as any[]) || [];
@@ -946,6 +983,12 @@ export function WeeklyProductionView() {
                           const houseScope = houseMacro?.scopes?.find((s: any) => s.id === selectedScope);
                           const currentProgress = houseScope?.percentage || 0;
                           const hasPartialProgress = currentProgress > 0 && currentProgress < 100;
+                          const remainingPercent = 100 - currentProgress;
+                          
+                          // In custom mode, limit to remaining percentage
+                          const housePercent = customPercentMode 
+                            ? Math.min(housePercentages[house.id] ?? massPercentage, remainingPercent)
+                            : remainingPercent;
                           
                           return (
                             <button
@@ -970,18 +1013,18 @@ export function WeeklyProductionView() {
                                 ${isDragging && !isCompleted ? 'cursor-crosshair' : ''}
                               `}
                               style={isSelected && macro ? { borderColor: macro.color, backgroundColor: macro.color + '20' } : undefined}
-                              title={hasPartialProgress ? `Casa ${house.id}: ${currentProgress}% concluído` : `Casa ${house.id}`}
+                              title={hasPartialProgress ? `Casa ${house.id}: ${currentProgress}% concluído - Resta ${remainingPercent}%` : `Casa ${house.id}`}
                             >
                               <span>{house.id}</span>
-                              {/* Show current progress if partial OR selected percentage in custom mode */}
-                              {hasPartialProgress && !isSelected && (
+                              {/* Always show current progress for partial houses */}
+                              {hasPartialProgress && (
                                 <span className="text-[8px] leading-tight text-amber-600">{currentProgress}%</span>
                               )}
-                              {customPercentMode && isSelected && (
-                                <span className="text-[8px] leading-tight opacity-80">{housePercent}%</span>
-                              )}
-                              {!customPercentMode && isSelected && hasPartialProgress && (
-                                <span className="text-[8px] leading-tight opacity-80">{currentProgress}→100</span>
+                              {/* Show what will be added when selected */}
+                              {isSelected && !isCompleted && (
+                                <span className="text-[8px] leading-tight opacity-80">
+                                  {hasPartialProgress ? `+${housePercent}` : `${housePercent}%`}
+                                </span>
                               )}
                               {isCompleted && (
                                 <CheckCircle2 className="absolute -top-1 -right-1 w-3 h-3 text-green-600" />

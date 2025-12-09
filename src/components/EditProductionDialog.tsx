@@ -441,15 +441,13 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
                   <ScrollArea className="h-[150px]">
                     <div className="space-y-2 pr-3">
                       {selectedHouses.map(houseId => {
-                        const currentProgress = getHouseProgress(houseId);
-                        const editedValue = housePercentages[houseId] ?? currentProgress;
+                        // Use the percentage from state, fallback to stored value
+                        const storedPercentage = housePercentages[houseId];
+                        const editedValue = storedPercentage ?? 100;
                         
                         return (
                           <div key={houseId} className="flex items-center gap-3 text-sm">
                             <span className="w-16 font-medium">Casa {houseId}</span>
-                            <span className="w-12 text-xs text-muted-foreground">
-                              ({currentProgress}%)
-                            </span>
                             <Slider
                               value={[editedValue]}
                               onValueChange={(v) => {
@@ -477,6 +475,7 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
                               min={0}
                               max={100}
                             />
+                            <span className="text-xs text-muted-foreground">%</span>
                           </div>
                         );
                       })}
