@@ -351,56 +351,91 @@ export function ProjectCostsView() {
     setEditingScope(null);
   };
 
-  // Handle PDF import
-  const handlePdfImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle file import (PDF or Excel)
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== 'application/pdf') {
-      toast.error("Por favor, selecione um arquivo PDF");
+    const validTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'text/csv'
+    ];
+
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const isValidType = validTypes.includes(file.type) || ['pdf', 'xlsx', 'xls', 'csv'].includes(fileExtension || '');
+
+    if (!isValidType) {
+      toast.error("Por favor, selecione um arquivo PDF ou Excel (.xlsx, .xls, .csv)");
       return;
     }
 
     setIsImporting(true);
     try {
-      // Convert PDF to base64
+      // Convert file to base64
       const reader = new FileReader();
       reader.onload = async () => {
         const base64 = reader.result as string;
+        const fileType = fileExtension === 'pdf' ? 'pdf' : 'excel';
         
-        toast.info("Analisando PDF com IA... Isso pode levar alguns segundos.");
+        toast.info("Analisando orçamento com IA... Isso pode levar até 30 segundos.");
         
         const { data, error } = await supabase.functions.invoke('parse-budget-pdf', {
           body: { 
             pdfBase64: base64,
-            existingMacros: macros
+            existingMacros: macros,
+            fileType
           }
         });
         
         if (error) {
-          console.error('Error parsing PDF:', error);
-          toast.error("Erro ao processar PDF");
+          console.error('Error parsing file:', error);
+          toast.error("Erro ao processar arquivo: " + (error.message || "Erro desconhecido"));
           setIsImporting(false);
           return;
         }
+
+        console.log("Parse result:", data);
         
         if (data && data.success && data.items && data.items.length > 0) {
           // Process imported items
           let importedCount = 0;
+          const itemsToInsert: any[] = [];
           
           for (const item of data.items) {
+            // Skip if it's a macro or scope level item (not actual items)
+            if (item.level === 'macro' || item.level === 'scope') {
+              continue;
+            }
+
             // Try to find matching scope
             let matchedScope: { id: string; name: string } | null = null;
             let matchedMacro: { id: string; name: string; color: string } | null = null;
             
+            // First try exact match on macro name
             for (const macro of macros) {
-              // Check if macro name matches
-              if (item.macroName && macro.name.toLowerCase().includes(item.macroName.toLowerCase())) {
+              const macroNameLower = macro.name.toLowerCase();
+              const itemMacroLower = (item.macroName || '').toLowerCase();
+              
+              // Check various match patterns
+              if (
+                itemMacroLower.includes(macroNameLower) || 
+                macroNameLower.includes(itemMacroLower) ||
+                macroNameLower.split(' ').some(word => itemMacroLower.includes(word) && word.length > 3)
+              ) {
                 matchedMacro = { id: macro.id, name: macro.name, color: macro.color };
                 
                 // Try to find matching scope within this macro
                 for (const scope of macro.scopes) {
-                  if (item.scopeName && scope.name.toLowerCase().includes(item.scopeName.toLowerCase())) {
+                  const scopeNameLower = scope.name.toLowerCase();
+                  const itemScopeLower = (item.scopeName || '').toLowerCase();
+                  
+                  if (
+                    itemScopeLower.includes(scopeNameLower) || 
+                    scopeNameLower.includes(itemScopeLower) ||
+                    scopeNameLower.split(' ').some(word => itemScopeLower.includes(word) && word.length > 3)
+                  ) {
                     matchedScope = { id: scope.id, name: scope.name };
                     break;
                   }
@@ -418,7 +453,13 @@ export function ProjectCostsView() {
             if (!matchedMacro) {
               for (const macro of macros) {
                 for (const scope of macro.scopes) {
-                  if (item.scopeName && scope.name.toLowerCase().includes(item.scopeName.toLowerCase())) {
+                  const scopeNameLower = scope.name.toLowerCase();
+                  const itemScopeLower = (item.scopeName || '').toLowerCase();
+                  
+                  if (
+                    itemScopeLower.includes(scopeNameLower) || 
+                    scopeNameLower.includes(itemScopeLower)
+                  ) {
                     matchedScope = { id: scope.id, name: scope.name };
                     matchedMacro = { id: macro.id, name: macro.name, color: macro.color };
                     break;
@@ -437,39 +478,62 @@ export function ProjectCostsView() {
             }
             
             if (matchedScope && matchedMacro && currentProject?.id) {
-              // Save the item
-              await supabase.from('scope_items').insert({
+              itemsToInsert.push({
                 project_id: currentProject.id,
                 scope_id: matchedScope.id,
                 macro_id: matchedMacro.id,
-                name: item.name,
+                name: `${item.code ? `[${item.code}] ` : ''}${item.name}`,
                 category: item.category,
                 unit_value: item.unitValue || 0,
                 quantity: item.quantity || 1,
-                unit: item.unit || 'un'
+                unit: item.unit || 'un',
+                notes: item.totalValue > 0 ? `Total: R$ ${item.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : null
               });
               importedCount++;
             }
           }
+
+          // Insert items in batches of 50
+          const BATCH_SIZE = 50;
+          for (let i = 0; i < itemsToInsert.length; i += BATCH_SIZE) {
+            const batch = itemsToInsert.slice(i, i + BATCH_SIZE);
+            const { error: insertError } = await supabase.from('scope_items').insert(batch);
+            if (insertError) {
+              console.error('Error inserting batch:', insertError);
+            }
+          }
           
           await loadScopeItems();
-          toast.success(`${importedCount} itens importados do PDF!`);
+          
+          // Show summary
+          const macroCount = data.macros?.length || 0;
+          let scopeCount = 0;
+          if (data.macros) {
+            for (const m of data.macros) {
+              scopeCount += m.scopes?.length || 0;
+            }
+          }
+          
+          toast.success(
+            `Importação concluída! ${importedCount} itens importados.` +
+            (macroCount > 0 ? ` Encontradas ${macroCount} etapas e ${scopeCount} serviços.` : '')
+          );
         } else {
-          toast.error(data?.message || "Não foi possível extrair itens do PDF");
+          toast.error(data?.message || "Não foi possível extrair itens do orçamento");
         }
         
         setIsImporting(false);
       };
       
       reader.onerror = () => {
-        toast.error("Erro ao ler arquivo PDF");
+        toast.error("Erro ao ler arquivo");
         setIsImporting(false);
       };
       
       reader.readAsDataURL(file);
     } catch (err) {
-      console.error('Error importing PDF:', err);
-      toast.error("Erro ao importar PDF");
+      console.error('Error importing file:', err);
+      toast.error("Erro ao importar arquivo");
       setIsImporting(false);
     }
     
@@ -1013,8 +1077,8 @@ export function ProjectCostsView() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="application/pdf"
-                onChange={handlePdfImport}
+                accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx,application/vnd.ms-excel,.xls,.csv"
+                onChange={handleFileImport}
                 className="hidden"
               />
               <Button
