@@ -77,7 +77,7 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
     const houseMacros = (house.macros as any[]) || [];
     const macro = houseMacros.find(m => m.id === production.macro_id);
     const scope = macro?.scopes?.find((s: any) => s.id === production.scope_id);
-    return scope?.percentage || 0;
+    return scope?.progress || 0;
   };
 
   useEffect(() => {
@@ -97,7 +97,7 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
           const houseMacros = (house.macros as any[]) || [];
           const macro = houseMacros.find(m => m.id === production.macro_id);
           const scope = macro?.scopes?.find((s: any) => s.id === production.scope_id);
-          percentages[houseId] = scope?.percentage || 100;
+          percentages[houseId] = scope?.progress || 0;
         }
       });
       setHousePercentages(percentages);

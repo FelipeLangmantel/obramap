@@ -343,7 +343,7 @@ export function WeeklyProductionView() {
         const houseMacros = (house?.macros as any[]) || [];
         const houseMacro = houseMacros.find(m => m.id === macro.id);
         const houseScope = houseMacro?.scopes?.find((s: any) => s.id === scope.id);
-        const currentProgress = houseScope?.percentage || 0;
+                          const currentProgress = houseScope?.progress || 0;
         const remainingPercent = 100 - currentProgress;
         
         // Get the percentage to add (from custom mode or default to remaining)
@@ -875,7 +875,7 @@ export function WeeklyProductionView() {
                                   const houseMacros = (house?.macros as any[]) || [];
                                   const houseMacro = houseMacros.find(m => m.id === selectedMacro);
                                   const houseScope = houseMacro?.scopes?.find((s: any) => s.id === selectedScope);
-                                  const currentProgress = houseScope?.percentage || 0;
+                                  const currentProgress = houseScope?.progress || 0;
                                   const remainingPercent = 100 - currentProgress;
                                   const maxAllowed = remainingPercent;
                                   const currentValue = housePercentages[houseId] ?? Math.min(massPercentage, maxAllowed);
@@ -980,7 +980,7 @@ export function WeeklyProductionView() {
                           const houseMacros = (house.macros as any[]) || [];
                           const houseMacro = houseMacros.find(m => m.id === selectedMacro);
                           const houseScope = houseMacro?.scopes?.find((s: any) => s.id === selectedScope);
-                          const currentProgress = houseScope?.percentage || 0;
+                          const currentProgress = houseScope?.progress || 0;
                           const hasPartialProgress = currentProgress > 0 && currentProgress < 100;
                           const remainingPercent = 100 - currentProgress;
                           
