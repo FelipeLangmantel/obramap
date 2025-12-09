@@ -31,7 +31,7 @@ export interface Quadra {
   houses: number[];
 }
 
-// Default colors for macros
+// Default colors for macros - Extended palette
 export const DEFAULT_MACRO_COLORS = [
   "#9ca3af", // gray - Não Iniciado
   "#ef4444", // red - Fundação
@@ -41,6 +41,20 @@ export const DEFAULT_MACRO_COLORS = [
   "#8b5cf6", // purple
   "#ec4899", // pink
   "#14b8a6", // teal
+  "#f97316", // orange
+  "#06b6d4", // cyan
+  "#84cc16", // lime
+  "#a855f7", // violet
+  "#e11d48", // rose
+  "#0ea5e9", // sky
+  "#eab308", // yellow
+  "#10b981", // emerald
+  "#6366f1", // indigo
+  "#dc2626", // red-600
+  "#7c3aed", // violet-600
+  "#059669", // emerald-600
+  "#d946ef", // fuchsia
+  "#0891b2", // cyan-600
 ];
 
 export const MACROS_TEMPLATE: Macro[] = [

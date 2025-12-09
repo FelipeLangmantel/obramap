@@ -1,5 +1,5 @@
-import { useState, DragEvent } from "react";
-import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy, Eye } from "lucide-react";
+import { useState, DragEvent, useMemo } from "react";
+import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy, Eye, Scale } from "lucide-react";
 import { CopyMacrosDialog } from "./CopyMacrosDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Scope } from "@/data/constructionData";
@@ -44,6 +46,31 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
   const hasData = currentProject.setupComplete && currentProject.houses.some(h => 
     h.macros.some(m => m.scopes.some(s => s.progress > 0))
   );
+
+  // Calculate total weight per macro and overall
+  const weightAnalysis = useMemo(() => {
+    const macroWeights = macrosTemplate.map(macro => ({
+      id: macro.id,
+      name: macro.name,
+      totalWeight: macro.scopes.reduce((sum, scope) => sum + scope.weight, 0)
+    }));
+    const overallTotalWeight = macroWeights.reduce((sum, m) => sum + m.totalWeight, 0);
+    return { macroWeights, overallTotalWeight };
+  }, [macrosTemplate]);
+
+  const needsWeightAdjustment = weightAnalysis.overallTotalWeight !== 100;
+
+  const suggestWeightDistribution = () => {
+    if (weightAnalysis.overallTotalWeight === 0) return;
+    
+    const factor = 100 / weightAnalysis.overallTotalWeight;
+    macrosTemplate.forEach(macro => {
+      macro.scopes.forEach(scope => {
+        const newWeight = Math.round(scope.weight * factor * 10) / 10;
+        updateScope(macro.id, scope.id, { weight: newWeight });
+      });
+    });
+  };
 
   const confirmOrExecute = (action: () => void) => {
     if (hasData) {
@@ -248,6 +275,39 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
             </div>
           )}
 
+          {/* Weight Analysis Alert */}
+          <div className={`p-3 rounded-lg border ${needsWeightAdjustment ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800' : 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800'}`}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Scale className={`w-4 h-4 ${needsWeightAdjustment ? 'text-orange-600' : 'text-green-600'}`} />
+                <div>
+                  <span className={`text-sm font-medium ${needsWeightAdjustment ? 'text-orange-800 dark:text-orange-200' : 'text-green-800 dark:text-green-200'}`}>
+                    Peso Total: {weightAnalysis.overallTotalWeight.toFixed(1)}%
+                  </span>
+                  {needsWeightAdjustment && (
+                    <p className="text-xs text-orange-600 dark:text-orange-400">
+                      A soma dos pesos deve ser 100% para cálculos precisos. Diferença: {(100 - weightAnalysis.overallTotalWeight).toFixed(1)}%
+                    </p>
+                  )}
+                </div>
+              </div>
+              {needsWeightAdjustment && canEdit && (
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                  onClick={suggestWeightDistribution}
+                >
+                  Ajustar Automaticamente
+                </Button>
+              )}
+            </div>
+            <Progress 
+              value={Math.min(weightAnalysis.overallTotalWeight, 100)} 
+              className="mt-2 h-2"
+            />
+          </div>
+
           <p className="text-xs text-muted-foreground">
             Arraste os itens ou use as setas para reorganizar a ordem das etapas e serviços.
           </p>
@@ -317,12 +377,12 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                                     style={{ backgroundColor: editingMacro.color }}
                                   />
                                 </PopoverTrigger>
-                                <PopoverContent className="w-auto p-2" align="start">
-                                  <div className="grid grid-cols-4 gap-2">
+                                <PopoverContent className="w-auto p-3" align="start">
+                                  <div className="grid grid-cols-6 gap-2">
                                     {DEFAULT_MACRO_COLORS.map((color) => (
                                       <button
                                         key={color}
-                                        className="w-8 h-8 rounded-md border-2 transition-transform hover:scale-110"
+                                        className="w-7 h-7 rounded-md border-2 transition-transform hover:scale-110"
                                         style={{ 
                                           backgroundColor: color,
                                           borderColor: editingMacro.color === color ? 'hsl(var(--foreground))' : 'transparent'
@@ -331,6 +391,7 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                                       />
                                     ))}
                                   </div>
+                                  <p className="text-xs text-muted-foreground mt-2 text-center">24 cores disponíveis</p>
                                 </PopoverContent>
                               </Popover>
                               <Input
@@ -354,6 +415,9 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                                   style={{ backgroundColor: macro.color }}
                                 />
                                 <span className="text-sm font-medium">{macro.name}</span>
+                                <Badge variant="secondary" className="text-xs">
+                                  {weightAnalysis.macroWeights.find(m => m.id === macro.id)?.totalWeight.toFixed(1)}%
+                                </Badge>
                               </div>
                               {canEdit && (
                                 <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
