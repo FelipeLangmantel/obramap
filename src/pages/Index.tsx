@@ -16,10 +16,11 @@ import { PlanningView } from "@/components/PlanningView";
 import { ProjectCostsView } from "@/components/ProjectCostsView";
 import { InteractiveMapView } from "@/components/InteractiveMapView";
 import { Map3DView } from "@/components/Map3DView";
+import { SuppliesView } from "@/components/SuppliesView";
 import { Loader2 } from "lucide-react";
 
 function IndexContent() {
-  const [activeView, setActiveView] = useState<"map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map">("map");
+  const [activeView, setActiveView] = useState<"map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies">("map");
   const { selectedHouse, isLoading, projects } = useConstruction();
 
   if (isLoading) {
@@ -40,7 +41,8 @@ function IndexContent() {
     charts: "Gráficos e Análises",
     production: "Produção Semanal",
     planning: "Planejamento",
-    costs: "Custos da Obra"
+    costs: "Custos da Obra",
+    supplies: "Suprimentos"
   };
 
   return (
@@ -129,6 +131,12 @@ function IndexContent() {
                 {activeView === "3d-map" && (
                   <div className="flex-1">
                     <Map3DView />
+                  </div>
+                )}
+
+                {activeView === "supplies" && (
+                  <div className="flex-1">
+                    <SuppliesView />
                   </div>
                 )}
               </div>
