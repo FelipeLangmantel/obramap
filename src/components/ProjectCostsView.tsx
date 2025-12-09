@@ -1072,31 +1072,7 @@ export function ProjectCostsView() {
             </Alert>
           )}
 
-          {canEdit && (
-            <div className="flex gap-2 mb-4">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf,.pdf"
-                onChange={handleFileImport}
-                className="hidden"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isImporting}
-                className="gap-2"
-              >
-                {isImporting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Upload className="w-4 h-4" />
-                )}
-                Importar PDF
-              </Button>
-            </div>
-          )}
+          {/* Import feature removed for faster manual input */}
 
           <ScrollArea className="h-[calc(100vh-420px)]">
             <div className="space-y-3">

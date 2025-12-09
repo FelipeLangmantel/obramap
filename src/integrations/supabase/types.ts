@@ -14,6 +14,79 @@ export type Database = {
   }
   public: {
     Tables: {
+      category_lead_times: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          lead_time_days: number
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          lead_time_days?: number
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          lead_time_days?: number
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "category_lead_times_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_tracking: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          location: string | null
+          purchase_order_id: string
+          status: string
+          tracking_date: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          location?: string | null
+          purchase_order_id: string
+          status: string
+          tracking_date?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          location?: string | null
+          purchase_order_id?: string
+          status?: string
+          tracking_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_tracking_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       houses: {
         Row: {
           area: number
@@ -348,6 +421,130 @@ export type Database = {
         }
         Relationships: []
       }
+      purchase_order_items: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          name: string
+          purchase_order_id: string
+          quantity: number
+          quotation_item_id: string | null
+          total_value: number
+          unit: string
+          unit_value: number
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          name: string
+          purchase_order_id: string
+          quantity?: number
+          quotation_item_id?: string | null
+          total_value?: number
+          unit?: string
+          unit_value?: number
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          name?: string
+          purchase_order_id?: string
+          quantity?: number
+          quotation_item_id?: string | null
+          total_value?: number
+          unit?: string
+          unit_value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_items_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_items_quotation_item_id_fkey"
+            columns: ["quotation_item_id"]
+            isOneToOne: false
+            referencedRelation: "quotation_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_orders: {
+        Row: {
+          actual_delivery_date: string | null
+          created_at: string
+          created_by: string | null
+          expected_delivery_date: string | null
+          id: string
+          notes: string | null
+          order_number: string
+          project_id: string
+          quotation_id: string | null
+          status: string
+          supplier_id: string
+          total_value: number
+          updated_at: string
+        }
+        Insert: {
+          actual_delivery_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          expected_delivery_date?: string | null
+          id?: string
+          notes?: string | null
+          order_number: string
+          project_id: string
+          quotation_id?: string | null
+          status?: string
+          supplier_id: string
+          total_value?: number
+          updated_at?: string
+        }
+        Update: {
+          actual_delivery_date?: string | null
+          created_at?: string
+          created_by?: string | null
+          expected_delivery_date?: string | null
+          id?: string
+          notes?: string | null
+          order_number?: string
+          project_id?: string
+          quotation_id?: string | null
+          status?: string
+          supplier_id?: string
+          total_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_quotation_id_fkey"
+            columns: ["quotation_id"]
+            isOneToOne: false
+            referencedRelation: "quotation_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quadras: {
         Row: {
           created_at: string
@@ -376,6 +573,107 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "quadras_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quotation_items: {
+        Row: {
+          category: string
+          created_at: string
+          estimated_unit_value: number | null
+          id: string
+          name: string
+          quantity: number
+          quotation_id: string
+          scope_item_id: string | null
+          unit: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          estimated_unit_value?: number | null
+          id?: string
+          name: string
+          quantity?: number
+          quotation_id: string
+          scope_item_id?: string | null
+          unit?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          estimated_unit_value?: number | null
+          id?: string
+          name?: string
+          quantity?: number
+          quotation_id?: string
+          scope_item_id?: string | null
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotation_items_quotation_id_fkey"
+            columns: ["quotation_id"]
+            isOneToOne: false
+            referencedRelation: "quotation_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotation_items_scope_item_id_fkey"
+            columns: ["scope_item_id"]
+            isOneToOne: false
+            referencedRelation: "scope_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quotation_requests: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          project_id: string
+          required_date: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          project_id: string
+          required_date: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          project_id?: string
+          required_date?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotation_requests_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -495,6 +793,101 @@ export type Database = {
             columns: ["scope_cost_id"]
             isOneToOne: false
             referencedRelation: "scope_costs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_quotes: {
+        Row: {
+          created_at: string
+          delivery_days: number
+          id: string
+          is_selected: boolean
+          notes: string | null
+          quotation_item_id: string
+          supplier_id: string
+          total_value: number
+          unit_value: number
+        }
+        Insert: {
+          created_at?: string
+          delivery_days?: number
+          id?: string
+          is_selected?: boolean
+          notes?: string | null
+          quotation_item_id: string
+          supplier_id: string
+          total_value: number
+          unit_value: number
+        }
+        Update: {
+          created_at?: string
+          delivery_days?: number
+          id?: string
+          is_selected?: boolean
+          notes?: string | null
+          quotation_item_id?: string
+          supplier_id?: string
+          total_value?: number
+          unit_value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_quotes_quotation_item_id_fkey"
+            columns: ["quotation_item_id"]
+            isOneToOne: false
+            referencedRelation: "quotation_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_quotes_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          address: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suppliers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
