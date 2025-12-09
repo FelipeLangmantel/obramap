@@ -7,19 +7,38 @@ const corsHeaders = {
 };
 
 interface BudgetItem {
+  code: string;           // Item code like "1.1.1"
   name: string;
   category: "material" | "labor" | "equipment";
   unitValue: number;
   quantity: number;
   unit: string;
-  scopeName?: string;
-  macroName?: string;
+  totalValue: number;
+  scopeName?: string;     // Service name like "RADIER"
+  macroName?: string;     // Stage name like "1 - FUNDAÇÃO"
+  level: "macro" | "scope" | "item";
+}
+
+interface BudgetMacro {
+  code: string;           // Like "1"
+  name: string;           // Like "RADIER"
+  totalValue: number;
+  scopes: BudgetScope[];
+}
+
+interface BudgetScope {
+  code: string;           // Like "1.1"
+  name: string;           // Like "RADIER"
+  totalValue: number;
+  items: BudgetItem[];
 }
 
 interface ParseResult {
+  macros: BudgetMacro[];
   items: BudgetItem[];
   success: boolean;
   message?: string;
+  totalValue?: number;
 }
 
 serve(async (req) => {
@@ -28,10 +47,10 @@ serve(async (req) => {
   }
 
   try {
-    const { pdfBase64, existingMacros } = await req.json();
+    const { pdfBase64, existingMacros, fileType } = await req.json();
 
     if (!pdfBase64) {
-      throw new Error("PDF is required");
+      throw new Error("Arquivo é obrigatório");
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -45,65 +64,86 @@ serve(async (req) => {
       scopes: m.scopes?.map((s: any) => s.name) || [],
     })) || [];
 
+    console.log("File type:", fileType || "pdf");
     console.log("Existing macros for context:", JSON.stringify(macroInfo));
     
-    const prompt = `Você é um especialista em análise de orçamentos de construção civil.
+    const prompt = `Você é um especialista em análise de orçamentos de construção civil brasileira.
 
-Analise este PDF de orçamento de obra e extraia TODOS os itens/insumos encontrados.
+Analise este documento de orçamento e extraia TODA a estrutura hierárquica:
+- ETAPAS (macros): são os itens principais como "1 - RADIER", "2 - PAREDES E LAJES", etc.
+- SERVIÇOS (scopes): são sub-itens das etapas como "1.1 - RADIER", "1.2 - ESPERAS DE ESGOTO"
+- ITENS/INSUMOS: são os materiais, mão de obra e equipamentos detalhados
 
-Para cada item, identifique:
-1. Nome do item/insumo
-2. Categoria: "material" (materiais de construção), "labor" (mão de obra), ou "equipment" (equipamentos)
-3. Valor unitário (se houver)
-4. Quantidade (se houver)
-5. Unidade de medida (un, m², m³, kg, etc.)
-6. Qual serviço/escopo o item pertence (se identificável)
-7. Qual etapa macro pertence (se identificável)
+ESTRUTURA DO ORÇAMENTO:
+- Itens com código de 1 dígito (ex: "1", "2", "3") são ETAPAS (macros)
+- Itens com código de 2 partes (ex: "1.1", "2.1") são SERVIÇOS (scopes)
+- Itens com código de 3+ partes (ex: "1.1.1", "2.1.3") são ITENS/INSUMOS
 
-Etapas (macros) e serviços existentes no projeto:
-${JSON.stringify(macroInfo, null, 2)}
+Para cada item, extraia:
+1. Código (N ou ITEM da tabela: "1", "1.1", "1.1.1", etc.)
+2. Nome/Descrição
+3. Unidade de medida (UNID.)
+4. Quantidade (QTD)
+5. Valor Unitário (UNIT ou CUSTO UNIT.)
+6. Valor Total (se houver)
+7. Categoria: "material", "labor" (mão de obra, tarefa, serviço), ou "equipment" (equipamento, aluguel)
 
 IMPORTANTE:
-- Extraia TODOS os itens do orçamento
-- Se não conseguir identificar o escopo, deixe em branco
-- Se não houver valor, coloque 0
+- Extraia ABSOLUTAMENTE TODOS os itens do orçamento, linha por linha
+- Mantenha a estrutura hierárquica (etapa -> serviço -> item)
+- Se um item tiver "mão de obra", "MO", "tarefa", "serviço" no nome, classifique como "labor"
+- Se tiver "aluguel", "locação" no nome, classifique como "equipment"
+- Demais itens são "material"
+- Converta valores em R$ para números (ex: "R$ 1.000,00" -> 1000.00)
 - Se não houver quantidade, coloque 1
-- Tente associar os itens aos serviços existentes no projeto
+- Se não houver valor, coloque 0
 
-Responda APENAS com um JSON válido (sem markdown, sem explicações) no seguinte formato:
+Responda APENAS com um JSON válido (sem markdown, sem \`\`\`json, sem explicações) neste formato:
+
 {
-  "items": [
+  "macros": [
     {
-      "name": "Cimento CP II",
-      "category": "material",
-      "unitValue": 35.50,
-      "quantity": 100,
-      "unit": "saco",
-      "scopeName": "Fundação",
-      "macroName": "RADIER"
-    },
-    {
-      "name": "Pedreiro",
-      "category": "labor",
-      "unitValue": 150.00,
-      "quantity": 8,
-      "unit": "diária",
-      "scopeName": "Alvenaria",
-      "macroName": "PAREDES"
+      "code": "1",
+      "name": "RADIER",
+      "totalValue": 9482.99,
+      "scopes": [
+        {
+          "code": "1.1",
+          "name": "RADIER",
+          "totalValue": 8589.97,
+          "items": [
+            {
+              "code": "1.1.1",
+              "name": "Concreto Usinado fck - 25 Mpa",
+              "category": "material",
+              "unitValue": 622.15,
+              "quantity": 7,
+              "unit": "m³",
+              "totalValue": 4482.59,
+              "level": "item"
+            },
+            {
+              "code": "1.1.15",
+              "name": "mao de obra radier",
+              "category": "labor",
+              "unitValue": 1000.00,
+              "quantity": 1,
+              "unit": "tarefa",
+              "totalValue": 1000.00,
+              "level": "item"
+            }
+          ]
+        }
+      ]
     }
   ],
-  "success": true,
-  "message": "Extraídos 25 itens do orçamento"
-}
-
-Se não conseguir extrair itens, retorne:
-{
   "items": [],
-  "success": false,
-  "message": "Motivo do erro"
+  "success": true,
+  "message": "Extraídas X etapas, Y serviços e Z itens do orçamento",
+  "totalValue": 90071.08
 }`;
 
-    console.log("Calling Lovable AI to parse budget PDF...");
+    console.log("Calling Lovable AI to parse budget document...");
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -130,24 +170,32 @@ Se não conseguir extrair itens, retorne:
             ],
           },
         ],
-        max_tokens: 8000,
+        max_tokens: 16000,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("AI API error:", response.status, errorText);
-      throw new Error(`AI API error: ${response.status}`);
+      
+      if (response.status === 429) {
+        throw new Error("Limite de requisições atingido. Tente novamente em alguns minutos.");
+      }
+      if (response.status === 402) {
+        throw new Error("Créditos insuficientes. Adicione créditos na sua conta Lovable.");
+      }
+      throw new Error(`Erro na API de IA: ${response.status}`);
     }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
 
     if (!content) {
-      throw new Error("No response from AI");
+      throw new Error("Sem resposta da IA");
     }
 
-    console.log("AI raw response:", content);
+    console.log("AI raw response length:", content.length);
+    console.log("AI raw response preview:", content.substring(0, 500));
 
     // Parse the JSON response
     let parseResult: ParseResult;
@@ -167,48 +215,114 @@ Se não conseguir extrair itens, retorne:
       parseResult = JSON.parse(cleanedContent);
     } catch (parseError) {
       console.error("Failed to parse AI response:", content);
-      parseResult = {
-        items: [],
-        success: false,
-        message: "Não foi possível processar a resposta da IA"
-      };
+      // Try to find JSON within the response
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          parseResult = JSON.parse(jsonMatch[0]);
+        } catch {
+          parseResult = {
+            macros: [],
+            items: [],
+            success: false,
+            message: "Não foi possível processar a resposta da IA"
+          };
+        }
+      } else {
+        parseResult = {
+          macros: [],
+          items: [],
+          success: false,
+          message: "Não foi possível processar a resposta da IA"
+        };
+      }
     }
 
-    // Validate the result
-    if (!parseResult.items || !Array.isArray(parseResult.items)) {
-      parseResult = {
-        items: [],
-        success: false,
-        message: "Formato de resposta inválido"
-      };
+    // Flatten items for backward compatibility
+    const flatItems: BudgetItem[] = [];
+    
+    if (parseResult.macros && Array.isArray(parseResult.macros)) {
+      for (const macro of parseResult.macros) {
+        if (macro.scopes && Array.isArray(macro.scopes)) {
+          for (const scope of macro.scopes) {
+            if (scope.items && Array.isArray(scope.items)) {
+              for (const item of scope.items) {
+                flatItems.push({
+                  ...item,
+                  macroName: macro.name,
+                  scopeName: scope.name,
+                  code: item.code || "",
+                  name: item.name || "Item sem nome",
+                  category: ["material", "labor", "equipment"].includes(item.category) ? item.category : "material",
+                  unitValue: typeof item.unitValue === "number" ? item.unitValue : 0,
+                  quantity: typeof item.quantity === "number" ? item.quantity : 1,
+                  unit: item.unit || "un",
+                  totalValue: typeof item.totalValue === "number" ? item.totalValue : 0,
+                  level: "item"
+                });
+              }
+            }
+          }
+        }
+      }
     }
 
-    // Clean up and validate items
-    parseResult.items = parseResult.items.map(item => ({
-      name: item.name || "Item sem nome",
-      category: ["material", "labor", "equipment"].includes(item.category) ? item.category : "material",
-      unitValue: typeof item.unitValue === "number" ? item.unitValue : 0,
-      quantity: typeof item.quantity === "number" ? item.quantity : 1,
-      unit: item.unit || "un",
-      scopeName: item.scopeName || undefined,
-      macroName: item.macroName || undefined,
-    }));
+    // Also include any items in the flat items array
+    if (parseResult.items && Array.isArray(parseResult.items)) {
+      for (const item of parseResult.items) {
+        flatItems.push({
+          code: item.code || "",
+          name: item.name || "Item sem nome",
+          category: ["material", "labor", "equipment"].includes(item.category) ? item.category : "material",
+          unitValue: typeof item.unitValue === "number" ? item.unitValue : 0,
+          quantity: typeof item.quantity === "number" ? item.quantity : 1,
+          unit: item.unit || "un",
+          totalValue: typeof item.totalValue === "number" ? item.totalValue : 0,
+          scopeName: item.scopeName,
+          macroName: item.macroName,
+          level: item.level || "item"
+        });
+      }
+    }
 
-    if (parseResult.items.length > 0) {
+    parseResult.items = flatItems;
+
+    // Count totals
+    const macroCount = parseResult.macros?.length || 0;
+    let scopeCount = 0;
+    let itemCount = flatItems.length;
+
+    if (parseResult.macros) {
+      for (const macro of parseResult.macros) {
+        scopeCount += macro.scopes?.length || 0;
+      }
+    }
+
+    if (macroCount > 0 || itemCount > 0) {
       parseResult.success = true;
-      parseResult.message = `Extraídos ${parseResult.items.length} itens do orçamento`;
+      parseResult.message = `Extraídas ${macroCount} etapas, ${scopeCount} serviços e ${itemCount} itens do orçamento`;
+    } else {
+      parseResult.success = false;
+      parseResult.message = "Não foi possível extrair itens do orçamento. Verifique se o arquivo está legível.";
     }
 
-    console.log("Final parse result:", JSON.stringify(parseResult, null, 2));
+    console.log("Final parse result:", JSON.stringify({
+      macros: macroCount,
+      scopes: scopeCount,
+      items: itemCount,
+      success: parseResult.success,
+      message: parseResult.message
+    }));
 
     return new Response(JSON.stringify(parseResult), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: unknown) {
     console.error("Error in parse-budget-pdf:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
     return new Response(
       JSON.stringify({ 
+        macros: [],
         items: [], 
         success: false, 
         message: errorMessage 
