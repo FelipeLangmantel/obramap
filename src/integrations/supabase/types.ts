@@ -73,6 +73,8 @@ export type Database = {
       }
       map_layouts: {
         Row: {
+          camera_position: Json | null
+          camera_target: Json | null
           created_at: string
           house_markers_3d: Json | null
           houses: Json
@@ -88,6 +90,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          camera_position?: Json | null
+          camera_target?: Json | null
           created_at?: string
           house_markers_3d?: Json | null
           houses?: Json
@@ -103,6 +107,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          camera_position?: Json | null
+          camera_target?: Json | null
           created_at?: string
           house_markers_3d?: Json | null
           houses?: Json

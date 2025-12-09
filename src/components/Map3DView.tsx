@@ -10,8 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Upload, Box, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home } from "lucide-react";
+import { Upload, Box, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -109,25 +110,92 @@ function HouseMarker3D({
 }
 
 // Camera reset controller - positions camera for top-down isometric view
-function CameraController({ resetTrigger }: { resetTrigger: number }) {
-  const { camera, scene } = useThree();
+function CameraController({ 
+  resetTrigger, 
+  savedPosition, 
+  savedTarget,
+  onCameraChange 
+}: { 
+  resetTrigger: number;
+  savedPosition?: [number, number, number] | null;
+  savedTarget?: [number, number, number] | null;
+  onCameraChange?: (position: [number, number, number], target: [number, number, number]) => void;
+}) {
+  const { camera, scene, controls } = useThree();
+  const lastPositionRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const hasInitializedRef = useRef(false);
   
+  // Initialize camera from saved position on first load
+  useEffect(() => {
+    if (!hasInitializedRef.current && savedPosition && savedTarget) {
+      camera.position.set(savedPosition[0], savedPosition[1], savedPosition[2]);
+      camera.lookAt(savedTarget[0], savedTarget[1], savedTarget[2]);
+      hasInitializedRef.current = true;
+    }
+  }, [savedPosition, savedTarget, camera]);
+  
+  // Handle camera reset trigger
   useEffect(() => {
     if (resetTrigger > 0) {
-      // Calculate bounding box of all objects in scene
-      const box = new THREE.Box3().setFromObject(scene);
+      // Calculate bounding box of all objects in scene (excluding grid and lights)
+      const box = new THREE.Box3();
+      let hasObjects = false;
+      
+      scene.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.geometry) {
+          const childBox = new THREE.Box3().setFromObject(child);
+          if (!childBox.isEmpty()) {
+            box.union(childBox);
+            hasObjects = true;
+          }
+        }
+      });
+      
+      if (!hasObjects || box.isEmpty()) {
+        // Default view for empty scene
+        camera.position.set(0, 50, 15);
+        camera.lookAt(0, 0, 0);
+        return;
+      }
+      
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
       
       // Calculate optimal distance based on scene size
       const maxDim = Math.max(size.x, size.y, size.z);
-      const distance = maxDim > 0 ? maxDim * 2 : 50;
+      const distance = maxDim > 0 ? maxDim * 2.5 : 50;
       
-      // Position camera for top-down isometric view (like the reference image)
-      camera.position.set(center.x, center.y + distance * 0.8, center.z + distance * 0.3);
+      // Position camera for top-down isometric view
+      camera.position.set(center.x + distance * 0.3, center.y + distance * 0.8, center.z + distance * 0.5);
       camera.lookAt(center);
+      
+      // Update OrbitControls target if available
+      if (controls && (controls as any).target) {
+        (controls as any).target.copy(center);
+        (controls as any).update();
+      }
     }
-  }, [resetTrigger, camera, scene]);
+  }, [resetTrigger, camera, scene, controls]);
+
+  // Track camera position changes for saving
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (camera.position.distanceTo(lastPositionRef.current) > 0.1) {
+        lastPositionRef.current.copy(camera.position);
+        if (onCameraChange) {
+          const target = new THREE.Vector3();
+          camera.getWorldDirection(target);
+          target.multiplyScalar(10).add(camera.position);
+          onCameraChange(
+            [camera.position.x, camera.position.y, camera.position.z],
+            [target.x, target.y, target.z]
+          );
+        }
+      }
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [camera, onCameraChange]);
 
   return null;
 }
@@ -139,7 +207,10 @@ function Scene({
   selectedMarkerId,
   onMarkerClick,
   customLegendItems,
-  resetTrigger
+  resetTrigger,
+  savedPosition,
+  savedTarget,
+  onCameraChange
 }: { 
   modelData: ModelData | null;
   markers: HouseMarker[];
@@ -147,11 +218,19 @@ function Scene({
   onMarkerClick: (marker: HouseMarker) => void;
   customLegendItems: any[];
   resetTrigger: number;
+  savedPosition?: [number, number, number] | null;
+  savedTarget?: [number, number, number] | null;
+  onCameraChange?: (position: [number, number, number], target: [number, number, number]) => void;
 }) {
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 50, 15]} fov={50} />
-      <CameraController resetTrigger={resetTrigger} />
+      <CameraController 
+        resetTrigger={resetTrigger} 
+        savedPosition={savedPosition}
+        savedTarget={savedTarget}
+        onCameraChange={onCameraChange}
+      />
       <OrbitControls 
         enablePan={true}
         enableZoom={true}
@@ -352,10 +431,20 @@ export function Map3DView() {
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [cameraResetTrigger, setCameraResetTrigger] = useState(0);
+  const [savedCameraPosition, setSavedCameraPosition] = useState<[number, number, number] | null>(null);
+  const [savedCameraTarget, setSavedCameraTarget] = useState<[number, number, number] | null>(null);
+  const [pendingCameraPosition, setPendingCameraPosition] = useState<[number, number, number] | null>(null);
+  const [pendingCameraTarget, setPendingCameraTarget] = useState<[number, number, number] | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mtlInputRef = useRef<HTMLInputElement>(null);
   const [pendingObjFile, setPendingObjFile] = useState<File | null>(null);
+  
+  const handleCameraChange = useCallback((position: [number, number, number], target: [number, number, number]) => {
+    setPendingCameraPosition(position);
+    setPendingCameraTarget(target);
+    setHasChanges(true);
+  }, []);
 
   // Reset camera when component mounts or project changes
   useEffect(() => {
@@ -380,7 +469,7 @@ export function Map3DView() {
     try {
       const { data, error } = await supabase
         .from('map_layouts')
-        .select('model_3d_url, model_3d_type, model_mtl_url, house_markers_3d')
+        .select('model_3d_url, model_3d_type, model_mtl_url, house_markers_3d, camera_position, camera_target')
         .eq('project_id', projectId)
         .maybeSingle();
 
@@ -402,6 +491,14 @@ export function Map3DView() {
         // Load markers if exists
         if (data.house_markers_3d && Array.isArray(data.house_markers_3d) && data.house_markers_3d.length > 0) {
           setMarkers(data.house_markers_3d as unknown as HouseMarker[]);
+        }
+        
+        // Load camera position if exists
+        if (data.camera_position && Array.isArray(data.camera_position)) {
+          setSavedCameraPosition(data.camera_position as [number, number, number]);
+        }
+        if (data.camera_target && Array.isArray(data.camera_target)) {
+          setSavedCameraTarget(data.camera_target as [number, number, number]);
         }
       }
     } catch (err) {
@@ -436,7 +533,9 @@ export function Map3DView() {
         model_3d_url: modelData?.url || null,
         model_3d_type: modelData?.type || null,
         model_mtl_url: modelData?.mtlUrl || null,
-        house_markers_3d: markers as unknown as any[]
+        house_markers_3d: markers as unknown as any[],
+        camera_position: pendingCameraPosition || savedCameraPosition,
+        camera_target: pendingCameraTarget || savedCameraTarget
       };
 
       if (existingLayout) {
@@ -621,7 +720,12 @@ export function Map3DView() {
     setMarkers([]);
     setSelectedMarker(null);
     setPendingObjFile(null);
+    setSavedCameraPosition(null);
+    setSavedCameraTarget(null);
+    setPendingCameraPosition(null);
+    setPendingCameraTarget(null);
     setHasChanges(true);
+    toast.success("Mapa resetado. Clique em Salvar para confirmar.");
   };
 
   return (
@@ -697,14 +801,36 @@ export function Map3DView() {
               Centralizar
             </Button>
 
-            <Button
-              variant="outline"
-              onClick={resetView}
-              disabled={isLoading}
-            >
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Resetar
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  disabled={isLoading}
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Resetar
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                    Confirmar Reset do Mapa
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação irá remover o modelo 3D importado, todos os marcadores de casas e a posição da câmera salvos. 
+                    <br /><br />
+                    <strong>Esta ação não pode ser desfeita.</strong> Você deseja continuar?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={resetView} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Sim, Resetar Mapa
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             <Button
               variant={hasChanges ? "default" : "outline"}
@@ -747,6 +873,9 @@ export function Map3DView() {
             onMarkerClick={setSelectedMarker}
             customLegendItems={customLegendItems}
             resetTrigger={cameraResetTrigger}
+            savedPosition={savedCameraPosition}
+            savedTarget={savedCameraTarget}
+            onCameraChange={handleCameraChange}
           />
         </Canvas>
 
