@@ -10,8 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Save, Trash2, CalendarDays, AlertCircle, Home, Eye } from "lucide-react";
+import { Save, Trash2, CalendarDays, AlertCircle, Home, Eye, Percent, Settings2 } from "lucide-react";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -59,8 +61,24 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
   const [isInitialDatabase, setIsInitialDatabase] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  
+  // Percentage editing
+  const [editPercentageMode, setEditPercentageMode] = useState(false);
+  const [housePercentages, setHousePercentages] = useState<Record<number, number>>({});
 
   const houses = currentProject?.houses || [];
+
+  // Get current progress for each house in this scope
+  const getHouseProgress = (houseId: number): number => {
+    if (!production) return 0;
+    const house = houses.find(h => h.id === houseId);
+    if (!house) return 0;
+    
+    const houseMacros = (house.macros as any[]) || [];
+    const macro = houseMacros.find(m => m.id === production.macro_id);
+    const scope = macro?.scopes?.find((s: any) => s.id === production.scope_id);
+    return scope?.percentage || 0;
+  };
 
   useEffect(() => {
     if (production) {
@@ -69,8 +87,22 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
       setNotes(production.notes || "");
       setSelectedHouses(production.house_ids || []);
       setIsInitialDatabase(production.is_initial_database || false);
+      setEditPercentageMode(false);
+      
+      // Initialize percentages from current house data
+      const percentages: Record<number, number> = {};
+      production.house_ids.forEach(houseId => {
+        const house = houses.find(h => h.id === houseId);
+        if (house) {
+          const houseMacros = (house.macros as any[]) || [];
+          const macro = houseMacros.find(m => m.id === production.macro_id);
+          const scope = macro?.scopes?.find((s: any) => s.id === production.scope_id);
+          percentages[houseId] = scope?.percentage || 100;
+        }
+      });
+      setHousePercentages(percentages);
     }
-  }, [production]);
+  }, [production, houses]);
 
   // Toggle house selection
   const toggleHouse = (houseId: number) => {
@@ -91,6 +123,20 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
   const getAddedHouses = () => {
     if (!production) return [];
     return selectedHouses.filter(id => !production.house_ids.includes(id));
+  };
+
+  // Get houses with changed percentages
+  const getChangedPercentages = () => {
+    if (!production || !editPercentageMode) return {};
+    const changed: Record<number, number> = {};
+    selectedHouses.forEach(houseId => {
+      const currentProgress = getHouseProgress(houseId);
+      const newPercentage = housePercentages[houseId];
+      if (newPercentage !== undefined && newPercentage !== currentProgress) {
+        changed[houseId] = newPercentage;
+      }
+    });
+    return changed;
   };
 
   const handleSave = async () => {
@@ -144,6 +190,21 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
         await updateBatchScopeProgress(addedHouses, production.macro_id, production.scope_id, 100);
       }
 
+      // Update individual percentages if in edit mode
+      if (editPercentageMode) {
+        const changedPercentages = getChangedPercentages();
+        const changedHouseIds = Object.keys(changedPercentages).map(Number);
+        if (changedHouseIds.length > 0) {
+          await updateBatchScopeProgress(
+            changedHouseIds, 
+            production.macro_id, 
+            production.scope_id, 
+            100, // fallback 
+            changedPercentages
+          );
+        }
+      }
+
       // Force refresh houses from database to ensure UI is synced
       await refreshHousesFromDB();
 
@@ -195,7 +256,9 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
 
   const removedCount = getRemovedHouses().length;
   const addedCount = getAddedHouses().length;
-  const hasChanges = removedCount > 0 || addedCount > 0 || 
+  const changedPercentages = getChangedPercentages();
+  const percentageChangedCount = Object.keys(changedPercentages).length;
+  const hasChanges = removedCount > 0 || addedCount > 0 || percentageChangedCount > 0 ||
     weekStart !== production.week_start || 
     weekEnd !== production.week_end || 
     notes !== (production.notes || "");
@@ -282,20 +345,34 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
 
             {/* Houses Selection */}
             <div className="space-y-3">
-              <Label className="text-sm font-medium flex items-center gap-2">
-                <Home className="w-4 h-4" />
-                Casas Incluídas
-                <Badge variant="secondary" className="ml-2">
-                  {selectedHouses.length} selecionadas
-                </Badge>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Home className="w-4 h-4" />
+                  Casas Incluídas
+                  <Badge variant="secondary" className="ml-2">
+                    {selectedHouses.length} selecionadas
+                  </Badge>
+                </Label>
                 {hasChanges && (
-                  <Badge variant="outline" className="text-xs ml-auto">
+                  <Badge variant="outline" className="text-xs">
                     {addedCount > 0 && <span className="text-green-600">+{addedCount}</span>}
                     {addedCount > 0 && removedCount > 0 && " / "}
                     {removedCount > 0 && <span className="text-red-600">-{removedCount}</span>}
                   </Badge>
                 )}
-              </Label>
+              </div>
+              
+              {/* Edit Percentage Mode Toggle */}
+              <div className="flex items-center justify-between p-2 bg-muted/30 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <Percent className="w-4 h-4 text-muted-foreground" />
+                  <Label className="text-sm">Editar % de cada casa</Label>
+                </div>
+                <Switch
+                  checked={editPercentageMode}
+                  onCheckedChange={setEditPercentageMode}
+                />
+              </div>
               
               <ScrollArea className="h-[200px] border rounded-lg p-2">
                 <div className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 gap-2">
@@ -304,31 +381,111 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
                     const wasOriginal = production.house_ids.includes(house.id);
                     const isAdded = isSelected && !wasOriginal;
                     const isRemoved = !isSelected && wasOriginal;
+                    const currentProgress = getHouseProgress(house.id);
+                    const editedPercentage = housePercentages[house.id];
+                    const hasPercentageChange = editPercentageMode && isSelected && editedPercentage !== undefined && editedPercentage !== currentProgress;
                     
                     return (
                       <button
                         key={house.id}
                         onClick={() => toggleHouse(house.id)}
                         className={`
-                          relative w-9 h-9 rounded-lg border-2 flex items-center justify-center text-xs font-medium transition-all
+                          relative w-9 h-9 rounded-lg border-2 flex flex-col items-center justify-center text-xs font-medium transition-all
                           ${isSelected 
                             ? isAdded
                               ? 'bg-green-100 border-green-500 text-green-700'
-                              : 'bg-primary/10 border-primary text-primary'
+                              : hasPercentageChange
+                                ? 'bg-amber-100 border-amber-500 text-amber-700'
+                                : 'bg-primary/10 border-primary text-primary'
                             : isRemoved
                               ? 'bg-red-100 border-red-500 text-red-700 line-through'
                               : 'bg-background border-border text-foreground hover:border-primary/50'
                           }
                         `}
+                        title={isSelected ? `Casa ${house.id}: ${editedPercentage ?? currentProgress}%` : `Casa ${house.id}`}
                       >
-                        {house.id}
+                        <span className="text-[10px]">{house.id}</span>
+                        {isSelected && editPercentageMode && (
+                          <span className="text-[7px] leading-none">{editedPercentage ?? currentProgress}%</span>
+                        )}
                       </button>
                     );
                   })}
                 </div>
               </ScrollArea>
               
-              {(addedCount > 0 || removedCount > 0) && (
+              {/* Individual Percentage Editing */}
+              {editPercentageMode && selectedHouses.length > 0 && (
+                <div className="space-y-3 p-3 border rounded-lg bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium flex items-center gap-1">
+                      <Settings2 className="w-3 h-3" />
+                      Ajustar % Individual
+                    </Label>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 text-xs"
+                      onClick={() => {
+                        const resetPercentages: Record<number, number> = {};
+                        selectedHouses.forEach(id => {
+                          resetPercentages[id] = 100;
+                        });
+                        setHousePercentages(resetPercentages);
+                        toast.success("Todas as casas definidas como 100%");
+                      }}
+                    >
+                      Todas 100%
+                    </Button>
+                  </div>
+                  <ScrollArea className="h-[150px]">
+                    <div className="space-y-2 pr-3">
+                      {selectedHouses.map(houseId => {
+                        const currentProgress = getHouseProgress(houseId);
+                        const editedValue = housePercentages[houseId] ?? currentProgress;
+                        
+                        return (
+                          <div key={houseId} className="flex items-center gap-3 text-sm">
+                            <span className="w-16 font-medium">Casa {houseId}</span>
+                            <span className="w-12 text-xs text-muted-foreground">
+                              ({currentProgress}%)
+                            </span>
+                            <Slider
+                              value={[editedValue]}
+                              onValueChange={(v) => {
+                                setHousePercentages(prev => ({
+                                  ...prev,
+                                  [houseId]: v[0]
+                                }));
+                              }}
+                              max={100}
+                              min={0}
+                              step={5}
+                              className="flex-1"
+                            />
+                            <Input
+                              type="number"
+                              value={editedValue}
+                              onChange={(e) => {
+                                const val = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                                setHousePercentages(prev => ({
+                                  ...prev,
+                                  [houseId]: val
+                                }));
+                              }}
+                              className="w-16 h-7 text-xs text-center"
+                              min={0}
+                              max={100}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+              
+              {(addedCount > 0 || removedCount > 0 || percentageChangedCount > 0) && (
                 <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded-lg">
                   <p className="font-medium mb-1">Alterações no mapa de obras:</p>
                   {addedCount > 0 && (
@@ -336,6 +493,9 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
                   )}
                   {removedCount > 0 && (
                     <p className="text-red-600">• {removedCount} casa(s) terão progresso revertido para 0%</p>
+                  )}
+                  {percentageChangedCount > 0 && (
+                    <p className="text-amber-600">• {percentageChangedCount} casa(s) terão % atualizada</p>
                   )}
                 </div>
               )}
