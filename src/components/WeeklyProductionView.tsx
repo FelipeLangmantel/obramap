@@ -975,7 +975,6 @@ export function WeeklyProductionView() {
                           const isCompleted = completedHouses.includes(house.id);
                           const isSelected = selectedHouses.includes(house.id);
                           const macro = macros.find(m => m.id === selectedMacro);
-                          const scope = scopes.find(s => s.id === selectedScope);
                           
                           // Get current scope progress for this house
                           const houseMacros = (house.macros as any[]) || [];
@@ -999,7 +998,7 @@ export function WeeklyProductionView() {
                               onContextMenu={(e) => e.preventDefault()}
                               disabled={isCompleted}
                               className={`
-                                relative w-10 h-10 rounded-lg border-2 flex flex-col items-center justify-center text-xs font-medium transition-all
+                                relative w-12 h-12 rounded-lg border-2 flex flex-col items-center justify-center text-xs font-medium transition-all
                                 ${isCompleted 
                                   ? 'bg-green-100 border-green-500 text-green-700 cursor-not-allowed opacity-60' 
                                   : hasPartialProgress
@@ -1013,17 +1012,23 @@ export function WeeklyProductionView() {
                                 ${isDragging && !isCompleted ? 'cursor-crosshair' : ''}
                               `}
                               style={isSelected && macro ? { borderColor: macro.color, backgroundColor: macro.color + '20' } : undefined}
-                              title={hasPartialProgress ? `Casa ${house.id}: ${currentProgress}% concluído - Resta ${remainingPercent}%` : `Casa ${house.id}`}
+                              title={`Casa ${house.id}: ${currentProgress}% concluído - Resta ${remainingPercent}%`}
                             >
-                              <span>{house.id}</span>
-                              {/* Always show current progress for partial houses */}
-                              {hasPartialProgress && (
-                                <span className="text-[8px] leading-tight text-amber-600">{currentProgress}%</span>
+                              <span className="font-bold">{house.id}</span>
+                              {/* Always show current progress percentage */}
+                              <span className={`text-[9px] leading-tight ${hasPartialProgress ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>
+                                {currentProgress}%
+                              </span>
+                              {/* Show remaining when there's partial progress */}
+                              {hasPartialProgress && !isSelected && (
+                                <span className="text-[8px] leading-tight text-blue-600">
+                                  +{remainingPercent}
+                                </span>
                               )}
                               {/* Show what will be added when selected */}
                               {isSelected && !isCompleted && (
-                                <span className="text-[8px] leading-tight opacity-80">
-                                  {hasPartialProgress ? `+${housePercent}` : `${housePercent}%`}
+                                <span className="text-[8px] leading-tight text-green-600 font-medium">
+                                  +{housePercent}
                                 </span>
                               )}
                               {isCompleted && (
