@@ -61,15 +61,49 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
   const needsWeightAdjustment = weightAnalysis.overallTotalWeight !== 100;
 
   const suggestWeightDistribution = () => {
-    if (weightAnalysis.overallTotalWeight === 0) return;
+    // Count total scopes across all macros
+    const totalScopes = macrosTemplate.reduce((sum, macro) => sum + macro.scopes.length, 0);
     
-    const factor = 100 / weightAnalysis.overallTotalWeight;
-    macrosTemplate.forEach(macro => {
-      macro.scopes.forEach(scope => {
-        const newWeight = Math.round(scope.weight * factor * 10) / 10;
-        updateScope(macro.id, scope.id, { weight: newWeight });
+    if (totalScopes === 0) return;
+    
+    // If overall weight is 0, distribute evenly across all scopes
+    if (weightAnalysis.overallTotalWeight === 0) {
+      const weightPerScope = Math.round((100 / totalScopes) * 10) / 10;
+      let remaining = 100;
+      let scopeCount = 0;
+      
+      macrosTemplate.forEach(macro => {
+        macro.scopes.forEach((scope, index) => {
+          scopeCount++;
+          // Last scope gets the remaining to ensure exactly 100
+          if (scopeCount === totalScopes) {
+            updateScope(macro.id, scope.id, { weight: Math.round(remaining * 10) / 10 });
+          } else {
+            updateScope(macro.id, scope.id, { weight: weightPerScope });
+            remaining -= weightPerScope;
+          }
+        });
       });
-    });
+    } else {
+      // Proportional distribution based on existing weights
+      const factor = 100 / weightAnalysis.overallTotalWeight;
+      let remaining = 100;
+      let scopeCount = 0;
+      
+      macrosTemplate.forEach(macro => {
+        macro.scopes.forEach((scope, index) => {
+          scopeCount++;
+          // Last scope gets the remaining to ensure exactly 100
+          if (scopeCount === totalScopes) {
+            updateScope(macro.id, scope.id, { weight: Math.round(remaining * 10) / 10 });
+          } else {
+            const newWeight = Math.round(scope.weight * factor * 10) / 10;
+            updateScope(macro.id, scope.id, { weight: newWeight });
+            remaining -= newWeight;
+          }
+        });
+      });
+    }
   };
 
   const confirmOrExecute = (action: () => void) => {

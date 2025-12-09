@@ -108,16 +108,26 @@ function HouseMarker3D({
   );
 }
 
-// Camera reset controller
+// Camera reset controller - positions camera for top-down isometric view
 function CameraController({ resetTrigger }: { resetTrigger: number }) {
-  const { camera } = useThree();
+  const { camera, scene } = useThree();
   
   useEffect(() => {
     if (resetTrigger > 0) {
-      camera.position.set(10, 10, 10);
-      camera.lookAt(0, 0, 0);
+      // Calculate bounding box of all objects in scene
+      const box = new THREE.Box3().setFromObject(scene);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      
+      // Calculate optimal distance based on scene size
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const distance = maxDim > 0 ? maxDim * 2 : 50;
+      
+      // Position camera for top-down isometric view (like the reference image)
+      camera.position.set(center.x, center.y + distance * 0.8, center.z + distance * 0.3);
+      camera.lookAt(center);
     }
-  }, [resetTrigger, camera]);
+  }, [resetTrigger, camera, scene]);
 
   return null;
 }
@@ -140,7 +150,7 @@ function Scene({
 }) {
   return (
     <>
-      <PerspectiveCamera makeDefault position={[10, 10, 10]} fov={60} />
+      <PerspectiveCamera makeDefault position={[0, 50, 15]} fov={50} />
       <CameraController resetTrigger={resetTrigger} />
       <OrbitControls 
         enablePan={true}

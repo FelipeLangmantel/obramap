@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Plus, Pencil, Trash2, DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Upload, FileText, Loader2, Target, Cloud, CloudOff, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Upload, FileText, Loader2, Target, Cloud, CloudOff, ChevronDown, ChevronRight, Home, ListPlus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,6 +40,17 @@ interface ScopeCost {
   equipmentCost: number;
 }
 
+interface ScopeItem {
+  id?: string;
+  scopeId: string;
+  name: string;
+  category: 'material' | 'labor' | 'equipment';
+  unitValue: number;
+  quantity: number;
+  unit: string;
+  notes?: string;
+}
+
 interface PlannedProduction {
   id: string;
   scope_id: string;
@@ -58,7 +70,11 @@ export function ProjectCostsView() {
   const { canEdit } = useAuth();
   const [scopeCosts, setScopeCosts] = useState<ScopeCost[]>([]);
   const [plannedProductions, setPlannedProductions] = useState<PlannedProduction[]>([]);
+  const [scopeItems, setScopeItems] = useState<ScopeItem[]>([]);
   const [editingScope, setEditingScope] = useState<ScopeCost | null>(null);
+  const [editingItem, setEditingItem] = useState<ScopeItem | null>(null);
+  const [newItem, setNewItem] = useState<{ scopeId: string; macroId: string } | null>(null);
+  const [expandedScopes, setExpandedScopes] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<"overview" | "details">(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(COSTS_TAB_STORAGE_KEY);
@@ -81,6 +97,18 @@ export function ProjectCostsView() {
         next.delete(macroId);
       } else {
         next.add(macroId);
+      }
+      return next;
+    });
+  };
+
+  const toggleScope = (scopeId: string) => {
+    setExpandedScopes(prev => {
+      const next = new Set(prev);
+      if (next.has(scopeId)) {
+        next.delete(scopeId);
+      } else {
+        next.add(scopeId);
       }
       return next;
     });
@@ -142,10 +170,41 @@ export function ProjectCostsView() {
     }
   }, [currentProject?.id, macros]);
 
+  // Load scope items from database
+  const loadScopeItems = useCallback(async () => {
+    if (!currentProject?.id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('scope_items')
+        .select('*')
+        .eq('project_id', currentProject.id);
+
+      if (error) throw error;
+
+      if (data) {
+        const items: ScopeItem[] = data.map(row => ({
+          id: row.id,
+          scopeId: row.scope_id,
+          name: row.name,
+          category: row.category as 'material' | 'labor' | 'equipment',
+          unitValue: Number(row.unit_value) || 0,
+          quantity: Number(row.quantity) || 0,
+          unit: row.unit || 'un',
+          notes: row.notes || undefined
+        }));
+        setScopeItems(items);
+      }
+    } catch (error) {
+      console.error('Error loading scope items:', error);
+    }
+  }, [currentProject?.id]);
+
   // Load costs on mount and when project changes
   useEffect(() => {
     loadCostsFromDatabase();
-  }, [loadCostsFromDatabase]);
+    loadScopeItems();
+  }, [loadCostsFromDatabase, loadScopeItems]);
 
   // Subscribe to realtime updates
   useEffect(() => {
@@ -221,6 +280,60 @@ export function ProjectCostsView() {
     } catch (error) {
       console.error('Error saving cost:', error);
       toast.error('Erro ao salvar custos');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Save scope item to database
+  const saveScopeItem = async (item: ScopeItem, macroId: string) => {
+    if (!currentProject?.id) return;
+    
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('scope_items')
+        .upsert({
+          id: item.id || undefined,
+          project_id: currentProject.id,
+          scope_id: item.scopeId,
+          macro_id: macroId,
+          name: item.name,
+          category: item.category,
+          unit_value: item.unitValue,
+          quantity: item.quantity,
+          unit: item.unit,
+          notes: item.notes || null
+        });
+
+      if (error) throw error;
+      
+      await loadScopeItems();
+      toast.success("Item salvo!");
+    } catch (error) {
+      console.error('Error saving item:', error);
+      toast.error('Erro ao salvar item');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Delete scope item from database
+  const deleteScopeItem = async (itemId: string) => {
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('scope_items')
+        .delete()
+        .eq('id', itemId);
+
+      if (error) throw error;
+      
+      setScopeItems(prev => prev.filter(i => i.id !== itemId));
+      toast.success("Item removido!");
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      toast.error('Erro ao remover item');
     } finally {
       setIsSaving(false);
     }
@@ -362,6 +475,26 @@ export function ProjectCostsView() {
     };
   }, [scopeCosts, scopeProgress, houses.length]);
 
+  // Calculate unit cost (cost per 1 house)
+  const unitCost = useMemo(() => {
+    let material = 0;
+    let labor = 0;
+    let equipment = 0;
+
+    scopeCosts.forEach(cost => {
+      material += cost.materialCost;
+      labor += cost.laborCost;
+      equipment += cost.equipmentCost;
+    });
+
+    return {
+      material,
+      labor,
+      equipment,
+      total: material + labor + equipment
+    };
+  }, [scopeCosts]);
+
   // Calculate projected costs based on planned production (future)
   const projectedCosts = useMemo(() => {
     let projectedMaterial = 0;
@@ -465,11 +598,56 @@ export function ProjectCostsView() {
           </TabsTrigger>
           <TabsTrigger value="details" className="gap-2 text-sm">
             <Calculator className="w-4 h-4" />
-            Custos por Serviço
+            Orçamento
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="flex-1 overflow-auto mt-4 space-y-4">
+          {/* Unit Cost Card - Cost per 1 housing unit */}
+          <Card className="border-2 border-purple-400/50 bg-gradient-to-br from-purple-50/50 to-purple-100/30 dark:from-purple-900/20 dark:to-purple-800/10">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Home className="w-5 h-5 text-purple-600" />
+                Custo por Unidade Habitacional (1 Casa)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-3 bg-background/80 rounded-lg">
+                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                    <Package className="w-3 h-3 text-blue-500" />
+                    Material
+                  </p>
+                  <p className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(unitCost.material)}</p>
+                </div>
+                <div className="p-3 bg-background/80 rounded-lg">
+                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                    <Hammer className="w-3 h-3 text-orange-500" />
+                    Mão de Obra
+                  </p>
+                  <p className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(unitCost.labor)}</p>
+                </div>
+                <div className="p-3 bg-background/80 rounded-lg">
+                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                    <Wrench className="w-3 h-3 text-green-500" />
+                    Equipamentos
+                  </p>
+                  <p className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(unitCost.equipment)}</p>
+                </div>
+                <div className="p-3 bg-purple-200/50 dark:bg-purple-700/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                    <DollarSign className="w-3 h-3" />
+                    Total Unitário
+                  </p>
+                  <p className="text-2xl font-bold text-purple-800 dark:text-purple-300">{formatCurrency(unitCost.total)}</p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-3 text-center">
+                Este é o custo total para construir 1 unidade habitacional com base no orçamento cadastrado.
+              </p>
+            </CardContent>
+          </Card>
+
           {/* Summary Cards - Realized Costs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5">
@@ -790,140 +968,118 @@ export function ProjectCostsView() {
                               const isEditing = editingScope?.scopeId === scope.id;
                               const scopeTotal = cost ? cost.materialCost + cost.laborCost + cost.equipmentCost : 0;
 
+                              const scopeItemsList = scopeItems.filter(i => i.scopeId === scope.id);
+                              const isScopeExpanded = expandedScopes.has(scope.id);
+
                               return (
-                                <div
-                                  key={scope.id}
-                                  className={`p-3 rounded-lg border transition-colors ${
-                                    isEditing ? 'bg-accent border-primary' : 'bg-muted/30 hover:bg-muted/50'
-                                  }`}
-                                >
-                                  {isEditing && editingScope ? (
-                                    <div className="space-y-3">
-                                      <div className="flex items-center justify-between">
-                                        <p className="font-medium text-sm">{scope.name}</p>
-                                        <div className="flex gap-2">
-                                          <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => setEditingScope(null)}
-                                          >
-                                            Cancelar
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            onClick={handleUpdateCost}
-                                            disabled={isSaving}
-                                          >
-                                            {isSaving ? (
-                                              <Loader2 className="w-4 h-4 animate-spin" />
-                                            ) : (
-                                              'Salvar'
-                                            )}
-                                          </Button>
+                                <Collapsible key={scope.id} open={isScopeExpanded} onOpenChange={() => toggleScope(scope.id)}>
+                                  <div
+                                    className={`p-3 rounded-lg border transition-colors ${
+                                      isEditing ? 'bg-accent border-primary' : 'bg-muted/30 hover:bg-muted/50'
+                                    }`}
+                                  >
+                                    {isEditing && editingScope ? (
+                                      <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                          <p className="font-medium text-sm">{scope.name}</p>
+                                          <div className="flex gap-2">
+                                            <Button size="sm" variant="ghost" onClick={() => setEditingScope(null)}>Cancelar</Button>
+                                            <Button size="sm" onClick={handleUpdateCost} disabled={isSaving}>
+                                              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Salvar'}
+                                            </Button>
+                                          </div>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-3">
+                                          <div>
+                                            <Label className="text-xs">Material (R$)</Label>
+                                            <Input type="number" value={editingScope.materialCost} onChange={(e) => setEditingScope({...editingScope, materialCost: Number(e.target.value) || 0})} className="h-8 text-sm" />
+                                          </div>
+                                          <div>
+                                            <Label className="text-xs">Mão de Obra (R$)</Label>
+                                            <Input type="number" value={editingScope.laborCost} onChange={(e) => setEditingScope({...editingScope, laborCost: Number(e.target.value) || 0})} className="h-8 text-sm" />
+                                          </div>
+                                          <div>
+                                            <Label className="text-xs">Equipamentos (R$)</Label>
+                                            <Input type="number" value={editingScope.equipmentCost} onChange={(e) => setEditingScope({...editingScope, equipmentCost: Number(e.target.value) || 0})} className="h-8 text-sm" />
+                                          </div>
                                         </div>
                                       </div>
-                                      <div className="grid grid-cols-3 gap-3">
-                                        <div>
-                                          <Label className="text-xs">Material (R$)</Label>
-                                          <Input
-                                            type="number"
-                                            value={editingScope.materialCost}
-                                            onChange={(e) => setEditingScope({
-                                              ...editingScope,
-                                              materialCost: Number(e.target.value) || 0
-                                            })}
-                                            className="h-8 text-sm"
-                                          />
-                                        </div>
-                                        <div>
-                                          <Label className="text-xs">Mão de Obra (R$)</Label>
-                                          <Input
-                                            type="number"
-                                            value={editingScope.laborCost}
-                                            onChange={(e) => setEditingScope({
-                                              ...editingScope,
-                                              laborCost: Number(e.target.value) || 0
-                                            })}
-                                            className="h-8 text-sm"
-                                          />
-                                        </div>
-                                        <div>
-                                          <Label className="text-xs">Equipamentos (R$)</Label>
-                                          <Input
-                                            type="number"
-                                            value={editingScope.equipmentCost}
-                                            onChange={(e) => setEditingScope({
-                                              ...editingScope,
-                                              equipmentCost: Number(e.target.value) || 0
-                                            })}
-                                            className="h-8 text-sm"
-                                          />
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-3">
-                                        <p className="text-sm font-medium">{scope.name}</p>
-                                        {scopeTotal > 0 && (
-                                          <div className="flex gap-2 text-xs text-muted-foreground">
-                                            {cost && cost.materialCost > 0 && (
-                                              <span className="flex items-center gap-1">
-                                                <Package className="w-3 h-3 text-blue-500" />
-                                                {formatCurrency(cost.materialCost)}
-                                              </span>
-                                            )}
-                                            {cost && cost.laborCost > 0 && (
-                                              <span className="flex items-center gap-1">
-                                                <Hammer className="w-3 h-3 text-orange-500" />
-                                                {formatCurrency(cost.laborCost)}
-                                              </span>
-                                            )}
-                                            {cost && cost.equipmentCost > 0 && (
-                                              <span className="flex items-center gap-1">
-                                                <Wrench className="w-3 h-3 text-green-500" />
-                                                {formatCurrency(cost.equipmentCost)}
-                                              </span>
+                                    ) : (
+                                      <>
+                                        <CollapsibleTrigger asChild>
+                                          <div className="flex items-center justify-between cursor-pointer">
+                                            <div className="flex items-center gap-3">
+                                              {isScopeExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                              <p className="text-sm font-medium">{scope.name}</p>
+                                              {scopeItemsList.length > 0 && (
+                                                <Badge variant="outline" className="text-xs">{scopeItemsList.length} itens</Badge>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                              <Badge variant={scopeTotal > 0 ? "default" : "secondary"} className="text-xs">{formatCurrency(scopeTotal)}</Badge>
+                                              {canEdit && (
+                                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); if (cost) { setEditingScope(cost); } else { const newCost: ScopeCost = { scopeId: scope.id, scopeName: scope.name, macroId: macro.id, macroName: macro.name, macroColor: macro.color, materialCost: 0, laborCost: 0, equipmentCost: 0 }; setScopeCosts(prev => [...prev, newCost]); setEditingScope(newCost); }}}>
+                                                  <Pencil className="w-3 h-3" />
+                                                </Button>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </CollapsibleTrigger>
+                                        <CollapsibleContent>
+                                          <div className="mt-3 pl-6 space-y-2 border-l-2 border-muted">
+                                            {scopeItemsList.map(item => (
+                                              <div key={item.id} className="flex items-center justify-between p-2 bg-background rounded text-xs">
+                                                <div className="flex items-center gap-2">
+                                                  {item.category === 'material' && <Package className="w-3 h-3 text-blue-500" />}
+                                                  {item.category === 'labor' && <Hammer className="w-3 h-3 text-orange-500" />}
+                                                  {item.category === 'equipment' && <Wrench className="w-3 h-3 text-green-500" />}
+                                                  <span>{item.name}</span>
+                                                  <span className="text-muted-foreground">({item.quantity} {item.unit})</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                  <span className="font-medium">{formatCurrency(item.unitValue * item.quantity)}</span>
+                                                  {canEdit && item.id && (
+                                                    <Button size="icon" variant="ghost" className="h-5 w-5" onClick={() => deleteScopeItem(item.id!)}>
+                                                      <Trash2 className="w-3 h-3 text-destructive" />
+                                                    </Button>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            ))}
+                                            {newItem?.scopeId === scope.id ? (
+                                              <div className="p-2 bg-background rounded space-y-2">
+                                                <div className="grid grid-cols-2 gap-2">
+                                                  <Input placeholder="Nome do item" value={editingItem?.name || ''} onChange={(e) => setEditingItem({...editingItem!, name: e.target.value})} className="h-7 text-xs" />
+                                                  <Select value={editingItem?.category || 'material'} onValueChange={(v) => setEditingItem({...editingItem!, category: v as any})}>
+                                                    <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                      <SelectItem value="material">Material</SelectItem>
+                                                      <SelectItem value="labor">Mão de Obra</SelectItem>
+                                                      <SelectItem value="equipment">Equipamento</SelectItem>
+                                                    </SelectContent>
+                                                  </Select>
+                                                </div>
+                                                <div className="grid grid-cols-3 gap-2">
+                                                  <Input type="number" placeholder="Valor unit." value={editingItem?.unitValue || ''} onChange={(e) => setEditingItem({...editingItem!, unitValue: Number(e.target.value)})} className="h-7 text-xs" />
+                                                  <Input type="number" placeholder="Qtd" value={editingItem?.quantity || ''} onChange={(e) => setEditingItem({...editingItem!, quantity: Number(e.target.value)})} className="h-7 text-xs" />
+                                                  <Input placeholder="Un" value={editingItem?.unit || 'un'} onChange={(e) => setEditingItem({...editingItem!, unit: e.target.value})} className="h-7 text-xs" />
+                                                </div>
+                                                <div className="flex gap-2">
+                                                  <Button size="sm" className="h-6 text-xs" onClick={() => { if (editingItem?.name && editingItem.unitValue) { saveScopeItem(editingItem, macro.id); setNewItem(null); setEditingItem(null); }}}>Salvar</Button>
+                                                  <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => { setNewItem(null); setEditingItem(null); }}>Cancelar</Button>
+                                                </div>
+                                              </div>
+                                            ) : canEdit && (
+                                              <Button size="sm" variant="ghost" className="w-full h-7 text-xs border-dashed border" onClick={() => { setNewItem({ scopeId: scope.id, macroId: macro.id }); setEditingItem({ scopeId: scope.id, name: '', category: 'material', unitValue: 0, quantity: 1, unit: 'un' }); }}>
+                                                <ListPlus className="w-3 h-3 mr-1" /> Adicionar Insumo
+                                              </Button>
                                             )}
                                           </div>
-                                        )}
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <Badge variant={scopeTotal > 0 ? "default" : "secondary"} className="text-xs">
-                                          {formatCurrency(scopeTotal)}
-                                        </Badge>
-                                        {canEdit && (
-                                          <Button
-                                            size="icon"
-                                            variant="ghost"
-                                            className="h-7 w-7"
-                                            onClick={() => {
-                                              if (cost) {
-                                                setEditingScope(cost);
-                                              } else {
-                                                // Create new cost entry if doesn't exist
-                                                const newCost: ScopeCost = {
-                                                  scopeId: scope.id,
-                                                  scopeName: scope.name,
-                                                  macroId: macro.id,
-                                                  macroName: macro.name,
-                                                  macroColor: macro.color,
-                                                  materialCost: 0,
-                                                  laborCost: 0,
-                                                  equipmentCost: 0
-                                                };
-                                                setScopeCosts(prev => [...prev, newCost]);
-                                                setEditingScope(newCost);
-                                              }
-                                            }}
-                                          >
-                                            <Pencil className="w-3 h-3" />
-                                          </Button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
+                                        </CollapsibleContent>
+                                      </>
+                                    )}
+                                  </div>
+                                </Collapsible>
                               );
                             })}
                           </div>
