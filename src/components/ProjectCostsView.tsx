@@ -351,41 +351,37 @@ export function ProjectCostsView() {
     setEditingScope(null);
   };
 
-  // Handle file import (PDF or Excel)
+  // Handle file import (PDF only - Excel not supported by AI)
   const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const validTypes = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-excel',
-      'text/csv'
-    ];
-
     const fileExtension = file.name.split('.').pop()?.toLowerCase();
-    const isValidType = validTypes.includes(file.type) || ['pdf', 'xlsx', 'xls', 'csv'].includes(fileExtension || '');
-
-    if (!isValidType) {
-      toast.error("Por favor, selecione um arquivo PDF ou Excel (.xlsx, .xls, .csv)");
+    
+    // Only PDF is supported
+    if (fileExtension !== 'pdf' && file.type !== 'application/pdf') {
+      toast.error("Apenas arquivos PDF são suportados. Por favor, exporte seu orçamento Excel como PDF.");
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       return;
     }
 
     setIsImporting(true);
-    try {
-      // Convert file to base64
-      const reader = new FileReader();
-      reader.onload = async () => {
+    
+    // Convert file to base64
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
         const base64 = reader.result as string;
-        const fileType = fileExtension === 'pdf' ? 'pdf' : 'excel';
         
-        toast.info("Analisando orçamento com IA... Isso pode levar até 30 segundos.");
+        toast.info("Analisando orçamento com IA... Isso pode levar até 60 segundos.");
         
         const { data, error } = await supabase.functions.invoke('parse-budget-pdf', {
           body: { 
             pdfBase64: base64,
             existingMacros: macros,
-            fileType
+            fileType: 'pdf'
           }
         });
         
@@ -393,6 +389,9 @@ export function ProjectCostsView() {
           console.error('Error parsing file:', error);
           toast.error("Erro ao processar arquivo: " + (error.message || "Erro desconhecido"));
           setIsImporting(false);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
           return;
         }
 
@@ -521,25 +520,26 @@ export function ProjectCostsView() {
         } else {
           toast.error(data?.message || "Não foi possível extrair itens do orçamento");
         }
-        
+      } catch (err) {
+        console.error('Error importing file:', err);
+        toast.error("Erro ao importar arquivo");
+      } finally {
         setIsImporting(false);
-      };
-      
-      reader.onerror = () => {
-        toast.error("Erro ao ler arquivo");
-        setIsImporting(false);
-      };
-      
-      reader.readAsDataURL(file);
-    } catch (err) {
-      console.error('Error importing file:', err);
-      toast.error("Erro ao importar arquivo");
-      setIsImporting(false);
-    }
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    };
     
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    reader.onerror = () => {
+      toast.error("Erro ao ler arquivo");
+      setIsImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    };
+    
+    reader.readAsDataURL(file);
   };
 
   // Calculate progress for each scope from houses
@@ -1077,7 +1077,7 @@ export function ProjectCostsView() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx,application/vnd.ms-excel,.xls,.csv"
+                accept="application/pdf,.pdf"
                 onChange={handleFileImport}
                 className="hidden"
               />
