@@ -1340,19 +1340,24 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         updates.push({ houseNumber: houseData.house_number, updatedMacros });
       }
 
-      // Execute all database updates in parallel
-      const updatePromises = updates.map(({ houseNumber, updatedMacros }) =>
-        supabase
-          .from('houses')
-          .update({ 
-            macros: macrosToJson(updatedMacros),
-            last_update: new Date().toISOString().split('T')[0]
-          })
-          .eq('project_id', currentProjectId)
-          .eq('house_number', houseNumber)
-      );
-
-      await Promise.all(updatePromises);
+      // Execute database updates in batches of 10 for better performance
+      const BATCH_SIZE = 10;
+      const today = new Date().toISOString().split('T')[0];
+      
+      for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+        const batch = updates.slice(i, i + BATCH_SIZE);
+        const batchPromises = batch.map(({ houseNumber, updatedMacros }) =>
+          supabase
+            .from('houses')
+            .update({ 
+              macros: macrosToJson(updatedMacros),
+              last_update: today
+            })
+            .eq('project_id', currentProjectId)
+            .eq('house_number', houseNumber)
+        );
+        await Promise.all(batchPromises);
+      }
 
       // Update local state with all changes at once
       setProjects(prev => prev.map(p => {
