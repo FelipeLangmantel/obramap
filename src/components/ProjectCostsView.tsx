@@ -290,8 +290,19 @@ export function ProjectCostsView() {
     const byScopeData: { name: string; material: number; labor: number; equipment: number; color: string }[] = [];
     const byMacroData: { [macroId: string]: { name: string; total: number; executed: number; color: string } } = {};
 
+    // Check if any cost has been entered
+    const hasAnyCostEntered = scopeCosts.some(cost => 
+      cost.materialCost > 0 || cost.laborCost > 0 || cost.equipmentCost > 0
+    );
+
     scopeCosts.forEach(cost => {
+      // Only calculate if this scope has costs entered
+      if (cost.materialCost === 0 && cost.laborCost === 0 && cost.equipmentCost === 0) {
+        return;
+      }
+
       const progress = scopeProgress[cost.scopeId];
+      // Use actual scope data if available, otherwise use houses.length
       const totalHouses = progress?.total || houses.length;
       const completedHouses = progress?.completed || 0;
 

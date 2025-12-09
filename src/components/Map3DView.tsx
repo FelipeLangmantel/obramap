@@ -1,5 +1,5 @@
 import { useState, useRef, Suspense, useCallback, useEffect } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Grid, Environment, Html, PerspectiveCamera } from "@react-three/drei";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Upload, Box, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2 } from "lucide-react";
+import { Upload, Box, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -108,23 +108,40 @@ function HouseMarker3D({
   );
 }
 
+// Camera reset controller
+function CameraController({ resetTrigger }: { resetTrigger: number }) {
+  const { camera } = useThree();
+  
+  useEffect(() => {
+    if (resetTrigger > 0) {
+      camera.position.set(10, 10, 10);
+      camera.lookAt(0, 0, 0);
+    }
+  }, [resetTrigger, camera]);
+
+  return null;
+}
+
 // 3D Scene component
 function Scene({ 
   modelData, 
   markers, 
   selectedMarkerId,
   onMarkerClick,
-  customLegendItems 
+  customLegendItems,
+  resetTrigger
 }: { 
   modelData: ModelData | null;
   markers: HouseMarker[];
   selectedMarkerId: number | null;
   onMarkerClick: (marker: HouseMarker) => void;
   customLegendItems: any[];
+  resetTrigger: number;
 }) {
   return (
     <>
       <PerspectiveCamera makeDefault position={[10, 10, 10]} fov={60} />
+      <CameraController resetTrigger={resetTrigger} />
       <OrbitControls 
         enablePan={true}
         enableZoom={true}
@@ -324,10 +341,20 @@ export function Map3DView() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [cameraResetTrigger, setCameraResetTrigger] = useState(0);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mtlInputRef = useRef<HTMLInputElement>(null);
   const [pendingObjFile, setPendingObjFile] = useState<File | null>(null);
+
+  // Reset camera when component mounts or project changes
+  useEffect(() => {
+    setCameraResetTrigger(prev => prev + 1);
+  }, [projectId]);
+
+  const centerCamera = () => {
+    setCameraResetTrigger(prev => prev + 1);
+  };
 
   const customLegendItems = currentProject?.customLegendItems || [
     { minPercent: 0, maxPercent: 49, color: "#ef4444" },
@@ -653,6 +680,15 @@ export function Map3DView() {
 
             <Button
               variant="outline"
+              onClick={centerCamera}
+              disabled={isLoading}
+            >
+              <Home className="h-4 w-4 mr-2" />
+              Centralizar
+            </Button>
+
+            <Button
+              variant="outline"
               onClick={resetView}
               disabled={isLoading}
             >
@@ -700,6 +736,7 @@ export function Map3DView() {
             selectedMarkerId={selectedMarker?.id || null}
             onMarkerClick={setSelectedMarker}
             customLegendItems={customLegendItems}
+            resetTrigger={cameraResetTrigger}
           />
         </Canvas>
 
