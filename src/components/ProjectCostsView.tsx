@@ -362,8 +362,116 @@ export function ProjectCostsView() {
     }
 
     setIsImporting(true);
-    toast.info("Funcionalidade de leitura de PDF em desenvolvimento. Por enquanto, cadastre os valores manualmente.");
-    setIsImporting(false);
+    try {
+      // Convert PDF to base64
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        
+        toast.info("Analisando PDF com IA... Isso pode levar alguns segundos.");
+        
+        const { data, error } = await supabase.functions.invoke('parse-budget-pdf', {
+          body: { 
+            pdfBase64: base64,
+            existingMacros: macros
+          }
+        });
+        
+        if (error) {
+          console.error('Error parsing PDF:', error);
+          toast.error("Erro ao processar PDF");
+          setIsImporting(false);
+          return;
+        }
+        
+        if (data && data.success && data.items && data.items.length > 0) {
+          // Process imported items
+          let importedCount = 0;
+          
+          for (const item of data.items) {
+            // Try to find matching scope
+            let matchedScope: { id: string; name: string } | null = null;
+            let matchedMacro: { id: string; name: string; color: string } | null = null;
+            
+            for (const macro of macros) {
+              // Check if macro name matches
+              if (item.macroName && macro.name.toLowerCase().includes(item.macroName.toLowerCase())) {
+                matchedMacro = { id: macro.id, name: macro.name, color: macro.color };
+                
+                // Try to find matching scope within this macro
+                for (const scope of macro.scopes) {
+                  if (item.scopeName && scope.name.toLowerCase().includes(item.scopeName.toLowerCase())) {
+                    matchedScope = { id: scope.id, name: scope.name };
+                    break;
+                  }
+                }
+                
+                // If no scope matched but macro matched, use first scope
+                if (!matchedScope && macro.scopes.length > 0) {
+                  matchedScope = { id: macro.scopes[0].id, name: macro.scopes[0].name };
+                }
+                break;
+              }
+            }
+            
+            // If no macro matched, try to find by scope name only
+            if (!matchedMacro) {
+              for (const macro of macros) {
+                for (const scope of macro.scopes) {
+                  if (item.scopeName && scope.name.toLowerCase().includes(item.scopeName.toLowerCase())) {
+                    matchedScope = { id: scope.id, name: scope.name };
+                    matchedMacro = { id: macro.id, name: macro.name, color: macro.color };
+                    break;
+                  }
+                }
+                if (matchedMacro) break;
+              }
+            }
+            
+            // If still no match, use first macro/scope as fallback
+            if (!matchedMacro && macros.length > 0) {
+              matchedMacro = { id: macros[0].id, name: macros[0].name, color: macros[0].color };
+              if (macros[0].scopes.length > 0) {
+                matchedScope = { id: macros[0].scopes[0].id, name: macros[0].scopes[0].name };
+              }
+            }
+            
+            if (matchedScope && matchedMacro && currentProject?.id) {
+              // Save the item
+              await supabase.from('scope_items').insert({
+                project_id: currentProject.id,
+                scope_id: matchedScope.id,
+                macro_id: matchedMacro.id,
+                name: item.name,
+                category: item.category,
+                unit_value: item.unitValue || 0,
+                quantity: item.quantity || 1,
+                unit: item.unit || 'un'
+              });
+              importedCount++;
+            }
+          }
+          
+          await loadScopeItems();
+          toast.success(`${importedCount} itens importados do PDF!`);
+        } else {
+          toast.error(data?.message || "Não foi possível extrair itens do PDF");
+        }
+        
+        setIsImporting(false);
+      };
+      
+      reader.onerror = () => {
+        toast.error("Erro ao ler arquivo PDF");
+        setIsImporting(false);
+      };
+      
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Error importing PDF:', err);
+      toast.error("Erro ao importar PDF");
+      setIsImporting(false);
+    }
     
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -603,51 +711,6 @@ export function ProjectCostsView() {
         </TabsList>
 
         <TabsContent value="overview" className="flex-1 overflow-auto mt-4 space-y-4">
-          {/* Unit Cost Card - Cost per 1 housing unit */}
-          <Card className="border-2 border-purple-400/50 bg-gradient-to-br from-purple-50/50 to-purple-100/30 dark:from-purple-900/20 dark:to-purple-800/10">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Home className="w-5 h-5 text-purple-600" />
-                Custo por Unidade Habitacional (1 Casa)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-3 bg-background/80 rounded-lg">
-                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    <Package className="w-3 h-3 text-blue-500" />
-                    Material
-                  </p>
-                  <p className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(unitCost.material)}</p>
-                </div>
-                <div className="p-3 bg-background/80 rounded-lg">
-                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    <Hammer className="w-3 h-3 text-orange-500" />
-                    Mão de Obra
-                  </p>
-                  <p className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(unitCost.labor)}</p>
-                </div>
-                <div className="p-3 bg-background/80 rounded-lg">
-                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    <Wrench className="w-3 h-3 text-green-500" />
-                    Equipamentos
-                  </p>
-                  <p className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(unitCost.equipment)}</p>
-                </div>
-                <div className="p-3 bg-purple-200/50 dark:bg-purple-700/30 rounded-lg">
-                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                    <DollarSign className="w-3 h-3" />
-                    Total Unitário
-                  </p>
-                  <p className="text-2xl font-bold text-purple-800 dark:text-purple-300">{formatCurrency(unitCost.total)}</p>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground mt-3 text-center">
-                Este é o custo total para construir 1 unidade habitacional com base no orçamento cadastrado.
-              </p>
-            </CardContent>
-          </Card>
-
           {/* Summary Cards - Realized Costs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5">
@@ -891,6 +954,51 @@ export function ProjectCostsView() {
         </TabsContent>
 
         <TabsContent value="details" className="flex-1 overflow-auto mt-4 space-y-4">
+          {/* Unit Cost Card - Cost per 1 housing unit */}
+          <Card className="border-2 border-purple-400/50 bg-gradient-to-br from-purple-50/50 to-purple-100/30 dark:from-purple-900/20 dark:to-purple-800/10">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Home className="w-5 h-5 text-purple-600" />
+                Custo por Unidade Habitacional (1 Casa)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-3 bg-background/80 rounded-lg">
+                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                    <Package className="w-3 h-3 text-blue-500" />
+                    Material
+                  </p>
+                  <p className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(unitCost.material)}</p>
+                </div>
+                <div className="p-3 bg-background/80 rounded-lg">
+                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                    <Hammer className="w-3 h-3 text-orange-500" />
+                    Mão de Obra
+                  </p>
+                  <p className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(unitCost.labor)}</p>
+                </div>
+                <div className="p-3 bg-background/80 rounded-lg">
+                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                    <Wrench className="w-3 h-3 text-green-500" />
+                    Equipamentos
+                  </p>
+                  <p className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(unitCost.equipment)}</p>
+                </div>
+                <div className="p-3 bg-purple-200/50 dark:bg-purple-700/30 rounded-lg">
+                  <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                    <DollarSign className="w-3 h-3" />
+                    Total Unitário
+                  </p>
+                  <p className="text-2xl font-bold text-purple-800 dark:text-purple-300">{formatCurrency(unitCost.total)}</p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-3 text-center">
+                Este é o custo total para construir 1 unidade habitacional com base no orçamento cadastrado.
+              </p>
+            </CardContent>
+          </Card>
+
           {!canEdit && (
             <Alert>
               <AlertDescription className="flex items-center gap-2">
@@ -926,7 +1034,7 @@ export function ProjectCostsView() {
             </div>
           )}
 
-          <ScrollArea className="h-[calc(100vh-320px)]">
+          <ScrollArea className="h-[calc(100vh-420px)]">
             <div className="space-y-3">
               {macros.map(macro => {
                 const macroScopeCosts = scopeCosts.filter(c => c.macroId === macro.id);
