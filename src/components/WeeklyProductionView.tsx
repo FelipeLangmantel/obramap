@@ -937,7 +937,15 @@ export function WeeklyProductionView() {
                           const isCompleted = completedHouses.includes(house.id);
                           const isSelected = selectedHouses.includes(house.id);
                           const macro = macros.find(m => m.id === selectedMacro);
+                          const scope = scopes.find(s => s.id === selectedScope);
                           const housePercent = housePercentages[house.id] ?? massPercentage;
+                          
+                          // Get current scope progress for this house
+                          const houseMacros = (house.macros as any[]) || [];
+                          const houseMacro = houseMacros.find(m => m.id === selectedMacro);
+                          const houseScope = houseMacro?.scopes?.find((s: any) => s.id === selectedScope);
+                          const currentProgress = houseScope?.percentage || 0;
+                          const hasPartialProgress = currentProgress > 0 && currentProgress < 100;
                           
                           return (
                             <button
@@ -951,17 +959,29 @@ export function WeeklyProductionView() {
                                 relative w-10 h-10 rounded-lg border-2 flex flex-col items-center justify-center text-xs font-medium transition-all
                                 ${isCompleted 
                                   ? 'bg-green-100 border-green-500 text-green-700 cursor-not-allowed opacity-60' 
-                                  : isSelected 
-                                    ? 'border-primary bg-primary/20 text-primary cursor-pointer' 
-                                    : 'border-border bg-card hover:border-primary/50 cursor-pointer'
+                                  : hasPartialProgress
+                                    ? isSelected 
+                                      ? 'border-primary bg-primary/20 text-primary cursor-pointer'
+                                      : 'border-amber-400 bg-amber-50 text-amber-700 cursor-pointer'
+                                    : isSelected 
+                                      ? 'border-primary bg-primary/20 text-primary cursor-pointer' 
+                                      : 'border-border bg-card hover:border-primary/50 cursor-pointer'
                                 }
                                 ${isDragging && !isCompleted ? 'cursor-crosshair' : ''}
                               `}
                               style={isSelected && macro ? { borderColor: macro.color, backgroundColor: macro.color + '20' } : undefined}
+                              title={hasPartialProgress ? `Casa ${house.id}: ${currentProgress}% concluído` : `Casa ${house.id}`}
                             >
                               <span>{house.id}</span>
+                              {/* Show current progress if partial OR selected percentage in custom mode */}
+                              {hasPartialProgress && !isSelected && (
+                                <span className="text-[8px] leading-tight text-amber-600">{currentProgress}%</span>
+                              )}
                               {customPercentMode && isSelected && (
                                 <span className="text-[8px] leading-tight opacity-80">{housePercent}%</span>
+                              )}
+                              {!customPercentMode && isSelected && hasPartialProgress && (
+                                <span className="text-[8px] leading-tight opacity-80">{currentProgress}→100</span>
                               )}
                               {isCompleted && (
                                 <CheckCircle2 className="absolute -top-1 -right-1 w-3 h-3 text-green-600" />
