@@ -206,6 +206,44 @@ export type Database = {
           },
         ]
       }
+      material_families: {
+        Row: {
+          color: string | null
+          created_at: string
+          display_order: number
+          icon: string | null
+          id: string
+          name: string
+          project_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          display_order?: number
+          icon?: string | null
+          id?: string
+          name: string
+          project_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          display_order?: number
+          icon?: string | null
+          id?: string
+          name?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "material_families_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planned_productions: {
         Row: {
           created_at: string
@@ -740,6 +778,7 @@ export type Database = {
           created_at: string
           id: string
           macro_id: string
+          material_family: string | null
           name: string
           notes: string | null
           project_id: string
@@ -755,6 +794,7 @@ export type Database = {
           created_at?: string
           id?: string
           macro_id: string
+          material_family?: string | null
           name: string
           notes?: string | null
           project_id: string
@@ -770,6 +810,7 @@ export type Database = {
           created_at?: string
           id?: string
           macro_id?: string
+          material_family?: string | null
           name?: string
           notes?: string | null
           project_id?: string
