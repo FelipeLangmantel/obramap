@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Plus, Trash2, Save, Package, Hammer, Wrench, Search, Filter, Settings, X, Check, ChevronDown, ChevronRight, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ interface ScopeItem {
   notes?: string;
   isNew?: boolean;
   isEditing?: boolean;
+  inputId?: string;
 }
 
 interface MaterialFamily {
@@ -31,6 +32,20 @@ interface MaterialFamily {
   icon: string;
   color: string;
   displayOrder: number;
+}
+
+interface InputItem {
+  id: string;
+  name: string;
+  unit: string;
+  material_family_id: string | null;
+  material_family_name?: string;
+}
+
+interface UnitItem {
+  id: string;
+  name: string;
+  abbreviation: string;
 }
 
 interface Macro {
@@ -62,8 +77,6 @@ const DEFAULT_FAMILIES: Omit<MaterialFamily, 'id'>[] = [
   { name: 'Geral', icon: 'package', color: '#9ca3af', displayOrder: 99 },
 ];
 
-const UNITS = ['un', 'kg', 'm', 'm²', 'm³', 'l', 'pç', 'vb', 'cx', 'sc', 'h', 'dia'];
-
 export function BudgetItemsEditor({
   projectId,
   scopeId,
@@ -75,6 +88,8 @@ export function BudgetItemsEditor({
 }: BudgetItemsEditorProps) {
   const [items, setItems] = useState<ScopeItem[]>([]);
   const [families, setFamilies] = useState<MaterialFamily[]>([]);
+  const [inputs, setInputs] = useState<InputItem[]>([]);
+  const [units, setUnits] = useState<UnitItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -83,6 +98,8 @@ export function BudgetItemsEditor({
   const [showFamilySettings, setShowFamilySettings] = useState(false);
   const [newFamilyName, setNewFamilyName] = useState("");
   const [expandedFamilies, setExpandedFamilies] = useState<Set<string>>(new Set(['all']));
+  const [inputSuggestions, setInputSuggestions] = useState<InputItem[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState<number | null>(null);
 
   // Load families and items
   const loadData = useCallback(async () => {
@@ -147,8 +164,36 @@ export function BudgetItemsEditor({
           unitValue: Number(item.unit_value) || 0,
           quantity: Number(item.quantity) || 1,
           unit: item.unit || 'un',
-          notes: item.notes || undefined
+          notes: item.notes || undefined,
+          inputId: item.input_id || undefined
         })));
+      }
+
+      // Load inputs catalog
+      const { data: inputsData } = await supabase
+        .from('inputs')
+        .select('*, material_families(name)')
+        .eq('project_id', projectId)
+        .order('name');
+
+      if (inputsData) {
+        setInputs(inputsData.map((i: any) => ({
+          id: i.id,
+          name: i.name,
+          unit: i.unit,
+          material_family_id: i.material_family_id,
+          material_family_name: i.material_families?.name
+        })));
+      }
+
+      // Load units
+      const { data: unitsData } = await supabase
+        .from('units')
+        .select('*')
+        .eq('project_id', projectId);
+
+      if (unitsData) {
+        setUnits(unitsData);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -157,6 +202,27 @@ export function BudgetItemsEditor({
       setIsLoading(false);
     }
   }, [projectId, scopeId]);
+
+  // Search inputs as user types
+  const searchInputs = (query: string) => {
+    if (!query || query.length < 2) {
+      setInputSuggestions([]);
+      return;
+    }
+    const filtered = inputs.filter(i => i.name.toLowerCase().includes(query.toLowerCase())).slice(0, 5);
+    setInputSuggestions(filtered);
+  };
+
+  // Select an input from suggestions
+  const selectInput = (index: number, input: InputItem) => {
+    const familyName = input.material_family_name || families.find(f => f.id === input.material_family_id)?.name || 'Geral';
+    updateItem(index, 'name', input.name);
+    updateItem(index, 'unit', input.unit);
+    updateItem(index, 'materialFamily', familyName);
+    updateItem(index, 'inputId', input.id);
+    setShowSuggestions(null);
+    setInputSuggestions([]);
+  };
 
   useEffect(() => {
     loadData();
@@ -522,7 +588,9 @@ export function BudgetItemsEditor({
                                       <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      {UNITS.map(u => (
+                                      {units.length > 0 ? units.map(u => (
+                                        <SelectItem key={u.id} value={u.abbreviation}>{u.abbreviation}</SelectItem>
+                                      )) : ['un', 'kg', 'm', 'm²', 'm³', 'l', 'pç', 'vb'].map(u => (
                                         <SelectItem key={u} value={u}>{u}</SelectItem>
                                       ))}
                                     </SelectContent>
