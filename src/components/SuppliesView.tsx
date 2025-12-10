@@ -274,7 +274,7 @@ export function SuppliesView() {
         const [inputsRes, unitsRes, familiesRes] = await Promise.all([
           supabase.from('inputs').select('*, material_families(*)').eq('project_id', projectId).order('name'),
           supabase.from('units').select('*').eq('project_id', projectId).order('name'),
-          supabase.from('material_families').select('*').eq('project_id', projectId).order('display_order')
+          supabase.from('material_families').select('*').eq('project_id', projectId).order('display_order').order('name')
         ]);
         if (inputsRes.data) setInputs(inputsRes.data.map((i: any) => ({ ...i, material_family: i.material_families, category: i.category as 'material' | 'labor' | 'equipment', unit_value: i.unit_value || 0 })));
         if (unitsRes.data) setUnits(unitsRes.data);
