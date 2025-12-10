@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Calendar, ClipboardCheck, Target, Home, CheckCircle2, ListChecks, ChevronRight } from "lucide-react";
+import { Calendar, ClipboardCheck, Target, Home, CheckCircle2, ListChecks, ChevronRight, Plus, AlertCircle } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -25,20 +25,24 @@ interface PlannedPeriod {
 
 interface MeasurementSelectorProps {
   plannedPeriods: PlannedPeriod[];
+  registeredScopeIds: string[]; // Services already registered for this measurement
   selectedMeasurement: number | null;
   onMeasurementChange: (measurement: number | null) => void;
   selectedPeriod: PlannedPeriod | null;
   onPeriodChange: (period: PlannedPeriod | null) => void;
   onApplyService: (period: PlannedPeriod) => void;
+  onAddUnplannedService: () => void;
 }
 
 export function MeasurementSelector({
   plannedPeriods,
+  registeredScopeIds,
   selectedMeasurement,
   onMeasurementChange,
   selectedPeriod,
   onPeriodChange,
-  onApplyService
+  onApplyService,
+  onAddUnplannedService
 }: MeasurementSelectorProps) {
   // Group periods by measurement number
   const measurementGroups = useMemo(() => {
@@ -66,10 +70,24 @@ export function MeasurementSelector({
     }));
   }, [measurementGroups]);
 
-  // Periods for selected measurement
+  // Periods for selected measurement - filter out already registered services
   const periodsForMeasurement = useMemo(() => {
     if (selectedMeasurement === null) return [];
-    return plannedPeriods.filter(p => (p.measurement_number || 1) === selectedMeasurement);
+    return plannedPeriods
+      .filter(p => (p.measurement_number || 1) === selectedMeasurement)
+      .filter(p => !registeredScopeIds.includes(p.id)); // Exclude already registered
+  }, [plannedPeriods, selectedMeasurement, registeredScopeIds]);
+
+  // Count of registered services for this measurement
+  const registeredCount = useMemo(() => {
+    if (selectedMeasurement === null) return 0;
+    const allPeriods = plannedPeriods.filter(p => (p.measurement_number || 1) === selectedMeasurement);
+    return allPeriods.filter(p => registeredScopeIds.includes(p.id)).length;
+  }, [plannedPeriods, selectedMeasurement, registeredScopeIds]);
+
+  const totalServicesInMeasurement = useMemo(() => {
+    if (selectedMeasurement === null) return 0;
+    return plannedPeriods.filter(p => (p.measurement_number || 1) === selectedMeasurement).length;
   }, [plannedPeriods, selectedMeasurement]);
 
   // Current measurement info
@@ -136,14 +154,26 @@ export function MeasurementSelector({
 
             {/* Quick Stats for selected measurement */}
             {currentMeasurementInfo && (
-              <div className="flex gap-3">
+              <div className="flex gap-3 flex-wrap">
                 <div className="bg-background rounded-lg p-3 text-center min-w-[90px] border">
                   <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
                     <ListChecks className="w-4 h-4" />
-                    <span className="text-xs">Serviços</span>
+                    <span className="text-xs">Pendentes</span>
                   </div>
-                  <span className="text-2xl font-bold text-primary">{currentMeasurementInfo.periodsCount}</span>
+                  <span className="text-2xl font-bold text-primary">{periodsForMeasurement.length}</span>
+                  {registeredCount > 0 && (
+                    <span className="text-xs text-muted-foreground block">de {totalServicesInMeasurement}</span>
+                  )}
                 </div>
+                {registeredCount > 0 && (
+                  <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center min-w-[90px] border border-green-200 dark:border-green-800">
+                    <div className="flex items-center justify-center gap-1 text-green-600 mb-1">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span className="text-xs">Lançados</span>
+                    </div>
+                    <span className="text-2xl font-bold text-green-600">{registeredCount}</span>
+                  </div>
+                )}
                 <div className="bg-background rounded-lg p-3 text-center min-w-[90px] border">
                   <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
                     <Home className="w-4 h-4" />
@@ -228,11 +258,53 @@ export function MeasurementSelector({
             </div>
           )}
 
-          {/* Empty State */}
-          {selectedMeasurement !== null && periodsForMeasurement.length === 0 && (
+          {/* Empty State - All services registered */}
+          {selectedMeasurement !== null && periodsForMeasurement.length === 0 && totalServicesInMeasurement > 0 && (
+            <div className="text-center py-6">
+              <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-green-500" />
+              <p className="text-sm font-medium text-green-600">Todos os serviços desta medição foram lançados!</p>
+              <p className="text-xs text-muted-foreground mt-1">{registeredCount} serviços registrados</p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="mt-3 gap-2"
+                onClick={onAddUnplannedService}
+              >
+                <Plus className="w-4 h-4" />
+                Adicionar serviço não previsto
+              </Button>
+            </div>
+          )}
+
+          {/* Empty State - No services at all */}
+          {selectedMeasurement !== null && totalServicesInMeasurement === 0 && (
             <div className="text-center py-6 text-muted-foreground">
-              <ListChecks className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">Nenhum serviço planejado para esta medição</p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="mt-3 gap-2"
+                onClick={onAddUnplannedService}
+              >
+                <Plus className="w-4 h-4" />
+                Adicionar serviço não previsto
+              </Button>
+            </div>
+          )}
+
+          {/* Add unplanned service button (always visible when measurement selected) */}
+          {selectedMeasurement !== null && periodsForMeasurement.length > 0 && (
+            <div className="flex justify-end pt-2 border-t">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="gap-2 text-muted-foreground hover:text-foreground"
+                onClick={onAddUnplannedService}
+              >
+                <Plus className="w-4 h-4" />
+                Adicionar serviço não previsto
+              </Button>
             </div>
           )}
         </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Package, Truck, FileText, Clock, AlertTriangle, CheckCircle2, Plus, Settings, Users, Search, Calendar, DollarSign, Loader2, Eye, Edit2, Trash2, Send, Check, X, Box, Layers, Hammer, Wrench, ChevronDown, ChevronRight } from "lucide-react";
+import { Package, Truck, FileText, Clock, AlertTriangle, CheckCircle2, Plus, Settings, Users, Search, Calendar, DollarSign, Loader2, Eye, Edit2, Trash2, Send, Check, X, Box, Layers, Hammer, Wrench, ChevronDown, ChevronRight, ClipboardList } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, addDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { LaborContractsView } from "./LaborContractsView";
 
 interface MaterialFamily {
   id: string;
@@ -175,7 +176,7 @@ export function SuppliesView() {
   const { canEdit } = useAuth();
   const projectId = currentProject?.id;
 
-  const [activeTab, setActiveTab] = useState<"alerts" | "inputs" | "quotations" | "orders" | "suppliers" | "settings">("alerts");
+  const [activeTab, setActiveTab] = useState<"alerts" | "inputs" | "quotations" | "orders" | "suppliers" | "contracts" | "settings">("alerts");
   const [isLoading, setIsLoading] = useState(true);
   
   // Data states - loaded on demand
@@ -794,7 +795,7 @@ export function SuppliesView() {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex flex-col h-full">
-        <TabsList className="grid w-full max-w-3xl grid-cols-6 h-10">
+        <TabsList className="grid w-full max-w-4xl grid-cols-7 h-10">
           <TabsTrigger value="alerts" className="gap-1 text-xs">
             <AlertTriangle className="w-3.5 h-3.5" />Alertas
             {alerts.length > 0 && <Badge variant="destructive" className="ml-1 h-4 w-4 p-0 text-[10px]">{alerts.length}</Badge>}
@@ -803,6 +804,7 @@ export function SuppliesView() {
           <TabsTrigger value="quotations" className="gap-1 text-xs"><FileText className="w-3.5 h-3.5" />Cotações</TabsTrigger>
           <TabsTrigger value="orders" className="gap-1 text-xs"><Truck className="w-3.5 h-3.5" />Pedidos</TabsTrigger>
           <TabsTrigger value="suppliers" className="gap-1 text-xs"><Users className="w-3.5 h-3.5" />Fornecedores</TabsTrigger>
+          <TabsTrigger value="contracts" className="gap-1 text-xs"><ClipboardList className="w-3.5 h-3.5" />Contratações</TabsTrigger>
           <TabsTrigger value="settings" className="gap-1 text-xs"><Settings className="w-3.5 h-3.5" />Config</TabsTrigger>
         </TabsList>
 
@@ -830,12 +832,11 @@ export function SuppliesView() {
                               variant="outline" 
                               className="shrink-0"
                               onClick={() => {
-                                setSupplierTypeFilter('labor');
-                                setActiveTab('suppliers');
+                                setActiveTab('contracts');
                               }}
                             >
-                              <Hammer className="w-3 h-3 mr-1" />
-                              Contratar
+                              <ClipboardList className="w-3 h-3 mr-1" />
+                              Gerenciar Contrato
                             </Button>
                           )}
                         </div>
@@ -1436,6 +1437,11 @@ export function SuppliesView() {
             ))}
             {filteredSuppliers.length === 0 && <Card className="col-span-full"><CardContent className="p-8 text-center text-muted-foreground">Nenhum fornecedor cadastrado</CardContent></Card>}
           </div>
+        </TabsContent>
+
+        {/* Contracts Tab - Labor Contracts */}
+        <TabsContent value="contracts" className="flex-1 overflow-auto mt-4">
+          <LaborContractsView />
         </TabsContent>
 
         {/* Settings Tab */}
