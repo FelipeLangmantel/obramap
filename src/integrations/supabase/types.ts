@@ -367,6 +367,7 @@ export type Database = {
           macro_color: string
           macro_id: string
           macro_name: string
+          measurement_number: number | null
           notes: string | null
           planned_house_ids: number[]
           planned_houses: number
@@ -383,6 +384,7 @@ export type Database = {
           macro_color?: string
           macro_id: string
           macro_name: string
+          measurement_number?: number | null
           notes?: string | null
           planned_house_ids?: number[]
           planned_houses?: number
@@ -399,6 +401,7 @@ export type Database = {
           macro_color?: string
           macro_id?: string
           macro_name?: string
+          measurement_number?: number | null
           notes?: string | null
           planned_house_ids?: number[]
           planned_houses?: number

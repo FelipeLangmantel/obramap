@@ -229,22 +229,34 @@ export function PlannedProductionTab() {
   // Selected house IDs for planning
   const [selectedHouseIds, setSelectedHouseIds] = useState<number[]>([]);
 
-  // Group future plans by week
+  // Group future plans by measurement number
   const groupedFuturePlans = useMemo(() => {
     const futurePlans = plannedProductions.filter(p => isAfter(parseISO(p.week_end), new Date()));
     const grouped: Record<string, PlannedProduction[]> = {};
     
     futurePlans.forEach(plan => {
-      const weekKey = `${plan.week_start}_${plan.week_end}`;
-      if (!grouped[weekKey]) {
-        grouped[weekKey] = [];
+      // Group by measurement number or week if no measurement
+      const measurementKey = plan.measurement_number 
+        ? `measurement_${plan.measurement_number}` 
+        : `${plan.week_start}_${plan.week_end}`;
+      if (!grouped[measurementKey]) {
+        grouped[measurementKey] = [];
       }
-      grouped[weekKey].push(plan);
+      grouped[measurementKey].push(plan);
     });
     
     return Object.entries(grouped)
-      .sort((a, b) => a[0].localeCompare(b[0]))
+      .sort((a, b) => {
+        const aPlans = a[1];
+        const bPlans = b[1];
+        // Sort by measurement number if available, otherwise by date
+        const aMeasurement = aPlans[0].measurement_number || 0;
+        const bMeasurement = bPlans[0].measurement_number || 0;
+        if (aMeasurement !== bMeasurement) return aMeasurement - bMeasurement;
+        return aPlans[0].week_start.localeCompare(bPlans[0].week_start);
+      })
       .map(([key, plans]) => ({
+        measurementNumber: plans[0].measurement_number,
         weekStart: plans[0].week_start,
         weekEnd: plans[0].week_end,
         plans
@@ -1275,6 +1287,26 @@ export function PlannedProductionTab() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Measurement Number */}
+            <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
+              <Label className="text-sm font-medium flex items-center gap-2 mb-2">
+                <FileText className="w-4 h-4" />
+                Número da Medição
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={1}
+                  value={measurementNumber}
+                  onChange={(e) => setMeasurementNumber(parseInt(e.target.value) || 1)}
+                  className="h-9 w-24 text-center font-bold text-lg"
+                />
+                <span className="text-xs text-muted-foreground">
+                  Próxima sugerida: {nextMeasurementNumber}
+                </span>
+              </div>
+            </div>
+
             <div className="p-3 bg-secondary/30 rounded-lg space-y-3">
               <Label className="text-sm font-medium flex items-center gap-2">
                 <CalendarDays className="w-4 h-4" />
@@ -1345,7 +1377,7 @@ export function PlannedProductionTab() {
             {selectedScope && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="text-sm">Casas Disponíveis (não executadas)</Label>
+                  <Label className="text-sm">Casas Disponíveis (com % evolução)</Label>
                   <Badge variant="outline" className="text-xs">
                     {availableHousesForScope.length} disponíveis
                   </Badge>
@@ -1372,11 +1404,39 @@ export function PlannedProductionTab() {
                       >
                         Limpar
                       </Button>
+                      {selectedHouseIds.length > 0 && (
+                        <Button 
+                          type="button"
+                          variant="secondary" 
+                          size="sm"
+                          className="text-xs gap-1"
+                          onClick={() => {
+                            // Initialize progress updates for selected houses
+                            const updates: Record<number, number> = {};
+                            selectedHouseIds.forEach(id => {
+                              const house = availableHousesForScope.find(h => h.id === id);
+                              if (house) {
+                                updates[id] = house.remainingProgress;
+                              }
+                            });
+                            setHouseProgressUpdates(updates);
+                            setProgressDialogOpen(true);
+                          }}
+                        >
+                          <TrendingUp className="w-3 h-3" />
+                          Definir % Projetada
+                        </Button>
+                      )}
                     </div>
-                    <ScrollArea className="h-[120px] border rounded-lg p-2">
-                      <div className="grid grid-cols-5 gap-1">
+                    <ScrollArea className="h-[180px] border rounded-lg p-2">
+                      <div className="grid grid-cols-4 gap-1.5">
                         {availableHousesForScope.map(house => {
                           const isSelected = selectedHouseIds.includes(house.id);
+                          const progressColor = house.currentProgress === 0 
+                            ? 'bg-gray-200' 
+                            : house.currentProgress < 50 
+                              ? 'bg-orange-400' 
+                              : 'bg-green-400';
                           return (
                             <button
                               key={house.id}
@@ -1388,21 +1448,38 @@ export function PlannedProductionTab() {
                                   setSelectedHouseIds(prev => [...prev, house.id]);
                                 }
                               }}
-                              className={`p-1.5 text-xs rounded border transition-colors ${
+                              className={`p-2 text-xs rounded-lg border transition-all relative overflow-hidden ${
                                 isSelected 
-                                  ? 'bg-primary text-primary-foreground border-primary' 
+                                  ? 'bg-primary text-primary-foreground border-primary ring-2 ring-primary/30' 
                                   : 'bg-card border-border hover:border-primary/50'
                               }`}
                             >
-                              {house.id}
+                              {/* Progress bar background */}
+                              {house.currentProgress > 0 && !isSelected && (
+                                <div 
+                                  className={`absolute bottom-0 left-0 right-0 h-1 ${progressColor}`}
+                                  style={{ width: `${house.currentProgress}%` }}
+                                />
+                              )}
+                              <div className="font-semibold">{house.id}</div>
+                              <div className={`text-[10px] ${isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                                {house.currentProgress}%
+                              </div>
                             </button>
                           );
                         })}
                       </div>
                     </ScrollArea>
-                    <p className="text-xs text-muted-foreground text-center">
-                      {selectedHouseIds.length} casas selecionadas
-                    </p>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">
+                        {selectedHouseIds.length} casas selecionadas
+                      </span>
+                      <div className="flex items-center gap-3 text-muted-foreground">
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300"></span>0%</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400"></span>&lt;50%</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400"></span>≥50%</span>
+                      </div>
+                    </div>
                   </>
                 ) : (
                   <div className="p-3 text-center text-xs text-muted-foreground bg-secondary/30 rounded-lg">
@@ -1411,6 +1488,96 @@ export function PlannedProductionTab() {
                 )}
               </div>
             )}
+
+            {/* Progress Dialog */}
+            <Dialog open={progressDialogOpen} onOpenChange={setProgressDialogOpen}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5" />
+                    Definir % Projetada para Medição {measurementNumber}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Defina quanto % cada casa deve avançar nesta medição. O valor padrão é a % restante para completar 100%.
+                  </p>
+                  <ScrollArea className="h-[300px] border rounded-lg p-3">
+                    <div className="space-y-2">
+                      {selectedHouseIds.map(houseId => {
+                        const house = availableHousesForScope.find(h => h.id === houseId);
+                        if (!house) return null;
+                        return (
+                          <div key={houseId} className="flex items-center gap-3 p-2 bg-muted/50 rounded-lg">
+                            <div className="w-12 text-center">
+                              <Badge variant="outline" className="font-bold">{houseId}</Badge>
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs text-muted-foreground">Atual:</span>
+                                <span className="text-xs font-medium">{house.currentProgress}%</span>
+                                <ArrowRight className="w-3 h-3 text-muted-foreground" />
+                                <span className="text-xs text-muted-foreground">Projetado:</span>
+                                <span className="text-xs font-medium text-green-600">
+                                  {Math.min(100, house.currentProgress + (houseProgressUpdates[houseId] || 0))}%
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  max={house.remainingProgress}
+                                  value={houseProgressUpdates[houseId] || 0}
+                                  onChange={(e) => {
+                                    const value = Math.min(house.remainingProgress, Math.max(0, parseInt(e.target.value) || 0));
+                                    setHouseProgressUpdates(prev => ({ ...prev, [houseId]: value }));
+                                  }}
+                                  className="h-7 w-20 text-center"
+                                />
+                                <span className="text-xs text-muted-foreground">% a evoluir</span>
+                                <Button 
+                                  type="button"
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="h-6 text-xs"
+                                  onClick={() => setHouseProgressUpdates(prev => ({ ...prev, [houseId]: house.remainingProgress }))}
+                                >
+                                  Completar
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                  <div className="flex items-center justify-between pt-2 border-t">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        const updates: Record<number, number> = {};
+                        selectedHouseIds.forEach(id => {
+                          const house = availableHousesForScope.find(h => h.id === id);
+                          if (house) updates[id] = house.remainingProgress;
+                        });
+                        setHouseProgressUpdates(updates);
+                      }}
+                    >
+                      Completar Todas
+                    </Button>
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => setProgressDialogOpen(false)}>
+                        Cancelar
+                      </Button>
+                      <Button onClick={() => setProgressDialogOpen(false)}>
+                        Confirmar
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             <div className="space-y-2">
               <Label className="text-sm">Observações (opcional)</Label>
@@ -1429,7 +1596,7 @@ export function PlannedProductionTab() {
               title={!canEdit ? "Você pode simular, mas não tem permissão para salvar" : ""}
             >
               <Save className="w-4 h-4" />
-              {!canEdit ? "Modo Visualização" : isSaving ? "Salvando..." : `Salvar Planejamento (${selectedHouseIds.length} casas)`}
+              {!canEdit ? "Modo Visualização" : isSaving ? "Salvando..." : `Salvar Medição ${measurementNumber} (${selectedHouseIds.length} casas)`}
             </Button>
             {!canEdit && (
               <p className="text-xs text-muted-foreground text-center mt-2">
@@ -1460,8 +1627,10 @@ export function PlannedProductionTab() {
                   {groupedFuturePlans.map(group => {
                     const totalHouses = group.plans.reduce((sum, p) => sum + p.planned_houses, 0);
                     const allHouseIds = [...new Set(group.plans.flatMap(p => p.planned_house_ids || []))].sort((a, b) => a - b);
-                    const weekKey = `${group.weekStart}_${group.weekEnd}`;
-                    const isExpanded = expandedWeeks.has(weekKey);
+                    const groupKey = group.measurementNumber 
+                      ? `measurement_${group.measurementNumber}` 
+                      : `${group.weekStart}_${group.weekEnd}`;
+                    const isExpanded = expandedWeeks.has(groupKey);
                     
                     // Group services by macro for combined display
                     const servicesByMacro: Record<string, { macroName: string; macroColor: string; scopeNames: string[]; totalHouses: number; plans: typeof group.plans }> = {};
@@ -1481,17 +1650,26 @@ export function PlannedProductionTab() {
                     });
                     
                     return (
-                      <Card key={weekKey} className="overflow-hidden border-2">
-                        {/* Week Header */}
+                      <Card key={groupKey} className="overflow-hidden border-2">
+                        {/* Measurement/Week Header */}
                         <div 
                           className="bg-blue-50 dark:bg-blue-950/30 p-4 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors"
-                          onClick={() => toggleWeekExpanded(weekKey)}
+                          onClick={() => toggleWeekExpanded(groupKey)}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
-                                <CalendarDays className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                              </div>
+                              {/* Measurement badge */}
+                              {group.measurementNumber && (
+                                <div className="w-12 h-12 rounded-lg bg-primary/20 flex flex-col items-center justify-center border-2 border-primary">
+                                  <span className="text-[10px] text-primary font-medium">Medição</span>
+                                  <span className="text-lg font-bold text-primary">{group.measurementNumber}</span>
+                                </div>
+                              )}
+                              {!group.measurementNumber && (
+                                <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+                                  <CalendarDays className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                </div>
+                              )}
                               <div>
                                 <p className="font-bold text-lg text-foreground">
                                   {format(parseISO(group.weekStart), "dd", { locale: ptBR })} a {format(parseISO(group.weekEnd), "dd 'de' MMMM", { locale: ptBR })}
