@@ -42,6 +42,7 @@ interface InputItem {
   category: 'material' | 'labor' | 'equipment';
   material_family_id: string | null;
   material_family_name?: string;
+  unit_value?: number;
 }
 
 interface UnitItem {
@@ -262,7 +263,7 @@ export function BudgetItemsEditor({
       name: input.name,
       category: input.category || 'material',
       materialFamily: familyName,
-      unitValue: 0,
+      unitValue: input.unit_value || 0,
       quantity: 1,
       unit: input.unit,
       isNew: true,
@@ -564,8 +565,9 @@ export function BudgetItemsEditor({
                                   <Input
                                     value={item.name}
                                     placeholder="Nome do item"
-                                    className="h-8 text-sm bg-muted/50"
+                                    className="h-8 text-sm bg-muted/50 cursor-not-allowed"
                                     readOnly
+                                    disabled
                                     title="Itens devem ser selecionados do cadastro de insumos"
                                   />
                                 </div>
@@ -581,21 +583,13 @@ export function BudgetItemsEditor({
                                   />
                                 </div>
                                 <div className="col-span-1">
-                                  <Select
+                                  <Input
                                     value={item.unit}
-                                    onValueChange={(v) => updateItem(originalIndex, 'unit', v)}
-                                  >
-                                    <SelectTrigger className="h-8 text-xs px-2">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {units.length > 0 ? units.map(u => (
-                                        <SelectItem key={u.id} value={u.abbreviation}>{u.abbreviation}</SelectItem>
-                                      )) : ['un', 'kg', 'm', 'm²', 'm³', 'l', 'pç', 'vb'].map(u => (
-                                        <SelectItem key={u} value={u}>{u}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                    className="h-8 text-xs px-2 bg-muted/50 cursor-not-allowed"
+                                    readOnly
+                                    disabled
+                                    title="Unidade definida no cadastro de insumos"
+                                  />
                                 </div>
                                 <div className="col-span-2">
                                   <Input
@@ -608,24 +602,16 @@ export function BudgetItemsEditor({
                                     step="0.01"
                                   />
                                 </div>
-                                {item.category === 'material' && (
-                                  <div className="col-span-2">
-                                    <Select
-                                      value={item.materialFamily}
-                                      onValueChange={(v) => updateItem(originalIndex, 'materialFamily', v)}
-                                    >
-                                      <SelectTrigger className="h-8 text-xs px-2">
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {families.map(f => (
-                                          <SelectItem key={f.id} value={f.name}>{f.name}</SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                )}
-                                <div className={`${item.category === 'material' ? 'col-span-1' : 'col-span-3'} flex justify-end gap-1`}>
+                                <div className="col-span-2">
+                                  <Input
+                                    value={item.materialFamily}
+                                    className="h-8 text-xs px-2 bg-muted/50 cursor-not-allowed"
+                                    readOnly
+                                    disabled
+                                    title="Família definida no cadastro de insumos"
+                                  />
+                                </div>
+                                <div className="col-span-1 flex justify-end gap-1">
                                   <Button
                                     size="icon"
                                     variant="ghost"
