@@ -471,16 +471,6 @@ export function BudgetItemsEditor({
 
       {/* Header with filters */}
       <div className="flex flex-wrap gap-2 mb-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Filtrar itens..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8 h-9"
-          />
-        </div>
-        
         <Select value={filterCategory} onValueChange={setFilterCategory}>
           <SelectTrigger className="w-[140px] h-9">
             <SelectValue placeholder="Categoria" />
@@ -506,7 +496,7 @@ export function BudgetItemsEditor({
         </Select>
       </div>
 
-      {/* Add item from catalog */}
+      {/* Add item from catalog - allows multiple selection */}
       <div className="flex gap-2 mb-3">
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
@@ -524,34 +514,48 @@ export function BudgetItemsEditor({
                 setShowSuggestions(-1);
               }
             }}
-            onBlur={() => {
-              // Delay to allow click on suggestion
-              setTimeout(() => setShowSuggestions(null), 200);
-            }}
             className="h-9 pl-8"
           />
           {showSuggestions === -1 && inputSuggestions.length > 0 && (
-            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg max-h-[250px] overflow-auto">
-              {inputSuggestions.map(input => (
-                <div
-                  key={input.id}
-                  className="px-3 py-2 hover:bg-muted cursor-pointer text-sm flex items-center gap-2"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => addItemFromInput(input)}
-                >
-                  {input.category === 'material' ? <Package className="w-3.5 h-3.5 text-blue-500 shrink-0" /> : 
-                   input.category === 'labor' ? <Hammer className="w-3.5 h-3.5 text-orange-500 shrink-0" /> : 
-                   <Wrench className="w-3.5 h-3.5 text-green-500 shrink-0" />}
-                  <span className="flex-1 truncate">{input.name}</span>
-                  <span className="text-muted-foreground text-xs shrink-0">{input.unit}</span>
-                  {input.unit_value && input.unit_value > 0 && (
-                    <span className="text-green-600 text-xs font-medium shrink-0">
-                      {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(input.unit_value)}
-                    </span>
-                  )}
-                  <Badge variant="outline" className="text-[10px] px-1">{input.material_family_name || 'Geral'}</Badge>
-                </div>
-              ))}
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg max-h-[300px] overflow-auto">
+              <div className="p-2 border-b bg-muted/50 text-xs text-muted-foreground">
+                Clique nos itens para adicionar (pode adicionar vários)
+              </div>
+              {inputSuggestions.map(input => {
+                const alreadyAdded = items.some(item => item.inputId === input.id);
+                return (
+                  <div
+                    key={input.id}
+                    className={`px-3 py-2 hover:bg-muted cursor-pointer text-sm flex items-center gap-2 ${alreadyAdded ? 'opacity-50' : ''}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      if (!alreadyAdded) {
+                        addItemFromInput(input);
+                        // Keep suggestions open for multiple selection
+                        searchInputs(catalogSearchTerm, filterCategory);
+                      }
+                    }}
+                  >
+                    {input.category === 'material' ? <Package className="w-3.5 h-3.5 text-blue-500 shrink-0" /> : 
+                     input.category === 'labor' ? <Hammer className="w-3.5 h-3.5 text-orange-500 shrink-0" /> : 
+                     <Wrench className="w-3.5 h-3.5 text-green-500 shrink-0" />}
+                    <span className="flex-1 truncate">{input.name}</span>
+                    <span className="text-muted-foreground text-xs shrink-0">{input.unit}</span>
+                    {input.unit_value && input.unit_value > 0 && (
+                      <span className="text-green-600 text-xs font-medium shrink-0">
+                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(input.unit_value)}
+                      </span>
+                    )}
+                    <Badge variant="outline" className="text-[10px] px-1">{input.material_family_name || 'Geral'}</Badge>
+                    {alreadyAdded && <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />}
+                  </div>
+                );
+              })}
+              <div className="p-2 border-t">
+                <Button size="sm" variant="ghost" className="w-full text-xs" onClick={() => setShowSuggestions(null)}>
+                  Fechar
+                </Button>
+              </div>
             </div>
           )}
           {showSuggestions === -1 && catalogSearchTerm.length >= 2 && inputSuggestions.length === 0 && (
