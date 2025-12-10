@@ -221,15 +221,15 @@ export function MeasurementSelector({
                           className={`w-4 h-4 rounded-full shrink-0 ${isSelected ? 'ring-2 ring-offset-2 ring-offset-background ring-primary' : ''}`}
                           style={{ backgroundColor: period.macro_color || '#6b7280' }} 
                         />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium truncate">{period.scope_name}</span>
-                            <Badge variant="secondary" className="text-xs shrink-0">
+                        <div className="flex-1 min-w-0 overflow-hidden">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm" title={period.scope_name}>{period.scope_name}</span>
+                            <Badge variant="secondary" className="text-[10px] shrink-0 px-1.5">
                               {period.macro_name}
                             </Badge>
                           </div>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                            <span>{period.planned_houses} casas</span>
+                            <span className="font-medium">{period.planned_houses} casas</span>
                             <span>·</span>
                             <span>
                               {format(parseISO(period.week_start), 'dd/MM', { locale: ptBR })} - {format(parseISO(period.week_end), 'dd/MM', { locale: ptBR })}
