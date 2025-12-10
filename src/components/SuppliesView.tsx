@@ -363,8 +363,13 @@ export function SuppliesView() {
   }, [loadAlertData]);
 
   useEffect(() => {
-    if (activeTab !== 'alerts' && activeTab !== 'settings') {
-      loadTabData(activeTab);
+    if (activeTab !== 'alerts') {
+      // Settings tab needs families from inputs tab data
+      if (activeTab === 'settings') {
+        loadTabData('inputs');
+      } else {
+        loadTabData(activeTab);
+      }
     }
   }, [activeTab, loadTabData]);
 
