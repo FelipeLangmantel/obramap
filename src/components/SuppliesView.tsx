@@ -25,6 +25,7 @@ interface MaterialFamily {
   id: string;
   name: string;
   color: string;
+  lead_time_days: number;
 }
 
 interface InputItem {
@@ -141,6 +142,37 @@ interface ScopeItem {
   unit_value: number;
   scope_id: string;
   macro_id: string;
+  material_family?: string;
+}
+
+interface PlannedProduction {
+  id: string;
+  scope_id: string;
+  scope_name: string;
+  macro_id: string;
+  macro_name: string;
+  planned_houses: number;
+  planned_house_ids: number[];
+  week_start: string;
+  week_end: string;
+}
+
+interface MaterialAlert {
+  familyId: string;
+  familyName: string;
+  familyColor: string;
+  leadTimeDays: number;
+  priority: 'urgent' | 'warning' | 'info';
+  dueDate: Date;
+  daysUntilDue: number;
+  items: {
+    id: string;
+    name: string;
+    totalQuantity: number;
+    unit: string;
+    unitValue: number;
+    totalValue: number;
+  }[];
 }
 
 const CATEGORY_LABELS = {
@@ -243,18 +275,25 @@ export function SuppliesView() {
   // Search for quotation items
   const [quotationItemSearch, setQuotationItemSearch] = useState('');
 
+  // State for material alerts
+  const [plannedProductions, setPlannedProductions] = useState<PlannedProduction[]>([]);
+  const [alertFamilies, setAlertFamilies] = useState<MaterialFamily[]>([]);
+  const [expandedAlertFamilies, setExpandedAlertFamilies] = useState<Set<string>>(new Set());
+
   // Load minimal data for alerts on mount
   const loadAlertData = useCallback(async () => {
     if (!projectId) return;
     setIsLoading(true);
 
     try {
-      const [scopeRes, quotRes, ordersRes, laborRes, prodRes] = await Promise.all([
-        supabase.from('scope_items').select('id, name, category, quantity, unit, unit_value, scope_id, macro_id').eq('project_id', projectId),
+      const [scopeRes, quotRes, ordersRes, laborRes, prodRes, plannedRes, familiesRes] = await Promise.all([
+        supabase.from('scope_items').select('id, name, category, quantity, unit, unit_value, scope_id, macro_id, material_family').eq('project_id', projectId),
         supabase.from('quotation_requests').select('id, status').eq('project_id', projectId).eq('status', 'pending'),
         supabase.from('purchase_orders').select('id, status').eq('project_id', projectId).eq('status', 'in_transit'),
         supabase.from('labor_contracts').select('*').eq('project_id', projectId),
-        supabase.from('weekly_productions').select('scope_id, house_ids').eq('project_id', projectId)
+        supabase.from('weekly_productions').select('scope_id, house_ids').eq('project_id', projectId),
+        supabase.from('planned_productions').select('*').eq('project_id', projectId).gte('week_start', new Date().toISOString().split('T')[0]),
+        supabase.from('material_families').select('*').eq('project_id', projectId).order('display_order')
       ]);
 
       if (scopeRes.data) {
@@ -265,6 +304,13 @@ export function SuppliesView() {
       if (quotRes.data) setAlertsData(prev => ({ ...prev, pendingQuotations: quotRes.data.length }));
       if (ordersRes.data) setAlertsData(prev => ({ ...prev, inTransitOrders: ordersRes.data.length }));
       if (laborRes.data) setLaborContracts(laborRes.data);
+      if (plannedRes.data) setPlannedProductions(plannedRes.data as PlannedProduction[]);
+      if (familiesRes.data) setAlertFamilies(familiesRes.data.map(f => ({ 
+        id: f.id, 
+        name: f.name, 
+        color: f.color || '#9ca3af', 
+        lead_time_days: f.lead_time_days || 7 
+      })));
       
       if (prodRes.data) {
         const executed: Record<string, number> = {};
@@ -294,7 +340,7 @@ export function SuppliesView() {
         ]);
         if (inputsRes.data) setInputs(inputsRes.data.map((i: any) => ({ ...i, material_family: i.material_families, category: i.category as 'material' | 'labor' | 'equipment', unit_value: i.unit_value || 0 })));
         if (unitsRes.data) setUnits(unitsRes.data);
-        if (familiesRes.data) setFamilies(familiesRes.data.map(f => ({ id: f.id, name: f.name, color: f.color || '#9ca3af' })));
+        if (familiesRes.data) setFamilies(familiesRes.data.map(f => ({ id: f.id, name: f.name, color: f.color || '#9ca3af', lead_time_days: f.lead_time_days || 7 })));
       } else if (tab === 'quotations') {
         const { data } = await supabase.from('quotation_requests').select(`*, quotation_items (*, supplier_quotes (*, suppliers (*)))`).eq('project_id', projectId).order('created_at', { ascending: false });
         if (data) setQuotations(data.map((q: any) => ({ ...q, status: q.status as QuotationRequest['status'], items: q.quotation_items?.map((item: any) => ({ ...item, quotes: item.supplier_quotes?.map((sq: any) => ({ ...sq, supplier: sq.suppliers })) })) })));
@@ -322,8 +368,8 @@ export function SuppliesView() {
     }
   }, [activeTab, loadTabData]);
 
-  // Calculate alerts
-  const alerts = useMemo(() => {
+  // Calculate labor alerts
+  const laborAlerts = useMemo(() => {
     const alertsList: { type: 'warning' | 'urgent' | 'info'; message: string; category: string; dueDate: Date; scopeId?: string }[] = [];
     const today = new Date();
 
@@ -355,6 +401,70 @@ export function SuppliesView() {
 
     return alertsList.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
   }, [alertsData.scopeItems, laborContracts, executedHouses]);
+
+  // Calculate material alerts based on lead time
+  const materialAlerts = useMemo((): MaterialAlert[] => {
+    const today = new Date();
+    const totalHouses = currentProject?.totalHouses || 0;
+    
+    if (totalHouses === 0 || alertFamilies.length === 0) return [];
+    
+    // Group material scope items by family
+    const materialItems = alertsData.scopeItems.filter(item => item.category === 'material');
+    const itemsByFamily: Record<string, typeof materialItems> = {};
+    
+    materialItems.forEach(item => {
+      const familyName = item.material_family || 'Geral';
+      if (!itemsByFamily[familyName]) itemsByFamily[familyName] = [];
+      itemsByFamily[familyName].push(item);
+    });
+    
+    // Create alerts for each family based on lead time
+    const alerts: MaterialAlert[] = [];
+    
+    Object.entries(itemsByFamily).forEach(([familyName, items]) => {
+      const family = alertFamilies.find(f => f.name === familyName);
+      if (!family) return;
+      
+      const leadTimeDays = family.lead_time_days || 7;
+      
+      // Calculate total quantities needed for all houses
+      const alertItems = items.map(item => ({
+        id: item.id,
+        name: item.name,
+        totalQuantity: item.quantity * totalHouses,
+        unit: item.unit,
+        unitValue: item.unit_value,
+        totalValue: item.quantity * totalHouses * item.unit_value
+      }));
+      
+      // Due date is today + lead time
+      const dueDate = addDays(today, leadTimeDays);
+      const daysUntilDue = differenceInDays(dueDate, today);
+      
+      // Determine priority based on days until due
+      let priority: 'urgent' | 'warning' | 'info' = 'info';
+      if (daysUntilDue <= 3) priority = 'urgent';
+      else if (daysUntilDue <= 7) priority = 'warning';
+      
+      alerts.push({
+        familyId: family.id,
+        familyName: family.name,
+        familyColor: family.color,
+        leadTimeDays,
+        priority,
+        dueDate,
+        daysUntilDue,
+        items: alertItems
+      });
+    });
+    
+    // Sort by days until due (most urgent first)
+    return alerts.sort((a, b) => a.daysUntilDue - b.daysUntilDue);
+  }, [alertsData.scopeItems, alertFamilies, currentProject?.totalHouses]);
+
+  // Combined alerts count
+  const totalAlertsCount = laborAlerts.length + materialAlerts.length;
 
   // CRUD operations
   const saveInput = async () => {
@@ -515,7 +625,7 @@ export function SuppliesView() {
         const { data, error } = await supabase.from('material_families').insert({ project_id: projectId, name: newFamily.name.trim(), color: newFamily.color, display_order: families.length }).select().single();
         if (error) throw error;
         if (data) {
-          setFamilies(prev => [...prev, { id: data.id, name: data.name, color: data.color || '#9ca3af' }]);
+          setFamilies(prev => [...prev, { id: data.id, name: data.name, color: data.color || '#9ca3af', lead_time_days: data.lead_time_days || 7 }]);
         }
         toast.success('Família cadastrada!');
       }
@@ -813,7 +923,7 @@ export function SuppliesView() {
         <TabsList className="grid w-full max-w-4xl grid-cols-7 h-10">
           <TabsTrigger value="alerts" className="gap-1 text-xs">
             <AlertTriangle className="w-3.5 h-3.5" />Alertas
-            {alerts.length > 0 && <Badge variant="destructive" className="ml-1 h-4 w-4 p-0 text-[10px]">{alerts.length}</Badge>}
+            {totalAlertsCount > 0 && <Badge variant="destructive" className="ml-1 h-4 w-4 p-0 text-[10px]">{totalAlertsCount}</Badge>}
           </TabsTrigger>
           <TabsTrigger value="inputs" className="gap-1 text-xs"><Box className="w-3.5 h-3.5" />Insumos</TabsTrigger>
           <TabsTrigger value="quotations" className="gap-1 text-xs"><FileText className="w-3.5 h-3.5" />Cotações</TabsTrigger>
@@ -825,15 +935,134 @@ export function SuppliesView() {
 
         {/* Alerts Tab */}
         <TabsContent value="alerts" className="flex-1 overflow-auto mt-4 space-y-4">
-          <Card>
-            <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg"><AlertTriangle className="w-5 h-5 text-yellow-500" />Alertas ({alerts.length})</CardTitle></CardHeader>
-            <CardContent>
-              {alerts.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">Todos os suprimentos em dia!</p>
-              ) : (
-                <ScrollArea className="h-[400px]">
+          {/* Material Alerts by Family */}
+          {materialAlerts.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Package className="w-5 h-5 text-blue-500" />
+                  Alertas de Cotação - Lead Time ({materialAlerts.length} famílias)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="max-h-[400px]">
                   <div className="space-y-2">
-                    {alerts.map((alert, idx) => (
+                    {materialAlerts.map((alert) => {
+                      const isExpanded = expandedAlertFamilies.has(alert.familyId);
+                      const totalValue = alert.items.reduce((sum, i) => sum + i.totalValue, 0);
+                      
+                      return (
+                        <Collapsible key={alert.familyId} open={isExpanded} onOpenChange={() => {
+                          setExpandedAlertFamilies(prev => {
+                            const next = new Set(prev);
+                            if (next.has(alert.familyId)) next.delete(alert.familyId);
+                            else next.add(alert.familyId);
+                            return next;
+                          });
+                        }}>
+                          <CollapsibleTrigger asChild>
+                            <div className={`p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors ${
+                              alert.priority === 'urgent' ? 'bg-red-50 border-red-200 dark:bg-red-900/20' : 
+                              alert.priority === 'warning' ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20' : 
+                              'bg-blue-50 border-blue-200 dark:bg-blue-900/20'
+                            }`}>
+                              <div className="flex items-center gap-3">
+                                {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: alert.familyColor }} />
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium text-sm">{alert.familyName}</p>
+                                    <Badge variant="secondary" className="text-xs">{alert.items.length} itens</Badge>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    Lead time: {alert.leadTimeDays} dias • 
+                                    {alert.daysUntilDue <= 0 ? ' Vencido!' : ` Iniciar cotação em ${alert.daysUntilDue} dias`}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="font-medium text-sm">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}</p>
+                                  <Badge className={`text-xs ${
+                                    alert.priority === 'urgent' ? 'bg-red-500' : 
+                                    alert.priority === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
+                                  }`}>
+                                    {alert.priority === 'urgent' ? 'Urgente' : alert.priority === 'warning' ? 'Atenção' : 'Programado'}
+                                  </Badge>
+                                </div>
+                                {canEdit && (
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline" 
+                                    className="shrink-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Pre-select items from this family for quotation
+                                      const itemIds = alert.items.map(i => i.id);
+                                      setNewQuotation({
+                                        title: `Cotação ${alert.familyName} - ${format(new Date(), 'dd/MM/yyyy')}`,
+                                        required_date: format(alert.dueDate, 'yyyy-MM-dd'),
+                                        notes: `Lead time: ${alert.leadTimeDays} dias`,
+                                        items: itemIds
+                                      });
+                                      setQuotationDialogOpen(true);
+                                    }}
+                                  >
+                                    <FileText className="w-3 h-3 mr-1" />
+                                    Cotar
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <div className="mt-1 ml-6 border rounded-lg overflow-hidden">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow className="bg-muted/30">
+                                    <TableHead className="text-xs">Insumo</TableHead>
+                                    <TableHead className="text-xs text-right">Qtd Total</TableHead>
+                                    <TableHead className="text-xs">Un</TableHead>
+                                    <TableHead className="text-xs text-right">Valor Unit.</TableHead>
+                                    <TableHead className="text-xs text-right">Valor Total</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {alert.items.map(item => (
+                                    <TableRow key={item.id}>
+                                      <TableCell className="text-sm">{item.name}</TableCell>
+                                      <TableCell className="text-sm text-right">{item.totalQuantity.toLocaleString('pt-BR')}</TableCell>
+                                      <TableCell className="text-sm">{item.unit}</TableCell>
+                                      <TableCell className="text-sm text-right">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitValue)}</TableCell>
+                                      <TableCell className="text-sm text-right font-medium">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.totalValue)}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Labor Alerts */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Hammer className="w-5 h-5 text-orange-500" />
+                Alertas de Mão de Obra ({laborAlerts.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {laborAlerts.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">Nenhum alerta de mão de obra</p>
+              ) : (
+                <ScrollArea className="max-h-[300px]">
+                  <div className="space-y-2">
+                    {laborAlerts.map((alert, idx) => (
                       <div key={idx} className={`p-3 rounded-lg border ${alert.type === 'urgent' ? 'bg-red-50 border-red-200 dark:bg-red-900/20' : 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20'}`}>
                         <div className="flex items-center gap-3">
                           {alert.type === 'urgent' ? <AlertTriangle className="w-4 h-4 text-red-500" /> : <Clock className="w-4 h-4 text-yellow-500" />}
@@ -841,13 +1070,12 @@ export function SuppliesView() {
                             <p className="font-medium text-sm">{alert.message}</p>
                             <Badge variant="outline" className="text-xs mt-1">{CATEGORY_LABELS[alert.category as keyof typeof CATEGORY_LABELS] || alert.category}</Badge>
                           </div>
-                          {alert.category === 'labor' && canEdit && (
+                          {canEdit && (
                             <Button 
                               size="sm" 
                               variant="outline" 
                               className="shrink-0"
                               onClick={() => {
-                                // Find scope item data for prefill
                                 const scopeItem = alertsData.scopeItems.find(s => s.id === alert.scopeId);
                                 if (scopeItem) {
                                   setLaborContractPrefill({
@@ -873,6 +1101,8 @@ export function SuppliesView() {
               )}
             </CardContent>
           </Card>
+
+          {/* Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Card><CardContent className="pt-4"><div className="flex items-center gap-2 mb-1"><FileText className="w-4 h-4 text-blue-500" /><span className="text-xs">Cotações Pendentes</span></div><p className="text-2xl font-bold">{alertsData.pendingQuotations}</p></CardContent></Card>
             <Card><CardContent className="pt-4"><div className="flex items-center gap-2 mb-1"><Truck className="w-4 h-4 text-orange-500" /><span className="text-xs">Em Trânsito</span></div><p className="text-2xl font-bold">{alertsData.inTransitOrders}</p></CardContent></Card>
@@ -1583,8 +1813,49 @@ export function SuppliesView() {
         {/* Settings Tab */}
         <TabsContent value="settings" className="flex-1 overflow-auto mt-4 space-y-4">
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><Settings className="w-5 h-5" />Configurações</CardTitle></CardHeader>
-            <CardContent><p className="text-muted-foreground">Configurações de suprimentos em desenvolvimento...</p></CardContent>
+            <CardHeader><CardTitle className="flex items-center gap-2"><Clock className="w-5 h-5" />Lead Time por Família de Material</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                Configure o prazo de antecedência (em dias) para iniciar cotações de cada família de materiais.
+              </p>
+              <ScrollArea className="h-[400px]">
+                <div className="space-y-2">
+                  {families.map(family => (
+                    <div key={family.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: family.color }} />
+                        <span className="font-medium">{family.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min="1"
+                          max="90"
+                          className="w-20 h-8"
+                          value={family.lead_time_days}
+                          onChange={async (e) => {
+                            const newDays = parseInt(e.target.value) || 7;
+                            try {
+                              await supabase.from('material_families').update({ lead_time_days: newDays }).eq('id', family.id);
+                              setFamilies(prev => prev.map(f => f.id === family.id ? { ...f, lead_time_days: newDays } : f));
+                              setAlertFamilies(prev => prev.map(f => f.id === family.id ? { ...f, lead_time_days: newDays } : f));
+                            } catch (error) {
+                              console.error('Error updating lead time:', error);
+                            }
+                          }}
+                        />
+                        <span className="text-sm text-muted-foreground">dias</span>
+                      </div>
+                    </div>
+                  ))}
+                  {families.length === 0 && (
+                    <p className="text-center text-muted-foreground py-8">
+                      Cadastre famílias de materiais na aba Insumos
+                    </p>
+                  )}
+                </div>
+              </ScrollArea>
+            </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
