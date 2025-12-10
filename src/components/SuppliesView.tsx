@@ -708,10 +708,12 @@ export function SuppliesView() {
     }
   };
 
-  const deleteFamily = async (id: string) => {
+  const deleteFamily = async (id: string, inputCount: number) => {
+    if (inputCount > 0) {
+      toast.error(`Não é possível excluir. Esta família possui ${inputCount} insumo(s) cadastrado(s).`);
+      return;
+    }
     try {
-      // Update inputs to remove family reference
-      await supabase.from('inputs').update({ material_family_id: null }).eq('material_family_id', id);
       await supabase.from('material_families').delete().eq('id', id);
       toast.success('Família removida');
       setFamilies(prev => prev.filter(f => f.id !== id));
@@ -1039,7 +1041,7 @@ export function SuppliesView() {
     });
   }, [inputs, searchInput, filterCategory]);
 
-  // Group inputs by family
+  // Group inputs by family - sorted alphabetically
   const inputsByFamily = useMemo(() => {
     const grouped: Record<string, InputItem[]> = {};
     filteredInputs.forEach(input => {
@@ -1047,8 +1049,36 @@ export function SuppliesView() {
       if (!grouped[familyName]) grouped[familyName] = [];
       grouped[familyName].push(input);
     });
-    return grouped;
+    // Sort by family name alphabetically (Sem Família at the end)
+    const sortedEntries = Object.entries(grouped).sort(([a], [b]) => {
+      if (a === 'Sem Família') return 1;
+      if (b === 'Sem Família') return -1;
+      return a.localeCompare(b, 'pt-BR');
+    });
+    return Object.fromEntries(sortedEntries);
   }, [filteredInputs]);
+
+  // Count inputs per family for delete protection
+  const inputCountByFamily = useMemo(() => {
+    const counts: Record<string, number> = {};
+    inputs.forEach(input => {
+      if (input.material_family_id) {
+        counts[input.material_family_id] = (counts[input.material_family_id] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [inputs]);
+
+  // Filter families by search for autocomplete suggestions
+  const [familySearch, setFamilySearch] = useState('');
+  const filteredFamilySuggestions = useMemo(() => {
+    if (!familySearch.trim()) return [];
+    const search = familySearch.toLowerCase();
+    return families.filter(f => 
+      f.name.toLowerCase().includes(search) && 
+      f.name.toLowerCase() !== search
+    ).slice(0, 5);
+  }, [families, familySearch]);
 
   const filteredSuppliers = useMemo(() => {
     return suppliers.filter(s => supplierTypeFilter === 'all' || s.supplier_type === supplierTypeFilter);
@@ -1094,8 +1124,8 @@ export function SuppliesView() {
                 </CardTitle>
               </CardHeader>
               <CardContent onClick={(e) => e.stopPropagation()}>
-                <ScrollArea className="max-h-[400px]">
-                  <div className="space-y-2">
+                <ScrollArea className="h-[400px]">
+                  <div className="space-y-2 pr-4">
                     {materialAlerts.map((alert) => {
                       const isExpanded = expandedAlertFamilies.has(alert.familyId);
                       const totalValue = alert.items.reduce((sum, i) => sum + i.totalValue, 0);
@@ -1223,8 +1253,8 @@ export function SuppliesView() {
               {laborAlerts.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">Nenhum alerta de mão de obra</p>
               ) : (
-                <ScrollArea className="max-h-[300px]">
-                  <div className="space-y-2">
+                <ScrollArea className="h-[300px]">
+                  <div className="space-y-2 pr-4">
                     {laborAlerts.map((alert, idx) => (
                       <div key={idx} className={`p-3 rounded-lg border ${alert.type === 'urgent' ? 'bg-red-50 border-red-200 dark:bg-red-900/20' : 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20'}`}>
                         <div className="flex items-center gap-3">
@@ -1299,6 +1329,7 @@ export function SuppliesView() {
                 if (!o) { 
                   setEditingFamily(null); 
                   setNewFamily({ name: '', color: '#3b82f6' }); 
+                  setFamilySearch('');
                   // Reload families para atualizar filtros
                   setDataLoaded(prev => ({ ...prev, inputs: false }));
                   loadTabData('inputs');
@@ -1308,43 +1339,88 @@ export function SuppliesView() {
                 <DialogContent>
                   <DialogHeader><DialogTitle>Gerenciar Famílias de Materiais</DialogTitle></DialogHeader>
                   <div className="space-y-4">
-                    <div className="flex gap-2">
-                      <Input placeholder="Nova família..." value={newFamily.name} onChange={(e) => setNewFamily({ ...newFamily, name: e.target.value })} className="flex-1" />
-                      <Input type="color" value={newFamily.color} onChange={(e) => setNewFamily({ ...newFamily, color: e.target.value })} className="w-12 p-1 h-10" />
-                      <Button onClick={saveFamily} disabled={!newFamily.name.trim()}>
-                        {editingFamily ? <><Check className="w-4 h-4 mr-1" />Salvar</> : <><Plus className="w-4 h-4 mr-1" />Adicionar</>}
-                      </Button>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <div className="flex-1 relative">
+                          <Input 
+                            placeholder="Nova família..." 
+                            value={newFamily.name} 
+                            onChange={(e) => { 
+                              setNewFamily({ ...newFamily, name: e.target.value }); 
+                              setFamilySearch(e.target.value);
+                            }} 
+                          />
+                          {filteredFamilySuggestions.length > 0 && !editingFamily && (
+                            <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg">
+                              <p className="px-3 py-1.5 text-xs text-muted-foreground border-b">Famílias semelhantes:</p>
+                              {filteredFamilySuggestions.map(f => (
+                                <div 
+                                  key={f.id} 
+                                  className="flex items-center gap-2 px-3 py-2 hover:bg-muted cursor-pointer"
+                                  onClick={() => {
+                                    setNewFamily({ name: f.name, color: f.color });
+                                    setFamilySearch('');
+                                  }}
+                                >
+                                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: f.color }} />
+                                  <span className="text-sm">{f.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <Input type="color" value={newFamily.color} onChange={(e) => setNewFamily({ ...newFamily, color: e.target.value })} className="w-12 p-1 h-10" />
+                        <Button onClick={() => { saveFamily(); setFamilySearch(''); }} disabled={!newFamily.name.trim()}>
+                          {editingFamily ? <><Check className="w-4 h-4 mr-1" />Salvar</> : <><Plus className="w-4 h-4 mr-1" />Adicionar</>}
+                        </Button>
+                      </div>
                     </div>
                     <ScrollArea className="h-[250px]">
                       <div className="space-y-1">
-                        {families.map(f => (
-                          <div key={f.id} className={`flex items-center justify-between p-2 rounded ${editingFamily?.id === f.id ? 'bg-primary/10 border border-primary/30' : 'bg-muted/50'}`}>
-                            <div className="flex items-center gap-2">
-                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: f.color }} />
-                              <span>{f.name}</span>
+                        {families.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(f => {
+                          const count = inputCountByFamily[f.id] || 0;
+                          return (
+                            <div key={f.id} className={`flex items-center justify-between p-2 rounded ${editingFamily?.id === f.id ? 'bg-primary/10 border border-primary/30' : 'bg-muted/50'}`}>
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: f.color }} />
+                                <span>{f.name}</span>
+                                {count > 0 && (
+                                  <Badge variant="secondary" className="text-xs">{count} insumo(s)</Badge>
+                                )}
+                              </div>
+                              <div className="flex gap-1">
+                                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { 
+                                  if (editingFamily?.id === f.id) {
+                                    setEditingFamily(null);
+                                    setNewFamily({ name: '', color: '#3b82f6' });
+                                    setFamilySearch('');
+                                  } else {
+                                    setEditingFamily(f); 
+                                    setNewFamily({ name: f.name, color: f.color }); 
+                                    setFamilySearch('');
+                                  }
+                                }}>
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost" 
+                                  className={`h-7 w-7 ${count > 0 ? 'text-muted-foreground cursor-not-allowed' : 'text-destructive'}`}
+                                  onClick={() => deleteFamily(f.id, count)}
+                                  title={count > 0 ? `Não pode excluir: ${count} insumo(s) cadastrado(s)` : 'Excluir família'}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex gap-1">
-                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { 
-                                if (editingFamily?.id === f.id) {
-                                  setEditingFamily(null);
-                                  setNewFamily({ name: '', color: '#3b82f6' });
-                                } else {
-                                  setEditingFamily(f); 
-                                  setNewFamily({ name: f.name, color: f.color }); 
-                                }
-                              }}>
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteFamily(f.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </ScrollArea>
                   </div>
                   <DialogFooter>
                     {editingFamily && (
-                      <Button variant="outline" onClick={() => { setEditingFamily(null); setNewFamily({ name: '', color: '#3b82f6' }); }}>
+                      <Button variant="outline" onClick={() => { setEditingFamily(null); setNewFamily({ name: '', color: '#3b82f6' }); setFamilySearch(''); }}>
                         Cancelar Edição
                       </Button>
                     )}
@@ -1419,7 +1495,20 @@ export function SuppliesView() {
                       <div><Label>Nome *</Label><Input value={newInput.name} onChange={(e) => setNewInput({ ...newInput, name: e.target.value })} /></div>
                       <div className="grid grid-cols-2 gap-4">
                         <div><Label>Categoria *</Label>
-                          <Select value={newInput.category} onValueChange={(v) => setNewInput({ ...newInput, category: v })}>
+                          <Select value={newInput.category} onValueChange={(v) => {
+                            // Auto-set family and unit for labor category
+                            if (v === 'labor') {
+                              const servicosFamily = families.find(f => f.name.toLowerCase() === 'serviços');
+                              setNewInput({ 
+                                ...newInput, 
+                                category: v, 
+                                unit: 'casa',
+                                material_family_id: servicosFamily?.id || newInput.material_family_id
+                              });
+                            } else {
+                              setNewInput({ ...newInput, category: v });
+                            }
+                          }}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="material">Material</SelectItem>
@@ -1429,21 +1518,39 @@ export function SuppliesView() {
                           </Select>
                         </div>
                         <div><Label>Unidade</Label>
-                          <Select value={newInput.unit} onValueChange={(v) => setNewInput({ ...newInput, unit: v })}>
+                          <Select 
+                            value={newInput.unit} 
+                            onValueChange={(v) => setNewInput({ ...newInput, unit: v })}
+                            disabled={newInput.category === 'labor'}
+                          >
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              {units.length > 0 ? units.map(u => <SelectItem key={u.id} value={u.abbreviation}>{u.abbreviation}</SelectItem>) : ['un', 'kg', 'm', 'm²', 'm³', 'l', 'pç', 'vb'].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                              {newInput.category === 'labor' ? (
+                                <SelectItem value="casa">casa</SelectItem>
+                              ) : (
+                                units.length > 0 ? units.map(u => <SelectItem key={u.id} value={u.abbreviation}>{u.abbreviation}</SelectItem>) : ['un', 'kg', 'm', 'm²', 'm³', 'l', 'pç', 'vb', 'casa'].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)
+                              )}
                             </SelectContent>
                           </Select>
+                          {newInput.category === 'labor' && (
+                            <p className="text-xs text-muted-foreground mt-1">Unidade fixa para mão de obra</p>
+                          )}
                         </div>
                         <div><Label>Família</Label>
-                          <Select value={newInput.material_family_id || "none"} onValueChange={(v) => setNewInput({ ...newInput, material_family_id: v === "none" ? "" : v })}>
+                          <Select 
+                            value={newInput.material_family_id || "none"} 
+                            onValueChange={(v) => setNewInput({ ...newInput, material_family_id: v === "none" ? "" : v })}
+                            disabled={newInput.category === 'labor'}
+                          >
                             <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">Sem família</SelectItem>
-                              {families.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                              {families.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
+                          {newInput.category === 'labor' && (
+                            <p className="text-xs text-muted-foreground mt-1">Família Serviços (automático)</p>
+                          )}
                         </div>
                         <div><Label>Valor Unitário (R$)</Label>
                           <Input 
@@ -1565,6 +1672,33 @@ export function SuppliesView() {
 
         {/* Quotations Tab */}
         <TabsContent value="quotations" className="flex-1 overflow-auto mt-4 space-y-4">
+          {/* Delete Quotation Dialog */}
+          <AlertDialog open={deleteQuotationDialogOpen} onOpenChange={setDeleteQuotationDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir Cotação</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Tem certeza que deseja excluir a cotação "{quotationToDelete?.title}"? Todos os itens e cotações de fornecedores serão removidos.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction 
+                  onClick={() => { 
+                    if (quotationToDelete) { 
+                      deleteQuotation(quotationToDelete.id); 
+                      setDeleteQuotationDialogOpen(false); 
+                      setQuotationToDelete(null); 
+                    } 
+                  }} 
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Excluir
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          
           {canEdit && (
             <div className="flex justify-end">
               <Dialog open={quotationDialogOpen} onOpenChange={setQuotationDialogOpen}>
@@ -2065,24 +2199,6 @@ export function SuppliesView() {
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
                 <AlertDialogAction onClick={() => { if (orderToDelete) { deleteOrder(orderToDelete.id); setDeleteOrderDialogOpen(false); setOrderToDelete(null); } }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Excluir
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-          
-          {/* Delete Quotation Dialog */}
-          <AlertDialog open={deleteQuotationDialogOpen} onOpenChange={setDeleteQuotationDialogOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Excluir Cotação</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Tem certeza que deseja excluir a cotação "{quotationToDelete?.title}"? Todos os itens e cotações de fornecedores serão removidos.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={() => { if (quotationToDelete) { deleteQuotation(quotationToDelete.id); setDeleteQuotationDialogOpen(false); setQuotationToDelete(null); } }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                   Excluir
                 </AlertDialogAction>
               </AlertDialogFooter>
