@@ -389,6 +389,17 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
     }
   }, [projectId, dataLoaded]);
 
+  // Reset dataLoaded when project changes
+  useEffect(() => {
+    setDataLoaded({});
+    setSuppliers([]);
+    setQuotations([]);
+    setPurchaseOrders([]);
+    setInputs([]);
+    setUnits([]);
+    setFamilies([]);
+  }, [projectId]);
+
   useEffect(() => {
     loadAlertData();
   }, [loadAlertData]);
@@ -2332,7 +2343,15 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                       {/* Footer actions */}
                       {canEdit && quotation.status === 'pending' && (
                         <div className="flex items-center justify-between p-4 border-t bg-muted/20">
-                          <Button size="sm" variant="outline" onClick={() => { setSelectedQuotation(quotation); setQuoteDetailsDialogOpen(true); }}>
+                          <Button size="sm" variant="outline" onClick={async () => { 
+                            // Ensure suppliers are loaded before opening dialog
+                            if (suppliers.length === 0) {
+                              const { data } = await supabase.from('suppliers').select('*').order('name');
+                              if (data) setSuppliers(data.map(s => ({ ...s, supplier_type: (s.supplier_type || 'material') as 'material' | 'labor' })));
+                            }
+                            setSelectedQuotation(quotation); 
+                            setQuoteDetailsDialogOpen(true); 
+                          }}>
                             <Edit2 className="w-3 h-3 mr-1" />Editar Cotações
                           </Button>
                           <Button 
