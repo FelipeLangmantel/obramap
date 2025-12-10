@@ -228,6 +228,18 @@ export function SuppliesView() {
   const [expandedQuotations, setExpandedQuotations] = useState<Set<string>>(new Set());
   const [deleteInputDialogOpen, setDeleteInputDialogOpen] = useState(false);
   const [inputToDelete, setInputToDelete] = useState<InputItem | null>(null);
+  
+  // Labor contract prefill from alert
+  const [laborContractPrefill, setLaborContractPrefill] = useState<{
+    scopeId: string;
+    macroId: string;
+    scopeName: string;
+    houses: number;
+    unitValue: number;
+  } | null>(null);
+  
+  // Search for quotation items
+  const [quotationItemSearch, setQuotationItemSearch] = useState('');
 
   // Load minimal data for alerts on mount
   const loadAlertData = useCallback(async () => {
@@ -833,11 +845,33 @@ export function SuppliesView() {
                               variant="outline" 
                               className="shrink-0"
                               onClick={() => {
+                                // Find scope item data for prefill
+                                const scopeItem = alertsData.scopeItems.find(s => s.id === alert.scopeId);
+                                if (scopeItem) {
+                                  // Find which macro this scope belongs to
+                                  const macros = currentProject?.macrosTemplate || [];
+                                  let macroId = '';
+                                  macros.forEach(macro => {
+                                    macro.scopes.forEach((scope: any) => {
+                                      if (scope.id === scopeItem.id) {
+                                        macroId = macro.id;
+                                      }
+                                    });
+                                  });
+                                  
+                                  setLaborContractPrefill({
+                                    scopeId: scopeItem.id,
+                                    macroId,
+                                    scopeName: scopeItem.name,
+                                    houses: currentProject?.totalHouses || 0,
+                                    unitValue: scopeItem.unit_value || 0
+                                  });
+                                }
                                 setActiveTab('contracts');
                               }}
                             >
                               <ClipboardList className="w-3 h-3 mr-1" />
-                              Gerenciar Contrato
+                              Contratar
                             </Button>
                           )}
                         </div>
@@ -1145,21 +1179,75 @@ export function SuppliesView() {
                       <div><Label>Data Necessária</Label><Input type="date" value={newQuotation.required_date} onChange={(e) => setNewQuotation({ ...newQuotation, required_date: e.target.value })} /></div>
                     </div>
                     <div><Label>Observações</Label><Textarea value={newQuotation.notes} onChange={(e) => setNewQuotation({ ...newQuotation, notes: e.target.value })} /></div>
-                    <div><Label>Itens do Orçamento</Label>
-                      <ScrollArea className="h-[200px] border rounded-lg p-2 mt-2">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label>Itens do Orçamento</Label>
+                        {newQuotation.items.length > 0 && (
+                          <Badge variant="secondary">{newQuotation.items.length} selecionado(s)</Badge>
+                        )}
+                      </div>
+                      <div className="relative mb-2">
+                        <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+                        <Input 
+                          placeholder="Buscar insumo..." 
+                          className="pl-8"
+                          value={quotationItemSearch}
+                          onChange={(e) => setQuotationItemSearch(e.target.value)}
+                        />
+                      </div>
+                      <ScrollArea className="h-[300px] border rounded-lg p-2">
                         <div className="space-y-1">
-                          {alertsData.scopeItems.filter(i => i.category === 'material').map(item => (
-                            <label key={item.id} className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer">
-                              <input type="checkbox" checked={newQuotation.items.includes(item.id)} onChange={(e) => {
-                                if (e.target.checked) setNewQuotation({ ...newQuotation, items: [...newQuotation.items, item.id] });
-                                else setNewQuotation({ ...newQuotation, items: newQuotation.items.filter(i => i !== item.id) });
-                              }} className="rounded" />
-                              <span className="flex-1">{item.name}</span>
-                              <span className="text-sm text-muted-foreground">{item.quantity} {item.unit}</span>
-                            </label>
-                          ))}
+                          {alertsData.scopeItems
+                            .filter(i => i.category === 'material')
+                            .filter(i => !quotationItemSearch || i.name.toLowerCase().includes(quotationItemSearch.toLowerCase()))
+                            .map(item => (
+                              <label 
+                                key={item.id} 
+                                className={`flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer transition-colors ${
+                                  newQuotation.items.includes(item.id) ? 'bg-primary/10 border border-primary/30' : ''
+                                }`}
+                              >
+                                <input 
+                                  type="checkbox" 
+                                  checked={newQuotation.items.includes(item.id)} 
+                                  onChange={(e) => {
+                                    if (e.target.checked) setNewQuotation({ ...newQuotation, items: [...newQuotation.items, item.id] });
+                                    else setNewQuotation({ ...newQuotation, items: newQuotation.items.filter(i => i !== item.id) });
+                                  }} 
+                                  className="rounded w-4 h-4" 
+                                />
+                                <span className="flex-1 text-sm">{item.name}</span>
+                                <span className="text-xs text-muted-foreground">{item.quantity} {item.unit}</span>
+                              </label>
+                            ))}
+                          {alertsData.scopeItems.filter(i => i.category === 'material').filter(i => !quotationItemSearch || i.name.toLowerCase().includes(quotationItemSearch.toLowerCase())).length === 0 && (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              {quotationItemSearch ? 'Nenhum item encontrado' : 'Nenhum item de material no orçamento'}
+                            </p>
+                          )}
                         </div>
                       </ScrollArea>
+                      {newQuotation.items.length > 0 && (
+                        <div className="flex justify-between mt-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => setNewQuotation({ ...newQuotation, items: [] })}
+                          >
+                            Limpar seleção
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => setNewQuotation({ 
+                              ...newQuotation, 
+                              items: alertsData.scopeItems.filter(i => i.category === 'material').map(i => i.id) 
+                            })}
+                          >
+                            Selecionar todos
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <DialogFooter>
@@ -1488,7 +1576,17 @@ export function SuppliesView() {
 
         {/* Contracts Tab - Labor Contracts */}
         <TabsContent value="contracts" className="flex-1 overflow-auto mt-4">
-          <LaborContractsView />
+          <LaborContractsView 
+            prefilledScopeId={laborContractPrefill?.scopeId}
+            prefilledMacroId={laborContractPrefill?.macroId}
+            prefilledScopeName={laborContractPrefill?.scopeName}
+            prefilledHouses={laborContractPrefill?.houses}
+            prefilledUnitValue={laborContractPrefill?.unitValue}
+            onContractCreated={() => {
+              setLaborContractPrefill(null);
+              loadAlertData();
+            }}
+          />
         </TabsContent>
 
         {/* Settings Tab */}

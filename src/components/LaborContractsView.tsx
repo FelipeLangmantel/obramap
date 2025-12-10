@@ -57,6 +57,16 @@ interface LaborContract {
   contractor_name: string | null;
   status: string;
   notes: string | null;
+  retention_percent?: number;
+}
+
+interface LaborContractsViewProps {
+  prefilledScopeId?: string;
+  prefilledMacroId?: string;
+  prefilledScopeName?: string;
+  prefilledHouses?: number;
+  prefilledUnitValue?: number;
+  onContractCreated?: () => void;
 }
 
 interface ContractMeasurement {
@@ -72,7 +82,14 @@ interface ContractMeasurement {
   status: string;
 }
 
-export function LaborContractsView() {
+export function LaborContractsView({ 
+  prefilledScopeId, 
+  prefilledMacroId, 
+  prefilledScopeName,
+  prefilledHouses,
+  prefilledUnitValue,
+  onContractCreated 
+}: LaborContractsViewProps = {}) {
   const { currentProject } = useConstruction();
   const { canEdit } = useAuth();
   const projectId = currentProject?.id;
@@ -96,6 +113,22 @@ export function LaborContractsView() {
   const [unitValue, setUnitValue] = useState("");
   const [retentionPercent, setRetentionPercent] = useState("5");
   const [notes, setNotes] = useState("");
+  const [originalUnitValue, setOriginalUnitValue] = useState<number | null>(null);
+  const [showBudgetWarning, setShowBudgetWarning] = useState(false);
+
+  // Open dialog with prefilled data when props change
+  useEffect(() => {
+    if (prefilledScopeId && prefilledMacroId) {
+      setSelectedMacro(prefilledMacroId);
+      setSelectedScope(prefilledScopeId);
+      if (prefilledHouses) setContractedHouses(prefilledHouses.toString());
+      if (prefilledUnitValue) {
+        setUnitValue(prefilledUnitValue.toString());
+        setOriginalUnitValue(prefilledUnitValue);
+      }
+      setNewContractOpen(true);
+    }
+  }, [prefilledScopeId, prefilledMacroId, prefilledHouses, prefilledUnitValue]);
   
   // Measurement form
   const [measurementHouses, setMeasurementHouses] = useState("");
@@ -230,6 +263,45 @@ export function LaborContractsView() {
     setUnitValue("");
     setRetentionPercent("5");
     setNotes("");
+    setOriginalUnitValue(null);
+    setShowBudgetWarning(false);
+  };
+
+  // Check if unit value changed from budget
+  const handleUnitValueChange = (value: string) => {
+    setUnitValue(value);
+    if (originalUnitValue !== null && parseFloat(value) !== originalUnitValue) {
+      setShowBudgetWarning(true);
+    } else {
+      setShowBudgetWarning(false);
+    }
+  };
+
+  // Update budget when contract is created with different value
+  const updateBudgetIfNeeded = async () => {
+    if (!showBudgetWarning || !prefilledScopeId) return;
+    
+    const newValue = parseFloat(unitValue);
+    try {
+      await supabase
+        .from('scope_items')
+        .update({ unit_value: newValue })
+        .eq('scope_id', prefilledScopeId)
+        .eq('category', 'labor');
+      
+      toast.info('Orçamento atualizado com o novo valor unitário');
+    } catch (error) {
+      console.error('Error updating budget:', error);
+    }
+  };
+
+  // Enhanced create contract
+  const handleCreateContractEnhanced = async () => {
+    await handleCreateContract();
+    if (showBudgetWarning) {
+      await updateBudgetIfNeeded();
+    }
+    onContractCreated?.();
   };
 
   // Calculate measurements for a contract
@@ -421,140 +493,179 @@ export function LaborContractsView() {
       </Card>
 
       {/* New Contract Dialog */}
-      <Dialog open={newContractOpen} onOpenChange={setNewContractOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
+      <Dialog open={newContractOpen} onOpenChange={(open) => { setNewContractOpen(open); if (!open) resetForm(); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Users className="w-5 h-5" />
               Novo Contrato de Mão de Obra
             </DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
-            {/* Step 1: Select Scope */}
-            <div className="space-y-2">
-              <Label>Etapa (Macro)</Label>
-              <Select value={selectedMacro} onValueChange={(v) => { setSelectedMacro(v); setSelectedScope(""); }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a etapa" />
-                </SelectTrigger>
-                <SelectContent>
-                  {macros.map(macro => (
-                    <SelectItem key={macro.id} value={macro.id}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: macro.color }} />
-                        {macro.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Serviço</Label>
-              <Select value={selectedScope} onValueChange={setSelectedScope} disabled={!selectedMacro}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o serviço" />
-                </SelectTrigger>
-                <SelectContent>
-                  {scopes.map(scope => (
-                    <SelectItem key={scope.id} value={scope.id}>
-                      {scope.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Step 2: Supplier */}
-            <div className="space-y-2">
-              <Label>Empreiteiro (opcional)</Label>
-              <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o empreiteiro" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhum (informar depois)</SelectItem>
-                  {suppliers.map(supplier => (
-                    <SelectItem key={supplier.id} value={supplier.id}>
-                      {supplier.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {suppliers.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  Nenhum fornecedor de mão de obra cadastrado. Cadastre em Suprimentos → Fornecedores.
-                </p>
+          <ScrollArea className="flex-1 pr-4">
+            <div className="space-y-4 py-4">
+              {/* Prefilled info */}
+              {prefilledScopeName && (
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <p className="text-sm text-blue-600 dark:text-blue-400">
+                    Contratação baseada no orçamento do serviço:
+                  </p>
+                  <p className="font-semibold text-blue-800 dark:text-blue-200">{prefilledScopeName}</p>
+                </div>
               )}
-            </div>
 
-            {/* Step 3: Values */}
-            <div className="grid grid-cols-2 gap-4">
+              {/* Step 1: Select Scope */}
               <div className="space-y-2">
-                <Label>Casas Contratadas</Label>
+                <Label>Etapa (Macro)</Label>
+                <Select value={selectedMacro} onValueChange={(v) => { setSelectedMacro(v); setSelectedScope(""); }} disabled={!!prefilledMacroId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a etapa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {macros.map(macro => (
+                      <SelectItem key={macro.id} value={macro.id}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: macro.color }} />
+                          {macro.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Serviço</Label>
+                <Select value={selectedScope} onValueChange={setSelectedScope} disabled={!selectedMacro || !!prefilledScopeId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o serviço" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {scopes.map(scope => (
+                      <SelectItem key={scope.id} value={scope.id}>
+                        {scope.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Step 2: Supplier */}
+              <div className="space-y-2">
+                <Label>Empreiteiro (opcional)</Label>
+                <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o empreiteiro" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhum (informar depois)</SelectItem>
+                    {suppliers.map(supplier => (
+                      <SelectItem key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {suppliers.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Nenhum fornecedor de mão de obra cadastrado. Cadastre em Suprimentos → Fornecedores.
+                  </p>
+                )}
+              </div>
+
+              {/* Step 3: Values */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Casas Contratadas</Label>
+                  <Input 
+                    type="number" 
+                    value={contractedHouses}
+                    onChange={(e) => setContractedHouses(e.target.value)}
+                    placeholder="Ex: 50"
+                  />
+                  {prefilledHouses && (
+                    <p className="text-xs text-muted-foreground">
+                      Orçamento: {prefilledHouses} casas
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label>Valor Unitário (R$)</Label>
+                  <Input 
+                    type="number" 
+                    value={unitValue}
+                    onChange={(e) => handleUnitValueChange(e.target.value)}
+                    placeholder="Ex: 1500"
+                    step="0.01"
+                  />
+                  {originalUnitValue !== null && (
+                    <p className="text-xs text-muted-foreground">
+                      Orçamento: {formatCurrency(originalUnitValue)}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Budget Warning */}
+              {showBudgetWarning && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-300 dark:border-amber-700">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                        Valor diferente do orçamento
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-500">
+                        O valor unitário será atualizado no orçamento ao criar o contrato.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Total Preview */}
+              {contractedHouses && unitValue && (
+                <div className="p-4 bg-primary/10 rounded-lg text-center">
+                  <p className="text-sm text-muted-foreground">Valor Total do Contrato</p>
+                  <p className="text-2xl font-bold text-primary">
+                    {formatCurrency(parseInt(contractedHouses || '0') * parseFloat(unitValue || '0'))}
+                  </p>
+                </div>
+              )}
+
+              {/* Retention */}
+              <div className="space-y-2">
+                <Label>Retenção por Medição (%)</Label>
                 <Input 
                   type="number" 
-                  value={contractedHouses}
-                  onChange={(e) => setContractedHouses(e.target.value)}
-                  placeholder="Ex: 50"
+                  value={retentionPercent}
+                  onChange={(e) => setRetentionPercent(e.target.value)}
+                  placeholder="Ex: 5"
+                  min="0"
+                  max="100"
                 />
-              </div>
-              <div className="space-y-2">
-                <Label>Valor Unitário (R$)</Label>
-                <Input 
-                  type="number" 
-                  value={unitValue}
-                  onChange={(e) => setUnitValue(e.target.value)}
-                  placeholder="Ex: 1500"
-                  step="0.01"
-                />
-              </div>
-            </div>
-
-            {/* Total Preview */}
-            {contractedHouses && unitValue && (
-              <div className="p-4 bg-primary/10 rounded-lg text-center">
-                <p className="text-sm text-muted-foreground">Valor Total do Contrato</p>
-                <p className="text-2xl font-bold text-primary">
-                  {formatCurrency(parseInt(contractedHouses || '0') * parseFloat(unitValue || '0'))}
+                <p className="text-xs text-muted-foreground">
+                  Percentual retido em cada medição para liberação após conclusão
                 </p>
               </div>
-            )}
 
-            {/* Retention */}
-            <div className="space-y-2">
-              <Label>Retenção por Medição (%)</Label>
-              <Input 
-                type="number" 
-                value={retentionPercent}
-                onChange={(e) => setRetentionPercent(e.target.value)}
-                placeholder="Ex: 5"
-                min="0"
-                max="100"
-              />
-              <p className="text-xs text-muted-foreground">
-                Percentual retido em cada medição para liberação após conclusão
-              </p>
+              {/* Notes */}
+              <div className="space-y-2">
+                <Label>Observações</Label>
+                <Textarea 
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Condições especiais, cronograma, etc."
+                />
+              </div>
             </div>
+          </ScrollArea>
 
-            {/* Notes */}
-            <div className="space-y-2">
-              <Label>Observações</Label>
-              <Textarea 
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Condições especiais, cronograma, etc."
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0 pt-4 border-t">
             <Button variant="outline" onClick={() => setNewContractOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleCreateContract}>
+            <Button onClick={handleCreateContractEnhanced}>
               Criar Contrato
             </Button>
           </DialogFooter>
