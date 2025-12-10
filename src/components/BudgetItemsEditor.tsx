@@ -112,11 +112,10 @@ export function BudgetItemsEditor({
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Load families
+      // Load families globally (all families available for all projects)
       const { data: familiesData } = await supabase
         .from('material_families')
         .select('*')
-        .eq('project_id', projectId)
         .order('display_order');
 
       if (familiesData && familiesData.length > 0) {

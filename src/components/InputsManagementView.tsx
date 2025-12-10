@@ -205,6 +205,20 @@ export function InputsManagementView() {
 
   const saveUnit = async () => {
     if (!defaultProjectId || !newUnit.name.trim() || !newUnit.abbreviation.trim()) return;
+    
+    // Check for duplicates (case-insensitive)
+    const normalizedName = newUnit.name.trim().toLowerCase();
+    const normalizedAbbr = newUnit.abbreviation.trim().toLowerCase();
+    const isDuplicate = units.some(u => 
+      u.id !== editingUnit?.id && 
+      (u.name.toLowerCase() === normalizedName || u.abbreviation.toLowerCase() === normalizedAbbr)
+    );
+    
+    if (isDuplicate) {
+      toast.error('Já existe uma unidade com este nome ou abreviação');
+      return;
+    }
+    
     try {
       if (editingUnit) {
         await supabase.from('units').update({ name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim() }).eq('id', editingUnit.id);
@@ -222,7 +236,28 @@ export function InputsManagementView() {
     }
   };
 
+  // Count inputs using each unit
+  const inputCountByUnit = useMemo(() => {
+    const counts: Record<string, number> = {};
+    inputs.forEach(input => {
+      const unitKey = input.unit?.toLowerCase().trim();
+      if (unitKey) {
+        // Match by abbreviation (case-insensitive)
+        const matchingUnit = units.find(u => u.abbreviation.toLowerCase() === unitKey);
+        if (matchingUnit) {
+          counts[matchingUnit.id] = (counts[matchingUnit.id] || 0) + 1;
+        }
+      }
+    });
+    return counts;
+  }, [inputs, units]);
+
   const deleteUnit = async (id: string) => {
+    // Check if unit has inputs associated
+    if (inputCountByUnit[id] > 0) {
+      toast.error('Não é possível remover unidade com insumos vinculados');
+      return;
+    }
     try {
       await supabase.from('units').delete().eq('id', id);
       toast.success('Unidade removida');
@@ -235,6 +270,18 @@ export function InputsManagementView() {
 
   const saveFamily = async () => {
     if (!defaultProjectId || !newFamily.name.trim()) return;
+    
+    // Check for duplicates (case-insensitive)
+    const normalizedName = newFamily.name.trim().toLowerCase();
+    const isDuplicate = families.some(f => 
+      f.id !== editingFamily?.id && f.name.toLowerCase() === normalizedName
+    );
+    
+    if (isDuplicate) {
+      toast.error('Já existe uma família com este nome');
+      return;
+    }
+    
     try {
       if (editingFamily) {
         await supabase.from('material_families').update({ name: newFamily.name.trim(), color: newFamily.color }).eq('id', editingFamily.id);
@@ -403,7 +450,10 @@ export function InputsManagementView() {
                       <div className="space-y-1">
                         {units.map(u => (
                           <div key={u.id} className={`flex items-center justify-between p-2 rounded ${editingUnit?.id === u.id ? 'bg-primary/10 border border-primary/30' : 'bg-muted/50'}`}>
-                            <span>{u.name} ({u.abbreviation})</span>
+                            <div className="flex items-center gap-2">
+                              <span>{u.name} ({u.abbreviation})</span>
+                              {inputCountByUnit[u.id] > 0 && <Badge variant="secondary" className="text-xs">{inputCountByUnit[u.id]}</Badge>}
+                            </div>
                             <div className="flex gap-1">
                               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { 
                                 if (editingUnit?.id === u.id) {
@@ -416,7 +466,7 @@ export function InputsManagementView() {
                               }}>
                                 <Edit2 className="w-3.5 h-3.5" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteUnit(u.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteUnit(u.id)} disabled={inputCountByUnit[u.id] > 0}><Trash2 className="w-3.5 h-3.5" /></Button>
                             </div>
                           </div>
                         ))}
