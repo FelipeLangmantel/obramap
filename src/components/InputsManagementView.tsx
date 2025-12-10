@@ -362,31 +362,50 @@ export function InputsManagementView() {
   };
 
   const saveFamily = async () => {
-    if (!defaultProjectId || !newFamily.name.trim()) return;
-    
-    // Check for duplicates (case-insensitive)
-    const normalizedName = newFamily.name.trim().toLowerCase();
-    const isDuplicate = families.some(f => 
-      f.id !== editingFamily?.id && f.name.toLowerCase() === normalizedName
-    );
-    
-    if (isDuplicate) {
-      toast.error('Já existe uma família com este nome');
+    if (!defaultProjectId || !newFamily.name.trim()) {
+      toast.error('Preencha o nome da família');
       return;
     }
     
+    const normalizedName = newFamily.name.trim();
+    
     try {
+      // Check for duplicates directly in database (case-insensitive)
+      const { data: existingFamilies, error: checkError } = await supabase
+        .from('material_families')
+        .select('id, name')
+        .ilike('name', normalizedName);
+      
+      if (checkError) throw checkError;
+      
+      // Check if any existing family (other than the one being edited) has the same name
+      const isDuplicate = existingFamilies?.some(f => 
+        f.id !== editingFamily?.id && f.name.toLowerCase() === normalizedName.toLowerCase()
+      );
+      
+      if (isDuplicate) {
+        toast.error(`A família "${normalizedName}" já existe no sistema. Escolha outro nome.`, {
+          duration: 5000
+        });
+        return;
+      }
+      
       if (editingFamily) {
-        await supabase.from('material_families').update({ name: newFamily.name.trim(), color: newFamily.color }).eq('id', editingFamily.id);
+        const { error } = await supabase
+          .from('material_families')
+          .update({ name: normalizedName, color: newFamily.color })
+          .eq('id', editingFamily.id);
+        if (error) throw error;
         toast.success('Família atualizada!');
       } else {
         const maxOrder = families.length > 0 ? Math.max(...families.map(f => f.lead_time_days)) + 1 : 0;
-        await supabase.from('material_families').insert({ 
-          name: newFamily.name.trim(), 
+        const { error } = await supabase.from('material_families').insert({ 
+          name: normalizedName, 
           color: newFamily.color, 
           project_id: defaultProjectId,
           display_order: maxOrder
         });
+        if (error) throw error;
         toast.success('Família cadastrada!');
       }
       setFamilyDialogOpen(false);
@@ -395,7 +414,7 @@ export function InputsManagementView() {
       loadData();
     } catch (error) {
       console.error('Error saving family:', error);
-      toast.error('Erro ao salvar');
+      toast.error('Erro ao salvar família');
     }
   };
 
