@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Plus, Trash2, Save, Package, Hammer, Wrench, Search, Filter, X, Check, ChevronDown, ChevronRight, GripVertical, Edit2 } from "lucide-react";
+import { Plus, Trash2, Save, Package, Hammer, Wrench, Search, Filter, X, Check, ChevronDown, ChevronRight, GripVertical, Edit2, FileUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { ImportBudgetItemsDialog } from "./ImportBudgetItemsDialog";
 
 interface ScopeItem {
   id?: string;
@@ -107,6 +108,7 @@ export function BudgetItemsEditor({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ index: number; item: ScopeItem } | null>(null);
   const [selectedInputsForMass, setSelectedInputsForMass] = useState<Set<string>>(new Set());
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
 
   // Load families and items
   const loadData = useCallback(async () => {
@@ -322,6 +324,38 @@ export function BudgetItemsEditor({
     toast.success(`${newItems.length} insumos adicionados!`);
   };
 
+  // Handle imported items from file
+  const handleImportedItems = async (importedItems: {
+    name: string;
+    category: 'material' | 'labor' | 'equipment';
+    quantity: number;
+    unit: string;
+    unitValue: number;
+    materialFamily: string;
+    inputId?: string;
+  }[]) => {
+    const newItems: ScopeItem[] = importedItems.map(item => ({
+      scopeId,
+      macroId,
+      name: item.name,
+      category: item.category,
+      materialFamily: item.materialFamily,
+      unitValue: item.unitValue,
+      quantity: item.quantity,
+      unit: item.unit,
+      isNew: true,
+      isEditing: true,
+      inputId: item.inputId
+    }));
+
+    // Expand all relevant families
+    const familyNames = new Set(newItems.map(i => i.category === 'material' ? i.materialFamily : 
+      i.category === 'labor' ? 'Mão de Obra' : 'Equipamentos'));
+    setExpandedFamilies(prev => new Set([...prev, ...familyNames]));
+
+    setItems(prev => [...prev, ...newItems]);
+  };
+
   // Focus on quantity input when new item is added
   useEffect(() => {
     if (newItemIndex !== null && quantityInputRef.current) {
@@ -498,10 +532,31 @@ export function BudgetItemsEditor({
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Import budget items dialog */}
+      <ImportBudgetItemsDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        projectId={projectId}
+        scopeId={scopeId}
+        macroId={macroId}
+        existingInputs={inputs}
+        families={families}
+        onImport={handleImportedItems}
+      />
+
       {/* Removed filters - search only via catalog */}
 
       {/* Add item from catalog - allows multiple selection with family filter */}
       <div className="flex gap-2 mb-3">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 gap-1.5"
+          onClick={() => setImportDialogOpen(true)}
+        >
+          <FileUp className="w-4 h-4" />
+          Importar
+        </Button>
         <Select value={catalogFamilyFilter} onValueChange={(val) => {
           setCatalogFamilyFilter(val);
           searchInputs(catalogSearchTerm, 'all', val);

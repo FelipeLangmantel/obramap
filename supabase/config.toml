@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.parse-inputs-import]
 verify_jwt = false
+
+[functions.parse-budget-items]
+verify_jwt = false
