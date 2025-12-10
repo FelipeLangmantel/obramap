@@ -67,7 +67,7 @@ export function ImportInputsDialog({
   const [newFamiliesToCreate, setNewFamiliesToCreate] = useState<Set<string>>(new Set());
   const [newUnitsToCreate, setNewUnitsToCreate] = useState<Set<string>>(new Set());
 
-  // Check for similar names (duplicates)
+  // Check for similar names (duplicates) - more strict matching
   const checkDuplicate = (name: string, existingNames: string[]): { isDuplicate: boolean; duplicateOf?: string } => {
     const normalizedName = name.trim().toLowerCase();
     
@@ -77,14 +77,40 @@ export function ImportInputsDialog({
       return { isDuplicate: true, duplicateOf: exactMatch };
     }
     
-    // Similar match (contains or is contained)
+    // Only consider duplicate if:
+    // 1. Names are nearly identical (one contains the other completely)
+    // 2. OR names share significant meaningful words (not just common words like "de", "para", etc.)
+    const commonWords = new Set(['de', 'para', 'com', 'sem', 'em', 'a', 'o', 'e', 'da', 'do', 'das', 'dos', 'um', 'uma', 'no', 'na', 'nos', 'nas', 'por', 'mm', 'cm', 'm', 'kg', 'un', 'pç', 'pc']);
+    
+    const getSignificantWords = (text: string) => {
+      return text.split(/[\s,.\-\/\\|]+/)
+        .map(w => w.toLowerCase().replace(/[^a-záàâãéèêíïóôõöúçñ0-9]/g, ''))
+        .filter(w => w.length > 2 && !commonWords.has(w));
+    };
+    
+    const words1 = getSignificantWords(normalizedName);
+    
     const similarMatch = existingNames.find(n => {
       const normalizedExisting = n.toLowerCase();
-      // Check if names are very similar (>80% common words)
-      const words1 = normalizedName.split(/\s+/);
-      const words2 = normalizedExisting.split(/\s+/);
-      const commonWords = words1.filter(w => words2.some(w2 => w2.includes(w) || w.includes(w2)));
-      return commonWords.length >= Math.min(words1.length, words2.length) * 0.8;
+      
+      // Check if one contains the other completely (minimum 10 chars to avoid false positives)
+      if (normalizedName.length >= 10 && normalizedExisting.length >= 10) {
+        if (normalizedExisting.includes(normalizedName) || normalizedName.includes(normalizedExisting)) {
+          return true;
+        }
+      }
+      
+      // Check significant word overlap - must have very high similarity
+      const words2 = getSignificantWords(normalizedExisting);
+      if (words1.length === 0 || words2.length === 0) return false;
+      
+      // Count exact word matches (not partial)
+      const exactWordMatches = words1.filter(w1 => words2.some(w2 => w1 === w2)).length;
+      const minWords = Math.min(words1.length, words2.length);
+      const maxWords = Math.max(words1.length, words2.length);
+      
+      // Require very high overlap: 90%+ of smaller set AND at least 70% of larger set
+      return exactWordMatches >= minWords * 0.9 && exactWordMatches >= maxWords * 0.7;
     });
     
     if (similarMatch) {
@@ -368,7 +394,7 @@ export function ImportInputsDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh]">
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
             {step === 'upload' ? 'Importar Insumos' : step === 'confirm_new' ? 'Novos Cadastros Detectados' : 'Revisar e Importar'}
@@ -477,7 +503,7 @@ export function ImportInputsDialog({
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="flex flex-col flex-1 space-y-4 min-h-0 overflow-hidden">
             {duplicateCount > 0 && (
               <Alert variant="destructive" className="border-amber-500 bg-amber-50 dark:bg-amber-900/20">
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
@@ -509,7 +535,7 @@ export function ImportInputsDialog({
               </Button>
             </div>
 
-            <ScrollArea className="h-[400px] border rounded-lg">
+            <ScrollArea className="flex-1 min-h-[300px] max-h-[50vh] border rounded-lg">
               <Table>
                 <TableHeader>
                   <TableRow>
