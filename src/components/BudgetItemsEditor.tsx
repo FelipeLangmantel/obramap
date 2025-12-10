@@ -187,7 +187,8 @@ export function BudgetItemsEditor({
           unit: i.unit,
           category: i.category as 'material' | 'labor' | 'equipment',
           material_family_id: i.material_family_id,
-          material_family_name: i.material_families?.name
+          material_family_name: i.material_families?.name,
+          unit_value: i.unit_value || 0
         })));
       }
 
@@ -511,6 +512,11 @@ export function BudgetItemsEditor({
                    <Wrench className="w-3.5 h-3.5 text-green-500 shrink-0" />}
                   <span className="flex-1 truncate">{input.name}</span>
                   <span className="text-muted-foreground text-xs shrink-0">{input.unit}</span>
+                  {input.unit_value && input.unit_value > 0 && (
+                    <span className="text-green-600 text-xs font-medium shrink-0">
+                      {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(input.unit_value)}
+                    </span>
+                  )}
                   <Badge variant="outline" className="text-[10px] px-1">{input.material_family_name || 'Geral'}</Badge>
                 </div>
               ))}

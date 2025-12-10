@@ -34,6 +34,7 @@ interface InputItem {
   material_family_id: string | null;
   material_family?: MaterialFamily;
   description: string | null;
+  unit_value: number;
 }
 
 interface UnitItem {
@@ -203,8 +204,8 @@ export function SuppliesView() {
   const [editingInput, setEditingInput] = useState<InputItem | null>(null);
 
   // Form states
-  const [newInput, setNewInput] = useState<{ name: string; unit: string; category: string; material_family_id: string; description: string }>({
-    name: '', unit: 'un', category: 'material', material_family_id: '', description: ''
+  const [newInput, setNewInput] = useState<{ name: string; unit: string; category: string; material_family_id: string; description: string; unit_value: number }>({
+    name: '', unit: 'un', category: 'material', material_family_id: '', description: '', unit_value: 0
   });
   const [newUnit, setNewUnit] = useState<{ name: string; abbreviation: string }>({ name: '', abbreviation: '' });
   const [newSupplier, setNewSupplier] = useState<Partial<Supplier>>({ supplier_type: 'material' });
@@ -275,7 +276,7 @@ export function SuppliesView() {
           supabase.from('units').select('*').eq('project_id', projectId).order('name'),
           supabase.from('material_families').select('*').eq('project_id', projectId).order('display_order')
         ]);
-        if (inputsRes.data) setInputs(inputsRes.data.map((i: any) => ({ ...i, material_family: i.material_families, category: i.category as 'material' | 'labor' | 'equipment' })));
+        if (inputsRes.data) setInputs(inputsRes.data.map((i: any) => ({ ...i, material_family: i.material_families, category: i.category as 'material' | 'labor' | 'equipment', unit_value: i.unit_value || 0 })));
         if (unitsRes.data) setUnits(unitsRes.data);
         if (familiesRes.data) setFamilies(familiesRes.data.map(f => ({ id: f.id, name: f.name, color: f.color || '#9ca3af' })));
       } else if (tab === 'quotations') {
@@ -375,7 +376,8 @@ export function SuppliesView() {
         unit: newInput.unit,
         category: newInput.category,
         material_family_id: newInput.material_family_id || null,
-        description: newInput.description || null
+        description: newInput.description || null,
+        unit_value: newInput.unit_value || 0
       };
       
       if (editingInput) {
@@ -386,7 +388,7 @@ export function SuppliesView() {
         toast.success('Insumo cadastrado!');
       }
       setInputDialogOpen(false);
-      setNewInput({ name: '', unit: 'un', category: 'material', material_family_id: '', description: '' });
+      setNewInput({ name: '', unit: 'un', category: 'material', material_family_id: '', description: '', unit_value: 0 });
       setEditingInput(null);
       setDataLoaded(prev => ({ ...prev, inputs: false }));
       loadTabData('inputs');
@@ -891,13 +893,13 @@ export function SuppliesView() {
               </Dialog>
               
               {canEdit && (
-                <Dialog open={inputDialogOpen} onOpenChange={(o) => { setInputDialogOpen(o); if (!o) { setEditingInput(null); setNewInput({ name: '', unit: 'un', category: 'material', material_family_id: '', description: '' }); } }}>
+                <Dialog open={inputDialogOpen} onOpenChange={(o) => { setInputDialogOpen(o); if (!o) { setEditingInput(null); setNewInput({ name: '', unit: 'un', category: 'material', material_family_id: '', description: '', unit_value: 0 }); } }}>
                   <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-1" />Novo Insumo</Button></DialogTrigger>
                   <DialogContent>
                     <DialogHeader><DialogTitle>{editingInput ? 'Editar' : 'Cadastrar'} Insumo</DialogTitle></DialogHeader>
                     <div className="space-y-4">
                       <div><Label>Nome *</Label><Input value={newInput.name} onChange={(e) => setNewInput({ ...newInput, name: e.target.value })} /></div>
-                      <div className="grid grid-cols-3 gap-4">
+                      <div className="grid grid-cols-4 gap-4">
                         <div><Label>Categoria *</Label>
                           <Select value={newInput.category} onValueChange={(v) => setNewInput({ ...newInput, category: v })}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -921,6 +923,16 @@ export function SuppliesView() {
                             <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                             <SelectContent>{families.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}</SelectContent>
                           </Select>
+                        </div>
+                        <div><Label>Valor Unitário (R$)</Label>
+                          <Input 
+                            type="number" 
+                            value={newInput.unit_value} 
+                            onChange={(e) => setNewInput({ ...newInput, unit_value: parseFloat(e.target.value) || 0 })} 
+                            placeholder="0,00"
+                            min="0"
+                            step="0.01"
+                          />
                         </div>
                       </div>
                       <div><Label>Descrição</Label><Textarea value={newInput.description} onChange={(e) => setNewInput({ ...newInput, description: e.target.value })} /></div>
@@ -985,13 +997,16 @@ export function SuppliesView() {
                                   </TableCell>
                                   <TableCell className="font-medium">{input.name}</TableCell>
                                   <TableCell className="w-20">{input.unit}</TableCell>
+                                  <TableCell className="w-28 text-right">
+                                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(input.unit_value || 0)}
+                                  </TableCell>
                                   <TableCell className="w-24">
                                     <Badge variant="outline">{CATEGORY_LABELS[input.category]}</Badge>
                                   </TableCell>
                                   <TableCell className="w-20">
                                     {canEdit && (
                                       <div className="flex gap-1">
-                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingInput(input); setNewInput({ name: input.name, unit: input.unit, category: input.category, material_family_id: input.material_family_id || '', description: input.description || '' }); setInputDialogOpen(true); }}><Edit2 className="w-3.5 h-3.5" /></Button>
+                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingInput(input); setNewInput({ name: input.name, unit: input.unit, category: input.category, material_family_id: input.material_family_id || '', description: input.description || '', unit_value: input.unit_value || 0 }); setInputDialogOpen(true); }}><Edit2 className="w-3.5 h-3.5" /></Button>
                                         <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => confirmDeleteInput(input)}><Trash2 className="w-3.5 h-3.5" /></Button>
                                       </div>
                                     )}
