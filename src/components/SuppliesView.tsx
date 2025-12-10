@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Package, Truck, FileText, Clock, AlertTriangle, CheckCircle2, Plus, Settings, Users, Search, Calendar, DollarSign, Loader2, Eye, Edit2, Trash2, Send, Check, X, Box, Layers, Hammer, Wrench } from "lucide-react";
+import { Package, Truck, FileText, Clock, AlertTriangle, CheckCircle2, Plus, Settings, Users, Search, Calendar, DollarSign, Loader2, Eye, Edit2, Trash2, Send, Check, X, Box, Layers, Hammer, Wrench, ChevronDown, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -220,6 +222,9 @@ export function SuppliesView() {
   const [searchInput, setSearchInput] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [supplierTypeFilter, setSupplierTypeFilter] = useState<string>('all');
+  const [expandedFamilies, setExpandedFamilies] = useState<Set<string>>(new Set());
+  const [deleteInputDialogOpen, setDeleteInputDialogOpen] = useState(false);
+  const [inputToDelete, setInputToDelete] = useState<InputItem | null>(null);
 
   // Load minimal data for alerts on mount
   const loadAlertData = useCallback(async () => {
@@ -337,6 +342,32 @@ export function SuppliesView() {
   // CRUD operations
   const saveInput = async () => {
     if (!projectId || !newInput.name.trim()) return;
+    
+    // Check for duplicates
+    const normalizedName = newInput.name.trim().toLowerCase();
+    const existingInput = inputs.find(i => 
+      i.id !== editingInput?.id && 
+      i.name.toLowerCase() === normalizedName
+    );
+    
+    if (existingInput) {
+      toast.error(`Já existe um insumo com o nome "${existingInput.name}". Verifique se não é duplicado.`);
+      return;
+    }
+    
+    // Check for similar names
+    const similarInputs = inputs.filter(i => 
+      i.id !== editingInput?.id && 
+      (i.name.toLowerCase().includes(normalizedName) || normalizedName.includes(i.name.toLowerCase()))
+    );
+    
+    if (similarInputs.length > 0 && !editingInput) {
+      const similarNames = similarInputs.slice(0, 3).map(i => i.name).join(', ');
+      if (!window.confirm(`Foram encontrados insumos semelhantes: ${similarNames}. Deseja continuar mesmo assim?`)) {
+        return;
+      }
+    }
+    
     try {
       const payload = {
         project_id: projectId,
@@ -365,19 +396,40 @@ export function SuppliesView() {
     }
   };
 
-  const deleteInput = async (id: string) => {
+  const confirmDeleteInput = (input: InputItem) => {
+    setInputToDelete(input);
+    setDeleteInputDialogOpen(true);
+  };
+
+  const executeDeleteInput = async () => {
+    if (!inputToDelete) return;
     try {
-      await supabase.from('inputs').delete().eq('id', id);
-      toast.success('Insumo removido');
-      setInputs(prev => prev.filter(i => i.id !== id));
+      await supabase.from('inputs').delete().eq('id', inputToDelete.id);
+      toast.success('Insumo removido permanentemente');
+      setInputs(prev => prev.filter(i => i.id !== inputToDelete.id));
     } catch (error) {
       console.error('Error deleting input:', error);
       toast.error('Erro ao remover');
+    } finally {
+      setDeleteInputDialogOpen(false);
+      setInputToDelete(null);
     }
   };
 
   const saveUnit = async () => {
     if (!projectId || !newUnit.name.trim() || !newUnit.abbreviation.trim()) return;
+    
+    // Check for duplicate abbreviation
+    const existingUnit = units.find(u => 
+      u.id !== editingUnit?.id && 
+      u.abbreviation.toLowerCase() === newUnit.abbreviation.trim().toLowerCase()
+    );
+    
+    if (existingUnit) {
+      toast.error(`Já existe uma unidade com a abreviação "${existingUnit.abbreviation}".`);
+      return;
+    }
+    
     try {
       if (editingUnit) {
         await supabase.from('units').update({ name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim() }).eq('id', editingUnit.id);
@@ -399,6 +451,18 @@ export function SuppliesView() {
 
   const saveFamily = async () => {
     if (!projectId || !newFamily.name.trim()) return;
+    
+    // Check for duplicate family name
+    const existingFamily = families.find(f => 
+      f.id !== editingFamily?.id && 
+      f.name.toLowerCase() === newFamily.name.trim().toLowerCase()
+    );
+    
+    if (existingFamily) {
+      toast.error(`Já existe uma família com o nome "${existingFamily.name}".`);
+      return;
+    }
+    
     try {
       if (editingFamily) {
         await supabase.from('material_families').update({ name: newFamily.name.trim(), color: newFamily.color }).eq('id', editingFamily.id);
@@ -657,6 +721,15 @@ export function SuppliesView() {
   const formatCurrency = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
   // Filtered data
+  const toggleFamily = (familyName: string) => {
+    setExpandedFamilies(prev => {
+      const next = new Set(prev);
+      if (next.has(familyName)) next.delete(familyName);
+      else next.add(familyName);
+      return next;
+    });
+  };
+
   const filteredInputs = useMemo(() => {
     return inputs.filter(i => {
       const matchSearch = !searchInput || i.name.toLowerCase().includes(searchInput.toLowerCase());
@@ -862,47 +935,75 @@ export function SuppliesView() {
             </div>
           </div>
 
-          {/* Inputs grouped by family */}
+          {/* Delete input confirmation dialog */}
+          <AlertDialog open={deleteInputDialogOpen} onOpenChange={setDeleteInputDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Tem certeza que deseja excluir o insumo "{inputToDelete?.name}"? 
+                  Esta ação é permanente.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setInputToDelete(null)}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={executeDeleteInput} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Excluir
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Inputs grouped by family - collapsible */}
           <ScrollArea className="h-[calc(100vh-280px)]">
-            <div className="space-y-4">
+            <div className="space-y-2">
               {Object.entries(inputsByFamily).map(([familyName, familyInputs]) => {
                 const family = families.find(f => f.name === familyName);
+                const isExpanded = expandedFamilies.has(familyName);
+                
                 return (
-                  <Card key={familyName}>
-                    <CardHeader className="py-3 px-4">
-                      <CardTitle className="flex items-center gap-2 text-sm">
-                        {family && <div className="w-3 h-3 rounded-full" style={{ backgroundColor: family.color }} />}
-                        {familyName}
-                        <Badge variant="secondary" className="ml-auto">{familyInputs.length}</Badge>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                      <Table>
-                        <TableBody>
-                          {familyInputs.map(input => (
-                            <TableRow key={input.id}>
-                              <TableCell className="w-10">
-                                {input.category === 'material' ? <Package className="w-4 h-4 text-blue-500" /> : input.category === 'labor' ? <Hammer className="w-4 h-4 text-orange-500" /> : <Wrench className="w-4 h-4 text-green-500" />}
-                              </TableCell>
-                              <TableCell className="font-medium">{input.name}</TableCell>
-                              <TableCell className="w-20">{input.unit}</TableCell>
-                              <TableCell className="w-24">
-                                <Badge variant="outline">{CATEGORY_LABELS[input.category]}</Badge>
-                              </TableCell>
-                              <TableCell className="w-20">
-                                {canEdit && (
-                                  <div className="flex gap-1">
-                                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingInput(input); setNewInput({ name: input.name, unit: input.unit, category: input.category, material_family_id: input.material_family_id || '', description: input.description || '' }); setInputDialogOpen(true); }}><Edit2 className="w-3.5 h-3.5" /></Button>
-                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteInput(input.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                                  </div>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
+                  <Collapsible key={familyName} open={isExpanded} onOpenChange={() => toggleFamily(familyName)}>
+                    <CollapsibleTrigger asChild>
+                      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted/80 transition-colors">
+                        <div className="flex items-center gap-2">
+                          {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                          {family && <div className="w-3 h-3 rounded-full" style={{ backgroundColor: family.color }} />}
+                          <span className="font-medium">{familyName}</span>
+                          <Badge variant="secondary">{familyInputs.length}</Badge>
+                        </div>
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <Card className="mt-1 border-l-4" style={{ borderLeftColor: family?.color || '#9ca3af' }}>
+                        <CardContent className="p-0">
+                          <Table>
+                            <TableBody>
+                              {familyInputs.map(input => (
+                                <TableRow key={input.id}>
+                                  <TableCell className="w-10">
+                                    {input.category === 'material' ? <Package className="w-4 h-4 text-blue-500" /> : input.category === 'labor' ? <Hammer className="w-4 h-4 text-orange-500" /> : <Wrench className="w-4 h-4 text-green-500" />}
+                                  </TableCell>
+                                  <TableCell className="font-medium">{input.name}</TableCell>
+                                  <TableCell className="w-20">{input.unit}</TableCell>
+                                  <TableCell className="w-24">
+                                    <Badge variant="outline">{CATEGORY_LABELS[input.category]}</Badge>
+                                  </TableCell>
+                                  <TableCell className="w-20">
+                                    {canEdit && (
+                                      <div className="flex gap-1">
+                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingInput(input); setNewInput({ name: input.name, unit: input.unit, category: input.category, material_family_id: input.material_family_id || '', description: input.description || '' }); setInputDialogOpen(true); }}><Edit2 className="w-3.5 h-3.5" /></Button>
+                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => confirmDeleteInput(input)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                                      </div>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </CardContent>
+                      </Card>
+                    </CollapsibleContent>
+                  </Collapsible>
                 );
               })}
               {Object.keys(inputsByFamily).length === 0 && (

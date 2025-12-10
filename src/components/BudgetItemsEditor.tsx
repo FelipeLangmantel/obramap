@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Plus, Trash2, Save, Package, Hammer, Wrench, Search, Filter, Settings, X, Check, ChevronDown, ChevronRight, GripVertical } from "lucide-react";
+import { Plus, Trash2, Save, Package, Hammer, Wrench, Search, Filter, X, Check, ChevronDown, ChevronRight, GripVertical, Edit2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -38,6 +39,7 @@ interface InputItem {
   id: string;
   name: string;
   unit: string;
+  category: 'material' | 'labor' | 'equipment';
   material_family_id: string | null;
   material_family_name?: string;
 }
@@ -95,10 +97,12 @@ export function BudgetItemsEditor({
   const [searchTerm, setSearchTerm] = useState("");
   const [filterFamily, setFilterFamily] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
-  const [expandedFamilies, setExpandedFamilies] = useState<Set<string>>(new Set(['all']));
+  const [expandedFamilies, setExpandedFamilies] = useState<Set<string>>(new Set());
   const [inputSuggestions, setInputSuggestions] = useState<InputItem[]>([]);
   const [showSuggestions, setShowSuggestions] = useState<number | null>(null);
-  const [inputSearchTerm, setInputSearchTerm] = useState("");
+  const [catalogSearchTerm, setCatalogSearchTerm] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{ index: number; item: ScopeItem } | null>(null);
 
   // Load families and items
   const loadData = useCallback(async () => {
@@ -180,6 +184,7 @@ export function BudgetItemsEditor({
           id: i.id,
           name: i.name,
           unit: i.unit,
+          category: i.category as 'material' | 'labor' | 'equipment',
           material_family_id: i.material_family_id,
           material_family_name: i.material_families?.name
         })));
@@ -203,14 +208,18 @@ export function BudgetItemsEditor({
   }, [projectId, scopeId]);
 
   // Search inputs as user types
-  const searchInputs = (query: string) => {
+  const searchInputs = useCallback((query: string, categoryFilter?: string) => {
     if (!query || query.length < 2) {
       setInputSuggestions([]);
       return;
     }
-    const filtered = inputs.filter(i => i.name.toLowerCase().includes(query.toLowerCase())).slice(0, 5);
+    const filtered = inputs.filter(i => {
+      const matchesName = i.name.toLowerCase().includes(query.toLowerCase());
+      const matchesCategory = !categoryFilter || categoryFilter === 'all' || i.category === categoryFilter;
+      return matchesName && matchesCategory;
+    }).slice(0, 8);
     setInputSuggestions(filtered);
-  };
+  }, [inputs]);
 
   // Select an input from suggestions
   const selectInput = (index: number, input: InputItem) => {
@@ -251,7 +260,7 @@ export function BudgetItemsEditor({
       scopeId,
       macroId,
       name: input.name,
-      category: 'material', // Will be set from input
+      category: input.category || 'material',
       materialFamily: familyName,
       unitValue: 0,
       quantity: 1,
@@ -263,6 +272,7 @@ export function BudgetItemsEditor({
     setItems([...items, newItem]);
     setShowSuggestions(null);
     setInputSuggestions([]);
+    setCatalogSearchTerm("");
   };
 
   // Save item
@@ -312,20 +322,33 @@ export function BudgetItemsEditor({
     }
   };
 
-  // Delete item
-  const deleteItem = async (index: number) => {
+  // Confirm delete item
+  const confirmDeleteItem = (index: number) => {
     const item = items[index];
+    setItemToDelete({ index, item });
+    setDeleteDialogOpen(true);
+  };
+
+  // Delete item after confirmation
+  const executeDeleteItem = async () => {
+    if (!itemToDelete) return;
+    
+    const { index, item } = itemToDelete;
     if (item.id) {
       try {
         await supabase.from('scope_items').delete().eq('id', item.id);
       } catch (error) {
         console.error('Error deleting:', error);
         toast.error('Erro ao remover');
+        setDeleteDialogOpen(false);
+        setItemToDelete(null);
         return;
       }
     }
     setItems(items.filter((_, i) => i !== index));
-    toast.success('Item removido');
+    toast.success('Item removido permanentemente');
+    setDeleteDialogOpen(false);
+    setItemToDelete(null);
   };
 
   // Update item field
@@ -393,12 +416,31 @@ export function BudgetItemsEditor({
 
   return (
     <div className={`flex flex-col ${compact ? 'h-[400px]' : 'h-full'}`}>
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o item "{itemToDelete?.item.name}"? 
+              Esta ação é permanente e os valores serão recalculados automaticamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setItemToDelete(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={executeDeleteItem} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Header with filters */}
       <div className="flex flex-wrap gap-2 mb-3">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar item..."
+            placeholder="Filtrar itens..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-8 h-9"
@@ -428,44 +470,54 @@ export function BudgetItemsEditor({
             ))}
           </SelectContent>
         </Select>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9"
-          onClick={() => window.open('?tab=inputs', '_self')}
-          title="Gerenciar famílias de materiais no módulo de Suprimentos"
-        >
-          <Settings className="w-4 h-4" />
-        </Button>
       </div>
 
       {/* Add item from catalog */}
       <div className="flex gap-2 mb-3">
         <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar insumo no cadastro para adicionar..."
-            value={searchTerm}
+            placeholder="Buscar insumo, mão de obra ou equipamento no cadastro..."
+            value={catalogSearchTerm}
             onChange={(e) => {
-              setSearchTerm(e.target.value);
-              searchInputs(e.target.value);
+              setCatalogSearchTerm(e.target.value);
+              searchInputs(e.target.value, filterCategory);
               setShowSuggestions(-1);
             }}
-            onFocus={() => setShowSuggestions(-1)}
-            className="h-9"
+            onFocus={() => {
+              if (catalogSearchTerm.length >= 2) {
+                searchInputs(catalogSearchTerm, filterCategory);
+                setShowSuggestions(-1);
+              }
+            }}
+            onBlur={() => {
+              // Delay to allow click on suggestion
+              setTimeout(() => setShowSuggestions(null), 200);
+            }}
+            className="h-9 pl-8"
           />
           {showSuggestions === -1 && inputSuggestions.length > 0 && (
-            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg max-h-[200px] overflow-auto">
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg max-h-[250px] overflow-auto">
               {inputSuggestions.map(input => (
                 <div
                   key={input.id}
-                  className="px-3 py-2 hover:bg-muted cursor-pointer text-sm flex items-center justify-between"
-                  onClick={() => { addItemFromInput(input); setSearchTerm(''); }}
+                  className="px-3 py-2 hover:bg-muted cursor-pointer text-sm flex items-center gap-2"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => addItemFromInput(input)}
                 >
-                  <span>{input.name}</span>
-                  <span className="text-muted-foreground text-xs">{input.unit} - {input.material_family_name || 'Geral'}</span>
+                  {input.category === 'material' ? <Package className="w-3.5 h-3.5 text-blue-500 shrink-0" /> : 
+                   input.category === 'labor' ? <Hammer className="w-3.5 h-3.5 text-orange-500 shrink-0" /> : 
+                   <Wrench className="w-3.5 h-3.5 text-green-500 shrink-0" />}
+                  <span className="flex-1 truncate">{input.name}</span>
+                  <span className="text-muted-foreground text-xs shrink-0">{input.unit}</span>
+                  <Badge variant="outline" className="text-[10px] px-1">{input.material_family_name || 'Geral'}</Badge>
                 </div>
               ))}
+            </div>
+          )}
+          {showSuggestions === -1 && catalogSearchTerm.length >= 2 && inputSuggestions.length === 0 && (
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg p-3 text-center text-sm text-muted-foreground">
+              Nenhum insumo encontrado. Cadastre no módulo de Suprimentos.
             </div>
           )}
         </div>
@@ -475,8 +527,9 @@ export function BudgetItemsEditor({
       <ScrollArea className="flex-1">
         <div className="space-y-2 pr-2">
           {Object.entries(itemsByFamily).map(([family, familyItems]) => {
-            const isExpanded = expandedFamilies.has(family) || expandedFamilies.has('all');
+            const isExpanded = expandedFamilies.has(family);
             const familyTotal = familyItems.reduce((sum, i) => sum + i.unitValue * i.quantity, 0);
+            const familyData = families.find(f => f.name === family);
             
             return (
               <Collapsible key={family} open={isExpanded} onOpenChange={() => toggleFamily(family)}>
@@ -484,6 +537,7 @@ export function BudgetItemsEditor({
                   <div className="flex items-center justify-between p-2 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted/80 transition-colors">
                     <div className="flex items-center gap-2">
                       {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      {familyData && <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: familyData.color }} />}
                       <span className="font-medium text-sm">{family}</span>
                       <Badge variant="secondary" className="text-xs">{familyItems.length}</Badge>
                     </div>
@@ -581,11 +635,11 @@ export function BudgetItemsEditor({
                                   >
                                     <Check className="w-4 h-4" />
                                   </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-7 w-7 text-destructive"
-                                    onClick={() => deleteItem(originalIndex)}
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-destructive"
+                                  onClick={() => confirmDeleteItem(originalIndex)}
                                   >
                                     <X className="w-4 h-4" />
                                   </Button>
@@ -611,13 +665,13 @@ export function BudgetItemsEditor({
                                   className="h-7 w-7"
                                   onClick={() => updateItem(originalIndex, 'isEditing', true)}
                                 >
-                                  <Settings className="w-3.5 h-3.5" />
+                                  <Edit2 className="w-3.5 h-3.5" />
                                 </Button>
                                 <Button
                                   size="icon"
                                   variant="ghost"
                                   className="h-7 w-7 text-destructive"
-                                  onClick={() => deleteItem(originalIndex)}
+                                  onClick={() => confirmDeleteItem(originalIndex)}
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </Button>
