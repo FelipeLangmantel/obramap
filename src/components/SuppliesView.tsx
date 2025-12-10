@@ -382,7 +382,22 @@ export function SuppliesView() {
       
       if (editingInput) {
         await supabase.from('inputs').update(payload).eq('id', editingInput.id);
-        toast.success('Insumo atualizado!');
+        
+        // Auto-update scope_items that use this input
+        const { error: updateError } = await supabase
+          .from('scope_items')
+          .update({ 
+            name: newInput.name.trim(), 
+            unit: newInput.unit,
+            unit_value: newInput.unit_value || 0 
+          })
+          .eq('input_id', editingInput.id);
+        
+        if (updateError) {
+          console.error('Error updating scope_items:', updateError);
+        }
+        
+        toast.success('Insumo atualizado! Orçamentos atualizados automaticamente.');
       } else {
         await supabase.from('inputs').insert(payload);
         toast.success('Insumo cadastrado!');
@@ -434,8 +449,18 @@ export function SuppliesView() {
     
     try {
       if (editingUnit) {
-        await supabase.from('units').update({ name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim() }).eq('id', editingUnit.id);
-        toast.success('Unidade atualizada!');
+        const oldAbbreviation = editingUnit.abbreviation;
+        const newAbbreviation = newUnit.abbreviation.trim();
+        
+        await supabase.from('units').update({ name: newUnit.name.trim(), abbreviation: newAbbreviation }).eq('id', editingUnit.id);
+        
+        // Update all inputs using this unit
+        await supabase.from('inputs').update({ unit: newAbbreviation }).eq('project_id', projectId).eq('unit', oldAbbreviation);
+        
+        // Update all scope_items using this unit
+        await supabase.from('scope_items').update({ unit: newAbbreviation }).eq('project_id', projectId).eq('unit', oldAbbreviation);
+        
+        toast.success('Unidade atualizada! Orçamentos atualizados automaticamente.');
       } else {
         await supabase.from('units').insert({ project_id: projectId, name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim() });
         toast.success('Unidade cadastrada!');
@@ -799,6 +824,20 @@ export function SuppliesView() {
                             <p className="font-medium text-sm">{alert.message}</p>
                             <Badge variant="outline" className="text-xs mt-1">{CATEGORY_LABELS[alert.category as keyof typeof CATEGORY_LABELS] || alert.category}</Badge>
                           </div>
+                          {alert.category === 'labor' && canEdit && (
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="shrink-0"
+                              onClick={() => {
+                                setSupplierTypeFilter('labor');
+                                setActiveTab('suppliers');
+                              }}
+                            >
+                              <Hammer className="w-3 h-3 mr-1" />
+                              Contratar
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1102,65 +1141,160 @@ export function SuppliesView() {
             </div>
           )}
           <ScrollArea className="h-[calc(100vh-300px)]">
-            <div className="space-y-3">
-              {quotations.map(quotation => (
-                <Card key={quotation.id}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div><h3 className="font-semibold">{quotation.title}</h3><p className="text-sm text-muted-foreground">{format(new Date(quotation.created_at), "dd/MM/yyyy", { locale: ptBR })}</p></div>
-                      <div className="flex items-center gap-2">
-                        <Badge className={STATUS_COLORS[quotation.status]}>{STATUS_LABELS[quotation.status]}</Badge>
-                        <Badge variant="outline">Até {format(new Date(quotation.required_date), "dd/MM/yyyy", { locale: ptBR })}</Badge>
+            <div className="space-y-4">
+              {quotations.map(quotation => {
+                const allItemsHaveSelection = quotation.items?.every(item => item.quotes?.some(q => q.is_selected)) || false;
+                const totalValue = quotation.items?.reduce((sum, item) => {
+                  const selectedQuote = item.quotes?.find(q => q.is_selected);
+                  return sum + (selectedQuote ? selectedQuote.unit_value * item.quantity : 0);
+                }, 0) || 0;
+                
+                return (
+                  <Card key={quotation.id} className={`transition-all ${quotation.status === 'approved' ? 'border-green-300 bg-green-50/30 dark:bg-green-900/10' : quotation.status === 'pending' && allItemsHaveSelection ? 'border-blue-300 ring-2 ring-blue-100' : ''}`}>
+                    <CardContent className="p-0">
+                      {/* Header */}
+                      <div className="flex items-center justify-between p-4 border-b bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${quotation.status === 'approved' ? 'bg-green-100 text-green-600' : quotation.status === 'pending' ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-600'}`}>
+                            {quotation.status === 'approved' ? <CheckCircle2 className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-base">{quotation.title}</h3>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Calendar className="w-3 h-3" />
+                              <span>Criada em {format(new Date(quotation.created_at), "dd/MM/yyyy", { locale: ptBR })}</span>
+                              <span>•</span>
+                              <span>Necessária até {format(new Date(quotation.required_date), "dd/MM/yyyy", { locale: ptBR })}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Badge className={`${STATUS_COLORS[quotation.status]} text-white`}>{STATUS_LABELS[quotation.status]}</Badge>
+                          {totalValue > 0 && (
+                            <div className="text-right">
+                              <p className="text-xs text-muted-foreground">Total Selecionado</p>
+                              <p className="font-bold text-lg text-green-600">{formatCurrency(totalValue)}</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    {quotation.items && quotation.items.length > 0 && (
-                      <div className="space-y-2 mb-3">
-                        <Table>
-                          <TableHeader><TableRow><TableHead>Item</TableHead><TableHead>Qtd</TableHead><TableHead>Cotação 1</TableHead><TableHead>Cotação 2</TableHead><TableHead>Cotação 3</TableHead><TableHead className="w-[80px]">Seleção</TableHead></TableRow></TableHeader>
-                          <TableBody>
+                      
+                      {/* Items */}
+                      {quotation.items && quotation.items.length > 0 && (
+                        <div className="p-4">
+                          <div className="grid gap-3">
                             {quotation.items.map(item => {
                               const quotes = item.quotes || [];
                               const selectedQuote = quotes.find(q => q.is_selected);
+                              const lowestQuote = quotes.length > 0 ? quotes.reduce((min, q) => q.unit_value < min.unit_value ? q : min, quotes[0]) : null;
+                              
                               return (
-                                <TableRow key={item.id}>
-                                  <TableCell className="font-medium">{item.name}</TableCell>
-                                  <TableCell>{item.quantity} {item.unit}</TableCell>
-                                  {[0, 1, 2].map(i => {
-                                    const quote = quotes[i];
-                                    return (
-                                      <TableCell key={i} className={quote?.is_selected ? 'bg-green-50 dark:bg-green-900/20' : ''}>
-                                        {quote ? (
-                                          <div className="text-sm">
-                                            <p className="font-medium">{quote.supplier?.name}</p>
-                                            <p className="text-muted-foreground">{formatCurrency(quote.unit_value)}/un</p>
-                                            <p className="text-xs text-muted-foreground">{quote.delivery_days} dias</p>
-                                            {canEdit && quotation.status === 'pending' && (
-                                              <Button size="sm" variant={quote.is_selected ? "default" : "outline"} className="mt-1 h-6 text-xs" onClick={() => selectQuote(item.id, quote.id)}>
-                                                {quote.is_selected ? <Check className="w-3 h-3" /> : 'Selecionar'}
-                                              </Button>
-                                            )}
-                                          </div>
-                                        ) : <span className="text-muted-foreground text-sm">-</span>}
-                                      </TableCell>
-                                    );
-                                  })}
-                                  <TableCell>{selectedQuote && <Badge variant="outline" className="bg-green-100">{selectedQuote.supplier?.name}</Badge>}</TableCell>
-                                </TableRow>
+                                <div key={item.id} className={`p-3 rounded-lg border ${selectedQuote ? 'border-green-200 bg-green-50/50 dark:bg-green-900/10' : 'border-muted'}`}>
+                                  <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                      <Package className="w-4 h-4 text-blue-500" />
+                                      <span className="font-medium">{item.name}</span>
+                                      <Badge variant="secondary" className="text-xs">{item.quantity} {item.unit}</Badge>
+                                    </div>
+                                    {selectedQuote && (
+                                      <div className="flex items-center gap-2">
+                                        <Check className="w-4 h-4 text-green-500" />
+                                        <span className="text-sm font-medium text-green-600">{selectedQuote.supplier?.name}</span>
+                                        <span className="text-sm font-bold">{formatCurrency(selectedQuote.unit_value * item.quantity)}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Quote cards */}
+                                  <div className="grid grid-cols-3 gap-2">
+                                    {[0, 1, 2].map(i => {
+                                      const quote = quotes[i];
+                                      const isLowest = quote && lowestQuote && quote.id === lowestQuote.id;
+                                      
+                                      return (
+                                        <div 
+                                          key={i} 
+                                          className={`p-2 rounded-lg border-2 transition-all cursor-pointer ${
+                                            quote?.is_selected 
+                                              ? 'border-green-500 bg-green-50 dark:bg-green-900/20' 
+                                              : quote 
+                                                ? 'border-muted hover:border-primary/50 hover:bg-muted/50' 
+                                                : 'border-dashed border-muted-foreground/20'
+                                          }`}
+                                          onClick={() => {
+                                            if (quote && canEdit && quotation.status === 'pending') {
+                                              selectQuote(item.id, quote.id);
+                                            }
+                                          }}
+                                        >
+                                          {quote ? (
+                                            <div className="text-center">
+                                              <p className="font-medium text-sm truncate">{quote.supplier?.name}</p>
+                                              <p className={`text-lg font-bold ${isLowest ? 'text-green-600' : ''}`}>
+                                                {formatCurrency(quote.unit_value)}
+                                                <span className="text-xs font-normal text-muted-foreground">/un</span>
+                                              </p>
+                                              <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
+                                                <Truck className="w-3 h-3" />
+                                                {quote.delivery_days} dias
+                                              </div>
+                                              {isLowest && !quote.is_selected && (
+                                                <Badge variant="secondary" className="text-[10px] mt-1 bg-green-100 text-green-700">Menor preço</Badge>
+                                              )}
+                                              {quote.is_selected && (
+                                                <Badge className="text-[10px] mt-1 bg-green-500">
+                                                  <Check className="w-2.5 h-2.5 mr-0.5" />Selecionado
+                                                </Badge>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <div className="text-center py-2 text-muted-foreground text-xs">
+                                              Cotação {i + 1}
+                                              <br />
+                                              <span className="text-[10px]">Não preenchida</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
                               );
                             })}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-                    {canEdit && quotation.status === 'pending' && (
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => { setSelectedQuotation(quotation); setQuoteDetailsDialogOpen(true); }}><Edit2 className="w-3 h-3 mr-1" />Editar Cotações</Button>
-                        <Button size="sm" onClick={() => approveQuotation(quotation)}><Check className="w-3 h-3 mr-1" />Aprovar e Gerar Pedido</Button>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Footer actions */}
+                      {canEdit && quotation.status === 'pending' && (
+                        <div className="flex items-center justify-between p-4 border-t bg-muted/20">
+                          <Button size="sm" variant="outline" onClick={() => { setSelectedQuotation(quotation); setQuoteDetailsDialogOpen(true); }}>
+                            <Edit2 className="w-3 h-3 mr-1" />Editar Cotações
+                          </Button>
+                          <Button 
+                            size="default" 
+                            className={allItemsHaveSelection ? 'bg-green-600 hover:bg-green-700' : ''}
+                            disabled={!allItemsHaveSelection}
+                            onClick={() => approveQuotation(quotation)}
+                          >
+                            <Check className="w-4 h-4 mr-1" />
+                            {allItemsHaveSelection ? `Aprovar e Gerar Pedido (${formatCurrency(totalValue)})` : 'Selecione todos os fornecedores'}
+                          </Button>
+                        </div>
+                      )}
+                      
+                      {quotation.status === 'approved' && (
+                        <div className="flex items-center justify-center p-4 border-t bg-green-50/50 dark:bg-green-900/10">
+                          <div className="flex items-center gap-2 text-green-600">
+                            <CheckCircle2 className="w-5 h-5" />
+                            <span className="font-medium">Cotação aprovada - Pedidos gerados</span>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
               {quotations.length === 0 && <Card><CardContent className="p-8 text-center text-muted-foreground">Nenhuma cotação criada</CardContent></Card>}
             </div>
           </ScrollArea>
