@@ -144,6 +144,116 @@ export type Database = {
           },
         ]
       }
+      inputs: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          material_family_id: string | null
+          name: string
+          project_id: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          material_family_id?: string | null
+          name: string
+          project_id: string
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          material_family_id?: string | null
+          name?: string
+          project_id?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inputs_material_family_id_fkey"
+            columns: ["material_family_id"]
+            isOneToOne: false
+            referencedRelation: "material_families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inputs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      labor_contracts: {
+        Row: {
+          contracted_houses: number
+          contractor_name: string | null
+          created_at: string
+          executed_houses: number
+          id: string
+          macro_id: string
+          macro_name: string
+          notes: string | null
+          project_id: string
+          scope_id: string
+          scope_name: string
+          status: string
+          total_value: number
+          unit_value: number
+          updated_at: string
+        }
+        Insert: {
+          contracted_houses?: number
+          contractor_name?: string | null
+          created_at?: string
+          executed_houses?: number
+          id?: string
+          macro_id: string
+          macro_name: string
+          notes?: string | null
+          project_id: string
+          scope_id: string
+          scope_name: string
+          status?: string
+          total_value?: number
+          unit_value?: number
+          updated_at?: string
+        }
+        Update: {
+          contracted_houses?: number
+          contractor_name?: string | null
+          created_at?: string
+          executed_houses?: number
+          id?: string
+          macro_id?: string
+          macro_name?: string
+          notes?: string | null
+          project_id?: string
+          scope_id?: string
+          scope_name?: string
+          status?: string
+          total_value?: number
+          unit_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "labor_contracts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       map_layouts: {
         Row: {
           camera_position: Json | null
@@ -777,6 +887,7 @@ export type Database = {
           category: string
           created_at: string
           id: string
+          input_id: string | null
           macro_id: string
           material_family: string | null
           name: string
@@ -793,6 +904,7 @@ export type Database = {
           category: string
           created_at?: string
           id?: string
+          input_id?: string | null
           macro_id: string
           material_family?: string | null
           name: string
@@ -809,6 +921,7 @@ export type Database = {
           category?: string
           created_at?: string
           id?: string
+          input_id?: string | null
           macro_id?: string
           material_family?: string | null
           name?: string
@@ -822,6 +935,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "scope_items_input_id_fkey"
+            columns: ["input_id"]
+            isOneToOne: false
+            referencedRelation: "inputs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "scope_items_project_id_fkey"
             columns: ["project_id"]
@@ -926,6 +1046,38 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "suppliers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      units: {
+        Row: {
+          abbreviation: string
+          created_at: string
+          id: string
+          name: string
+          project_id: string
+        }
+        Insert: {
+          abbreviation: string
+          created_at?: string
+          id?: string
+          name: string
+          project_id: string
+        }
+        Update: {
+          abbreviation?: string
+          created_at?: string
+          id?: string
+          name?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "units_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"

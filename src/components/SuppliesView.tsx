@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Package, Truck, FileText, Clock, AlertTriangle, CheckCircle2, Plus, Settings, Users, Search, Filter, ChevronDown, ChevronRight, Calendar, DollarSign, Loader2, RefreshCw, Eye, Edit2, Trash2, Send, Check, X } from "lucide-react";
+import { Package, Truck, FileText, Clock, AlertTriangle, CheckCircle2, Plus, Settings, Users, Search, Calendar, DollarSign, Loader2, Eye, Edit2, Trash2, Send, Check, X, Box, Layers } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,14 +10,34 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Progress } from "@/components/ui/progress";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { format, addDays, differenceInDays, isAfter, isBefore } from "date-fns";
+import { format, addDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+interface MaterialFamily {
+  id: string;
+  name: string;
+  color: string;
+}
+
+interface InputItem {
+  id: string;
+  name: string;
+  unit: string;
+  material_family_id: string | null;
+  material_family?: MaterialFamily;
+  description: string | null;
+}
+
+interface UnitItem {
+  id: string;
+  name: string;
+  abbreviation: string;
+}
 
 interface LeadTime {
   id?: string;
@@ -98,6 +118,20 @@ interface DeliveryTracking {
   tracking_date: string;
 }
 
+interface LaborContract {
+  id: string;
+  scope_id: string;
+  scope_name: string;
+  macro_id: string;
+  macro_name: string;
+  contracted_houses: number;
+  executed_houses: number;
+  unit_value: number;
+  total_value: number;
+  contractor_name: string | null;
+  status: string;
+}
+
 interface ScopeItem {
   id: string;
   name: string;
@@ -113,7 +147,7 @@ const CATEGORY_LABELS = {
   equipment: 'Equipamento'
 };
 
-const STATUS_LABELS = {
+const STATUS_LABELS: Record<string, string> = {
   pending: 'Pendente',
   in_progress: 'Em Andamento',
   approved: 'Aprovado',
@@ -125,7 +159,7 @@ const STATUS_LABELS = {
   delivered: 'Entregue'
 };
 
-const STATUS_COLORS = {
+const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-500',
   in_progress: 'bg-blue-500',
   approved: 'bg-green-500',
@@ -142,8 +176,13 @@ export function SuppliesView() {
   const { canEdit } = useAuth();
   const projectId = currentProject?.id;
 
-  const [activeTab, setActiveTab] = useState<"alerts" | "quotations" | "orders" | "suppliers" | "settings">("alerts");
+  const [activeTab, setActiveTab] = useState<"alerts" | "inputs" | "quotations" | "orders" | "suppliers" | "settings">("alerts");
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Data states
+  const [inputs, setInputs] = useState<InputItem[]>([]);
+  const [units, setUnits] = useState<UnitItem[]>([]);
+  const [families, setFamilies] = useState<MaterialFamily[]>([]);
   const [leadTimes, setLeadTimes] = useState<LeadTime[]>([
     { category: 'material', lead_time_days: 15 },
     { category: 'labor', lead_time_days: 7 },
@@ -153,30 +192,82 @@ export function SuppliesView() {
   const [quotations, setQuotations] = useState<QuotationRequest[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [scopeItems, setScopeItems] = useState<ScopeItem[]>([]);
+  const [laborContracts, setLaborContracts] = useState<LaborContract[]>([]);
+  const [executedHouses, setExecutedHouses] = useState<Record<string, number>>({});
 
   // Dialog states
+  const [inputDialogOpen, setInputDialogOpen] = useState(false);
+  const [unitDialogOpen, setUnitDialogOpen] = useState(false);
   const [supplierDialogOpen, setSupplierDialogOpen] = useState(false);
   const [quotationDialogOpen, setQuotationDialogOpen] = useState(false);
-  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
+  const [quoteDetailsDialogOpen, setQuoteDetailsDialogOpen] = useState(false);
+  const [orderEditDialogOpen, setOrderEditDialogOpen] = useState(false);
   const [trackingDialogOpen, setTrackingDialogOpen] = useState(false);
   const [selectedQuotation, setSelectedQuotation] = useState<QuotationRequest | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
 
   // Form states
+  const [newInput, setNewInput] = useState<{ name: string; unit: string; material_family_id: string; description: string }>({
+    name: '', unit: 'un', material_family_id: '', description: ''
+  });
+  const [newUnit, setNewUnit] = useState<{ name: string; abbreviation: string }>({ name: '', abbreviation: '' });
   const [newSupplier, setNewSupplier] = useState<Partial<Supplier>>({});
   const [newQuotation, setNewQuotation] = useState<{ title: string; required_date: string; notes: string; items: string[] }>({
     title: '', required_date: '', notes: '', items: []
   });
+  const [supplierQuotes, setSupplierQuotes] = useState<Record<string, { supplier_id: string; unit_value: number; delivery_days: number; notes: string }[]>>({});
   const [newTracking, setNewTracking] = useState<{ status: string; description: string; location: string }>({
     status: '', description: '', location: ''
   });
+  const [searchInput, setSearchInput] = useState('');
 
-  // Load data
+  // Load all data
   const loadData = useCallback(async () => {
     if (!projectId) return;
     setIsLoading(true);
 
     try {
+      // Load inputs catalog
+      const { data: inputsData } = await supabase
+        .from('inputs')
+        .select('*, material_families(*)')
+        .eq('project_id', projectId)
+        .order('name');
+
+      if (inputsData) {
+        setInputs(inputsData.map((i: any) => ({
+          ...i,
+          material_family: i.material_families
+        })));
+      }
+
+      // Load units
+      const { data: unitsData } = await supabase
+        .from('units')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('name');
+
+      if (unitsData) {
+        setUnits(unitsData);
+      }
+
+      // Load material families
+      const { data: familiesData } = await supabase
+        .from('material_families')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('display_order');
+
+      if (familiesData) {
+        setFamilies(familiesData.map(f => ({
+          id: f.id,
+          name: f.name,
+          color: f.color || '#9ca3af'
+        })));
+      }
+
       // Load lead times
       const { data: leadTimeData } = await supabase
         .from('category_lead_times')
@@ -202,7 +293,7 @@ export function SuppliesView() {
         setSuppliers(supplierData);
       }
 
-      // Load quotations with items
+      // Load quotations with items and quotes
       const { data: quotationData } = await supabase
         .from('quotation_requests')
         .select(`
@@ -232,7 +323,7 @@ export function SuppliesView() {
         })));
       }
 
-      // Load purchase orders with items and tracking
+      // Load purchase orders
       const { data: orderData } = await supabase
         .from('purchase_orders')
         .select(`
@@ -254,7 +345,7 @@ export function SuppliesView() {
         })));
       }
 
-      // Load scope items for creating quotations
+      // Load scope items
       const { data: scopeItemData } = await supabase
         .from('scope_items')
         .select('*')
@@ -271,9 +362,34 @@ export function SuppliesView() {
         })));
       }
 
+      // Load labor contracts
+      const { data: laborData } = await supabase
+        .from('labor_contracts')
+        .select('*')
+        .eq('project_id', projectId);
+
+      if (laborData) {
+        setLaborContracts(laborData);
+      }
+
+      // Calculate executed houses per scope from weekly_productions
+      const { data: productionsData } = await supabase
+        .from('weekly_productions')
+        .select('scope_id, house_ids')
+        .eq('project_id', projectId);
+
+      if (productionsData) {
+        const executed: Record<string, number> = {};
+        productionsData.forEach(p => {
+          if (!executed[p.scope_id]) executed[p.scope_id] = 0;
+          executed[p.scope_id] += (p.house_ids?.length || 0);
+        });
+        setExecutedHouses(executed);
+      }
+
     } catch (error) {
       console.error('Error loading supplies data:', error);
-      toast.error('Erro ao carregar dados de suprimentos');
+      toast.error('Erro ao carregar dados');
     } finally {
       setIsLoading(false);
     }
@@ -283,63 +399,87 @@ export function SuppliesView() {
     loadData();
   }, [loadData]);
 
-  // Calculate alerts based on lead times and planned productions
+  // Calculate alerts - now with labor contract logic
   const alerts = useMemo(() => {
-    const alertsList: { type: 'warning' | 'urgent' | 'info'; message: string; category: string; dueDate: Date }[] = [];
+    const alertsList: { type: 'warning' | 'urgent' | 'info'; message: string; category: string; dueDate: Date; scopeId?: string }[] = [];
     const today = new Date();
 
-    // Check scope items that need to be ordered based on lead times
-    scopeItems.forEach(item => {
-      const leadTime = leadTimes.find(lt => lt.category === item.category);
+    // Material alerts
+    scopeItems.filter(item => item.category === 'material').forEach(item => {
+      const leadTime = leadTimes.find(lt => lt.category === 'material');
       if (!leadTime) return;
 
-      const requiredDate = addDays(today, leadTime.lead_time_days);
-      
-      // Check if there's a pending quotation or order for this item
       const hasQuotation = quotations.some(q => 
-        q.status !== 'cancelled' && 
-        q.items?.some(qi => qi.name.includes(item.name))
+        q.status !== 'cancelled' && q.items?.some(qi => qi.name === item.name)
       );
       const hasOrder = purchaseOrders.some(o => 
-        o.status !== 'cancelled' && 
-        o.items?.some(oi => oi.name.includes(item.name))
+        o.status !== 'cancelled' && o.items?.some(oi => oi.name === item.name)
       );
 
       if (!hasQuotation && !hasOrder && item.quantity > 0) {
-        const daysUntilNeeded = differenceInDays(requiredDate, today);
+        const requiredDate = addDays(today, leadTime.lead_time_days);
+        const daysUntilNeeded = leadTime.lead_time_days;
         
         if (daysUntilNeeded <= 3) {
           alertsList.push({
             type: 'urgent',
             message: `${item.name} precisa ser cotado urgentemente!`,
-            category: item.category,
+            category: 'material',
             dueDate: requiredDate
           });
         } else if (daysUntilNeeded <= 7) {
           alertsList.push({
             type: 'warning',
             message: `${item.name} deve ser cotado em breve`,
-            category: item.category,
+            category: 'material',
             dueDate: requiredDate
           });
         }
       }
     });
 
-    // Check pending quotations that need attention
+    // Labor alerts - only show if executed houses exceed contracted
+    scopeItems.filter(item => item.category === 'labor').forEach(item => {
+      const contract = laborContracts.find(c => c.scope_id === item.id && c.status === 'active');
+      const executed = executedHouses[item.id] || 0;
+      
+      if (contract) {
+        // Only alert if executed houses exceed contracted
+        if (executed >= contract.contracted_houses) {
+          alertsList.push({
+            type: 'urgent',
+            message: `Mão de obra para "${item.name}" precisa ser renovada (${executed}/${contract.contracted_houses} casas executadas)`,
+            category: 'labor',
+            dueDate: today,
+            scopeId: item.id
+          });
+        }
+      } else {
+        // No contract yet - need to hire
+        alertsList.push({
+          type: 'warning',
+          message: `Contratar mão de obra para "${item.name}"`,
+          category: 'labor',
+          dueDate: addDays(today, leadTimes.find(lt => lt.category === 'labor')?.lead_time_days || 7),
+          scopeId: item.id
+        });
+      }
+    });
+
+    // Pending quotations
     quotations.filter(q => q.status === 'pending').forEach(q => {
       const daysUntilRequired = differenceInDays(new Date(q.required_date), today);
       if (daysUntilRequired <= 3) {
         alertsList.push({
           type: 'urgent',
-          message: `Cotação "${q.title}" vence em ${daysUntilRequired} dias`,
+          message: `Cotação "${q.title}" vence em ${Math.max(0, daysUntilRequired)} dias`,
           category: 'quotation',
           dueDate: new Date(q.required_date)
         });
       }
     });
 
-    // Check orders in transit
+    // Orders in transit
     purchaseOrders.filter(o => o.status === 'in_transit' && o.expected_delivery_date).forEach(o => {
       const expectedDate = new Date(o.expected_delivery_date!);
       const daysUntilDelivery = differenceInDays(expectedDate, today);
@@ -351,39 +491,85 @@ export function SuppliesView() {
           category: 'delivery',
           dueDate: expectedDate
         });
-      } else if (daysUntilDelivery <= 2) {
-        alertsList.push({
-          type: 'info',
-          message: `Pedido ${o.order_number} chega em ${daysUntilDelivery} dias`,
-          category: 'delivery',
-          dueDate: expectedDate
-        });
       }
     });
 
     return alertsList.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
-  }, [scopeItems, leadTimes, quotations, purchaseOrders]);
+  }, [scopeItems, leadTimes, quotations, purchaseOrders, laborContracts, executedHouses]);
 
-  // Save lead time
-  const saveLeadTime = async (category: string, days: number) => {
-    if (!projectId) return;
+  // Save input
+  const saveInput = async () => {
+    if (!projectId || !newInput.name.trim()) return;
 
     try {
       const { error } = await supabase
-        .from('category_lead_times')
-        .upsert({
+        .from('inputs')
+        .insert({
           project_id: projectId,
-          category,
-          lead_time_days: days
-        }, {
-          onConflict: 'project_id,category'
+          name: newInput.name.trim(),
+          unit: newInput.unit,
+          material_family_id: newInput.material_family_id || null,
+          description: newInput.description || null
         });
 
       if (error) throw error;
-      toast.success('Lead time salvo!');
+      
+      toast.success('Insumo cadastrado!');
+      setInputDialogOpen(false);
+      setNewInput({ name: '', unit: 'un', material_family_id: '', description: '' });
+      loadData();
     } catch (error) {
-      console.error('Error saving lead time:', error);
-      toast.error('Erro ao salvar lead time');
+      console.error('Error saving input:', error);
+      toast.error('Erro ao salvar insumo');
+    }
+  };
+
+  // Delete input
+  const deleteInput = async (id: string) => {
+    try {
+      await supabase.from('inputs').delete().eq('id', id);
+      toast.success('Insumo removido');
+      loadData();
+    } catch (error) {
+      console.error('Error deleting input:', error);
+      toast.error('Erro ao remover');
+    }
+  };
+
+  // Save unit
+  const saveUnit = async () => {
+    if (!projectId || !newUnit.name.trim() || !newUnit.abbreviation.trim()) return;
+
+    try {
+      const { error } = await supabase
+        .from('units')
+        .insert({
+          project_id: projectId,
+          name: newUnit.name.trim(),
+          abbreviation: newUnit.abbreviation.trim()
+        });
+
+      if (error) throw error;
+      
+      toast.success('Unidade cadastrada!');
+      setUnitDialogOpen(false);
+      setNewUnit({ name: '', abbreviation: '' });
+      loadData();
+    } catch (error) {
+      console.error('Error saving unit:', error);
+      toast.error('Erro ao salvar unidade');
+    }
+  };
+
+  // Delete unit
+  const deleteUnit = async (id: string) => {
+    try {
+      await supabase.from('units').delete().eq('id', id);
+      toast.success('Unidade removida');
+      loadData();
+    } catch (error) {
+      console.error('Error deleting unit:', error);
+      toast.error('Erro ao remover');
     }
   };
 
@@ -392,22 +578,35 @@ export function SuppliesView() {
     if (!projectId || !newSupplier.name) return;
 
     try {
-      const { error } = await supabase
-        .from('suppliers')
-        .insert({
-          project_id: projectId,
-          name: newSupplier.name,
-          email: newSupplier.email || null,
-          phone: newSupplier.phone || null,
-          address: newSupplier.address || null,
-          notes: newSupplier.notes || null
-        });
-
-      if (error) throw error;
+      if (editingSupplier) {
+        await supabase
+          .from('suppliers')
+          .update({
+            name: newSupplier.name,
+            email: newSupplier.email || null,
+            phone: newSupplier.phone || null,
+            address: newSupplier.address || null,
+            notes: newSupplier.notes || null
+          })
+          .eq('id', editingSupplier.id);
+        toast.success('Fornecedor atualizado!');
+      } else {
+        await supabase
+          .from('suppliers')
+          .insert({
+            project_id: projectId,
+            name: newSupplier.name,
+            email: newSupplier.email || null,
+            phone: newSupplier.phone || null,
+            address: newSupplier.address || null,
+            notes: newSupplier.notes || null
+          });
+        toast.success('Fornecedor cadastrado!');
+      }
       
-      toast.success('Fornecedor cadastrado!');
       setSupplierDialogOpen(false);
       setNewSupplier({});
+      setEditingSupplier(null);
       loadData();
     } catch (error) {
       console.error('Error saving supplier:', error);
@@ -415,12 +614,23 @@ export function SuppliesView() {
     }
   };
 
-  // Create quotation request
+  // Delete supplier
+  const deleteSupplier = async (id: string) => {
+    try {
+      await supabase.from('suppliers').delete().eq('id', id);
+      toast.success('Fornecedor removido');
+      loadData();
+    } catch (error) {
+      console.error('Error deleting supplier:', error);
+      toast.error('Erro ao remover');
+    }
+  };
+
+  // Create quotation
   const createQuotation = async () => {
     if (!projectId || !newQuotation.title || !newQuotation.required_date) return;
 
     try {
-      // Create quotation request
       const { data: quotationData, error: quotationError } = await supabase
         .from('quotation_requests')
         .insert({
@@ -434,7 +644,6 @@ export function SuppliesView() {
 
       if (quotationError) throw quotationError;
 
-      // Add selected items
       if (newQuotation.items.length > 0) {
         const itemsToInsert = newQuotation.items.map(itemId => {
           const item = scopeItems.find(si => si.id === itemId);
@@ -449,14 +658,10 @@ export function SuppliesView() {
           };
         });
 
-        const { error: itemsError } = await supabase
-          .from('quotation_items')
-          .insert(itemsToInsert);
-
-        if (itemsError) throw itemsError;
+        await supabase.from('quotation_items').insert(itemsToInsert);
       }
 
-      toast.success('Mapa de cotação criado!');
+      toast.success('Cotação criada!');
       setQuotationDialogOpen(false);
       setNewQuotation({ title: '', required_date: '', notes: '', items: [] });
       loadData();
@@ -466,36 +671,88 @@ export function SuppliesView() {
     }
   };
 
-  // Approve quotation and create purchase order
+  // Save supplier quotes for a quotation item
+  const saveSupplierQuotes = async (quotationItemId: string, quotes: { supplier_id: string; unit_value: number; delivery_days: number; notes: string }[]) => {
+    try {
+      // Delete existing quotes
+      await supabase.from('supplier_quotes').delete().eq('quotation_item_id', quotationItemId);
+      
+      // Insert new quotes
+      const quotesToInsert = quotes.filter(q => q.supplier_id && q.unit_value > 0).map(q => ({
+        quotation_item_id: quotationItemId,
+        supplier_id: q.supplier_id,
+        unit_value: q.unit_value,
+        total_value: 0, // Will be calculated
+        delivery_days: q.delivery_days || 0,
+        notes: q.notes || null,
+        is_selected: false
+      }));
+
+      if (quotesToInsert.length > 0) {
+        await supabase.from('supplier_quotes').insert(quotesToInsert);
+      }
+
+      toast.success('Cotações salvas!');
+      loadData();
+    } catch (error) {
+      console.error('Error saving quotes:', error);
+      toast.error('Erro ao salvar cotações');
+    }
+  };
+
+  // Select a quote for an item
+  const selectQuote = async (quotationItemId: string, quoteId: string) => {
+    try {
+      // Unselect all quotes for this item
+      await supabase
+        .from('supplier_quotes')
+        .update({ is_selected: false })
+        .eq('quotation_item_id', quotationItemId);
+      
+      // Select the chosen quote
+      await supabase
+        .from('supplier_quotes')
+        .update({ is_selected: true })
+        .eq('id', quoteId);
+
+      toast.success('Cotação selecionada!');
+      loadData();
+    } catch (error) {
+      console.error('Error selecting quote:', error);
+      toast.error('Erro ao selecionar');
+    }
+  };
+
+  // Approve quotation and create purchase orders
   const approveQuotation = async (quotation: QuotationRequest) => {
     if (!projectId) return;
 
-    // Find selected quotes for each item
-    const selectedQuotes = quotation.items?.flatMap(item => 
-      item.quotes?.filter(q => q.is_selected) || []
-    ) || [];
+    // Check all items have selected quotes
+    const itemsWithoutSelection = quotation.items?.filter(item => 
+      !item.quotes?.some(q => q.is_selected)
+    );
 
-    if (selectedQuotes.length === 0) {
-      toast.error('Selecione pelo menos uma cotação de fornecedor');
+    if (itemsWithoutSelection && itemsWithoutSelection.length > 0) {
+      toast.error(`Selecione um fornecedor para cada item: ${itemsWithoutSelection.map(i => i.name).join(', ')}`);
       return;
     }
 
+    const selectedQuotes = quotation.items?.flatMap(item => 
+      item.quotes?.filter(q => q.is_selected).map(q => ({ ...q, itemName: item.name, itemQuantity: item.quantity, itemUnit: item.unit, itemCategory: item.category })) || []
+    ) || [];
+
     // Group by supplier
     const bySupplier = selectedQuotes.reduce((acc, quote) => {
-      if (!acc[quote.supplier_id]) {
-        acc[quote.supplier_id] = [];
-      }
+      if (!acc[quote.supplier_id]) acc[quote.supplier_id] = [];
       acc[quote.supplier_id].push(quote);
       return acc;
-    }, {} as Record<string, SupplierQuote[]>);
+    }, {} as Record<string, typeof selectedQuotes>);
 
     try {
-      // Create purchase orders for each supplier
       for (const [supplierId, quotes] of Object.entries(bySupplier)) {
-        const totalValue = quotes.reduce((sum, q) => sum + q.total_value, 0);
+        const totalValue = quotes.reduce((sum, q) => sum + (q.unit_value * q.itemQuantity), 0);
         const maxDeliveryDays = Math.max(...quotes.map(q => q.delivery_days));
         const expectedDeliveryDate = addDays(new Date(), maxDeliveryDays);
-
         const orderNumber = `PO-${Date.now().toString(36).toUpperCase()}`;
 
         const { data: orderData, error: orderError } = await supabase
@@ -513,41 +770,41 @@ export function SuppliesView() {
 
         if (orderError) throw orderError;
 
-        // Add order items
-        const orderItems = quotes.map(quote => {
-          const quotationItem = quotation.items?.find(qi => 
-            qi.quotes?.some(q => q.id === quote.id)
-          );
-          return {
-            purchase_order_id: orderData.id,
-            quotation_item_id: quotationItem?.id,
-            name: quotationItem?.name || '',
-            category: quotationItem?.category || 'material',
-            quantity: quotationItem?.quantity || 1,
-            unit: quotationItem?.unit || 'un',
-            unit_value: quote.unit_value,
-            total_value: quote.total_value
-          };
-        });
+        const orderItems = quotes.map(quote => ({
+          purchase_order_id: orderData.id,
+          name: quote.itemName,
+          category: quote.itemCategory,
+          quantity: quote.itemQuantity,
+          unit: quote.itemUnit,
+          unit_value: quote.unit_value,
+          total_value: quote.unit_value * quote.itemQuantity
+        }));
 
-        const { error: itemsError } = await supabase
-          .from('purchase_order_items')
-          .insert(orderItems);
-
-        if (itemsError) throw itemsError;
+        await supabase.from('purchase_order_items').insert(orderItems);
       }
 
-      // Update quotation status
       await supabase
         .from('quotation_requests')
         .update({ status: 'approved', approved_at: new Date().toISOString() })
         .eq('id', quotation.id);
 
-      toast.success('Cotação aprovada e pedidos criados!');
+      toast.success('Cotação aprovada e pedidos gerados!');
       loadData();
     } catch (error) {
       console.error('Error approving quotation:', error);
       toast.error('Erro ao aprovar cotação');
+    }
+  };
+
+  // Update purchase order
+  const updateOrder = async (orderId: string, updates: Partial<PurchaseOrder>) => {
+    try {
+      await supabase.from('purchase_orders').update(updates).eq('id', orderId);
+      toast.success('Pedido atualizado!');
+      loadData();
+    } catch (error) {
+      console.error('Error updating order:', error);
+      toast.error('Erro ao atualizar');
     }
   };
 
@@ -556,31 +813,20 @@ export function SuppliesView() {
     if (!selectedOrder || !newTracking.status) return;
 
     try {
-      const { error } = await supabase
-        .from('delivery_tracking')
-        .insert({
-          purchase_order_id: selectedOrder.id,
-          status: newTracking.status,
-          description: newTracking.description || null,
-          location: newTracking.location || null
-        });
+      await supabase.from('delivery_tracking').insert({
+        purchase_order_id: selectedOrder.id,
+        status: newTracking.status,
+        description: newTracking.description || null,
+        location: newTracking.location || null
+      });
 
-      if (error) throw error;
-
-      // Update order status if delivered
       if (newTracking.status === 'delivered') {
         await supabase
           .from('purchase_orders')
-          .update({ 
-            status: 'delivered', 
-            actual_delivery_date: new Date().toISOString().split('T')[0] 
-          })
+          .update({ status: 'delivered', actual_delivery_date: new Date().toISOString().split('T')[0] })
           .eq('id', selectedOrder.id);
       } else if (newTracking.status === 'in_transit') {
-        await supabase
-          .from('purchase_orders')
-          .update({ status: 'in_transit' })
-          .eq('id', selectedOrder.id);
+        await supabase.from('purchase_orders').update({ status: 'in_transit' }).eq('id', selectedOrder.id);
       }
 
       toast.success('Rastreamento atualizado!');
@@ -593,29 +839,31 @@ export function SuppliesView() {
     }
   };
 
-  // Update order status
-  const updateOrderStatus = async (orderId: string, status: string) => {
+  // Save lead time
+  const saveLeadTime = async (category: string, days: number) => {
+    if (!projectId) return;
     try {
-      const { error } = await supabase
-        .from('purchase_orders')
-        .update({ status })
-        .eq('id', orderId);
-
-      if (error) throw error;
-      toast.success('Status atualizado!');
-      loadData();
+      await supabase.from('category_lead_times').upsert({
+        project_id: projectId,
+        category,
+        lead_time_days: days
+      }, { onConflict: 'project_id,category' });
+      toast.success('Lead time salvo!');
     } catch (error) {
-      console.error('Error updating order status:', error);
-      toast.error('Erro ao atualizar status');
+      console.error('Error saving lead time:', error);
+      toast.error('Erro ao salvar');
     }
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(value);
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
   };
+
+  // Filtered inputs for search
+  const filteredInputs = useMemo(() => {
+    if (!searchInput) return inputs;
+    return inputs.filter(i => i.name.toLowerCase().includes(searchInput.toLowerCase()));
+  }, [inputs, searchInput]);
 
   if (!currentProject) {
     return (
@@ -641,30 +889,30 @@ export function SuppliesView() {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex flex-col h-full">
-        <TabsList className="grid w-full max-w-2xl grid-cols-5 h-10">
-          <TabsTrigger value="alerts" className="gap-2 text-xs">
-            <AlertTriangle className="w-4 h-4" />
+        <TabsList className="grid w-full max-w-3xl grid-cols-6 h-10">
+          <TabsTrigger value="alerts" className="gap-1 text-xs">
+            <AlertTriangle className="w-3.5 h-3.5" />
             Alertas
-            {alerts.length > 0 && (
-              <Badge variant="destructive" className="ml-1 h-5 w-5 p-0 flex items-center justify-center">
-                {alerts.length}
-              </Badge>
-            )}
+            {alerts.length > 0 && <Badge variant="destructive" className="ml-1 h-4 w-4 p-0 text-[10px]">{alerts.length}</Badge>}
           </TabsTrigger>
-          <TabsTrigger value="quotations" className="gap-2 text-xs">
-            <FileText className="w-4 h-4" />
+          <TabsTrigger value="inputs" className="gap-1 text-xs">
+            <Box className="w-3.5 h-3.5" />
+            Insumos
+          </TabsTrigger>
+          <TabsTrigger value="quotations" className="gap-1 text-xs">
+            <FileText className="w-3.5 h-3.5" />
             Cotações
           </TabsTrigger>
-          <TabsTrigger value="orders" className="gap-2 text-xs">
-            <Truck className="w-4 h-4" />
+          <TabsTrigger value="orders" className="gap-1 text-xs">
+            <Truck className="w-3.5 h-3.5" />
             Pedidos
           </TabsTrigger>
-          <TabsTrigger value="suppliers" className="gap-2 text-xs">
-            <Users className="w-4 h-4" />
+          <TabsTrigger value="suppliers" className="gap-1 text-xs">
+            <Users className="w-3.5 h-3.5" />
             Fornecedores
           </TabsTrigger>
-          <TabsTrigger value="settings" className="gap-2 text-xs">
-            <Settings className="w-4 h-4" />
+          <TabsTrigger value="settings" className="gap-1 text-xs">
+            <Settings className="w-3.5 h-3.5" />
             Config
           </TabsTrigger>
         </TabsList>
@@ -672,54 +920,40 @@ export function SuppliesView() {
         {/* Alerts Tab */}
         <TabsContent value="alerts" className="flex-1 overflow-auto mt-4 space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg">
                 <AlertTriangle className="w-5 h-5 text-yellow-500" />
-                Alertas de Suprimentos
+                Alertas de Suprimentos ({alerts.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
               {alerts.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">
-                  Nenhum alerta no momento. Todos os suprimentos estão em dia!
-                </p>
+                <p className="text-center text-muted-foreground py-8">Todos os suprimentos em dia!</p>
               ) : (
                 <ScrollArea className="h-[400px]">
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {alerts.map((alert, idx) => (
-                      <div key={idx} className={`p-4 rounded-lg border ${
-                        alert.type === 'urgent' ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' :
-                        alert.type === 'warning' ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20 dark:border-yellow-800' :
-                        'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800'
+                      <div key={idx} className={`p-3 rounded-lg border ${
+                        alert.type === 'urgent' ? 'bg-red-50 border-red-200 dark:bg-red-900/20' :
+                        alert.type === 'warning' ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20' :
+                        'bg-blue-50 border-blue-200 dark:bg-blue-900/20'
                       }`}>
-                        <div className="flex items-start gap-3">
-                          {alert.type === 'urgent' ? (
-                            <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                          ) : alert.type === 'warning' ? (
-                            <Clock className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
-                          ) : (
-                            <Package className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
-                          )}
+                        <div className="flex items-center gap-3">
+                          {alert.type === 'urgent' ? <AlertTriangle className="w-4 h-4 text-red-500" /> :
+                           alert.type === 'warning' ? <Clock className="w-4 h-4 text-yellow-500" /> :
+                           <Package className="w-4 h-4 text-blue-500" />}
                           <div className="flex-1">
-                            <p className="font-medium">{alert.message}</p>
-                            <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                              <Badge variant="outline" className="text-xs">
-                                {CATEGORY_LABELS[alert.category as keyof typeof CATEGORY_LABELS] || alert.category}
-                              </Badge>
-                              <span>Até {format(alert.dueDate, "dd/MM/yyyy", { locale: ptBR })}</span>
+                            <p className="font-medium text-sm">{alert.message}</p>
+                            <div className="flex gap-2 mt-1">
+                              <Badge variant="outline" className="text-xs">{CATEGORY_LABELS[alert.category as keyof typeof CATEGORY_LABELS] || alert.category}</Badge>
+                              <span className="text-xs text-muted-foreground">{format(alert.dueDate, "dd/MM/yyyy", { locale: ptBR })}</span>
                             </div>
                           </div>
-                          {canEdit && alert.category !== 'quotation' && alert.category !== 'delivery' && (
-                            <Button size="sm" onClick={() => {
-                              setNewQuotation({
-                                ...newQuotation,
-                                title: `Cotação - ${alert.message.split(' ')[0]}`,
-                                required_date: format(alert.dueDate, 'yyyy-MM-dd')
-                              });
+                          {canEdit && alert.category === 'material' && (
+                            <Button size="sm" variant="outline" onClick={() => {
+                              setNewQuotation({ ...newQuotation, title: `Cotação - ${alert.message.split(' ')[0]}` });
                               setQuotationDialogOpen(true);
-                            }}>
-                              Criar Cotação
-                            </Button>
+                            }}>Criar Cotação</Button>
                           )}
                         </div>
                       </div>
@@ -730,45 +964,152 @@ export function SuppliesView() {
             </CardContent>
           </Card>
 
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <FileText className="w-4 h-4 text-blue-500" />
-                  <span className="text-xs font-medium">Cotações Pendentes</span>
-                </div>
-                <p className="text-2xl font-bold">{quotations.filter(q => q.status === 'pending').length}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Truck className="w-4 h-4 text-orange-500" />
-                  <span className="text-xs font-medium">Em Trânsito</span>
-                </div>
-                <p className="text-2xl font-bold">{purchaseOrders.filter(o => o.status === 'in_transit').length}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
-                  <span className="text-xs font-medium">Entregues</span>
-                </div>
-                <p className="text-2xl font-bold">{purchaseOrders.filter(o => o.status === 'delivered').length}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <DollarSign className="w-4 h-4 text-primary" />
-                  <span className="text-xs font-medium">Total Pedidos</span>
-                </div>
-                <p className="text-xl font-bold">{formatCurrency(purchaseOrders.reduce((sum, o) => sum + o.total_value, 0))}</p>
-              </CardContent>
-            </Card>
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Card><CardContent className="pt-4">
+              <div className="flex items-center gap-2 mb-1"><FileText className="w-4 h-4 text-blue-500" /><span className="text-xs">Cotações Pendentes</span></div>
+              <p className="text-2xl font-bold">{quotations.filter(q => q.status === 'pending').length}</p>
+            </CardContent></Card>
+            <Card><CardContent className="pt-4">
+              <div className="flex items-center gap-2 mb-1"><Truck className="w-4 h-4 text-orange-500" /><span className="text-xs">Em Trânsito</span></div>
+              <p className="text-2xl font-bold">{purchaseOrders.filter(o => o.status === 'in_transit').length}</p>
+            </CardContent></Card>
+            <Card><CardContent className="pt-4">
+              <div className="flex items-center gap-2 mb-1"><CheckCircle2 className="w-4 h-4 text-green-500" /><span className="text-xs">Entregues</span></div>
+              <p className="text-2xl font-bold">{purchaseOrders.filter(o => o.status === 'delivered').length}</p>
+            </CardContent></Card>
+            <Card><CardContent className="pt-4">
+              <div className="flex items-center gap-2 mb-1"><DollarSign className="w-4 h-4" /><span className="text-xs">Total Pedidos</span></div>
+              <p className="text-xl font-bold">{formatCurrency(purchaseOrders.reduce((s, o) => s + o.total_value, 0))}</p>
+            </CardContent></Card>
           </div>
+        </TabsContent>
+
+        {/* Inputs Tab */}
+        <TabsContent value="inputs" className="flex-1 overflow-auto mt-4 space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+              <Input placeholder="Buscar insumo..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} className="pl-8" />
+            </div>
+            <div className="flex gap-2">
+              <Dialog open={unitDialogOpen} onOpenChange={setUnitDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm"><Layers className="w-4 h-4 mr-1" />Unidades</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Gerenciar Unidades</DialogTitle></DialogHeader>
+                  <div className="space-y-4">
+                    <div className="flex gap-2">
+                      <Input placeholder="Nome" value={newUnit.name} onChange={(e) => setNewUnit({ ...newUnit, name: e.target.value })} />
+                      <Input placeholder="Abreviação" value={newUnit.abbreviation} onChange={(e) => setNewUnit({ ...newUnit, abbreviation: e.target.value })} className="w-24" />
+                      <Button onClick={saveUnit}><Plus className="w-4 h-4" /></Button>
+                    </div>
+                    <ScrollArea className="h-[200px]">
+                      <div className="space-y-1">
+                        {units.map(u => (
+                          <div key={u.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                            <span>{u.name} ({u.abbreviation})</span>
+                            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteUnit(u.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              {canEdit && (
+                <Dialog open={inputDialogOpen} onOpenChange={setInputDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button><Plus className="w-4 h-4 mr-1" />Novo Insumo</Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader><DialogTitle>Cadastrar Insumo</DialogTitle></DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label>Nome *</Label>
+                        <Input value={newInput.name} onChange={(e) => setNewInput({ ...newInput, name: e.target.value })} placeholder="Nome do insumo" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Unidade</Label>
+                          <Select value={newInput.unit} onValueChange={(v) => setNewInput({ ...newInput, unit: v })}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {units.map(u => <SelectItem key={u.id} value={u.abbreviation}>{u.name} ({u.abbreviation})</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>Família</Label>
+                          <Select value={newInput.material_family_id} onValueChange={(v) => setNewInput({ ...newInput, material_family_id: v })}>
+                            <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                            <SelectContent>
+                              {families.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Descrição</Label>
+                        <Textarea value={newInput.description} onChange={(e) => setNewInput({ ...newInput, description: e.target.value })} placeholder="Descrição opcional..." />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setInputDialogOpen(false)}>Cancelar</Button>
+                      <Button onClick={saveInput} disabled={!newInput.name.trim()}>Salvar</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
+          </div>
+
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Unidade</TableHead>
+                    <TableHead>Família</TableHead>
+                    <TableHead>Descrição</TableHead>
+                    <TableHead className="w-[80px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredInputs.map(input => (
+                    <TableRow key={input.id}>
+                      <TableCell className="font-medium">{input.name}</TableCell>
+                      <TableCell>{input.unit}</TableCell>
+                      <TableCell>
+                        {input.material_family && (
+                          <Badge variant="outline" style={{ borderColor: input.material_family.color }}>
+                            {input.material_family.name}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{input.description || '-'}</TableCell>
+                      <TableCell>
+                        {canEdit && (
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteInput(input.id)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredInputs.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                        {inputs.length === 0 ? 'Nenhum insumo cadastrado' : 'Nenhum insumo encontrado'}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Quotations Tab */}
@@ -777,85 +1118,37 @@ export function SuppliesView() {
             <div className="flex justify-end">
               <Dialog open={quotationDialogOpen} onOpenChange={setQuotationDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button className="gap-2">
-                    <Plus className="w-4 h-4" />
-                    Nova Cotação
-                  </Button>
+                  <Button><Plus className="w-4 h-4 mr-1" />Nova Cotação</Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>Criar Mapa de Cotação</DialogTitle>
-                  </DialogHeader>
+                  <DialogHeader><DialogTitle>Criar Mapa de Cotação</DialogTitle></DialogHeader>
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label>Título</Label>
-                        <Input 
-                          value={newQuotation.title}
-                          onChange={(e) => setNewQuotation({ ...newQuotation, title: e.target.value })}
-                          placeholder="Ex: Material Fundação Quadra A"
-                        />
-                      </div>
-                      <div>
-                        <Label>Data Necessária</Label>
-                        <Input 
-                          type="date"
-                          value={newQuotation.required_date}
-                          onChange={(e) => setNewQuotation({ ...newQuotation, required_date: e.target.value })}
-                        />
-                      </div>
+                      <div><Label>Título</Label><Input value={newQuotation.title} onChange={(e) => setNewQuotation({ ...newQuotation, title: e.target.value })} placeholder="Ex: Material Fundação" /></div>
+                      <div><Label>Data Necessária</Label><Input type="date" value={newQuotation.required_date} onChange={(e) => setNewQuotation({ ...newQuotation, required_date: e.target.value })} /></div>
                     </div>
-                    <div>
-                      <Label>Observações</Label>
-                      <Textarea 
-                        value={newQuotation.notes}
-                        onChange={(e) => setNewQuotation({ ...newQuotation, notes: e.target.value })}
-                        placeholder="Observações para os fornecedores..."
-                      />
-                    </div>
+                    <div><Label>Observações</Label><Textarea value={newQuotation.notes} onChange={(e) => setNewQuotation({ ...newQuotation, notes: e.target.value })} /></div>
                     <div>
                       <Label>Itens do Orçamento</Label>
                       <ScrollArea className="h-[200px] border rounded-lg p-2 mt-2">
-                        <div className="space-y-2">
-                          {scopeItems.map(item => (
+                        <div className="space-y-1">
+                          {scopeItems.filter(i => i.category === 'material').map(item => (
                             <label key={item.id} className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer">
-                              <input 
-                                type="checkbox"
-                                checked={newQuotation.items.includes(item.id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setNewQuotation({ ...newQuotation, items: [...newQuotation.items, item.id] });
-                                  } else {
-                                    setNewQuotation({ ...newQuotation, items: newQuotation.items.filter(i => i !== item.id) });
-                                  }
-                                }}
-                                className="rounded"
-                              />
+                              <input type="checkbox" checked={newQuotation.items.includes(item.id)} onChange={(e) => {
+                                if (e.target.checked) setNewQuotation({ ...newQuotation, items: [...newQuotation.items, item.id] });
+                                else setNewQuotation({ ...newQuotation, items: newQuotation.items.filter(i => i !== item.id) });
+                              }} className="rounded" />
                               <span className="flex-1">{item.name}</span>
-                              <Badge variant="outline" className="text-xs">
-                                {CATEGORY_LABELS[item.category]}
-                              </Badge>
-                              <span className="text-sm text-muted-foreground">
-                                {item.quantity} {item.unit}
-                              </span>
+                              <span className="text-sm text-muted-foreground">{item.quantity} {item.unit}</span>
                             </label>
                           ))}
-                          {scopeItems.length === 0 && (
-                            <p className="text-center text-muted-foreground py-4">
-                              Nenhum item cadastrado no orçamento
-                            </p>
-                          )}
                         </div>
                       </ScrollArea>
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setQuotationDialogOpen(false)}>
-                      Cancelar
-                    </Button>
-                    <Button onClick={createQuotation} disabled={!newQuotation.title || !newQuotation.required_date}>
-                      Criar Cotação
-                    </Button>
+                    <Button variant="outline" onClick={() => setQuotationDialogOpen(false)}>Cancelar</Button>
+                    <Button onClick={createQuotation} disabled={!newQuotation.title || !newQuotation.required_date}>Criar</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -870,51 +1163,75 @@ export function SuppliesView() {
                     <div className="flex items-center justify-between mb-3">
                       <div>
                         <h3 className="font-semibold">{quotation.title}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Criado em {format(new Date(quotation.created_at), "dd/MM/yyyy", { locale: ptBR })}
-                        </p>
+                        <p className="text-sm text-muted-foreground">{format(new Date(quotation.created_at), "dd/MM/yyyy", { locale: ptBR })}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge className={STATUS_COLORS[quotation.status]}>
-                          {STATUS_LABELS[quotation.status]}
-                        </Badge>
-                        <Badge variant="outline">
-                          Até {format(new Date(quotation.required_date), "dd/MM/yyyy", { locale: ptBR })}
-                        </Badge>
+                        <Badge className={STATUS_COLORS[quotation.status]}>{STATUS_LABELS[quotation.status]}</Badge>
+                        <Badge variant="outline">Até {format(new Date(quotation.required_date), "dd/MM/yyyy", { locale: ptBR })}</Badge>
                       </div>
                     </div>
-                    
+
+                    {/* Items with 3 quotes each */}
                     {quotation.items && quotation.items.length > 0 && (
                       <div className="space-y-2 mb-3">
-                        <p className="text-sm font-medium">{quotation.items.length} itens:</p>
-                        <div className="flex flex-wrap gap-1">
-                          {quotation.items.slice(0, 5).map(item => (
-                            <Badge key={item.id} variant="secondary" className="text-xs">
-                              {item.name}
-                            </Badge>
-                          ))}
-                          {quotation.items.length > 5 && (
-                            <Badge variant="secondary" className="text-xs">
-                              +{quotation.items.length - 5}
-                            </Badge>
-                          )}
-                        </div>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Item</TableHead>
+                              <TableHead>Qtd</TableHead>
+                              <TableHead>Cotação 1</TableHead>
+                              <TableHead>Cotação 2</TableHead>
+                              <TableHead>Cotação 3</TableHead>
+                              <TableHead className="w-[80px]">Seleção</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {quotation.items.map(item => {
+                              const quotes = item.quotes || [];
+                              const selectedQuote = quotes.find(q => q.is_selected);
+                              return (
+                                <TableRow key={item.id}>
+                                  <TableCell className="font-medium">{item.name}</TableCell>
+                                  <TableCell>{item.quantity} {item.unit}</TableCell>
+                                  {[0, 1, 2].map(i => {
+                                    const quote = quotes[i];
+                                    return (
+                                      <TableCell key={i} className={quote?.is_selected ? 'bg-green-50 dark:bg-green-900/20' : ''}>
+                                        {quote ? (
+                                          <div className="text-sm">
+                                            <p className="font-medium">{quote.supplier?.name}</p>
+                                            <p className="text-muted-foreground">{formatCurrency(quote.unit_value)}/un</p>
+                                            <p className="text-xs text-muted-foreground">{quote.delivery_days} dias</p>
+                                            {canEdit && quotation.status === 'pending' && (
+                                              <Button size="sm" variant={quote.is_selected ? "default" : "outline"} className="mt-1 h-6 text-xs" onClick={() => selectQuote(item.id, quote.id)}>
+                                                {quote.is_selected ? <Check className="w-3 h-3" /> : 'Selecionar'}
+                                              </Button>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <span className="text-muted-foreground text-sm">-</span>
+                                        )}
+                                      </TableCell>
+                                    );
+                                  })}
+                                  <TableCell>
+                                    {selectedQuote && <Badge variant="outline" className="bg-green-100">{selectedQuote.supplier?.name}</Badge>}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
                       </div>
                     )}
 
                     {canEdit && quotation.status === 'pending' && (
                       <div className="flex gap-2">
-                        <Button size="sm" variant="outline" className="gap-1">
-                          <Edit2 className="w-3 h-3" />
-                          Editar
+                        <Button size="sm" variant="outline" onClick={() => { setSelectedQuotation(quotation); setQuoteDetailsDialogOpen(true); }}>
+                          <Edit2 className="w-3 h-3 mr-1" />Editar Cotações
                         </Button>
-                        <Button 
-                          size="sm" 
-                          className="gap-1"
-                          onClick={() => approveQuotation(quotation)}
-                        >
-                          <Check className="w-3 h-3" />
-                          Aprovar e Gerar Pedido
+                        <Button size="sm" onClick={() => approveQuotation(quotation)}>
+                          <Check className="w-3 h-3 mr-1" />Aprovar e Gerar Pedido
                         </Button>
                       </div>
                     )}
@@ -922,11 +1239,7 @@ export function SuppliesView() {
                 </Card>
               ))}
               {quotations.length === 0 && (
-                <Card>
-                  <CardContent className="p-8 text-center text-muted-foreground">
-                    Nenhuma cotação criada ainda
-                  </CardContent>
-                </Card>
+                <Card><CardContent className="p-8 text-center text-muted-foreground">Nenhuma cotação criada</CardContent></Card>
               )}
             </div>
           </ScrollArea>
@@ -942,42 +1255,39 @@ export function SuppliesView() {
                     <div className="flex items-center justify-between mb-3">
                       <div>
                         <h3 className="font-semibold">{order.order_number}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {order.supplier?.name || 'Fornecedor não definido'}
-                        </p>
+                        <p className="text-sm text-muted-foreground">{order.supplier?.name}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge className={STATUS_COLORS[order.status]}>
-                          {STATUS_LABELS[order.status]}
-                        </Badge>
+                        <Badge className={STATUS_COLORS[order.status]}>{STATUS_LABELS[order.status]}</Badge>
                         <span className="font-bold">{formatCurrency(order.total_value)}</span>
                       </div>
                     </div>
 
-                    {order.expected_delivery_date && (
-                      <div className="flex items-center gap-2 mb-3 text-sm">
-                        <Calendar className="w-4 h-4 text-muted-foreground" />
-                        <span>
-                          Previsão: {format(new Date(order.expected_delivery_date), "dd/MM/yyyy", { locale: ptBR })}
-                        </span>
-                        {order.actual_delivery_date && (
-                          <Badge variant="outline" className="ml-2">
-                            Entregue em {format(new Date(order.actual_delivery_date), "dd/MM/yyyy", { locale: ptBR })}
-                          </Badge>
-                        )}
+                    {order.items && order.items.length > 0 && (
+                      <div className="mb-3 text-sm">
+                        <p className="font-medium mb-1">Itens:</p>
+                        <div className="flex flex-wrap gap-1">
+                          {order.items.map(item => (
+                            <Badge key={item.id} variant="secondary">{item.name} ({item.quantity} {item.unit})</Badge>
+                          ))}
+                        </div>
                       </div>
                     )}
 
-                    {/* Tracking timeline */}
+                    {order.expected_delivery_date && (
+                      <div className="flex items-center gap-2 mb-3 text-sm">
+                        <Calendar className="w-4 h-4" />
+                        <span>Previsão: {format(new Date(order.expected_delivery_date), "dd/MM/yyyy", { locale: ptBR })}</span>
+                        {order.actual_delivery_date && <Badge variant="outline">Entregue: {format(new Date(order.actual_delivery_date), "dd/MM/yyyy", { locale: ptBR })}</Badge>}
+                      </div>
+                    )}
+
                     {order.tracking && order.tracking.length > 0 && (
-                      <div className="border-l-2 border-muted pl-4 mb-3 space-y-2">
-                        {order.tracking.slice(0, 3).map((track, idx) => (
+                      <div className="border-l-2 border-muted pl-4 mb-3 space-y-1">
+                        {order.tracking.slice(0, 3).map(track => (
                           <div key={track.id} className="text-sm">
                             <p className="font-medium">{track.status}</p>
-                            <p className="text-muted-foreground text-xs">
-                              {track.description && `${track.description} - `}
-                              {format(new Date(track.tracking_date), "dd/MM HH:mm", { locale: ptBR })}
-                            </p>
+                            <p className="text-muted-foreground text-xs">{track.description} - {format(new Date(track.tracking_date), "dd/MM HH:mm", { locale: ptBR })}</p>
                           </div>
                         ))}
                       </div>
@@ -985,46 +1295,22 @@ export function SuppliesView() {
 
                     {canEdit && order.status !== 'delivered' && order.status !== 'cancelled' && (
                       <div className="flex gap-2">
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedOrder(order);
-                            setTrackingDialogOpen(true);
-                          }}
-                        >
-                          <Plus className="w-3 h-3 mr-1" />
-                          Rastreamento
+                        <Button size="sm" variant="outline" onClick={() => { setSelectedOrder(order); setOrderEditDialogOpen(true); }}>
+                          <Edit2 className="w-3 h-3 mr-1" />Editar
                         </Button>
-                        {order.status === 'pending' && (
-                          <Button size="sm" onClick={() => updateOrderStatus(order.id, 'sent')}>
-                            <Send className="w-3 h-3 mr-1" />
-                            Enviar ao Fornecedor
-                          </Button>
-                        )}
-                        {order.status === 'sent' && (
-                          <Button size="sm" onClick={() => updateOrderStatus(order.id, 'confirmed')}>
-                            <Check className="w-3 h-3 mr-1" />
-                            Confirmar
-                          </Button>
-                        )}
-                        {order.status === 'confirmed' && (
-                          <Button size="sm" onClick={() => updateOrderStatus(order.id, 'in_transit')}>
-                            <Truck className="w-3 h-3 mr-1" />
-                            Em Trânsito
-                          </Button>
-                        )}
+                        <Button size="sm" variant="outline" onClick={() => { setSelectedOrder(order); setTrackingDialogOpen(true); }}>
+                          <Plus className="w-3 h-3 mr-1" />Rastreamento
+                        </Button>
+                        {order.status === 'pending' && <Button size="sm" onClick={() => updateOrder(order.id, { status: 'sent' })}><Send className="w-3 h-3 mr-1" />Enviar</Button>}
+                        {order.status === 'sent' && <Button size="sm" onClick={() => updateOrder(order.id, { status: 'confirmed' })}><Check className="w-3 h-3 mr-1" />Confirmar</Button>}
+                        {order.status === 'confirmed' && <Button size="sm" onClick={() => updateOrder(order.id, { status: 'in_transit' })}><Truck className="w-3 h-3 mr-1" />Em Trânsito</Button>}
                       </div>
                     )}
                   </CardContent>
                 </Card>
               ))}
               {purchaseOrders.length === 0 && (
-                <Card>
-                  <CardContent className="p-8 text-center text-muted-foreground">
-                    Nenhum pedido de compra ainda. Aprove uma cotação para criar pedidos.
-                  </CardContent>
-                </Card>
+                <Card><CardContent className="p-8 text-center text-muted-foreground">Nenhum pedido. Aprove uma cotação para criar pedidos.</CardContent></Card>
               )}
             </div>
           </ScrollArea>
@@ -1034,65 +1320,24 @@ export function SuppliesView() {
         <TabsContent value="suppliers" className="flex-1 overflow-auto mt-4 space-y-4">
           {canEdit && (
             <div className="flex justify-end">
-              <Dialog open={supplierDialogOpen} onOpenChange={setSupplierDialogOpen}>
+              <Dialog open={supplierDialogOpen} onOpenChange={(o) => { setSupplierDialogOpen(o); if (!o) { setEditingSupplier(null); setNewSupplier({}); } }}>
                 <DialogTrigger asChild>
-                  <Button className="gap-2">
-                    <Plus className="w-4 h-4" />
-                    Novo Fornecedor
-                  </Button>
+                  <Button><Plus className="w-4 h-4 mr-1" />Novo Fornecedor</Button>
                 </DialogTrigger>
                 <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Cadastrar Fornecedor</DialogTitle>
-                  </DialogHeader>
+                  <DialogHeader><DialogTitle>{editingSupplier ? 'Editar' : 'Cadastrar'} Fornecedor</DialogTitle></DialogHeader>
                   <div className="space-y-4">
-                    <div>
-                      <Label>Nome *</Label>
-                      <Input 
-                        value={newSupplier.name || ''}
-                        onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })}
-                        placeholder="Nome do fornecedor"
-                      />
-                    </div>
+                    <div><Label>Nome *</Label><Input value={newSupplier.name || ''} onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })} /></div>
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <Label>Email</Label>
-                        <Input 
-                          type="email"
-                          value={newSupplier.email || ''}
-                          onChange={(e) => setNewSupplier({ ...newSupplier, email: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Label>Telefone</Label>
-                        <Input 
-                          value={newSupplier.phone || ''}
-                          onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })}
-                        />
-                      </div>
+                      <div><Label>Email</Label><Input type="email" value={newSupplier.email || ''} onChange={(e) => setNewSupplier({ ...newSupplier, email: e.target.value })} /></div>
+                      <div><Label>Telefone</Label><Input value={newSupplier.phone || ''} onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })} /></div>
                     </div>
-                    <div>
-                      <Label>Endereço</Label>
-                      <Input 
-                        value={newSupplier.address || ''}
-                        onChange={(e) => setNewSupplier({ ...newSupplier, address: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label>Observações</Label>
-                      <Textarea 
-                        value={newSupplier.notes || ''}
-                        onChange={(e) => setNewSupplier({ ...newSupplier, notes: e.target.value })}
-                      />
-                    </div>
+                    <div><Label>Endereço</Label><Input value={newSupplier.address || ''} onChange={(e) => setNewSupplier({ ...newSupplier, address: e.target.value })} /></div>
+                    <div><Label>Observações</Label><Textarea value={newSupplier.notes || ''} onChange={(e) => setNewSupplier({ ...newSupplier, notes: e.target.value })} /></div>
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setSupplierDialogOpen(false)}>
-                      Cancelar
-                    </Button>
-                    <Button onClick={saveSupplier} disabled={!newSupplier.name}>
-                      Salvar
-                    </Button>
+                    <Button variant="outline" onClick={() => setSupplierDialogOpen(false)}>Cancelar</Button>
+                    <Button onClick={saveSupplier} disabled={!newSupplier.name}>Salvar</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -1103,25 +1348,29 @@ export function SuppliesView() {
             {suppliers.map(supplier => (
               <Card key={supplier.id}>
                 <CardContent className="p-4">
-                  <h3 className="font-semibold mb-2">{supplier.name}</h3>
-                  {supplier.email && (
-                    <p className="text-sm text-muted-foreground">{supplier.email}</p>
-                  )}
-                  {supplier.phone && (
-                    <p className="text-sm text-muted-foreground">{supplier.phone}</p>
-                  )}
-                  {supplier.address && (
-                    <p className="text-sm text-muted-foreground truncate">{supplier.address}</p>
-                  )}
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-semibold">{supplier.name}</h3>
+                      {supplier.email && <p className="text-sm text-muted-foreground">{supplier.email}</p>}
+                      {supplier.phone && <p className="text-sm text-muted-foreground">{supplier.phone}</p>}
+                      {supplier.address && <p className="text-sm text-muted-foreground truncate">{supplier.address}</p>}
+                    </div>
+                    {canEdit && (
+                      <div className="flex gap-1">
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingSupplier(supplier); setNewSupplier(supplier); setSupplierDialogOpen(true); }}>
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteSupplier(supplier.id)}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             ))}
             {suppliers.length === 0 && (
-              <Card className="col-span-full">
-                <CardContent className="p-8 text-center text-muted-foreground">
-                  Nenhum fornecedor cadastrado
-                </CardContent>
-              </Card>
+              <Card className="col-span-full"><CardContent className="p-8 text-center text-muted-foreground">Nenhum fornecedor cadastrado</CardContent></Card>
             )}
           </div>
         </TabsContent>
@@ -1129,50 +1378,19 @@ export function SuppliesView() {
         {/* Settings Tab */}
         <TabsContent value="settings" className="flex-1 overflow-auto mt-4 space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="w-5 h-5" />
-                Lead Times por Categoria
-              </CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2"><Clock className="w-5 h-5" />Lead Times por Categoria</CardTitle></CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">
-                Defina o tempo médio de antecedência necessário para cotação e compra de cada categoria.
-              </p>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {leadTimes.map(lt => (
-                  <div key={lt.category} className="flex items-center gap-4 p-4 bg-muted/30 rounded-lg">
+                  <div key={lt.category} className="flex items-center gap-4 p-3 bg-muted/30 rounded-lg">
                     <div className="flex-1">
                       <p className="font-medium">{CATEGORY_LABELS[lt.category]}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Alertas serão gerados {lt.lead_time_days} dias antes da data necessária
-                      </p>
+                      <p className="text-sm text-muted-foreground">Alertas {lt.lead_time_days} dias antes</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Input 
-                        type="number"
-                        value={lt.lead_time_days}
-                        onChange={(e) => {
-                          const newDays = parseInt(e.target.value) || 0;
-                          setLeadTimes(prev => prev.map(l => 
-                            l.category === lt.category 
-                              ? { ...l, lead_time_days: newDays }
-                              : l
-                          ));
-                        }}
-                        className="w-20 text-center"
-                        min={1}
-                      />
-                      <span className="text-sm text-muted-foreground">dias</span>
-                      {canEdit && (
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => saveLeadTime(lt.category, lt.lead_time_days)}
-                        >
-                          Salvar
-                        </Button>
-                      )}
+                      <Input type="number" value={lt.lead_time_days} onChange={(e) => setLeadTimes(prev => prev.map(l => l.category === lt.category ? { ...l, lead_time_days: parseInt(e.target.value) || 0 } : l))} className="w-20 text-center" min={1} />
+                      <span className="text-sm">dias</span>
+                      {canEdit && <Button size="sm" variant="outline" onClick={() => saveLeadTime(lt.category, lt.lead_time_days)}>Salvar</Button>}
                     </div>
                   </div>
                 ))}
@@ -1182,21 +1400,95 @@ export function SuppliesView() {
         </TabsContent>
       </Tabs>
 
+      {/* Edit Quotes Dialog */}
+      <Dialog open={quoteDetailsDialogOpen} onOpenChange={setQuoteDetailsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+          <DialogHeader><DialogTitle>Editar Cotações - {selectedQuotation?.title}</DialogTitle></DialogHeader>
+          {selectedQuotation?.items?.map(item => (
+            <div key={item.id} className="border rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">{item.name}</p>
+                  <p className="text-sm text-muted-foreground">{item.quantity} {item.unit}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {[0, 1, 2].map(i => {
+                  const existingQuote = item.quotes?.[i];
+                  const quoteKey = `${item.id}-${i}`;
+                  const currentQuotes = supplierQuotes[item.id] || [];
+                  const quote = currentQuotes[i] || { supplier_id: existingQuote?.supplier_id || '', unit_value: existingQuote?.unit_value || 0, delivery_days: existingQuote?.delivery_days || 0, notes: existingQuote?.notes || '' };
+                  
+                  return (
+                    <div key={i} className="space-y-2 p-3 bg-muted/30 rounded">
+                      <p className="text-sm font-medium">Cotação {i + 1}</p>
+                      <Select value={quote.supplier_id} onValueChange={(v) => {
+                        const updated = [...currentQuotes];
+                        updated[i] = { ...quote, supplier_id: v };
+                        setSupplierQuotes({ ...supplierQuotes, [item.id]: updated });
+                      }}>
+                        <SelectTrigger><SelectValue placeholder="Fornecedor" /></SelectTrigger>
+                        <SelectContent>
+                          {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Input type="number" placeholder="Valor unitário" value={quote.unit_value || ''} onChange={(e) => {
+                        const updated = [...currentQuotes];
+                        updated[i] = { ...quote, unit_value: parseFloat(e.target.value) || 0 };
+                        setSupplierQuotes({ ...supplierQuotes, [item.id]: updated });
+                      }} />
+                      <Input type="number" placeholder="Dias entrega" value={quote.delivery_days || ''} onChange={(e) => {
+                        const updated = [...currentQuotes];
+                        updated[i] = { ...quote, delivery_days: parseInt(e.target.value) || 0 };
+                        setSupplierQuotes({ ...supplierQuotes, [item.id]: updated });
+                      }} />
+                    </div>
+                  );
+                })}
+              </div>
+              <Button size="sm" onClick={() => saveSupplierQuotes(item.id, supplierQuotes[item.id] || [])}>Salvar Cotações deste Item</Button>
+            </div>
+          ))}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Order Dialog */}
+      <Dialog open={orderEditDialogOpen} onOpenChange={setOrderEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Editar Pedido - {selectedOrder?.order_number}</DialogTitle></DialogHeader>
+          {selectedOrder && (
+            <div className="space-y-4">
+              <div><Label>Fornecedor</Label>
+                <Select value={selectedOrder.supplier_id} onValueChange={(v) => setSelectedOrder({ ...selectedOrder, supplier_id: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><Label>Data Prevista Entrega</Label>
+                <Input type="date" value={selectedOrder.expected_delivery_date || ''} onChange={(e) => setSelectedOrder({ ...selectedOrder, expected_delivery_date: e.target.value })} />
+              </div>
+              <div><Label>Observações</Label>
+                <Textarea value={selectedOrder.notes || ''} onChange={(e) => setSelectedOrder({ ...selectedOrder, notes: e.target.value })} />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOrderEditDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={() => { if (selectedOrder) { updateOrder(selectedOrder.id, { supplier_id: selectedOrder.supplier_id, expected_delivery_date: selectedOrder.expected_delivery_date, notes: selectedOrder.notes }); setOrderEditDialogOpen(false); } }}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Tracking Dialog */}
       <Dialog open={trackingDialogOpen} onOpenChange={setTrackingDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Adicionar Rastreamento</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Adicionar Rastreamento</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label>Status</Label>
+            <div><Label>Status</Label>
               <Select value={newTracking.status} onValueChange={(v) => setNewTracking({ ...newTracking, status: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o status" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="confirmed">Confirmado pelo Fornecedor</SelectItem>
+                  <SelectItem value="confirmed">Confirmado</SelectItem>
                   <SelectItem value="processing">Em Preparação</SelectItem>
                   <SelectItem value="shipped">Despachado</SelectItem>
                   <SelectItem value="in_transit">Em Trânsito</SelectItem>
@@ -1205,30 +1497,12 @@ export function SuppliesView() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Descrição</Label>
-              <Input 
-                value={newTracking.description}
-                onChange={(e) => setNewTracking({ ...newTracking, description: e.target.value })}
-                placeholder="Detalhes do rastreamento..."
-              />
-            </div>
-            <div>
-              <Label>Localização</Label>
-              <Input 
-                value={newTracking.location}
-                onChange={(e) => setNewTracking({ ...newTracking, location: e.target.value })}
-                placeholder="Ex: Centro de Distribuição SP"
-              />
-            </div>
+            <div><Label>Descrição</Label><Input value={newTracking.description} onChange={(e) => setNewTracking({ ...newTracking, description: e.target.value })} /></div>
+            <div><Label>Localização</Label><Input value={newTracking.location} onChange={(e) => setNewTracking({ ...newTracking, location: e.target.value })} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setTrackingDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={addTrackingEvent} disabled={!newTracking.status}>
-              Adicionar
-            </Button>
+            <Button variant="outline" onClick={() => setTrackingDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={addTrackingEvent} disabled={!newTracking.status}>Adicionar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
