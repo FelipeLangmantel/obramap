@@ -210,7 +210,7 @@ const STATUS_COLORS: Record<string, string> = {
   delivered: 'bg-green-600'
 };
 
-type TabType = "alerts" | "inputs" | "quotations" | "orders" | "suppliers" | "contracts" | "settings";
+type TabType = "alerts" | "quotations" | "orders" | "contracts" | "leadtime";
 
 interface SuppliesViewProps {
   initialTab?: TabType;
@@ -374,7 +374,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         const { data } = await supabase.from('purchase_orders').select(`*, suppliers (*), purchase_order_items (*), delivery_tracking (*)`).eq('project_id', projectId).order('created_at', { ascending: false });
         if (data) setPurchaseOrders(data.map((o: any) => ({ ...o, status: o.status as PurchaseOrder['status'], supplier: o.suppliers, items: o.purchase_order_items, tracking: o.delivery_tracking })));
       } else if (tab === 'suppliers') {
-        const { data } = await supabase.from('suppliers').select('*').eq('project_id', projectId).order('name');
+        const { data } = await supabase.from('suppliers').select('*').order('name');
         if (data) setSuppliers(data.map(s => ({ ...s, supplier_type: (s.supplier_type || 'material') as 'material' | 'labor' })));
       }
 
@@ -390,8 +390,8 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
 
   useEffect(() => {
     if (activeTab !== 'alerts') {
-      // Settings tab needs families from inputs tab data
-      if (activeTab === 'settings') {
+      // Lead time tab needs families from inputs tab data
+      if (activeTab === 'leadtime') {
         loadTabData('inputs');
       } else {
         loadTabData(activeTab);
@@ -1242,17 +1242,15 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex flex-col h-full">
-        <TabsList className="grid w-full max-w-4xl grid-cols-7 h-10">
+        <TabsList className="grid w-full max-w-3xl grid-cols-5 h-10">
           <TabsTrigger value="alerts" className="gap-1 text-xs">
             <AlertTriangle className="w-3.5 h-3.5" />Alertas
             {totalAlertsCount > 0 && <Badge variant="destructive" className="ml-1 h-4 w-4 p-0 text-[10px]">{totalAlertsCount}</Badge>}
           </TabsTrigger>
-          <TabsTrigger value="inputs" className="gap-1 text-xs"><Box className="w-3.5 h-3.5" />Insumos</TabsTrigger>
           <TabsTrigger value="quotations" className="gap-1 text-xs"><FileText className="w-3.5 h-3.5" />Cotações</TabsTrigger>
           <TabsTrigger value="orders" className="gap-1 text-xs"><Truck className="w-3.5 h-3.5" />Pedidos</TabsTrigger>
-          <TabsTrigger value="suppliers" className="gap-1 text-xs"><Users className="w-3.5 h-3.5" />Fornecedores</TabsTrigger>
           <TabsTrigger value="contracts" className="gap-1 text-xs"><ClipboardList className="w-3.5 h-3.5" />Contratações</TabsTrigger>
-          <TabsTrigger value="settings" className="gap-1 text-xs"><Settings className="w-3.5 h-3.5" />Config</TabsTrigger>
+          <TabsTrigger value="leadtime" className="gap-1 text-xs"><Clock className="w-3.5 h-3.5" />Lead Time</TabsTrigger>
         </TabsList>
 
         {/* Alerts Tab */}
@@ -2531,7 +2529,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         </TabsContent>
 
         {/* Settings Tab */}
-        <TabsContent value="settings" className="flex-1 overflow-auto mt-4 space-y-4">
+        <TabsContent value="leadtime" className="flex-1 overflow-auto mt-4 space-y-4">
           <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><Clock className="w-5 h-5" />Lead Time por Família de Material</CardTitle></CardHeader>
             <CardContent>
