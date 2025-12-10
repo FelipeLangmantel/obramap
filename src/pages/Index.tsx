@@ -19,8 +19,10 @@ import { Map3DView } from "@/components/Map3DView";
 import { SuppliesView } from "@/components/SuppliesView";
 import { Loader2 } from "lucide-react";
 
+type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers";
+
 function IndexContent() {
-  const [activeView, setActiveView] = useState<"map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies">("map");
+  const [activeView, setActiveView] = useState<ViewType>("map");
   const { selectedHouse, isLoading, projects } = useConstruction();
 
   if (isLoading) {
@@ -34,7 +36,7 @@ function IndexContent() {
     );
   }
 
-  const viewTitles = {
+  const viewTitles: Record<ViewType, string> = {
     map: "Mapa de Obras",
     "interactive-map": "Mapa Interativo",
     "3d-map": "Mapa 3D",
@@ -42,7 +44,9 @@ function IndexContent() {
     production: "Produção Semanal",
     planning: "Planejamento",
     costs: "Custos da Obra",
-    supplies: "Suprimentos"
+    supplies: "Suprimentos",
+    inputs: "Cadastro de Insumos",
+    suppliers: "Cadastro de Fornecedores"
   };
 
   return (
@@ -137,6 +141,18 @@ function IndexContent() {
                 {activeView === "supplies" && (
                   <div className="flex-1">
                     <SuppliesView />
+                  </div>
+                )}
+
+                {activeView === "inputs" && (
+                  <div className="flex-1">
+                    <SuppliesView initialTab="inputs" />
+                  </div>
+                )}
+
+                {activeView === "suppliers" && (
+                  <div className="flex-1">
+                    <SuppliesView initialTab="suppliers" />
                   </div>
                 )}
               </div>

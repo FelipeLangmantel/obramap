@@ -169,7 +169,28 @@ export function ImportInputsDialog({
         .eq('project_id', projectId);
       
       const existingNames = existingInputsData?.map(i => i.name) || [];
-      const existingUnits = units.map(u => u.abbreviation.toLowerCase());
+      
+      // Normalize unit for comparison - case insensitive, trim, and handle common variations
+      const normalizeUnit = (unit: string) => {
+        return unit.trim().toLowerCase()
+          .replace(/\s+/g, '')
+          .replace(/[.]/g, '')
+          .replace(/^unid$/, 'un')
+          .replace(/^und$/, 'un')
+          .replace(/^unidade$/, 'un')
+          .replace(/^pç$/, 'pc')
+          .replace(/^pça$/, 'pc')
+          .replace(/^peça$/, 'pc')
+          .replace(/^pecas?$/, 'pc')
+          .replace(/^metro$/, 'm')
+          .replace(/^metros$/, 'm')
+          .replace(/^quilograma$/, 'kg')
+          .replace(/^quilos?$/, 'kg')
+          .replace(/^litros?$/, 'l')
+          .replace(/^lt$/, 'l');
+      };
+      
+      const existingUnitsNormalized = units.map(u => normalizeUnit(u.abbreviation));
       const existingFamilies = families.map(f => f.name.toLowerCase());
 
       // Track new families and units found
@@ -189,8 +210,9 @@ export function ImportInputsDialog({
         const isNewFamily = input.family && !existingFamilies.includes(input.family.toLowerCase());
         if (isNewFamily) newFamilies.add(input.family);
         
-        // Check if unit is new
-        const isNewUnit = input.unit && !existingUnits.includes(input.unit.toLowerCase());
+        // Check if unit is new - use normalized comparison
+        const normalizedInputUnit = input.unit ? normalizeUnit(input.unit) : '';
+        const isNewUnit = input.unit && !existingUnitsNormalized.includes(normalizedInputUnit);
         if (isNewUnit) newUnits.add(input.unit);
         
         return {
