@@ -95,11 +95,10 @@ export function BudgetItemsEditor({
   const [searchTerm, setSearchTerm] = useState("");
   const [filterFamily, setFilterFamily] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
-  const [showFamilySettings, setShowFamilySettings] = useState(false);
-  const [newFamilyName, setNewFamilyName] = useState("");
   const [expandedFamilies, setExpandedFamilies] = useState<Set<string>>(new Set(['all']));
   const [inputSuggestions, setInputSuggestions] = useState<InputItem[]>([]);
   const [showSuggestions, setShowSuggestions] = useState<number | null>(null);
+  const [inputSearchTerm, setInputSearchTerm] = useState("");
 
   // Load families and items
   const loadData = useCallback(async () => {
@@ -336,63 +335,6 @@ export function BudgetItemsEditor({
     setItems(updated);
   };
 
-  // Add family
-  const addFamily = async () => {
-    if (!newFamilyName.trim()) return;
-    
-    try {
-      const { data } = await supabase
-        .from('material_families')
-        .insert({
-          project_id: projectId,
-          name: newFamilyName.trim(),
-          display_order: families.length
-        })
-        .select()
-        .single();
-
-      if (data) {
-        setFamilies([...families, {
-          id: data.id,
-          name: data.name,
-          icon: data.icon || 'package',
-          color: data.color || '#9ca3af',
-          displayOrder: data.display_order
-        }]);
-        setNewFamilyName('');
-        toast.success('Família adicionada');
-      }
-    } catch (error) {
-      console.error('Error adding family:', error);
-      toast.error('Erro ao adicionar');
-    }
-  };
-
-  // Delete family
-  const deleteFamily = async (familyId: string, familyName: string) => {
-    if (familyName === 'Geral') {
-      toast.error('Não é possível remover a família Geral');
-      return;
-    }
-    
-    try {
-      // Update items to use 'Geral' instead
-      await supabase
-        .from('scope_items')
-        .update({ material_family: 'Geral' })
-        .eq('project_id', projectId)
-        .eq('material_family', familyName);
-
-      await supabase.from('material_families').delete().eq('id', familyId);
-      
-      setFamilies(families.filter(f => f.id !== familyId));
-      toast.success('Família removida');
-    } catch (error) {
-      console.error('Error deleting family:', error);
-      toast.error('Erro ao remover');
-    }
-  };
-
   // Filter items
   const filteredItems = useMemo(() => {
     return items.filter(item => {
@@ -491,7 +433,8 @@ export function BudgetItemsEditor({
           variant="outline"
           size="sm"
           className="h-9"
-          onClick={() => setShowFamilySettings(true)}
+          onClick={() => window.open('?tab=inputs', '_self')}
+          title="Gerenciar famílias de materiais no módulo de Suprimentos"
         >
           <Settings className="w-4 h-4" />
         </Button>
@@ -566,10 +509,10 @@ export function BudgetItemsEditor({
                                 <div className="col-span-4">
                                   <Input
                                     value={item.name}
-                                    onChange={(e) => updateItem(originalIndex, 'name', e.target.value)}
                                     placeholder="Nome do item"
-                                    className="h-8 text-sm"
-                                    autoFocus
+                                    className="h-8 text-sm bg-muted/50"
+                                    readOnly
+                                    title="Itens devem ser selecionados do cadastro de insumos"
                                   />
                                 </div>
                                 <div className="col-span-2">
@@ -719,58 +662,6 @@ export function BudgetItemsEditor({
         </div>
       </div>
 
-      {/* Family Settings Dialog */}
-      <Dialog open={showFamilySettings} onOpenChange={setShowFamilySettings}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Gerenciar Famílias de Materiais</DialogTitle>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div className="flex gap-2">
-              <Input
-                placeholder="Nova família..."
-                value={newFamilyName}
-                onChange={(e) => setNewFamilyName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addFamily()}
-              />
-              <Button onClick={addFamily} disabled={!newFamilyName.trim()}>
-                <Plus className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <ScrollArea className="h-[300px]">
-              <div className="space-y-2">
-                {families.map(family => (
-                  <div key={family.id} className="flex items-center justify-between p-2 bg-muted/50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <div 
-                        className="w-3 h-3 rounded-full" 
-                        style={{ backgroundColor: family.color }}
-                      />
-                      <span className="text-sm">{family.name}</span>
-                    </div>
-                    {family.name !== 'Geral' && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-destructive"
-                        onClick={() => deleteFamily(family.id, family.name)}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-          </div>
-
-          <DialogFooter>
-            <Button onClick={() => setShowFamilySettings(false)}>Fechar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
