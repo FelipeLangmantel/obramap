@@ -43,10 +43,34 @@ interface PlannedProduction {
   scope_name: string;
   macro_id: string;
   macro_name: string;
+  macro_color: string;
   planned_houses: number;
   planned_house_ids: number[];
   week_start: string;
   week_end: string;
+  measurement_number: number | null;
+}
+
+interface MeasurementCost {
+  measurementNumber: number;
+  weekStart: string;
+  weekEnd: string;
+  productions: {
+    scopeId: string;
+    scopeName: string;
+    macroName: string;
+    macroColor: string;
+    houses: number;
+    houseIds: number[];
+    materialCost: number;
+    laborCost: number;
+    equipmentCost: number;
+    totalCost: number;
+  }[];
+  totalMaterial: number;
+  totalLabor: number;
+  totalEquipment: number;
+  totalCost: number;
 }
 
 const COSTS_TAB_STORAGE_KEY = "obramap_costs_tab";
@@ -67,17 +91,24 @@ export function ProjectCostsView() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [expandedMacros, setExpandedMacros] = useState<Set<string>>(new Set());
+  const [expandedMeasurements, setExpandedMeasurements] = useState<Set<number>>(new Set());
   const [editingScope, setEditingScope] = useState<{ scopeId: string; macroId: string; scopeName: string } | null>(null);
   const [isUnitCostCollapsed, setIsUnitCostCollapsed] = useState(false);
 
   const toggleMacro = (macroId: string) => {
     setExpandedMacros(prev => {
       const next = new Set(prev);
-      if (next.has(macroId)) {
-        next.delete(macroId);
-      } else {
-        next.add(macroId);
-      }
+      if (next.has(macroId)) next.delete(macroId);
+      else next.add(macroId);
+      return next;
+    });
+  };
+
+  const toggleMeasurement = (measurementNumber: number) => {
+    setExpandedMeasurements(prev => {
+      const next = new Set(prev);
+      if (next.has(measurementNumber)) next.delete(measurementNumber);
+      else next.add(measurementNumber);
       return next;
     });
   };
@@ -181,12 +212,14 @@ export function ProjectCostsView() {
       const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('planned_productions')
-        .select('id, scope_id, scope_name, macro_id, macro_name, planned_houses, planned_house_ids, week_start, week_end')
+        .select('id, scope_id, scope_name, macro_id, macro_name, macro_color, planned_houses, planned_house_ids, week_start, week_end, measurement_number')
         .eq('project_id', currentProject.id)
-        .gte('week_end', today);
+        .gte('week_end', today)
+        .order('measurement_number', { ascending: true })
+        .order('week_start', { ascending: true });
       
       if (!error && data) {
-        setPlannedProductions(data);
+        setPlannedProductions(data as PlannedProduction[]);
       }
     };
     
@@ -301,39 +334,79 @@ export function ProjectCostsView() {
     };
   }, [scopeCosts]);
 
-  // Calculate projected costs
+  // Calculate projected costs grouped by measurement
   const projectedCosts = useMemo(() => {
     let projectedMaterial = 0;
     let projectedLabor = 0;
     let projectedEquipment = 0;
-    const byPlanData: { week: string; scope: string; houses: number; houseIds: number[]; total: number }[] = [];
+    
+    // Group by measurement number
+    const measurementsMap: Record<number, MeasurementCost> = {};
 
     plannedProductions.forEach(planned => {
       const cost = scopeCosts.find(c => c.scopeId === planned.scope_id);
+      const measurementNumber = planned.measurement_number || 1;
+      
+      if (!measurementsMap[measurementNumber]) {
+        measurementsMap[measurementNumber] = {
+          measurementNumber,
+          weekStart: planned.week_start,
+          weekEnd: planned.week_end,
+          productions: [],
+          totalMaterial: 0,
+          totalLabor: 0,
+          totalEquipment: 0,
+          totalCost: 0
+        };
+      }
+      
+      // Update date range for the measurement
+      if (planned.week_start < measurementsMap[measurementNumber].weekStart) {
+        measurementsMap[measurementNumber].weekStart = planned.week_start;
+      }
+      if (planned.week_end > measurementsMap[measurementNumber].weekEnd) {
+        measurementsMap[measurementNumber].weekEnd = planned.week_end;
+      }
+      
       if (cost) {
-        const unitTotal = cost.materialCost + cost.laborCost + cost.equipmentCost;
-        const total = unitTotal * planned.planned_houses;
+        const materialCost = cost.materialCost * planned.planned_houses;
+        const laborCost = cost.laborCost * planned.planned_houses;
+        const equipmentCost = cost.equipmentCost * planned.planned_houses;
+        const totalCost = materialCost + laborCost + equipmentCost;
         
-        projectedMaterial += cost.materialCost * planned.planned_houses;
-        projectedLabor += cost.laborCost * planned.planned_houses;
-        projectedEquipment += cost.equipmentCost * planned.planned_houses;
+        projectedMaterial += materialCost;
+        projectedLabor += laborCost;
+        projectedEquipment += equipmentCost;
         
-        byPlanData.push({
-          week: `${planned.week_start.split('-').reverse().slice(0, 2).join('/')} - ${planned.week_end.split('-').reverse().slice(0, 2).join('/')}`,
-          scope: planned.scope_name,
+        measurementsMap[measurementNumber].productions.push({
+          scopeId: planned.scope_id,
+          scopeName: planned.scope_name,
+          macroName: planned.macro_name,
+          macroColor: planned.macro_color,
           houses: planned.planned_houses,
           houseIds: planned.planned_house_ids || [],
-          total
+          materialCost,
+          laborCost,
+          equipmentCost,
+          totalCost
         });
+        
+        measurementsMap[measurementNumber].totalMaterial += materialCost;
+        measurementsMap[measurementNumber].totalLabor += laborCost;
+        measurementsMap[measurementNumber].totalEquipment += equipmentCost;
+        measurementsMap[measurementNumber].totalCost += totalCost;
       }
     });
+    
+    // Convert to sorted array
+    const byMeasurement = Object.values(measurementsMap).sort((a, b) => a.measurementNumber - b.measurementNumber);
 
     return {
       material: projectedMaterial,
       labor: projectedLabor,
       equipment: projectedEquipment,
       total: projectedMaterial + projectedLabor + projectedEquipment,
-      byPlanData
+      byMeasurement
     };
   }, [plannedProductions, scopeCosts]);
 
@@ -648,25 +721,66 @@ export function ProjectCostsView() {
                   </div>
                 </div>
                 
-                {projectedCosts.byPlanData.length > 0 && (
+                {projectedCosts.byMeasurement.length > 0 && (
                   <div className="mt-4">
                     <p className="text-sm font-semibold mb-3 flex items-center gap-2">
                       <BarChart3 className="w-4 h-4" />
-                      Detalhamento por Planejamento
+                      Detalhamento por Medição
                     </p>
-                    <ScrollArea className="h-[150px]">
+                    <ScrollArea className="h-[300px]">
                       <div className="space-y-2">
-                        {projectedCosts.byPlanData.map((plan, idx) => (
-                          <div key={idx} className="p-3 bg-background/60 rounded-lg border border-amber-200/50">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-sm font-medium">{plan.scope}</p>
-                                <p className="text-xs text-muted-foreground">{plan.week} • {plan.houses} casas</p>
-                              </div>
-                              <p className="text-sm font-bold text-amber-700 dark:text-amber-400">{formatCurrency(plan.total)}</p>
-                            </div>
-                          </div>
-                        ))}
+                        {projectedCosts.byMeasurement.map((measurement) => {
+                          const isExpanded = expandedMeasurements.has(measurement.measurementNumber);
+                          const weekRange = `${measurement.weekStart.split('-').reverse().slice(0, 2).join('/')} - ${measurement.weekEnd.split('-').reverse().slice(0, 2).join('/')}`;
+                          
+                          return (
+                            <Collapsible key={measurement.measurementNumber} open={isExpanded} onOpenChange={() => toggleMeasurement(measurement.measurementNumber)}>
+                              <CollapsibleTrigger asChild>
+                                <div className="p-3 bg-background/60 rounded-lg border border-amber-200/50 cursor-pointer hover:bg-amber-50/50 dark:hover:bg-amber-900/20 transition-colors">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                      <div>
+                                        <p className="text-sm font-medium">Medição {measurement.measurementNumber}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {weekRange} • {measurement.productions.reduce((sum, p) => sum + p.houses, 0)} casas • {measurement.productions.length} serviços
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-sm font-bold text-amber-700 dark:text-amber-400">{formatCurrency(measurement.totalCost)}</p>
+                                      <div className="flex gap-2 text-xs text-muted-foreground">
+                                        <span>Mat: {formatCurrency(measurement.totalMaterial)}</span>
+                                        <span>MO: {formatCurrency(measurement.totalLabor)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent>
+                                <div className="mt-1 ml-6 space-y-1">
+                                  {measurement.productions.map((prod, idx) => (
+                                    <div key={idx} className="p-2 bg-muted/30 rounded border border-muted flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: prod.macroColor }} />
+                                        <div>
+                                          <p className="text-xs font-medium">{prod.scopeName}</p>
+                                          <p className="text-xs text-muted-foreground">{prod.macroName} • {prod.houses} casas</p>
+                                        </div>
+                                      </div>
+                                      <div className="text-right text-xs">
+                                        <p className="font-medium">{formatCurrency(prod.totalCost)}</p>
+                                        <p className="text-muted-foreground">
+                                          M: {formatCurrency(prod.materialCost)} | MO: {formatCurrency(prod.laborCost)} | EQ: {formatCurrency(prod.equipmentCost)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </CollapsibleContent>
+                            </Collapsible>
+                          );
+                        })}
                       </div>
                     </ScrollArea>
                   </div>

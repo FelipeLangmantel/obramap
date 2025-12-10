@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Package, Truck, FileText, Clock, AlertTriangle, CheckCircle2, Plus, Settings, Users, Search, Calendar, DollarSign, Loader2, Eye, Edit2, Trash2, Send, Check, X, Box, Layers, Hammer, Wrench, ChevronDown, ChevronRight, ClipboardList } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -280,6 +280,10 @@ export function SuppliesView() {
   const [alertFamilies, setAlertFamilies] = useState<MaterialFamily[]>([]);
   const [expandedAlertFamilies, setExpandedAlertFamilies] = useState<Set<string>>(new Set());
 
+  // Refs for scrolling to alert sections
+  const materialAlertsRef = useRef<HTMLDivElement>(null);
+  const laborAlertsRef = useRef<HTMLDivElement>(null);
+
   // Load minimal data for alerts on mount
   const loadAlertData = useCallback(async () => {
     if (!projectId) return;
@@ -291,7 +295,8 @@ export function SuppliesView() {
         supabase.from('quotation_requests').select('id, status').eq('project_id', projectId).eq('status', 'pending'),
         supabase.from('purchase_orders').select('id, status').eq('project_id', projectId).eq('status', 'in_transit'),
         supabase.from('labor_contracts').select('*').eq('project_id', projectId),
-        supabase.from('weekly_productions').select('scope_id, house_ids').eq('project_id', projectId),
+        // Only get non-initial database productions for executed count
+        supabase.from('weekly_productions').select('scope_id, house_ids, is_initial_database').eq('project_id', projectId),
         supabase.from('planned_productions').select('*').eq('project_id', projectId).gte('week_start', new Date().toISOString().split('T')[0]),
         supabase.from('material_families').select('*').eq('project_id', projectId).order('display_order')
       ]);
@@ -314,7 +319,8 @@ export function SuppliesView() {
       
       if (prodRes.data) {
         const executed: Record<string, number> = {};
-        prodRes.data.forEach(p => {
+        // Only count non-initial database productions (already contracted/purchased)
+        prodRes.data.filter(p => !p.is_initial_database).forEach(p => {
           if (!executed[p.scope_id]) executed[p.scope_id] = 0;
           executed[p.scope_id] += (p.house_ids?.length || 0);
         });
@@ -407,44 +413,63 @@ export function SuppliesView() {
     return alertsList.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
   }, [alertsData.scopeItems, laborContracts, executedHouses]);
 
-  // Calculate material alerts based on lead time
+  // Calculate material alerts based on lead time - only for planned future production
   const materialAlerts = useMemo((): MaterialAlert[] => {
     const today = new Date();
-    const totalHouses = currentProject?.totalHouses || 0;
     
-    if (totalHouses === 0 || alertFamilies.length === 0) return [];
+    if (alertFamilies.length === 0 || plannedProductions.length === 0) return [];
     
-    // Group material scope items by family
-    const materialItems = alertsData.scopeItems.filter(item => item.category === 'material');
-    const itemsByFamily: Record<string, typeof materialItems> = {};
+    // Get total planned houses from future productions (excluding initial database)
+    const plannedHousesByScope: Record<string, number[]> = {};
+    plannedProductions.forEach(pp => {
+      if (!plannedHousesByScope[pp.scope_id]) plannedHousesByScope[pp.scope_id] = [];
+      plannedHousesByScope[pp.scope_id].push(...pp.planned_house_ids);
+    });
+    
+    // Group material scope items by family, only for scopes with planned production
+    const materialItems = alertsData.scopeItems.filter(item => 
+      item.category === 'material' && plannedHousesByScope[item.scope_id]
+    );
+    
+    const itemsByFamily: Record<string, { item: typeof materialItems[0]; plannedHouses: number }[]> = {};
     
     materialItems.forEach(item => {
       const familyName = item.material_family || 'Geral';
       if (!itemsByFamily[familyName]) itemsByFamily[familyName] = [];
-      itemsByFamily[familyName].push(item);
+      const plannedHouses = [...new Set(plannedHousesByScope[item.scope_id] || [])].length;
+      if (plannedHouses > 0) {
+        itemsByFamily[familyName].push({ item, plannedHouses });
+      }
     });
     
     // Create alerts for each family based on lead time
     const alerts: MaterialAlert[] = [];
     
-    Object.entries(itemsByFamily).forEach(([familyName, items]) => {
+    Object.entries(itemsByFamily).forEach(([familyName, itemsData]) => {
       const family = alertFamilies.find(f => f.name === familyName);
-      if (!family) return;
+      if (!family || itemsData.length === 0) return;
       
       const leadTimeDays = family.lead_time_days || 7;
       
-      // Calculate total quantities needed for all houses
-      const alertItems = items.map(item => ({
+      // Calculate quantities based on planned houses only (remaining balance)
+      const alertItems = itemsData.map(({ item, plannedHouses }) => ({
         id: item.id,
         name: item.name,
-        totalQuantity: item.quantity * totalHouses,
+        totalQuantity: item.quantity * plannedHouses,
         unit: item.unit,
         unitValue: item.unit_value,
-        totalValue: item.quantity * totalHouses * item.unit_value
+        totalValue: item.quantity * plannedHouses * item.unit_value
       }));
       
-      // Due date is today + lead time
-      const dueDate = addDays(today, leadTimeDays);
+      // Due date is based on earliest planned production for this family
+      const earliestPlanned = plannedProductions
+        .filter(pp => itemsData.some(id => id.item.scope_id === pp.scope_id))
+        .sort((a, b) => new Date(a.week_start).getTime() - new Date(b.week_start).getTime())[0];
+      
+      const dueDate = earliestPlanned 
+        ? addDays(new Date(earliestPlanned.week_start), -leadTimeDays)
+        : addDays(today, leadTimeDays);
+      
       const daysUntilDue = differenceInDays(dueDate, today);
       
       // Determine priority based on days until due
@@ -466,7 +491,7 @@ export function SuppliesView() {
     
     // Sort by days until due (most urgent first)
     return alerts.sort((a, b) => a.daysUntilDue - b.daysUntilDue);
-  }, [alertsData.scopeItems, alertFamilies, currentProject?.totalHouses]);
+  }, [alertsData.scopeItems, alertFamilies, plannedProductions]);
 
   // Combined alerts count
   const totalAlertsCount = laborAlerts.length + materialAlerts.length;
@@ -942,14 +967,18 @@ export function SuppliesView() {
         <TabsContent value="alerts" className="flex-1 overflow-auto mt-4 space-y-4">
           {/* Material Alerts by Family */}
           {materialAlerts.length > 0 && (
-            <Card>
+            <Card 
+              ref={materialAlertsRef}
+              className="cursor-pointer hover:border-blue-400 transition-colors"
+              onClick={() => materialAlertsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            >
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Package className="w-5 h-5 text-blue-500" />
                   Alertas de Cotação - Lead Time ({materialAlerts.length} famílias)
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent onClick={(e) => e.stopPropagation()}>
                 <ScrollArea className="max-h-[400px]">
                   <div className="space-y-2">
                     {materialAlerts.map((alert) => {
@@ -1054,14 +1083,18 @@ export function SuppliesView() {
           )}
 
           {/* Labor Alerts */}
-          <Card>
+          <Card 
+            ref={laborAlertsRef}
+            className="cursor-pointer hover:border-orange-400 transition-colors"
+            onClick={() => laborAlertsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          >
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Hammer className="w-5 h-5 text-orange-500" />
                 Alertas de Mão de Obra ({laborAlerts.length})
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent onClick={(e) => e.stopPropagation()}>
               {laborAlerts.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">Nenhum alerta de mão de obra</p>
               ) : (
