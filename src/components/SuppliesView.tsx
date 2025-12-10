@@ -947,10 +947,10 @@ export function SuppliesView() {
                           </Select>
                         </div>
                         <div><Label>Família</Label>
-                          <Select value={newInput.material_family_id} onValueChange={(v) => setNewInput({ ...newInput, material_family_id: v })}>
+                          <Select value={newInput.material_family_id || "none"} onValueChange={(v) => setNewInput({ ...newInput, material_family_id: v === "none" ? "" : v })}>
                             <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">Sem família</SelectItem>
+                              <SelectItem value="none">Sem família</SelectItem>
                               {families.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
