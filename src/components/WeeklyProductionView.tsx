@@ -31,7 +31,11 @@ import {
   ListChecks,
   AlertTriangle,
   Percent,
-  Settings2
+  Settings2,
+  ClipboardCheck,
+  Zap,
+  RotateCcw,
+  Users
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
@@ -48,6 +52,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { LaborContractsView } from "./LaborContractsView";
 
 interface WeeklyProduction {
   id: string;
@@ -88,10 +93,10 @@ export function WeeklyProductionView() {
   const { canEdit } = useAuth();
   
   // Load saved tab from localStorage
-  const [activeTab, setActiveTab] = useState<"register" | "analysis">(() => {
+  const [activeTab, setActiveTab] = useState<"register" | "analysis" | "contracts">(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(TAB_STORAGE_KEY);
-      if (saved === "register" || saved === "analysis") {
+      if (saved === "register" || saved === "analysis" || saved === "contracts") {
         return saved;
       }
     }
@@ -629,7 +634,7 @@ export function WeeklyProductionView() {
 
   // Handle tab change with persistence
   const handleTabChange = (value: string) => {
-    const tab = value as "register" | "analysis";
+    const tab = value as "register" | "analysis" | "contracts";
     setActiveTab(tab);
     localStorage.setItem(TAB_STORAGE_KEY, tab);
   };
@@ -640,17 +645,43 @@ export function WeeklyProductionView() {
     localStorage.setItem(INITIAL_DB_STORAGE_KEY, checked.toString());
   };
 
+  // State for measurement-based navigation
+  const [selectedMeasurementNum, setSelectedMeasurementNum] = useState<number | null>(null);
+
+  // Group periods by measurement
+  const measurementGroups = useMemo(() => {
+    const groups = new Map<number, PlannedPeriod[]>();
+    plannedPeriods.forEach(period => {
+      const measurementNum = period.measurement_number || 1;
+      if (!groups.has(measurementNum)) {
+        groups.set(measurementNum, []);
+      }
+      groups.get(measurementNum)!.push(period);
+    });
+    return Array.from(groups.entries()).sort((a, b) => b[0] - a[0]);
+  }, [plannedPeriods]);
+
+  // Periods for selected measurement
+  const periodsForMeasurement = useMemo(() => {
+    if (selectedMeasurementNum === null) return [];
+    return plannedPeriods.filter(p => (p.measurement_number || 1) === selectedMeasurementNum);
+  }, [plannedPeriods, selectedMeasurementNum]);
+
   return (
     <div className="space-y-4 h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2 h-10">
+        <TabsList className="grid w-full max-w-lg grid-cols-3 h-10">
           <TabsTrigger value="register" className="gap-2 text-sm">
             <ClipboardList className="w-4 h-4" />
-            Registrar Produção
+            Registrar
           </TabsTrigger>
           <TabsTrigger value="analysis" className="gap-2 text-sm">
             <TrendingUp className="w-4 h-4" />
-            Análise Semanal
+            Análise
+          </TabsTrigger>
+          <TabsTrigger value="contracts" className="gap-2 text-sm">
+            <Users className="w-4 h-4" />
+            Contratações
           </TabsTrigger>
         </TabsList>
 
@@ -1516,6 +1547,10 @@ export function WeeklyProductionView() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="contracts" className="flex-1 overflow-auto mt-4">
+          <LaborContractsView />
         </TabsContent>
 
       </Tabs>
