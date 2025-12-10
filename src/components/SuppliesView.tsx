@@ -47,7 +47,7 @@ interface Supplier {
   phone: string | null;
   address: string | null;
   notes: string | null;
-  supplier_type: 'material' | 'labor';
+  supplier_type: 'material' | 'labor' | 'equipment';
 }
 
 interface QuotationRequest {
@@ -206,6 +206,10 @@ export function SuppliesView() {
   });
   const [newUnit, setNewUnit] = useState<{ name: string; abbreviation: string }>({ name: '', abbreviation: '' });
   const [newSupplier, setNewSupplier] = useState<Partial<Supplier>>({ supplier_type: 'material' });
+  const [familyDialogOpen, setFamilyDialogOpen] = useState(false);
+  const [newFamily, setNewFamily] = useState<{ name: string; color: string }>({ name: '', color: '#3b82f6' });
+  const [editingUnit, setEditingUnit] = useState<UnitItem | null>(null);
+  const [editingFamily, setEditingFamily] = useState<MaterialFamily | null>(null);
   const [newQuotation, setNewQuotation] = useState<{ title: string; required_date: string; notes: string; items: string[] }>({
     title: '', required_date: '', notes: '', items: []
   });
@@ -375,15 +379,55 @@ export function SuppliesView() {
   const saveUnit = async () => {
     if (!projectId || !newUnit.name.trim() || !newUnit.abbreviation.trim()) return;
     try {
-      await supabase.from('units').insert({ project_id: projectId, name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim() });
-      toast.success('Unidade cadastrada!');
+      if (editingUnit) {
+        await supabase.from('units').update({ name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim() }).eq('id', editingUnit.id);
+        toast.success('Unidade atualizada!');
+      } else {
+        await supabase.from('units').insert({ project_id: projectId, name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim() });
+        toast.success('Unidade cadastrada!');
+      }
       setUnitDialogOpen(false);
       setNewUnit({ name: '', abbreviation: '' });
+      setEditingUnit(null);
       setDataLoaded(prev => ({ ...prev, inputs: false }));
       loadTabData('inputs');
     } catch (error) {
       console.error('Error saving unit:', error);
       toast.error('Erro ao salvar unidade');
+    }
+  };
+
+  const saveFamily = async () => {
+    if (!projectId || !newFamily.name.trim()) return;
+    try {
+      if (editingFamily) {
+        await supabase.from('material_families').update({ name: newFamily.name.trim(), color: newFamily.color }).eq('id', editingFamily.id);
+        toast.success('Família atualizada!');
+      } else {
+        await supabase.from('material_families').insert({ project_id: projectId, name: newFamily.name.trim(), color: newFamily.color, display_order: families.length });
+        toast.success('Família cadastrada!');
+      }
+      setFamilyDialogOpen(false);
+      setNewFamily({ name: '', color: '#3b82f6' });
+      setEditingFamily(null);
+      setDataLoaded(prev => ({ ...prev, inputs: false }));
+      loadTabData('inputs');
+    } catch (error) {
+      console.error('Error saving family:', error);
+      toast.error('Erro ao salvar família');
+    }
+  };
+
+  const deleteFamily = async (id: string) => {
+    try {
+      // Update inputs to remove family reference
+      await supabase.from('inputs').update({ material_family_id: null }).eq('material_family_id', id);
+      await supabase.from('material_families').delete().eq('id', id);
+      toast.success('Família removida');
+      setFamilies(prev => prev.filter(f => f.id !== id));
+    } catch (error) {
+      console.error('Error deleting family:', error);
+      toast.error('Erro ao remover');
     }
   };
 
@@ -621,6 +665,17 @@ export function SuppliesView() {
     });
   }, [inputs, searchInput, filterCategory]);
 
+  // Group inputs by family
+  const inputsByFamily = useMemo(() => {
+    const grouped: Record<string, InputItem[]> = {};
+    filteredInputs.forEach(input => {
+      const familyName = input.material_family?.name || 'Sem Família';
+      if (!grouped[familyName]) grouped[familyName] = [];
+      grouped[familyName].push(input);
+    });
+    return grouped;
+  }, [filteredInputs]);
+
   const filteredSuppliers = useMemo(() => {
     return suppliers.filter(s => supplierTypeFilter === 'all' || s.supplier_type === supplierTypeFilter);
   }, [suppliers, supplierTypeFilter]);
@@ -701,29 +756,67 @@ export function SuppliesView() {
               </Select>
             </div>
             <div className="flex gap-2">
-              <Dialog open={unitDialogOpen} onOpenChange={setUnitDialogOpen}>
+              {/* Families Dialog */}
+              <Dialog open={familyDialogOpen} onOpenChange={(o) => { setFamilyDialogOpen(o); if (!o) { setEditingFamily(null); setNewFamily({ name: '', color: '#3b82f6' }); } }}>
+                <DialogTrigger asChild><Button variant="outline" size="sm"><Package className="w-4 h-4 mr-1" />Famílias</Button></DialogTrigger>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Gerenciar Famílias de Materiais</DialogTitle></DialogHeader>
+                  <div className="space-y-4">
+                    <div className="flex gap-2">
+                      <Input placeholder="Nova família..." value={newFamily.name} onChange={(e) => setNewFamily({ ...newFamily, name: e.target.value })} className="flex-1" />
+                      <Input type="color" value={newFamily.color} onChange={(e) => setNewFamily({ ...newFamily, color: e.target.value })} className="w-12 p-1 h-10" />
+                      <Button onClick={saveFamily}><Plus className="w-4 h-4" /></Button>
+                    </div>
+                    <ScrollArea className="h-[250px]">
+                      <div className="space-y-1">
+                        {families.map(f => (
+                          <div key={f.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: f.color }} />
+                              <span>{f.name}</span>
+                            </div>
+                            <div className="flex gap-1">
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingFamily(f); setNewFamily({ name: f.name, color: f.color }); }}><Edit2 className="w-3.5 h-3.5" /></Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteFamily(f.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </div>
+                  <DialogFooter><Button onClick={() => setFamilyDialogOpen(false)}>Fechar</Button></DialogFooter>
+                </DialogContent>
+              </Dialog>
+              
+              {/* Units Dialog */}
+              <Dialog open={unitDialogOpen} onOpenChange={(o) => { setUnitDialogOpen(o); if (!o) { setEditingUnit(null); setNewUnit({ name: '', abbreviation: '' }); } }}>
                 <DialogTrigger asChild><Button variant="outline" size="sm"><Layers className="w-4 h-4 mr-1" />Unidades</Button></DialogTrigger>
                 <DialogContent>
                   <DialogHeader><DialogTitle>Gerenciar Unidades</DialogTitle></DialogHeader>
                   <div className="space-y-4">
                     <div className="flex gap-2">
                       <Input placeholder="Nome" value={newUnit.name} onChange={(e) => setNewUnit({ ...newUnit, name: e.target.value })} />
-                      <Input placeholder="Abrev." value={newUnit.abbreviation} onChange={(e) => setNewUnit({ ...newUnit, abbreviation: e.target.value })} className="w-24" />
+                      <Input placeholder="Abreviação" value={newUnit.abbreviation} onChange={(e) => setNewUnit({ ...newUnit, abbreviation: e.target.value })} className="w-24" />
                       <Button onClick={saveUnit}><Plus className="w-4 h-4" /></Button>
                     </div>
-                    <ScrollArea className="h-[200px]">
+                    <ScrollArea className="h-[250px]">
                       <div className="space-y-1">
                         {units.map(u => (
                           <div key={u.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
                             <span>{u.name} ({u.abbreviation})</span>
-                            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteUnit(u.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                            <div className="flex gap-1">
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingUnit(u); setNewUnit({ name: u.name, abbreviation: u.abbreviation }); }}><Edit2 className="w-3.5 h-3.5" /></Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteUnit(u.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                            </div>
                           </div>
                         ))}
                       </div>
                     </ScrollArea>
                   </div>
+                  <DialogFooter><Button onClick={() => setUnitDialogOpen(false)}>Fechar</Button></DialogFooter>
                 </DialogContent>
               </Dialog>
+              
               {canEdit && (
                 <Dialog open={inputDialogOpen} onOpenChange={(o) => { setInputDialogOpen(o); if (!o) { setEditingInput(null); setNewInput({ name: '', unit: 'un', category: 'material', material_family_id: '', description: '' }); } }}>
                   <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-1" />Novo Insumo</Button></DialogTrigger>
@@ -769,42 +862,54 @@ export function SuppliesView() {
             </div>
           </div>
 
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10"></TableHead>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Unidade</TableHead>
-                    <TableHead>Família</TableHead>
-                    <TableHead className="w-[80px]"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredInputs.map(input => (
-                    <TableRow key={input.id}>
-                      <TableCell>
-                        {input.category === 'material' ? <Package className="w-4 h-4 text-blue-500" /> : input.category === 'labor' ? <Hammer className="w-4 h-4 text-orange-500" /> : <Wrench className="w-4 h-4 text-green-500" />}
-                      </TableCell>
-                      <TableCell className="font-medium">{input.name}</TableCell>
-                      <TableCell>{input.unit}</TableCell>
-                      <TableCell>{input.material_family && <Badge variant="outline" style={{ borderColor: input.material_family.color }}>{input.material_family.name}</Badge>}</TableCell>
-                      <TableCell>
-                        {canEdit && (
-                          <div className="flex gap-1">
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingInput(input); setNewInput({ name: input.name, unit: input.unit, category: input.category, material_family_id: input.material_family_id || '', description: input.description || '' }); setInputDialogOpen(true); }}><Edit2 className="w-3.5 h-3.5" /></Button>
-                            <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteInput(input.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {filteredInputs.length === 0 && <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{inputs.length === 0 ? 'Nenhum insumo cadastrado' : 'Nenhum insumo encontrado'}</TableCell></TableRow>}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          {/* Inputs grouped by family */}
+          <ScrollArea className="h-[calc(100vh-280px)]">
+            <div className="space-y-4">
+              {Object.entries(inputsByFamily).map(([familyName, familyInputs]) => {
+                const family = families.find(f => f.name === familyName);
+                return (
+                  <Card key={familyName}>
+                    <CardHeader className="py-3 px-4">
+                      <CardTitle className="flex items-center gap-2 text-sm">
+                        {family && <div className="w-3 h-3 rounded-full" style={{ backgroundColor: family.color }} />}
+                        {familyName}
+                        <Badge variant="secondary" className="ml-auto">{familyInputs.length}</Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <Table>
+                        <TableBody>
+                          {familyInputs.map(input => (
+                            <TableRow key={input.id}>
+                              <TableCell className="w-10">
+                                {input.category === 'material' ? <Package className="w-4 h-4 text-blue-500" /> : input.category === 'labor' ? <Hammer className="w-4 h-4 text-orange-500" /> : <Wrench className="w-4 h-4 text-green-500" />}
+                              </TableCell>
+                              <TableCell className="font-medium">{input.name}</TableCell>
+                              <TableCell className="w-20">{input.unit}</TableCell>
+                              <TableCell className="w-24">
+                                <Badge variant="outline">{CATEGORY_LABELS[input.category]}</Badge>
+                              </TableCell>
+                              <TableCell className="w-20">
+                                {canEdit && (
+                                  <div className="flex gap-1">
+                                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingInput(input); setNewInput({ name: input.name, unit: input.unit, category: input.category, material_family_id: input.material_family_id || '', description: input.description || '' }); setInputDialogOpen(true); }}><Edit2 className="w-3.5 h-3.5" /></Button>
+                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteInput(input.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                                  </div>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+              {Object.keys(inputsByFamily).length === 0 && (
+                <Card><CardContent className="p-8 text-center text-muted-foreground">{inputs.length === 0 ? 'Nenhum insumo cadastrado' : 'Nenhum insumo encontrado'}</CardContent></Card>
+              )}
+            </div>
+          </ScrollArea>
         </TabsContent>
 
         {/* Quotations Tab */}
@@ -957,6 +1062,7 @@ export function SuppliesView() {
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="material">Materiais</SelectItem>
                 <SelectItem value="labor">Mão de Obra</SelectItem>
+                <SelectItem value="equipment">Equipamentos</SelectItem>
               </SelectContent>
             </Select>
             {canEdit && (
@@ -967,11 +1073,12 @@ export function SuppliesView() {
                   <div className="space-y-4">
                     <div><Label>Nome *</Label><Input value={newSupplier.name || ''} onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })} /></div>
                     <div><Label>Tipo *</Label>
-                      <Select value={newSupplier.supplier_type || 'material'} onValueChange={(v: 'material' | 'labor') => setNewSupplier({ ...newSupplier, supplier_type: v })}>
+                      <Select value={newSupplier.supplier_type || 'material'} onValueChange={(v: 'material' | 'labor' | 'equipment') => setNewSupplier({ ...newSupplier, supplier_type: v })}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="material">Materiais</SelectItem>
                           <SelectItem value="labor">Mão de Obra</SelectItem>
+                          <SelectItem value="equipment">Equipamentos</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -998,8 +1105,8 @@ export function SuppliesView() {
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold">{supplier.name}</h3>
-                        <Badge variant="outline" className={supplier.supplier_type === 'labor' ? 'border-orange-500 text-orange-600' : 'border-blue-500 text-blue-600'}>
-                          {supplier.supplier_type === 'labor' ? 'MO' : 'MAT'}
+                        <Badge variant="outline" className={supplier.supplier_type === 'labor' ? 'border-orange-500 text-orange-600' : supplier.supplier_type === 'equipment' ? 'border-green-500 text-green-600' : 'border-blue-500 text-blue-600'}>
+                          {supplier.supplier_type === 'labor' ? 'MO' : supplier.supplier_type === 'equipment' ? 'EQP' : 'MAT'}
                         </Badge>
                       </div>
                       {supplier.email && <p className="text-sm text-muted-foreground">{supplier.email}</p>}
