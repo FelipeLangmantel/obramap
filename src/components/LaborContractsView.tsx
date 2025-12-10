@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
@@ -104,6 +105,9 @@ export function LaborContractsView({
   const [newContractOpen, setNewContractOpen] = useState(false);
   const [measurementDialogOpen, setMeasurementDialogOpen] = useState(false);
   const [selectedContract, setSelectedContract] = useState<LaborContract | null>(null);
+  const [editingContract, setEditingContract] = useState<LaborContract | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [contractToDelete, setContractToDelete] = useState<LaborContract | null>(null);
   
   // Form states
   const [selectedMacro, setSelectedMacro] = useState("");
@@ -308,6 +312,53 @@ export function LaborContractsView({
   const getContractProgress = (contract: LaborContract) => {
     const executed = executedHouses[contract.scope_id] || 0;
     return Math.min(100, (executed / contract.contracted_houses) * 100);
+  };
+
+  // Delete contract
+  const handleDeleteContract = async (contract: LaborContract) => {
+    try {
+      const { error } = await supabase.from('labor_contracts').delete().eq('id', contract.id);
+      if (error) throw error;
+      toast.success('Contrato excluído com sucesso!');
+      setContracts(prev => prev.filter(c => c.id !== contract.id));
+      setDeleteConfirmOpen(false);
+      setContractToDelete(null);
+      setSelectedContract(null);
+    } catch (error) {
+      console.error('Error deleting contract:', error);
+      toast.error('Erro ao excluir contrato');
+    }
+  };
+
+  // Update contract (auto-save)
+  const handleUpdateContract = async (contract: LaborContract, updates: Partial<LaborContract>) => {
+    try {
+      const newValues = { ...contract, ...updates };
+      // Recalculate total if houses or value changed
+      if (updates.contracted_houses !== undefined || updates.unit_value !== undefined) {
+        newValues.total_value = newValues.contracted_houses * newValues.unit_value;
+      }
+      
+      const { error } = await supabase.from('labor_contracts').update({
+        contracted_houses: newValues.contracted_houses,
+        unit_value: newValues.unit_value,
+        total_value: newValues.total_value,
+        contractor_name: newValues.contractor_name,
+        status: newValues.status,
+        notes: newValues.notes
+      }).eq('id', contract.id);
+      
+      if (error) throw error;
+      
+      setContracts(prev => prev.map(c => c.id === contract.id ? newValues : c));
+      if (selectedContract?.id === contract.id) {
+        setSelectedContract(newValues);
+      }
+      toast.success('Contrato atualizado!');
+    } catch (error) {
+      console.error('Error updating contract:', error);
+      toast.error('Erro ao atualizar contrato');
+    }
   };
 
   // Format currency
@@ -674,7 +725,7 @@ export function LaborContractsView({
 
       {/* Contract Details Dialog */}
       <Dialog open={!!selectedContract} onOpenChange={() => setSelectedContract(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <ClipboardList className="w-5 h-5" />
@@ -694,14 +745,53 @@ export function LaborContractsView({
                   <p className="font-semibold">{selectedContract.macro_name}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Empreiteiro</p>
-                  <p className="font-semibold">{selectedContract.contractor_name || '-'}</p>
+                  <Label className="text-sm text-muted-foreground">Empreiteiro</Label>
+                  <Input 
+                    value={selectedContract.contractor_name || ''} 
+                    onChange={(e) => setSelectedContract({ ...selectedContract, contractor_name: e.target.value })}
+                    onBlur={() => handleUpdateContract(selectedContract, { contractor_name: selectedContract.contractor_name })}
+                    placeholder="Nome do empreiteiro"
+                  />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Status</p>
-                  <Badge variant={selectedContract.status === 'active' ? 'default' : 'secondary'}>
-                    {selectedContract.status === 'active' ? 'Ativo' : 'Inativo'}
-                  </Badge>
+                  <Label className="text-sm text-muted-foreground">Status</Label>
+                  <Select 
+                    value={selectedContract.status} 
+                    onValueChange={(v) => {
+                      setSelectedContract({ ...selectedContract, status: v });
+                      handleUpdateContract(selectedContract, { status: v });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Ativo</SelectItem>
+                      <SelectItem value="inactive">Inativo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm text-muted-foreground">Casas Contratadas</Label>
+                  <Input 
+                    type="number"
+                    value={selectedContract.contracted_houses} 
+                    onChange={(e) => setSelectedContract({ ...selectedContract, contracted_houses: parseInt(e.target.value) || 0 })}
+                    onBlur={() => handleUpdateContract(selectedContract, { contracted_houses: selectedContract.contracted_houses })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm text-muted-foreground">Valor Unitário (R$)</Label>
+                  <Input 
+                    type="number"
+                    step="0.01"
+                    value={selectedContract.unit_value} 
+                    onChange={(e) => setSelectedContract({ ...selectedContract, unit_value: parseFloat(e.target.value) || 0 })}
+                    onBlur={() => handleUpdateContract(selectedContract, { unit_value: selectedContract.unit_value })}
+                  />
                 </div>
               </div>
 
@@ -719,56 +809,62 @@ export function LaborContractsView({
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-primary">
-                      {formatCurrency(selectedContract.total_value)}
+                      {formatCurrency(selectedContract.contracted_houses * selectedContract.unit_value)}
                     </p>
                     <p className="text-xs text-muted-foreground">Valor Total</p>
                   </div>
                 </div>
               </div>
 
-              {/* Measurements Table */}
-              <div className="space-y-2">
-                <h4 className="font-medium flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  Medições
-                </h4>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nº</TableHead>
-                      <TableHead>Casas</TableHead>
-                      <TableHead>Valor Bruto</TableHead>
-                      <TableHead>Retenção</TableHead>
-                      <TableHead>Valor Líquido</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                        As medições são registradas automaticamente com base nas produções lançadas
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
+              <div>
+                <Label className="text-sm text-muted-foreground">Observações</Label>
+                <Textarea 
+                  value={selectedContract.notes || ''} 
+                  onChange={(e) => setSelectedContract({ ...selectedContract, notes: e.target.value })}
+                  onBlur={() => handleUpdateContract(selectedContract, { notes: selectedContract.notes })}
+                  placeholder="Observações do contrato..."
+                />
               </div>
-
-              {selectedContract.notes && (
-                <div>
-                  <p className="text-sm text-muted-foreground">Observações</p>
-                  <p className="text-sm mt-1">{selectedContract.notes}</p>
-                </div>
-              )}
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="gap-2">
+            {canEdit && (
+              <Button 
+                variant="destructive" 
+                onClick={() => {
+                  setContractToDelete(selectedContract);
+                  setDeleteConfirmOpen(true);
+                }}
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                Excluir
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setSelectedContract(null)}>
               Fechar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o contrato "{contractToDelete?.scope_name}"? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteConfirmOpen(false)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => contractToDelete && handleDeleteContract(contractToDelete)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
