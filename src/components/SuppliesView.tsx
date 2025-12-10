@@ -318,7 +318,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         // Only get non-initial database productions for executed count
         supabase.from('weekly_productions').select('scope_id, house_ids, is_initial_database').eq('project_id', projectId),
         supabase.from('planned_productions').select('*').eq('project_id', projectId).gte('week_start', new Date().toISOString().split('T')[0]),
-        supabase.from('material_families').select('*').eq('project_id', projectId).order('display_order')
+        supabase.from('material_families').select('*').order('display_order')
       ]);
 
       if (scopeRes.data) {
@@ -368,8 +368,13 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         if (unitsRes.data) setUnits(unitsRes.data);
         if (familiesRes.data) setFamilies(familiesRes.data.map(f => ({ id: f.id, name: f.name, color: f.color || '#9ca3af', lead_time_days: f.lead_time_days || 7 })));
       } else if (tab === 'quotations') {
-        const { data } = await supabase.from('quotation_requests').select(`*, quotation_items (*, supplier_quotes (*, suppliers (*)))`).eq('project_id', projectId).order('created_at', { ascending: false });
-        if (data) setQuotations(data.map((q: any) => ({ ...q, status: q.status as QuotationRequest['status'], items: q.quotation_items?.map((item: any) => ({ ...item, quotes: item.supplier_quotes?.map((sq: any) => ({ ...sq, supplier: sq.suppliers })) })) })));
+        // Load suppliers first to have them available for quotation details
+        const [quotRes, suppliersRes] = await Promise.all([
+          supabase.from('quotation_requests').select(`*, quotation_items (*, supplier_quotes (*, suppliers (*)))`).eq('project_id', projectId).order('created_at', { ascending: false }),
+          supabase.from('suppliers').select('*').order('name')
+        ]);
+        if (quotRes.data) setQuotations(quotRes.data.map((q: any) => ({ ...q, status: q.status as QuotationRequest['status'], items: q.quotation_items?.map((item: any) => ({ ...item, quotes: item.supplier_quotes?.map((sq: any) => ({ ...sq, supplier: sq.suppliers })) })) })));
+        if (suppliersRes.data) setSuppliers(suppliersRes.data.map(s => ({ ...s, supplier_type: (s.supplier_type || 'material') as 'material' | 'labor' })));
       } else if (tab === 'orders') {
         const { data } = await supabase.from('purchase_orders').select(`*, suppliers (*), purchase_order_items (*), delivery_tracking (*)`).eq('project_id', projectId).order('created_at', { ascending: false });
         if (data) setPurchaseOrders(data.map((o: any) => ({ ...o, status: o.status as PurchaseOrder['status'], supplier: o.suppliers, items: o.purchase_order_items, tracking: o.delivery_tracking })));
