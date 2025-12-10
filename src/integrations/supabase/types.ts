@@ -146,6 +146,7 @@ export type Database = {
       }
       inputs: {
         Row: {
+          category: string
           created_at: string
           description: string | null
           id: string
@@ -156,6 +157,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string
           created_at?: string
           description?: string | null
           id?: string
@@ -166,6 +168,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string
           created_at?: string
           description?: string | null
           id?: string
@@ -1019,6 +1022,7 @@ export type Database = {
           notes: string | null
           phone: string | null
           project_id: string
+          supplier_type: string
           updated_at: string
         }
         Insert: {
@@ -1030,6 +1034,7 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           project_id: string
+          supplier_type?: string
           updated_at?: string
         }
         Update: {
@@ -1041,6 +1046,7 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           project_id?: string
+          supplier_type?: string
           updated_at?: string
         }
         Relationships: [
