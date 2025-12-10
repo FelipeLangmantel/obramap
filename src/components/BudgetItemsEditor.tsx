@@ -245,21 +245,25 @@ export function BudgetItemsEditor({
     }
   }, [items, onTotalChange]);
 
-  // Add new item
-  const addItem = (category: 'material' | 'labor' | 'equipment') => {
+  // Add new item from input catalog only
+  const addItemFromInput = (input: InputItem) => {
+    const familyName = input.material_family_name || families.find(f => f.id === input.material_family_id)?.name || 'Geral';
     const newItem: ScopeItem = {
       scopeId,
       macroId,
-      name: '',
-      category,
-      materialFamily: 'Geral',
+      name: input.name,
+      category: 'material', // Will be set from input
+      materialFamily: familyName,
       unitValue: 0,
       quantity: 1,
-      unit: 'un',
+      unit: input.unit,
       isNew: true,
-      isEditing: true
+      isEditing: true,
+      inputId: input.id
     };
     setItems([...items, newItem]);
+    setShowSuggestions(null);
+    setInputSuggestions([]);
   };
 
   // Save item
@@ -493,35 +497,35 @@ export function BudgetItemsEditor({
         </Button>
       </div>
 
-      {/* Quick add buttons */}
+      {/* Add item from catalog */}
       <div className="flex gap-2 mb-3">
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 text-blue-600 border-blue-200 hover:bg-blue-50"
-          onClick={() => addItem('material')}
-        >
-          <Package className="w-3.5 h-3.5" />
-          + Material
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 text-orange-600 border-orange-200 hover:bg-orange-50"
-          onClick={() => addItem('labor')}
-        >
-          <Hammer className="w-3.5 h-3.5" />
-          + Mão de Obra
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1.5 text-green-600 border-green-200 hover:bg-green-50"
-          onClick={() => addItem('equipment')}
-        >
-          <Wrench className="w-3.5 h-3.5" />
-          + Equipamento
-        </Button>
+        <div className="relative flex-1">
+          <Input
+            placeholder="Buscar insumo no cadastro para adicionar..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              searchInputs(e.target.value);
+              setShowSuggestions(-1);
+            }}
+            onFocus={() => setShowSuggestions(-1)}
+            className="h-9"
+          />
+          {showSuggestions === -1 && inputSuggestions.length > 0 && (
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg max-h-[200px] overflow-auto">
+              {inputSuggestions.map(input => (
+                <div
+                  key={input.id}
+                  className="px-3 py-2 hover:bg-muted cursor-pointer text-sm flex items-center justify-between"
+                  onClick={() => { addItemFromInput(input); setSearchTerm(''); }}
+                >
+                  <span>{input.name}</span>
+                  <span className="text-muted-foreground text-xs">{input.unit} - {input.material_family_name || 'Geral'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Items list grouped by family */}
