@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Box, Plus, Search, Trash2, Edit2, Layers, Check, Upload, Package, Hammer, Wrench, ChevronDown, ChevronRight } from "lucide-react";
+import { Box, Plus, Search, Trash2, Edit2, Layers, Check, Upload, Package, Hammer, Wrench, ChevronDown, ChevronRight, ArrowRightLeft, AlertTriangle, CheckSquare } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -72,11 +73,17 @@ export function InputsManagementView() {
   const [familyDialogOpen, setFamilyDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [deleteInputDialogOpen, setDeleteInputDialogOpen] = useState(false);
+  const [bulkFamilyDialogOpen, setBulkFamilyDialogOpen] = useState(false);
   
   const [editingInput, setEditingInput] = useState<InputItem | null>(null);
   const [editingUnit, setEditingUnit] = useState<UnitItem | null>(null);
   const [editingFamily, setEditingFamily] = useState<MaterialFamily | null>(null);
   const [inputToDelete, setInputToDelete] = useState<InputItem | null>(null);
+  const [inputInBudget, setInputInBudget] = useState<string[]>([]);
+  
+  // Bulk selection
+  const [selectedInputIds, setSelectedInputIds] = useState<Set<string>>(new Set());
+  const [bulkTargetFamily, setBulkTargetFamily] = useState<string>('');
   
   const [newInput, setNewInput] = useState<{ name: string; unit: string; category: string; material_family_id: string; description: string; unit_value: number; stock_quantity: number }>({
     name: '', unit: 'un', category: 'material', material_family_id: '', description: '', unit_value: 0, stock_quantity: 0
@@ -189,18 +196,104 @@ export function InputsManagementView() {
     }
   };
 
+  // Check if input is used in any budget (scope_items)
+  const checkInputInBudget = async (inputId: string): Promise<string[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('scope_items')
+        .select('macro_id, scope_id, name')
+        .eq('input_id', inputId);
+      
+      if (error) throw error;
+      return data?.map(item => `${item.macro_id} > ${item.scope_id} (${item.name})`) || [];
+    } catch (error) {
+      console.error('Error checking budget:', error);
+      return [];
+    }
+  };
+
+  const handleDeleteClick = async (input: InputItem) => {
+    setInputToDelete(input);
+    const budgetUsage = await checkInputInBudget(input.id);
+    setInputInBudget(budgetUsage);
+    setDeleteInputDialogOpen(true);
+  };
+
   const confirmDeleteInput = async () => {
     if (!inputToDelete) return;
+    
+    // If input is used in budget, prevent deletion
+    if (inputInBudget.length > 0) {
+      toast.error('Não é possível excluir insumo vinculado a orçamentos');
+      setDeleteInputDialogOpen(false);
+      setInputToDelete(null);
+      setInputInBudget([]);
+      return;
+    }
+    
     try {
       await supabase.from('inputs').delete().eq('id', inputToDelete.id);
       toast.success('Insumo removido');
       setInputs(prev => prev.filter(i => i.id !== inputToDelete.id));
+      setSelectedInputIds(prev => {
+        const next = new Set(prev);
+        next.delete(inputToDelete.id);
+        return next;
+      });
       setDeleteInputDialogOpen(false);
       setInputToDelete(null);
+      setInputInBudget([]);
     } catch (error) {
       console.error('Error deleting input:', error);
       toast.error('Erro ao remover');
     }
+  };
+
+  // Bulk family change
+  const handleBulkFamilyChange = async () => {
+    if (selectedInputIds.size === 0) {
+      toast.error('Selecione pelo menos um insumo');
+      return;
+    }
+    
+    try {
+      const { error } = await supabase
+        .from('inputs')
+        .update({ material_family_id: bulkTargetFamily === 'none' ? null : bulkTargetFamily })
+        .in('id', Array.from(selectedInputIds));
+      
+      if (error) throw error;
+      
+      toast.success(`${selectedInputIds.size} insumo(s) atualizado(s)`);
+      setBulkFamilyDialogOpen(false);
+      setBulkTargetFamily('');
+      setSelectedInputIds(new Set());
+      loadData();
+    } catch (error) {
+      console.error('Error updating inputs:', error);
+      toast.error('Erro ao atualizar insumos');
+    }
+  };
+
+  const toggleInputSelection = (inputId: string) => {
+    setSelectedInputIds(prev => {
+      const next = new Set(prev);
+      if (next.has(inputId)) next.delete(inputId);
+      else next.add(inputId);
+      return next;
+    });
+  };
+
+  const toggleSelectAllInFamily = (familyInputs: InputItem[]) => {
+    const allSelected = familyInputs.every(i => selectedInputIds.has(i.id));
+    setSelectedInputIds(prev => {
+      const next = new Set(prev);
+      familyInputs.forEach(i => {
+        if (allSelected) next.delete(i.id);
+        else next.add(i.id);
+      });
+      return next;
+    });
   };
 
   const saveUnit = async () => {
@@ -383,6 +476,13 @@ export function InputsManagementView() {
             </div>
             
             <div className="flex gap-2">
+              {selectedInputIds.size > 0 && (
+                <Button variant="secondary" size="sm" onClick={() => setBulkFamilyDialogOpen(true)}>
+                  <ArrowRightLeft className="w-4 h-4 mr-1" />
+                  Mover {selectedInputIds.size} para família
+                </Button>
+              )}
+              
               <Dialog open={familyDialogOpen} onOpenChange={(o) => { setFamilyDialogOpen(o); if (!o) { setEditingFamily(null); setNewFamily({ name: '', color: '#3b82f6' }); } }}>
                 <DialogTrigger asChild><Button variant="outline" size="sm"><Layers className="w-4 h-4 mr-1" />Famílias</Button></DialogTrigger>
                 <DialogContent>
@@ -572,21 +672,39 @@ export function InputsManagementView() {
                       return next;
                     });
                   }}>
-                    <CollapsibleTrigger asChild>
-                      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted/70 transition-colors">
-                        <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted/70 transition-colors">
+                      <CollapsibleTrigger asChild>
+                        <div className="flex items-center gap-2 flex-1 cursor-pointer">
                           {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                           {family && <div className="w-3 h-3 rounded-full" style={{ backgroundColor: family.color }} />}
                           <span className="font-medium">{familyName}</span>
                           <Badge variant="secondary" className="text-xs">{familyInputs.length}</Badge>
                         </div>
-                      </div>
-                    </CollapsibleTrigger>
+                      </CollapsibleTrigger>
+                      {canEdit && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2"
+                          onClick={(e) => { e.stopPropagation(); toggleSelectAllInFamily(familyInputs); }}
+                        >
+                          <CheckSquare className="w-3.5 h-3.5 mr-1" />
+                          {familyInputs.every(i => selectedInputIds.has(i.id)) ? 'Desmarcar' : 'Selecionar'}
+                        </Button>
+                      )}
+                    </div>
                     <CollapsibleContent>
                       <div className="mt-1 space-y-1 ml-6">
                         {familyInputs.map(input => (
-                          <div key={input.id} className="flex items-center justify-between p-2 border rounded-lg bg-card hover:bg-muted/30">
+                          <div key={input.id} className={`flex items-center justify-between p-2 border rounded-lg bg-card hover:bg-muted/30 ${selectedInputIds.has(input.id) ? 'ring-2 ring-primary/50 bg-primary/5' : ''}`}>
                             <div className="flex items-center gap-2 flex-1 min-w-0">
+                              {canEdit && (
+                                <Checkbox
+                                  checked={selectedInputIds.has(input.id)}
+                                  onCheckedChange={() => toggleInputSelection(input.id)}
+                                  className="shrink-0"
+                                />
+                              )}
                               {getCategoryIcon(input.category)}
                               <span className="truncate">{input.name}</span>
                               <Badge variant="outline" className="text-xs shrink-0">{input.unit}</Badge>
@@ -610,7 +728,7 @@ export function InputsManagementView() {
                                 }}>
                                   <Edit2 className="w-3.5 h-3.5" />
                                 </Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => { setInputToDelete(input); setDeleteInputDialogOpen(true); }}>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => handleDeleteClick(input)}>
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </Button>
                               </div>
@@ -630,22 +748,81 @@ export function InputsManagementView() {
         </CardContent>
       </Card>
 
-      <AlertDialog open={deleteInputDialogOpen} onOpenChange={setDeleteInputDialogOpen}>
+      <AlertDialog open={deleteInputDialogOpen} onOpenChange={(open) => { setDeleteInputDialogOpen(open); if (!open) { setInputInBudget([]); setInputToDelete(null); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir o insumo "{inputToDelete?.name}"? Esta ação não pode ser desfeita.
+            <AlertDialogTitle className="flex items-center gap-2">
+              {inputInBudget.length > 0 && <AlertTriangle className="w-5 h-5 text-amber-500" />}
+              {inputInBudget.length > 0 ? 'Exclusão Bloqueada' : 'Confirmar exclusão'}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                {inputInBudget.length > 0 ? (
+                  <div className="space-y-2">
+                    <p>O insumo <strong>"{inputToDelete?.name}"</strong> está vinculado aos seguintes orçamentos:</p>
+                    <ul className="list-disc pl-4 text-sm space-y-1 max-h-40 overflow-y-auto">
+                      {inputInBudget.map((budget, i) => (
+                        <li key={i}>{budget}</li>
+                      ))}
+                    </ul>
+                    <p className="text-amber-600 font-medium">Remova o insumo dos orçamentos antes de excluí-lo.</p>
+                  </div>
+                ) : (
+                  <p>Tem certeza que deseja excluir o insumo "{inputToDelete?.name}"? Esta ação não pode ser desfeita.</p>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteInput} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Excluir
-            </AlertDialogAction>
+            {inputInBudget.length === 0 && (
+              <AlertDialogAction onClick={confirmDeleteInput} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Excluir
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Family Change Dialog */}
+      <Dialog open={bulkFamilyDialogOpen} onOpenChange={setBulkFamilyDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mover Insumos para Família</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {selectedInputIds.size} insumo(s) selecionado(s) serão movidos para a família escolhida.
+            </p>
+            <div>
+              <Label>Nova Família</Label>
+              <Select value={bulkTargetFamily} onValueChange={setBulkTargetFamily}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a família destino" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem família</SelectItem>
+                  {families.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(f => (
+                    <SelectItem key={f.id} value={f.id}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: f.color }} />
+                        {f.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkFamilyDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleBulkFamilyChange} disabled={!bulkTargetFamily}>
+              <ArrowRightLeft className="w-4 h-4 mr-1" />
+              Mover Insumos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ImportInputsDialog 
         open={importDialogOpen} 
