@@ -53,7 +53,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { LaborContractsView } from "./LaborContractsView";
 import { MeasurementSelector } from "./production/MeasurementSelector";
 
 interface WeeklyProduction {
@@ -96,10 +95,10 @@ export function WeeklyProductionView() {
   const { canEdit } = useAuth();
   
   // Load saved tab from localStorage
-  const [activeTab, setActiveTab] = useState<"register" | "analysis" | "contracts">(() => {
+  const [activeTab, setActiveTab] = useState<"register" | "analysis">(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(TAB_STORAGE_KEY);
-      if (saved === "register" || saved === "analysis" || saved === "contracts") {
+      if (saved === "register" || saved === "analysis") {
         return saved;
       }
     }
@@ -637,7 +636,7 @@ export function WeeklyProductionView() {
 
   // Handle tab change with persistence
   const handleTabChange = (value: string) => {
-    const tab = value as "register" | "analysis" | "contracts";
+    const tab = value as "register" | "analysis";
     setActiveTab(tab);
     localStorage.setItem(TAB_STORAGE_KEY, tab);
   };
@@ -650,6 +649,32 @@ export function WeeklyProductionView() {
 
   // State for measurement-based navigation
   const [selectedMeasurementNum, setSelectedMeasurementNum] = useState<number | null>(null);
+  
+  // State for adding unplanned service
+  const [isAddingUnplanned, setIsAddingUnplanned] = useState(false);
+
+  // Get list of registered production IDs for the current measurement
+  // This helps track which planned services have already been registered
+  const registeredPlannedIds = useMemo(() => {
+    if (selectedMeasurementNum === null) return [];
+    
+    // Get all planned periods for this measurement
+    const measurementPeriods = plannedPeriods.filter(p => 
+      (p.measurement_number || 1) === selectedMeasurementNum
+    );
+    
+    // Check which ones have matching productions in the same date range
+    return measurementPeriods
+      .filter(period => {
+        return productions.some(prod => 
+          prod.scope_id === period.scope_id && 
+          prod.macro_id === period.macro_id &&
+          prod.week_start === period.week_start &&
+          prod.week_end === period.week_end
+        );
+      })
+      .map(p => p.id);
+  }, [selectedMeasurementNum, plannedPeriods, productions]);
 
   // Group periods by measurement
   const measurementGroups = useMemo(() => {
@@ -673,7 +698,7 @@ export function WeeklyProductionView() {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full">
-        <TabsList className="grid w-full max-w-lg grid-cols-3 h-10">
+        <TabsList className="grid w-full max-w-md grid-cols-2 h-10">
           <TabsTrigger value="register" className="gap-2 text-sm">
             <ClipboardList className="w-4 h-4" />
             Registrar
@@ -682,23 +707,20 @@ export function WeeklyProductionView() {
             <TrendingUp className="w-4 h-4" />
             Análise
           </TabsTrigger>
-          <TabsTrigger value="contracts" className="gap-2 text-sm">
-            <Users className="w-4 h-4" />
-            Contratações
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="register" className="flex-1 overflow-auto mt-4 space-y-4">
           {/* Measurement Selector - Main navigation */}
-          {!isInitialDatabase && plannedPeriods.length > 0 && (
+          {!isInitialDatabase && !isAddingUnplanned && plannedPeriods.length > 0 && (
             <MeasurementSelector
               plannedPeriods={plannedPeriods}
+              registeredScopeIds={registeredPlannedIds}
               selectedMeasurement={selectedMeasurementNum}
               onMeasurementChange={setSelectedMeasurementNum}
               selectedPeriod={selectedPlannedPeriod}
               onPeriodChange={setSelectedPlannedPeriod}
               onApplyService={(period) => {
-                // Apply period data to form
+                setIsAddingUnplanned(false);
                 setMeasurementStartDate(period.week_start);
                 setMeasurementEndDate(period.week_end);
                 setSelectedMacro(period.macro_id);
@@ -708,7 +730,44 @@ export function WeeklyProductionView() {
                 }
                 toast.success(`Serviço "${period.scope_name}" aplicado com ${period.planned_houses} casas`);
               }}
+              onAddUnplannedService={() => {
+                setIsAddingUnplanned(true);
+                setSelectedPlannedPeriod(null);
+                setSelectedMacro("");
+                setSelectedScope("");
+                setSelectedHouses([]);
+              }}
             />
+          )}
+
+          {/* Mode indicator for unplanned service */}
+          {isAddingUnplanned && (
+            <Card className="border-2 border-amber-500/50 bg-amber-50/50 dark:bg-amber-900/20">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Plus className="w-5 h-5 text-amber-600" />
+                    <div>
+                      <h3 className="font-medium text-amber-800 dark:text-amber-200">Serviço Não Previsto</h3>
+                      <p className="text-sm text-amber-600 dark:text-amber-400">Adicionando atividade fora do planejamento da medição</p>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      setIsAddingUnplanned(false);
+                      setSelectedMacro("");
+                      setSelectedScope("");
+                      setSelectedHouses([]);
+                    }}
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Voltar ao Planejamento
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Main Content Grid */}
@@ -734,17 +793,30 @@ export function WeeklyProductionView() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Period Info (from planning or manual) */}
-                {!isInitialDatabase && (
-                  <div className="p-3 bg-secondary/30 rounded-lg space-y-2">
+                {/* Period Info (read-only from planning) */}
+                {!isInitialDatabase && selectedPlannedPeriod && (
+                  <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 space-y-2">
                     <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
+                      <Calendar className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium">Período da Medição</span>
+                      <Badge variant="secondary" className="ml-auto text-xs">
+                        {selectedPlannedPeriod.measurement_number}ª Med.
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="font-medium">{format(parseISO(measurementStartDate), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                      <span className="text-muted-foreground">até</span>
+                      <span className="font-medium">{format(parseISO(measurementEndDate), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Period input for unplanned service */}
+                {!isInitialDatabase && isAddingUnplanned && (
+                  <div className="p-3 bg-amber-50/50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-amber-600" />
                       <span className="text-sm font-medium">Período</span>
-                      {selectedPlannedPeriod?.measurement_number && (
-                        <Badge variant="secondary" className="ml-auto text-xs">
-                          {selectedPlannedPeriod.measurement_number}ª Med.
-                        </Badge>
-                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
@@ -1427,9 +1499,6 @@ export function WeeklyProductionView() {
           </div>
         </TabsContent>
 
-        <TabsContent value="contracts" className="flex-1 overflow-auto mt-4">
-          <LaborContractsView />
-        </TabsContent>
 
       </Tabs>
 
