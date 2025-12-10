@@ -394,8 +394,8 @@ export function ImportInputsDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl h-[85vh] flex flex-col overflow-hidden">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>
             {step === 'upload' ? 'Importar Insumos' : step === 'confirm_new' ? 'Novos Cadastros Detectados' : 'Revisar e Importar'}
           </DialogTitle>
@@ -503,9 +503,9 @@ export function ImportInputsDialog({
             </p>
           </div>
         ) : (
-          <div className="flex flex-col flex-1 space-y-4 min-h-0 overflow-hidden">
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden gap-4">
             {duplicateCount > 0 && (
-              <Alert variant="destructive" className="border-amber-500 bg-amber-50 dark:bg-amber-900/20">
+              <Alert variant="destructive" className="flex-shrink-0 border-amber-500 bg-amber-50 dark:bg-amber-900/20">
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
                 <AlertDescription className="text-amber-800 dark:text-amber-200">
                   <strong>{duplicateCount} insumo(s) com nome similar</strong> a cadastros existentes foram desmarcados automaticamente. 
@@ -514,7 +514,7 @@ export function ImportInputsDialog({
               </Alert>
             )}
             
-            <div className="flex items-center justify-between">
+            <div className="flex-shrink-0 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -535,7 +535,7 @@ export function ImportInputsDialog({
               </Button>
             </div>
 
-            <ScrollArea className="flex-1 min-h-[300px] max-h-[50vh] border rounded-lg">
+            <ScrollArea className="flex-1 border rounded-lg">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -702,7 +702,7 @@ export function ImportInputsDialog({
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="flex-shrink-0 pt-4">
           <Button variant="outline" onClick={handleClose}>
             Cancelar
           </Button>
