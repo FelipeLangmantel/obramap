@@ -934,7 +934,16 @@ export function SuppliesView() {
               </Dialog>
               
               {/* Units Dialog */}
-              <Dialog open={unitDialogOpen} onOpenChange={(o) => { setUnitDialogOpen(o); if (!o) { setEditingUnit(null); setNewUnit({ name: '', abbreviation: '' }); } }}>
+              <Dialog open={unitDialogOpen} onOpenChange={(o) => { 
+                setUnitDialogOpen(o); 
+                if (!o) { 
+                  setEditingUnit(null); 
+                  setNewUnit({ name: '', abbreviation: '' }); 
+                  // Reload para atualizar lista
+                  setDataLoaded(prev => ({ ...prev, inputs: false }));
+                  loadTabData('inputs');
+                } 
+              }}>
                 <DialogTrigger asChild><Button variant="outline" size="sm"><Layers className="w-4 h-4 mr-1" />Unidades</Button></DialogTrigger>
                 <DialogContent>
                   <DialogHeader><DialogTitle>Gerenciar Unidades</DialogTitle></DialogHeader>
@@ -942,15 +951,27 @@ export function SuppliesView() {
                     <div className="flex gap-2">
                       <Input placeholder="Nome" value={newUnit.name} onChange={(e) => setNewUnit({ ...newUnit, name: e.target.value })} />
                       <Input placeholder="Abreviação" value={newUnit.abbreviation} onChange={(e) => setNewUnit({ ...newUnit, abbreviation: e.target.value })} className="w-24" />
-                      <Button onClick={saveUnit}><Plus className="w-4 h-4" /></Button>
+                      <Button onClick={saveUnit} disabled={!newUnit.name.trim() || !newUnit.abbreviation.trim()}>
+                        {editingUnit ? <><Check className="w-4 h-4 mr-1" />Salvar</> : <><Plus className="w-4 h-4 mr-1" />Adicionar</>}
+                      </Button>
                     </div>
                     <ScrollArea className="h-[250px]">
                       <div className="space-y-1">
                         {units.map(u => (
-                          <div key={u.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                          <div key={u.id} className={`flex items-center justify-between p-2 rounded ${editingUnit?.id === u.id ? 'bg-primary/10 border border-primary/30' : 'bg-muted/50'}`}>
                             <span>{u.name} ({u.abbreviation})</span>
                             <div className="flex gap-1">
-                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingUnit(u); setNewUnit({ name: u.name, abbreviation: u.abbreviation }); }}><Edit2 className="w-3.5 h-3.5" /></Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { 
+                                if (editingUnit?.id === u.id) {
+                                  setEditingUnit(null);
+                                  setNewUnit({ name: '', abbreviation: '' });
+                                } else {
+                                  setEditingUnit(u); 
+                                  setNewUnit({ name: u.name, abbreviation: u.abbreviation }); 
+                                }
+                              }}>
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteUnit(u.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                             </div>
                           </div>
@@ -958,7 +979,14 @@ export function SuppliesView() {
                       </div>
                     </ScrollArea>
                   </div>
-                  <DialogFooter><Button onClick={() => setUnitDialogOpen(false)}>Fechar</Button></DialogFooter>
+                  <DialogFooter>
+                    {editingUnit && (
+                      <Button variant="outline" onClick={() => { setEditingUnit(null); setNewUnit({ name: '', abbreviation: '' }); }}>
+                        Cancelar Edição
+                      </Button>
+                    )}
+                    <Button onClick={() => setUnitDialogOpen(false)}>Fechar</Button>
+                  </DialogFooter>
                 </DialogContent>
               </Dialog>
               

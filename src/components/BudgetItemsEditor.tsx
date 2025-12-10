@@ -392,16 +392,10 @@ export function BudgetItemsEditor({
     setItems(updated);
   };
 
-  // Filter items
+  // Filter items - show all items (filters removed)
   const filteredItems = useMemo(() => {
-    return items.filter(item => {
-      const matchesSearch = !searchTerm || 
-        item.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesFamily = filterFamily === 'all' || item.materialFamily === filterFamily;
-      const matchesCategory = filterCategory === 'all' || item.category === filterCategory;
-      return matchesSearch && matchesFamily && matchesCategory;
-    });
-  }, [items, searchTerm, filterFamily, filterCategory]);
+    return items;
+  }, [items]);
 
   // Group items by family
   const itemsByFamily = useMemo(() => {
@@ -469,32 +463,7 @@ export function BudgetItemsEditor({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Header with filters */}
-      <div className="flex flex-wrap gap-2 mb-3">
-        <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="w-[140px] h-9">
-            <SelectValue placeholder="Categoria" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas</SelectItem>
-            <SelectItem value="material">Material</SelectItem>
-            <SelectItem value="labor">Mão de Obra</SelectItem>
-            <SelectItem value="equipment">Equipamento</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select value={filterFamily} onValueChange={setFilterFamily}>
-          <SelectTrigger className="w-[140px] h-9">
-            <SelectValue placeholder="Família" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas</SelectItem>
-            {families.map(f => (
-              <SelectItem key={f.id} value={f.name}>{f.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {/* Removed filters - search only via catalog */}
 
       {/* Add item from catalog - allows multiple selection */}
       <div className="flex gap-2 mb-3">
@@ -505,41 +474,45 @@ export function BudgetItemsEditor({
             value={catalogSearchTerm}
             onChange={(e) => {
               setCatalogSearchTerm(e.target.value);
-              searchInputs(e.target.value, filterCategory);
+              searchInputs(e.target.value, 'all');
               setShowSuggestions(-1);
             }}
             onFocus={() => {
               if (catalogSearchTerm.length >= 2) {
-                searchInputs(catalogSearchTerm, filterCategory);
+                searchInputs(catalogSearchTerm, 'all');
                 setShowSuggestions(-1);
               }
             }}
             className="h-9 pl-8"
           />
           {showSuggestions === -1 && inputSuggestions.length > 0 && (
-            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg max-h-[300px] overflow-auto">
-              <div className="p-2 border-b bg-muted/50 text-xs text-muted-foreground">
-                Clique nos itens para adicionar (pode adicionar vários)
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg max-h-[400px] overflow-auto">
+              <div className="p-2 border-b bg-muted/50 text-xs text-muted-foreground flex items-center justify-between">
+                <span>Clique nos itens para adicionar (pode adicionar vários)</span>
+                <Badge variant="secondary" className="text-xs">{inputSuggestions.length} encontrados</Badge>
               </div>
               {inputSuggestions.map(input => {
                 const alreadyAdded = items.some(item => item.inputId === input.id);
                 return (
                   <div
                     key={input.id}
-                    className={`px-3 py-2 hover:bg-muted cursor-pointer text-sm flex items-center gap-2 ${alreadyAdded ? 'opacity-50' : ''}`}
+                    className={`px-3 py-2 hover:bg-muted cursor-pointer text-sm flex items-center gap-2 border-b border-muted/30 ${alreadyAdded ? 'bg-green-50/50 dark:bg-green-900/10' : ''}`}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
                       if (!alreadyAdded) {
                         addItemFromInput(input);
                         // Keep suggestions open for multiple selection
-                        searchInputs(catalogSearchTerm, filterCategory);
+                        searchInputs(catalogSearchTerm, 'all');
                       }
                     }}
                   >
-                    {input.category === 'material' ? <Package className="w-3.5 h-3.5 text-blue-500 shrink-0" /> : 
-                     input.category === 'labor' ? <Hammer className="w-3.5 h-3.5 text-orange-500 shrink-0" /> : 
-                     <Wrench className="w-3.5 h-3.5 text-green-500 shrink-0" />}
-                    <span className="flex-1 truncate">{input.name}</span>
+                    {alreadyAdded && <Check className="w-4 h-4 text-green-500 shrink-0" />}
+                    {!alreadyAdded && (
+                      input.category === 'material' ? <Package className="w-4 h-4 text-blue-500 shrink-0" /> : 
+                      input.category === 'labor' ? <Hammer className="w-4 h-4 text-orange-500 shrink-0" /> : 
+                      <Wrench className="w-4 h-4 text-green-500 shrink-0" />
+                    )}
+                    <span className="flex-1 truncate font-medium">{input.name}</span>
                     <span className="text-muted-foreground text-xs shrink-0">{input.unit}</span>
                     {input.unit_value && input.unit_value > 0 && (
                       <span className="text-green-600 text-xs font-medium shrink-0">
@@ -547,12 +520,11 @@ export function BudgetItemsEditor({
                       </span>
                     )}
                     <Badge variant="outline" className="text-[10px] px-1">{input.material_family_name || 'Geral'}</Badge>
-                    {alreadyAdded && <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />}
                   </div>
                 );
               })}
-              <div className="p-2 border-t">
-                <Button size="sm" variant="ghost" className="w-full text-xs" onClick={() => setShowSuggestions(null)}>
+              <div className="p-2 border-t bg-muted/30">
+                <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => setShowSuggestions(null)}>
                   Fechar
                 </Button>
               </div>
