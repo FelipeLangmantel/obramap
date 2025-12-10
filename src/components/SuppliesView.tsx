@@ -253,9 +253,16 @@ export function SuppliesView() {
   const [newFamily, setNewFamily] = useState<{ name: string; color: string }>({ name: '', color: '#3b82f6' });
   const [editingUnit, setEditingUnit] = useState<UnitItem | null>(null);
   const [editingFamily, setEditingFamily] = useState<MaterialFamily | null>(null);
-  const [newQuotation, setNewQuotation] = useState<{ title: string; required_date: string; notes: string; items: string[] }>({
-    title: '', required_date: '', notes: '', items: []
+  const [newQuotation, setNewQuotation] = useState<{ title: string; required_date: string; notes: string; items: string[]; customItems: { name: string; quantity: number; unit: string; estimatedValue: number }[] }>({
+    title: '', required_date: '', notes: '', items: [], customItems: []
   });
+  const [newCustomItem, setNewCustomItem] = useState<{ name: string; quantity: number; unit: string; estimatedValue: number }>({ name: '', quantity: 1, unit: 'un', estimatedValue: 0 });
+  const [expandedPendingQuotations, setExpandedPendingQuotations] = useState<Set<string>>(new Set());
+  const [deleteOrderDialogOpen, setDeleteOrderDialogOpen] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<PurchaseOrder | null>(null);
+  const [deleteQuotationDialogOpen, setDeleteQuotationDialogOpen] = useState(false);
+  const [quotationToDelete, setQuotationToDelete] = useState<QuotationRequest | null>(null);
+  const [editingQuotationItem, setEditingQuotationItem] = useState<{ itemId: string; name: string; quantity: number; unit: string } | null>(null);
   const [supplierQuotes, setSupplierQuotes] = useState<Record<string, { supplier_id: string; unit_value: number; delivery_days: number; notes: string }[]>>({});
   const [newTracking, setNewTracking] = useState<{ status: string; description: string; location: string }>({
     status: '', description: '', location: ''
@@ -384,24 +391,36 @@ export function SuppliesView() {
     }
   }, [activeTab, loadTabData]);
 
+  // Get scopes that have planned production (future only)
+  const scopesWithPlannedProduction = useMemo(() => {
+    return new Set(plannedProductions.map(pp => pp.scope_id));
+  }, [plannedProductions]);
+
   // Calculate labor alerts
   const laborAlerts = useMemo(() => {
-    const alertsList: { type: 'warning' | 'urgent' | 'info'; message: string; category: string; dueDate: Date; scopeId?: string }[] = [];
+    const alertsList: { type: 'warning' | 'urgent' | 'info'; message: string; category: string; dueDate: Date; scopeId?: string; macroId?: string; scopeName?: string; unitValue?: number }[] = [];
     const today = new Date();
 
-    // Labor alerts - only show if executed houses exceed contracted
+    // Labor alerts - only show for scopes with planned production and if executed houses exceed contracted
     alertsData.scopeItems.filter(item => item.category === 'labor').forEach(item => {
+      // Only show alerts for scopes that have planned production
+      if (!scopesWithPlannedProduction.has(item.scope_id)) return;
+      
       const contract = laborContracts.find(c => c.scope_id === item.scope_id && c.status === 'active');
       const executed = executedHouses[item.scope_id] || 0;
       
       if (contract) {
+        // Only show if executed houses exceed contracted
         if (executed >= contract.contracted_houses) {
           alertsList.push({
             type: 'urgent',
             message: `Mão de obra para "${item.name}" precisa ser renovada (${executed}/${contract.contracted_houses} casas)`,
             category: 'labor',
             dueDate: today,
-            scopeId: item.id
+            scopeId: item.id,
+            macroId: item.macro_id,
+            scopeName: item.name,
+            unitValue: item.unit_value
           });
         }
       } else if (item.quantity > 0) {
@@ -410,13 +429,16 @@ export function SuppliesView() {
           message: `Contratar mão de obra para "${item.name}"`,
           category: 'labor',
           dueDate: addDays(today, 7),
-          scopeId: item.id
+          scopeId: item.id,
+          macroId: item.macro_id,
+          scopeName: item.name,
+          unitValue: item.unit_value
         });
       }
     });
 
     return alertsList.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
-  }, [alertsData.scopeItems, laborContracts, executedHouses]);
+  }, [alertsData.scopeItems, laborContracts, executedHouses, scopesWithPlannedProduction]);
 
   // Calculate material alerts based on lead time - only for planned future production
   const materialAlerts = useMemo((): MaterialAlert[] => {
@@ -762,30 +784,105 @@ export function SuppliesView() {
       }).select().single();
       if (error) throw error;
 
+      const itemsToInsert: any[] = [];
+
+      // Add budget items
       if (newQuotation.items.length > 0) {
-        const itemsToInsert = newQuotation.items.map(itemId => {
+        newQuotation.items.forEach(itemId => {
           const item = alertsData.scopeItems.find(si => si.id === itemId);
-          return {
-            quotation_id: quotationData.id,
-            scope_item_id: itemId,
-            name: item?.name || '',
-            category: item?.category || 'material',
-            quantity: item?.quantity || 1,
-            unit: item?.unit || 'un',
-            estimated_unit_value: item?.unit_value || 0
-          };
+          if (item) {
+            itemsToInsert.push({
+              quotation_id: quotationData.id,
+              scope_item_id: itemId,
+              name: item.name,
+              category: item.category,
+              quantity: item.quantity || 1,
+              unit: item.unit || 'un',
+              estimated_unit_value: item.unit_value || 0
+            });
+          }
         });
+      }
+
+      // Add custom items (unplanned costs)
+      if (newQuotation.customItems.length > 0) {
+        newQuotation.customItems.forEach(customItem => {
+          itemsToInsert.push({
+            quotation_id: quotationData.id,
+            scope_item_id: null,
+            name: `[EXTRA] ${customItem.name}`,
+            category: 'material',
+            quantity: customItem.quantity || 1,
+            unit: customItem.unit || 'un',
+            estimated_unit_value: customItem.estimatedValue || 0
+          });
+        });
+      }
+
+      if (itemsToInsert.length > 0) {
         await supabase.from('quotation_items').insert(itemsToInsert);
       }
 
       toast.success('Cotação criada!');
       setQuotationDialogOpen(false);
-      setNewQuotation({ title: '', required_date: '', notes: '', items: [] });
+      setNewQuotation({ title: '', required_date: '', notes: '', items: [], customItems: [] });
+      setNewCustomItem({ name: '', quantity: 1, unit: 'un', estimatedValue: 0 });
       setDataLoaded(prev => ({ ...prev, quotations: false }));
       loadTabData('quotations');
+      setActiveTab('quotations');
     } catch (error) {
       console.error('Error creating quotation:', error);
       toast.error('Erro ao criar cotação');
+    }
+  };
+
+  const deleteQuotation = async (id: string) => {
+    try {
+      await supabase.from('quotation_items').delete().eq('quotation_id', id);
+      await supabase.from('quotation_requests').delete().eq('id', id);
+      toast.success('Cotação excluída!');
+      setQuotations(prev => prev.filter(q => q.id !== id));
+    } catch (error) {
+      console.error('Error deleting quotation:', error);
+      toast.error('Erro ao excluir cotação');
+    }
+  };
+
+  const updateQuotationItem = async (itemId: string, updates: { name?: string; quantity?: number; unit?: string }) => {
+    try {
+      await supabase.from('quotation_items').update(updates).eq('id', itemId);
+      toast.success('Item atualizado!');
+      setDataLoaded(prev => ({ ...prev, quotations: false }));
+      loadTabData('quotations');
+      setEditingQuotationItem(null);
+    } catch (error) {
+      console.error('Error updating quotation item:', error);
+      toast.error('Erro ao atualizar item');
+    }
+  };
+
+  const deleteQuotationItem = async (quotationId: string, itemId: string) => {
+    try {
+      await supabase.from('quotation_items').delete().eq('id', itemId);
+      toast.success('Item removido!');
+      setDataLoaded(prev => ({ ...prev, quotations: false }));
+      loadTabData('quotations');
+    } catch (error) {
+      console.error('Error deleting quotation item:', error);
+      toast.error('Erro ao remover item');
+    }
+  };
+
+  const deleteOrder = async (id: string) => {
+    try {
+      await supabase.from('purchase_order_items').delete().eq('purchase_order_id', id);
+      await supabase.from('delivery_tracking').delete().eq('purchase_order_id', id);
+      await supabase.from('purchase_orders').delete().eq('id', id);
+      toast.success('Pedido excluído!');
+      setPurchaseOrders(prev => prev.filter(o => o.id !== id));
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      toast.error('Erro ao excluir pedido');
     }
   };
 
@@ -1041,7 +1138,7 @@ export function SuppliesView() {
                                   </Badge>
                                 </div>
                                 {canEdit && (
-                                  <Button 
+                                <Button 
                                     size="sm" 
                                     variant="outline" 
                                     className="shrink-0"
@@ -1053,9 +1150,11 @@ export function SuppliesView() {
                                         title: `Cotação ${alert.familyName} - ${format(new Date(), 'dd/MM/yyyy')}`,
                                         required_date: format(alert.dueDate, 'yyyy-MM-dd'),
                                         notes: `Lead time: ${alert.leadTimeDays} dias`,
-                                        items: itemIds
+                                        items: itemIds,
+                                        customItems: []
                                       });
                                       setQuotationDialogOpen(true);
+                                      setActiveTab('quotations');
                                     }}
                                   >
                                     <FileText className="w-3 h-3 mr-1" />
@@ -1144,10 +1243,10 @@ export function SuppliesView() {
                                 if (scopeItem) {
                                   setLaborContractPrefill({
                                     scopeId: scopeItem.scope_id,
-                                    macroId: scopeItem.macro_id,
-                                    scopeName: scopeItem.name,
+                                    macroId: alert.macroId || scopeItem.macro_id,
+                                    scopeName: alert.scopeName || scopeItem.name,
                                     houses: currentProject?.totalHouses || 0,
-                                    unitValue: scopeItem.unit_value || 0
+                                    unitValue: alert.unitValue || scopeItem.unit_value || 0
                                   });
                                 }
                                 setActiveTab('contracts');
@@ -1470,88 +1569,172 @@ export function SuppliesView() {
             <div className="flex justify-end">
               <Dialog open={quotationDialogOpen} onOpenChange={setQuotationDialogOpen}>
                 <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-1" />Nova Cotação</Button></DialogTrigger>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
                   <DialogHeader><DialogTitle>Criar Mapa de Cotação</DialogTitle></DialogHeader>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div><Label>Título</Label><Input value={newQuotation.title} onChange={(e) => setNewQuotation({ ...newQuotation, title: e.target.value })} /></div>
-                      <div><Label>Data Necessária</Label><Input type="date" value={newQuotation.required_date} onChange={(e) => setNewQuotation({ ...newQuotation, required_date: e.target.value })} /></div>
-                    </div>
-                    <div><Label>Observações</Label><Textarea value={newQuotation.notes} onChange={(e) => setNewQuotation({ ...newQuotation, notes: e.target.value })} /></div>
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <Label>Itens do Orçamento</Label>
-                        {newQuotation.items.length > 0 && (
-                          <Badge variant="secondary">{newQuotation.items.length} selecionado(s)</Badge>
-                        )}
+                  <ScrollArea className="flex-1 pr-4">
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div><Label>Título</Label><Input value={newQuotation.title} onChange={(e) => setNewQuotation({ ...newQuotation, title: e.target.value })} /></div>
+                        <div><Label>Data Necessária</Label><Input type="date" value={newQuotation.required_date} onChange={(e) => setNewQuotation({ ...newQuotation, required_date: e.target.value })} /></div>
                       </div>
-                      <div className="relative mb-2">
-                        <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-                        <Input 
-                          placeholder="Buscar insumo..." 
-                          className="pl-8"
-                          value={quotationItemSearch}
-                          onChange={(e) => setQuotationItemSearch(e.target.value)}
-                        />
-                      </div>
-                      <ScrollArea className="h-[300px] border rounded-lg p-2">
-                        <div className="space-y-1">
-                          {alertsData.scopeItems
-                            .filter(i => i.category === 'material')
-                            .filter(i => !quotationItemSearch || i.name.toLowerCase().includes(quotationItemSearch.toLowerCase()))
-                            .map(item => (
-                              <label 
-                                key={item.id} 
-                                className={`flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer transition-colors ${
-                                  newQuotation.items.includes(item.id) ? 'bg-primary/10 border border-primary/30' : ''
-                                }`}
-                              >
-                                <input 
-                                  type="checkbox" 
-                                  checked={newQuotation.items.includes(item.id)} 
-                                  onChange={(e) => {
-                                    if (e.target.checked) setNewQuotation({ ...newQuotation, items: [...newQuotation.items, item.id] });
-                                    else setNewQuotation({ ...newQuotation, items: newQuotation.items.filter(i => i !== item.id) });
-                                  }} 
-                                  className="rounded w-4 h-4" 
-                                />
-                                <span className="flex-1 text-sm">{item.name}</span>
-                                <span className="text-xs text-muted-foreground">{item.quantity} {item.unit}</span>
-                              </label>
-                            ))}
-                          {alertsData.scopeItems.filter(i => i.category === 'material').filter(i => !quotationItemSearch || i.name.toLowerCase().includes(quotationItemSearch.toLowerCase())).length === 0 && (
-                            <p className="text-sm text-muted-foreground text-center py-4">
-                              {quotationItemSearch ? 'Nenhum item encontrado' : 'Nenhum item de material no orçamento'}
-                            </p>
+                      <div><Label>Observações</Label><Textarea value={newQuotation.notes} onChange={(e) => setNewQuotation({ ...newQuotation, notes: e.target.value })} /></div>
+                      
+                      {/* Budget Items Section */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <Label>Itens do Orçamento</Label>
+                          {newQuotation.items.length > 0 && (
+                            <Badge variant="secondary">{newQuotation.items.length} selecionado(s)</Badge>
                           )}
                         </div>
-                      </ScrollArea>
-                      {newQuotation.items.length > 0 && (
-                        <div className="flex justify-between mt-2">
+                        <div className="relative mb-2">
+                          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+                          <Input 
+                            placeholder="Buscar insumo..." 
+                            className="pl-8"
+                            value={quotationItemSearch}
+                            onChange={(e) => setQuotationItemSearch(e.target.value)}
+                          />
+                        </div>
+                        <ScrollArea className="h-[200px] border rounded-lg p-2">
+                          <div className="space-y-1">
+                            {alertsData.scopeItems
+                              .filter(i => i.category === 'material')
+                              .filter(i => !quotationItemSearch || i.name.toLowerCase().includes(quotationItemSearch.toLowerCase()))
+                              .map(item => (
+                                <label 
+                                  key={item.id} 
+                                  className={`flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer transition-colors ${
+                                    newQuotation.items.includes(item.id) ? 'bg-primary/10 border border-primary/30' : ''
+                                  }`}
+                                >
+                                  <input 
+                                    type="checkbox" 
+                                    checked={newQuotation.items.includes(item.id)} 
+                                    onChange={(e) => {
+                                      if (e.target.checked) setNewQuotation({ ...newQuotation, items: [...newQuotation.items, item.id] });
+                                      else setNewQuotation({ ...newQuotation, items: newQuotation.items.filter(i => i !== item.id) });
+                                    }} 
+                                    className="rounded w-4 h-4" 
+                                  />
+                                  <span className="flex-1 text-sm">{item.name}</span>
+                                  <span className="text-xs text-muted-foreground">{item.quantity} {item.unit}</span>
+                                </label>
+                              ))}
+                            {alertsData.scopeItems.filter(i => i.category === 'material').filter(i => !quotationItemSearch || i.name.toLowerCase().includes(quotationItemSearch.toLowerCase())).length === 0 && (
+                              <p className="text-sm text-muted-foreground text-center py-4">
+                                {quotationItemSearch ? 'Nenhum item encontrado' : 'Nenhum item de material no orçamento'}
+                              </p>
+                            )}
+                          </div>
+                        </ScrollArea>
+                        {(newQuotation.items.length > 0 || alertsData.scopeItems.filter(i => i.category === 'material').length > 0) && (
+                          <div className="flex justify-between mt-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => setNewQuotation({ ...newQuotation, items: [] })}
+                            >
+                              Limpar seleção
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => setNewQuotation({ 
+                                ...newQuotation, 
+                                items: alertsData.scopeItems.filter(i => i.category === 'material').map(i => i.id) 
+                              })}
+                            >
+                              Selecionar todos
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Custom Items Section (Unplanned Costs) */}
+                      <div className="border-t pt-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <Label className="flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-orange-500" />
+                            Itens Extras (Custo Não Previsto)
+                          </Label>
+                          {newQuotation.customItems.length > 0 && (
+                            <Badge variant="outline" className="border-orange-500 text-orange-600">{newQuotation.customItems.length} extra(s)</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-3">Adicione itens que não estão no orçamento original. Eles serão marcados como [EXTRA].</p>
+                        
+                        {/* Add new custom item form */}
+                        <div className="grid grid-cols-5 gap-2 mb-3">
+                          <Input 
+                            placeholder="Nome do item" 
+                            className="col-span-2"
+                            value={newCustomItem.name}
+                            onChange={(e) => setNewCustomItem({ ...newCustomItem, name: e.target.value })}
+                          />
+                          <Input 
+                            type="number"
+                            placeholder="Qtd"
+                            min="1"
+                            value={newCustomItem.quantity}
+                            onChange={(e) => setNewCustomItem({ ...newCustomItem, quantity: parseFloat(e.target.value) || 1 })}
+                          />
+                          <Input 
+                            placeholder="Un"
+                            value={newCustomItem.unit}
+                            onChange={(e) => setNewCustomItem({ ...newCustomItem, unit: e.target.value })}
+                          />
                           <Button 
-                            variant="ghost" 
+                            type="button"
                             size="sm"
-                            onClick={() => setNewQuotation({ ...newQuotation, items: [] })}
+                            disabled={!newCustomItem.name.trim()}
+                            onClick={() => {
+                              if (newCustomItem.name.trim()) {
+                                setNewQuotation({
+                                  ...newQuotation,
+                                  customItems: [...newQuotation.customItems, { ...newCustomItem }]
+                                });
+                                setNewCustomItem({ name: '', quantity: 1, unit: 'un', estimatedValue: 0 });
+                              }
+                            }}
                           >
-                            Limpar seleção
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => setNewQuotation({ 
-                              ...newQuotation, 
-                              items: alertsData.scopeItems.filter(i => i.category === 'material').map(i => i.id) 
-                            })}
-                          >
-                            Selecionar todos
+                            <Plus className="w-4 h-4" />
                           </Button>
                         </div>
-                      )}
+
+                        {/* List of custom items */}
+                        {newQuotation.customItems.length > 0 && (
+                          <div className="border rounded-lg divide-y">
+                            {newQuotation.customItems.map((item, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-2 bg-orange-50/50 dark:bg-orange-900/10">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="text-orange-600 border-orange-400">EXTRA</Badge>
+                                  <span className="text-sm font-medium">{item.name}</span>
+                                  <span className="text-xs text-muted-foreground">{item.quantity} {item.unit}</span>
+                                </div>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost" 
+                                  className="h-6 w-6 text-destructive"
+                                  onClick={() => setNewQuotation({
+                                    ...newQuotation,
+                                    customItems: newQuotation.customItems.filter((_, i) => i !== idx)
+                                  })}
+                                >
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setQuotationDialogOpen(false)}>Cancelar</Button>
-                    <Button onClick={createQuotation} disabled={!newQuotation.title || !newQuotation.required_date}>Criar</Button>
+                  </ScrollArea>
+                  <DialogFooter className="mt-4 pt-4 border-t">
+                    <Button variant="outline" onClick={() => { setQuotationDialogOpen(false); setNewQuotation({ title: '', required_date: '', notes: '', items: [], customItems: [] }); }}>Cancelar</Button>
+                    <Button onClick={createQuotation} disabled={!newQuotation.title || !newQuotation.required_date || (newQuotation.items.length === 0 && newQuotation.customItems.length === 0)}>
+                      Criar ({newQuotation.items.length + newQuotation.customItems.length} itens)
+                    </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -1580,24 +1763,29 @@ export function SuppliesView() {
                     <CardContent className="p-0">
                       {/* Header - Always visible */}
                       <div 
-                        className={`flex items-center justify-between p-4 border-b bg-muted/30 ${
-                          quotation.status === 'approved' ? 'cursor-pointer hover:bg-muted/50' : ''
-                        }`}
+                        className="flex items-center justify-between p-4 border-b bg-muted/30 cursor-pointer hover:bg-muted/50"
                         onClick={() => {
                           if (quotation.status === 'approved') {
                             setExpandedQuotations(prev => {
                               const next = new Set(prev);
-                              if (next.has(quotation.id)) {
-                                next.delete(quotation.id);
-                              } else {
-                                next.add(quotation.id);
-                              }
+                              if (next.has(quotation.id)) next.delete(quotation.id);
+                              else next.add(quotation.id);
+                              return next;
+                            });
+                          } else if (quotation.status === 'pending') {
+                            setExpandedPendingQuotations(prev => {
+                              const next = new Set(prev);
+                              if (next.has(quotation.id)) next.delete(quotation.id);
+                              else next.add(quotation.id);
                               return next;
                             });
                           }
                         }}
                       >
                         <div className="flex items-center gap-3">
+                          {quotation.status === 'pending' ? (
+                            expandedPendingQuotations.has(quotation.id) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />
+                          ) : null}
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                             quotation.status === 'approved' 
                               ? 'bg-green-100 text-green-600' 
@@ -1618,10 +1806,26 @@ export function SuppliesView() {
                                   <span>Necessária até {format(new Date(quotation.required_date), "dd/MM/yyyy", { locale: ptBR })}</span>
                                 </>
                               )}
+                              <span>•</span>
+                              <span>{quotation.items?.length || 0} itens</span>
                             </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
+                          {canEdit && quotation.status === 'pending' && (
+                            <Button 
+                              size="icon" 
+                              variant="ghost" 
+                              className="h-8 w-8 text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setQuotationToDelete(quotation);
+                                setDeleteQuotationDialogOpen(true);
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
                           <Badge className={`${STATUS_COLORS[quotation.status]} text-white`}>{STATUS_LABELS[quotation.status]}</Badge>
                           {totalValue > 0 && (
                             <div className="text-right">
@@ -1629,17 +1833,18 @@ export function SuppliesView() {
                               <p className="font-bold text-lg text-green-600">{formatCurrency(totalValue)}</p>
                             </div>
                           )}
-                          {quotation.status === 'approved' && (
-                            <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform ${
-                              expandedQuotations.has(quotation.id) ? 'rotate-180' : ''
-                            }`} />
-                          )}
+                          <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform ${
+                            (quotation.status === 'approved' && expandedQuotations.has(quotation.id)) ||
+                            (quotation.status === 'pending' && expandedPendingQuotations.has(quotation.id))
+                              ? 'rotate-180' : ''
+                          }`} />
                         </div>
                       </div>
                       
-                      {/* Items - Show for pending OR when approved and expanded */}
+                      {/* Items - Show when expanded */}
                       {quotation.items && quotation.items.length > 0 && (
-                        quotation.status !== 'approved' || expandedQuotations.has(quotation.id)
+                        (quotation.status === 'pending' && expandedPendingQuotations.has(quotation.id)) ||
+                        (quotation.status === 'approved' && expandedQuotations.has(quotation.id))
                       ) && (
                         <div className="p-4">
                           <div className="grid gap-3">
@@ -1649,12 +1854,85 @@ export function SuppliesView() {
                               const lowestQuote = quotes.length > 0 ? quotes.reduce((min, q) => q.unit_value < min.unit_value ? q : min, quotes[0]) : null;
                               
                               return (
-                                <div key={item.id} className={`p-3 rounded-lg border ${selectedQuote ? 'border-green-200 bg-green-50/50 dark:bg-green-900/10' : 'border-muted'}`}>
+                                <div key={item.id} className={`p-3 rounded-lg border ${selectedQuote ? 'border-green-200 bg-green-50/50 dark:bg-green-900/10' : item.name.startsWith('[EXTRA]') ? 'border-orange-200 bg-orange-50/30' : 'border-muted'}`}>
                                   <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center gap-2">
-                                      <Package className="w-4 h-4 text-blue-500" />
-                                      <span className="font-medium">{item.name}</span>
-                                      <Badge variant="secondary" className="text-xs">{item.quantity} {item.unit}</Badge>
+                                      {item.name.startsWith('[EXTRA]') ? (
+                                        <AlertTriangle className="w-4 h-4 text-orange-500" />
+                                      ) : (
+                                        <Package className="w-4 h-4 text-blue-500" />
+                                      )}
+                                      {editingQuotationItem?.itemId === item.id ? (
+                                        <div className="flex items-center gap-2">
+                                          <Input 
+                                            className="h-7 w-40"
+                                            value={editingQuotationItem.name}
+                                            onChange={(e) => setEditingQuotationItem({ ...editingQuotationItem, name: e.target.value })}
+                                          />
+                                          <Input 
+                                            type="number"
+                                            className="h-7 w-16"
+                                            value={editingQuotationItem.quantity}
+                                            onChange={(e) => setEditingQuotationItem({ ...editingQuotationItem, quantity: parseFloat(e.target.value) || 1 })}
+                                          />
+                                          <Input 
+                                            className="h-7 w-14"
+                                            value={editingQuotationItem.unit}
+                                            onChange={(e) => setEditingQuotationItem({ ...editingQuotationItem, unit: e.target.value })}
+                                          />
+                                          <Button 
+                                            size="icon" 
+                                            variant="ghost" 
+                                            className="h-7 w-7"
+                                            onClick={() => updateQuotationItem(item.id, { 
+                                              name: editingQuotationItem.name, 
+                                              quantity: editingQuotationItem.quantity, 
+                                              unit: editingQuotationItem.unit 
+                                            })}
+                                          >
+                                            <Check className="w-3 h-3" />
+                                          </Button>
+                                          <Button 
+                                            size="icon" 
+                                            variant="ghost" 
+                                            className="h-7 w-7"
+                                            onClick={() => setEditingQuotationItem(null)}
+                                          >
+                                            <X className="w-3 h-3" />
+                                          </Button>
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <span className="font-medium">{item.name}</span>
+                                          <Badge variant="secondary" className="text-xs">{item.quantity} {item.unit}</Badge>
+                                          {canEdit && quotation.status === 'pending' && (
+                                            <div className="flex gap-1 ml-2">
+                                              <Button 
+                                                size="icon" 
+                                                variant="ghost" 
+                                                className="h-6 w-6"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setEditingQuotationItem({ itemId: item.id, name: item.name, quantity: item.quantity, unit: item.unit });
+                                                }}
+                                              >
+                                                <Edit2 className="w-3 h-3" />
+                                              </Button>
+                                              <Button 
+                                                size="icon" 
+                                                variant="ghost" 
+                                                className="h-6 w-6 text-destructive"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  deleteQuotationItem(quotation.id, item.id);
+                                                }}
+                                              >
+                                                <Trash2 className="w-3 h-3" />
+                                              </Button>
+                                            </div>
+                                          )}
+                                        </>
+                                      )}
                                     </div>
                                     {selectedQuote && (
                                       <div className="flex items-center gap-2">
@@ -1745,6 +2023,16 @@ export function SuppliesView() {
                         </div>
                       )}
                       
+                      {quotation.status === 'pending' && !expandedPendingQuotations.has(quotation.id) && (
+                        <div className="flex items-center justify-center p-3 border-t bg-yellow-50/50 dark:bg-yellow-900/10">
+                          <div className="flex items-center gap-2 text-yellow-600 text-sm">
+                            <Clock className="w-4 h-4" />
+                            <span className="font-medium">Cotação pendente</span>
+                            <span className="text-muted-foreground">• Clique para expandir</span>
+                          </div>
+                        </div>
+                      )}
+                      
                       {quotation.status === 'approved' && !expandedQuotations.has(quotation.id) && (
                         <div className="flex items-center justify-center p-3 border-t bg-green-50/50 dark:bg-green-900/10">
                           <div className="flex items-center gap-2 text-green-600 text-sm">
@@ -1765,6 +2053,42 @@ export function SuppliesView() {
 
         {/* Orders Tab */}
         <TabsContent value="orders" className="flex-1 overflow-auto mt-4 space-y-4">
+          {/* Delete Order Dialog */}
+          <AlertDialog open={deleteOrderDialogOpen} onOpenChange={setDeleteOrderDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir Pedido</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Tem certeza que deseja excluir o pedido "{orderToDelete?.order_number}"? Esta ação não pode ser desfeita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { if (orderToDelete) { deleteOrder(orderToDelete.id); setDeleteOrderDialogOpen(false); setOrderToDelete(null); } }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Excluir
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          
+          {/* Delete Quotation Dialog */}
+          <AlertDialog open={deleteQuotationDialogOpen} onOpenChange={setDeleteQuotationDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Excluir Cotação</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Tem certeza que deseja excluir a cotação "{quotationToDelete?.title}"? Todos os itens e cotações de fornecedores serão removidos.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { if (quotationToDelete) { deleteQuotation(quotationToDelete.id); setDeleteQuotationDialogOpen(false); setQuotationToDelete(null); } }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Excluir
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          
           <ScrollArea className="h-[calc(100vh-250px)]">
             <div className="space-y-3">
               {purchaseOrders.map(order => (
@@ -1772,7 +2096,10 @@ export function SuppliesView() {
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div><h3 className="font-semibold">{order.order_number}</h3><p className="text-sm text-muted-foreground">{order.supplier?.name}</p></div>
-                      <div className="flex items-center gap-2"><Badge className={STATUS_COLORS[order.status]}>{STATUS_LABELS[order.status]}</Badge><span className="font-bold">{formatCurrency(order.total_value)}</span></div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={STATUS_COLORS[order.status]}>{STATUS_LABELS[order.status]}</Badge>
+                        <span className="font-bold">{formatCurrency(order.total_value)}</span>
+                      </div>
                     </div>
                     {order.items && order.items.length > 0 && (
                       <div className="mb-3 text-sm"><p className="font-medium mb-1">Itens:</p><div className="flex flex-wrap gap-1">{order.items.map(item => <Badge key={item.id} variant="secondary">{item.name} ({item.quantity} {item.unit})</Badge>)}</div></div>
@@ -1783,13 +2110,25 @@ export function SuppliesView() {
                         {order.actual_delivery_date && <Badge variant="outline">Entregue: {format(new Date(order.actual_delivery_date), "dd/MM/yyyy", { locale: ptBR })}</Badge>}
                       </div>
                     )}
-                    {canEdit && order.status !== 'delivered' && order.status !== 'cancelled' && (
+                    {canEdit && (
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => { setSelectedOrder(order); setOrderEditDialogOpen(true); }}><Edit2 className="w-3 h-3 mr-1" />Editar</Button>
-                        <Button size="sm" variant="outline" onClick={() => { setSelectedOrder(order); setTrackingDialogOpen(true); }}><Plus className="w-3 h-3 mr-1" />Rastreamento</Button>
-                        {order.status === 'pending' && <Button size="sm" onClick={() => updateOrder(order.id, { status: 'sent' })}><Send className="w-3 h-3 mr-1" />Enviar</Button>}
-                        {order.status === 'sent' && <Button size="sm" onClick={() => updateOrder(order.id, { status: 'confirmed' })}><Check className="w-3 h-3 mr-1" />Confirmar</Button>}
-                        {order.status === 'confirmed' && <Button size="sm" onClick={() => updateOrder(order.id, { status: 'in_transit' })}><Truck className="w-3 h-3 mr-1" />Em Trânsito</Button>}
+                        {order.status !== 'delivered' && order.status !== 'cancelled' && (
+                          <>
+                            <Button size="sm" variant="outline" onClick={() => { setSelectedOrder(order); setTrackingDialogOpen(true); }}><Plus className="w-3 h-3 mr-1" />Rastreamento</Button>
+                            {order.status === 'pending' && <Button size="sm" onClick={() => updateOrder(order.id, { status: 'sent' })}><Send className="w-3 h-3 mr-1" />Enviar</Button>}
+                            {order.status === 'sent' && <Button size="sm" onClick={() => updateOrder(order.id, { status: 'confirmed' })}><Check className="w-3 h-3 mr-1" />Confirmar</Button>}
+                            {order.status === 'confirmed' && <Button size="sm" onClick={() => updateOrder(order.id, { status: 'in_transit' })}><Truck className="w-3 h-3 mr-1" />Em Trânsito</Button>}
+                          </>
+                        )}
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
+                          onClick={() => { setOrderToDelete(order); setDeleteOrderDialogOpen(true); }}
+                        >
+                          <Trash2 className="w-3 h-3 mr-1" />Excluir
+                        </Button>
                       </div>
                     )}
                   </CardContent>
