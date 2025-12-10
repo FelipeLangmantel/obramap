@@ -210,12 +210,18 @@ const STATUS_COLORS: Record<string, string> = {
   delivered: 'bg-green-600'
 };
 
-export function SuppliesView() {
+type TabType = "alerts" | "inputs" | "quotations" | "orders" | "suppliers" | "contracts" | "settings";
+
+interface SuppliesViewProps {
+  initialTab?: TabType;
+}
+
+export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   const { currentProject } = useConstruction();
   const { canEdit } = useAuth();
   const projectId = currentProject?.id;
 
-  const [activeTab, setActiveTab] = useState<"alerts" | "inputs" | "quotations" | "orders" | "suppliers" | "contracts" | "settings">("alerts");
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   const [isLoading, setIsLoading] = useState(true);
   
   // Data states - loaded on demand

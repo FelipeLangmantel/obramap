@@ -28,7 +28,8 @@ import {
   Target,
   Map,
   Box,
-  Package
+  Package,
+  Truck
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -46,9 +47,11 @@ import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import obraMapLogo from "@/assets/obramap-logo.png";
 
+type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers";
+
 interface AppSidebarProps {
-  activeView: "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies";
-  onViewChange: (view: "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies") => void;
+  activeView: ViewType;
+  onViewChange: (view: ViewType) => void;
 }
 
 export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
@@ -120,7 +123,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     },
   ];
 
-  const handleViewChange = (view: "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies") => {
+  const handleViewChange = (view: ViewType) => {
     onViewChange(view);
   };
 
@@ -215,6 +218,36 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                     >
                       <Layers className="h-5 w-5 shrink-0" />
                       <span className="text-sm">Etapas e Serviços</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => handleViewChange("inputs")}
+                      isActive={activeView === "inputs"}
+                      className={cn(
+                        "w-full justify-start gap-3 px-3 py-2.5 rounded-md transition-all duration-150",
+                        activeView === "inputs" 
+                          ? "bg-accent text-accent-foreground font-medium" 
+                          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                      )}
+                    >
+                      <Box className="h-5 w-5 shrink-0" />
+                      <span className="text-sm">Cadastro de Insumos</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => handleViewChange("suppliers")}
+                      isActive={activeView === "suppliers"}
+                      className={cn(
+                        "w-full justify-start gap-3 px-3 py-2.5 rounded-md transition-all duration-150",
+                        activeView === "suppliers" 
+                          ? "bg-accent text-accent-foreground font-medium" 
+                          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                      )}
+                    >
+                      <Truck className="h-5 w-5 shrink-0" />
+                      <span className="text-sm">Cadastro de Fornecedores</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                   {isAdmin && (
