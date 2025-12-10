@@ -1575,12 +1575,49 @@ export function SuppliesView() {
                 <DialogContent>
                   <DialogHeader><DialogTitle>Gerenciar Unidades</DialogTitle></DialogHeader>
                   <div className="space-y-4">
-                    <div className="flex gap-2">
-                      <Input placeholder="Nome" value={newUnit.name} onChange={(e) => setNewUnit({ ...newUnit, name: e.target.value })} />
-                      <Input placeholder="Abreviação" value={newUnit.abbreviation} onChange={(e) => setNewUnit({ ...newUnit, abbreviation: e.target.value })} className="w-24" />
-                      <Button onClick={saveUnit} disabled={!newUnit.name.trim() || !newUnit.abbreviation.trim()}>
-                        {editingUnit ? <><Check className="w-4 h-4 mr-1" />Salvar</> : <><Plus className="w-4 h-4 mr-1" />Adicionar</>}
-                      </Button>
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Input 
+                            placeholder="Nome" 
+                            value={newUnit.name} 
+                            onChange={(e) => setNewUnit({ ...newUnit, name: e.target.value })} 
+                          />
+                          {/* Autocomplete suggestions */}
+                          {newUnit.name.trim() && !editingUnit && (
+                            (() => {
+                              const suggestions = units.filter(u => 
+                                u.name.toLowerCase().includes(newUnit.name.toLowerCase()) ||
+                                u.abbreviation.toLowerCase().includes(newUnit.name.toLowerCase())
+                              ).slice(0, 5);
+                              return suggestions.length > 0 ? (
+                                <div className="absolute z-10 w-full mt-1 bg-popover border rounded-md shadow-md">
+                                  {suggestions.map(u => (
+                                    <div 
+                                      key={u.id}
+                                      className="px-3 py-2 text-sm cursor-pointer hover:bg-muted flex justify-between"
+                                      onClick={() => {
+                                        setEditingUnit(u);
+                                        setNewUnit({ name: u.name, abbreviation: u.abbreviation });
+                                      }}
+                                    >
+                                      <span>{u.name}</span>
+                                      <Badge variant="secondary" className="text-xs">{u.abbreviation}</Badge>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null;
+                            })()
+                          )}
+                        </div>
+                        <Input placeholder="Abreviação" value={newUnit.abbreviation} onChange={(e) => setNewUnit({ ...newUnit, abbreviation: e.target.value })} className="w-24" />
+                        <Button onClick={saveUnit} disabled={!newUnit.name.trim() || !newUnit.abbreviation.trim()}>
+                          {editingUnit ? <><Check className="w-4 h-4 mr-1" />Salvar</> : <><Plus className="w-4 h-4 mr-1" />Adicionar</>}
+                        </Button>
+                      </div>
+                      {newUnit.name.trim() && !editingUnit && units.some(u => u.name.toLowerCase() === newUnit.name.toLowerCase().trim()) && (
+                        <p className="text-xs text-amber-600">Unidade já cadastrada. Clique na sugestão para editar.</p>
+                      )}
                     </div>
                     <ScrollArea className="h-[250px]">
                       <div className="space-y-1">
