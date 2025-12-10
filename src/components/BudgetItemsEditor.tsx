@@ -255,6 +255,10 @@ export function BudgetItemsEditor({
     }
   }, [items, onTotalChange]);
 
+  // Ref para focar na quantidade ao adicionar item
+  const quantityInputRef = useRef<HTMLInputElement>(null);
+  const [newItemIndex, setNewItemIndex] = useState<number | null>(null);
+
   // Add new item from input catalog only
   const addItemFromInput = (input: InputItem) => {
     const familyName = input.material_family_name || families.find(f => f.id === input.material_family_id)?.name || 'Geral';
@@ -271,11 +275,26 @@ export function BudgetItemsEditor({
       isEditing: true,
       inputId: input.id
     };
-    setItems([...items, newItem]);
+    const newItems = [...items, newItem];
+    setItems(newItems);
+    setNewItemIndex(newItems.length - 1);
+    // Expand the family so user sees the new item
+    const family = newItem.category === 'material' ? newItem.materialFamily : 
+      newItem.category === 'labor' ? 'Mão de Obra' : 'Equipamentos';
+    setExpandedFamilies(prev => new Set([...prev, family]));
     setShowSuggestions(null);
     setInputSuggestions([]);
     setCatalogSearchTerm("");
   };
+
+  // Focus on quantity input when new item is added
+  useEffect(() => {
+    if (newItemIndex !== null && quantityInputRef.current) {
+      quantityInputRef.current.focus();
+      quantityInputRef.current.select();
+      setNewItemIndex(null);
+    }
+  }, [newItemIndex, items]);
 
   // Save item
   const saveItem = async (index: number) => {
@@ -336,21 +355,34 @@ export function BudgetItemsEditor({
     if (!itemToDelete) return;
     
     const { index, item } = itemToDelete;
+    
+    // Primeiro atualiza o estado local imediatamente
+    const updatedItems = items.filter((_, i) => i !== index);
+    setItems(updatedItems);
+    setDeleteDialogOpen(false);
+    setItemToDelete(null);
+    
+    // Depois deleta do banco de dados
     if (item.id) {
       try {
-        await supabase.from('scope_items').delete().eq('id', item.id);
+        const { error } = await supabase.from('scope_items').delete().eq('id', item.id);
+        if (error) {
+          console.error('Error deleting:', error);
+          toast.error('Erro ao remover do banco de dados');
+          // Reverte a mudança local se falhou
+          loadData();
+          return;
+        }
+        toast.success('Item removido permanentemente');
       } catch (error) {
         console.error('Error deleting:', error);
         toast.error('Erro ao remover');
-        setDeleteDialogOpen(false);
-        setItemToDelete(null);
-        return;
+        // Reverte a mudança local se falhou
+        loadData();
       }
+    } else {
+      toast.success('Item removido');
     }
-    setItems(items.filter((_, i) => i !== index));
-    toast.success('Item removido permanentemente');
-    setDeleteDialogOpen(false);
-    setItemToDelete(null);
   };
 
   // Update item field
@@ -579,6 +611,7 @@ export function BudgetItemsEditor({
                                 </div>
                                 <div className="col-span-2">
                                   <Input
+                                    ref={item.isNew ? quantityInputRef : undefined}
                                     type="number"
                                     value={item.quantity}
                                     onChange={(e) => updateItem(originalIndex, 'quantity', parseFloat(e.target.value) || 0)}
@@ -586,6 +619,7 @@ export function BudgetItemsEditor({
                                     className="h-8 text-sm"
                                     min="0"
                                     step="0.01"
+                                    autoFocus={item.isNew}
                                   />
                                 </div>
                                 <div className="col-span-1">

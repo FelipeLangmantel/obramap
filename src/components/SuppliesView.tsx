@@ -832,7 +832,16 @@ export function SuppliesView() {
             </div>
             <div className="flex gap-2">
               {/* Families Dialog */}
-              <Dialog open={familyDialogOpen} onOpenChange={(o) => { setFamilyDialogOpen(o); if (!o) { setEditingFamily(null); setNewFamily({ name: '', color: '#3b82f6' }); } }}>
+              <Dialog open={familyDialogOpen} onOpenChange={(o) => { 
+                setFamilyDialogOpen(o); 
+                if (!o) { 
+                  setEditingFamily(null); 
+                  setNewFamily({ name: '', color: '#3b82f6' }); 
+                  // Reload families para atualizar filtros
+                  setDataLoaded(prev => ({ ...prev, inputs: false }));
+                  loadTabData('inputs');
+                } 
+              }}>
                 <DialogTrigger asChild><Button variant="outline" size="sm"><Package className="w-4 h-4 mr-1" />Famílias</Button></DialogTrigger>
                 <DialogContent>
                   <DialogHeader><DialogTitle>Gerenciar Famílias de Materiais</DialogTitle></DialogHeader>
@@ -840,18 +849,30 @@ export function SuppliesView() {
                     <div className="flex gap-2">
                       <Input placeholder="Nova família..." value={newFamily.name} onChange={(e) => setNewFamily({ ...newFamily, name: e.target.value })} className="flex-1" />
                       <Input type="color" value={newFamily.color} onChange={(e) => setNewFamily({ ...newFamily, color: e.target.value })} className="w-12 p-1 h-10" />
-                      <Button onClick={saveFamily}><Plus className="w-4 h-4" /></Button>
+                      <Button onClick={saveFamily} disabled={!newFamily.name.trim()}>
+                        {editingFamily ? <><Check className="w-4 h-4 mr-1" />Salvar</> : <><Plus className="w-4 h-4 mr-1" />Adicionar</>}
+                      </Button>
                     </div>
                     <ScrollArea className="h-[250px]">
                       <div className="space-y-1">
                         {families.map(f => (
-                          <div key={f.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                          <div key={f.id} className={`flex items-center justify-between p-2 rounded ${editingFamily?.id === f.id ? 'bg-primary/10 border border-primary/30' : 'bg-muted/50'}`}>
                             <div className="flex items-center gap-2">
                               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: f.color }} />
                               <span>{f.name}</span>
                             </div>
                             <div className="flex gap-1">
-                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingFamily(f); setNewFamily({ name: f.name, color: f.color }); }}><Edit2 className="w-3.5 h-3.5" /></Button>
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { 
+                                if (editingFamily?.id === f.id) {
+                                  setEditingFamily(null);
+                                  setNewFamily({ name: '', color: '#3b82f6' });
+                                } else {
+                                  setEditingFamily(f); 
+                                  setNewFamily({ name: f.name, color: f.color }); 
+                                }
+                              }}>
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </Button>
                               <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => deleteFamily(f.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                             </div>
                           </div>
@@ -859,7 +880,14 @@ export function SuppliesView() {
                       </div>
                     </ScrollArea>
                   </div>
-                  <DialogFooter><Button onClick={() => setFamilyDialogOpen(false)}>Fechar</Button></DialogFooter>
+                  <DialogFooter>
+                    {editingFamily && (
+                      <Button variant="outline" onClick={() => { setEditingFamily(null); setNewFamily({ name: '', color: '#3b82f6' }); }}>
+                        Cancelar Edição
+                      </Button>
+                    )}
+                    <Button onClick={() => setFamilyDialogOpen(false)}>Fechar</Button>
+                  </DialogFooter>
                 </DialogContent>
               </Dialog>
               
@@ -921,7 +949,10 @@ export function SuppliesView() {
                         <div><Label>Família</Label>
                           <Select value={newInput.material_family_id} onValueChange={(v) => setNewInput({ ...newInput, material_family_id: v })}>
                             <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                            <SelectContent>{families.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}</SelectContent>
+                            <SelectContent>
+                              <SelectItem value="">Sem família</SelectItem>
+                              {families.map(f => <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>)}
+                            </SelectContent>
                           </Select>
                         </div>
                         <div><Label>Valor Unitário (R$)</Label>
