@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Plus, Trash2, Save, Package, Hammer, Wrench, Search, Filter, X, Check, ChevronDown, ChevronRight, GripVertical, Edit2, FileUp, Download, Maximize2, Minimize2 } from "lucide-react";
+import { Plus, Trash2, Save, Package, Hammer, Wrench, Search, Filter, X, Check, ChevronDown, ChevronRight, GripVertical, Edit2, FileUp, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -69,8 +69,6 @@ interface BudgetItemsEditorProps {
   onTotalChange?: (total: { material: number; labor: number; equipment: number }) => void;
   onClose?: () => void;
   compact?: boolean;
-  expanded?: boolean;
-  onExpandToggle?: () => void;
   scrollPositionKey?: string;
 }
 
@@ -95,8 +93,6 @@ export function BudgetItemsEditor({
   onTotalChange,
   onClose,
   compact = false,
-  expanded = false,
-  onExpandToggle,
   scrollPositionKey
 }: BudgetItemsEditorProps) {
   const [items, setItems] = useState<ScopeItem[]>([]);
@@ -117,7 +113,7 @@ export function BudgetItemsEditor({
   const [itemToDelete, setItemToDelete] = useState<{ index: number; item: ScopeItem } | null>(null);
   const [selectedInputsForMass, setSelectedInputsForMass] = useState<Set<string>>(new Set());
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  const [allFamiliesExpanded, setAllFamiliesExpanded] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Load families and items
@@ -410,86 +406,6 @@ export function BudgetItemsEditor({
     }
   };
 
-  // Export budget function
-  const exportBudget = async (format: 'analytical' | 'synthetic') => {
-    setIsExporting(true);
-    
-    try {
-      const groupedItems = Object.entries(itemsByFamily);
-      const lines: string[] = [];
-      const separator = ',';
-      
-      // Header
-      lines.push(`Orçamento - ${scopeName}`);
-      lines.push(`Macro: ${macroName || macroId}`);
-      lines.push(`Exportado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`);
-      lines.push('');
-
-      if (format === 'analytical') {
-        // Analytical - detailed view
-        lines.push(`Família${separator}Item${separator}Categoria${separator}Quantidade${separator}Unidade${separator}Valor Unit.${separator}Total`);
-        
-        groupedItems.forEach(([family, familyItems]) => {
-          familyItems.forEach(item => {
-            const total = item.unitValue * item.quantity;
-            const categoryName = item.category === 'material' ? 'Material' : 
-              item.category === 'labor' ? 'Mão de Obra' : 'Equipamento';
-            lines.push(`${family}${separator}"${item.name}"${separator}${categoryName}${separator}${item.quantity}${separator}${item.unit}${separator}${item.unitValue.toFixed(2)}${separator}${total.toFixed(2)}`);
-          });
-        });
-        
-        // Totals by category
-        lines.push('');
-        lines.push('RESUMO POR CATEGORIA');
-        const materialTotal = items.filter(i => i.category === 'material').reduce((sum, i) => sum + i.unitValue * i.quantity, 0);
-        const laborTotal = items.filter(i => i.category === 'labor').reduce((sum, i) => sum + i.unitValue * i.quantity, 0);
-        const equipmentTotal = items.filter(i => i.category === 'equipment').reduce((sum, i) => sum + i.unitValue * i.quantity, 0);
-        lines.push(`Material${separator}${separator}${separator}${separator}${separator}${separator}${materialTotal.toFixed(2)}`);
-        lines.push(`Mão de Obra${separator}${separator}${separator}${separator}${separator}${separator}${laborTotal.toFixed(2)}`);
-        lines.push(`Equipamento${separator}${separator}${separator}${separator}${separator}${separator}${equipmentTotal.toFixed(2)}`);
-        lines.push(`TOTAL GERAL${separator}${separator}${separator}${separator}${separator}${separator}${(materialTotal + laborTotal + equipmentTotal).toFixed(2)}`);
-      } else {
-        // Synthetic - summary view by family
-        lines.push(`Família${separator}Qtd Itens${separator}Total Material${separator}Total Mão de Obra${separator}Total Equipamento${separator}Total Geral`);
-        
-        let totalMaterial = 0, totalLabor = 0, totalEquipment = 0;
-        
-        groupedItems.forEach(([family, familyItems]) => {
-          const familyMaterial = familyItems.filter(i => i.category === 'material').reduce((sum, i) => sum + i.unitValue * i.quantity, 0);
-          const familyLabor = familyItems.filter(i => i.category === 'labor').reduce((sum, i) => sum + i.unitValue * i.quantity, 0);
-          const familyEquipment = familyItems.filter(i => i.category === 'equipment').reduce((sum, i) => sum + i.unitValue * i.quantity, 0);
-          const familyTotal = familyMaterial + familyLabor + familyEquipment;
-          
-          totalMaterial += familyMaterial;
-          totalLabor += familyLabor;
-          totalEquipment += familyEquipment;
-          
-          lines.push(`${family}${separator}${familyItems.length}${separator}${familyMaterial.toFixed(2)}${separator}${familyLabor.toFixed(2)}${separator}${familyEquipment.toFixed(2)}${separator}${familyTotal.toFixed(2)}`);
-        });
-        
-        lines.push('');
-        lines.push(`TOTAL${separator}${items.length}${separator}${totalMaterial.toFixed(2)}${separator}${totalLabor.toFixed(2)}${separator}${totalEquipment.toFixed(2)}${separator}${(totalMaterial + totalLabor + totalEquipment).toFixed(2)}`);
-      }
-      
-      // Download CSV
-      const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `orcamento_${scopeName.replace(/\s+/g, '_')}_${format}_${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
-      toast.success(`Orçamento ${format === 'analytical' ? 'analítico' : 'sintético'} exportado!`);
-    } catch (error) {
-      console.error('Error exporting:', error);
-      toast.error('Erro ao exportar orçamento');
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   // Save and restore scroll position
   useEffect(() => {
@@ -673,6 +589,18 @@ export function BudgetItemsEditor({
     });
   };
 
+  // Expand/collapse all families
+  const toggleAllFamilies = () => {
+    if (allFamiliesExpanded) {
+      setExpandedFamilies(new Set());
+      setAllFamiliesExpanded(false);
+    } else {
+      const allFamilyNames = Object.keys(itemsByFamily);
+      setExpandedFamilies(new Set(allFamilyNames));
+      setAllFamiliesExpanded(true);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8 text-muted-foreground">
@@ -728,46 +656,16 @@ export function BudgetItemsEditor({
           Importar
         </Button>
         
-        {/* Export dropdown */}
-        <div className="relative group">
+        {/* Expand/Collapse all families button */}
+        {Object.keys(itemsByFamily).length > 0 && (
           <Button
             variant="outline"
             size="sm"
             className="h-9 gap-1.5"
-            disabled={items.length === 0 || isExporting}
+            onClick={toggleAllFamilies}
           >
-            <Download className="w-4 h-4" />
-            Exportar
-            <ChevronDown className="w-3 h-3 ml-1" />
-          </Button>
-          <div className="absolute left-0 top-full mt-1 bg-popover border rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 min-w-[160px]">
-            <button
-              className="w-full px-3 py-2 text-sm text-left hover:bg-muted transition-colors"
-              onClick={() => exportBudget('analytical')}
-              disabled={isExporting}
-            >
-              Analítico (detalhado)
-            </button>
-            <button
-              className="w-full px-3 py-2 text-sm text-left hover:bg-muted transition-colors border-t"
-              onClick={() => exportBudget('synthetic')}
-              disabled={isExporting}
-            >
-              Sintético (resumo)
-            </button>
-          </div>
-        </div>
-
-        {/* Expand button */}
-        {onExpandToggle && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 gap-1.5"
-            onClick={onExpandToggle}
-          >
-            {expanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            {expanded ? 'Recolher' : 'Expandir'}
+            <ChevronsUpDown className="w-4 h-4" />
+            {allFamiliesExpanded ? 'Recolher Todas' : 'Expandir Todas'}
           </Button>
         )}
         <Select value={catalogFamilyFilter} onValueChange={(val) => {
@@ -912,7 +810,7 @@ export function BudgetItemsEditor({
       </div>
 
       {/* Items list grouped by family */}
-      <ScrollArea className={`flex-1 ${expanded ? 'h-[calc(100vh-200px)]' : ''}`} ref={scrollAreaRef}>
+      <ScrollArea className="flex-1" ref={scrollAreaRef}>
         <div className="space-y-2 pr-2">
           {Object.entries(itemsByFamily).map(([family, familyItems]) => {
             const isExpanded = expandedFamilies.has(family);
