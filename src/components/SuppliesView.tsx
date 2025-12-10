@@ -37,6 +37,7 @@ interface InputItem {
   material_family?: MaterialFamily;
   description: string | null;
   unit_value: number;
+  stock_quantity: number;
 }
 
 interface UnitItem {
@@ -169,9 +170,12 @@ interface MaterialAlert {
     id: string;
     name: string;
     totalQuantity: number;
+    stockQuantity: number;
+    needQuantity: number;
     unit: string;
     unitValue: number;
     totalValue: number;
+    houseIds: number[];
   }[];
 }
 
@@ -239,9 +243,10 @@ export function SuppliesView() {
   const [editingInput, setEditingInput] = useState<InputItem | null>(null);
 
   // Form states
-  const [newInput, setNewInput] = useState<{ name: string; unit: string; category: string; material_family_id: string; description: string; unit_value: number }>({
-    name: '', unit: 'un', category: 'material', material_family_id: '', description: '', unit_value: 0
+  const [newInput, setNewInput] = useState<{ name: string; unit: string; category: string; material_family_id: string; description: string; unit_value: number; stock_quantity: number }>({
+    name: '', unit: 'un', category: 'material', material_family_id: '', description: '', unit_value: 0, stock_quantity: 0
   });
+  const [inputStockEdit, setInputStockEdit] = useState<Record<string, number>>({});
   const [newUnit, setNewUnit] = useState<{ name: string; abbreviation: string }>({ name: '', abbreviation: '' });
   const [newSupplier, setNewSupplier] = useState<Partial<Supplier>>({ supplier_type: 'material' });
   const [familyDialogOpen, setFamilyDialogOpen] = useState(false);
@@ -344,7 +349,7 @@ export function SuppliesView() {
           supabase.from('units').select('*').eq('project_id', projectId).order('name'),
           supabase.from('material_families').select('*').eq('project_id', projectId).order('display_order').order('name')
         ]);
-        if (inputsRes.data) setInputs(inputsRes.data.map((i: any) => ({ ...i, material_family: i.material_families, category: i.category as 'material' | 'labor' | 'equipment', unit_value: i.unit_value || 0 })));
+        if (inputsRes.data) setInputs(inputsRes.data.map((i: any) => ({ ...i, material_family: i.material_families, category: i.category as 'material' | 'labor' | 'equipment', unit_value: i.unit_value || 0, stock_quantity: i.stock_quantity || 0 })));
         if (unitsRes.data) setUnits(unitsRes.data);
         if (familiesRes.data) setFamilies(familiesRes.data.map(f => ({ id: f.id, name: f.name, color: f.color || '#9ca3af', lead_time_days: f.lead_time_days || 7 })));
       } else if (tab === 'quotations') {
@@ -431,14 +436,15 @@ export function SuppliesView() {
       item.category === 'material' && plannedHousesByScope[item.scope_id]
     );
     
-    const itemsByFamily: Record<string, { item: typeof materialItems[0]; plannedHouses: number }[]> = {};
+    const itemsByFamily: Record<string, { item: typeof materialItems[0]; plannedHouses: number; plannedHouseIds: number[] }[]> = {};
     
     materialItems.forEach(item => {
       const familyName = item.material_family || 'Geral';
       if (!itemsByFamily[familyName]) itemsByFamily[familyName] = [];
-      const plannedHouses = [...new Set(plannedHousesByScope[item.scope_id] || [])].length;
+      const plannedHouseIds = [...new Set(plannedHousesByScope[item.scope_id] || [])];
+      const plannedHouses = plannedHouseIds.length;
       if (plannedHouses > 0) {
-        itemsByFamily[familyName].push({ item, plannedHouses });
+        itemsByFamily[familyName].push({ item, plannedHouses, plannedHouseIds });
       }
     });
     
@@ -451,15 +457,26 @@ export function SuppliesView() {
       
       const leadTimeDays = family.lead_time_days || 7;
       
-      // Calculate quantities based on planned houses only (remaining balance)
-      const alertItems = itemsData.map(({ item, plannedHouses }) => ({
-        id: item.id,
-        name: item.name,
-        totalQuantity: item.quantity * plannedHouses,
-        unit: item.unit,
-        unitValue: item.unit_value,
-        totalValue: item.quantity * plannedHouses * item.unit_value
-      }));
+      // Calculate quantities based on planned houses only (remaining balance) with stock discount
+      const alertItems = itemsData.map(({ item, plannedHouses, plannedHouseIds }) => {
+        const totalQuantity = item.quantity * plannedHouses;
+        // Find matching input to get stock quantity
+        const matchingInput = inputs.find(i => i.name.toLowerCase() === item.name.toLowerCase() && i.category === 'material');
+        const stockQuantity = matchingInput?.stock_quantity || 0;
+        const needQuantity = Math.max(0, totalQuantity - stockQuantity);
+        
+        return {
+          id: item.id,
+          name: item.name,
+          totalQuantity,
+          stockQuantity,
+          needQuantity,
+          unit: item.unit,
+          unitValue: item.unit_value,
+          totalValue: needQuantity * item.unit_value,
+          houseIds: plannedHouseIds
+        };
+      });
       
       // Due date is based on earliest planned production for this family
       const earliestPlanned = plannedProductions
@@ -491,7 +508,7 @@ export function SuppliesView() {
     
     // Sort by days until due (most urgent first)
     return alerts.sort((a, b) => a.daysUntilDue - b.daysUntilDue);
-  }, [alertsData.scopeItems, alertFamilies, plannedProductions]);
+  }, [alertsData.scopeItems, alertFamilies, plannedProductions, inputs]);
 
   // Combined alerts count
   const totalAlertsCount = laborAlerts.length + materialAlerts.length;
@@ -533,7 +550,8 @@ export function SuppliesView() {
         category: newInput.category,
         material_family_id: newInput.material_family_id || null,
         description: newInput.description || null,
-        unit_value: newInput.unit_value || 0
+        unit_value: newInput.unit_value || 0,
+        stock_quantity: newInput.stock_quantity || 0
       };
       
       if (editingInput) {
@@ -559,7 +577,7 @@ export function SuppliesView() {
         toast.success('Insumo cadastrado!');
       }
       setInputDialogOpen(false);
-      setNewInput({ name: '', unit: 'un', category: 'material', material_family_id: '', description: '', unit_value: 0 });
+      setNewInput({ name: '', unit: 'un', category: 'material', material_family_id: '', description: '', unit_value: 0, stock_quantity: 0 });
       setEditingInput(null);
       setDataLoaded(prev => ({ ...prev, inputs: false }));
       loadTabData('inputs');
@@ -1053,10 +1071,13 @@ export function SuppliesView() {
                                 <TableHeader>
                                   <TableRow className="bg-muted/30">
                                     <TableHead className="text-xs">Insumo</TableHead>
-                                    <TableHead className="text-xs text-right">Qtd Total</TableHead>
+                                    <TableHead className="text-xs text-right">Qtd Necessária</TableHead>
+                                    <TableHead className="text-xs text-right">Em Estoque</TableHead>
+                                    <TableHead className="text-xs text-right">A Comprar</TableHead>
                                     <TableHead className="text-xs">Un</TableHead>
                                     <TableHead className="text-xs text-right">Valor Unit.</TableHead>
                                     <TableHead className="text-xs text-right">Valor Total</TableHead>
+                                    <TableHead className="text-xs">Casas</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -1064,9 +1085,14 @@ export function SuppliesView() {
                                     <TableRow key={item.id}>
                                       <TableCell className="text-sm">{item.name}</TableCell>
                                       <TableCell className="text-sm text-right">{item.totalQuantity.toLocaleString('pt-BR')}</TableCell>
+                                      <TableCell className="text-sm text-right text-green-600">{item.stockQuantity.toLocaleString('pt-BR')}</TableCell>
+                                      <TableCell className="text-sm text-right font-medium text-orange-600">{item.needQuantity.toLocaleString('pt-BR')}</TableCell>
                                       <TableCell className="text-sm">{item.unit}</TableCell>
                                       <TableCell className="text-sm text-right">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitValue)}</TableCell>
                                       <TableCell className="text-sm text-right font-medium">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.totalValue)}</TableCell>
+                                      <TableCell className="text-xs text-muted-foreground max-w-[100px] truncate" title={item.houseIds.join(', ')}>
+                                        {item.houseIds.slice(0, 5).join(', ')}{item.houseIds.length > 5 ? ` +${item.houseIds.length - 5}` : ''}
+                                      </TableCell>
                                     </TableRow>
                                   ))}
                                 </TableBody>
@@ -1286,13 +1312,13 @@ export function SuppliesView() {
               </Dialog>
               
               {canEdit && (
-                <Dialog open={inputDialogOpen} onOpenChange={(o) => { setInputDialogOpen(o); if (!o) { setEditingInput(null); setNewInput({ name: '', unit: 'un', category: 'material', material_family_id: '', description: '', unit_value: 0 }); } }}>
+                <Dialog open={inputDialogOpen} onOpenChange={(o) => { setInputDialogOpen(o); if (!o) { setEditingInput(null); setNewInput({ name: '', unit: 'un', category: 'material', material_family_id: '', description: '', unit_value: 0, stock_quantity: 0 }); } }}>
                   <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-1" />Novo Insumo</Button></DialogTrigger>
                   <DialogContent>
                     <DialogHeader><DialogTitle>{editingInput ? 'Editar' : 'Cadastrar'} Insumo</DialogTitle></DialogHeader>
                     <div className="space-y-4">
                       <div><Label>Nome *</Label><Input value={newInput.name} onChange={(e) => setNewInput({ ...newInput, name: e.target.value })} /></div>
-                      <div className="grid grid-cols-4 gap-4">
+                      <div className="grid grid-cols-2 gap-4">
                         <div><Label>Categoria *</Label>
                           <Select value={newInput.category} onValueChange={(v) => setNewInput({ ...newInput, category: v })}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1331,6 +1357,20 @@ export function SuppliesView() {
                           />
                         </div>
                       </div>
+                      {newInput.category === 'material' && (
+                        <div>
+                          <Label>Quantidade em Estoque</Label>
+                          <Input 
+                            type="number" 
+                            value={newInput.stock_quantity} 
+                            onChange={(e) => setNewInput({ ...newInput, stock_quantity: parseFloat(e.target.value) || 0 })} 
+                            placeholder="0"
+                            min="0"
+                            step="0.01"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">Quantidade atual em estoque para desconto nas compras</p>
+                        </div>
+                      )}
                       <div><Label>Descrição</Label><Textarea value={newInput.description} onChange={(e) => setNewInput({ ...newInput, description: e.target.value })} /></div>
                     </div>
                     <DialogFooter>
@@ -1402,7 +1442,7 @@ export function SuppliesView() {
                                   <TableCell className="w-20">
                                     {canEdit && (
                                       <div className="flex gap-1">
-                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingInput(input); setNewInput({ name: input.name, unit: input.unit, category: input.category, material_family_id: input.material_family_id || '', description: input.description || '', unit_value: input.unit_value || 0 }); setInputDialogOpen(true); }}><Edit2 className="w-3.5 h-3.5" /></Button>
+                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditingInput(input); setNewInput({ name: input.name, unit: input.unit, category: input.category, material_family_id: input.material_family_id || '', description: input.description || '', unit_value: input.unit_value || 0, stock_quantity: input.stock_quantity || 0 }); setInputDialogOpen(true); }}><Edit2 className="w-3.5 h-3.5" /></Button>
                                         <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => confirmDeleteInput(input)}><Trash2 className="w-3.5 h-3.5" /></Button>
                                       </div>
                                     )}

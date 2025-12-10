@@ -153,6 +153,7 @@ export type Database = {
           material_family_id: string | null
           name: string
           project_id: string
+          stock_quantity: number
           unit: string
           unit_value: number | null
           updated_at: string
@@ -165,6 +166,7 @@ export type Database = {
           material_family_id?: string | null
           name: string
           project_id: string
+          stock_quantity?: number
           unit?: string
           unit_value?: number | null
           updated_at?: string
@@ -177,6 +179,7 @@ export type Database = {
           material_family_id?: string | null
           name?: string
           project_id?: string
+          stock_quantity?: number
           unit?: string
           unit_value?: number | null
           updated_at?: string
