@@ -1,11 +1,12 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Target, Cloud, ChevronDown, ChevronRight, Home, Loader2, Minimize2, Maximize2 } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Target, Cloud, ChevronDown, ChevronRight, Home, Loader2, Minimize2, Maximize2, Printer } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -94,6 +95,9 @@ export function ProjectCostsView() {
   const [expandedMeasurements, setExpandedMeasurements] = useState<Set<number>>(new Set());
   const [editingScope, setEditingScope] = useState<{ scopeId: string; macroId: string; scopeName: string } | null>(null);
   const [isUnitCostCollapsed, setIsUnitCostCollapsed] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const savedScrollPosition = useRef<number>(0);
 
   const toggleMacro = (macroId: string) => {
     setExpandedMacros(prev => {
@@ -417,6 +421,125 @@ export function ProjectCostsView() {
     }).format(value);
   };
 
+  // Print budget function
+  const printBudget = async (format: 'analytical' | 'synthetic') => {
+    setIsPrinting(true);
+    
+    try {
+      // Load all scope items for the project
+      const { data: itemsData, error } = await supabase
+        .from('scope_items')
+        .select('*')
+        .eq('project_id', currentProject?.id);
+
+      if (error) throw error;
+
+      const lines: string[] = [];
+      const separator = ',';
+      
+      // Header
+      lines.push(`Orçamento do Projeto - ${currentProject?.name}`);
+      lines.push(`Contratante: ${currentProject?.contractor}`);
+      lines.push(`Local: ${currentProject?.location}`);
+      lines.push(`Total de Casas: ${houses.length}`);
+      lines.push(`Exportado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`);
+      lines.push('');
+
+      if (format === 'analytical') {
+        // Analytical - detailed view by macro and scope
+        lines.push(`Etapa${separator}Serviço${separator}Item${separator}Categoria${separator}Quantidade${separator}Unidade${separator}Valor Unit.${separator}Total por Casa`);
+        
+        macros.forEach(macro => {
+          macro.scopes.forEach(scope => {
+            const scopeItems = itemsData?.filter(item => item.scope_id === scope.id) || [];
+            scopeItems.forEach(item => {
+              const total = Number(item.unit_value) * Number(item.quantity);
+              const categoryName = item.category === 'material' ? 'Material' : 
+                item.category === 'labor' ? 'Mão de Obra' : 'Equipamento';
+              lines.push(`${macro.name}${separator}"${scope.name}"${separator}"${item.name}"${separator}${categoryName}${separator}${item.quantity}${separator}${item.unit}${separator}${Number(item.unit_value).toFixed(2)}${separator}${total.toFixed(2)}`);
+            });
+          });
+        });
+        
+        // Totals
+        lines.push('');
+        lines.push('RESUMO GERAL');
+        lines.push(`Material por Casa${separator}${separator}${separator}${separator}${separator}${separator}${separator}${unitCost.material.toFixed(2)}`);
+        lines.push(`Mão de Obra por Casa${separator}${separator}${separator}${separator}${separator}${separator}${separator}${unitCost.labor.toFixed(2)}`);
+        lines.push(`Equipamentos por Casa${separator}${separator}${separator}${separator}${separator}${separator}${separator}${unitCost.equipment.toFixed(2)}`);
+        lines.push(`TOTAL POR CASA${separator}${separator}${separator}${separator}${separator}${separator}${separator}${unitCost.total.toFixed(2)}`);
+        lines.push(`TOTAL DA OBRA (${houses.length} casas)${separator}${separator}${separator}${separator}${separator}${separator}${separator}${(unitCost.total * houses.length).toFixed(2)}`);
+      } else {
+        // Synthetic - summary by macro
+        lines.push(`Etapa${separator}Qtd Serviços${separator}Material${separator}Mão de Obra${separator}Equipamentos${separator}Total por Casa`);
+        
+        let totalMaterial = 0, totalLabor = 0, totalEquipment = 0;
+        
+        macros.forEach(macro => {
+          const macroScopeCosts = scopeCosts.filter(c => c.macroId === macro.id);
+          const macroMaterial = macroScopeCosts.reduce((sum, c) => sum + c.materialCost, 0);
+          const macroLabor = macroScopeCosts.reduce((sum, c) => sum + c.laborCost, 0);
+          const macroEquipment = macroScopeCosts.reduce((sum, c) => sum + c.equipmentCost, 0);
+          const macroTotal = macroMaterial + macroLabor + macroEquipment;
+          
+          totalMaterial += macroMaterial;
+          totalLabor += macroLabor;
+          totalEquipment += macroEquipment;
+          
+          lines.push(`${macro.name}${separator}${macro.scopes.length}${separator}${macroMaterial.toFixed(2)}${separator}${macroLabor.toFixed(2)}${separator}${macroEquipment.toFixed(2)}${separator}${macroTotal.toFixed(2)}`);
+        });
+        
+        lines.push('');
+        lines.push(`TOTAL POR CASA${separator}${separator}${totalMaterial.toFixed(2)}${separator}${totalLabor.toFixed(2)}${separator}${totalEquipment.toFixed(2)}${separator}${(totalMaterial + totalLabor + totalEquipment).toFixed(2)}`);
+        lines.push(`TOTAL DA OBRA (${houses.length} casas)${separator}${separator}${(totalMaterial * houses.length).toFixed(2)}${separator}${(totalLabor * houses.length).toFixed(2)}${separator}${(totalEquipment * houses.length).toFixed(2)}${separator}${((totalMaterial + totalLabor + totalEquipment) * houses.length).toFixed(2)}`);
+      }
+      
+      // Download CSV
+      const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `orcamento_${currentProject?.name.replace(/\s+/g, '_')}_${format}_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.success(`Orçamento ${format === 'analytical' ? 'analítico' : 'sintético'} exportado!`);
+    } catch (error) {
+      console.error('Error printing:', error);
+      toast.error('Erro ao exportar orçamento');
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
+  // Save scroll position before editing
+  const handleEditScope = (scopeId: string, macroId: string, scopeName: string) => {
+    if (scrollAreaRef.current) {
+      const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (viewport) {
+        savedScrollPosition.current = viewport.scrollTop;
+      }
+    }
+    setEditingScope({ scopeId, macroId, scopeName });
+  };
+
+  // Restore scroll position after editing
+  const handleBackFromEdit = () => {
+    setEditingScope(null);
+    loadCostsFromDatabase();
+    // Restore scroll position after a small delay to allow DOM to update
+    setTimeout(() => {
+      if (scrollAreaRef.current) {
+        const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+        if (viewport) {
+          viewport.scrollTop = savedScrollPosition.current;
+        }
+      }
+    }, 100);
+  };
+
   const pieData = [
     { name: "Material", value: unitCost.material, color: "#3b82f6" },
     { name: "Mão de Obra", value: unitCost.labor, color: "#f97316" },
@@ -521,6 +644,28 @@ export function ProjectCostsView() {
             </Card>
           </Collapsible>
 
+          {/* Print Budget Button */}
+          {!editingScope && (
+            <div className="flex justify-end">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2" disabled={isPrinting}>
+                    <Printer className="w-4 h-4" />
+                    {isPrinting ? 'Exportando...' : 'Imprimir Orçamento'}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => printBudget('analytical')}>
+                    Analítico (detalhado)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => printBudget('synthetic')}>
+                    Sintético (resumo)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
+
           {/* Scope editor inline or macro list */}
           {editingScope ? (
             <Card>
@@ -530,10 +675,7 @@ export function ProjectCostsView() {
                     <Calculator className="w-4 h-4" />
                     {editingScope.scopeName}
                   </CardTitle>
-                  <Button variant="outline" size="sm" onClick={() => {
-                    setEditingScope(null);
-                    loadCostsFromDatabase();
-                  }}>
+                  <Button variant="outline" size="sm" onClick={handleBackFromEdit}>
                     Voltar
                   </Button>
                 </div>
@@ -549,7 +691,7 @@ export function ProjectCostsView() {
               </CardContent>
             </Card>
           ) : (
-            <ScrollArea className="h-[calc(100vh-380px)]">
+            <ScrollArea className="h-[calc(100vh-380px)]" ref={scrollAreaRef}>
               <div className="space-y-3">
                 {macros.map(macro => {
                   const macroScopeCosts = scopeCosts.filter(c => c.macroId === macro.id);
@@ -594,11 +736,7 @@ export function ProjectCostsView() {
                                   <div
                                     key={scope.id}
                                     className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
-                                    onClick={() => setEditingScope({
-                                      scopeId: scope.id,
-                                      macroId: macro.id,
-                                      scopeName: scope.name
-                                    })}
+                                    onClick={() => handleEditScope(scope.id, macro.id, scope.name)}
                                   >
                                     <div className="flex-1">
                                       <p className="font-medium text-sm">{scope.name}</p>
