@@ -468,16 +468,19 @@ export function SuppliesView() {
     try {
       if (editingFamily) {
         await supabase.from('material_families').update({ name: newFamily.name.trim(), color: newFamily.color }).eq('id', editingFamily.id);
+        setFamilies(prev => prev.map(f => f.id === editingFamily.id ? { ...f, name: newFamily.name.trim(), color: newFamily.color } : f));
         toast.success('Família atualizada!');
       } else {
-        await supabase.from('material_families').insert({ project_id: projectId, name: newFamily.name.trim(), color: newFamily.color, display_order: families.length });
+        const { data, error } = await supabase.from('material_families').insert({ project_id: projectId, name: newFamily.name.trim(), color: newFamily.color, display_order: families.length }).select().single();
+        if (error) throw error;
+        if (data) {
+          setFamilies(prev => [...prev, { id: data.id, name: data.name, color: data.color || '#9ca3af' }]);
+        }
         toast.success('Família cadastrada!');
       }
       setFamilyDialogOpen(false);
       setNewFamily({ name: '', color: '#3b82f6' });
       setEditingFamily(null);
-      setDataLoaded(prev => ({ ...prev, inputs: false }));
-      loadTabData('inputs');
     } catch (error) {
       console.error('Error saving family:', error);
       toast.error('Erro ao salvar família');
