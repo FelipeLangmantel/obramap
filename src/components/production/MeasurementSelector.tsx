@@ -1,9 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Calendar, ClipboardCheck, Target, TrendingUp, Home, AlertCircle } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Calendar, ClipboardCheck, Target, Home, CheckCircle2, ListChecks, ChevronRight } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -27,6 +29,7 @@ interface MeasurementSelectorProps {
   onMeasurementChange: (measurement: number | null) => void;
   selectedPeriod: PlannedPeriod | null;
   onPeriodChange: (period: PlannedPeriod | null) => void;
+  onApplyService: (period: PlannedPeriod) => void;
 }
 
 export function MeasurementSelector({
@@ -34,7 +37,8 @@ export function MeasurementSelector({
   selectedMeasurement,
   onMeasurementChange,
   selectedPeriod,
-  onPeriodChange
+  onPeriodChange,
+  onApplyService
 }: MeasurementSelectorProps) {
   // Group periods by measurement number
   const measurementGroups = useMemo(() => {
@@ -49,7 +53,7 @@ export function MeasurementSelector({
     return Array.from(groups.entries()).sort((a, b) => b[0] - a[0]); // Most recent first
   }, [plannedPeriods]);
 
-  // Available measurements
+  // Available measurements with summary info
   const availableMeasurements = useMemo(() => {
     return measurementGroups.map(([num, periods]) => ({
       number: num,
@@ -68,117 +72,170 @@ export function MeasurementSelector({
     return plannedPeriods.filter(p => (p.measurement_number || 1) === selectedMeasurement);
   }, [plannedPeriods, selectedMeasurement]);
 
-  return (
-    <Card className="border-2 border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
-      <CardContent className="p-4">
-        <div className="flex flex-wrap items-start gap-4">
-          {/* Measurement Selector */}
-          <div className="flex-1 min-w-[200px]">
-            <div className="flex items-center gap-2 mb-2">
-              <ClipboardCheck className="w-5 h-5 text-primary" />
-              <Label className="font-semibold text-base">Medição</Label>
-            </div>
-            <Select 
-              value={selectedMeasurement?.toString() || ""} 
-              onValueChange={(v) => {
-                const num = v ? parseInt(v) : null;
-                onMeasurementChange(num);
-                onPeriodChange(null);
-              }}
-            >
-              <SelectTrigger className="h-12 text-lg font-semibold bg-background">
-                <SelectValue placeholder="Selecione a medição" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableMeasurements.map(m => (
-                  <SelectItem key={m.number} value={m.number.toString()}>
-                    <div className="flex items-center gap-3">
-                      <Badge className="text-base px-3">{m.number}ª</Badge>
-                      <span className="text-sm text-muted-foreground">
-                        {m.periodsCount} serviço(s) · {m.totalHouses} casas
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))}
-                {availableMeasurements.length === 0 && (
-                  <div className="p-4 text-center text-muted-foreground text-sm">
-                    Nenhuma medição planejada
-                  </div>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+  // Current measurement info
+  const currentMeasurementInfo = useMemo(() => {
+    return availableMeasurements.find(m => m.number === selectedMeasurement);
+  }, [availableMeasurements, selectedMeasurement]);
 
-          {/* Period Info */}
-          {selectedMeasurement !== null && (
-            <div className="flex-1 min-w-[250px]">
+  // Auto-select first service when measurement changes
+  useEffect(() => {
+    if (selectedMeasurement !== null && periodsForMeasurement.length > 0 && !selectedPeriod) {
+      onPeriodChange(periodsForMeasurement[0]);
+    }
+  }, [selectedMeasurement, periodsForMeasurement, selectedPeriod, onPeriodChange]);
+
+  return (
+    <Card className="border-2 border-primary/30 bg-gradient-to-br from-primary/5 via-transparent to-primary/5">
+      <CardContent className="p-4">
+        {/* Main Measurement Selector */}
+        <div className="flex flex-col gap-4">
+          {/* Header Row */}
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex-1 min-w-[200px]">
               <div className="flex items-center gap-2 mb-2">
-                <Calendar className="w-5 h-5 text-muted-foreground" />
-                <Label className="font-medium">Serviço Planejado</Label>
+                <ClipboardCheck className="w-5 h-5 text-primary" />
+                <Label className="font-semibold text-base">Medição</Label>
               </div>
-              <Select
-                value={selectedPeriod?.id || ""}
+              <Select 
+                value={selectedMeasurement?.toString() || ""} 
                 onValueChange={(v) => {
-                  const period = periodsForMeasurement.find(p => p.id === v);
-                  onPeriodChange(period || null);
+                  const num = v ? parseInt(v) : null;
+                  onMeasurementChange(num);
+                  onPeriodChange(null); // Reset period when measurement changes
                 }}
               >
-                <SelectTrigger className="h-12 bg-background">
-                  <SelectValue placeholder="Selecione o serviço" />
+                <SelectTrigger className="h-12 text-lg font-semibold bg-background border-2 border-primary/20 hover:border-primary/40 transition-colors">
+                  <SelectValue placeholder="Selecione a medição..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {periodsForMeasurement.map(period => (
-                    <SelectItem key={period.id} value={period.id}>
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: period.macro_color || '#6b7280' }} 
-                        />
-                        <span className="font-medium">{period.scope_name}</span>
-                        <Badge variant="outline" className="text-xs">
-                          {period.planned_houses} casas
-                        </Badge>
+                  {availableMeasurements.map(m => (
+                    <SelectItem key={m.number} value={m.number.toString()}>
+                      <div className="flex items-center gap-3 py-1">
+                        <Badge className="text-base px-3 bg-primary">{m.number}ª Medição</Badge>
+                        <div className="flex flex-col text-left">
+                          <span className="text-sm font-medium">
+                            {m.periodsCount} serviço(s) · {m.totalHouses} casas
+                          </span>
+                          {m.dateRange && (
+                            <span className="text-xs text-muted-foreground">
+                              {format(parseISO(m.dateRange.start), 'dd/MM', { locale: ptBR })} - {format(parseISO(m.dateRange.end), 'dd/MM', { locale: ptBR })}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </SelectItem>
                   ))}
+                  {availableMeasurements.length === 0 && (
+                    <div className="p-4 text-center text-muted-foreground text-sm">
+                      Nenhuma medição planejada
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Quick Stats for selected measurement */}
+            {currentMeasurementInfo && (
+              <div className="flex gap-3">
+                <div className="bg-background rounded-lg p-3 text-center min-w-[90px] border">
+                  <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
+                    <ListChecks className="w-4 h-4" />
+                    <span className="text-xs">Serviços</span>
+                  </div>
+                  <span className="text-2xl font-bold text-primary">{currentMeasurementInfo.periodsCount}</span>
+                </div>
+                <div className="bg-background rounded-lg p-3 text-center min-w-[90px] border">
+                  <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
+                    <Home className="w-4 h-4" />
+                    <span className="text-xs">Casas</span>
+                  </div>
+                  <span className="text-2xl font-bold text-primary">{currentMeasurementInfo.totalHouses}</span>
+                </div>
+                {currentMeasurementInfo.dateRange && (
+                  <div className="bg-background rounded-lg p-3 text-center min-w-[120px] border">
+                    <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
+                      <Calendar className="w-4 h-4" />
+                      <span className="text-xs">Período</span>
+                    </div>
+                    <span className="text-sm font-medium">
+                      {format(parseISO(currentMeasurementInfo.dateRange.start), 'dd/MM', { locale: ptBR })} - {format(parseISO(currentMeasurementInfo.dateRange.end), 'dd/MM', { locale: ptBR })}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Services List for Selected Measurement */}
+          {selectedMeasurement !== null && periodsForMeasurement.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-muted-foreground" />
+                <Label className="text-sm font-medium">Serviços Planejados</Label>
+              </div>
+              <ScrollArea className="max-h-[200px]">
+                <div className="grid gap-2">
+                  {periodsForMeasurement.map((period) => {
+                    const isSelected = selectedPeriod?.id === period.id;
+                    return (
+                      <div
+                        key={period.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                          isSelected 
+                            ? 'border-primary bg-primary/10 shadow-sm' 
+                            : 'border-border/50 hover:border-primary/30 hover:bg-muted/30'
+                        }`}
+                        onClick={() => onPeriodChange(period)}
+                      >
+                        <div 
+                          className={`w-4 h-4 rounded-full shrink-0 ${isSelected ? 'ring-2 ring-offset-2 ring-offset-background ring-primary' : ''}`}
+                          style={{ backgroundColor: period.macro_color || '#6b7280' }} 
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium truncate">{period.scope_name}</span>
+                            <Badge variant="secondary" className="text-xs shrink-0">
+                              {period.macro_name}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                            <span>{period.planned_houses} casas</span>
+                            <span>·</span>
+                            <span>
+                              {format(parseISO(period.week_start), 'dd/MM', { locale: ptBR })} - {format(parseISO(period.week_end), 'dd/MM', { locale: ptBR })}
+                            </span>
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <Button
+                            size="sm"
+                            className="shrink-0 gap-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onApplyService(period);
+                            }}
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            Aplicar
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            </div>
           )}
 
-          {/* Quick Stats */}
-          {selectedPeriod && (
-            <div className="flex gap-3">
-              <div className="bg-background rounded-lg p-3 text-center min-w-[100px]">
-                <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
-                  <Target className="w-4 h-4" />
-                  <span className="text-xs">Previsto</span>
-                </div>
-                <span className="text-2xl font-bold text-primary">{selectedPeriod.planned_houses}</span>
-                <span className="text-xs text-muted-foreground ml-1">casas</span>
-              </div>
-              <div className="bg-background rounded-lg p-3 text-center min-w-[120px]">
-                <div className="flex items-center justify-center gap-1 text-muted-foreground mb-1">
-                  <Calendar className="w-4 h-4" />
-                  <span className="text-xs">Período</span>
-                </div>
-                <span className="text-sm font-medium">
-                  {format(parseISO(selectedPeriod.week_start), 'dd/MM', { locale: ptBR })} - {format(parseISO(selectedPeriod.week_end), 'dd/MM', { locale: ptBR })}
-                </span>
-              </div>
+          {/* Empty State */}
+          {selectedMeasurement !== null && periodsForMeasurement.length === 0 && (
+            <div className="text-center py-6 text-muted-foreground">
+              <ListChecks className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Nenhum serviço planejado para esta medição</p>
             </div>
           )}
         </div>
-
-        {/* Validation Alert */}
-        {selectedMeasurement && !selectedPeriod && periodsForMeasurement.length > 0 && (
-          <div className="mt-3 flex items-center gap-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-            <AlertCircle className="w-4 h-4 text-amber-600" />
-            <span className="text-sm text-amber-700 dark:text-amber-300">
-              Selecione um serviço para validar a produção
-            </span>
-          </div>
-        )}
       </CardContent>
     </Card>
   );

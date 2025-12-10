@@ -35,7 +35,8 @@ import {
   ClipboardCheck,
   Zap,
   RotateCcw,
-  Users
+  Users,
+  Plus
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
@@ -53,6 +54,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { LaborContractsView } from "./LaborContractsView";
+import { MeasurementSelector } from "./production/MeasurementSelector";
 
 interface WeeklyProduction {
   id: string;
@@ -79,6 +81,7 @@ interface PlannedPeriod {
   scope_id: string;
   macro_name: string;
   macro_id: string;
+  macro_color?: string;
   planned_house_ids: number[];
   planned_houses: number;
   measurement_number: number | null;
@@ -246,7 +249,7 @@ export function WeeklyProductionView() {
           .order('week_start', { ascending: false }),
         supabase
           .from('planned_productions')
-          .select('id, week_start, week_end, scope_name, scope_id, macro_name, macro_id, planned_house_ids, planned_houses, measurement_number')
+          .select('id, week_start, week_end, scope_name, scope_id, macro_name, macro_id, macro_color, planned_house_ids, planned_houses, measurement_number')
           .eq('project_id', currentProject.id)
           .order('week_start', { ascending: true })
       ]);
@@ -685,66 +688,62 @@ export function WeeklyProductionView() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="register" className="flex-1 overflow-auto mt-4">
-          {/* Allow viewers to interact but block saving */}
-          {(
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
-            {/* Selection Panel */}
-            <Card className="lg:col-span-1 overflow-visible">
+        <TabsContent value="register" className="flex-1 overflow-auto mt-4 space-y-4">
+          {/* Measurement Selector - Main navigation */}
+          {!isInitialDatabase && plannedPeriods.length > 0 && (
+            <MeasurementSelector
+              plannedPeriods={plannedPeriods}
+              selectedMeasurement={selectedMeasurementNum}
+              onMeasurementChange={setSelectedMeasurementNum}
+              selectedPeriod={selectedPlannedPeriod}
+              onPeriodChange={setSelectedPlannedPeriod}
+              onApplyService={(period) => {
+                // Apply period data to form
+                setMeasurementStartDate(period.week_start);
+                setMeasurementEndDate(period.week_end);
+                setSelectedMacro(period.macro_id);
+                setTimeout(() => setSelectedScope(period.scope_id), 100);
+                if (period.planned_house_ids?.length > 0) {
+                  setSelectedHouses(period.planned_house_ids);
+                }
+                toast.success(`Serviço "${period.scope_name}" aplicado com ${period.planned_houses} casas`);
+              }}
+            />
+          )}
+
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+            {/* Left Panel - Configuration */}
+            <Card className="xl:col-span-1 overflow-visible">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Calendar className="w-5 h-5" />
-                  Configuração do Registro
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Settings2 className="w-5 h-5" />
+                    Configuração
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="initial-database"
+                      checked={isInitialDatabase}
+                      onCheckedChange={(checked) => handleInitialDatabaseChange(checked as boolean)}
+                    />
+                    <Label htmlFor="initial-database" className="text-xs cursor-pointer">
+                      Banco Inicial
+                    </Label>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Initial Database Mode - Moved to top */}
-                <div className="flex items-center space-x-2 p-3 bg-muted/30 rounded-lg">
-                  <Checkbox
-                    id="initial-database"
-                    checked={isInitialDatabase}
-                    onCheckedChange={(checked) => handleInitialDatabaseChange(checked as boolean)}
-                  />
-                  <Label 
-                    htmlFor="initial-database" 
-                    className="text-sm cursor-pointer"
-                  >
-                    Banco de Atividades Iniciais
-                  </Label>
-                  {isInitialDatabase && (
-                    <Badge variant="outline" className="ml-auto text-xs text-amber-600 border-amber-500/50">
-                      Não afeta análises
-                    </Badge>
-                  )}
-                </div>
-
-                {/* Period of measurement - Hidden when initial database */}
+                {/* Period Info (from planning or manual) */}
                 {!isInitialDatabase && (
-                  <div className="p-3 bg-secondary/30 rounded-lg space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium flex items-center gap-2">
-                        <CalendarDays className="w-4 h-4" />
-                        Período de Medição
-                      </Label>
-                      {plannedPeriods.length > 0 && (
-                        <Select onValueChange={applyPlannedPeriod}>
-                          <SelectTrigger className="h-7 w-auto gap-1 text-xs px-2">
-                            <ListChecks className="w-3 h-3" />
-                            <span>Do Planejamento</span>
-                          </SelectTrigger>
-                          <SelectContent position="popper" sideOffset={4} className="max-h-[300px] overflow-y-auto z-50">
-                            {/* Remove duplicate periods by using unique week_start + week_end combination */}
-                            {Array.from(
-                              new Map(
-                                plannedPeriods.map(p => [`${p.week_start}_${p.week_end}`, p])
-                              ).values()
-                            ).map(period => (
-                              <SelectItem key={period.id} value={period.id}>
-                                {format(parseISO(period.week_start), 'dd/MM', { locale: ptBR })} a {format(parseISO(period.week_end), 'dd/MM', { locale: ptBR })}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                  <div className="p-3 bg-secondary/30 rounded-lg space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">Período</span>
+                      {selectedPlannedPeriod?.measurement_number && (
+                        <Badge variant="secondary" className="ml-auto text-xs">
+                          {selectedPlannedPeriod.measurement_number}ª Med.
+                        </Badge>
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -754,7 +753,7 @@ export function WeeklyProductionView() {
                           type="date" 
                           value={measurementStartDate}
                           onChange={(e) => setMeasurementStartDate(e.target.value)}
-                          className="h-9"
+                          className="h-8 text-sm"
                         />
                       </div>
                       <div className="space-y-1">
@@ -763,353 +762,217 @@ export function WeeklyProductionView() {
                           type="date" 
                           value={measurementEndDate}
                           onChange={(e) => setMeasurementEndDate(e.target.value)}
-                          className="h-9"
+                          className="h-8 text-sm"
                         />
                       </div>
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Data de Lançamento</Label>
-                      <Input 
-                        type="date" 
-                        value={registrationDate}
-                        onChange={(e) => setRegistrationDate(e.target.value)}
-                        className="h-9"
-                      />
-                    </div>
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <Label className="text-sm">Etapa (Macro)</Label>
-                  <Select value={selectedMacro} onValueChange={(v) => { setSelectedMacro(v); setSelectedScope(""); }}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Selecione a etapa" />
-                    </SelectTrigger>
-                    <SelectContent position="popper" sideOffset={4} className="max-h-[300px] overflow-y-auto z-50">
-                      {macros.map(macro => (
-                        <SelectItem key={macro.id} value={macro.id}>
-                          <div className="flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: macro.color }} />
-                            {macro.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {/* Macro/Scope Selectors */}
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Etapa</Label>
+                    <Select value={selectedMacro} onValueChange={(v) => { setSelectedMacro(v); setSelectedScope(""); }}>
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Selecione a etapa" />
+                      </SelectTrigger>
+                      <SelectContent position="popper" sideOffset={4} className="max-h-[300px] overflow-y-auto z-50">
+                        {macros.map(macro => (
+                          <SelectItem key={macro.id} value={macro.id}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: macro.color }} />
+                              {macro.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Serviço</Label>
+                    <Select 
+                      value={selectedScope} 
+                      onValueChange={setSelectedScope}
+                      disabled={!selectedMacro}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Selecione o serviço" />
+                      </SelectTrigger>
+                      <SelectContent position="popper" sideOffset={4} className="max-h-[300px] overflow-y-auto z-50">
+                        {scopes.map(scope => (
+                          <SelectItem key={scope.id} value={scope.id}>
+                            {scope.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label className="text-sm">Serviço</Label>
-                  <Select 
-                    value={selectedScope} 
-                    onValueChange={setSelectedScope}
-                    disabled={!selectedMacro}
-                  >
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Selecione o serviço" />
-                    </SelectTrigger>
-                    <SelectContent position="popper" sideOffset={4} className="max-h-[300px] overflow-y-auto z-50">
-                      {scopes.map(scope => (
-                        <SelectItem key={scope.id} value={scope.id}>
-                          {scope.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Planned vs Actual Validation */}
+                {/* Validation / Status */}
                 {selectedPlannedPeriod && selectedScope && selectedPlannedPeriod.scope_id === selectedScope && (
                   <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 space-y-2">
-                    <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                    <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300 text-sm">
                       <Target className="w-4 h-4" />
-                      <span className="text-sm font-medium">Validação do Planejamento</span>
-                      {selectedPlannedPeriod.measurement_number && (
-                        <Badge variant="outline" className="text-xs">Med. {selectedPlannedPeriod.measurement_number}</Badge>
-                      )}
+                      <span className="font-medium">Validação</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="flex items-center justify-between p-2 bg-background rounded">
-                        <span className="text-muted-foreground">Previsto:</span>
-                        <span className="font-semibold">{selectedPlannedPeriod.planned_houses} casas</span>
-                      </div>
-                      <div className="flex items-center justify-between p-2 bg-background rounded">
-                        <span className="text-muted-foreground">Selecionado:</span>
-                        <span className={`font-semibold ${selectedHouses.length === selectedPlannedPeriod.planned_houses ? 'text-green-600' : selectedHouses.length < selectedPlannedPeriod.planned_houses ? 'text-yellow-600' : 'text-blue-600'}`}>
-                          {selectedHouses.length} casas
-                        </span>
-                      </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span>Previsto: <strong>{selectedPlannedPeriod.planned_houses}</strong></span>
+                      <span className={`font-semibold ${selectedHouses.length === selectedPlannedPeriod.planned_houses ? 'text-green-600' : 'text-yellow-600'}`}>
+                        Selecionado: {selectedHouses.length}
+                      </span>
                     </div>
-                    {selectedHouses.length !== selectedPlannedPeriod.planned_houses && (
-                      <div className="flex items-center gap-2 text-xs">
-                        <AlertTriangle className="w-3 h-3 text-yellow-600" />
-                        <span className="text-yellow-700 dark:text-yellow-400">
-                          {selectedHouses.length < selectedPlannedPeriod.planned_houses 
-                            ? `Faltam ${selectedPlannedPeriod.planned_houses - selectedHouses.length} casas para atingir o previsto`
-                            : `${selectedHouses.length - selectedPlannedPeriod.planned_houses} casas a mais do que previsto`
-                          }
-                        </span>
-                      </div>
-                    )}
-                    {selectedHouses.length === selectedPlannedPeriod.planned_houses && (
-                      <div className="flex items-center gap-2 text-xs text-green-600">
+                    {selectedHouses.length === selectedPlannedPeriod.planned_houses ? (
+                      <div className="flex items-center gap-1 text-xs text-green-600">
                         <CheckCircle2 className="w-3 h-3" />
-                        <span>Meta de produção atingida!</span>
+                        Meta atingida!
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 text-xs text-yellow-600">
+                        <AlertTriangle className="w-3 h-3" />
+                        {Math.abs(selectedPlannedPeriod.planned_houses - selectedHouses.length)} {selectedHouses.length < selectedPlannedPeriod.planned_houses ? 'faltando' : 'a mais'}
                       </div>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full text-xs h-7"
-                      onClick={() => {
-                        if (selectedPlannedPeriod.planned_house_ids?.length > 0) {
-                          setSelectedHouses(selectedPlannedPeriod.planned_house_ids);
-                          toast.info("Casas do planejamento selecionadas");
-                        }
-                      }}
-                    >
-                      <ListChecks className="w-3 h-3 mr-1" />
-                      Selecionar casas do planejamento
-                    </Button>
                   </div>
                 )}
 
-                {/* Non-planned service indicator */}
                 {selectedScope && !selectedPlannedPeriod && (
-                  <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-                    <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 text-sm">
-                      <AlertTriangle className="w-4 h-4" />
-                      <span>Serviço não previsto no planejamento</span>
+                  <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 text-xs">
+                      <Plus className="w-3 h-3" />
+                      <span>Serviço adicional (não planejado)</span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Este registro será salvo como produção adicional
-                    </p>
                   </div>
                 )}
 
+                {/* House Selection Summary */}
                 {selectedScope && (
-                  <div className="pt-3 border-t space-y-3">
-                    <div className="flex items-center justify-between mb-2">
+                  <div className="pt-3 border-t space-y-2">
+                    <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">Casas Selecionadas</span>
                       <Badge variant="secondary">{selectedHouses.length}</Badge>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={selectAllHouses}>
+                    <div className="flex flex-wrap gap-1">
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={selectAllHouses}>
                         Todas
                       </Button>
-                      <Button variant="outline" size="sm" onClick={clearSelection}>
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={clearSelection}>
                         Limpar
                       </Button>
                       {selectedPlannedPeriod?.planned_house_ids && selectedPlannedPeriod.planned_house_ids.length > 0 && (
                         <Button 
                           variant="outline" 
-                          size="sm" 
+                          size="sm"
+                          className="h-7 text-xs gap-1"
                           onClick={() => setSelectedHouses(selectedPlannedPeriod.planned_house_ids)}
-                          className="gap-1"
                         >
                           <Target className="w-3 h-3" />
-                          Previstas
+                          Planejadas
                         </Button>
                       )}
                     </div>
                     
-                    {/* Custom Percentage Mode */}
-                    <div className="pt-2 border-t">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Percent className="w-4 h-4 text-muted-foreground" />
-                          <Label className="text-sm">Editar % do Serviço</Label>
-                        </div>
-                        <Switch
-                          checked={customPercentMode}
-                          onCheckedChange={(checked) => {
-                            setCustomPercentMode(checked);
-                            if (!checked) {
-                              setHousePercentages({});
-                              setMassPercentage(100);
-                            }
-                          }}
-                        />
+                    {/* Custom Percentage Toggle */}
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="flex items-center gap-1">
+                        <Percent className="w-3 h-3 text-muted-foreground" />
+                        <Label className="text-xs">% Parcial</Label>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {customPercentMode 
-                          ? "Defina o % de conclusão (por padrão é 100%)"
-                          : "Por padrão, todas as casas são marcadas como 100% concluídas"
-                        }
-                      </p>
+                      <Switch
+                        checked={customPercentMode}
+                        onCheckedChange={(checked) => {
+                          setCustomPercentMode(checked);
+                          if (!checked) {
+                            setHousePercentages({});
+                            setMassPercentage(100);
+                          }
+                        }}
+                      />
                     </div>
 
-                    {customPercentMode && selectedHouses.length > 0 && (
-                      <div className="space-y-3 pt-2 border-t">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium">% para todas selecionadas</Label>
-                            <Badge variant="outline">{massPercentage}%</Badge>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <Slider
-                              value={[massPercentage]}
-                              onValueChange={(v) => {
-                                setMassPercentage(v[0]);
-                                // Apply to all houses that don't have individual percentages
-                                const newPercentages: Record<number, number> = {};
-                                selectedHouses.forEach(houseId => {
-                                  if (!(houseId in housePercentages)) {
-                                    newPercentages[houseId] = v[0];
-                                  } else {
-                                    newPercentages[houseId] = housePercentages[houseId];
-                                  }
-                                });
-                                setHousePercentages(newPercentages);
-                              }}
-                              max={100}
-                              min={0}
-                              step={5}
-                              className="flex-1"
-                            />
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
-                                const newPercentages: Record<number, number> = {};
-                                selectedHouses.forEach(houseId => {
-                                  newPercentages[houseId] = massPercentage;
-                                });
-                                setHousePercentages(newPercentages);
-                                toast.success(`Aplicado ${massPercentage}% a ${selectedHouses.length} casas`);
-                              }}
-                            >
-                              Aplicar
-                            </Button>
-                          </div>
-                        </div>
-
-                        {Object.keys(housePercentages).length > 0 && (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <Label className="text-sm font-medium flex items-center gap-1">
-                                <Settings2 className="w-3 h-3" />
-                                Ajuste Individual
-                              </Label>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 text-xs"
-                                onClick={() => setHousePercentages({})}
-                              >
-                                Limpar
-                              </Button>
-                            </div>
-                            <ScrollArea className="h-[100px]">
-                              <div className="space-y-1.5 pr-3">
-                                {selectedHouses.map(houseId => {
-                                  // Get current scope progress for this house
-                                  const house = houses.find(h => h.id === houseId);
-                                  const houseMacros = (house?.macros as any[]) || [];
-                                  const houseMacro = houseMacros.find(m => m.id === selectedMacro);
-                                  const houseScope = houseMacro?.scopes?.find((s: any) => s.id === selectedScope);
-                                  const currentProgress = houseScope?.progress || 0;
-                                  const remainingPercent = 100 - currentProgress;
-                                  const maxAllowed = remainingPercent;
-                                  const currentValue = housePercentages[houseId] ?? Math.min(massPercentage, maxAllowed);
-                                  
-                                  return (
-                                    <div key={houseId} className="flex items-center gap-2 text-sm">
-                                      <span className="w-14 font-medium">Casa {houseId}</span>
-                                      {currentProgress > 0 && (
-                                        <span className="w-10 text-xs text-amber-600">({currentProgress}%)</span>
-                                      )}
-                                      <Slider
-                                        value={[currentValue]}
-                                        onValueChange={(v) => {
-                                          const limitedValue = Math.min(v[0], maxAllowed);
-                                          setHousePercentages(prev => ({
-                                            ...prev,
-                                            [houseId]: limitedValue
-                                          }));
-                                        }}
-                                        max={maxAllowed}
-                                        min={0}
-                                        step={5}
-                                        className="flex-1"
-                                      />
-                                      <Input
-                                        type="number"
-                                        value={currentValue}
-                                        onChange={(e) => {
-                                          const val = Math.min(maxAllowed, Math.max(0, parseInt(e.target.value) || 0));
-                                          setHousePercentages(prev => ({
-                                            ...prev,
-                                            [houseId]: val
-                                          }));
-                                        }}
-                                        className="w-14 h-6 text-xs text-center px-1"
-                                        min={0}
-                                        max={maxAllowed}
-                                      />
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </ScrollArea>
-                          </div>
-                        )}
+                    {customPercentMode && (
+                      <div className="flex items-center gap-2">
+                        <Slider
+                          value={[massPercentage]}
+                          onValueChange={(v) => {
+                            setMassPercentage(v[0]);
+                            const newPercentages: Record<number, number> = {};
+                            selectedHouses.forEach(houseId => {
+                              newPercentages[houseId] = v[0];
+                            });
+                            setHousePercentages(newPercentages);
+                          }}
+                          max={100}
+                          min={0}
+                          step={5}
+                          className="flex-1"
+                        />
+                        <Badge variant="outline">{massPercentage}%</Badge>
                       </div>
                     )}
                   </div>
                 )}
 
+                {/* Save Button */}
                 <Button 
                   className="w-full gap-2 h-10" 
                   onClick={handleSave}
                   disabled={!selectedScope || selectedHouses.length === 0 || isSaving || !canEdit}
-                  title={!canEdit ? "Você pode simular, mas não tem permissão para salvar" : ""}
                 >
                   <Save className="w-4 h-4" />
                   {!canEdit ? "Modo Visualização" : isSaving ? "Salvando..." : "Registrar Produção"}
                 </Button>
                 {!canEdit && (
-                  <p className="text-xs text-muted-foreground text-center mt-2">
-                    Modo simulação - você pode interagir mas não salvar
+                  <p className="text-xs text-muted-foreground text-center">
+                    Modo simulação - sem permissão para salvar
                   </p>
                 )}
               </CardContent>
             </Card>
 
-            {/* Houses Grid */}
-            <Card className="lg:col-span-2">
+            {/* Right Panel - Houses Grid */}
+            <Card className="xl:col-span-3">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Home className="w-5 h-5" />
                   Selecionar Casas
                   {selectedScope && (
-                    <Badge variant="outline" className="ml-auto text-xs">
-                      {completedHouses.length} já concluídas
-                    </Badge>
+                    <div className="ml-auto flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">
+                        {selectedHouses.length} selecionadas
+                      </Badge>
+                      <Badge variant="secondary" className="text-xs">
+                        {completedHouses.length} concluídas
+                      </Badge>
+                    </div>
                   )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {!selectedScope ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    Selecione uma etapa e um serviço para ver as casas
+                  <div className="text-center py-12 text-muted-foreground">
+                    <ClipboardCheck className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <p className="text-sm">Selecione uma medição e um serviço para começar</p>
+                    <p className="text-xs mt-1">Use o seletor de medição acima ou escolha manualmente</p>
                   </div>
                 ) : (
                   <>
-                    <p className="text-xs text-muted-foreground mb-2">
-                      💡 Dica: Clique e arraste para selecionar múltiplas casas rapidamente
+                    <p className="text-xs text-muted-foreground mb-3">
+                      💡 Clique e arraste para selecionar múltiplas casas
                     </p>
-                    <ScrollArea className="h-[calc(100vh-420px)] min-h-[300px]">
+                    <ScrollArea className="h-[calc(100vh-480px)] min-h-[250px]">
                       <div 
-                        className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-12 gap-2 select-none"
+                        className="grid grid-cols-8 sm:grid-cols-10 md:grid-cols-12 lg:grid-cols-14 xl:grid-cols-16 gap-1.5 select-none"
                         onContextMenu={(e) => e.preventDefault()}
                       >
                         {houses.map(house => {
                           const isCompleted = completedHouses.includes(house.id);
                           const isSelected = selectedHouses.includes(house.id);
+                          const isPlanned = selectedPlannedPeriod?.planned_house_ids?.includes(house.id);
                           const macro = macros.find(m => m.id === selectedMacro);
                           
-                          // Get current scope progress for this house
                           const houseMacros = (house.macros as any[]) || [];
                           const houseMacro = houseMacros.find(m => m.id === selectedMacro);
                           const houseScope = houseMacro?.scopes?.find((s: any) => s.id === selectedScope);
@@ -1117,7 +980,6 @@ export function WeeklyProductionView() {
                           const hasPartialProgress = currentProgress > 0 && currentProgress < 100;
                           const remainingPercent = 100 - currentProgress;
                           
-                          // In custom mode, limit to remaining percentage
                           const housePercent = customPercentMode 
                             ? Math.min(housePercentages[house.id] ?? massPercentage, remainingPercent)
                             : remainingPercent;
@@ -1131,7 +993,7 @@ export function WeeklyProductionView() {
                               onContextMenu={(e) => e.preventDefault()}
                               disabled={isCompleted}
                               className={`
-                                relative w-12 h-12 rounded-lg border-2 flex flex-col items-center justify-center text-xs font-medium transition-all
+                                relative w-10 h-10 rounded-md border-2 flex flex-col items-center justify-center text-xs font-medium transition-all
                                 ${isCompleted 
                                   ? 'bg-green-100 border-green-500 text-green-700 cursor-not-allowed opacity-60' 
                                   : hasPartialProgress
@@ -1140,44 +1002,60 @@ export function WeeklyProductionView() {
                                       : 'border-amber-400 bg-amber-50 text-amber-700 cursor-pointer'
                                     : isSelected 
                                       ? 'border-primary bg-primary/20 text-primary cursor-pointer' 
-                                      : 'border-border bg-card hover:border-primary/50 cursor-pointer'
+                                      : isPlanned
+                                        ? 'border-blue-300 bg-blue-50/50 hover:border-primary/50 cursor-pointer'
+                                        : 'border-border bg-card hover:border-primary/50 cursor-pointer'
                                 }
                                 ${isDragging && !isCompleted ? 'cursor-crosshair' : ''}
                               `}
                               style={isSelected && macro ? { borderColor: macro.color, backgroundColor: macro.color + '20' } : undefined}
-                              title={`Casa ${house.id}: ${currentProgress}% concluído - Resta ${remainingPercent}%`}
+                              title={`Casa ${house.id}: ${currentProgress}% concluído`}
                             >
-                              <span className="font-bold">{house.id}</span>
-                              {/* Always show current progress percentage */}
-                              <span className={`text-[9px] leading-tight ${hasPartialProgress ? 'text-amber-600 font-medium' : 'text-muted-foreground'}`}>
+                              <span className="font-bold text-[11px]">{house.id}</span>
+                              <span className={`text-[8px] leading-tight ${hasPartialProgress ? 'text-amber-600' : 'text-muted-foreground'}`}>
                                 {currentProgress}%
                               </span>
-                              {/* Show remaining when there's partial progress */}
-                              {hasPartialProgress && !isSelected && (
-                                <span className="text-[8px] leading-tight text-blue-600">
-                                  +{remainingPercent}
-                                </span>
-                              )}
-                              {/* Show what will be added when selected */}
                               {isSelected && !isCompleted && (
-                                <span className="text-[8px] leading-tight text-green-600 font-medium">
-                                  +{housePercent}
+                                <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full flex items-center justify-center">
+                                  <CheckCircle2 className="w-2 h-2 text-white" />
                                 </span>
                               )}
                               {isCompleted && (
                                 <CheckCircle2 className="absolute -top-1 -right-1 w-3 h-3 text-green-600" />
+                              )}
+                              {isPlanned && !isSelected && !isCompleted && (
+                                <div className="absolute -top-0.5 -left-0.5 w-2 h-2 bg-blue-500 rounded-full" />
                               )}
                             </button>
                           );
                         })}
                       </div>
                     </ScrollArea>
+                    
+                    {/* Legend */}
+                    <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded-full bg-blue-500" />
+                        <span>Planejada</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded bg-amber-50 border-2 border-amber-400" />
+                        <span>Parcial</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded bg-green-100 border-2 border-green-500" />
+                        <span>Concluída</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded bg-primary/20 border-2 border-primary" />
+                        <span>Selecionada</span>
+                      </div>
+                    </div>
                   </>
                 )}
               </CardContent>
             </Card>
           </div>
-          )}
         </TabsContent>
 
         <TabsContent value="analysis" className="flex-1 overflow-auto mt-4 space-y-4">
