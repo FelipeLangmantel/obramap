@@ -71,7 +71,12 @@ interface PlannedPeriod {
   week_start: string;
   week_end: string;
   scope_name: string;
+  scope_id: string;
   macro_name: string;
+  macro_id: string;
+  planned_house_ids: number[];
+  planned_houses: number;
+  measurement_number: number | null;
 }
 
 const FILTER_STORAGE_KEY = "obramap_production_filters";
@@ -236,9 +241,8 @@ export function WeeklyProductionView() {
           .order('week_start', { ascending: false }),
         supabase
           .from('planned_productions')
-          .select('id, week_start, week_end, scope_name, macro_name')
+          .select('id, week_start, week_end, scope_name, scope_id, macro_name, macro_id, planned_house_ids, planned_houses, measurement_number')
           .eq('project_id', currentProject.id)
-          .gte('week_start', format(new Date(), 'yyyy-MM-dd'))
           .order('week_start', { ascending: true })
       ]);
 
@@ -292,13 +296,31 @@ export function WeeklyProductionView() {
     setProductions(newData || []);
   };
 
-  // Apply planned period to measurement dates
+  // State for selected planned period
+  const [selectedPlannedPeriod, setSelectedPlannedPeriod] = useState<PlannedPeriod | null>(null);
+
+  // Apply planned period to measurement dates and pre-select houses/scope
   const applyPlannedPeriod = (periodId: string) => {
     const period = plannedPeriods.find(p => p.id === periodId);
     if (period) {
       setMeasurementStartDate(period.week_start);
       setMeasurementEndDate(period.week_end);
-      toast.success(`Período aplicado: ${format(parseISO(period.week_start), 'dd/MM', { locale: ptBR })} - ${format(parseISO(period.week_end), 'dd/MM', { locale: ptBR })}`);
+      setSelectedPlannedPeriod(period);
+      
+      // Auto-select macro and scope if available
+      if (period.macro_id) {
+        setSelectedMacro(period.macro_id);
+        if (period.scope_id) {
+          setTimeout(() => setSelectedScope(period.scope_id), 100);
+        }
+      }
+      
+      // Pre-select planned houses
+      if (period.planned_house_ids && period.planned_house_ids.length > 0) {
+        setSelectedHouses(period.planned_house_ids);
+      }
+      
+      toast.success(`Período aplicado: ${format(parseISO(period.week_start), 'dd/MM', { locale: ptBR })} - ${format(parseISO(period.week_end), 'dd/MM', { locale: ptBR })} (${period.planned_houses} casas previstas)`);
     }
   };
 
@@ -765,6 +787,75 @@ export function WeeklyProductionView() {
                   </Select>
                 </div>
 
+                {/* Planned vs Actual Validation */}
+                {selectedPlannedPeriod && selectedScope && selectedPlannedPeriod.scope_id === selectedScope && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 space-y-2">
+                    <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                      <Target className="w-4 h-4" />
+                      <span className="text-sm font-medium">Validação do Planejamento</span>
+                      {selectedPlannedPeriod.measurement_number && (
+                        <Badge variant="outline" className="text-xs">Med. {selectedPlannedPeriod.measurement_number}</Badge>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="flex items-center justify-between p-2 bg-background rounded">
+                        <span className="text-muted-foreground">Previsto:</span>
+                        <span className="font-semibold">{selectedPlannedPeriod.planned_houses} casas</span>
+                      </div>
+                      <div className="flex items-center justify-between p-2 bg-background rounded">
+                        <span className="text-muted-foreground">Selecionado:</span>
+                        <span className={`font-semibold ${selectedHouses.length === selectedPlannedPeriod.planned_houses ? 'text-green-600' : selectedHouses.length < selectedPlannedPeriod.planned_houses ? 'text-yellow-600' : 'text-blue-600'}`}>
+                          {selectedHouses.length} casas
+                        </span>
+                      </div>
+                    </div>
+                    {selectedHouses.length !== selectedPlannedPeriod.planned_houses && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <AlertTriangle className="w-3 h-3 text-yellow-600" />
+                        <span className="text-yellow-700 dark:text-yellow-400">
+                          {selectedHouses.length < selectedPlannedPeriod.planned_houses 
+                            ? `Faltam ${selectedPlannedPeriod.planned_houses - selectedHouses.length} casas para atingir o previsto`
+                            : `${selectedHouses.length - selectedPlannedPeriod.planned_houses} casas a mais do que previsto`
+                          }
+                        </span>
+                      </div>
+                    )}
+                    {selectedHouses.length === selectedPlannedPeriod.planned_houses && (
+                      <div className="flex items-center gap-2 text-xs text-green-600">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Meta de produção atingida!</span>
+                      </div>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-xs h-7"
+                      onClick={() => {
+                        if (selectedPlannedPeriod.planned_house_ids?.length > 0) {
+                          setSelectedHouses(selectedPlannedPeriod.planned_house_ids);
+                          toast.info("Casas do planejamento selecionadas");
+                        }
+                      }}
+                    >
+                      <ListChecks className="w-3 h-3 mr-1" />
+                      Selecionar casas do planejamento
+                    </Button>
+                  </div>
+                )}
+
+                {/* Non-planned service indicator */}
+                {selectedScope && !selectedPlannedPeriod && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300 text-sm">
+                      <AlertTriangle className="w-4 h-4" />
+                      <span>Serviço não previsto no planejamento</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Este registro será salvo como produção adicional
+                    </p>
+                  </div>
+                )}
+
                 {selectedScope && (
                   <div className="pt-3 border-t space-y-3">
                     <div className="flex items-center justify-between mb-2">
@@ -778,6 +869,17 @@ export function WeeklyProductionView() {
                       <Button variant="outline" size="sm" onClick={clearSelection}>
                         Limpar
                       </Button>
+                      {selectedPlannedPeriod?.planned_house_ids && selectedPlannedPeriod.planned_house_ids.length > 0 && (
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => setSelectedHouses(selectedPlannedPeriod.planned_house_ids)}
+                          className="gap-1"
+                        >
+                          <Target className="w-3 h-3" />
+                          Previstas
+                        </Button>
+                      )}
                     </div>
                     
                     {/* Custom Percentage Mode */}
