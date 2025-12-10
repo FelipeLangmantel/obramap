@@ -189,6 +189,9 @@ export function LaborContractsView() {
     const houses = parseInt(contractedHouses);
     const value = parseFloat(unitValue);
 
+    // Handle "none" value for supplier
+    const contractorName = selectedSupplier === 'none' ? null : (supplier?.name || null);
+
     try {
       const { error } = await supabase.from('labor_contracts').insert({
         project_id: projectId,
@@ -199,7 +202,7 @@ export function LaborContractsView() {
         contracted_houses: houses,
         unit_value: value,
         total_value: houses * value,
-        contractor_name: supplier?.name || null,
+        contractor_name: contractorName,
         status: 'active',
         notes: notes || null
       });
@@ -472,7 +475,7 @@ export function LaborContractsView() {
                   <SelectValue placeholder="Selecione o empreiteiro" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhum (informar depois)</SelectItem>
+                  <SelectItem value="none">Nenhum (informar depois)</SelectItem>
                   {suppliers.map(supplier => (
                     <SelectItem key={supplier.id} value={supplier.id}>
                       {supplier.name}
@@ -482,7 +485,7 @@ export function LaborContractsView() {
               </Select>
               {suppliers.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Nenhum fornecedor de mão de obra cadastrado. Cadastre em Insumos → Fornecedores.
+                  Nenhum fornecedor de mão de obra cadastrado. Cadastre em Suprimentos → Fornecedores.
                 </p>
               )}
             </div>

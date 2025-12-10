@@ -225,6 +225,7 @@ export function SuppliesView() {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [supplierTypeFilter, setSupplierTypeFilter] = useState<string>('all');
   const [expandedFamilies, setExpandedFamilies] = useState<Set<string>>(new Set());
+  const [expandedQuotations, setExpandedQuotations] = useState<Set<string>>(new Set());
   const [deleteInputDialogOpen, setDeleteInputDialogOpen] = useState(false);
   const [inputToDelete, setInputToDelete] = useState<InputItem | null>(null);
 
@@ -1179,12 +1180,44 @@ export function SuppliesView() {
                 }, 0) || 0;
                 
                 return (
-                  <Card key={quotation.id} className={`transition-all ${quotation.status === 'approved' ? 'border-green-300 bg-green-50/30 dark:bg-green-900/10' : quotation.status === 'pending' && allItemsHaveSelection ? 'border-blue-300 ring-2 ring-blue-100' : ''}`}>
+                  <Card 
+                    key={quotation.id} 
+                    className={`transition-all ${
+                      quotation.status === 'approved' 
+                        ? 'border-green-300 bg-green-50/30 dark:bg-green-900/10' 
+                        : quotation.status === 'pending' && allItemsHaveSelection 
+                          ? 'border-blue-300 ring-2 ring-blue-100' 
+                          : ''
+                    }`}
+                  >
                     <CardContent className="p-0">
-                      {/* Header */}
-                      <div className="flex items-center justify-between p-4 border-b bg-muted/30">
+                      {/* Header - Always visible */}
+                      <div 
+                        className={`flex items-center justify-between p-4 border-b bg-muted/30 ${
+                          quotation.status === 'approved' ? 'cursor-pointer hover:bg-muted/50' : ''
+                        }`}
+                        onClick={() => {
+                          if (quotation.status === 'approved') {
+                            setExpandedQuotations(prev => {
+                              const next = new Set(prev);
+                              if (next.has(quotation.id)) {
+                                next.delete(quotation.id);
+                              } else {
+                                next.add(quotation.id);
+                              }
+                              return next;
+                            });
+                          }
+                        }}
+                      >
                         <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${quotation.status === 'approved' ? 'bg-green-100 text-green-600' : quotation.status === 'pending' ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-600'}`}>
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                            quotation.status === 'approved' 
+                              ? 'bg-green-100 text-green-600' 
+                              : quotation.status === 'pending' 
+                                ? 'bg-yellow-100 text-yellow-600' 
+                                : 'bg-gray-100 text-gray-600'
+                          }`}>
                             {quotation.status === 'approved' ? <CheckCircle2 className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
                           </div>
                           <div>
@@ -1192,8 +1225,12 @@ export function SuppliesView() {
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               <Calendar className="w-3 h-3" />
                               <span>Criada em {format(new Date(quotation.created_at), "dd/MM/yyyy", { locale: ptBR })}</span>
-                              <span>•</span>
-                              <span>Necessária até {format(new Date(quotation.required_date), "dd/MM/yyyy", { locale: ptBR })}</span>
+                              {quotation.status !== 'approved' && (
+                                <>
+                                  <span>•</span>
+                                  <span>Necessária até {format(new Date(quotation.required_date), "dd/MM/yyyy", { locale: ptBR })}</span>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1201,15 +1238,22 @@ export function SuppliesView() {
                           <Badge className={`${STATUS_COLORS[quotation.status]} text-white`}>{STATUS_LABELS[quotation.status]}</Badge>
                           {totalValue > 0 && (
                             <div className="text-right">
-                              <p className="text-xs text-muted-foreground">Total Selecionado</p>
+                              <p className="text-xs text-muted-foreground">Total</p>
                               <p className="font-bold text-lg text-green-600">{formatCurrency(totalValue)}</p>
                             </div>
+                          )}
+                          {quotation.status === 'approved' && (
+                            <ChevronDown className={`w-5 h-5 text-muted-foreground transition-transform ${
+                              expandedQuotations.has(quotation.id) ? 'rotate-180' : ''
+                            }`} />
                           )}
                         </div>
                       </div>
                       
-                      {/* Items */}
+                      {/* Items - Show for pending OR when approved and expanded */}
                       {quotation.items && quotation.items.length > 0 && (
+                        quotation.status !== 'approved' || expandedQuotations.has(quotation.id)
+                      ) && (
                         <div className="p-4">
                           <div className="grid gap-3">
                             {quotation.items.map(item => {
@@ -1234,59 +1278,61 @@ export function SuppliesView() {
                                     )}
                                   </div>
                                   
-                                  {/* Quote cards */}
-                                  <div className="grid grid-cols-3 gap-2">
-                                    {[0, 1, 2].map(i => {
-                                      const quote = quotes[i];
-                                      const isLowest = quote && lowestQuote && quote.id === lowestQuote.id;
-                                      
-                                      return (
-                                        <div 
-                                          key={i} 
-                                          className={`p-2 rounded-lg border-2 transition-all cursor-pointer ${
-                                            quote?.is_selected 
-                                              ? 'border-green-500 bg-green-50 dark:bg-green-900/20' 
-                                              : quote 
-                                                ? 'border-muted hover:border-primary/50 hover:bg-muted/50' 
-                                                : 'border-dashed border-muted-foreground/20'
-                                          }`}
-                                          onClick={() => {
-                                            if (quote && canEdit && quotation.status === 'pending') {
-                                              selectQuote(item.id, quote.id);
-                                            }
-                                          }}
-                                        >
-                                          {quote ? (
-                                            <div className="text-center">
-                                              <p className="font-medium text-sm truncate">{quote.supplier?.name}</p>
-                                              <p className={`text-lg font-bold ${isLowest ? 'text-green-600' : ''}`}>
-                                                {formatCurrency(quote.unit_value)}
-                                                <span className="text-xs font-normal text-muted-foreground">/un</span>
-                                              </p>
-                                              <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
-                                                <Truck className="w-3 h-3" />
-                                                {quote.delivery_days} dias
+                                  {/* Quote cards - only show for pending */}
+                                  {quotation.status !== 'approved' && (
+                                    <div className="grid grid-cols-3 gap-2">
+                                      {[0, 1, 2].map(i => {
+                                        const quote = quotes[i];
+                                        const isLowest = quote && lowestQuote && quote.id === lowestQuote.id;
+                                        
+                                        return (
+                                          <div 
+                                            key={i} 
+                                            className={`p-2 rounded-lg border-2 transition-all cursor-pointer ${
+                                              quote?.is_selected 
+                                                ? 'border-green-500 bg-green-50 dark:bg-green-900/20' 
+                                                : quote 
+                                                  ? 'border-muted hover:border-primary/50 hover:bg-muted/50' 
+                                                  : 'border-dashed border-muted-foreground/20'
+                                            }`}
+                                            onClick={() => {
+                                              if (quote && canEdit && quotation.status === 'pending') {
+                                                selectQuote(item.id, quote.id);
+                                              }
+                                            }}
+                                          >
+                                            {quote ? (
+                                              <div className="text-center">
+                                                <p className="font-medium text-sm truncate">{quote.supplier?.name}</p>
+                                                <p className={`text-lg font-bold ${isLowest ? 'text-green-600' : ''}`}>
+                                                  {formatCurrency(quote.unit_value)}
+                                                  <span className="text-xs font-normal text-muted-foreground">/un</span>
+                                                </p>
+                                                <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
+                                                  <Truck className="w-3 h-3" />
+                                                  {quote.delivery_days} dias
+                                                </div>
+                                                {isLowest && !quote.is_selected && (
+                                                  <Badge variant="secondary" className="text-[10px] mt-1 bg-green-100 text-green-700">Menor preço</Badge>
+                                                )}
+                                                {quote.is_selected && (
+                                                  <Badge className="text-[10px] mt-1 bg-green-500">
+                                                    <Check className="w-2.5 h-2.5 mr-0.5" />Selecionado
+                                                  </Badge>
+                                                )}
                                               </div>
-                                              {isLowest && !quote.is_selected && (
-                                                <Badge variant="secondary" className="text-[10px] mt-1 bg-green-100 text-green-700">Menor preço</Badge>
-                                              )}
-                                              {quote.is_selected && (
-                                                <Badge className="text-[10px] mt-1 bg-green-500">
-                                                  <Check className="w-2.5 h-2.5 mr-0.5" />Selecionado
-                                                </Badge>
-                                              )}
-                                            </div>
-                                          ) : (
-                                            <div className="text-center py-2 text-muted-foreground text-xs">
-                                              Cotação {i + 1}
-                                              <br />
-                                              <span className="text-[10px]">Não preenchida</span>
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
+                                            ) : (
+                                              <div className="text-center py-2 text-muted-foreground text-xs">
+                                                Cotação {i + 1}
+                                                <br />
+                                                <span className="text-[10px]">Não preenchida</span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
@@ -1312,11 +1358,12 @@ export function SuppliesView() {
                         </div>
                       )}
                       
-                      {quotation.status === 'approved' && (
-                        <div className="flex items-center justify-center p-4 border-t bg-green-50/50 dark:bg-green-900/10">
-                          <div className="flex items-center gap-2 text-green-600">
-                            <CheckCircle2 className="w-5 h-5" />
-                            <span className="font-medium">Cotação aprovada - Pedidos gerados</span>
+                      {quotation.status === 'approved' && !expandedQuotations.has(quotation.id) && (
+                        <div className="flex items-center justify-center p-3 border-t bg-green-50/50 dark:bg-green-900/10">
+                          <div className="flex items-center gap-2 text-green-600 text-sm">
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span className="font-medium">Cotação aprovada</span>
+                            <span className="text-muted-foreground">• Clique para ver detalhes</span>
                           </div>
                         </div>
                       )}
