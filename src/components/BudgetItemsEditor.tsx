@@ -7,6 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -102,8 +103,10 @@ export function BudgetItemsEditor({
   const [inputSuggestions, setInputSuggestions] = useState<InputItem[]>([]);
   const [showSuggestions, setShowSuggestions] = useState<number | null>(null);
   const [catalogSearchTerm, setCatalogSearchTerm] = useState("");
+  const [catalogFamilyFilter, setCatalogFamilyFilter] = useState<string>("all");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ index: number; item: ScopeItem } | null>(null);
+  const [selectedInputsForMass, setSelectedInputsForMass] = useState<Set<string>>(new Set());
 
   // Load families and items
   const loadData = useCallback(async () => {
@@ -209,17 +212,15 @@ export function BudgetItemsEditor({
     }
   }, [projectId, scopeId]);
 
-  // Search inputs as user types
-  const searchInputs = useCallback((query: string, categoryFilter?: string) => {
-    if (!query || query.length < 2) {
-      setInputSuggestions([]);
-      return;
-    }
+  // Search inputs as user types - with family filter
+  const searchInputs = useCallback((query: string, categoryFilter?: string, familyFilter?: string) => {
+    const searchQuery = query || '';
     const filtered = inputs.filter(i => {
-      const matchesName = i.name.toLowerCase().includes(query.toLowerCase());
+      const matchesName = searchQuery.length < 2 || i.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = !categoryFilter || categoryFilter === 'all' || i.category === categoryFilter;
-      return matchesName && matchesCategory;
-    }).slice(0, 50); // Increased limit for multiple selection
+      const matchesFamily = !familyFilter || familyFilter === 'all' || i.material_family_id === familyFilter;
+      return matchesName && matchesCategory && matchesFamily;
+    }).slice(0, 100);
     setInputSuggestions(filtered);
   }, [inputs]);
 
@@ -282,9 +283,46 @@ export function BudgetItemsEditor({
     const family = newItem.category === 'material' ? newItem.materialFamily : 
       newItem.category === 'labor' ? 'Mão de Obra' : 'Equipamentos';
     setExpandedFamilies(prev => new Set([...prev, family]));
+    setSelectedInputsForMass(new Set());
+  };
+
+  // Add multiple items from input catalog (mass selection)
+  const addItemsFromInputsMass = () => {
+    const inputsToAdd = inputs.filter(i => selectedInputsForMass.has(i.id));
+    if (inputsToAdd.length === 0) {
+      toast.warning('Selecione pelo menos um insumo');
+      return;
+    }
+
+    const newItems: ScopeItem[] = inputsToAdd.map(input => {
+      const familyName = input.material_family_name || families.find(f => f.id === input.material_family_id)?.name || 'Geral';
+      return {
+        scopeId,
+        macroId,
+        name: input.name,
+        category: input.category || 'material',
+        materialFamily: familyName,
+        unitValue: input.unit_value || 0,
+        quantity: 1,
+        unit: input.unit,
+        isNew: true,
+        isEditing: true,
+        inputId: input.id
+      };
+    });
+
+    // Expand all relevant families
+    const familyNames = new Set(newItems.map(i => i.category === 'material' ? i.materialFamily : 
+      i.category === 'labor' ? 'Mão de Obra' : 'Equipamentos'));
+    setExpandedFamilies(prev => new Set([...prev, ...familyNames]));
+
+    setItems(prev => [...prev, ...newItems]);
+    setSelectedInputsForMass(new Set());
     setShowSuggestions(null);
     setInputSuggestions([]);
     setCatalogSearchTerm("");
+    setCatalogFamilyFilter("all");
+    toast.success(`${newItems.length} insumos adicionados!`);
   };
 
   // Focus on quantity input when new item is added
@@ -465,8 +503,29 @@ export function BudgetItemsEditor({
 
       {/* Removed filters - search only via catalog */}
 
-      {/* Add item from catalog - allows multiple selection */}
+      {/* Add item from catalog - allows multiple selection with family filter */}
       <div className="flex gap-2 mb-3">
+        <Select value={catalogFamilyFilter} onValueChange={(val) => {
+          setCatalogFamilyFilter(val);
+          searchInputs(catalogSearchTerm, 'all', val);
+          setShowSuggestions(-1);
+          setSelectedInputsForMass(new Set());
+        }}>
+          <SelectTrigger className="w-[180px] h-9">
+            <SelectValue placeholder="Filtrar por família" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as famílias</SelectItem>
+            {families.map(f => (
+              <SelectItem key={f.id} value={f.id}>
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: f.color }} />
+                  {f.name}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
           <Input
@@ -474,40 +533,71 @@ export function BudgetItemsEditor({
             value={catalogSearchTerm}
             onChange={(e) => {
               setCatalogSearchTerm(e.target.value);
-              searchInputs(e.target.value, 'all');
+              searchInputs(e.target.value, 'all', catalogFamilyFilter);
               setShowSuggestions(-1);
             }}
             onFocus={() => {
-              if (catalogSearchTerm.length >= 2) {
-                searchInputs(catalogSearchTerm, 'all');
-                setShowSuggestions(-1);
-              }
+              searchInputs(catalogSearchTerm, 'all', catalogFamilyFilter);
+              setShowSuggestions(-1);
             }}
             className="h-9 pl-8"
           />
           {showSuggestions === -1 && inputSuggestions.length > 0 && (
             <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg">
               <div className="p-2 border-b bg-muted/50 text-xs text-muted-foreground flex items-center justify-between sticky top-0 z-10">
-                <span>Clique nos itens para adicionar (pode adicionar vários)</span>
+                <div className="flex items-center gap-2">
+                  <Checkbox 
+                    checked={selectedInputsForMass.size > 0 && inputSuggestions.filter(i => !items.some(item => item.inputId === i.id)).every(i => selectedInputsForMass.has(i.id))}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        const availableIds = inputSuggestions.filter(i => !items.some(item => item.inputId === i.id)).map(i => i.id);
+                        setSelectedInputsForMass(new Set(availableIds));
+                      } else {
+                        setSelectedInputsForMass(new Set());
+                      }
+                    }}
+                  />
+                  <span>
+                    {selectedInputsForMass.size > 0 
+                      ? `${selectedInputsForMass.size} selecionado(s)` 
+                      : 'Selecionar todos'}
+                  </span>
+                </div>
                 <Badge variant="secondary" className="text-xs">{inputSuggestions.length} encontrados</Badge>
               </div>
               <ScrollArea className="h-[350px]">
                 <div className="p-1">
                   {inputSuggestions.map(input => {
                     const alreadyAdded = items.some(item => item.inputId === input.id);
+                    const isSelected = selectedInputsForMass.has(input.id);
                     return (
                       <div
                         key={input.id}
-                        className={`px-3 py-2 hover:bg-muted cursor-pointer text-sm flex items-center gap-2 rounded-md mb-0.5 ${alreadyAdded ? 'bg-green-50/50 dark:bg-green-900/10' : ''}`}
+                        className={`px-3 py-2 hover:bg-muted cursor-pointer text-sm flex items-center gap-2 rounded-md mb-0.5 ${
+                          alreadyAdded ? 'bg-green-50/50 dark:bg-green-900/10 opacity-50' : 
+                          isSelected ? 'bg-primary/10 border border-primary/30' : ''
+                        }`}
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
                           if (!alreadyAdded) {
-                            addItemFromInput(input);
-                            // Keep suggestions open for multiple selection
-                            searchInputs(catalogSearchTerm, 'all');
+                            setSelectedInputsForMass(prev => {
+                              const next = new Set(prev);
+                              if (next.has(input.id)) {
+                                next.delete(input.id);
+                              } else {
+                                next.add(input.id);
+                              }
+                              return next;
+                            });
                           }
                         }}
                       >
+                        <Checkbox 
+                          checked={alreadyAdded || isSelected} 
+                          disabled={alreadyAdded}
+                          onCheckedChange={() => {}}
+                          className="pointer-events-none"
+                        />
                         {alreadyAdded && <Check className="w-4 h-4 text-green-500 shrink-0" />}
                         {!alreadyAdded && (
                           input.category === 'material' ? <Package className="w-4 h-4 text-blue-500 shrink-0" /> : 
@@ -527,16 +617,30 @@ export function BudgetItemsEditor({
                   })}
                 </div>
               </ScrollArea>
-              <div className="p-2 border-t bg-muted/30 sticky bottom-0">
-                <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => setShowSuggestions(null)}>
+              <div className="p-2 border-t bg-muted/30 sticky bottom-0 flex gap-2">
+                {selectedInputsForMass.size > 0 && (
+                  <Button size="sm" className="flex-1" onClick={addItemsFromInputsMass}>
+                    <Plus className="w-4 h-4 mr-1" />
+                    Adicionar {selectedInputsForMass.size} selecionado(s)
+                  </Button>
+                )}
+                <Button size="sm" variant="outline" className={selectedInputsForMass.size > 0 ? '' : 'w-full'} onClick={() => {
+                  setShowSuggestions(null);
+                  setSelectedInputsForMass(new Set());
+                }}>
                   Fechar
                 </Button>
               </div>
             </div>
           )}
-          {showSuggestions === -1 && catalogSearchTerm.length >= 2 && inputSuggestions.length === 0 && (
+          {showSuggestions === -1 && catalogSearchTerm.length >= 2 && inputSuggestions.length === 0 && catalogFamilyFilter === 'all' && (
             <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg p-3 text-center text-sm text-muted-foreground">
               Nenhum insumo encontrado. Cadastre no módulo de Suprimentos.
+            </div>
+          )}
+          {showSuggestions === -1 && inputSuggestions.length === 0 && catalogFamilyFilter !== 'all' && (
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border rounded-md shadow-lg p-3 text-center text-sm text-muted-foreground">
+              Nenhum insumo encontrado nesta família.
             </div>
           )}
         </div>
