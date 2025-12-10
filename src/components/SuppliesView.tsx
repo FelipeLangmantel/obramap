@@ -440,7 +440,11 @@ export function SuppliesView() {
     return alertsList.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
   }, [alertsData.scopeItems, laborContracts, executedHouses, scopesWithPlannedProduction]);
 
+  // State to track which alerts have been quoted (by family ID)
+  const [quotedAlertFamilies, setQuotedAlertFamilies] = useState<Set<string>>(new Set());
+
   // Calculate material alerts based on lead time - only for planned future production
+  // GROUP ITEMS BY NAME within each family and sum quantities
   const materialAlerts = useMemo((): MaterialAlert[] => {
     const today = new Date();
     
@@ -479,26 +483,62 @@ export function SuppliesView() {
       
       const leadTimeDays = family.lead_time_days || 7;
       
-      // Calculate quantities based on planned houses only (remaining balance) with stock discount
-      const alertItems = itemsData.map(({ item, plannedHouses, plannedHouseIds }) => {
-        const totalQuantity = item.quantity * plannedHouses;
-        // Find matching input to get stock quantity
-        const matchingInput = inputs.find(i => i.name.toLowerCase() === item.name.toLowerCase() && i.category === 'material');
+      // GROUP AND SUM items with the same name within the family
+      const groupedByName: Record<string, {
+        totalQuantity: number;
+        stockQuantity: number;
+        unit: string;
+        unitValue: number;
+        houseIds: Set<number>;
+        ids: string[];
+      }> = {};
+      
+      itemsData.forEach(({ item, plannedHouses, plannedHouseIds }) => {
+        const normalizedName = item.name.trim().toLowerCase();
+        const matchingInput = inputs.find(i => i.name.toLowerCase() === normalizedName && i.category === 'material');
         const stockQuantity = matchingInput?.stock_quantity || 0;
-        const needQuantity = Math.max(0, totalQuantity - stockQuantity);
+        
+        if (!groupedByName[normalizedName]) {
+          groupedByName[normalizedName] = {
+            totalQuantity: 0,
+            stockQuantity,
+            unit: item.unit,
+            unitValue: item.unit_value,
+            houseIds: new Set(),
+            ids: []
+          };
+        }
+        
+        groupedByName[normalizedName].totalQuantity += item.quantity * plannedHouses;
+        groupedByName[normalizedName].ids.push(item.id);
+        plannedHouseIds.forEach(h => groupedByName[normalizedName].houseIds.add(h));
+        // Use the highest unit value if there are different values
+        if (item.unit_value > groupedByName[normalizedName].unitValue) {
+          groupedByName[normalizedName].unitValue = item.unit_value;
+        }
+      });
+      
+      // Convert grouped items to alert items
+      const alertItems = Object.entries(groupedByName).map(([name, data]) => {
+        const needQuantity = Math.max(0, data.totalQuantity - data.stockQuantity);
+        // Find the original item name with proper casing
+        const originalItem = itemsData.find(d => d.item.name.trim().toLowerCase() === name);
         
         return {
-          id: item.id,
-          name: item.name,
-          totalQuantity,
-          stockQuantity,
+          id: data.ids.join(','), // Store all IDs
+          name: originalItem?.item.name || name,
+          totalQuantity: data.totalQuantity,
+          stockQuantity: data.stockQuantity,
           needQuantity,
-          unit: item.unit,
-          unitValue: item.unit_value,
-          totalValue: needQuantity * item.unit_value,
-          houseIds: plannedHouseIds
+          unit: data.unit,
+          unitValue: data.unitValue,
+          totalValue: needQuantity * data.unitValue,
+          houseIds: Array.from(data.houseIds)
         };
-      });
+      }).filter(item => item.needQuantity > 0); // Only show items that need to be purchased
+      
+      // Skip families with no items to purchase
+      if (alertItems.length === 0) return;
       
       // Due date is based on earliest planned production for this family
       const earliestPlanned = plannedProductions
@@ -532,8 +572,29 @@ export function SuppliesView() {
     return alerts.sort((a, b) => a.daysUntilDue - b.daysUntilDue);
   }, [alertsData.scopeItems, alertFamilies, plannedProductions, inputs]);
 
-  // Combined alerts count
-  const totalAlertsCount = laborAlerts.length + materialAlerts.length;
+  // Filter out alerts that already have pending quotations
+  const visibleMaterialAlerts = useMemo(() => {
+    return materialAlerts.filter(alert => !quotedAlertFamilies.has(alert.familyId));
+  }, [materialAlerts, quotedAlertFamilies]);
+
+  // Check for existing quotations that match alert families and mark them as quoted
+  useEffect(() => {
+    if (quotations.length > 0 && materialAlerts.length > 0) {
+      const quoted = new Set<string>();
+      quotations.filter(q => q.status === 'pending').forEach(q => {
+        materialAlerts.forEach(alert => {
+          // If quotation title contains family name, consider it quoted
+          if (q.title.toLowerCase().includes(alert.familyName.toLowerCase())) {
+            quoted.add(alert.familyId);
+          }
+        });
+      });
+      setQuotedAlertFamilies(quoted);
+    }
+  }, [quotations, materialAlerts]);
+
+  // Combined alerts count - use visible alerts
+  const totalAlertsCount = laborAlerts.length + visibleMaterialAlerts.length;
 
   // CRUD operations
   const saveInput = async () => {
@@ -775,6 +836,49 @@ export function SuppliesView() {
     }
   };
 
+  // Create quotation directly from alert - no item selection needed
+  const createQuotationFromAlert = async (alert: MaterialAlert) => {
+    if (!projectId) return;
+    try {
+      const title = `Cotação ${alert.familyName} - ${format(new Date(), 'dd/MM/yyyy')}`;
+      const required_date = format(alert.dueDate, 'yyyy-MM-dd');
+      
+      const { data: quotationData, error } = await supabase.from('quotation_requests').insert({
+        project_id: projectId,
+        title,
+        required_date,
+        notes: `Lead time: ${alert.leadTimeDays} dias | ${alert.items.length} itens agrupados`
+      }).select().single();
+      if (error) throw error;
+
+      // Insert all items from the alert (already grouped and summed)
+      const itemsToInsert = alert.items.map(item => ({
+        quotation_id: quotationData.id,
+        scope_item_id: null, // Items are grouped, so we don't link to single scope item
+        name: item.name,
+        category: 'material',
+        quantity: item.needQuantity, // Use the quantity to purchase (total - stock)
+        unit: item.unit,
+        estimated_unit_value: item.unitValue
+      }));
+
+      if (itemsToInsert.length > 0) {
+        await supabase.from('quotation_items').insert(itemsToInsert);
+      }
+
+      // Mark alert as quoted
+      setQuotedAlertFamilies(prev => new Set(prev).add(alert.familyId));
+
+      toast.success(`Cotação criada para ${alert.familyName}!`);
+      setDataLoaded(prev => ({ ...prev, quotations: false }));
+      loadTabData('quotations');
+      setActiveTab('quotations');
+    } catch (error) {
+      console.error('Error creating quotation:', error);
+      toast.error('Erro ao criar cotação');
+    }
+  };
+
   const createQuotation = async () => {
     if (!projectId || !newQuotation.title || !newQuotation.required_date) return;
     try {
@@ -838,12 +942,47 @@ export function SuppliesView() {
     }
   };
 
-  const deleteQuotation = async (id: string) => {
+  const deleteQuotation = async (id: string, quotation?: QuotationRequest) => {
     try {
+      // If quotation has associated orders, delete them first (cascade delete)
+      const { data: relatedOrders } = await supabase.from('purchase_orders').select('id').eq('quotation_id', id);
+      if (relatedOrders && relatedOrders.length > 0) {
+        for (const order of relatedOrders) {
+          await supabase.from('purchase_order_items').delete().eq('purchase_order_id', order.id);
+          await supabase.from('delivery_tracking').delete().eq('purchase_order_id', order.id);
+        }
+        await supabase.from('purchase_orders').delete().eq('quotation_id', id);
+      }
+      
+      // Delete supplier quotes for all items
+      const { data: items } = await supabase.from('quotation_items').select('id').eq('quotation_id', id);
+      if (items) {
+        for (const item of items) {
+          await supabase.from('supplier_quotes').delete().eq('quotation_item_id', item.id);
+        }
+      }
+      
       await supabase.from('quotation_items').delete().eq('quotation_id', id);
       await supabase.from('quotation_requests').delete().eq('id', id);
+      
+      // Re-enable the alert for this family if we can identify it
+      if (quotation) {
+        const matchingAlert = materialAlerts.find(a => 
+          quotation.title.toLowerCase().includes(a.familyName.toLowerCase())
+        );
+        if (matchingAlert) {
+          setQuotedAlertFamilies(prev => {
+            const next = new Set(prev);
+            next.delete(matchingAlert.familyId);
+            return next;
+          });
+        }
+      }
+      
       toast.success('Cotação excluída!');
       setQuotations(prev => prev.filter(q => q.id !== id));
+      setDataLoaded(prev => ({ ...prev, orders: false }));
+      loadTabData('orders');
     } catch (error) {
       console.error('Error deleting quotation:', error);
       toast.error('Erro ao excluir cotação');
@@ -1111,7 +1250,7 @@ export function SuppliesView() {
         {/* Alerts Tab */}
         <TabsContent value="alerts" className="flex-1 overflow-auto mt-4 space-y-4">
           {/* Material Alerts by Family */}
-          {materialAlerts.length > 0 && (
+          {visibleMaterialAlerts.length > 0 && (
             <Card 
               ref={materialAlertsRef}
               className="cursor-pointer hover:border-blue-400 transition-colors"
@@ -1120,13 +1259,13 @@ export function SuppliesView() {
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Package className="w-5 h-5 text-blue-500" />
-                  Alertas de Cotação - Lead Time ({materialAlerts.length} famílias)
+                  Alertas de Cotação - Lead Time ({visibleMaterialAlerts.length} famílias)
                 </CardTitle>
               </CardHeader>
               <CardContent onClick={(e) => e.stopPropagation()}>
                 <ScrollArea className="h-[400px]">
                   <div className="space-y-2 pr-4">
-                    {materialAlerts.map((alert) => {
+                    {visibleMaterialAlerts.map((alert) => {
                       const isExpanded = expandedAlertFamilies.has(alert.familyId);
                       const totalValue = alert.items.reduce((sum, i) => sum + i.totalValue, 0);
                       
@@ -1151,7 +1290,7 @@ export function SuppliesView() {
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2">
                                     <p className="font-medium text-sm">{alert.familyName}</p>
-                                    <Badge variant="secondary" className="text-xs">{alert.items.length} itens</Badge>
+                                    <Badge variant="secondary" className="text-xs">{alert.items.length} itens (agrupados)</Badge>
                                   </div>
                                   <p className="text-xs text-muted-foreground">
                                     Lead time: {alert.leadTimeDays} dias • 
@@ -1170,25 +1309,15 @@ export function SuppliesView() {
                                 {canEdit && (
                                 <Button 
                                     size="sm" 
-                                    variant="outline" 
-                                    className="shrink-0"
+                                    className="shrink-0 bg-blue-600 hover:bg-blue-700"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      // Pre-select items from this family for quotation
-                                      const itemIds = alert.items.map(i => i.id);
-                                      setNewQuotation({
-                                        title: `Cotação ${alert.familyName} - ${format(new Date(), 'dd/MM/yyyy')}`,
-                                        required_date: format(alert.dueDate, 'yyyy-MM-dd'),
-                                        notes: `Lead time: ${alert.leadTimeDays} dias`,
-                                        items: itemIds,
-                                        customItems: []
-                                      });
-                                      setQuotationDialogOpen(true);
-                                      setActiveTab('quotations');
+                                      // Auto-create quotation from alert
+                                      createQuotationFromAlert(alert);
                                     }}
                                   >
                                     <FileText className="w-3 h-3 mr-1" />
-                                    Cotar
+                                    Cotar Agora
                                   </Button>
                                 )}
                               </div>
@@ -1678,7 +1807,13 @@ export function SuppliesView() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Excluir Cotação</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Tem certeza que deseja excluir a cotação "{quotationToDelete?.title}"? Todos os itens e cotações de fornecedores serão removidos.
+                  Tem certeza que deseja excluir a cotação "{quotationToDelete?.title}"? 
+                  {quotationToDelete?.status === 'approved' && (
+                    <span className="block mt-2 text-destructive font-medium">
+                      Atenção: Esta cotação está aprovada. Todos os pedidos relacionados também serão excluídos!
+                    </span>
+                  )}
+                  Todos os itens e cotações de fornecedores serão removidos.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -1686,7 +1821,7 @@ export function SuppliesView() {
                 <AlertDialogAction 
                   onClick={() => { 
                     if (quotationToDelete) { 
-                      deleteQuotation(quotationToDelete.id); 
+                      deleteQuotation(quotationToDelete.id, quotationToDelete); 
                       setDeleteQuotationDialogOpen(false); 
                       setQuotationToDelete(null); 
                     } 
@@ -1946,7 +2081,7 @@ export function SuppliesView() {
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          {canEdit && quotation.status === 'pending' && (
+                          {canEdit && (
                             <Button 
                               size="icon" 
                               variant="ghost" 
@@ -2393,48 +2528,185 @@ export function SuppliesView() {
         </TabsContent>
       </Tabs>
 
-      {/* Edit Quotes Dialog */}
-      <Dialog open={quoteDetailsDialogOpen} onOpenChange={setQuoteDetailsDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
-          <DialogHeader><DialogTitle>Editar Cotações - {selectedQuotation?.title}</DialogTitle></DialogHeader>
-          {selectedQuotation?.items?.map(item => (
-            <div key={item.id} className="border rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div><p className="font-medium">{item.name}</p><p className="text-sm text-muted-foreground">{item.quantity} {item.unit}</p></div>
+      {/* Edit Quotes Dialog - Improved for faster bulk entry */}
+      <Dialog open={quoteDetailsDialogOpen} onOpenChange={(open) => {
+        setQuoteDetailsDialogOpen(open);
+        if (!open) {
+          setSupplierQuotes({});
+        }
+      }}>
+        <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Mapa de Cotação - {selectedQuotation?.title}</DialogTitle>
+            <p className="text-sm text-muted-foreground">Preencha os valores por fornecedor. Prazo de entrega é geral para todo o pedido.</p>
+          </DialogHeader>
+          
+          {selectedQuotation && (
+            <div className="flex-1 overflow-auto space-y-4">
+              {/* Global delivery days selector */}
+              <div className="flex items-center gap-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200">
+                <Truck className="w-5 h-5 text-blue-500" />
+                <Label className="font-medium">Prazo de Entrega Geral:</Label>
+                <Input 
+                  type="number" 
+                  className="w-24"
+                  placeholder="Dias"
+                  min="1"
+                  onChange={(e) => {
+                    const days = parseInt(e.target.value) || 0;
+                    // Apply to all items
+                    const updated: typeof supplierQuotes = {};
+                    selectedQuotation.items?.forEach(item => {
+                      const current = supplierQuotes[item.id] || [];
+                      updated[item.id] = [0, 1, 2].map(i => ({
+                        ...(current[i] || { supplier_id: item.quotes?.[i]?.supplier_id || '', unit_value: item.quotes?.[i]?.unit_value || 0, notes: '' }),
+                        delivery_days: days
+                      }));
+                    });
+                    setSupplierQuotes(updated);
+                  }}
+                />
+                <span className="text-sm text-muted-foreground">dias para todos os itens</span>
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                {[0, 1, 2].map(i => {
-                  const existingQuote = item.quotes?.[i];
-                  const currentQuotes = supplierQuotes[item.id] || [];
-                  const quote = currentQuotes[i] || { supplier_id: existingQuote?.supplier_id || '', unit_value: existingQuote?.unit_value || 0, delivery_days: existingQuote?.delivery_days || 0, notes: existingQuote?.notes || '' };
-                  return (
-                    <div key={i} className="space-y-2 p-3 bg-muted/30 rounded">
-                      <p className="text-sm font-medium">Cotação {i + 1}</p>
-                      <Select value={quote.supplier_id} onValueChange={(v) => {
-                        const updated = [...currentQuotes];
-                        updated[i] = { ...quote, supplier_id: v };
-                        setSupplierQuotes({ ...supplierQuotes, [item.id]: updated });
-                      }}>
-                        <SelectTrigger><SelectValue placeholder="Fornecedor" /></SelectTrigger>
-                        <SelectContent>{suppliers.filter(s => s.supplier_type === 'material').map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-                      </Select>
-                      <Input type="number" placeholder="Valor unitário" value={quote.unit_value || ''} onChange={(e) => {
-                        const updated = [...currentQuotes];
-                        updated[i] = { ...quote, unit_value: parseFloat(e.target.value) || 0 };
-                        setSupplierQuotes({ ...supplierQuotes, [item.id]: updated });
-                      }} />
-                      <Input type="number" placeholder="Dias entrega" value={quote.delivery_days || ''} onChange={(e) => {
-                        const updated = [...currentQuotes];
-                        updated[i] = { ...quote, delivery_days: parseInt(e.target.value) || 0 };
-                        setSupplierQuotes({ ...supplierQuotes, [item.id]: updated });
-                      }} />
-                    </div>
-                  );
-                })}
+
+              {/* Quick supplier assignment */}
+              <div className="grid grid-cols-3 gap-4 p-3 bg-muted/50 rounded-lg">
+                {[0, 1, 2].map(i => (
+                  <div key={i} className="space-y-2">
+                    <Label className="text-sm font-medium">Fornecedor {i + 1}</Label>
+                    <Select 
+                      value=""
+                      onValueChange={(supplierId) => {
+                        // Apply this supplier to all items at position i
+                        const updated: typeof supplierQuotes = { ...supplierQuotes };
+                        selectedQuotation.items?.forEach(item => {
+                          const current = updated[item.id] || [];
+                          const existingQuote = item.quotes?.[i];
+                          updated[item.id] = [...current];
+                          updated[item.id][i] = {
+                            supplier_id: supplierId,
+                            unit_value: current[i]?.unit_value || existingQuote?.unit_value || 0,
+                            delivery_days: current[i]?.delivery_days || existingQuote?.delivery_days || 0,
+                            notes: current[i]?.notes || existingQuote?.notes || ''
+                          };
+                        });
+                        setSupplierQuotes(updated);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Aplicar fornecedor a todos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {suppliers.filter(s => s.supplier_type === 'material').map(s => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
               </div>
-              <Button size="sm" onClick={() => saveSupplierQuotes(item.id, supplierQuotes[item.id] || [])}>Salvar Cotações</Button>
+
+              {/* Items table for quick price entry */}
+              <ScrollArea className="h-[400px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30">
+                      <TableHead className="w-[200px]">Item</TableHead>
+                      <TableHead className="text-center w-[80px]">Qtd</TableHead>
+                      <TableHead className="text-center">Fornecedor 1</TableHead>
+                      <TableHead className="text-center">Fornecedor 2</TableHead>
+                      <TableHead className="text-center">Fornecedor 3</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedQuotation.items?.map(item => {
+                      const currentQuotes = supplierQuotes[item.id] || [];
+                      
+                      return (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium">{item.name}</TableCell>
+                          <TableCell className="text-center text-sm">{item.quantity} {item.unit}</TableCell>
+                          {[0, 1, 2].map(i => {
+                            const existingQuote = item.quotes?.[i];
+                            const quote = currentQuotes[i] || { 
+                              supplier_id: existingQuote?.supplier_id || '', 
+                              unit_value: existingQuote?.unit_value || 0, 
+                              delivery_days: existingQuote?.delivery_days || 0, 
+                              notes: '' 
+                            };
+                            const supplier = suppliers.find(s => s.id === quote.supplier_id);
+                            
+                            return (
+                              <TableCell key={i} className="p-1">
+                                <div className="space-y-1">
+                                  {!supplier ? (
+                                    <Select 
+                                      value={quote.supplier_id} 
+                                      onValueChange={(v) => {
+                                        const updated = [...currentQuotes];
+                                        updated[i] = { ...quote, supplier_id: v };
+                                        setSupplierQuotes({ ...supplierQuotes, [item.id]: updated });
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs">
+                                        <SelectValue placeholder="Fornecedor" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {suppliers.filter(s => s.supplier_type === 'material').map(s => (
+                                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <Badge variant="secondary" className="text-xs w-full justify-center">
+                                      {supplier.name}
+                                    </Badge>
+                                  )}
+                                  <Input 
+                                    type="number" 
+                                    className="h-8 text-center"
+                                    placeholder="R$ 0,00"
+                                    value={quote.unit_value || ''} 
+                                    onChange={(e) => {
+                                      const updated = [...currentQuotes];
+                                      updated[i] = { ...quote, unit_value: parseFloat(e.target.value) || 0 };
+                                      setSupplierQuotes({ ...supplierQuotes, [item.id]: updated });
+                                    }}
+                                  />
+                                </div>
+                              </TableCell>
+                            );
+                          })}
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
             </div>
-          ))}
+          )}
+          
+          <DialogFooter className="border-t pt-4">
+            <Button variant="outline" onClick={() => setQuoteDetailsDialogOpen(false)}>Cancelar</Button>
+            <Button 
+              onClick={async () => {
+                // Save all quotes at once
+                if (selectedQuotation?.items) {
+                  for (const item of selectedQuotation.items) {
+                    const quotes = supplierQuotes[item.id];
+                    if (quotes && quotes.some(q => q.supplier_id && q.unit_value > 0)) {
+                      await saveSupplierQuotes(item.id, quotes);
+                    }
+                  }
+                }
+                setQuoteDetailsDialogOpen(false);
+              }}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <Check className="w-4 h-4 mr-1" />
+              Salvar Todas as Cotações
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
