@@ -67,7 +67,7 @@ export function ImportInputsDialog({
   const [newFamiliesToCreate, setNewFamiliesToCreate] = useState<Set<string>>(new Set());
   const [newUnitsToCreate, setNewUnitsToCreate] = useState<Set<string>>(new Set());
 
-  // Check for similar names (duplicates) - more strict matching
+  // Check for similar names (duplicates) - strict matching for construction materials
   const checkDuplicate = (name: string, existingNames: string[]): { isDuplicate: boolean; duplicateOf?: string } => {
     const normalizedName = name.trim().toLowerCase();
     
@@ -77,40 +77,85 @@ export function ImportInputsDialog({
       return { isDuplicate: true, duplicateOf: exactMatch };
     }
     
-    // Only consider duplicate if:
-    // 1. Names are nearly identical (one contains the other completely)
-    // 2. OR names share significant meaningful words (not just common words like "de", "para", etc.)
-    const commonWords = new Set(['de', 'para', 'com', 'sem', 'em', 'a', 'o', 'e', 'da', 'do', 'das', 'dos', 'um', 'uma', 'no', 'na', 'nos', 'nas', 'por', 'mm', 'cm', 'm', 'kg', 'un', 'pç', 'pc']);
-    
-    const getSignificantWords = (text: string) => {
-      return text.split(/[\s,.\-\/\\|]+/)
-        .map(w => w.toLowerCase().replace(/[^a-záàâãéèêíïóôõöúçñ0-9]/g, ''))
-        .filter(w => w.length > 2 && !commonWords.has(w));
+    // Normalize for comparison - remove extra spaces, special chars
+    const normalize = (text: string) => {
+      return text
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .replace(/[^\w\sáàâãéèêíïóôõöúçñ0-9]/g, '')
+        .trim();
     };
     
-    const words1 = getSignificantWords(normalizedName);
+    const normalizedInput = normalize(normalizedName);
     
-    const similarMatch = existingNames.find(n => {
-      const normalizedExisting = n.toLowerCase();
+    // Check for very similar normalized names
+    const normalizedMatch = existingNames.find(n => normalize(n) === normalizedInput);
+    if (normalizedMatch) {
+      return { isDuplicate: true, duplicateOf: normalizedMatch };
+    }
+    
+    // Extract key identifiers (DN numbers, dimensions, specific codes)
+    const extractKeyParts = (text: string) => {
+      const normalized = normalize(text);
+      // Extract: DN numbers, dimensions (20x30), codes with numbers
+      const dnMatch = normalized.match(/dn\s*\d+/gi);
+      const dimMatch = normalized.match(/\d+\s*x\s*\d+/gi);
+      const codeMatch = normalized.match(/\b[a-z]+\d+\b/gi);
+      const numMatch = normalized.match(/\d+(?:[.,]\d+)?(?:\s*(?:mm|cm|m|kg|l|pol|"))?/gi);
       
-      // Check if one contains the other completely (minimum 10 chars to avoid false positives)
-      if (normalizedName.length >= 10 && normalizedExisting.length >= 10) {
-        if (normalizedExisting.includes(normalizedName) || normalizedName.includes(normalizedExisting)) {
-          return true;
-        }
+      return {
+        dn: dnMatch?.[0]?.toLowerCase().replace(/\s/g, '') || '',
+        dim: dimMatch?.[0]?.toLowerCase().replace(/\s/g, '') || '',
+        code: codeMatch?.[0]?.toLowerCase() || '',
+        numbers: numMatch?.map(n => n.toLowerCase().replace(/\s/g, '')) || []
+      };
+    };
+    
+    // Get significant words (excluding common words)
+    const commonWords = new Set(['de', 'para', 'com', 'sem', 'em', 'a', 'o', 'e', 'da', 'do', 'das', 'dos', 'um', 'uma', 'no', 'na', 'nos', 'nas', 'por', 'tipo', 'c', 's']);
+    const unitWords = new Set(['mm', 'cm', 'm', 'm2', 'm3', 'kg', 'un', 'pç', 'pc', 'l', 'lt', 'pol']);
+    
+    const getSignificantWords = (text: string) => {
+      return normalize(text)
+        .split(/\s+/)
+        .filter(w => w.length > 1 && !commonWords.has(w) && !unitWords.has(w));
+    };
+    
+    const inputParts = extractKeyParts(normalizedName);
+    const inputWords = getSignificantWords(normalizedName);
+    
+    const similarMatch = existingNames.find(existing => {
+      const existingParts = extractKeyParts(existing);
+      const existingWords = getSignificantWords(existing);
+      
+      // If both have DN codes, they must match
+      if (inputParts.dn && existingParts.dn) {
+        if (inputParts.dn !== existingParts.dn) return false;
       }
       
-      // Check significant word overlap - must have very high similarity
-      const words2 = getSignificantWords(normalizedExisting);
-      if (words1.length === 0 || words2.length === 0) return false;
+      // If both have dimensions, they must match
+      if (inputParts.dim && existingParts.dim) {
+        if (inputParts.dim !== existingParts.dim) return false;
+      }
       
-      // Count exact word matches (not partial)
-      const exactWordMatches = words1.filter(w1 => words2.some(w2 => w1 === w2)).length;
-      const minWords = Math.min(words1.length, words2.length);
-      const maxWords = Math.max(words1.length, words2.length);
+      // Check word similarity
+      if (inputWords.length === 0 || existingWords.length === 0) return false;
       
-      // Require very high overlap: 90%+ of smaller set AND at least 70% of larger set
-      return exactWordMatches >= minWords * 0.9 && exactWordMatches >= maxWords * 0.7;
+      const commonWordsCount = inputWords.filter(w => existingWords.some(ew => ew === w || ew.includes(w) || w.includes(ew))).length;
+      const minWords = Math.min(inputWords.length, existingWords.length);
+      const maxWords = Math.max(inputWords.length, existingWords.length);
+      
+      // High similarity threshold: 80%+ match of significant words AND same key identifiers
+      const wordSimilarity = commonWordsCount / minWords;
+      const coverageRatio = commonWordsCount / maxWords;
+      
+      // Match if: same DN/dim AND high word overlap, OR very high word overlap without identifiers
+      if (inputParts.dn && existingParts.dn && inputParts.dn === existingParts.dn && wordSimilarity >= 0.7) {
+        return true;
+      }
+      
+      // Very strict: must have 85%+ overlap to be considered duplicate
+      return wordSimilarity >= 0.85 && coverageRatio >= 0.7;
     });
     
     if (similarMatch) {
