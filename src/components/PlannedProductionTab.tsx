@@ -63,6 +63,7 @@ interface PlannedProduction {
   planned_house_ids: number[];
   notes: string | null;
   created_at: string;
+  measurement_number?: number;
 }
 
 interface ActualProduction {
@@ -126,6 +127,7 @@ export function PlannedProductionTab() {
   const [selectedMacro, setSelectedMacro] = useState<string>("");
   const [selectedScope, setSelectedScope] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
+  const [measurementNumber, setMeasurementNumber] = useState<number>(1);
   
   // Planning period dates (next week by default)
   const [planStartDate, setPlanStartDate] = useState<string>(
@@ -141,6 +143,10 @@ export function PlannedProductionTab() {
   const [scopeCosts, setScopeCosts] = useState<ScopeCost[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // House progress completion dialog
+  const [progressDialogOpen, setProgressDialogOpen] = useState(false);
+  const [houseProgressUpdates, setHouseProgressUpdates] = useState<Record<number, number>>({});
   
   // Report dialog
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
@@ -192,7 +198,7 @@ export function PlannedProductionTab() {
     return macro?.scopes || [];
   }, [selectedMacro, macros]);
 
-  // Calculate houses not yet executed for the selected scope
+  // Calculate houses with their progress for the selected scope
   const availableHousesForScope = useMemo(() => {
     if (!selectedScope || !selectedMacro) return [];
     
@@ -201,8 +207,24 @@ export function PlannedProductionTab() {
       if (!macro) return true; // House doesn't have this macro yet
       const scope = macro.scopes.find(s => s.id === selectedScope);
       return !scope || scope.progress < 100; // Not executed or partially executed
+    }).map(house => {
+      const macro = house.macros.find(m => m.id === selectedMacro);
+      const scope = macro?.scopes.find(s => s.id === selectedScope);
+      const currentProgress = scope?.progress || 0;
+      return {
+        ...house,
+        currentProgress,
+        remainingProgress: 100 - currentProgress
+      };
     });
   }, [houses, selectedMacro, selectedScope]);
+
+  // Calculate next measurement number
+  const nextMeasurementNumber = useMemo(() => {
+    if (!plannedProductions.length) return 1;
+    const maxMeasurement = Math.max(...plannedProductions.map(p => p.measurement_number || 0));
+    return maxMeasurement + 1;
+  }, [plannedProductions]);
 
   // Selected house IDs for planning
   const [selectedHouseIds, setSelectedHouseIds] = useState<number[]>([]);
@@ -326,6 +348,7 @@ export function PlannedProductionTab() {
           planned_houses: selectedHouseIds.length,
           planned_house_ids: selectedHouseIds,
           notes: notes || null,
+          measurement_number: measurementNumber,
         });
 
       if (error) throw error;
@@ -343,6 +366,7 @@ export function PlannedProductionTab() {
       setSelectedHouseIds([]);
       setNotes("");
       setSelectedScope("");
+      setMeasurementNumber(prev => prev + 1);
     } catch (error) {
       console.error('Error saving planned production:', error);
       toast.error("Erro ao salvar planejamento");
