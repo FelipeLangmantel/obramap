@@ -17,6 +17,8 @@ import { ProjectCostsView } from "@/components/ProjectCostsView";
 import { InteractiveMapView } from "@/components/InteractiveMapView";
 import { Map3DView } from "@/components/Map3DView";
 import { SuppliesView } from "@/components/SuppliesView";
+import { InputsManagementView } from "@/components/InputsManagementView";
+import { SuppliersManagementView } from "@/components/SuppliersManagementView";
 import { Loader2 } from "lucide-react";
 
 type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers";
@@ -146,13 +148,13 @@ function IndexContent() {
 
                 {activeView === "inputs" && (
                   <div className="flex-1">
-                    <SuppliesView initialTab="inputs" />
+                    <InputsManagementView />
                   </div>
                 )}
 
                 {activeView === "suppliers" && (
                   <div className="flex-1">
-                    <SuppliesView initialTab="suppliers" />
+                    <SuppliersManagementView />
                   </div>
                 )}
               </div>

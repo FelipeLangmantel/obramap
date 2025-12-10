@@ -176,11 +176,10 @@ export function BudgetItemsEditor({
         })));
       }
 
-      // Load inputs catalog
+      // Load inputs catalog globally (all inputs available for all projects)
       const { data: inputsData } = await supabase
         .from('inputs')
         .select('*, material_families(name)')
-        .eq('project_id', projectId)
         .order('name');
 
       if (inputsData) {
@@ -195,11 +194,10 @@ export function BudgetItemsEditor({
         })));
       }
 
-      // Load units
+      // Load units globally
       const { data: unitsData } = await supabase
         .from('units')
-        .select('*')
-        .eq('project_id', projectId);
+        .select('*');
 
       if (unitsData) {
         setUnits(unitsData);
