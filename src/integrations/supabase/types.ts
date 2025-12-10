@@ -329,6 +329,7 @@ export type Database = {
           display_order: number
           icon: string | null
           id: string
+          lead_time_days: number
           name: string
           project_id: string
         }
@@ -338,6 +339,7 @@ export type Database = {
           display_order?: number
           icon?: string | null
           id?: string
+          lead_time_days?: number
           name: string
           project_id: string
         }
@@ -347,6 +349,7 @@ export type Database = {
           display_order?: number
           icon?: string | null
           id?: string
+          lead_time_days?: number
           name?: string
           project_id?: string
         }
