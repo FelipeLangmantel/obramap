@@ -1,1 +1,10 @@
 project_id = "zcsoudhbfeiszutasead"
+
+[functions.analyze-floor-plan]
+verify_jwt = false
+
+[functions.parse-budget-pdf]
+verify_jwt = false
+
+[functions.parse-inputs-import]
+verify_jwt = false

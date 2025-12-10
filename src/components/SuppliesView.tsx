@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Package, Truck, FileText, Clock, AlertTriangle, CheckCircle2, Plus, Settings, Users, Search, Calendar, DollarSign, Loader2, Eye, Edit2, Trash2, Send, Check, X, Box, Layers, Hammer, Wrench, ChevronDown, ChevronRight, ClipboardList } from "lucide-react";
+import { Package, Truck, FileText, Clock, AlertTriangle, CheckCircle2, Plus, Settings, Users, Search, Calendar, DollarSign, Loader2, Eye, Edit2, Trash2, Send, Check, X, Box, Layers, Hammer, Wrench, ChevronDown, ChevronRight, ClipboardList, Upload } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { format, addDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { LaborContractsView } from "./LaborContractsView";
+import { ImportInputsDialog } from "./ImportInputsDialog";
 
 interface MaterialFamily {
   id: string;
@@ -274,6 +275,7 @@ export function SuppliesView() {
   const [expandedQuotations, setExpandedQuotations] = useState<Set<string>>(new Set());
   const [deleteInputDialogOpen, setDeleteInputDialogOpen] = useState(false);
   const [inputToDelete, setInputToDelete] = useState<InputItem | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   
   // Labor contract prefill from alert
   const [laborContractPrefill, setLaborContractPrefill] = useState<{
@@ -1616,6 +1618,13 @@ export function SuppliesView() {
               </Dialog>
               
               {canEdit && (
+                <Button variant="outline" size="sm" onClick={() => setImportDialogOpen(true)}>
+                  <Upload className="w-4 h-4 mr-1" />
+                  Importar
+                </Button>
+              )}
+              
+              {canEdit && (
                 <Dialog open={inputDialogOpen} onOpenChange={(o) => { setInputDialogOpen(o); if (!o) { setEditingInput(null); setNewInput({ name: '', unit: 'un', category: 'material', material_family_id: '', description: '', unit_value: 0, stock_quantity: 0 }); } }}>
                   <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-1" />Novo Insumo</Button></DialogTrigger>
                   <DialogContent>
@@ -2760,6 +2769,21 @@ export function SuppliesView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Import Inputs Dialog */}
+      {projectId && (
+        <ImportInputsDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          projectId={projectId}
+          families={families}
+          units={units}
+          onSuccess={() => {
+            setDataLoaded(prev => ({ ...prev, inputs: false }));
+            loadTabData('inputs');
+          }}
+        />
+      )}
     </div>
   );
 }
