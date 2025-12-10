@@ -139,6 +139,8 @@ interface ScopeItem {
   quantity: number;
   unit: string;
   unit_value: number;
+  scope_id: string;
+  macro_id: string;
 }
 
 const CATEGORY_LABELS = {
@@ -248,7 +250,7 @@ export function SuppliesView() {
 
     try {
       const [scopeRes, quotRes, ordersRes, laborRes, prodRes] = await Promise.all([
-        supabase.from('scope_items').select('id, name, category, quantity, unit, unit_value').eq('project_id', projectId),
+        supabase.from('scope_items').select('id, name, category, quantity, unit, unit_value, scope_id, macro_id').eq('project_id', projectId),
         supabase.from('quotation_requests').select('id, status').eq('project_id', projectId).eq('status', 'pending'),
         supabase.from('purchase_orders').select('id, status').eq('project_id', projectId).eq('status', 'in_transit'),
         supabase.from('labor_contracts').select('*').eq('project_id', projectId),
@@ -327,8 +329,8 @@ export function SuppliesView() {
 
     // Labor alerts - only show if executed houses exceed contracted
     alertsData.scopeItems.filter(item => item.category === 'labor').forEach(item => {
-      const contract = laborContracts.find(c => c.scope_id === item.id && c.status === 'active');
-      const executed = executedHouses[item.id] || 0;
+      const contract = laborContracts.find(c => c.scope_id === item.scope_id && c.status === 'active');
+      const executed = executedHouses[item.scope_id] || 0;
       
       if (contract) {
         if (executed >= contract.contracted_houses) {
@@ -848,20 +850,9 @@ export function SuppliesView() {
                                 // Find scope item data for prefill
                                 const scopeItem = alertsData.scopeItems.find(s => s.id === alert.scopeId);
                                 if (scopeItem) {
-                                  // Find which macro this scope belongs to
-                                  const macros = currentProject?.macrosTemplate || [];
-                                  let macroId = '';
-                                  macros.forEach(macro => {
-                                    macro.scopes.forEach((scope: any) => {
-                                      if (scope.id === scopeItem.id) {
-                                        macroId = macro.id;
-                                      }
-                                    });
-                                  });
-                                  
                                   setLaborContractPrefill({
-                                    scopeId: scopeItem.id,
-                                    macroId,
+                                    scopeId: scopeItem.scope_id,
+                                    macroId: scopeItem.macro_id,
                                     scopeName: scopeItem.name,
                                     houses: currentProject?.totalHouses || 0,
                                     unitValue: scopeItem.unit_value || 0
