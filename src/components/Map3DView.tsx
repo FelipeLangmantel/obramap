@@ -114,16 +114,47 @@ function CameraController({
   resetTrigger, 
   savedPosition, 
   savedTarget,
-  onCameraChange
+  onCameraChange,
+  modelLoaded
 }: { 
   resetTrigger: number;
   savedPosition?: [number, number, number] | null;
   savedTarget?: [number, number, number] | null;
   onCameraChange?: (position: [number, number, number], target: [number, number, number]) => void;
+  modelLoaded?: boolean;
 }) {
-  const { camera, controls } = useThree();
+  const { camera, controls, scene } = useThree();
   const lastPositionRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const hasInitializedRef = useRef(false);
+  const hasAutoFitRef = useRef(false);
+  
+  // Auto-fit camera to scene bounds when model is loaded
+  const fitCameraToScene = useCallback(() => {
+    const box = new THREE.Box3().setFromObject(scene);
+    if (box.isEmpty()) return;
+    
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = (camera as THREE.PerspectiveCamera).fov * (Math.PI / 180);
+    let cameraZ = Math.abs(maxDim / Math.sin(fov / 2)) * 0.8;
+    
+    // Position camera at an angle for better view
+    camera.position.set(center.x + cameraZ * 0.5, center.y + cameraZ * 0.7, center.z + cameraZ * 0.5);
+    
+    if (controls && (controls as any).target) {
+      (controls as any).target.set(center.x, center.y, center.z);
+      (controls as any).update();
+    }
+    
+    // Report the new position
+    if (onCameraChange) {
+      onCameraChange(
+        [camera.position.x, camera.position.y, camera.position.z],
+        [center.x, center.y, center.z]
+      );
+    }
+  }, [camera, controls, scene, onCameraChange]);
   
   // Move camera to saved position
   const moveToSavedPosition = useCallback(() => {
@@ -135,7 +166,7 @@ function CameraController({
       }
     } else {
       // Default position if no saved position
-      camera.position.set(0, 50, 15);
+      camera.position.set(0, 30, 20);
       camera.lookAt(0, 0, 0);
       if (controls && (controls as any).target) {
         (controls as any).target.set(0, 0, 0);
@@ -156,12 +187,27 @@ function CameraController({
     }
   }, [savedPosition, savedTarget, camera, controls]);
   
+  // Auto-fit when model is first loaded and no saved position
+  useEffect(() => {
+    if (modelLoaded && !hasAutoFitRef.current && !savedPosition) {
+      // Small delay to ensure model is in scene
+      setTimeout(() => {
+        fitCameraToScene();
+        hasAutoFitRef.current = true;
+      }, 100);
+    }
+  }, [modelLoaded, savedPosition, fitCameraToScene]);
+  
   // Handle manual camera reset trigger - return to SAVED position
   useEffect(() => {
     if (resetTrigger > 0) {
-      moveToSavedPosition();
+      if (savedPosition && savedTarget) {
+        moveToSavedPosition();
+      } else {
+        fitCameraToScene();
+      }
     }
-  }, [resetTrigger, moveToSavedPosition]);
+  }, [resetTrigger, moveToSavedPosition, fitCameraToScene, savedPosition, savedTarget]);
 
   // Track camera position changes for manual saving
   useEffect(() => {
@@ -208,20 +254,26 @@ function Scene({
 }) {
   return (
     <>
-      <PerspectiveCamera makeDefault position={[0, 50, 15]} fov={50} />
+      <PerspectiveCamera makeDefault position={[0, 30, 20]} fov={50} />
       <CameraController 
         resetTrigger={resetTrigger} 
         savedPosition={savedPosition}
         savedTarget={savedTarget}
         onCameraChange={onCameraChange}
+        modelLoaded={!!modelData || markers.length > 0}
       />
       <OrbitControls
         enablePan={true}
         enableZoom={true}
         enableRotate={true}
         maxPolarAngle={Math.PI / 2}
-        minDistance={2}
-        maxDistance={100}
+        minDistance={1}
+        maxDistance={200}
+        zoomSpeed={1.2}
+        panSpeed={0.8}
+        rotateSpeed={0.5}
+        enableDamping={true}
+        dampingFactor={0.1}
       />
       
       <ambientLight intensity={0.5} />
@@ -835,7 +887,7 @@ export function Map3DView() {
             <div className="flex-1" />
 
             <div className="text-sm text-muted-foreground">
-              <span className="font-medium">Controles:</span> Arrastar para rotacionar • Scroll para zoom • Shift+Arrastar para mover
+              <span className="font-medium">Controles:</span> Arrastar para rotacionar • Scroll para zoom • Botão direito para mover
             </div>
           </div>
         </CardContent>

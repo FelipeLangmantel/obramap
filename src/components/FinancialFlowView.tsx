@@ -141,12 +141,14 @@ export function FinancialFlowView() {
   
   // Dialogs
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [showQRDialog, setShowQRDialog] = useState(false);
   const [showNewSupplierDialog, setShowNewSupplierDialog] = useState(false);
   const [showCategoryDialog, setShowCategoryDialog] = useState(false);
   const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null);
   
   const [selectedEntry, setSelectedEntry] = useState<FinancialEntry | null>(null);
+  const [editingEntry, setEditingEntry] = useState<FinancialEntry | null>(null);
   const [supplierSearchValue, setSupplierSearchValue] = useState("");
   
   const [newEntry, setNewEntry] = useState({
@@ -402,10 +404,65 @@ export function FinancialFlowView() {
       if (error) throw error;
       toast.success("Lançamento excluído");
       setDeleteEntryId(null);
+      setShowEditDialog(false);
+      setEditingEntry(null);
       loadData();
     } catch (error) {
       console.error("Error deleting entry:", error);
       toast.error("Erro ao excluir lançamento");
+    }
+  };
+
+  const openEditDialog = (entry: FinancialEntry) => {
+    setEditingEntry(entry);
+    setNewEntry({
+      category: entry.category,
+      subcategory: entry.subcategory || "",
+      description: entry.description,
+      amount: Number(entry.amount),
+      due_date: entry.due_date,
+      supplier_id: entry.supplier_id || "",
+      supplier_name: entry.supplier?.name || "",
+      pix_key: entry.pix_key || "",
+      pix_key_type: entry.pix_key_type || "cpf",
+      notes: entry.notes || ""
+    });
+    setSupplierSearchValue(entry.supplier?.name || "");
+    setShowEditDialog(true);
+  };
+
+  const handleUpdateEntry = async () => {
+    if (!editingEntry || !newEntry.description || !newEntry.category) {
+      toast.error("Preencha os campos obrigatórios");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("financial_entries")
+        .update({
+          category: newEntry.category,
+          subcategory: newEntry.subcategory || null,
+          description: newEntry.description,
+          amount: newEntry.amount,
+          due_date: newEntry.due_date,
+          supplier_id: newEntry.supplier_id || null,
+          pix_key: newEntry.pix_key || null,
+          pix_key_type: newEntry.pix_key_type || null,
+          notes: newEntry.notes || null
+        })
+        .eq("id", editingEntry.id);
+
+      if (error) throw error;
+
+      toast.success("Lançamento atualizado com sucesso");
+      setShowEditDialog(false);
+      setEditingEntry(null);
+      resetNewEntry();
+      loadData();
+    } catch (error) {
+      console.error("Error updating entry:", error);
+      toast.error("Erro ao atualizar lançamento");
     }
   };
 
@@ -589,21 +646,21 @@ export function FinancialFlowView() {
                           {categoryEntries.map(entry => (
                             <TableRow key={entry.id} className="hover:bg-muted/30 group">
                               <TableCell className="pl-6 sticky left-0 bg-background">
-                                <div className="flex items-center gap-2">
-                                  <span className={entry.status === "paid" ? "line-through text-muted-foreground" : ""}>
-                                    {entry.description}
-                                  </span>
-                                  <Badge variant={entry.status === "paid" ? "secondary" : entry.status === "overdue" ? "destructive" : "default"} className="text-xs">
-                                    {STATUS_CONFIG[entry.status as keyof typeof STATUS_CONFIG]?.label || entry.status}
-                                  </Badge>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
-                                    onClick={() => setDeleteEntryId(entry.id)}
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
+                                <div 
+                                  className="flex flex-col gap-0.5 cursor-pointer"
+                                  onClick={() => openEditDialog(entry)}
+                                >
+                                  {entry.supplier?.name && (
+                                    <span className="text-xs font-medium text-primary">{entry.supplier.name}</span>
+                                  )}
+                                  <div className="flex items-center gap-2">
+                                    <span className={entry.status === "paid" ? "line-through text-muted-foreground" : ""}>
+                                      {entry.description}
+                                    </span>
+                                    <Badge variant={entry.status === "paid" ? "secondary" : entry.status === "overdue" ? "destructive" : "default"} className="text-xs">
+                                      {STATUS_CONFIG[entry.status as keyof typeof STATUS_CONFIG]?.label || entry.status}
+                                    </Badge>
+                                  </div>
                                 </div>
                               </TableCell>
                               {weeks.map((week, i) => {
@@ -784,6 +841,126 @@ export function FinancialFlowView() {
         </DialogContent>
       </Dialog>
 
+      {/* Edit Entry Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={(open) => { 
+        setShowEditDialog(open); 
+        if (!open) { setEditingEntry(null); resetNewEntry(); }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Lançamento</DialogTitle>
+            <DialogDescription>Atualize os dados do lançamento financeiro</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Categoria *</Label>
+              <Select value={newEntry.category} onValueChange={(v) => setNewEntry({ ...newEntry, category: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map(cat => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label>Descrição *</Label>
+              <Input 
+                value={newEntry.description}
+                onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })}
+                placeholder="Ex: Pagamento materiais"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Valor (R$) *</Label>
+                <Input 
+                  type="number"
+                  value={newEntry.amount}
+                  onChange={(e) => setNewEntry({ ...newEntry, amount: parseFloat(e.target.value) || 0 })}
+                />
+              </div>
+              <div>
+                <Label>Vencimento *</Label>
+                <Input 
+                  type="date"
+                  value={newEntry.due_date}
+                  onChange={(e) => setNewEntry({ ...newEntry, due_date: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label>Fornecedor</Label>
+              <SupplierAutocomplete
+                suppliers={suppliers}
+                value={supplierSearchValue}
+                selectedId={newEntry.supplier_id}
+                onChange={setSupplierSearchValue}
+                onSelect={handleSelectSupplier}
+                onCreateNew={(name) => {
+                  setNewSupplier({ ...newSupplier, name });
+                  setShowNewSupplierDialog(true);
+                }}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Chave PIX</Label>
+                <Input 
+                  value={newEntry.pix_key}
+                  onChange={(e) => setNewEntry({ ...newEntry, pix_key: e.target.value })}
+                  placeholder="CPF, CNPJ, Email..."
+                />
+              </div>
+              <div>
+                <Label>Tipo</Label>
+                <Select value={newEntry.pix_key_type} onValueChange={(v) => setNewEntry({ ...newEntry, pix_key_type: v })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cpf">CPF</SelectItem>
+                    <SelectItem value="cnpj">CNPJ</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="phone">Telefone</SelectItem>
+                    <SelectItem value="random">Aleatória</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label>Observações</Label>
+              <Textarea 
+                value={newEntry.notes}
+                onChange={(e) => setNewEntry({ ...newEntry, notes: e.target.value })}
+                placeholder="Notas adicionais..."
+              />
+            </div>
+
+            <div className="flex justify-between">
+              <Button 
+                variant="destructive" 
+                onClick={() => setDeleteEntryId(editingEntry?.id || null)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Excluir
+              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => { setShowEditDialog(false); setEditingEntry(null); resetNewEntry(); }}>Cancelar</Button>
+                <Button onClick={handleUpdateEntry}>Salvar</Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* New Supplier Dialog */}
       <Dialog open={showNewSupplierDialog} onOpenChange={setShowNewSupplierDialog}>
         <DialogContent className="max-w-md">
@@ -812,12 +989,12 @@ export function FinancialFlowView() {
                 </Select>
               </div>
               <div>
-                <Label>Escopo</Label>
+                <Label>Disponível para</Label>
                 <Select value={newSupplier.supplier_scope} onValueChange={(v) => setNewSupplier({ ...newSupplier, supplier_scope: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="project">Apenas esta Obra</SelectItem>
-                    <SelectItem value="global">Geral (todas as obras)</SelectItem>
+                    <SelectItem value="project">Esta Obra</SelectItem>
+                    <SelectItem value="global">Todas as Obras</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
