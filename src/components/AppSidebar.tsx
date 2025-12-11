@@ -182,14 +182,14 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
             </SidebarGroupContent>
           </SidebarGroup>
 
-          {/* Gerenciamento */}
-          {canEdit && (
-            <SidebarGroup className="mt-6">
-              <SidebarGroupLabel className="text-muted-foreground/70 text-xs font-medium uppercase tracking-wider px-3 mb-1">
-                Gerenciamento
-              </SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu className="space-y-0.5">
+          {/* Gerenciamento - Visível para todos, mas ações de criar/editar apenas para quem pode editar */}
+          <SidebarGroup className="mt-6">
+            <SidebarGroupLabel className="text-muted-foreground/70 text-xs font-medium uppercase tracking-wider px-3 mb-1">
+              Gerenciamento
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="space-y-0.5">
+                {canEdit && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => setNewProjectOpen(true)}
@@ -199,74 +199,76 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                       <span className="text-sm">Nova Obra</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
+                )}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setProjectsListOpen(true)}
+                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                  >
+                    <Building2 className="h-5 w-5 shrink-0" />
+                    <span className="text-sm">Cadastro de Obras</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setQuadrasDialogOpen(true)}
+                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                  >
+                    <Grid3X3 className="h-5 w-5 shrink-0" />
+                    <span className="text-sm">Cadastro de Quadras</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setMacrosDialogOpen(true)}
+                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                  >
+                    <Layers className="h-5 w-5 shrink-0" />
+                    <span className="text-sm">Etapas e Serviços</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => handleViewChange("inputs")}
+                    isActive={activeView === "inputs"}
+                    className={cn(
+                      "w-full justify-start gap-3 px-3 py-2.5 rounded-md transition-all duration-150",
+                      activeView === "inputs" 
+                        ? "bg-accent text-accent-foreground font-medium" 
+                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                    )}
+                  >
+                    <Box className="h-5 w-5 shrink-0" />
+                    <span className="text-sm">Cadastro de Insumos</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => handleViewChange("suppliers")}
+                    isActive={activeView === "suppliers"}
+                    className={cn(
+                      "w-full justify-start gap-3 px-3 py-2.5 rounded-md transition-all duration-150",
+                      activeView === "suppliers" 
+                        ? "bg-accent text-accent-foreground font-medium" 
+                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                    )}
+                  >
+                    <Truck className="h-5 w-5 shrink-0" />
+                    <span className="text-sm">Cadastro de Fornecedores</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {isAdmin && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      onClick={() => setProjectsListOpen(true)}
+                      onClick={() => setUsersDialogOpen(true)}
                       className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
                     >
-                      <Building2 className="h-5 w-5 shrink-0" />
-                      <span className="text-sm">Cadastro de Obras</span>
+                      <Users className="h-5 w-5 shrink-0" />
+                      <span className="text-sm">Gerenciar Usuários</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      onClick={() => setQuadrasDialogOpen(true)}
-                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
-                    >
-                      <Grid3X3 className="h-5 w-5 shrink-0" />
-                      <span className="text-sm">Cadastro de Quadras</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      onClick={() => setMacrosDialogOpen(true)}
-                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
-                    >
-                      <Layers className="h-5 w-5 shrink-0" />
-                      <span className="text-sm">Etapas e Serviços</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      onClick={() => handleViewChange("inputs")}
-                      isActive={activeView === "inputs"}
-                      className={cn(
-                        "w-full justify-start gap-3 px-3 py-2.5 rounded-md transition-all duration-150",
-                        activeView === "inputs" 
-                          ? "bg-accent text-accent-foreground font-medium" 
-                          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                      )}
-                    >
-                      <Box className="h-5 w-5 shrink-0" />
-                      <span className="text-sm">Cadastro de Insumos</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      onClick={() => handleViewChange("suppliers")}
-                      isActive={activeView === "suppliers"}
-                      className={cn(
-                        "w-full justify-start gap-3 px-3 py-2.5 rounded-md transition-all duration-150",
-                        activeView === "suppliers" 
-                          ? "bg-accent text-accent-foreground font-medium" 
-                          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                      )}
-                    >
-                      <Truck className="h-5 w-5 shrink-0" />
-                      <span className="text-sm">Cadastro de Fornecedores</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  {isAdmin && (
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        onClick={() => setUsersDialogOpen(true)}
-                        className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
-                      >
-                        <Users className="h-5 w-5 shrink-0" />
-                        <span className="text-sm">Gerenciar Usuários</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )}
+                )}
+                {canEdit && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => setSettingsOpen(true)}
@@ -276,10 +278,10 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                       <span className="text-sm">Configurações</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
         </SidebarContent>
 
         {/* Footer with User Info */}
