@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { UserManagement } from "@/components/UserManagement";
+import { UserPermissionsPanel } from "@/components/admin/UserPermissionsPanel";
 import {
   Dialog,
   DialogContent,
@@ -312,11 +312,11 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       </Sidebar>
 
       <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Gerenciar Acessos</DialogTitle>
+            <DialogTitle>Painel de Gerenciamento de Usuários</DialogTitle>
           </DialogHeader>
-          <UserManagement />
+          <UserPermissionsPanel />
         </DialogContent>
       </Dialog>
 

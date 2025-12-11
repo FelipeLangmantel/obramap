@@ -31,6 +31,7 @@ import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
 import { SupplierAutocomplete } from "./financial/SupplierAutocomplete";
@@ -132,6 +133,7 @@ function generatePixPayload(pixKey: string, amount: number, merchantName: string
 
 export function FinancialFlowView() {
   const { currentProject } = useConstruction();
+  const { canEdit } = useAuth();
   const [entries, setEntries] = useState<FinancialEntry[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
@@ -146,6 +148,7 @@ export function FinancialFlowView() {
   const [showNewSupplierDialog, setShowNewSupplierDialog] = useState(false);
   const [showCategoryDialog, setShowCategoryDialog] = useState(false);
   const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null);
+  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
   
   const [selectedEntry, setSelectedEntry] = useState<FinancialEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<FinancialEntry | null>(null);
@@ -533,18 +536,22 @@ export function FinancialFlowView() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Fluxo Financeiro</h2>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setShowCategoryDialog(true)}>
-            <Settings className="h-4 w-4 mr-2" />
-            Categorias
-          </Button>
+          {canEdit && (
+            <Button variant="outline" size="sm" onClick={() => setShowCategoryDialog(true)}>
+              <Settings className="h-4 w-4 mr-2" />
+              Categorias
+            </Button>
+          )}
           <Button variant="outline" onClick={handleGeneratePDF}>
             <FileText className="h-4 w-4 mr-2" />
             Gerar PDF
           </Button>
-          <Button onClick={() => setShowAddDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Novo Lançamento
-          </Button>
+          {canEdit && (
+            <Button onClick={() => setShowAddDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Lançamento
+            </Button>
+          )}
         </div>
       </div>
 
@@ -650,17 +657,33 @@ export function FinancialFlowView() {
                                   className="flex flex-col gap-0.5 cursor-pointer"
                                   onClick={() => openEditDialog(entry)}
                                 >
-                                  {entry.supplier?.name && (
-                                    <span className="text-xs font-medium text-primary">{entry.supplier.name}</span>
-                                  )}
                                   <div className="flex items-center gap-2">
-                                    <span className={entry.status === "paid" ? "line-through text-muted-foreground" : ""}>
-                                      {entry.description}
+                                    <span className={cn(
+                                      "font-medium",
+                                      entry.status === "paid" && "line-through text-muted-foreground"
+                                    )}>
+                                      {entry.supplier?.name || entry.description}
                                     </span>
                                     <Badge variant={entry.status === "paid" ? "secondary" : entry.status === "overdue" ? "destructive" : "default"} className="text-xs">
                                       {STATUS_CONFIG[entry.status as keyof typeof STATUS_CONFIG]?.label || entry.status}
                                     </Badge>
                                   </div>
+                                  {entry.supplier?.name && expandedEntryId === entry.id && (
+                                    <span className="text-xs text-muted-foreground">{entry.description}</span>
+                                  )}
+                                  {entry.supplier?.name && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-5 px-1 text-xs text-muted-foreground hover:text-foreground w-fit"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setExpandedEntryId(expandedEntryId === entry.id ? null : entry.id);
+                                      }}
+                                    >
+                                      {expandedEntryId === entry.id ? "Ocultar serviço" : "Ver serviço"}
+                                    </Button>
+                                  )}
                                 </div>
                               </TableCell>
                               {weeks.map((week, i) => {
@@ -687,30 +710,32 @@ export function FinancialFlowView() {
                                         >
                                           R$ {Number(entry.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                                         </div>
-                                        <div className="flex gap-1 justify-center">
-                                          {entry.status === "pending" && (
-                                            <Button 
-                                              variant="ghost" 
-                                              size="sm" 
-                                              className="h-6 text-xs"
-                                              onClick={() => handleMarkAsPaid(entry)}
-                                            >
-                                              <CheckCircle className="h-3 w-3 mr-1" />
-                                              Pagar
-                                            </Button>
-                                          )}
-                                          {entry.status === "paid" && (
-                                            <Button 
-                                              variant="ghost" 
-                                              size="sm" 
-                                              className="h-6 text-xs text-orange-600 hover:text-orange-700"
-                                              onClick={() => handleUndoPayment(entry)}
-                                            >
-                                              <Undo2 className="h-3 w-3 mr-1" />
-                                              Desfazer
-                                            </Button>
-                                          )}
-                                        </div>
+                                        {canEdit && (
+                                          <div className="flex gap-1 justify-center">
+                                            {entry.status === "pending" && (
+                                              <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                className="h-6 text-xs"
+                                                onClick={() => handleMarkAsPaid(entry)}
+                                              >
+                                                <CheckCircle className="h-3 w-3 mr-1" />
+                                                Pagar
+                                              </Button>
+                                            )}
+                                            {entry.status === "paid" && (
+                                              <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                className="h-6 text-xs text-orange-600 hover:text-orange-700"
+                                                onClick={() => handleUndoPayment(entry)}
+                                              >
+                                                <Undo2 className="h-3 w-3 mr-1" />
+                                                Desfazer
+                                              </Button>
+                                            )}
+                                          </div>
+                                        )}
                                       </div>
                                     ) : null}
                                   </TableCell>
