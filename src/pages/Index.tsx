@@ -19,9 +19,10 @@ import { Map3DView } from "@/components/Map3DView";
 import { SuppliesView } from "@/components/SuppliesView";
 import { InputsManagementView } from "@/components/InputsManagementView";
 import { SuppliersManagementView } from "@/components/SuppliersManagementView";
+import { FinancialFlowView } from "@/components/FinancialFlowView";
 import { Loader2 } from "lucide-react";
 
-type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers";
+type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow";
 
 function IndexContent() {
   const [activeView, setActiveView] = useState<ViewType>("map");
@@ -48,7 +49,8 @@ function IndexContent() {
     costs: "Custos da Obra",
     supplies: "Suprimentos",
     inputs: "Cadastro de Insumos",
-    suppliers: "Cadastro de Fornecedores"
+    suppliers: "Cadastro de Fornecedores",
+    "financial-flow": "Fluxo Financeiro"
   };
 
   return (
@@ -155,6 +157,12 @@ function IndexContent() {
                 {activeView === "suppliers" && (
                   <div className="flex-1">
                     <SuppliersManagementView />
+                  </div>
+                )}
+
+                {activeView === "financial-flow" && (
+                  <div className="flex-1">
+                    <FinancialFlowView />
                   </div>
                 )}
               </div>

@@ -87,6 +87,75 @@ export type Database = {
           },
         ]
       }
+      financial_entries: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          description: string
+          due_date: string
+          id: string
+          notes: string | null
+          payment_date: string | null
+          pix_key: string | null
+          pix_key_type: string | null
+          project_id: string
+          status: string
+          subcategory: string | null
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          category: string
+          created_at?: string
+          description: string
+          due_date: string
+          id?: string
+          notes?: string | null
+          payment_date?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
+          project_id: string
+          status?: string
+          subcategory?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          description?: string
+          due_date?: string
+          id?: string
+          notes?: string | null
+          payment_date?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
+          project_id?: string
+          status?: string
+          subcategory?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_entries_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       houses: {
         Row: {
           area: number
@@ -1027,36 +1096,54 @@ export type Database = {
       suppliers: {
         Row: {
           address: string | null
+          bank_account: string | null
+          bank_agency: string | null
+          bank_name: string | null
+          cnpj_cpf: string | null
           created_at: string
           email: string | null
           id: string
           name: string
           notes: string | null
           phone: string | null
+          pix_key: string | null
+          pix_key_type: string | null
           project_id: string
           supplier_type: string
           updated_at: string
         }
         Insert: {
           address?: string | null
+          bank_account?: string | null
+          bank_agency?: string | null
+          bank_name?: string | null
+          cnpj_cpf?: string | null
           created_at?: string
           email?: string | null
           id?: string
           name: string
           notes?: string | null
           phone?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
           project_id: string
           supplier_type?: string
           updated_at?: string
         }
         Update: {
           address?: string | null
+          bank_account?: string | null
+          bank_agency?: string | null
+          bank_name?: string | null
+          cnpj_cpf?: string | null
           created_at?: string
           email?: string | null
           id?: string
           name?: string
           notes?: string | null
           phone?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
           project_id?: string
           supplier_type?: string
           updated_at?: string
