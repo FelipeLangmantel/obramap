@@ -1109,6 +1109,7 @@ export type Database = {
           pix_key: string | null
           pix_key_type: string | null
           project_id: string
+          supplier_scope: string
           supplier_type: string
           updated_at: string
         }
@@ -1127,6 +1128,7 @@ export type Database = {
           pix_key?: string | null
           pix_key_type?: string | null
           project_id: string
+          supplier_scope?: string
           supplier_type?: string
           updated_at?: string
         }
@@ -1145,6 +1147,7 @@ export type Database = {
           pix_key?: string | null
           pix_key_type?: string | null
           project_id?: string
+          supplier_scope?: string
           supplier_type?: string
           updated_at?: string
         }
