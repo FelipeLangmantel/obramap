@@ -46,9 +46,10 @@ export function SuppliersManagementView() {
   const [supplierDialogOpen, setSupplierDialogOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   
-  const [newSupplier, setNewSupplier] = useState<Partial<Supplier>>({ 
+  const [newSupplier, setNewSupplier] = useState<Partial<Supplier & { selected_project_id?: string }>>({ 
     supplier_type: 'material',
-    supplier_scope: 'project'
+    supplier_scope: 'project',
+    selected_project_id: defaultProjectId
   });
 
   const loadData = useCallback(async () => {
@@ -91,10 +92,20 @@ export function SuppliersManagementView() {
   const globalSuppliers = filteredSuppliers.filter(s => s.supplier_scope === 'global');
 
   const saveSupplier = async () => {
-    if (!defaultProjectId || !newSupplier.name) {
+    if (!newSupplier.name) {
       toast.error('Preencha o nome do fornecedor');
       return;
     }
+    
+    const projectIdToUse = newSupplier.supplier_scope === 'global' 
+      ? defaultProjectId 
+      : (newSupplier.selected_project_id || defaultProjectId);
+      
+    if (!projectIdToUse) {
+      toast.error('Selecione uma obra');
+      return;
+    }
+    
     try {
       const payload = {
         name: newSupplier.name,
@@ -113,14 +124,14 @@ export function SuppliersManagementView() {
       };
       
       if (editingSupplier) {
-        await supabase.from('suppliers').update(payload).eq('id', editingSupplier.id);
+        await supabase.from('suppliers').update({ ...payload, project_id: projectIdToUse }).eq('id', editingSupplier.id);
         toast.success('Fornecedor atualizado!');
       } else {
-        await supabase.from('suppliers').insert({ ...payload, project_id: defaultProjectId });
+        await supabase.from('suppliers').insert({ ...payload, project_id: projectIdToUse });
         toast.success('Fornecedor cadastrado!');
       }
       setSupplierDialogOpen(false);
-      setNewSupplier({ supplier_type: 'material', supplier_scope: 'project' });
+      setNewSupplier({ supplier_type: 'material', supplier_scope: 'project', selected_project_id: defaultProjectId });
       setEditingSupplier(null);
       loadData();
     } catch (error) {
@@ -155,7 +166,7 @@ export function SuppliersManagementView() {
                 {supplier.supplier_type === 'labor' ? 'MO' : supplier.supplier_type === 'equipment' ? 'EQP' : 'MAT'}
               </Badge>
               <Badge variant={supplier.supplier_scope === 'global' ? 'default' : 'secondary'} className="text-xs">
-                {supplier.supplier_scope === 'global' ? 'Geral' : 'Obra'}
+                {supplier.supplier_scope === 'global' ? 'Geral' : projects.find(p => p.id === supplier.project_id)?.name || 'Obra'}
               </Badge>
             </div>
             {supplier.cnpj_cpf && <p className="text-sm text-muted-foreground">CPF/CNPJ: {supplier.cnpj_cpf}</p>}
@@ -169,7 +180,7 @@ export function SuppliersManagementView() {
             <div className="flex gap-1">
               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { 
                 setEditingSupplier(supplier); 
-                setNewSupplier(supplier); 
+                setNewSupplier({ ...supplier, selected_project_id: supplier.project_id }); 
                 setSupplierDialogOpen(true); 
               }}>
                 <Edit2 className="w-3.5 h-3.5" />
@@ -237,7 +248,7 @@ export function SuppliersManagementView() {
                 setSupplierDialogOpen(o); 
                 if (!o) { 
                   setEditingSupplier(null); 
-                  setNewSupplier({ supplier_type: 'material', supplier_scope: 'project' }); 
+                  setNewSupplier({ supplier_type: 'material', supplier_scope: 'project', selected_project_id: defaultProjectId });
                 } 
               }}>
                 <DialogTrigger asChild>
@@ -265,16 +276,34 @@ export function SuppliersManagementView() {
                         </Select>
                       </div>
                       <div>
-                        <Label>Escopo</Label>
+                        <Label>Disponível para</Label>
                         <Select value={newSupplier.supplier_scope || 'project'} onValueChange={(v) => setNewSupplier({ ...newSupplier, supplier_scope: v as 'project' | 'global' })}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="project">Apenas esta Obra</SelectItem>
-                            <SelectItem value="global">Geral (todas as obras)</SelectItem>
+                            <SelectItem value="project">Uma Obra específica</SelectItem>
+                            <SelectItem value="global">Todas as Obras</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
+                    
+                    {newSupplier.supplier_scope === 'project' && (
+                      <div>
+                        <Label>Obra</Label>
+                        <Select 
+                          value={newSupplier.selected_project_id || defaultProjectId || ''} 
+                          onValueChange={(v) => setNewSupplier({ ...newSupplier, selected_project_id: v })}
+                        >
+                          <SelectTrigger><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
+                          <SelectContent>
+                            {projects.map(project => (
+                              <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label>CPF/CNPJ</Label>
