@@ -87,6 +87,27 @@ export type Database = {
           },
         ]
       }
+      departments: {
+        Row: {
+          created_at: string
+          display_order: number | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       financial_entries: {
         Row: {
           amount: number
@@ -1195,6 +1216,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_permissions: {
+        Row: {
+          allowed_project_ids: string[] | null
+          created_at: string
+          department: string | null
+          id: string
+          updated_at: string
+          user_id: string
+          visible_management_sections: Json | null
+          visible_menus: Json | null
+        }
+        Insert: {
+          allowed_project_ids?: string[] | null
+          created_at?: string
+          department?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+          visible_management_sections?: Json | null
+          visible_menus?: Json | null
+        }
+        Update: {
+          allowed_project_ids?: string[] | null
+          created_at?: string
+          department?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+          visible_management_sections?: Json | null
+          visible_menus?: Json | null
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {

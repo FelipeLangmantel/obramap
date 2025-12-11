@@ -1,0 +1,785 @@
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useConstruction } from "@/contexts/ConstructionContext";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { toast } from "sonner";
+import { 
+  Loader2, 
+  UserPlus, 
+  Shield, 
+  Pencil, 
+  Eye, 
+  Trash2, 
+  Settings,
+  Building2,
+  Menu,
+  FolderCog,
+  Plus,
+  X,
+  Save,
+  Users
+} from "lucide-react";
+import { z } from "zod";
+
+type AppRole = "admin" | "editor" | "viewer";
+
+interface UserWithRole {
+  id: string;
+  user_id: string;
+  display_name: string;
+  email: string;
+  role: AppRole;
+  created_at: string;
+}
+
+interface UserPermission {
+  id: string;
+  user_id: string;
+  department: string;
+  allowed_project_ids: string[] | null;
+  visible_menus: string[];
+  visible_management_sections: string[];
+}
+
+interface Department {
+  id: string;
+  name: string;
+  display_order: number;
+}
+
+interface Project {
+  id: string;
+  name: string;
+}
+
+const MENU_OPTIONS = [
+  { id: "dashboard", label: "Dashboard", icon: "📊" },
+  { id: "producao", label: "Produção", icon: "🏗️" },
+  { id: "financeiro", label: "Financeiro", icon: "💰" },
+  { id: "suprimentos", label: "Suprimentos", icon: "📦" },
+  { id: "planejamento", label: "Planejamento", icon: "📅" },
+  { id: "mapa", label: "Mapa", icon: "🗺️" },
+  { id: "graficos", label: "Gráficos", icon: "📈" },
+];
+
+const MANAGEMENT_OPTIONS = [
+  { id: "projetos", label: "Projetos", icon: "🏢" },
+  { id: "quadras", label: "Quadras", icon: "📍" },
+  { id: "macros", label: "Macros", icon: "🔧" },
+  { id: "escopos", label: "Escopos", icon: "📋" },
+  { id: "insumos", label: "Insumos", icon: "🧱" },
+  { id: "fornecedores", label: "Fornecedores", icon: "🚚" },
+  { id: "mao_de_obra", label: "Mão de Obra", icon: "👷" },
+  { id: "usuarios", label: "Usuários", icon: "👥" },
+];
+
+const createUserSchema = z.object({
+  email: z.string().email("Email inválido"),
+  password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
+  displayName: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  role: z.enum(["admin", "editor", "viewer"]),
+});
+
+export function UserPermissionsPanel() {
+  const { isAdmin, user } = useAuth();
+  const { projects } = useConstruction();
+  const [users, setUsers] = useState<UserWithRole[]>([]);
+  const [permissions, setPermissions] = useState<Record<string, UserPermission>>({});
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("users");
+  
+  // Dialog states
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [newDepartment, setNewDepartment] = useState("");
+  
+  // Form state for new user
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [role, setRole] = useState<AppRole>("viewer");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isCreating, setIsCreating] = useState(false);
+  
+  // Permission editing state
+  const [editingPermission, setEditingPermission] = useState<UserPermission | null>(null);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const [profilesRes, rolesRes, permissionsRes, departmentsRes] = await Promise.all([
+        supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+        supabase.from("user_roles").select("*"),
+        supabase.from("user_permissions").select("*"),
+        supabase.from("departments").select("*").order("display_order"),
+      ]);
+
+      if (profilesRes.error) throw profilesRes.error;
+      if (rolesRes.error) throw rolesRes.error;
+      if (departmentsRes.error) throw departmentsRes.error;
+
+      const usersWithRoles: UserWithRole[] = (profilesRes.data || []).map((profile) => {
+        const userRole = rolesRes.data?.find((r) => r.user_id === profile.user_id);
+        return {
+          id: profile.id,
+          user_id: profile.user_id,
+          display_name: profile.display_name,
+          email: profile.email,
+          role: (userRole?.role as AppRole) || "viewer",
+          created_at: profile.created_at,
+        };
+      });
+
+      const permissionsMap: Record<string, UserPermission> = {};
+      (permissionsRes.data || []).forEach((p) => {
+        permissionsMap[p.user_id] = {
+          id: p.id,
+          user_id: p.user_id,
+          department: p.department || "geral",
+          allowed_project_ids: p.allowed_project_ids,
+          visible_menus: (p.visible_menus as string[]) || MENU_OPTIONS.map(m => m.id),
+          visible_management_sections: (p.visible_management_sections as string[]) || MANAGEMENT_OPTIONS.map(m => m.id),
+        };
+      });
+
+      setUsers(usersWithRoles);
+      setPermissions(permissionsMap);
+      setDepartments(departmentsRes.data || []);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast.error("Erro ao carregar dados");
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    if (isAdmin) {
+      fetchData();
+    }
+  }, [isAdmin]);
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrors({});
+
+    const result = createUserSchema.safeParse({ email, password, displayName, role });
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      result.error.errors.forEach((err) => {
+        if (err.path[0]) fieldErrors[err.path[0] as string] = err.message;
+      });
+      setErrors(fieldErrors);
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: { display_name: displayName },
+        },
+      });
+
+      if (authError) throw authError;
+
+      if (authData.user) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        
+        if (role !== "viewer") {
+          await supabase.from("user_roles").update({ role }).eq("user_id", authData.user.id);
+        }
+
+        toast.success("Usuário criado com sucesso!");
+        setIsCreateDialogOpen(false);
+        resetForm();
+        fetchData();
+      }
+    } catch (error: any) {
+      if (error.message?.includes("already registered")) {
+        toast.error("Este email já está cadastrado");
+      } else {
+        toast.error(error.message || "Erro ao criar usuário");
+      }
+    }
+    setIsCreating(false);
+  };
+
+  const handleUpdateRole = async (userId: string, newRole: AppRole) => {
+    try {
+      const { error } = await supabase.from("user_roles").update({ role: newRole }).eq("user_id", userId);
+      if (error) throw error;
+      setUsers((prev) => prev.map((u) => (u.user_id === userId ? { ...u, role: newRole } : u)));
+      toast.success("Função atualizada!");
+    } catch (error) {
+      console.error("Error updating role:", error);
+      toast.error("Erro ao atualizar função");
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, userEmail: string) => {
+    if (userId === user?.id) {
+      toast.error("Você não pode excluir sua própria conta");
+      return;
+    }
+    if (!confirm(`Tem certeza que deseja excluir ${userEmail}?`)) return;
+
+    try {
+      const { error } = await supabase.from("profiles").delete().eq("user_id", userId);
+      if (error) throw error;
+      setUsers((prev) => prev.filter((u) => u.user_id !== userId));
+      toast.success("Usuário removido");
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      toast.error("Erro ao excluir usuário");
+    }
+  };
+
+  const openPermissionDialog = (userId: string) => {
+    setSelectedUserId(userId);
+    const existingPermission = permissions[userId];
+    setEditingPermission(existingPermission || {
+      id: "",
+      user_id: userId,
+      department: "geral",
+      allowed_project_ids: null,
+      visible_menus: MENU_OPTIONS.map(m => m.id),
+      visible_management_sections: MANAGEMENT_OPTIONS.map(m => m.id),
+    });
+    setIsPermissionDialogOpen(true);
+  };
+
+  const handleSavePermission = async () => {
+    if (!editingPermission || !selectedUserId) return;
+
+    try {
+      const existingPermission = permissions[selectedUserId];
+      
+      if (existingPermission?.id) {
+        const { error } = await supabase
+          .from("user_permissions")
+          .update({
+            department: editingPermission.department,
+            allowed_project_ids: editingPermission.allowed_project_ids,
+            visible_menus: editingPermission.visible_menus,
+            visible_management_sections: editingPermission.visible_management_sections,
+          })
+          .eq("id", existingPermission.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("user_permissions").insert({
+          user_id: selectedUserId,
+          department: editingPermission.department,
+          allowed_project_ids: editingPermission.allowed_project_ids,
+          visible_menus: editingPermission.visible_menus,
+          visible_management_sections: editingPermission.visible_management_sections,
+        });
+        if (error) throw error;
+      }
+
+      toast.success("Permissões salvas!");
+      setIsPermissionDialogOpen(false);
+      fetchData();
+    } catch (error) {
+      console.error("Error saving permission:", error);
+      toast.error("Erro ao salvar permissões");
+    }
+  };
+
+  const handleAddDepartment = async () => {
+    if (!newDepartment.trim()) return;
+    
+    try {
+      const { error } = await supabase.from("departments").insert({
+        name: newDepartment.trim(),
+        display_order: departments.length,
+      });
+      if (error) throw error;
+      toast.success("Departamento adicionado!");
+      setNewDepartment("");
+      fetchData();
+    } catch (error: any) {
+      if (error.message?.includes("duplicate")) {
+        toast.error("Este departamento já existe");
+      } else {
+        toast.error("Erro ao adicionar departamento");
+      }
+    }
+  };
+
+  const handleDeleteDepartment = async (id: string) => {
+    try {
+      const { error } = await supabase.from("departments").delete().eq("id", id);
+      if (error) throw error;
+      toast.success("Departamento removido");
+      fetchData();
+    } catch (error) {
+      console.error("Error deleting department:", error);
+      toast.error("Erro ao remover departamento");
+    }
+  };
+
+  const resetForm = () => {
+    setEmail("");
+    setPassword("");
+    setDisplayName("");
+    setRole("viewer");
+    setErrors({});
+  };
+
+  const toggleMenu = (menuId: string) => {
+    if (!editingPermission) return;
+    const current = editingPermission.visible_menus;
+    const updated = current.includes(menuId)
+      ? current.filter(m => m !== menuId)
+      : [...current, menuId];
+    setEditingPermission({ ...editingPermission, visible_menus: updated });
+  };
+
+  const toggleManagement = (sectionId: string) => {
+    if (!editingPermission) return;
+    const current = editingPermission.visible_management_sections;
+    const updated = current.includes(sectionId)
+      ? current.filter(m => m !== sectionId)
+      : [...current, sectionId];
+    setEditingPermission({ ...editingPermission, visible_management_sections: updated });
+  };
+
+  const toggleProject = (projectId: string) => {
+    if (!editingPermission) return;
+    const current = editingPermission.allowed_project_ids || [];
+    const updated = current.includes(projectId)
+      ? current.filter(p => p !== projectId)
+      : [...current, projectId];
+    setEditingPermission({ 
+      ...editingPermission, 
+      allowed_project_ids: updated.length > 0 ? updated : null 
+    });
+  };
+
+  const getRoleBadge = (role: AppRole) => {
+    switch (role) {
+      case "admin":
+        return <Badge className="bg-primary/20 text-primary"><Shield className="h-3 w-3 mr-1" />Admin</Badge>;
+      case "editor":
+        return <Badge className="bg-amber-500/20 text-amber-600"><Pencil className="h-3 w-3 mr-1" />Editor</Badge>;
+      case "viewer":
+        return <Badge className="bg-muted text-muted-foreground"><Eye className="h-3 w-3 mr-1" />Visualizador</Badge>;
+    }
+  };
+
+  if (!isAdmin) {
+    return (
+      <div className="p-6 text-center text-muted-foreground">
+        <Shield className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+        <p>Você não tem permissão para acessar esta seção.</p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <div className="flex items-center justify-between">
+          <TabsList>
+            <TabsTrigger value="users" className="gap-2">
+              <Users className="h-4 w-4" />
+              Usuários
+            </TabsTrigger>
+            <TabsTrigger value="departments" className="gap-2">
+              <Building2 className="h-4 w-4" />
+              Departamentos
+            </TabsTrigger>
+          </TabsList>
+
+          {activeTab === "users" && (
+            <Button onClick={() => { resetForm(); setIsCreateDialogOpen(true); }}>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Novo Usuário
+            </Button>
+          )}
+        </div>
+
+        <TabsContent value="users" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Usuários do Sistema</CardTitle>
+              <CardDescription>
+                Gerencie acessos, funções e permissões detalhadas de cada usuário
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Função</TableHead>
+                    <TableHead>Departamento</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map((u) => (
+                    <TableRow key={u.id}>
+                      <TableCell className="font-medium">{u.display_name}</TableCell>
+                      <TableCell>{u.email}</TableCell>
+                      <TableCell>{getRoleBadge(u.role)}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {permissions[u.user_id]?.department || "Geral"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Select
+                            value={u.role}
+                            onValueChange={(v) => handleUpdateRole(u.user_id, v as AppRole)}
+                            disabled={u.user_id === user?.id}
+                          >
+                            <SelectTrigger className="w-[130px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="viewer">Visualizador</SelectItem>
+                              <SelectItem value="editor">Editor</SelectItem>
+                              <SelectItem value="admin">Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => openPermissionDialog(u.user_id)}
+                            title="Configurar permissões"
+                          >
+                            <Settings className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteUser(u.user_id, u.email)}
+                            disabled={u.user_id === user?.id}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-muted/50">
+            <CardContent className="pt-6">
+              <h4 className="font-semibold mb-3">Níveis de Acesso</h4>
+              <div className="grid md:grid-cols-3 gap-4 text-sm">
+                <div className="p-3 bg-background rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield className="h-4 w-4 text-primary" />
+                    <span className="font-medium">Administrador</span>
+                  </div>
+                  <p className="text-muted-foreground">Acesso total. Pode gerenciar usuários, configurações e todas as obras.</p>
+                </div>
+                <div className="p-3 bg-background rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Pencil className="h-4 w-4 text-amber-500" />
+                    <span className="font-medium">Editor</span>
+                  </div>
+                  <p className="text-muted-foreground">Pode editar avanços, atualizar progresso e modificar dados das obras permitidas.</p>
+                </div>
+                <div className="p-3 bg-background rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">Visualizador</span>
+                  </div>
+                  <p className="text-muted-foreground">Apenas visualização e simulações. <strong>Não pode salvar nenhuma alteração.</strong></p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="departments" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Departamentos / Categorias</CardTitle>
+              <CardDescription>
+                Crie e gerencie os departamentos que podem ser atribuídos aos usuários
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Nome do novo departamento"
+                  value={newDepartment}
+                  onChange={(e) => setNewDepartment(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddDepartment()}
+                />
+                <Button onClick={handleAddDepartment}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                {departments.map((dept) => (
+                  <div
+                    key={dept.id}
+                    className="flex items-center justify-between p-3 bg-muted rounded-lg"
+                  >
+                    <span>{dept.name}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-destructive hover:bg-destructive/10"
+                      onClick={() => handleDeleteDepartment(dept.id)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Create User Dialog */}
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cadastrar Novo Usuário</DialogTitle>
+            <DialogDescription>Preencha os dados do novo usuário</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateUser} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Nome Completo</Label>
+              <Input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className={errors.displayName ? "border-destructive" : ""}
+              />
+              {errors.displayName && <p className="text-sm text-destructive">{errors.displayName}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={errors.email ? "border-destructive" : ""}
+              />
+              {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label>Senha</Label>
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={errors.password ? "border-destructive" : ""}
+              />
+              {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label>Função</Label>
+              <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="viewer">Visualizador</SelectItem>
+                  <SelectItem value="editor">Editor</SelectItem>
+                  <SelectItem value="admin">Administrador</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isCreating}>
+                {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Criar Usuário
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Permission Dialog */}
+      <Dialog open={isPermissionDialogOpen} onOpenChange={setIsPermissionDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Configurar Permissões</DialogTitle>
+            <DialogDescription>
+              {users.find(u => u.user_id === selectedUserId)?.display_name} - 
+              Defina quais menus, seções e obras este usuário pode acessar
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="max-h-[60vh] pr-4">
+            <div className="space-y-6">
+              {/* Department */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4" />
+                  Departamento
+                </Label>
+                <Select
+                  value={editingPermission?.department || "geral"}
+                  onValueChange={(v) => setEditingPermission(prev => prev ? { ...prev, department: v } : null)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="geral">Geral</SelectItem>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Allowed Projects */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4" />
+                  Obras Permitidas
+                </Label>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Se nenhuma obra for selecionada, o usuário terá acesso a todas.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {projects.map((project) => (
+                    <div
+                      key={project.id}
+                      className="flex items-center space-x-2 p-2 bg-muted rounded"
+                    >
+                      <Checkbox
+                        id={`project-${project.id}`}
+                        checked={editingPermission?.allowed_project_ids?.includes(project.id) || false}
+                        onCheckedChange={() => toggleProject(project.id)}
+                      />
+                      <label htmlFor={`project-${project.id}`} className="text-sm cursor-pointer flex-1">
+                        {project.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Menu Visibility */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Menu className="h-4 w-4" />
+                  Menus Visíveis
+                </Label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {MENU_OPTIONS.map((menu) => (
+                    <div
+                      key={menu.id}
+                      className="flex items-center space-x-2 p-2 bg-muted rounded"
+                    >
+                      <Checkbox
+                        id={`menu-${menu.id}`}
+                        checked={editingPermission?.visible_menus?.includes(menu.id) || false}
+                        onCheckedChange={() => toggleMenu(menu.id)}
+                      />
+                      <label htmlFor={`menu-${menu.id}`} className="text-sm cursor-pointer flex-1">
+                        {menu.icon} {menu.label}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Management Sections */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <FolderCog className="h-4 w-4" />
+                  Seções de Gerenciamento
+                </Label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {MANAGEMENT_OPTIONS.map((section) => (
+                    <div
+                      key={section.id}
+                      className="flex items-center space-x-2 p-2 bg-muted rounded"
+                    >
+                      <Checkbox
+                        id={`section-${section.id}`}
+                        checked={editingPermission?.visible_management_sections?.includes(section.id) || false}
+                        onCheckedChange={() => toggleManagement(section.id)}
+                      />
+                      <label htmlFor={`section-${section.id}`} className="text-sm cursor-pointer flex-1">
+                        {section.icon} {section.label}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPermissionDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSavePermission}>
+              <Save className="h-4 w-4 mr-2" />
+              Salvar Permissões
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
