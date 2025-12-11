@@ -1,6 +1,6 @@
 import { useState, useRef, Suspense, useCallback, useEffect } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { OrbitControls, useGLTF, Grid, Environment, Html, PerspectiveCamera } from "@react-three/drei";
+import { OrbitControls, useGLTF, Grid, Html, PerspectiveCamera } from "@react-three/drei";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
 import { useLoader } from "@react-three/fiber";
@@ -276,11 +276,10 @@ function Scene({
         dampingFactor={0.1}
       />
       
-      <ambientLight intensity={0.5} />
+      <ambientLight intensity={0.6} />
       <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
-      <directionalLight position={[-10, 10, -5]} intensity={0.3} />
-      
-      <Environment preset="city" />
+      <directionalLight position={[-10, 10, -5]} intensity={0.5} />
+      <hemisphereLight args={["#87ceeb", "#4a7c59", 0.4]} />
       
       {/* Ground grid */}
       <Grid
