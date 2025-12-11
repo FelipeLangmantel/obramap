@@ -192,7 +192,7 @@ export function FinancialFlowView() {
     setIsLoading(true);
 
     try {
-      const [entriesRes, suppliersRes] = await Promise.all([
+      const [entriesRes, suppliersRes, projectRes] = await Promise.all([
         supabase
           .from("financial_entries")
           .select("*, supplier:suppliers(name, pix_key, pix_key_type, cnpj_cpf)")
@@ -201,7 +201,12 @@ export function FinancialFlowView() {
         supabase
           .from("suppliers")
           .select("id, name, pix_key, pix_key_type, cnpj_cpf, supplier_scope, project_id")
-          .or(`project_id.eq.${currentProject.id},supplier_scope.eq.global`)
+          .or(`project_id.eq.${currentProject.id},supplier_scope.eq.global`),
+        supabase
+          .from("projects")
+          .select("financial_categories")
+          .eq("id", currentProject.id)
+          .single()
       ]);
 
       if (entriesRes.error) throw entriesRes.error;
@@ -209,11 +214,37 @@ export function FinancialFlowView() {
 
       setEntries(entriesRes.data || []);
       setSuppliers(suppliersRes.data || []);
+      
+      // Load project-specific categories
+      if (projectRes.data?.financial_categories) {
+        const projectCategories = projectRes.data.financial_categories as string[];
+        if (Array.isArray(projectCategories) && projectCategories.length > 0) {
+          setCategories(projectCategories);
+        }
+      }
     } catch (error) {
       console.error("Error loading financial data:", error);
       toast.error("Erro ao carregar dados financeiros");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleCategoriesChange = async (newCategories: string[]) => {
+    if (!currentProject?.id) return;
+    
+    setCategories(newCategories);
+    
+    try {
+      const { error } = await supabase
+        .from("projects")
+        .update({ financial_categories: newCategories })
+        .eq("id", currentProject.id);
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error saving categories:", error);
+      toast.error("Erro ao salvar categorias");
     }
   };
 
@@ -845,7 +876,7 @@ export function FinancialFlowView() {
         open={showCategoryDialog}
         onOpenChange={setShowCategoryDialog}
         categories={categories}
-        onCategoriesChange={setCategories}
+        onCategoriesChange={handleCategoriesChange}
       />
 
       {/* Delete Entry Confirmation */}

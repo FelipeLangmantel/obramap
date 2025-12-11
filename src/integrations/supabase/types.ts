@@ -603,6 +603,7 @@ export type Database = {
           custom_legend_items: Json
           display_order: number
           expected_end_date: string
+          financial_categories: Json | null
           id: string
           legend_follow_macros: boolean
           location: string
@@ -621,6 +622,7 @@ export type Database = {
           custom_legend_items?: Json
           display_order?: number
           expected_end_date: string
+          financial_categories?: Json | null
           id?: string
           legend_follow_macros?: boolean
           location: string
@@ -639,6 +641,7 @@ export type Database = {
           custom_legend_items?: Json
           display_order?: number
           expected_end_date?: string
+          financial_categories?: Json | null
           id?: string
           legend_follow_macros?: boolean
           location?: string

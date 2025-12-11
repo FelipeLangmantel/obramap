@@ -88,7 +88,7 @@ export function CategoryManagement({
           <DialogHeader>
             <DialogTitle>Gerenciar Categorias</DialogTitle>
             <DialogDescription>
-              Adicione, edite ou remova categorias do fluxo financeiro
+              Adicione, edite ou remova categorias do fluxo financeiro desta obra. As alterações são exclusivas para este projeto.
             </DialogDescription>
           </DialogHeader>
           
