@@ -29,7 +29,8 @@ import {
   Map,
   Box,
   Package,
-  Truck
+  Truck,
+  Wallet
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -47,7 +48,7 @@ import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import obraMapLogo from "@/assets/obramap-logo.png";
 
-type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers";
+type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow";
 
 interface AppSidebarProps {
   activeView: ViewType;
@@ -120,6 +121,11 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       title: "Suprimentos", 
       view: "supplies" as const, 
       icon: Package 
+    },
+    { 
+      title: "Fluxo Financeiro", 
+      view: "financial-flow" as const, 
+      icon: Wallet 
     },
   ];
 
