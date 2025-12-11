@@ -6,6 +6,7 @@ import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
 import { useLoader } from "@react-three/fiber";
 import * as THREE from "three";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -456,6 +457,7 @@ function HouseDetailsPanel({
 
 export function Map3DView() {
   const { currentProject } = useConstruction();
+  const { isAdmin } = useAuth();
   const houses = currentProject?.houses || [];
   const projectId = currentProject?.id;
   
@@ -839,49 +841,53 @@ export function Map3DView() {
               Centralizar
             </Button>
 
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  disabled={isLoading}
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Resetar
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-destructive" />
-                    Confirmar Reset do Mapa
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Esta ação irá remover o modelo 3D importado, todos os marcadores de casas e a posição da câmera salvos. 
-                    <br /><br />
-                    <strong>Esta ação não pode ser desfeita.</strong> Você deseja continuar?
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={resetView} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                    Sim, Resetar Mapa
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            {isAdmin && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    disabled={isLoading}
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Resetar
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-destructive" />
+                      Confirmar Reset do Mapa
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Esta ação irá remover o modelo 3D importado, todos os marcadores de casas e a posição da câmera salvos. 
+                      <br /><br />
+                      <strong>Esta ação não pode ser desfeita.</strong> Você deseja continuar?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={resetView} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      Sim, Resetar Mapa
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
 
-            <Button
-              variant={hasChanges ? "default" : "outline"}
-              onClick={save3DMap}
-              disabled={isSaving || isLoading}
-            >
-              {isSaving ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4 mr-2" />
-              )}
-              Salvar Mapa
-            </Button>
+            {isAdmin && (
+              <Button
+                variant={hasChanges ? "default" : "outline"}
+                onClick={save3DMap}
+                disabled={isSaving || isLoading}
+              >
+                {isSaving ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Salvar Mapa
+              </Button>
+            )}
 
             <div className="flex-1" />
 

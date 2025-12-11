@@ -11,6 +11,8 @@ interface Supplier {
   pix_key: string | null;
   pix_key_type: string | null;
   supplier_scope: string;
+  cnpj_cpf?: string | null;
+  project_id?: string;
 }
 
 interface SupplierAutocompleteProps {
