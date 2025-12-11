@@ -1,16 +1,16 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Plus, 
   ChevronLeft, 
@@ -19,9 +19,12 @@ import {
   CheckCircle, 
   Clock, 
   AlertCircle,
-  Printer,
+  FileText,
   Undo2,
-  UserPlus
+  UserPlus,
+  Settings,
+  Trash2,
+  BarChart3
 } from "lucide-react";
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, isWithinInterval, parseISO, isSameWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -30,6 +33,10 @@ import { toast } from "sonner";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { QRCodeSVG } from "qrcode.react";
 import { cn } from "@/lib/utils";
+import { SupplierAutocomplete } from "./financial/SupplierAutocomplete";
+import { CategoryManagement } from "./financial/CategoryManagement";
+import { FinancialAnalyticsPanel } from "./financial/FinancialAnalyticsPanel";
+import { generatePDFReport } from "./financial/generatePDFReport";
 
 interface FinancialEntry {
   id: string;
@@ -63,7 +70,7 @@ interface Supplier {
   project_id: string;
 }
 
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   "CUSTOS EXTRAS",
   "MATERIAIS",
   "MÃO DE OBRA",
@@ -95,32 +102,27 @@ function crc16CCITT(str: string): string {
 }
 
 function generatePixPayload(pixKey: string, amount: number, merchantName: string, description: string): string {
-  // PIX EMV QR Code format
   const formatValue = (id: string, value: string) => `${id}${value.length.toString().padStart(2, '0')}${value}`;
   
-  // Clean values
   const cleanName = merchantName.substring(0, 25).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 ]/g, '');
   const cleanDesc = description.substring(0, 25).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 ]/g, '');
   const cleanAmount = amount.toFixed(2);
   
-  // Build merchant account info (field 26)
   const gui = formatValue('00', 'br.gov.bcb.pix');
   const key = formatValue('01', pixKey);
   const merchantAccountInfo = formatValue('26', gui + key);
   
-  // Build the payload
   let payload = '';
-  payload += formatValue('00', '01'); // Payload Format Indicator
-  payload += merchantAccountInfo; // Merchant Account Info
-  payload += formatValue('52', '0000'); // Merchant Category Code
-  payload += formatValue('53', '986'); // Transaction Currency (BRL)
-  payload += formatValue('54', cleanAmount); // Transaction Amount
-  payload += formatValue('58', 'BR'); // Country Code
-  payload += formatValue('59', cleanName || 'Pagamento'); // Merchant Name
-  payload += formatValue('60', 'SAOPAULO'); // Merchant City
-  payload += formatValue('62', formatValue('05', cleanDesc || 'PIX')); // Additional Data
+  payload += formatValue('00', '01');
+  payload += merchantAccountInfo;
+  payload += formatValue('52', '0000');
+  payload += formatValue('53', '986');
+  payload += formatValue('54', cleanAmount);
+  payload += formatValue('58', 'BR');
+  payload += formatValue('59', cleanName || 'Pagamento');
+  payload += formatValue('60', 'SAOPAULO');
+  payload += formatValue('62', formatValue('05', cleanDesc || 'PIX'));
   
-  // Calculate CRC16
   payload += '6304';
   const crc = crc16CCITT(payload);
   payload += crc;
@@ -132,13 +134,19 @@ export function FinancialFlowView() {
   const { currentProject } = useConstruction();
   const [entries, setEntries] = useState<FinancialEntry[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("flow");
+  
+  // Dialogs
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showQRDialog, setShowQRDialog] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<FinancialEntry | null>(null);
   const [showNewSupplierDialog, setShowNewSupplierDialog] = useState(false);
-  const [supplierSearchOpen, setSupplierSearchOpen] = useState(false);
+  const [showCategoryDialog, setShowCategoryDialog] = useState(false);
+  const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null);
+  
+  const [selectedEntry, setSelectedEntry] = useState<FinancialEntry | null>(null);
   const [supplierSearchValue, setSupplierSearchValue] = useState("");
   
   const [newEntry, setNewEntry] = useState({
@@ -209,10 +217,6 @@ export function FinancialFlowView() {
     }
   };
 
-  const filteredSuppliers = suppliers.filter(s => 
-    s.name.toLowerCase().includes(supplierSearchValue.toLowerCase())
-  );
-
   const handleSelectSupplier = (supplier: Supplier) => {
     setNewEntry({
       ...newEntry,
@@ -222,7 +226,6 @@ export function FinancialFlowView() {
       pix_key_type: supplier.pix_key_type || newEntry.pix_key_type
     });
     setSupplierSearchValue(supplier.name);
-    setSupplierSearchOpen(false);
   };
 
   const handleCreateNewSupplier = async () => {
@@ -249,7 +252,6 @@ export function FinancialFlowView() {
       toast.success("Fornecedor cadastrado com sucesso");
       setShowNewSupplierDialog(false);
       
-      // Update suppliers list and select the new one
       setSuppliers([...suppliers, data]);
       setNewEntry({
         ...newEntry,
@@ -301,24 +303,28 @@ export function FinancialFlowView() {
 
       toast.success("Lançamento adicionado com sucesso");
       setShowAddDialog(false);
-      setNewEntry({
-        category: "",
-        subcategory: "",
-        description: "",
-        amount: 0,
-        due_date: format(new Date(), "yyyy-MM-dd"),
-        supplier_id: "",
-        supplier_name: "",
-        pix_key: "",
-        pix_key_type: "cpf",
-        notes: ""
-      });
-      setSupplierSearchValue("");
+      resetNewEntry();
       loadData();
     } catch (error) {
       console.error("Error adding entry:", error);
       toast.error("Erro ao adicionar lançamento");
     }
+  };
+
+  const resetNewEntry = () => {
+    setNewEntry({
+      category: "",
+      subcategory: "",
+      description: "",
+      amount: 0,
+      due_date: format(new Date(), "yyyy-MM-dd"),
+      supplier_id: "",
+      supplier_name: "",
+      pix_key: "",
+      pix_key_type: "cpf",
+      notes: ""
+    });
+    setSupplierSearchValue("");
   };
 
   const handleMarkAsPaid = async (entry: FinancialEntry) => {
@@ -353,6 +359,25 @@ export function FinancialFlowView() {
     }
   };
 
+  const handleDeleteEntry = async () => {
+    if (!deleteEntryId) return;
+    
+    try {
+      const { error } = await supabase
+        .from("financial_entries")
+        .delete()
+        .eq("id", deleteEntryId);
+
+      if (error) throw error;
+      toast.success("Lançamento excluído");
+      setDeleteEntryId(null);
+      loadData();
+    } catch (error) {
+      console.error("Error deleting entry:", error);
+      toast.error("Erro ao excluir lançamento");
+    }
+  };
+
   const openQRCode = (entry: FinancialEntry) => {
     setSelectedEntry(entry);
     setShowQRDialog(true);
@@ -380,41 +405,21 @@ export function FinancialFlowView() {
     return isSameWeek(weekStart, today, { weekStartsOn: 1 });
   };
 
-  const generatePaymentReport = () => {
-    const pendingEntries = entries.filter(e => e.status === "pending");
+  const handleGeneratePDF = () => {
+    if (!currentProject) return;
     
-    let report = `RELATÓRIO DE PAGAMENTOS - ${currentProject?.name}\n`;
-    report += `Data: ${format(new Date(), "dd/MM/yyyy HH:mm")}\n\n`;
-    report += "=".repeat(60) + "\n\n";
-
-    CATEGORIES.forEach(category => {
-      const categoryEntries = pendingEntries.filter(e => e.category === category);
-      if (categoryEntries.length > 0) {
-        report += `${category}\n`;
-        report += "-".repeat(40) + "\n";
-        categoryEntries.forEach(entry => {
-          report += `• ${entry.description}\n`;
-          report += `  Valor: R$ ${Number(entry.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\n`;
-          report += `  Vencimento: ${format(parseISO(entry.due_date), "dd/MM/yyyy")}\n`;
-          if (entry.pix_key || entry.supplier?.pix_key) {
-            report += `  PIX: ${entry.pix_key || entry.supplier?.pix_key}\n`;
-          }
-          report += "\n";
-        });
-      }
-    });
-
-    report += "=".repeat(60) + "\n";
-    report += `TOTAL PENDENTE: R$ ${pendingEntries.reduce((sum, e) => sum + Number(e.amount), 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\n`;
-
-    const blob = new Blob([report], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `relatorio_pagamentos_${format(new Date(), "yyyy-MM-dd")}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Relatório gerado com sucesso");
+    try {
+      generatePDFReport({
+        projectName: currentProject.name,
+        entries,
+        categories,
+        filterStatus: 'pending'
+      });
+      toast.success("PDF gerado com sucesso");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast.error("Erro ao gerar PDF");
+    }
   };
 
   const getPixPayloadForEntry = (entry: FinancialEntry) => {
@@ -440,9 +445,13 @@ export function FinancialFlowView() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Fluxo Financeiro</h2>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={generatePaymentReport}>
-            <Printer className="h-4 w-4 mr-2" />
-            Relatório de Pagamentos
+          <Button variant="outline" size="sm" onClick={() => setShowCategoryDialog(true)}>
+            <Settings className="h-4 w-4 mr-2" />
+            Categorias
+          </Button>
+          <Button variant="outline" onClick={handleGeneratePDF}>
+            <FileText className="h-4 w-4 mr-2" />
+            Gerar PDF
           </Button>
           <Button onClick={() => setShowAddDialog(true)}>
             <Plus className="h-4 w-4 mr-2" />
@@ -451,168 +460,190 @@ export function FinancialFlowView() {
         </div>
       </div>
 
-      {/* Week Navigation */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" size="sm" onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))}>
-              <ChevronLeft className="h-4 w-4" />
-              Anterior
-            </Button>
-            <CardTitle className="text-lg">
-              {format(currentWeekStart, "MMMM yyyy", { locale: ptBR })}
-            </CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))}>
-              Próximo
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <ScrollArea className="w-full">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[200px] sticky left-0 bg-background z-10">Categoria / Descrição</TableHead>
-                  {weeks.map((week, i) => (
-                    <TableHead 
-                      key={i} 
-                      className={cn(
-                        "text-center min-w-[140px]",
-                        isCurrentWeek(week.start) && "bg-primary/20"
-                      )}
-                    >
-                      <div className={cn(
-                        "font-semibold",
-                        isCurrentWeek(week.start) && "text-primary"
-                      )}>
-                        {format(week.start, "dd/MM")} a {format(week.end, "dd/MM")}
-                        {isCurrentWeek(week.start) && (
-                          <Badge className="ml-2 text-xs" variant="secondary">Atual</Badge>
-                        )}
-                      </div>
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {/* Total Row */}
-                <TableRow className="bg-primary/10 font-bold">
-                  <TableCell className="sticky left-0 bg-primary/10">TOTAL</TableCell>
-                  {weeks.map((week, i) => (
-                    <TableCell 
-                      key={i} 
-                      className={cn(
-                        "text-center",
-                        isCurrentWeek(week.start) && "bg-primary/20"
-                      )}
-                    >
-                      R$ {getWeekTotal(week.start, week.end).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </TableCell>
-                  ))}
-                </TableRow>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="flow">Fluxo de Caixa</TabsTrigger>
+          <TabsTrigger value="analytics">
+            <BarChart3 className="h-4 w-4 mr-2" />
+            Análises
+          </TabsTrigger>
+        </TabsList>
 
-                {/* Categories and Entries */}
-                {CATEGORIES.map(category => {
-                  const hasEntries = entries.some(e => e.category === category);
-                  if (!hasEntries) return null;
+        <TabsContent value="flow" className="space-y-4">
+          {/* Week Navigation */}
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <Button variant="ghost" size="sm" onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))}>
+                  <ChevronLeft className="h-4 w-4" />
+                  Anterior
+                </Button>
+                <CardTitle className="text-lg">
+                  {format(currentWeekStart, "MMMM yyyy", { locale: ptBR })}
+                </CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))}>
+                  Próximo
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="w-full">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="min-w-[200px] sticky left-0 bg-background z-10">Categoria / Descrição</TableHead>
+                      {weeks.map((week, i) => (
+                        <TableHead 
+                          key={i} 
+                          className={cn(
+                            "text-center min-w-[140px]",
+                            isCurrentWeek(week.start) && "bg-primary/20"
+                          )}
+                        >
+                          <div className={cn(
+                            "font-semibold",
+                            isCurrentWeek(week.start) && "text-primary"
+                          )}>
+                            {format(week.start, "dd/MM")} a {format(week.end, "dd/MM")}
+                            {isCurrentWeek(week.start) && (
+                              <Badge className="ml-2 text-xs" variant="secondary">Atual</Badge>
+                            )}
+                          </div>
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {/* Total Row */}
+                    <TableRow className="bg-primary/10 font-bold">
+                      <TableCell className="sticky left-0 bg-primary/10">TOTAL</TableCell>
+                      {weeks.map((week, i) => (
+                        <TableCell 
+                          key={i} 
+                          className={cn(
+                            "text-center",
+                            isCurrentWeek(week.start) && "bg-primary/20"
+                          )}
+                        >
+                          R$ {getWeekTotal(week.start, week.end).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        </TableCell>
+                      ))}
+                    </TableRow>
 
-                  return (
-                    <>
-                      <TableRow key={category} className="bg-muted/50">
-                        <TableCell className="font-semibold sticky left-0 bg-muted/50">{category}</TableCell>
-                        {weeks.map((week, i) => {
-                          const total = getCategoryTotal(category, week.start, week.end);
-                          return (
-                            <TableCell 
-                              key={i} 
-                              className={cn(
-                                "text-center font-semibold",
-                                isCurrentWeek(week.start) && "bg-primary/10"
-                              )}
-                            >
-                              {total > 0 ? `R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "-"}
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
-                      {entries
-                        .filter(e => e.category === category)
-                        .map(entry => (
-                          <TableRow key={entry.id} className="hover:bg-muted/30">
-                            <TableCell className="pl-6 sticky left-0 bg-background">
-                              <div className="flex items-center gap-2">
-                                <span className={entry.status === "paid" ? "line-through text-muted-foreground" : ""}>
-                                  {entry.description}
-                                </span>
-                                <Badge variant={entry.status === "paid" ? "secondary" : entry.status === "overdue" ? "destructive" : "default"} className="text-xs">
-                                  {STATUS_CONFIG[entry.status as keyof typeof STATUS_CONFIG]?.label || entry.status}
-                                </Badge>
-                              </div>
-                            </TableCell>
+                    {/* Categories and Entries */}
+                    {categories.map(category => {
+                      const categoryEntries = entries.filter(e => e.category === category);
+                      if (categoryEntries.length === 0) return null;
+
+                      return (
+                        <React.Fragment key={category}>
+                          <TableRow className="bg-muted/50">
+                            <TableCell className="font-semibold sticky left-0 bg-muted/50">{category}</TableCell>
                             {weeks.map((week, i) => {
-                              const dueDate = parseISO(entry.due_date);
-                              const isInWeek = isWithinInterval(dueDate, { start: week.start, end: week.end });
-                              
+                              const total = getCategoryTotal(category, week.start, week.end);
                               return (
                                 <TableCell 
                                   key={i} 
                                   className={cn(
-                                    "text-center",
-                                    isCurrentWeek(week.start) && "bg-primary/5"
+                                    "text-center font-semibold",
+                                    isCurrentWeek(week.start) && "bg-primary/10"
                                   )}
                                 >
-                                  {isInWeek ? (
-                                    <div className="space-y-1">
-                                      <div 
-                                        className={cn(
-                                          "font-medium cursor-pointer hover:underline",
-                                          entry.status === "paid" && "text-green-600",
-                                          entry.status === "overdue" && "text-red-600"
-                                        )}
-                                        onClick={() => openQRCode(entry)}
-                                      >
-                                        R$ {Number(entry.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                                      </div>
-                                      <div className="flex gap-1 justify-center">
-                                        {entry.status === "pending" && (
-                                          <Button 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            className="h-6 text-xs"
-                                            onClick={() => handleMarkAsPaid(entry)}
-                                          >
-                                            <CheckCircle className="h-3 w-3 mr-1" />
-                                            Pagar
-                                          </Button>
-                                        )}
-                                        {entry.status === "paid" && (
-                                          <Button 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            className="h-6 text-xs text-orange-600 hover:text-orange-700"
-                                            onClick={() => handleUndoPayment(entry)}
-                                          >
-                                            <Undo2 className="h-3 w-3 mr-1" />
-                                            Desfazer
-                                          </Button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ) : null}
+                                  {total > 0 ? `R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "-"}
                                 </TableCell>
                               );
                             })}
                           </TableRow>
-                        ))}
-                    </>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </ScrollArea>
-        </CardContent>
-      </Card>
+                          {categoryEntries.map(entry => (
+                            <TableRow key={entry.id} className="hover:bg-muted/30 group">
+                              <TableCell className="pl-6 sticky left-0 bg-background">
+                                <div className="flex items-center gap-2">
+                                  <span className={entry.status === "paid" ? "line-through text-muted-foreground" : ""}>
+                                    {entry.description}
+                                  </span>
+                                  <Badge variant={entry.status === "paid" ? "secondary" : entry.status === "overdue" ? "destructive" : "default"} className="text-xs">
+                                    {STATUS_CONFIG[entry.status as keyof typeof STATUS_CONFIG]?.label || entry.status}
+                                  </Badge>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
+                                    onClick={() => setDeleteEntryId(entry.id)}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                              {weeks.map((week, i) => {
+                                const dueDate = parseISO(entry.due_date);
+                                const isInWeek = isWithinInterval(dueDate, { start: week.start, end: week.end });
+                                
+                                return (
+                                  <TableCell 
+                                    key={i} 
+                                    className={cn(
+                                      "text-center",
+                                      isCurrentWeek(week.start) && "bg-primary/5"
+                                    )}
+                                  >
+                                    {isInWeek ? (
+                                      <div className="space-y-1">
+                                        <div 
+                                          className={cn(
+                                            "font-medium cursor-pointer hover:underline",
+                                            entry.status === "paid" && "text-green-600",
+                                            entry.status === "overdue" && "text-red-600"
+                                          )}
+                                          onClick={() => openQRCode(entry)}
+                                        >
+                                          R$ {Number(entry.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                        </div>
+                                        <div className="flex gap-1 justify-center">
+                                          {entry.status === "pending" && (
+                                            <Button 
+                                              variant="ghost" 
+                                              size="sm" 
+                                              className="h-6 text-xs"
+                                              onClick={() => handleMarkAsPaid(entry)}
+                                            >
+                                              <CheckCircle className="h-3 w-3 mr-1" />
+                                              Pagar
+                                            </Button>
+                                          )}
+                                          {entry.status === "paid" && (
+                                            <Button 
+                                              variant="ghost" 
+                                              size="sm" 
+                                              className="h-6 text-xs text-orange-600 hover:text-orange-700"
+                                              onClick={() => handleUndoPayment(entry)}
+                                            >
+                                              <Undo2 className="h-3 w-3 mr-1" />
+                                              Desfazer
+                                            </Button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                  </TableCell>
+                                );
+                              })}
+                            </TableRow>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics">
+          <FinancialAnalyticsPanel entries={entries} categories={categories} />
+        </TabsContent>
+      </Tabs>
 
       {/* Add Entry Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
@@ -629,7 +660,7 @@ export function FinancialFlowView() {
                   <SelectValue placeholder="Selecione a categoria" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CATEGORIES.map(cat => (
+                  {categories.map(cat => (
                     <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                   ))}
                 </SelectContent>
@@ -666,70 +697,17 @@ export function FinancialFlowView() {
 
             <div>
               <Label>Fornecedor</Label>
-              <Popover open={supplierSearchOpen} onOpenChange={setSupplierSearchOpen}>
-                <PopoverTrigger asChild>
-                  <div className="relative">
-                    <Input
-                      value={supplierSearchValue}
-                      onChange={(e) => {
-                        setSupplierSearchValue(e.target.value);
-                        setSupplierSearchOpen(true);
-                        if (!e.target.value) {
-                          setNewEntry({ ...newEntry, supplier_id: "", supplier_name: "" });
-                        }
-                      }}
-                      onFocus={() => setSupplierSearchOpen(true)}
-                      placeholder="Digite para buscar ou criar fornecedor..."
-                    />
-                  </div>
-                </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-0" align="start">
-                  <Command>
-                    <CommandList>
-                      {filteredSuppliers.length > 0 ? (
-                        <CommandGroup heading="Fornecedores">
-                          {filteredSuppliers.map(supplier => (
-                            <CommandItem 
-                              key={supplier.id} 
-                              onSelect={() => handleSelectSupplier(supplier)}
-                              className="cursor-pointer"
-                            >
-                              <div className="flex items-center justify-between w-full">
-                                <span>{supplier.name}</span>
-                                <Badge variant="outline" className="text-xs">
-                                  {supplier.supplier_scope === 'global' ? 'Geral' : 'Obra'}
-                                </Badge>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      ) : null}
-                      {supplierSearchValue && !filteredSuppliers.some(s => s.name.toLowerCase() === supplierSearchValue.toLowerCase()) && (
-                        <CommandGroup>
-                          <CommandItem 
-                            onSelect={() => {
-                              setNewSupplier({ ...newSupplier, name: supplierSearchValue });
-                              setShowNewSupplierDialog(true);
-                              setSupplierSearchOpen(false);
-                            }}
-                            className="cursor-pointer text-primary"
-                          >
-                            <UserPlus className="h-4 w-4 mr-2" />
-                            Cadastrar "{supplierSearchValue}" como novo fornecedor
-                          </CommandItem>
-                        </CommandGroup>
-                      )}
-                      {!supplierSearchValue && filteredSuppliers.length === 0 && (
-                        <CommandEmpty>
-                          <div className="p-2 text-sm text-muted-foreground">
-                            Nenhum fornecedor cadastrado. Digite um nome para criar.
-                          </div>
-                        </CommandEmpty>
-                      )}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <SupplierAutocomplete
+                suppliers={suppliers}
+                value={supplierSearchValue}
+                selectedId={newEntry.supplier_id}
+                onChange={setSupplierSearchValue}
+                onSelect={handleSelectSupplier}
+                onCreateNew={(name) => {
+                  setNewSupplier({ ...newSupplier, name });
+                  setShowNewSupplierDialog(true);
+                }}
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -768,7 +746,7 @@ export function FinancialFlowView() {
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancelar</Button>
+              <Button variant="outline" onClick={() => { setShowAddDialog(false); resetNewEntry(); }}>Cancelar</Button>
               <Button onClick={handleAddEntry}>Adicionar</Button>
             </div>
           </div>
@@ -862,6 +840,32 @@ export function FinancialFlowView() {
         </DialogContent>
       </Dialog>
 
+      {/* Category Management */}
+      <CategoryManagement
+        open={showCategoryDialog}
+        onOpenChange={setShowCategoryDialog}
+        categories={categories}
+        onCategoriesChange={setCategories}
+      />
+
+      {/* Delete Entry Confirmation */}
+      <AlertDialog open={!!deleteEntryId} onOpenChange={() => setDeleteEntryId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Lançamento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este lançamento financeiro? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteEntry} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* QR Code Dialog */}
       <Dialog open={showQRDialog} onOpenChange={setShowQRDialog}>
         <DialogContent className="max-w-sm">
@@ -880,62 +884,39 @@ export function FinancialFlowView() {
                     value={getPixPayloadForEntry(selectedEntry)}
                     size={192}
                     level="M"
-                    includeMargin={true}
                   />
                 ) : (
-                  <div className="w-48 h-48 border-2 border-dashed border-muted-foreground flex items-center justify-center">
-                    <div className="text-center text-sm text-muted-foreground">
-                      <QrCode className="h-12 w-12 mx-auto mb-2" />
-                      <p>Chave PIX não informada</p>
-                    </div>
+                  <div className="w-48 h-48 flex items-center justify-center text-muted-foreground">
+                    Sem chave PIX cadastrada
                   </div>
                 )}
               </div>
-              
               <div className="space-y-2">
-                <p className="font-semibold text-lg">
+                <p className="font-semibold">{selectedEntry.description}</p>
+                <p className="text-2xl font-bold text-primary">
                   R$ {Number(selectedEntry.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </p>
-                <p className="text-sm text-muted-foreground">{selectedEntry.description}</p>
                 {selectedEntry.supplier?.name && (
-                  <p className="text-sm">Favorecido: {selectedEntry.supplier.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Fornecedor: {selectedEntry.supplier.name}
+                  </p>
                 )}
-                {(selectedEntry.pix_key || selectedEntry.supplier?.pix_key) && (
-                  <div className="mt-2 p-2 bg-muted rounded">
-                    <p className="text-xs text-muted-foreground">Chave PIX:</p>
-                    <p className="font-mono text-sm break-all">
-                      {selectedEntry.pix_key || selectedEntry.supplier?.pix_key}
-                    </p>
-                  </div>
-                )}
+                <p className="text-sm text-muted-foreground">
+                  Vencimento: {format(parseISO(selectedEntry.due_date), "dd/MM/yyyy")}
+                </p>
               </div>
-
-              <div className="flex gap-2 justify-center">
-                <Button variant="outline" onClick={() => setShowQRDialog(false)}>
-                  Fechar
-                </Button>
-                {selectedEntry.status === "pending" ? (
-                  <Button onClick={() => {
+              {selectedEntry.status === "pending" && (
+                <Button 
+                  onClick={() => {
                     handleMarkAsPaid(selectedEntry);
                     setShowQRDialog(false);
-                  }}>
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    Marcar como Pago
-                  </Button>
-                ) : (
-                  <Button 
-                    variant="outline" 
-                    className="text-orange-600"
-                    onClick={() => {
-                      handleUndoPayment(selectedEntry);
-                      setShowQRDialog(false);
-                    }}
-                  >
-                    <Undo2 className="h-4 w-4 mr-2" />
-                    Desfazer Pagamento
-                  </Button>
-                )}
-              </div>
+                  }}
+                  className="w-full"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Marcar como Pago
+                </Button>
+              )}
             </div>
           )}
         </DialogContent>
