@@ -26,7 +26,7 @@ import {
   Trash2,
   BarChart3
 } from "lucide-react";
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, isWithinInterval, parseISO, isSameWeek } from "date-fns";
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, isWithinInterval, parseISO, isSameWeek, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -86,49 +86,91 @@ const STATUS_CONFIG = {
   overdue: { label: "Atrasado", color: "bg-red-500", icon: AlertCircle }
 };
 
-// CRC16-CCITT calculation for PIX
+// CRC16-CCITT calculation for PIX (polynomial 0x1021)
 function crc16CCITT(str: string): string {
   let crc = 0xFFFF;
   for (let i = 0; i < str.length; i++) {
     crc ^= str.charCodeAt(i) << 8;
     for (let j = 0; j < 8; j++) {
-      if (crc & 0x8000) {
-        crc = (crc << 1) ^ 0x1021;
+      if ((crc & 0x8000) !== 0) {
+        crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
       } else {
-        crc = crc << 1;
+        crc = (crc << 1) & 0xFFFF;
       }
     }
   }
   return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
 }
 
-function generatePixPayload(pixKey: string, amount: number, merchantName: string, description: string): string {
-  const formatValue = (id: string, value: string) => `${id}${value.length.toString().padStart(2, '0')}${value}`;
+// Format a PIX EMV field: ID + Length (2 digits) + Value
+function formatEMVField(id: string, value: string): string {
+  return `${id}${value.length.toString().padStart(2, '0')}${value}`;
+}
+
+// Sanitize text for PIX (remove accents, special chars, uppercase)
+function sanitizePixText(text: string, maxLength: number = 25): string {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9 ]/g, "")
+    .substring(0, maxLength)
+    .toUpperCase()
+    .trim() || "PAGAMENTO";
+}
+
+// Generate a valid PIX BR Code (EMV-QR) payload
+function generatePixPayload(pixKey: string, amount: number, merchantName: string, merchantCity: string = "SAO PAULO"): string {
+  // Validate PIX key
+  if (!pixKey || pixKey.trim() === '') {
+    return '';
+  }
   
-  const cleanName = merchantName.substring(0, 25).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 ]/g, '');
-  const cleanDesc = description.substring(0, 25).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 ]/g, '');
+  const cleanKey = pixKey.trim();
+  const cleanName = sanitizePixText(merchantName, 25);
+  const cleanCity = sanitizePixText(merchantCity, 15);
   const cleanAmount = amount.toFixed(2);
   
-  const gui = formatValue('00', 'br.gov.bcb.pix');
-  const key = formatValue('01', pixKey);
-  const merchantAccountInfo = formatValue('26', gui + key);
+  // Build Merchant Account Information (ID 26)
+  // 00: GUI - br.gov.bcb.pix (mandatory)
+  // 01: PIX Key (mandatory)
+  const gui = formatEMVField('00', 'br.gov.bcb.pix');
+  const key = formatEMVField('01', cleanKey);
+  const merchantAccountInfo = formatEMVField('26', gui + key);
   
+  // Build the payload without CRC
   let payload = '';
-  payload += formatValue('00', '01');
-  payload += merchantAccountInfo;
-  payload += formatValue('52', '0000');
-  payload += formatValue('53', '986');
-  payload += formatValue('54', cleanAmount);
-  payload += formatValue('58', 'BR');
-  payload += formatValue('59', cleanName || 'Pagamento');
-  payload += formatValue('60', 'SAOPAULO');
-  payload += formatValue('62', formatValue('05', cleanDesc || 'PIX'));
+  payload += formatEMVField('00', '01');                    // Payload Format Indicator
+  payload += merchantAccountInfo;                           // Merchant Account Information
+  payload += formatEMVField('52', '0000');                  // Merchant Category Code
+  payload += formatEMVField('53', '986');                   // Transaction Currency (986 = BRL)
   
+  if (amount > 0) {
+    payload += formatEMVField('54', cleanAmount);           // Transaction Amount
+  }
+  
+  payload += formatEMVField('58', 'BR');                    // Country Code
+  payload += formatEMVField('59', cleanName);              // Merchant Name
+  payload += formatEMVField('60', cleanCity);              // Merchant City
+  
+  // Add CRC placeholder and calculate
   payload += '6304';
   const crc = crc16CCITT(payload);
   payload += crc;
   
   return payload;
+}
+
+// Generate boleto barcode payload for QR Code (compatible with bank apps)
+function generateBoletoPayload(barcodeOrLine: string): string {
+  // Clean the input - remove spaces, dots, and special chars
+  const cleaned = barcodeOrLine.replace(/[\s.\-]/g, '');
+  
+  // If it's a linha digitável (47 or 48 digits), return as is for bank app
+  if (cleaned.length >= 44) {
+    return cleaned;
+  }
+  
+  return cleaned;
 }
 
 export function FinancialFlowView() {
@@ -164,7 +206,11 @@ export function FinancialFlowView() {
     supplier_name: "",
     pix_key: "",
     pix_key_type: "cpf",
-    notes: ""
+    notes: "",
+    payment_type: "pix" as "pix" | "boleto",
+    boleto_code: "",
+    installments: 1,
+    installment_interval: 30
   });
 
   const [newSupplier, setNewSupplier] = useState({
@@ -321,23 +367,43 @@ export function FinancialFlowView() {
     }
 
     try {
-      const { error } = await supabase.from("financial_entries").insert({
-        project_id: currentProject.id,
-        category: newEntry.category,
-        subcategory: newEntry.subcategory || null,
-        description: newEntry.description,
-        amount: newEntry.amount,
-        due_date: newEntry.due_date,
-        supplier_id: newEntry.supplier_id || null,
-        pix_key: newEntry.pix_key || null,
-        pix_key_type: newEntry.pix_key_type || null,
-        notes: newEntry.notes || null,
-        status: "pending"
-      });
+      const installments = newEntry.installments || 1;
+      const baseAmount = newEntry.amount / installments;
+      const baseDate = parseISO(newEntry.due_date);
+      
+      const entriesToInsert = [];
+      
+      for (let i = 0; i < installments; i++) {
+        const dueDate = addDays(baseDate, i * newEntry.installment_interval);
+        const description = installments > 1 
+          ? `${newEntry.description} (${i + 1}/${installments})`
+          : newEntry.description;
+        
+        entriesToInsert.push({
+          project_id: currentProject.id,
+          category: newEntry.category,
+          subcategory: newEntry.subcategory || null,
+          description,
+          amount: baseAmount,
+          due_date: format(dueDate, "yyyy-MM-dd"),
+          supplier_id: newEntry.supplier_id || null,
+          pix_key: newEntry.payment_type === "pix" ? (newEntry.pix_key || null) : null,
+          pix_key_type: newEntry.payment_type === "pix" ? (newEntry.pix_key_type || null) : null,
+          notes: newEntry.payment_type === "boleto" && newEntry.boleto_code 
+            ? `Boleto: ${newEntry.boleto_code}${newEntry.notes ? '\n' + newEntry.notes : ''}`
+            : (newEntry.notes || null),
+          status: "pending"
+        });
+      }
+
+      const { error } = await supabase.from("financial_entries").insert(entriesToInsert);
 
       if (error) throw error;
 
-      toast.success("Lançamento adicionado com sucesso");
+      toast.success(installments > 1 
+        ? `${installments} parcelas adicionadas com sucesso`
+        : "Lançamento adicionado com sucesso"
+      );
       setShowAddDialog(false);
       resetNewEntry();
       loadData();
@@ -358,7 +424,11 @@ export function FinancialFlowView() {
       supplier_name: "",
       pix_key: "",
       pix_key_type: "cpf",
-      notes: ""
+      notes: "",
+      payment_type: "pix",
+      boleto_code: "",
+      installments: 1,
+      installment_interval: 30
     });
     setSupplierSearchValue("");
   };
@@ -428,7 +498,11 @@ export function FinancialFlowView() {
       supplier_name: entry.supplier?.name || "",
       pix_key: entry.pix_key || "",
       pix_key_type: entry.pix_key_type || "cpf",
-      notes: entry.notes || ""
+      notes: entry.notes || "",
+      payment_type: "pix",
+      boleto_code: "",
+      installments: 1,
+      installment_interval: 30
     });
     setSupplierSearchValue(entry.supplier?.name || "");
     setShowEditDialog(true);
@@ -518,9 +592,8 @@ export function FinancialFlowView() {
     if (!pixKey) return "";
     
     const merchantName = entry.supplier?.name || "Pagamento";
-    const description = entry.description.substring(0, 25);
     
-    return generatePixPayload(pixKey, Number(entry.amount), merchantName, description);
+    return generatePixPayload(pixKey, Number(entry.amount), merchantName);
   };
 
   if (!currentProject) {
@@ -791,7 +864,7 @@ export function FinancialFlowView() {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Valor (R$) *</Label>
+                <Label>Valor Total (R$) *</Label>
                 <Input 
                   type="number"
                   value={newEntry.amount}
@@ -808,6 +881,51 @@ export function FinancialFlowView() {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Parcelas</Label>
+                <Select 
+                  value={String(newEntry.installments)} 
+                  onValueChange={(v) => setNewEntry({ ...newEntry, installments: parseInt(v) })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
+                      <SelectItem key={n} value={String(n)}>{n}x</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {newEntry.installments > 1 && (
+                <div>
+                  <Label>Intervalo (dias)</Label>
+                  <Select 
+                    value={String(newEntry.installment_interval)} 
+                    onValueChange={(v) => setNewEntry({ ...newEntry, installment_interval: parseInt(v) })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="7">7 dias</SelectItem>
+                      <SelectItem value="14">14 dias</SelectItem>
+                      <SelectItem value="15">15 dias</SelectItem>
+                      <SelectItem value="30">30 dias</SelectItem>
+                      <SelectItem value="60">60 dias</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
+            {newEntry.installments > 1 && (
+              <div className="text-sm text-muted-foreground bg-muted p-2 rounded">
+                {newEntry.installments} parcelas de R$ {(newEntry.amount / newEntry.installments).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              </div>
+            )}
+
             <div>
               <Label>Fornecedor</Label>
               <SupplierAutocomplete
@@ -823,31 +941,63 @@ export function FinancialFlowView() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Chave PIX</Label>
-                <Input 
-                  value={newEntry.pix_key}
-                  onChange={(e) => setNewEntry({ ...newEntry, pix_key: e.target.value })}
-                  placeholder="CPF, CNPJ, Email..."
-                />
-              </div>
-              <div>
-                <Label>Tipo</Label>
-                <Select value={newEntry.pix_key_type} onValueChange={(v) => setNewEntry({ ...newEntry, pix_key_type: v })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cpf">CPF</SelectItem>
-                    <SelectItem value="cnpj">CNPJ</SelectItem>
-                    <SelectItem value="email">Email</SelectItem>
-                    <SelectItem value="phone">Telefone</SelectItem>
-                    <SelectItem value="random">Aleatória</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div>
+              <Label>Tipo de Pagamento</Label>
+              <Select 
+                value={newEntry.payment_type} 
+                onValueChange={(v: "pix" | "boleto") => setNewEntry({ ...newEntry, payment_type: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pix">PIX</SelectItem>
+                  <SelectItem value="boleto">Boleto Bancário</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            {newEntry.payment_type === "pix" && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Chave PIX</Label>
+                  <Input 
+                    value={newEntry.pix_key}
+                    onChange={(e) => setNewEntry({ ...newEntry, pix_key: e.target.value })}
+                    placeholder="CPF, CNPJ, Email..."
+                  />
+                </div>
+                <div>
+                  <Label>Tipo da Chave</Label>
+                  <Select value={newEntry.pix_key_type} onValueChange={(v) => setNewEntry({ ...newEntry, pix_key_type: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cpf">CPF</SelectItem>
+                      <SelectItem value="cnpj">CNPJ</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="phone">Telefone</SelectItem>
+                      <SelectItem value="random">Aleatória</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {newEntry.payment_type === "boleto" && (
+              <div>
+                <Label>Linha Digitável do Boleto</Label>
+                <Input 
+                  value={newEntry.boleto_code}
+                  onChange={(e) => setNewEntry({ ...newEntry, boleto_code: e.target.value })}
+                  placeholder="Cole a linha digitável (47 ou 48 dígitos)"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  O QR Code gerado permitirá o pagamento direto no app do banco
+                </p>
+              </div>
+            )}
 
             <div>
               <Label>Observações</Label>
@@ -1105,53 +1255,66 @@ export function FinancialFlowView() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <QrCode className="h-5 w-5" />
-              Pagamento PIX
+              {selectedEntry?.notes?.includes("Boleto:") ? "Pagamento Boleto" : "Pagamento PIX"}
             </DialogTitle>
             <DialogDescription>Escaneie o QR Code para pagar</DialogDescription>
           </DialogHeader>
-          {selectedEntry && (
-            <div className="space-y-4 text-center">
-              <div className="bg-white p-4 rounded-lg inline-block mx-auto">
-                {(selectedEntry.pix_key || selectedEntry.supplier?.pix_key) ? (
-                  <QRCodeSVG 
-                    value={getPixPayloadForEntry(selectedEntry)}
-                    size={192}
-                    level="M"
-                  />
-                ) : (
-                  <div className="w-48 h-48 flex items-center justify-center text-muted-foreground">
-                    Sem chave PIX cadastrada
-                  </div>
-                )}
-              </div>
-              <div className="space-y-2">
-                <p className="font-semibold">{selectedEntry.description}</p>
-                <p className="text-2xl font-bold text-primary">
-                  R$ {Number(selectedEntry.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                </p>
-                {selectedEntry.supplier?.name && (
-                  <p className="text-sm text-muted-foreground">
-                    Fornecedor: {selectedEntry.supplier.name}
+          {selectedEntry && (() => {
+            // Check if it's a boleto payment (extract from notes)
+            const boletoMatch = selectedEntry.notes?.match(/Boleto:\s*(\d+)/);
+            const boletoCode = boletoMatch ? boletoMatch[1] : null;
+            const pixKey = selectedEntry.pix_key || selectedEntry.supplier?.pix_key || "";
+            const hasValidPayment = boletoCode || pixKey;
+            
+            return (
+              <div className="space-y-4 text-center">
+                <div className="bg-white p-4 rounded-lg inline-block mx-auto">
+                  {hasValidPayment ? (
+                    <QRCodeSVG 
+                      value={boletoCode ? generateBoletoPayload(boletoCode) : getPixPayloadForEntry(selectedEntry)}
+                      size={192}
+                      level="M"
+                    />
+                  ) : (
+                    <div className="w-48 h-48 flex items-center justify-center text-muted-foreground text-sm">
+                      Sem dados de pagamento cadastrados
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <p className="font-semibold">{selectedEntry.description}</p>
+                  <p className="text-2xl font-bold text-primary">
+                    R$ {Number(selectedEntry.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                   </p>
+                  {selectedEntry.supplier?.name && (
+                    <p className="text-sm text-muted-foreground">
+                      Fornecedor: {selectedEntry.supplier.name}
+                    </p>
+                  )}
+                  <p className="text-sm text-muted-foreground">
+                    Vencimento: {format(parseISO(selectedEntry.due_date), "dd/MM/yyyy")}
+                  </p>
+                  {boletoCode && (
+                    <p className="text-xs text-muted-foreground bg-muted p-2 rounded break-all">
+                      Linha: {boletoCode}
+                    </p>
+                  )}
+                </div>
+                {canEdit && selectedEntry.status === "pending" && (
+                  <Button 
+                    onClick={() => {
+                      handleMarkAsPaid(selectedEntry);
+                      setShowQRDialog(false);
+                    }}
+                    className="w-full"
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Marcar como Pago
+                  </Button>
                 )}
-                <p className="text-sm text-muted-foreground">
-                  Vencimento: {format(parseISO(selectedEntry.due_date), "dd/MM/yyyy")}
-                </p>
               </div>
-              {selectedEntry.status === "pending" && (
-                <Button 
-                  onClick={() => {
-                    handleMarkAsPaid(selectedEntry);
-                    setShowQRDialog(false);
-                  }}
-                  className="w-full"
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Marcar como Pago
-                </Button>
-              )}
-            </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>
