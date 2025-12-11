@@ -38,6 +38,7 @@ import { SupplierAutocomplete } from "./financial/SupplierAutocomplete";
 import { CategoryManagement } from "./financial/CategoryManagement";
 import { FinancialAnalyticsPanel } from "./financial/FinancialAnalyticsPanel";
 import { generatePDFReport } from "./financial/generatePDFReport";
+import { SupplierTypesManagement } from "./financial/SupplierTypesManagement";
 
 interface FinancialEntry {
   id: string;
@@ -78,6 +79,14 @@ const DEFAULT_CATEGORIES = [
   "ADM E SEGURANÇA",
   "OUTROS",
   "PÓS-OBRAS E PLANEJAMENTOS"
+];
+
+const DEFAULT_SUPPLIER_TYPES = [
+  "Materiais",
+  "Mão de Obra",
+  "Equipamentos",
+  "Assessoria",
+  "Serviços"
 ];
 
 const STATUS_CONFIG = {
@@ -189,8 +198,10 @@ export function FinancialFlowView() {
   const [showQRDialog, setShowQRDialog] = useState(false);
   const [showNewSupplierDialog, setShowNewSupplierDialog] = useState(false);
   const [showCategoryDialog, setShowCategoryDialog] = useState(false);
+  const [showSupplierTypesDialog, setShowSupplierTypesDialog] = useState(false);
   const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null);
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
+  const [supplierTypes, setSupplierTypes] = useState<string[]>(DEFAULT_SUPPLIER_TYPES);
   
   const [selectedEntry, setSelectedEntry] = useState<FinancialEntry | null>(null);
   const [editingEntry, setEditingEntry] = useState<FinancialEntry | null>(null);
@@ -215,7 +226,7 @@ export function FinancialFlowView() {
 
   const [newSupplier, setNewSupplier] = useState({
     name: "",
-    supplier_type: "material",
+    supplier_type: "",
     supplier_scope: "project",
     pix_key: "",
     pix_key_type: "cpf",
@@ -346,7 +357,7 @@ export function FinancialFlowView() {
       
       setNewSupplier({
         name: "",
-        supplier_type: "material",
+        supplier_type: "",
         supplier_scope: "project",
         pix_key: "",
         pix_key_type: "cpf",
@@ -833,131 +844,260 @@ export function FinancialFlowView() {
 
       {/* Add Entry Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Novo Lançamento Financeiro</DialogTitle>
             <DialogDescription>Adicione um novo lançamento ao fluxo de caixa</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Categoria *</Label>
-              <Select value={newEntry.category} onValueChange={(v) => setNewEntry({ ...newEntry, category: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map(cat => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Descrição *</Label>
-              <Input 
-                value={newEntry.description}
-                onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })}
-                placeholder="Ex: Pagamento materiais"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+          <ScrollArea className="flex-1 pr-4">
+            <div className="space-y-4 pb-2">
               <div>
-                <Label>Valor Total (R$) *</Label>
-                <Input 
-                  type="number"
-                  value={newEntry.amount}
-                  onChange={(e) => setNewEntry({ ...newEntry, amount: parseFloat(e.target.value) || 0 })}
-                />
-              </div>
-              <div>
-                <Label>Vencimento *</Label>
-                <Input 
-                  type="date"
-                  value={newEntry.due_date}
-                  onChange={(e) => setNewEntry({ ...newEntry, due_date: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Parcelas</Label>
-                <Select 
-                  value={String(newEntry.installments)} 
-                  onValueChange={(v) => setNewEntry({ ...newEntry, installments: parseInt(v) })}
-                >
+                <Label>Categoria *</Label>
+                <Select value={newEntry.category} onValueChange={(v) => setNewEntry({ ...newEntry, category: v })}>
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Selecione a categoria" />
                   </SelectTrigger>
                   <SelectContent>
-                    {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
-                      <SelectItem key={n} value={String(n)}>{n}x</SelectItem>
+                    {categories.map(cat => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              {newEntry.installments > 1 && (
+
+              <div>
+                <Label>Descrição *</Label>
+                <Input 
+                  value={newEntry.description}
+                  onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })}
+                  placeholder="Ex: Pagamento materiais"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label>Intervalo (dias)</Label>
+                  <Label>Valor Total (R$) *</Label>
+                  <Input 
+                    type="number"
+                    value={newEntry.amount}
+                    onChange={(e) => setNewEntry({ ...newEntry, amount: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <Label>Vencimento *</Label>
+                  <Input 
+                    type="date"
+                    value={newEntry.due_date}
+                    onChange={(e) => setNewEntry({ ...newEntry, due_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Parcelas</Label>
                   <Select 
-                    value={String(newEntry.installment_interval)} 
-                    onValueChange={(v) => setNewEntry({ ...newEntry, installment_interval: parseInt(v) })}
+                    value={String(newEntry.installments)} 
+                    onValueChange={(v) => setNewEntry({ ...newEntry, installments: parseInt(v) })}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="7">7 dias</SelectItem>
-                      <SelectItem value="14">14 dias</SelectItem>
-                      <SelectItem value="15">15 dias</SelectItem>
-                      <SelectItem value="30">30 dias</SelectItem>
-                      <SelectItem value="60">60 dias</SelectItem>
+                      {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
+                        <SelectItem key={n} value={String(n)}>{n}x</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
-              )}
-            </div>
-
-            {newEntry.installments > 1 && (
-              <div className="text-sm text-muted-foreground bg-muted p-2 rounded">
-                {newEntry.installments} parcelas de R$ {(newEntry.amount / newEntry.installments).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                {newEntry.installments > 1 && (
+                  <div>
+                    <Label>Intervalo (dias)</Label>
+                    <Select 
+                      value={String(newEntry.installment_interval)} 
+                      onValueChange={(v) => setNewEntry({ ...newEntry, installment_interval: parseInt(v) })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="7">7 dias</SelectItem>
+                        <SelectItem value="14">14 dias</SelectItem>
+                        <SelectItem value="15">15 dias</SelectItem>
+                        <SelectItem value="30">30 dias</SelectItem>
+                        <SelectItem value="60">60 dias</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
-            )}
 
-            <div>
-              <Label>Fornecedor</Label>
-              <SupplierAutocomplete
-                suppliers={suppliers}
-                value={supplierSearchValue}
-                selectedId={newEntry.supplier_id}
-                onChange={setSupplierSearchValue}
-                onSelect={handleSelectSupplier}
-                onCreateNew={(name) => {
-                  setNewSupplier({ ...newSupplier, name });
-                  setShowNewSupplierDialog(true);
-                }}
-              />
+              {newEntry.installments > 1 && (
+                <div className="text-sm text-muted-foreground bg-muted p-2 rounded">
+                  {newEntry.installments} parcelas de R$ {(newEntry.amount / newEntry.installments).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </div>
+              )}
+
+              <div>
+                <Label>Fornecedor</Label>
+                <SupplierAutocomplete
+                  suppliers={suppliers}
+                  value={supplierSearchValue}
+                  selectedId={newEntry.supplier_id}
+                  onChange={setSupplierSearchValue}
+                  onSelect={handleSelectSupplier}
+                  onCreateNew={(name) => {
+                    setNewSupplier({ ...newSupplier, name });
+                    setShowNewSupplierDialog(true);
+                  }}
+                />
+              </div>
+
+              <div>
+                <Label>Tipo de Pagamento</Label>
+                <Select 
+                  value={newEntry.payment_type} 
+                  onValueChange={(v: "pix" | "boleto") => setNewEntry({ ...newEntry, payment_type: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pix">PIX</SelectItem>
+                    <SelectItem value="boleto">Boleto Bancário</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {newEntry.payment_type === "pix" && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Chave PIX</Label>
+                    <Input 
+                      value={newEntry.pix_key}
+                      onChange={(e) => setNewEntry({ ...newEntry, pix_key: e.target.value })}
+                      placeholder="CPF, CNPJ, Email..."
+                    />
+                  </div>
+                  <div>
+                    <Label>Tipo da Chave</Label>
+                    <Select value={newEntry.pix_key_type} onValueChange={(v) => setNewEntry({ ...newEntry, pix_key_type: v })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cpf">CPF</SelectItem>
+                        <SelectItem value="cnpj">CNPJ</SelectItem>
+                        <SelectItem value="email">Email</SelectItem>
+                        <SelectItem value="phone">Telefone</SelectItem>
+                        <SelectItem value="random">Aleatória</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+
+              {newEntry.payment_type === "boleto" && (
+                <div>
+                  <Label>Linha Digitável do Boleto</Label>
+                  <Input 
+                    value={newEntry.boleto_code}
+                    onChange={(e) => setNewEntry({ ...newEntry, boleto_code: e.target.value })}
+                    placeholder="Cole a linha digitável (47 ou 48 dígitos)"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    O QR Code gerado permitirá o pagamento direto no app do banco
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <Label>Observações</Label>
+                <Textarea 
+                  value={newEntry.notes}
+                  onChange={(e) => setNewEntry({ ...newEntry, notes: e.target.value })}
+                  placeholder="Notas adicionais..."
+                  rows={2}
+                />
+              </div>
             </div>
+          </ScrollArea>
+          <DialogFooter className="flex-shrink-0 pt-4 border-t">
+            <Button variant="outline" onClick={() => { setShowAddDialog(false); resetNewEntry(); }}>Cancelar</Button>
+            <Button onClick={handleAddEntry}>Lançar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-            <div>
-              <Label>Tipo de Pagamento</Label>
-              <Select 
-                value={newEntry.payment_type} 
-                onValueChange={(v: "pix" | "boleto") => setNewEntry({ ...newEntry, payment_type: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pix">PIX</SelectItem>
-                  <SelectItem value="boleto">Boleto Bancário</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      {/* Edit Entry Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={(open) => { 
+        setShowEditDialog(open); 
+        if (!open) { setEditingEntry(null); resetNewEntry(); }
+      }}>
+        <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle>Editar Lançamento</DialogTitle>
+            <DialogDescription>Atualize os dados do lançamento financeiro</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="flex-1 pr-4">
+            <div className="space-y-4 pb-2">
+              <div>
+                <Label>Categoria *</Label>
+                <Select value={newEntry.category} onValueChange={(v) => setNewEntry({ ...newEntry, category: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map(cat => (
+                      <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {newEntry.payment_type === "pix" && (
+              <div>
+                <Label>Descrição *</Label>
+                <Input 
+                  value={newEntry.description}
+                  onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })}
+                  placeholder="Ex: Pagamento materiais"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Valor (R$) *</Label>
+                  <Input 
+                    type="number"
+                    value={newEntry.amount}
+                    onChange={(e) => setNewEntry({ ...newEntry, amount: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <Label>Vencimento *</Label>
+                  <Input 
+                    type="date"
+                    value={newEntry.due_date}
+                    onChange={(e) => setNewEntry({ ...newEntry, due_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label>Fornecedor</Label>
+                <SupplierAutocomplete
+                  suppliers={suppliers}
+                  value={supplierSearchValue}
+                  selectedId={newEntry.supplier_id}
+                  onChange={setSupplierSearchValue}
+                  onSelect={handleSelectSupplier}
+                  onCreateNew={(name) => {
+                    setNewSupplier({ ...newSupplier, name });
+                    setShowNewSupplierDialog(true);
+                  }}
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Chave PIX</Label>
@@ -968,7 +1108,7 @@ export function FinancialFlowView() {
                   />
                 </div>
                 <div>
-                  <Label>Tipo da Chave</Label>
+                  <Label>Tipo</Label>
                   <Select value={newEntry.pix_key_type} onValueChange={(v) => setNewEntry({ ...newEntry, pix_key_type: v })}>
                     <SelectTrigger>
                       <SelectValue />
@@ -983,143 +1123,20 @@ export function FinancialFlowView() {
                   </Select>
                 </div>
               </div>
-            )}
 
-            {newEntry.payment_type === "boleto" && (
               <div>
-                <Label>Linha Digitável do Boleto</Label>
-                <Input 
-                  value={newEntry.boleto_code}
-                  onChange={(e) => setNewEntry({ ...newEntry, boleto_code: e.target.value })}
-                  placeholder="Cole a linha digitável (47 ou 48 dígitos)"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  O QR Code gerado permitirá o pagamento direto no app do banco
-                </p>
-              </div>
-            )}
-
-            <div>
-              <Label>Observações</Label>
-              <Textarea 
-                value={newEntry.notes}
-                onChange={(e) => setNewEntry({ ...newEntry, notes: e.target.value })}
-                placeholder="Notas adicionais..."
-              />
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => { setShowAddDialog(false); resetNewEntry(); }}>Cancelar</Button>
-              <Button onClick={handleAddEntry}>Adicionar</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Entry Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={(open) => { 
-        setShowEditDialog(open); 
-        if (!open) { setEditingEntry(null); resetNewEntry(); }
-      }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Editar Lançamento</DialogTitle>
-            <DialogDescription>Atualize os dados do lançamento financeiro</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Categoria *</Label>
-              <Select value={newEntry.category} onValueChange={(v) => setNewEntry({ ...newEntry, category: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map(cat => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Descrição *</Label>
-              <Input 
-                value={newEntry.description}
-                onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })}
-                placeholder="Ex: Pagamento materiais"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Valor (R$) *</Label>
-                <Input 
-                  type="number"
-                  value={newEntry.amount}
-                  onChange={(e) => setNewEntry({ ...newEntry, amount: parseFloat(e.target.value) || 0 })}
-                />
-              </div>
-              <div>
-                <Label>Vencimento *</Label>
-                <Input 
-                  type="date"
-                  value={newEntry.due_date}
-                  onChange={(e) => setNewEntry({ ...newEntry, due_date: e.target.value })}
+                <Label>Observações</Label>
+                <Textarea 
+                  value={newEntry.notes}
+                  onChange={(e) => setNewEntry({ ...newEntry, notes: e.target.value })}
+                  placeholder="Notas adicionais..."
+                  rows={2}
                 />
               </div>
             </div>
-
-            <div>
-              <Label>Fornecedor</Label>
-              <SupplierAutocomplete
-                suppliers={suppliers}
-                value={supplierSearchValue}
-                selectedId={newEntry.supplier_id}
-                onChange={setSupplierSearchValue}
-                onSelect={handleSelectSupplier}
-                onCreateNew={(name) => {
-                  setNewSupplier({ ...newSupplier, name });
-                  setShowNewSupplierDialog(true);
-                }}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Chave PIX</Label>
-                <Input 
-                  value={newEntry.pix_key}
-                  onChange={(e) => setNewEntry({ ...newEntry, pix_key: e.target.value })}
-                  placeholder="CPF, CNPJ, Email..."
-                />
-              </div>
-              <div>
-                <Label>Tipo</Label>
-                <Select value={newEntry.pix_key_type} onValueChange={(v) => setNewEntry({ ...newEntry, pix_key_type: v })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cpf">CPF</SelectItem>
-                    <SelectItem value="cnpj">CNPJ</SelectItem>
-                    <SelectItem value="email">Email</SelectItem>
-                    <SelectItem value="phone">Telefone</SelectItem>
-                    <SelectItem value="random">Aleatória</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div>
-              <Label>Observações</Label>
-              <Textarea 
-                value={newEntry.notes}
-                onChange={(e) => setNewEntry({ ...newEntry, notes: e.target.value })}
-                placeholder="Notas adicionais..."
-              />
-            </div>
-
-            <div className="flex justify-between">
+          </ScrollArea>
+          <DialogFooter className="flex-shrink-0 pt-4 border-t">
+            <div className="flex justify-between w-full">
               <Button 
                 variant="destructive" 
                 onClick={() => setDeleteEntryId(editingEntry?.id || null)}
@@ -1132,34 +1149,45 @@ export function FinancialFlowView() {
                 <Button onClick={handleUpdateEntry}>Salvar</Button>
               </div>
             </div>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* New Supplier Dialog */}
       <Dialog open={showNewSupplierDialog} onOpenChange={setShowNewSupplierDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Cadastrar Novo Fornecedor</DialogTitle>
             <DialogDescription>O fornecedor será salvo automaticamente</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Nome *</Label>
-              <Input 
-                value={newSupplier.name}
-                onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+          <ScrollArea className="flex-1 pr-4">
+            <div className="space-y-4 pb-2">
               <div>
-                <Label>Tipo</Label>
+                <Label>Nome *</Label>
+                <Input 
+                  value={newSupplier.name}
+                  onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Label>Tipo</Label>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setShowSupplierTypesDialog(true)}
+                  >
+                    <Settings className="h-3 w-3 mr-1" />
+                    Editar tipos
+                  </Button>
+                </div>
                 <Select value={newSupplier.supplier_type} onValueChange={(v) => setNewSupplier({ ...newSupplier, supplier_type: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="material">Materiais</SelectItem>
-                    <SelectItem value="labor">Mão de Obra</SelectItem>
-                    <SelectItem value="equipment">Equipamentos</SelectItem>
+                    {supplierTypes.map(type => (
+                      <SelectItem key={type} value={type}>{type}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1173,47 +1201,47 @@ export function FinancialFlowView() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>CPF/CNPJ</Label>
+                  <Input 
+                    value={newSupplier.cnpj_cpf}
+                    onChange={(e) => setNewSupplier({ ...newSupplier, cnpj_cpf: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Telefone</Label>
+                  <Input 
+                    value={newSupplier.phone}
+                    onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Chave PIX</Label>
+                  <Input 
+                    value={newSupplier.pix_key}
+                    onChange={(e) => setNewSupplier({ ...newSupplier, pix_key: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Tipo PIX</Label>
+                  <Select value={newSupplier.pix_key_type} onValueChange={(v) => setNewSupplier({ ...newSupplier, pix_key_type: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cpf">CPF</SelectItem>
+                      <SelectItem value="cnpj">CNPJ</SelectItem>
+                      <SelectItem value="email">Email</SelectItem>
+                      <SelectItem value="phone">Telefone</SelectItem>
+                      <SelectItem value="random">Aleatória</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>CPF/CNPJ</Label>
-                <Input 
-                  value={newSupplier.cnpj_cpf}
-                  onChange={(e) => setNewSupplier({ ...newSupplier, cnpj_cpf: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Telefone</Label>
-                <Input 
-                  value={newSupplier.phone}
-                  onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Chave PIX</Label>
-                <Input 
-                  value={newSupplier.pix_key}
-                  onChange={(e) => setNewSupplier({ ...newSupplier, pix_key: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Tipo PIX</Label>
-                <Select value={newSupplier.pix_key_type} onValueChange={(v) => setNewSupplier({ ...newSupplier, pix_key_type: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="cpf">CPF</SelectItem>
-                    <SelectItem value="cnpj">CNPJ</SelectItem>
-                    <SelectItem value="email">Email</SelectItem>
-                    <SelectItem value="phone">Telefone</SelectItem>
-                    <SelectItem value="random">Aleatória</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
+          </ScrollArea>
+          <DialogFooter className="flex-shrink-0 pt-4 border-t">
             <Button variant="outline" onClick={() => setShowNewSupplierDialog(false)}>Cancelar</Button>
             <Button onClick={handleCreateNewSupplier} disabled={!newSupplier.name}>
               <UserPlus className="h-4 w-4 mr-2" />
@@ -1229,6 +1257,14 @@ export function FinancialFlowView() {
         onOpenChange={setShowCategoryDialog}
         categories={categories}
         onCategoriesChange={handleCategoriesChange}
+      />
+
+      {/* Supplier Types Management */}
+      <SupplierTypesManagement
+        open={showSupplierTypesDialog}
+        onOpenChange={setShowSupplierTypesDialog}
+        types={supplierTypes}
+        onTypesChange={setSupplierTypes}
       />
 
       {/* Delete Entry Confirmation */}
