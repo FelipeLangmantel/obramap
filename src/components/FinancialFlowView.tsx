@@ -1,17 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { 
   Plus, 
-  FileText, 
   ChevronLeft, 
   ChevronRight, 
   QrCode, 
@@ -19,16 +20,16 @@ import {
   Clock, 
   AlertCircle,
   Printer,
-  Download,
-  Trash2,
-  Edit2
+  Undo2,
+  UserPlus
 } from "lucide-react";
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, isWithinInterval, parseISO } from "date-fns";
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, isWithinInterval, parseISO, isSameWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { QRCodeSVG } from "qrcode.react";
+import { cn } from "@/lib/utils";
 
 interface FinancialEntry {
   id: string;
@@ -58,6 +59,8 @@ interface Supplier {
   pix_key: string | null;
   pix_key_type: string | null;
   cnpj_cpf: string | null;
+  supplier_scope: string;
+  project_id: string;
 }
 
 const CATEGORIES = [
@@ -75,6 +78,56 @@ const STATUS_CONFIG = {
   overdue: { label: "Atrasado", color: "bg-red-500", icon: AlertCircle }
 };
 
+// CRC16-CCITT calculation for PIX
+function crc16CCITT(str: string): string {
+  let crc = 0xFFFF;
+  for (let i = 0; i < str.length; i++) {
+    crc ^= str.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j++) {
+      if (crc & 0x8000) {
+        crc = (crc << 1) ^ 0x1021;
+      } else {
+        crc = crc << 1;
+      }
+    }
+  }
+  return (crc & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+}
+
+function generatePixPayload(pixKey: string, amount: number, merchantName: string, description: string): string {
+  // PIX EMV QR Code format
+  const formatValue = (id: string, value: string) => `${id}${value.length.toString().padStart(2, '0')}${value}`;
+  
+  // Clean values
+  const cleanName = merchantName.substring(0, 25).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 ]/g, '');
+  const cleanDesc = description.substring(0, 25).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 ]/g, '');
+  const cleanAmount = amount.toFixed(2);
+  
+  // Build merchant account info (field 26)
+  const gui = formatValue('00', 'br.gov.bcb.pix');
+  const key = formatValue('01', pixKey);
+  const merchantAccountInfo = formatValue('26', gui + key);
+  
+  // Build the payload
+  let payload = '';
+  payload += formatValue('00', '01'); // Payload Format Indicator
+  payload += merchantAccountInfo; // Merchant Account Info
+  payload += formatValue('52', '0000'); // Merchant Category Code
+  payload += formatValue('53', '986'); // Transaction Currency (BRL)
+  payload += formatValue('54', cleanAmount); // Transaction Amount
+  payload += formatValue('58', 'BR'); // Country Code
+  payload += formatValue('59', cleanName || 'Pagamento'); // Merchant Name
+  payload += formatValue('60', 'SAOPAULO'); // Merchant City
+  payload += formatValue('62', formatValue('05', cleanDesc || 'PIX')); // Additional Data
+  
+  // Calculate CRC16
+  payload += '6304';
+  const crc = crc16CCITT(payload);
+  payload += crc;
+  
+  return payload;
+}
+
 export function FinancialFlowView() {
   const { currentProject } = useConstruction();
   const [entries, setEntries] = useState<FinancialEntry[]>([]);
@@ -84,6 +137,10 @@ export function FinancialFlowView() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showQRDialog, setShowQRDialog] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<FinancialEntry | null>(null);
+  const [showNewSupplierDialog, setShowNewSupplierDialog] = useState(false);
+  const [supplierSearchOpen, setSupplierSearchOpen] = useState(false);
+  const [supplierSearchValue, setSupplierSearchValue] = useState("");
+  
   const [newEntry, setNewEntry] = useState({
     category: "",
     subcategory: "",
@@ -91,9 +148,21 @@ export function FinancialFlowView() {
     amount: 0,
     due_date: format(new Date(), "yyyy-MM-dd"),
     supplier_id: "",
+    supplier_name: "",
     pix_key: "",
     pix_key_type: "cpf",
     notes: ""
+  });
+
+  const [newSupplier, setNewSupplier] = useState({
+    name: "",
+    supplier_type: "material",
+    supplier_scope: "project",
+    pix_key: "",
+    pix_key_type: "cpf",
+    cnpj_cpf: "",
+    phone: "",
+    email: ""
   });
 
   const weeks = Array.from({ length: 5 }, (_, i) => {
@@ -101,6 +170,8 @@ export function FinancialFlowView() {
     const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
     return { start: weekStart, end: weekEnd };
   });
+
+  const today = new Date();
 
   useEffect(() => {
     if (currentProject?.id) {
@@ -121,8 +192,8 @@ export function FinancialFlowView() {
           .order("due_date", { ascending: true }),
         supabase
           .from("suppliers")
-          .select("id, name, pix_key, pix_key_type, cnpj_cpf")
-          .eq("project_id", currentProject.id)
+          .select("id, name, pix_key, pix_key_type, cnpj_cpf, supplier_scope, project_id")
+          .or(`project_id.eq.${currentProject.id},supplier_scope.eq.global`)
       ]);
 
       if (entriesRes.error) throw entriesRes.error;
@@ -135,6 +206,73 @@ export function FinancialFlowView() {
       toast.error("Erro ao carregar dados financeiros");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const filteredSuppliers = suppliers.filter(s => 
+    s.name.toLowerCase().includes(supplierSearchValue.toLowerCase())
+  );
+
+  const handleSelectSupplier = (supplier: Supplier) => {
+    setNewEntry({
+      ...newEntry,
+      supplier_id: supplier.id,
+      supplier_name: supplier.name,
+      pix_key: supplier.pix_key || newEntry.pix_key,
+      pix_key_type: supplier.pix_key_type || newEntry.pix_key_type
+    });
+    setSupplierSearchValue(supplier.name);
+    setSupplierSearchOpen(false);
+  };
+
+  const handleCreateNewSupplier = async () => {
+    if (!currentProject?.id || !newSupplier.name) {
+      toast.error("Preencha o nome do fornecedor");
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.from("suppliers").insert({
+        project_id: currentProject.id,
+        name: newSupplier.name,
+        supplier_type: newSupplier.supplier_type,
+        supplier_scope: newSupplier.supplier_scope,
+        pix_key: newSupplier.pix_key || null,
+        pix_key_type: newSupplier.pix_key_type || null,
+        cnpj_cpf: newSupplier.cnpj_cpf || null,
+        phone: newSupplier.phone || null,
+        email: newSupplier.email || null
+      }).select().single();
+
+      if (error) throw error;
+
+      toast.success("Fornecedor cadastrado com sucesso");
+      setShowNewSupplierDialog(false);
+      
+      // Update suppliers list and select the new one
+      setSuppliers([...suppliers, data]);
+      setNewEntry({
+        ...newEntry,
+        supplier_id: data.id,
+        supplier_name: data.name,
+        pix_key: data.pix_key || newEntry.pix_key,
+        pix_key_type: data.pix_key_type || newEntry.pix_key_type
+      });
+      setSupplierSearchValue(data.name);
+      
+      setNewSupplier({
+        name: "",
+        supplier_type: "material",
+        supplier_scope: "project",
+        pix_key: "",
+        pix_key_type: "cpf",
+        cnpj_cpf: "",
+        phone: "",
+        email: ""
+      });
+    } catch (error) {
+      console.error("Error creating supplier:", error);
+      toast.error("Erro ao cadastrar fornecedor");
     }
   };
 
@@ -170,10 +308,12 @@ export function FinancialFlowView() {
         amount: 0,
         due_date: format(new Date(), "yyyy-MM-dd"),
         supplier_id: "",
+        supplier_name: "",
         pix_key: "",
         pix_key_type: "cpf",
         notes: ""
       });
+      setSupplierSearchValue("");
       loadData();
     } catch (error) {
       console.error("Error adding entry:", error);
@@ -194,6 +334,22 @@ export function FinancialFlowView() {
     } catch (error) {
       console.error("Error updating entry:", error);
       toast.error("Erro ao atualizar lançamento");
+    }
+  };
+
+  const handleUndoPayment = async (entry: FinancialEntry) => {
+    try {
+      const { error } = await supabase
+        .from("financial_entries")
+        .update({ status: "pending", payment_date: null })
+        .eq("id", entry.id);
+
+      if (error) throw error;
+      toast.success("Pagamento desfeito");
+      loadData();
+    } catch (error) {
+      console.error("Error updating entry:", error);
+      toast.error("Erro ao desfazer pagamento");
     }
   };
 
@@ -218,6 +374,10 @@ export function FinancialFlowView() {
   const getWeekTotal = (weekStart: Date, weekEnd: Date) => {
     return getEntriesForWeek(weekStart, weekEnd)
       .reduce((sum, e) => sum + Number(e.amount), 0);
+  };
+
+  const isCurrentWeek = (weekStart: Date) => {
+    return isSameWeek(weekStart, today, { weekStartsOn: 1 });
   };
 
   const generatePaymentReport = () => {
@@ -257,16 +417,14 @@ export function FinancialFlowView() {
     toast.success("Relatório gerado com sucesso");
   };
 
-  const generatePixPayload = (entry: FinancialEntry) => {
+  const getPixPayloadForEntry = (entry: FinancialEntry) => {
     const pixKey = entry.pix_key || entry.supplier?.pix_key || "";
-    const amount = Number(entry.amount).toFixed(2);
+    if (!pixKey) return "";
+    
+    const merchantName = entry.supplier?.name || "Pagamento";
     const description = entry.description.substring(0, 25);
     
-    // Simplified PIX payload (EMV format)
-    // In production, use a proper PIX library for accurate payload generation
-    const payload = `00020126${(26 + pixKey.length).toString().padStart(2, "0")}0014br.gov.bcb.pix01${pixKey.length.toString().padStart(2, "0")}${pixKey}52040000530398654${amount.length.toString().padStart(2, "0")}${amount}5802BR59${entry.supplier?.name?.length || 8}${entry.supplier?.name || "Pagamento"}60${description.length.toString().padStart(2, "0")}${description}6304`;
-    
-    return payload;
+    return generatePixPayload(pixKey, Number(entry.amount), merchantName, description);
   };
 
   if (!currentProject) {
@@ -317,9 +475,21 @@ export function FinancialFlowView() {
                 <TableRow>
                   <TableHead className="min-w-[200px] sticky left-0 bg-background z-10">Categoria / Descrição</TableHead>
                   {weeks.map((week, i) => (
-                    <TableHead key={i} className="text-center min-w-[140px]">
-                      <div className="font-semibold">
+                    <TableHead 
+                      key={i} 
+                      className={cn(
+                        "text-center min-w-[140px]",
+                        isCurrentWeek(week.start) && "bg-primary/20"
+                      )}
+                    >
+                      <div className={cn(
+                        "font-semibold",
+                        isCurrentWeek(week.start) && "text-primary"
+                      )}>
                         {format(week.start, "dd/MM")} a {format(week.end, "dd/MM")}
+                        {isCurrentWeek(week.start) && (
+                          <Badge className="ml-2 text-xs" variant="secondary">Atual</Badge>
+                        )}
                       </div>
                     </TableHead>
                   ))}
@@ -330,7 +500,13 @@ export function FinancialFlowView() {
                 <TableRow className="bg-primary/10 font-bold">
                   <TableCell className="sticky left-0 bg-primary/10">TOTAL</TableCell>
                   {weeks.map((week, i) => (
-                    <TableCell key={i} className="text-center">
+                    <TableCell 
+                      key={i} 
+                      className={cn(
+                        "text-center",
+                        isCurrentWeek(week.start) && "bg-primary/20"
+                      )}
+                    >
                       R$ {getWeekTotal(week.start, week.end).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                     </TableCell>
                   ))}
@@ -348,7 +524,13 @@ export function FinancialFlowView() {
                         {weeks.map((week, i) => {
                           const total = getCategoryTotal(category, week.start, week.end);
                           return (
-                            <TableCell key={i} className="text-center font-semibold">
+                            <TableCell 
+                              key={i} 
+                              className={cn(
+                                "text-center font-semibold",
+                                isCurrentWeek(week.start) && "bg-primary/10"
+                              )}
+                            >
                               {total > 0 ? `R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "-"}
                             </TableCell>
                           );
@@ -373,26 +555,49 @@ export function FinancialFlowView() {
                               const isInWeek = isWithinInterval(dueDate, { start: week.start, end: week.end });
                               
                               return (
-                                <TableCell key={i} className="text-center">
+                                <TableCell 
+                                  key={i} 
+                                  className={cn(
+                                    "text-center",
+                                    isCurrentWeek(week.start) && "bg-primary/5"
+                                  )}
+                                >
                                   {isInWeek ? (
                                     <div className="space-y-1">
                                       <div 
-                                        className={`font-medium cursor-pointer hover:underline ${entry.status === "paid" ? "text-green-600" : entry.status === "overdue" ? "text-red-600" : ""}`}
+                                        className={cn(
+                                          "font-medium cursor-pointer hover:underline",
+                                          entry.status === "paid" && "text-green-600",
+                                          entry.status === "overdue" && "text-red-600"
+                                        )}
                                         onClick={() => openQRCode(entry)}
                                       >
                                         R$ {Number(entry.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                                       </div>
-                                      {entry.status === "pending" && (
-                                        <Button 
-                                          variant="ghost" 
-                                          size="sm" 
-                                          className="h-6 text-xs"
-                                          onClick={() => handleMarkAsPaid(entry)}
-                                        >
-                                          <CheckCircle className="h-3 w-3 mr-1" />
-                                          Pagar
-                                        </Button>
-                                      )}
+                                      <div className="flex gap-1 justify-center">
+                                        {entry.status === "pending" && (
+                                          <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-6 text-xs"
+                                            onClick={() => handleMarkAsPaid(entry)}
+                                          >
+                                            <CheckCircle className="h-3 w-3 mr-1" />
+                                            Pagar
+                                          </Button>
+                                        )}
+                                        {entry.status === "paid" && (
+                                          <Button 
+                                            variant="ghost" 
+                                            size="sm" 
+                                            className="h-6 text-xs text-orange-600 hover:text-orange-700"
+                                            onClick={() => handleUndoPayment(entry)}
+                                          >
+                                            <Undo2 className="h-3 w-3 mr-1" />
+                                            Desfazer
+                                          </Button>
+                                        )}
+                                      </div>
                                     </div>
                                   ) : null}
                                 </TableCell>
@@ -461,24 +666,70 @@ export function FinancialFlowView() {
 
             <div>
               <Label>Fornecedor</Label>
-              <Select value={newEntry.supplier_id} onValueChange={(v) => {
-                const supplier = suppliers.find(s => s.id === v);
-                setNewEntry({ 
-                  ...newEntry, 
-                  supplier_id: v,
-                  pix_key: supplier?.pix_key || newEntry.pix_key,
-                  pix_key_type: supplier?.pix_key_type || newEntry.pix_key_type
-                });
-              }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione (opcional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {suppliers.map(sup => (
-                    <SelectItem key={sup.id} value={sup.id}>{sup.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={supplierSearchOpen} onOpenChange={setSupplierSearchOpen}>
+                <PopoverTrigger asChild>
+                  <div className="relative">
+                    <Input
+                      value={supplierSearchValue}
+                      onChange={(e) => {
+                        setSupplierSearchValue(e.target.value);
+                        setSupplierSearchOpen(true);
+                        if (!e.target.value) {
+                          setNewEntry({ ...newEntry, supplier_id: "", supplier_name: "" });
+                        }
+                      }}
+                      onFocus={() => setSupplierSearchOpen(true)}
+                      placeholder="Digite para buscar ou criar fornecedor..."
+                    />
+                  </div>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0" align="start">
+                  <Command>
+                    <CommandList>
+                      {filteredSuppliers.length > 0 ? (
+                        <CommandGroup heading="Fornecedores">
+                          {filteredSuppliers.map(supplier => (
+                            <CommandItem 
+                              key={supplier.id} 
+                              onSelect={() => handleSelectSupplier(supplier)}
+                              className="cursor-pointer"
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                <span>{supplier.name}</span>
+                                <Badge variant="outline" className="text-xs">
+                                  {supplier.supplier_scope === 'global' ? 'Geral' : 'Obra'}
+                                </Badge>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      ) : null}
+                      {supplierSearchValue && !filteredSuppliers.some(s => s.name.toLowerCase() === supplierSearchValue.toLowerCase()) && (
+                        <CommandGroup>
+                          <CommandItem 
+                            onSelect={() => {
+                              setNewSupplier({ ...newSupplier, name: supplierSearchValue });
+                              setShowNewSupplierDialog(true);
+                              setSupplierSearchOpen(false);
+                            }}
+                            className="cursor-pointer text-primary"
+                          >
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            Cadastrar "{supplierSearchValue}" como novo fornecedor
+                          </CommandItem>
+                        </CommandGroup>
+                      )}
+                      {!supplierSearchValue && filteredSuppliers.length === 0 && (
+                        <CommandEmpty>
+                          <div className="p-2 text-sm text-muted-foreground">
+                            Nenhum fornecedor cadastrado. Digite um nome para criar.
+                          </div>
+                        </CommandEmpty>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -524,6 +775,93 @@ export function FinancialFlowView() {
         </DialogContent>
       </Dialog>
 
+      {/* New Supplier Dialog */}
+      <Dialog open={showNewSupplierDialog} onOpenChange={setShowNewSupplierDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cadastrar Novo Fornecedor</DialogTitle>
+            <DialogDescription>O fornecedor será salvo automaticamente</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Nome *</Label>
+              <Input 
+                value={newSupplier.name}
+                onChange={(e) => setNewSupplier({ ...newSupplier, name: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Tipo</Label>
+                <Select value={newSupplier.supplier_type} onValueChange={(v) => setNewSupplier({ ...newSupplier, supplier_type: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="material">Materiais</SelectItem>
+                    <SelectItem value="labor">Mão de Obra</SelectItem>
+                    <SelectItem value="equipment">Equipamentos</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Escopo</Label>
+                <Select value={newSupplier.supplier_scope} onValueChange={(v) => setNewSupplier({ ...newSupplier, supplier_scope: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="project">Apenas esta Obra</SelectItem>
+                    <SelectItem value="global">Geral (todas as obras)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>CPF/CNPJ</Label>
+                <Input 
+                  value={newSupplier.cnpj_cpf}
+                  onChange={(e) => setNewSupplier({ ...newSupplier, cnpj_cpf: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Telefone</Label>
+                <Input 
+                  value={newSupplier.phone}
+                  onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Chave PIX</Label>
+                <Input 
+                  value={newSupplier.pix_key}
+                  onChange={(e) => setNewSupplier({ ...newSupplier, pix_key: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Tipo PIX</Label>
+                <Select value={newSupplier.pix_key_type} onValueChange={(v) => setNewSupplier({ ...newSupplier, pix_key_type: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cpf">CPF</SelectItem>
+                    <SelectItem value="cnpj">CNPJ</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="phone">Telefone</SelectItem>
+                    <SelectItem value="random">Aleatória</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewSupplierDialog(false)}>Cancelar</Button>
+            <Button onClick={handleCreateNewSupplier} disabled={!newSupplier.name}>
+              <UserPlus className="h-4 w-4 mr-2" />
+              Cadastrar e Usar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* QR Code Dialog */}
       <Dialog open={showQRDialog} onOpenChange={setShowQRDialog}>
         <DialogContent className="max-w-sm">
@@ -539,7 +877,7 @@ export function FinancialFlowView() {
               <div className="bg-white p-4 rounded-lg inline-block mx-auto">
                 {(selectedEntry.pix_key || selectedEntry.supplier?.pix_key) ? (
                   <QRCodeSVG 
-                    value={generatePixPayload(selectedEntry)}
+                    value={getPixPayloadForEntry(selectedEntry)}
                     size={192}
                     level="M"
                     includeMargin={true}
@@ -576,13 +914,27 @@ export function FinancialFlowView() {
                 <Button variant="outline" onClick={() => setShowQRDialog(false)}>
                   Fechar
                 </Button>
-                <Button onClick={() => {
-                  handleMarkAsPaid(selectedEntry);
-                  setShowQRDialog(false);
-                }}>
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Marcar como Pago
-                </Button>
+                {selectedEntry.status === "pending" ? (
+                  <Button onClick={() => {
+                    handleMarkAsPaid(selectedEntry);
+                    setShowQRDialog(false);
+                  }}>
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Marcar como Pago
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="outline" 
+                    className="text-orange-600"
+                    onClick={() => {
+                      handleUndoPayment(selectedEntry);
+                      setShowQRDialog(false);
+                    }}
+                  >
+                    <Undo2 className="h-4 w-4 mr-2" />
+                    Desfazer Pagamento
+                  </Button>
+                )}
               </div>
             </div>
           )}
