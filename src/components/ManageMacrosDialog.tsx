@@ -1,6 +1,7 @@
 import { useState, DragEvent, useMemo } from "react";
-import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy, Eye, Scale } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy, Eye, Scale, Upload, FileUp, Download, Printer } from "lucide-react";
 import { CopyMacrosDialog } from "./CopyMacrosDialog";
+import { ImportMacrosDialog } from "./ImportMacrosDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +21,15 @@ interface ManageMacrosDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+interface ExtractedMacro {
+  name: string;
+  color: string;
+  scopes: {
+    name: string;
+    weight: number;
+  }[];
+}
+
 export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogProps) {
   const { currentProject, addMacro, updateMacro, deleteMacro, addScope, updateScope, deleteScope, resetProjectData, reorderMacros, reorderScopes } = useConstruction();
   const { canEdit } = useAuth();
@@ -34,6 +44,10 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
   const [showResetWarning, setShowResetWarning] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [showCopyDialog, setShowCopyDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showImportWeightsDialog, setShowImportWeightsDialog] = useState(false);
+  const [showCriticalDeleteAlert, setShowCriticalDeleteAlert] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'macro' | 'scope'; macroId: string; scopeId?: string; name: string } | null>(null);
   
   // Drag state for macros
   const [draggedMacroId, setDraggedMacroId] = useState<string | null>(null);
@@ -142,9 +156,78 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
   };
 
   const handleDeleteMacro = (macroId: string) => {
-    confirmOrExecute(() => {
-      deleteMacro(macroId);
+    const macro = macrosTemplate.find(m => m.id === macroId);
+    setDeleteTarget({ type: 'macro', macroId, name: macro?.name || 'Etapa' });
+    setShowCriticalDeleteAlert(true);
+  };
+
+  const handleDeleteScope = (macroId: string, scopeId: string) => {
+    const macro = macrosTemplate.find(m => m.id === macroId);
+    const scope = macro?.scopes.find(s => s.id === scopeId);
+    setDeleteTarget({ type: 'scope', macroId, scopeId, name: scope?.name || 'Serviço' });
+    setShowCriticalDeleteAlert(true);
+  };
+
+  const confirmCriticalDelete = () => {
+    if (!deleteTarget) return;
+    
+    if (deleteTarget.type === 'macro') {
+      confirmOrExecute(() => {
+        deleteMacro(deleteTarget.macroId);
+      });
+    } else if (deleteTarget.type === 'scope' && deleteTarget.scopeId) {
+      confirmOrExecute(() => {
+        deleteScope(deleteTarget.macroId, deleteTarget.scopeId!);
+      });
+    }
+    
+    setShowCriticalDeleteAlert(false);
+    setDeleteTarget(null);
+  };
+
+  // Import handlers
+  const handleImportMacros = async (macros: ExtractedMacro[]) => {
+    if (!currentProject) return;
+    
+    confirmOrExecute(async () => {
+      for (const macro of macros) {
+        await addMacro(macro.name);
+        // Get the newly added macro from the updated template
+        const updatedProject = currentProject;
+        const newMacro = updatedProject.macrosTemplate[updatedProject.macrosTemplate.length - 1];
+        if (newMacro) {
+          await updateMacro(newMacro.id, macro.name, macro.color);
+          for (const scope of macro.scopes) {
+            await addScope(newMacro.id, scope.name, scope.weight);
+          }
+        }
+      }
     });
+  };
+
+  const handleImportWeights = (macros: ExtractedMacro[]) => {
+    if (!currentProject) return;
+    
+    // Match imported macros/scopes with existing ones and update weights
+    for (const importedMacro of macros) {
+      const existingMacro = macrosTemplate.find(m => 
+        m.name.toLowerCase().includes(importedMacro.name.toLowerCase()) ||
+        importedMacro.name.toLowerCase().includes(m.name.toLowerCase())
+      );
+      
+      if (existingMacro) {
+        for (const importedScope of importedMacro.scopes) {
+          const existingScope = existingMacro.scopes.find(s =>
+            s.name.toLowerCase().includes(importedScope.name.toLowerCase()) ||
+            importedScope.name.toLowerCase().includes(s.name.toLowerCase())
+          );
+          
+          if (existingScope) {
+            updateScope(existingMacro.id, existingScope.id, { weight: importedScope.weight });
+          }
+        }
+      }
+    }
   };
 
   const handleAddScope = () => {
@@ -166,11 +249,7 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
     }
   };
 
-  const handleDeleteScope = (macroId: string, scopeId: string) => {
-    confirmOrExecute(() => {
-      deleteScope(macroId, scopeId);
-    });
-  };
+  // Note: handleDeleteScope moved to above with critical alert
 
   // Macro reordering
   const handleMacroDragStart = (e: DragEvent<HTMLDivElement>, macroId: string) => {
@@ -374,13 +453,30 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                   </div>
                 )}
                 {!showAddMacro && (
-                  <Button 
-                    variant="outline"
-                    onClick={() => setShowCopyDialog(true)}
-                  >
-                    <Copy className="w-4 h-4 mr-2" />
-                    Copiar de Outra Obra
-                  </Button>
+                  <>
+                    <Button 
+                      variant="outline"
+                      onClick={() => setShowCopyDialog(true)}
+                    >
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copiar de Outra Obra
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      onClick={() => setShowImportDialog(true)}
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Importar Etapas
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      onClick={() => setShowImportWeightsDialog(true)}
+                      title="Importar pesos do orçamento"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Importar Pesos
+                    </Button>
+                  </>
                 )}
               </div>
             )}
@@ -654,6 +750,73 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
         open={showCopyDialog} 
         onOpenChange={setShowCopyDialog} 
       />
+
+      <ImportMacrosDialog 
+        open={showImportDialog} 
+        onOpenChange={setShowImportDialog}
+        onImport={handleImportMacros}
+        mode="structure"
+      />
+
+      <ImportMacrosDialog 
+        open={showImportWeightsDialog} 
+        onOpenChange={setShowImportWeightsDialog}
+        onImport={handleImportWeights}
+        mode="weights"
+      />
+
+      {/* Critical Delete Alert */}
+      <AlertDialog open={showCriticalDeleteAlert} onOpenChange={setShowCriticalDeleteAlert}>
+        <AlertDialogContent className="border-destructive">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-destructive/10 rounded-full">
+                <AlertTriangle className="h-6 w-6 text-destructive" />
+              </div>
+              <AlertDialogTitle className="text-destructive">
+                ⚠️ ALERTA CRÍTICO DE EXCLUSÃO
+              </AlertDialogTitle>
+            </div>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
+                  <p className="font-semibold text-foreground">
+                    Você está prestes a excluir: <span className="text-destructive">{deleteTarget?.name}</span>
+                  </p>
+                  <p className="text-sm mt-1">
+                    Obra: <span className="font-medium">{currentProject?.name}</span>
+                  </p>
+                </div>
+                
+                <div className="text-sm space-y-2 text-muted-foreground">
+                  <p className="font-semibold text-foreground">Esta ação irá:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-2">
+                    <li>Remover permanentemente {deleteTarget?.type === 'macro' ? 'esta etapa e todos os seus serviços' : 'este serviço'}</li>
+                    <li className="text-destructive font-medium">ZERAR TODO O PROGRESSO de todas as {currentProject?.houses.length || 0} casas da obra</li>
+                    <li>Esta ação NÃO pode ser desfeita</li>
+                  </ul>
+                </div>
+
+                <div className="p-2 bg-amber-100 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 rounded text-sm text-amber-800 dark:text-amber-200">
+                  <strong>Recomendação:</strong> Exporte os dados antes de prosseguir.
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel onClick={() => setDeleteTarget(null)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmCriticalDelete} 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Confirmar Exclusão
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
