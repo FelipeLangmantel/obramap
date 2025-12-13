@@ -81,6 +81,7 @@ const DEFAULT_FAMILIES: Omit<MaterialFamily, 'id'>[] = [
   { name: 'Madeira', icon: 'tree-pine', color: '#854d0e', displayOrder: 5 },
   { name: 'Pintura', icon: 'paintbrush', color: '#ec4899', displayOrder: 6 },
   { name: 'Cerâmica', icon: 'square', color: '#14b8a6', displayOrder: 7 },
+  { name: 'Ferramentas', icon: 'wrench', color: '#64748b', displayOrder: 8 },
   { name: 'Geral', icon: 'package', color: '#9ca3af', displayOrder: 99 },
 ];
 

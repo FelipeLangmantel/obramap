@@ -48,35 +48,35 @@ serve(async (req) => {
     
     const prompt = `Você é um especialista em análise de cronogramas e estruturas de obras de construção civil brasileira.
 
-Analise este documento (imagem de planilha, cronograma, lista de etapas ou estrutura de obra) e extraia a ESTRUTURA DE ETAPAS E SERVIÇOS.
+TAREFA: Extraia EXATAMENTE o texto e valores do documento, sem modificar, corrigir ou interpretar.
 
-OBJETIVO: Identificar as ETAPAS PRINCIPAIS (macros) e seus SERVIÇOS (scopes) dentro de cada etapa.
+REGRAS CRÍTICAS DE FIDELIDADE:
+1. NÃO CORRIJA erros de ortografia ou gramática
+2. NÃO ALTERE a formatação ou capitalização dos nomes
+3. NÃO INTERPRETE ou traduza termos técnicos
+4. COPIE o texto EXATAMENTE como aparece no documento
+5. Use os valores EXATAMENTE como aparecem (não arredonde, não recalcule)
+6. Se houver valores monetários, calcule os percentuais a partir deles
+7. Mantenha abreviações e siglas como estão no documento
 
-ESTRUTURA ESPERADA:
-- ETAPA (Macro): Grupo principal de atividades (ex: Fundação, Estrutura, Alvenaria, Instalações, Acabamento)
-- SERVIÇO (Scope): Atividades específicas dentro de cada etapa (ex: dentro de "Fundação": Escavação, Forma, Concretagem)
+ESTRUTURA A IDENTIFICAR:
+- ETAPA (Macro): Grupo principal (ex: FUNDAÇÃO, ESTRUTURA, ALVENARIA)
+- SERVIÇO (Scope): Atividades específicas dentro de cada etapa
 
 ${mode === 'weights' ? `
-IMPORTANTE - MODO PESOS:
-- Extraia os PERCENTUAIS/PESOS de cada serviço se disponíveis
-- Os pesos devem somar aproximadamente 100% considerando todos os serviços de todas as etapas
-- Se não houver pesos explícitos, distribua proporcionalmente
+MODO PESOS - PRIORIDADE MÁXIMA:
+- Se houver valores monetários no documento, calcule o peso de cada serviço como: (valor_serviço / valor_total) * 100
+- Os pesos devem somar exatamente 100% considerando todos os serviços
+- USE APENAS OS VALORES UNITÁRIOS que aparecem no documento original
+- NÃO RECALCULE, NÃO NORMALIZE os valores do documento
 ` : `
-IMPORTANTE - MODO ESTRUTURA:
-- Distribua os pesos de forma proporcional se não estiverem explícitos
-- Cada serviço deve ter um peso que some 100% no total de todos os serviços
+MODO ESTRUTURA:
+- Extraia os nomes exatamente como aparecem
+- Se não houver pesos, distribua uniformemente
 `}
 
-REGRAS:
-1. Identifique claramente a hierarquia: Etapa > Serviços
-2. Mantenha os nomes exatamente como aparecem no documento
-3. Atribua pesos percentuais que somem aproximadamente 100%
-4. Se o documento tiver valores monetários, use para calcular proporção dos pesos
-5. Ordene as etapas na sequência lógica de execução da obra
-
-Responda APENAS com JSON válido, SEM markdown, SEM \`\`\`json, SEM explicações.
-O formato deve ser exatamente:
-{"macros":[{"name":"Nome da Etapa","color":"#ef4444","scopes":[{"name":"Nome do Serviço","weight":5.5}]}],"success":true,"message":"X etapas com Y serviços extraídos"}`;
+RESPOSTA OBRIGATÓRIA EM JSON PURO (sem markdown, sem \`\`\`):
+{"macros":[{"name":"NOME EXATO DA ETAPA","color":"#ef4444","scopes":[{"name":"Nome exato do serviço","weight":5.5}]}],"success":true,"message":"X etapas com Y serviços extraídos"}`;
 
     console.log("Calling Lovable AI to parse macros/scopes...");
 
