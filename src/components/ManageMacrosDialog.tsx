@@ -536,24 +536,14 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                       <span className="sm:hidden">Importar</span>
                     </Button>
                     <Button 
-                      variant="outline"
-                      onClick={() => setShowImportWeightsDialog(true)}
-                      title="Importar pesos de imagem/arquivo"
-                      className="flex-1 sm:flex-none text-xs sm:text-sm"
-                    >
-                      <Download className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                      <span className="hidden sm:inline">Importar Pesos</span>
-                      <span className="sm:hidden">Importar</span>
-                    </Button>
-                    <Button 
-                      variant="outline"
+                      variant="default"
                       onClick={handlePullWeightsFromBudget}
                       title="Puxar pesos automaticamente do orçamento da obra"
                       className="flex-1 sm:flex-none text-xs sm:text-sm"
                     >
                       <Calculator className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                      <span className="hidden sm:inline">Puxar do Orçamento</span>
-                      <span className="sm:hidden">Orçamento</span>
+                      <span className="hidden sm:inline">Autoajuste de Pesos</span>
+                      <span className="sm:hidden">Autoajuste</span>
                     </Button>
                   </div>
                 )}

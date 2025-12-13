@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ConstructionProvider, useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ProjectSelector } from "@/components/ProjectSelector";
 import { StatsCards } from "@/components/StatsCards";
@@ -20,7 +20,16 @@ import { SuppliesView } from "@/components/SuppliesView";
 import { InputsManagementView } from "@/components/InputsManagementView";
 import { SuppliersManagementView } from "@/components/SuppliersManagementView";
 import { FinancialFlowView } from "@/components/FinancialFlowView";
-import { Loader2 } from "lucide-react";
+import { Loader2, Menu } from "lucide-react";
+
+// Mobile sidebar trigger button
+function SidebarTriggerButton() {
+  return (
+    <SidebarTrigger className="md:hidden p-2 -ml-1 text-muted-foreground hover:text-foreground">
+      <Menu className="h-5 w-5" />
+    </SidebarTrigger>
+  );
+}
 
 type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow";
 
@@ -63,8 +72,9 @@ function IndexContent() {
         
         <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
           {/* Top Header */}
-          <header className="h-14 bg-card border-b border-border px-4 md:px-6 flex items-center gap-4 shrink-0">
-            <h2 className="text-lg md:text-xl font-semibold text-foreground whitespace-nowrap shrink-0">
+          <header className="h-14 bg-card border-b border-border px-2 md:px-6 flex items-center gap-2 md:gap-4 shrink-0">
+            <SidebarTriggerButton />
+            <h2 className="text-sm md:text-xl font-semibold text-foreground whitespace-nowrap shrink-0 truncate">
               {viewTitles[activeView]}
             </h2>
             
