@@ -1040,6 +1040,8 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   const deleteMacro = useCallback(async (macroId: string) => {
     if (!currentProject) return;
     
+    const macro = currentProject.macrosTemplate.find(m => m.id === macroId);
+    const scopeIds = macro?.scopes.map(s => s.id) || [];
     const newTemplate = currentProject.macrosTemplate.filter(m => m.id !== macroId);
 
     // Update in database first
@@ -1054,9 +1056,19 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Delete related data - budget items, productions, deviations, labor contracts
+    for (const scopeId of scopeIds) {
+      await supabase.from('scope_items').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
+      await supabase.from('scope_costs').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
+    }
+    await supabase.from('weekly_productions').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
+    await supabase.from('planned_productions').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
+    await supabase.from('production_deviations').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
+    await supabase.from('labor_contracts').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
+
     // Then sync to houses
     await syncMacrosToHouses(newTemplate);
-    toast.success("Etapa removida!");
+    toast.success("Etapa e todos dados relacionados removidos!");
   }, [currentProject, syncMacrosToHouses]);
 
   // Scope management - with proper await for database persistence
@@ -1168,9 +1180,17 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Delete related data - budget items, productions, deviations, labor contracts
+    await supabase.from('scope_items').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
+    await supabase.from('scope_costs').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
+    await supabase.from('weekly_productions').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
+    await supabase.from('planned_productions').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
+    await supabase.from('production_deviations').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
+    await supabase.from('labor_contracts').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
+
     // Then sync to houses
     await syncMacrosToHouses(newTemplate);
-    toast.success("Serviço removido!");
+    toast.success("Serviço e todos dados relacionados removidos!");
   }, [currentProject, syncMacrosToHouses]);
 
   // Reorder macros - reorganizes the order of macros/etapas

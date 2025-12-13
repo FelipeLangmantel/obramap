@@ -170,9 +170,9 @@ export function ImportMacrosDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl h-[85vh] flex flex-col overflow-hidden">
+      <DialogContent className="w-[95vw] max-w-4xl h-[90vh] max-h-[90vh] flex flex-col overflow-hidden p-3 sm:p-6">
         <DialogHeader className="flex-shrink-0">
-          <DialogTitle>
+          <DialogTitle className="text-base sm:text-lg">
             {mode === 'weights' 
               ? 'Importar Pesos do Orçamento' 
               : 'Importar Etapas e Serviços'}
@@ -180,9 +180,9 @@ export function ImportMacrosDialog({
         </DialogHeader>
 
         {step === 'upload' ? (
-          <div className="py-8">
+          <div className="py-4 sm:py-8 flex-1 overflow-y-auto">
             <div 
-              className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
+              className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-4 sm:p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
               onClick={() => fileInputRef.current?.click()}
             >
               {isProcessing ? (
@@ -245,7 +245,7 @@ export function ImportMacrosDialog({
             </div>
 
             {/* Macros list */}
-            <ScrollArea className="flex-1 border rounded-lg p-2">
+            <ScrollArea className="flex-1 border rounded-lg p-1 sm:p-2 min-h-0">
               <Accordion type="multiple" defaultValue={extractedMacros.map((_, i) => `macro-${i}`)}>
                 {extractedMacros.map((macro, macroIndex) => (
                   <AccordionItem key={macroIndex} value={`macro-${macroIndex}`}>

@@ -1,5 +1,5 @@
 import { useState, DragEvent, useMemo } from "react";
-import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy, Eye, Scale, Upload, FileUp, Download, Printer } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy, Eye, Scale, Upload, FileUp, Download, Printer, Calculator } from "lucide-react";
 import { CopyMacrosDialog } from "./CopyMacrosDialog";
 import { ImportMacrosDialog } from "./ImportMacrosDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -15,6 +15,8 @@ import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Scope } from "@/data/constructionData";
 import { DEFAULT_MACRO_COLORS } from "@/data/constructionData";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface ManageMacrosDialogProps {
   open: boolean;
@@ -230,6 +232,63 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
     }
   };
 
+  // Pull weights automatically from the project's budget
+  const handlePullWeightsFromBudget = async () => {
+    if (!currentProject) return;
+    
+    try {
+      // Load all scope items for the project
+      const { data: itemsData, error } = await supabase
+        .from('scope_items')
+        .select('scope_id, unit_value, quantity')
+        .eq('project_id', currentProject.id);
+
+      if (error) throw error;
+      if (!itemsData || itemsData.length === 0) {
+        toast.error('Nenhum item de orçamento encontrado. Adicione itens ao orçamento primeiro.');
+        return;
+      }
+
+      // Calculate total cost per scope
+      const scopeTotals: Record<string, number> = {};
+      itemsData.forEach(item => {
+        const total = Number(item.unit_value) * Number(item.quantity);
+        scopeTotals[item.scope_id] = (scopeTotals[item.scope_id] || 0) + total;
+      });
+
+      // Calculate grand total
+      const grandTotal = Object.values(scopeTotals).reduce((sum, val) => sum + val, 0);
+      
+      if (grandTotal === 0) {
+        toast.error('O orçamento não tem valores. Adicione valores aos itens primeiro.');
+        return;
+      }
+
+      // Calculate and update weights for each scope
+      let updated = 0;
+      for (const macro of macrosTemplate) {
+        for (const scope of macro.scopes) {
+          const scopeTotal = scopeTotals[scope.id] || 0;
+          const newWeight = Math.round((scopeTotal / grandTotal) * 100 * 10) / 10; // Round to 1 decimal
+          
+          if (newWeight > 0) {
+            await updateScope(macro.id, scope.id, { weight: newWeight });
+            updated++;
+          }
+        }
+      }
+
+      if (updated > 0) {
+        toast.success(`Pesos atualizados para ${updated} serviços baseados no orçamento!`);
+      } else {
+        toast.warning('Nenhum peso pôde ser calculado. Verifique se os serviços têm itens no orçamento.');
+      }
+    } catch (error) {
+      console.error('Error pulling weights from budget:', error);
+      toast.error('Erro ao calcular pesos do orçamento');
+    }
+  };
+
   const handleAddScope = () => {
     if (newScope && newScope.name.trim() && newScope.weight) {
       confirmOrExecute(() => {
@@ -365,9 +424,9 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Gerenciar Etapas e Serviços</DialogTitle>
+        <DialogContent className="w-[95vw] max-w-2xl h-[90vh] max-h-[90vh] flex flex-col overflow-hidden p-3 sm:p-6">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="text-base sm:text-lg">Gerenciar Etapas e Serviços</DialogTitle>
           </DialogHeader>
           
           {!canEdit && (
@@ -425,58 +484,78 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
             Arraste os itens ou use as setas para reorganizar a ordem das etapas e serviços.
           </p>
           
-          <div className="space-y-4 py-4">
+          <div className="flex-1 overflow-y-auto space-y-4 py-2 sm:py-4 min-h-0">
             {/* Action Buttons - Only show if can edit */}
             {canEdit && (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {!showAddMacro ? (
                   <Button 
                     variant="outline" 
-                    className="flex-1 border-dashed"
+                    className="flex-1 min-w-[150px] border-dashed text-xs sm:text-sm"
                     onClick={() => setShowAddMacro(true)}
                   >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Adicionar Nova Etapa
+                    <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">Adicionar Nova Etapa</span>
+                    <span className="sm:hidden">Nova Etapa</span>
                   </Button>
                 ) : (
-                  <div className="flex gap-2 p-3 bg-secondary/50 rounded-lg flex-1">
+                  <div className="flex flex-col sm:flex-row gap-2 p-2 sm:p-3 bg-secondary/50 rounded-lg flex-1">
                     <Input
                       placeholder="Nome da etapa..."
                       value={newMacroName}
                       onChange={(e) => setNewMacroName(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleAddMacro()}
+                      className="text-sm"
                     />
-                    <Button size="sm" onClick={handleAddMacro}>Adicionar</Button>
-                    <Button size="sm" variant="ghost" onClick={() => { setShowAddMacro(false); setNewMacroName(""); }}>
-                      Cancelar
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleAddMacro} className="text-xs">Adicionar</Button>
+                      <Button size="sm" variant="ghost" onClick={() => { setShowAddMacro(false); setNewMacroName(""); }} className="text-xs">
+                        Cancelar
+                      </Button>
+                    </div>
                   </div>
                 )}
                 {!showAddMacro && (
-                  <>
+                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                     <Button 
                       variant="outline"
                       onClick={() => setShowCopyDialog(true)}
+                      className="flex-1 sm:flex-none text-xs sm:text-sm"
                     >
-                      <Copy className="w-4 h-4 mr-2" />
-                      Copiar de Outra Obra
+                      <Copy className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                      <span className="hidden sm:inline">Copiar de Outra Obra</span>
+                      <span className="sm:hidden">Copiar</span>
                     </Button>
                     <Button 
                       variant="outline"
                       onClick={() => setShowImportDialog(true)}
+                      className="flex-1 sm:flex-none text-xs sm:text-sm"
                     >
-                      <Upload className="w-4 h-4 mr-2" />
-                      Importar Etapas
+                      <Upload className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                      <span className="hidden sm:inline">Importar Etapas</span>
+                      <span className="sm:hidden">Importar</span>
                     </Button>
                     <Button 
                       variant="outline"
                       onClick={() => setShowImportWeightsDialog(true)}
-                      title="Importar pesos do orçamento"
+                      title="Importar pesos de imagem/arquivo"
+                      className="flex-1 sm:flex-none text-xs sm:text-sm"
                     >
-                      <Download className="w-4 h-4 mr-2" />
-                      Importar Pesos
+                      <Download className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                      <span className="hidden sm:inline">Importar Pesos</span>
+                      <span className="sm:hidden">Importar</span>
                     </Button>
-                  </>
+                    <Button 
+                      variant="outline"
+                      onClick={handlePullWeightsFromBudget}
+                      title="Puxar pesos automaticamente do orçamento da obra"
+                      className="flex-1 sm:flex-none text-xs sm:text-sm"
+                    >
+                      <Calculator className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                      <span className="hidden sm:inline">Puxar do Orçamento</span>
+                      <span className="sm:hidden">Orçamento</span>
+                    </Button>
+                  </div>
                 )}
               </div>
             )}

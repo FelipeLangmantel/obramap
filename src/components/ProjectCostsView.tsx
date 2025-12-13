@@ -421,11 +421,18 @@ export function ProjectCostsView() {
     }).format(value);
   };
 
-  // Print budget function
+  // Print budget function - PDF
   const printBudget = async (format: 'analytical' | 'synthetic') => {
     setIsPrinting(true);
     
     try {
+      const jsPDFModule = await import('jspdf');
+      const jsPDF = jsPDFModule.default;
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 15;
+      let y = 20;
+
       // Load all scope items for the project
       const { data: itemsData, error } = await supabase
         .from('scope_items')
@@ -434,48 +441,117 @@ export function ProjectCostsView() {
 
       if (error) throw error;
 
-      const lines: string[] = [];
-      const separator = ',';
-      
       // Header
-      lines.push(`Orçamento do Projeto - ${currentProject?.name}`);
-      lines.push(`Contratante: ${currentProject?.contractor}`);
-      lines.push(`Local: ${currentProject?.location}`);
-      lines.push(`Total de Casas: ${houses.length}`);
-      lines.push(`Exportado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`);
-      lines.push('');
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`ORÇAMENTO - ${currentProject?.name}`, pageWidth / 2, y, { align: 'center' });
+      
+      y += 8;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Contratante: ${currentProject?.contractor}`, margin, y);
+      y += 5;
+      doc.text(`Local: ${currentProject?.location}`, margin, y);
+      y += 5;
+      doc.text(`Total de Casas: ${houses.length}`, margin, y);
+      y += 5;
+      doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, margin, y);
+      
+      y += 10;
+      doc.setDrawColor(200);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 8;
 
       if (format === 'analytical') {
         // Analytical - detailed view by macro and scope
-        lines.push(`Etapa${separator}Serviço${separator}Item${separator}Categoria${separator}Quantidade${separator}Unidade${separator}Valor Unit.${separator}Total por Casa`);
-        
         macros.forEach(macro => {
+          // Check if we need a new page
+          if (y > 260) {
+            doc.addPage();
+            y = 20;
+          }
+          
+          // Macro header
+          doc.setFillColor(70, 130, 180);
+          doc.roundedRect(margin, y, pageWidth - 2 * margin, 7, 2, 2, 'F');
+          doc.setTextColor(255);
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'bold');
+          doc.text(macro.name, margin + 3, y + 5);
+          y += 12;
+          doc.setTextColor(0);
+          
           macro.scopes.forEach(scope => {
             const scopeItems = itemsData?.filter(item => item.scope_id === scope.id) || [];
+            if (scopeItems.length === 0) return;
+            
+            if (y > 270) {
+              doc.addPage();
+              y = 20;
+            }
+            
+            // Scope header
+            doc.setFillColor(240, 240, 240);
+            doc.roundedRect(margin, y, pageWidth - 2 * margin, 6, 1, 1, 'F');
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`  ${scope.name}`, margin, y + 4.5);
+            const scopeTotal = scopeItems.reduce((sum, i) => sum + Number(i.unit_value) * Number(i.quantity), 0);
+            doc.text(formatCurrency(scopeTotal), pageWidth - margin - 3, y + 4.5, { align: 'right' });
+            y += 9;
+            
+            // Items
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
             scopeItems.forEach(item => {
+              if (y > 275) {
+                doc.addPage();
+                y = 20;
+              }
+              
               const total = Number(item.unit_value) * Number(item.quantity);
-              const categoryName = item.category === 'material' ? 'Material' : 
-                item.category === 'labor' ? 'Mão de Obra' : 'Equipamento';
-              lines.push(`${macro.name}${separator}"${scope.name}"${separator}"${item.name}"${separator}${categoryName}${separator}${item.quantity}${separator}${item.unit}${separator}${Number(item.unit_value).toFixed(2)}${separator}${total.toFixed(2)}`);
+              const categoryIcon = item.category === 'material' ? '[M]' : item.category === 'labor' ? '[O]' : '[E]';
+              
+              // Item name with word wrap
+              const itemName = `${categoryIcon} ${item.name}`;
+              const maxWidth = 90;
+              const lines = doc.splitTextToSize(itemName, maxWidth);
+              
+              doc.text(lines, margin + 4, y + 3);
+              doc.text(`${item.quantity} ${item.unit}`, pageWidth - 70, y + 3);
+              doc.text(formatCurrency(Number(item.unit_value)), pageWidth - 45, y + 3);
+              doc.text(formatCurrency(total), pageWidth - margin - 3, y + 3, { align: 'right' });
+              
+              y += 4 * lines.length + 2;
             });
+            
+            y += 3;
           });
+          
+          y += 5;
         });
-        
-        // Totals
-        lines.push('');
-        lines.push('RESUMO GERAL');
-        lines.push(`Material por Casa${separator}${separator}${separator}${separator}${separator}${separator}${separator}${unitCost.material.toFixed(2)}`);
-        lines.push(`Mão de Obra por Casa${separator}${separator}${separator}${separator}${separator}${separator}${separator}${unitCost.labor.toFixed(2)}`);
-        lines.push(`Equipamentos por Casa${separator}${separator}${separator}${separator}${separator}${separator}${separator}${unitCost.equipment.toFixed(2)}`);
-        lines.push(`TOTAL POR CASA${separator}${separator}${separator}${separator}${separator}${separator}${separator}${unitCost.total.toFixed(2)}`);
-        lines.push(`TOTAL DA OBRA (${houses.length} casas)${separator}${separator}${separator}${separator}${separator}${separator}${separator}${(unitCost.total * houses.length).toFixed(2)}`);
       } else {
         // Synthetic - summary by macro
-        lines.push(`Etapa${separator}Qtd Serviços${separator}Material${separator}Mão de Obra${separator}Equipamentos${separator}Total por Casa`);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Etapa', margin, y);
+        doc.text('Material', pageWidth - 85, y);
+        doc.text('M.Obra', pageWidth - 60, y);
+        doc.text('Equip.', pageWidth - 40, y);
+        doc.text('Total', pageWidth - margin, y, { align: 'right' });
+        y += 3;
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 6;
         
+        doc.setFont('helvetica', 'normal');
         let totalMaterial = 0, totalLabor = 0, totalEquipment = 0;
         
         macros.forEach(macro => {
+          if (y > 270) {
+            doc.addPage();
+            y = 20;
+          }
+          
           const macroScopeCosts = scopeCosts.filter(c => c.macroId === macro.id);
           const macroMaterial = macroScopeCosts.reduce((sum, c) => sum + c.materialCost, 0);
           const macroLabor = macroScopeCosts.reduce((sum, c) => sum + c.laborCost, 0);
@@ -486,29 +562,50 @@ export function ProjectCostsView() {
           totalLabor += macroLabor;
           totalEquipment += macroEquipment;
           
-          lines.push(`${macro.name}${separator}${macro.scopes.length}${separator}${macroMaterial.toFixed(2)}${separator}${macroLabor.toFixed(2)}${separator}${macroEquipment.toFixed(2)}${separator}${macroTotal.toFixed(2)}`);
+          const macroName = macro.name.length > 25 ? macro.name.substring(0, 25) + '...' : macro.name;
+          doc.text(macroName, margin, y);
+          doc.text(formatCurrency(macroMaterial), pageWidth - 85, y);
+          doc.text(formatCurrency(macroLabor), pageWidth - 60, y);
+          doc.text(formatCurrency(macroEquipment), pageWidth - 40, y);
+          doc.text(formatCurrency(macroTotal), pageWidth - margin, y, { align: 'right' });
+          y += 6;
         });
         
-        lines.push('');
-        lines.push(`TOTAL POR CASA${separator}${separator}${totalMaterial.toFixed(2)}${separator}${totalLabor.toFixed(2)}${separator}${totalEquipment.toFixed(2)}${separator}${(totalMaterial + totalLabor + totalEquipment).toFixed(2)}`);
-        lines.push(`TOTAL DA OBRA (${houses.length} casas)${separator}${separator}${(totalMaterial * houses.length).toFixed(2)}${separator}${(totalLabor * houses.length).toFixed(2)}${separator}${(totalEquipment * houses.length).toFixed(2)}${separator}${((totalMaterial + totalLabor + totalEquipment) * houses.length).toFixed(2)}`);
+        // Totals
+        y += 3;
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 6;
+        doc.setFont('helvetica', 'bold');
+        doc.text('TOTAL POR CASA', margin, y);
+        doc.text(formatCurrency(totalMaterial), pageWidth - 85, y);
+        doc.text(formatCurrency(totalLabor), pageWidth - 60, y);
+        doc.text(formatCurrency(totalEquipment), pageWidth - 40, y);
+        doc.text(formatCurrency(totalMaterial + totalLabor + totalEquipment), pageWidth - margin, y, { align: 'right' });
+        
+        y += 8;
+        doc.setFillColor(230, 230, 255);
+        doc.roundedRect(margin, y - 4, pageWidth - 2 * margin, 10, 2, 2, 'F');
+        doc.setFontSize(11);
+        doc.text(`TOTAL DA OBRA (${houses.length} casas): ${formatCurrency((totalMaterial + totalLabor + totalEquipment) * houses.length)}`, pageWidth / 2, y + 2, { align: 'center' });
       }
       
-      // Download CSV
-      const blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `orcamento_${currentProject?.name.replace(/\s+/g, '_')}_${format}_${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      // Footer with page numbers
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+      }
       
-      toast.success(`Orçamento ${format === 'analytical' ? 'analítico' : 'sintético'} exportado!`);
+      // Save PDF
+      const fileName = `orcamento_${currentProject?.name.replace(/\s+/g, '_')}_${format}_${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(fileName);
+      
+      toast.success(`Orçamento ${format === 'analytical' ? 'analítico' : 'sintético'} em PDF gerado!`);
     } catch (error) {
       console.error('Error printing:', error);
-      toast.error('Erro ao exportar orçamento');
+      toast.error('Erro ao gerar PDF do orçamento');
     } finally {
       setIsPrinting(false);
     }
