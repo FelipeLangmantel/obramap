@@ -141,7 +141,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     <>
       <Sidebar 
         className="border-r border-border/40 bg-card h-screen"
-        collapsible="none"
+        collapsible="offcanvas"
       >
         {/* Header with Logo */}
         <SidebarHeader className="px-4 py-5">
