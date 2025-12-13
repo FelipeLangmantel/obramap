@@ -793,6 +793,7 @@ export function ProjectCostsView() {
                 {macros.map(macro => {
                   const macroScopeCosts = scopeCosts.filter(c => c.macroId === macro.id);
                   const macroTotal = macroScopeCosts.reduce((sum, c) => sum + c.materialCost + c.laborCost + c.equipmentCost, 0);
+                  const macroWeightPercent = unitCost.total > 0 ? (macroTotal / unitCost.total * 100) : 0;
                   const isExpanded = expandedMacros.has(macro.id);
                   
                   return (
@@ -815,6 +816,9 @@ export function ProjectCostsView() {
                                 <Badge variant="outline" className="ml-2 text-xs font-normal">
                                   {macro.scopes.length} serviços
                                 </Badge>
+                                <Badge className="ml-1 text-xs bg-primary/20 text-primary">
+                                  {macroWeightPercent.toFixed(1)}%
+                                </Badge>
                               </CardTitle>
                               <Badge variant="secondary" className="text-xs">
                                 {formatCurrency(macroTotal)} / casa
@@ -828,6 +832,7 @@ export function ProjectCostsView() {
                               {macro.scopes.map(scope => {
                                 const cost = scopeCosts.find(c => c.scopeId === scope.id);
                                 const scopeTotal = cost ? cost.materialCost + cost.laborCost + cost.equipmentCost : 0;
+                                const weightPercent = unitCost.total > 0 ? (scopeTotal / unitCost.total * 100) : 0;
 
                                 return (
                                   <div
@@ -836,7 +841,12 @@ export function ProjectCostsView() {
                                     onClick={() => handleEditScope(scope.id, macro.id, scope.name)}
                                   >
                                     <div className="flex-1">
-                                      <p className="font-medium text-sm">{scope.name}</p>
+                                      <div className="flex items-center gap-2">
+                                        <p className="font-medium text-sm">{scope.name}</p>
+                                        <Badge variant="outline" className="text-xs bg-primary/10 text-primary">
+                                          {weightPercent.toFixed(1)}%
+                                        </Badge>
+                                      </div>
                                       <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
                                         <span className="flex items-center gap-1">
                                           <Package className="w-3 h-3 text-blue-500" />

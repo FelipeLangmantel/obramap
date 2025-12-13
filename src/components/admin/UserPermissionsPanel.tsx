@@ -49,7 +49,11 @@ import {
   Plus,
   X,
   Save,
-  Users
+  Users,
+  Clock,
+  Globe,
+  LogOut,
+  Key
 } from "lucide-react";
 import { z } from "zod";
 
@@ -82,6 +86,16 @@ interface Department {
 interface Project {
   id: string;
   name: string;
+}
+
+interface UserSession {
+  id: string;
+  user_id: string;
+  login_at: string;
+  logout_at: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  is_active: boolean;
 }
 
 const MENU_OPTIONS = [
@@ -118,9 +132,12 @@ export function UserPermissionsPanel() {
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [permissions, setPermissions] = useState<Record<string, UserPermission>>({});
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [sessions, setSessions] = useState<UserSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("users");
-  
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [selectedUserForPassword, setSelectedUserForPassword] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
@@ -141,11 +158,12 @@ export function UserPermissionsPanel() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [profilesRes, rolesRes, permissionsRes, departmentsRes] = await Promise.all([
+      const [profilesRes, rolesRes, permissionsRes, departmentsRes, sessionsRes] = await Promise.all([
         supabase.from("profiles").select("*").order("created_at", { ascending: false }),
         supabase.from("user_roles").select("*"),
         supabase.from("user_permissions").select("*"),
         supabase.from("departments").select("*").order("display_order"),
+        supabase.from("user_sessions").select("*").order("login_at", { ascending: false }).limit(100),
       ]);
 
       if (profilesRes.error) throw profilesRes.error;
@@ -179,6 +197,7 @@ export function UserPermissionsPanel() {
       setUsers(usersWithRoles);
       setPermissions(permissionsMap);
       setDepartments(departmentsRes.data || []);
+      setSessions((sessionsRes.data || []) as UserSession[]);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("Erro ao carregar dados");
@@ -393,6 +412,35 @@ export function UserPermissionsPanel() {
     });
   };
 
+  const handleTerminateSession = async (sessionId: string) => {
+    try {
+      const { error } = await supabase
+        .from("user_sessions")
+        .update({ is_active: false, logout_at: new Date().toISOString() })
+        .eq("id", sessionId);
+      if (error) throw error;
+      toast.success("Sessão encerrada!");
+      fetchData();
+    } catch (error) {
+      console.error("Error terminating session:", error);
+      toast.error("Erro ao encerrar sessão");
+    }
+  };
+
+  const formatSessionDuration = (loginAt: string, logoutAt: string | null) => {
+    const start = new Date(loginAt);
+    const end = logoutAt ? new Date(logoutAt) : new Date();
+    const diff = Math.floor((end.getTime() - start.getTime()) / 1000 / 60);
+    if (diff < 60) return `${diff} min`;
+    const hours = Math.floor(diff / 60);
+    const mins = diff % 60;
+    return `${hours}h ${mins}min`;
+  };
+
+  const getUserName = (userId: string) => {
+    return users.find(u => u.user_id === userId)?.display_name || "Desconhecido";
+  };
+
   const getRoleBadge = (role: AppRole) => {
     switch (role) {
       case "admin":
@@ -433,6 +481,10 @@ export function UserPermissionsPanel() {
             <TabsTrigger value="departments" className="gap-2">
               <Building2 className="h-4 w-4" />
               Departamentos
+            </TabsTrigger>
+            <TabsTrigger value="sessions" className="gap-2">
+              <Clock className="h-4 w-4" />
+              Sessões
             </TabsTrigger>
           </TabsList>
 
@@ -585,6 +637,97 @@ export function UserPermissionsPanel() {
                     </Button>
                   </div>
                 ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="sessions" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Sessões Ativas e Histórico
+              </CardTitle>
+              <CardDescription>
+                Monitore logins, IPs, duração e encerre sessões se necessário
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Usuário</TableHead>
+                    <TableHead>Login</TableHead>
+                    <TableHead>IP</TableHead>
+                    <TableHead>Duração</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sessions.map((session) => (
+                    <TableRow key={session.id}>
+                      <TableCell className="font-medium">{getUserName(session.user_id)}</TableCell>
+                      <TableCell className="text-sm">
+                        {new Date(session.login_at).toLocaleString('pt-BR')}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Globe className="h-3 w-3" />
+                          {session.ip_address || "N/A"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {formatSessionDuration(session.login_at, session.logout_at)}
+                      </TableCell>
+                      <TableCell>
+                        {session.is_active ? (
+                          <Badge className="bg-green-500/20 text-green-600">Ativa</Badge>
+                        ) : (
+                          <Badge variant="outline">Encerrada</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {session.is_active && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleTerminateSession(session.id)}
+                            title="Encerrar sessão"
+                          >
+                            <LogOut className="h-4 w-4 mr-1" />
+                            Encerrar
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {sessions.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                        Nenhuma sessão registrada
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-muted/50">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-amber-500/10 rounded-full">
+                  <Shield className="h-6 w-6 text-amber-500" />
+                </div>
+                <div>
+                  <h4 className="font-semibold mb-1">Segurança de Sessões</h4>
+                  <p className="text-sm text-muted-foreground">
+                    Use o botão "Encerrar" para desconectar sessões travadas ou suspeitas. 
+                    O usuário precisará fazer login novamente.
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
