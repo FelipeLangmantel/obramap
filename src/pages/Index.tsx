@@ -22,11 +22,11 @@ import { SuppliersManagementView } from "@/components/SuppliersManagementView";
 import { FinancialFlowView } from "@/components/FinancialFlowView";
 import { Loader2, Menu } from "lucide-react";
 
-// Mobile sidebar trigger button
+// Sidebar trigger button - visible on all screen sizes
 function SidebarTriggerButton() {
   return (
-    <SidebarTrigger className="md:hidden p-2 -ml-1 text-muted-foreground hover:text-foreground">
-      <Menu className="h-5 w-5" />
+    <SidebarTrigger className="p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors">
+      <Menu className="h-6 w-6" />
     </SidebarTrigger>
   );
 }
