@@ -270,11 +270,15 @@ function Scene({
         maxPolarAngle={Math.PI / 2}
         minDistance={1}
         maxDistance={200}
-        zoomSpeed={1.2}
-        panSpeed={0.8}
-        rotateSpeed={0.5}
+        zoomSpeed={1.5}
+        panSpeed={1.2}
+        rotateSpeed={0.8}
         enableDamping={true}
-        dampingFactor={0.1}
+        dampingFactor={0.08}
+        touches={{
+          ONE: 1, // ROTATE - one finger touch
+          TWO: 2  // DOLLY_PAN - two finger touch
+        }}
       />
       
       <ambientLight intensity={0.6} />
