@@ -140,11 +140,11 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   return (
     <>
       <Sidebar 
-        className="border-r border-border/40 bg-card h-screen"
+        className="border-r border-border bg-background h-screen"
         collapsible="offcanvas"
       >
         {/* Header with Logo */}
-        <SidebarHeader className="px-4 py-5 border-b border-border/30">
+        <SidebarHeader className="px-4 py-5 border-b border-border bg-background">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
               <img src={obraMapLogo} alt="ObraMap" className="h-9 w-9 object-contain" />
@@ -153,10 +153,10 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
           </div>
         </SidebarHeader>
 
-        <SidebarContent className="px-3 overflow-y-auto">
+        <SidebarContent className="px-3 overflow-y-auto bg-background">
           {/* Menu Principal */}
           <SidebarGroup>
-            <SidebarGroupLabel className="text-foreground/80 text-xs font-semibold uppercase tracking-wider px-3 mb-2 mt-2">
+            <SidebarGroupLabel className="text-primary text-xs font-bold uppercase tracking-wider px-3 mb-2 mt-3">
               Menu Principal
             </SidebarGroupLabel>
             <SidebarGroupContent>
@@ -169,12 +169,12 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                       className={cn(
                         "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
                         activeView === item.view 
-                          ? "bg-primary text-primary-foreground font-medium shadow-sm" 
-                          : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                          ? "bg-primary text-primary-foreground font-semibold shadow-sm" 
+                          : "text-foreground hover:bg-accent hover:text-accent-foreground font-medium"
                       )}
                     >
                       <item.icon className="h-5 w-5 shrink-0" />
-                      <span className="text-sm font-medium">{item.title}</span>
+                      <span className="text-sm">{item.title}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -184,7 +184,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
 
           {/* Gerenciamento - Visível para todos, mas ações de criar/editar apenas para quem pode editar */}
           <SidebarGroup className="mt-4">
-            <SidebarGroupLabel className="text-foreground/80 text-xs font-semibold uppercase tracking-wider px-3 mb-2">
+            <SidebarGroupLabel className="text-primary text-xs font-bold uppercase tracking-wider px-3 mb-2">
               Gerenciamento
             </SidebarGroupLabel>
             <SidebarGroupContent>
@@ -285,7 +285,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         </SidebarContent>
 
         {/* Footer with User Info */}
-        <SidebarFooter className="p-3 border-t border-border/40 mt-auto">
+        <SidebarFooter className="p-3 border-t border-border mt-auto bg-background">
           {profile && (
             <div className="flex items-center gap-3 p-2 rounded-lg">
               <Avatar className="h-9 w-9 shrink-0">
