@@ -1256,21 +1256,24 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   }
 
   return (
-    <div className="space-y-4 h-full flex flex-col">
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex flex-col h-full">
-        <TabsList className="grid w-full max-w-3xl grid-cols-5 h-10">
-          <TabsTrigger value="alerts" className="gap-1 text-xs">
-            <AlertTriangle className="w-3.5 h-3.5" />Alertas
-            {totalAlertsCount > 0 && <Badge variant="destructive" className="ml-1 h-4 w-4 p-0 text-[10px]">{totalAlertsCount}</Badge>}
-          </TabsTrigger>
-          <TabsTrigger value="quotations" className="gap-1 text-xs"><FileText className="w-3.5 h-3.5" />Cotações</TabsTrigger>
-          <TabsTrigger value="orders" className="gap-1 text-xs"><Truck className="w-3.5 h-3.5" />Pedidos</TabsTrigger>
-          <TabsTrigger value="contracts" className="gap-1 text-xs"><ClipboardList className="w-3.5 h-3.5" />Contratações</TabsTrigger>
-          <TabsTrigger value="leadtime" className="gap-1 text-xs"><Clock className="w-3.5 h-3.5" />Lead Time</TabsTrigger>
-        </TabsList>
+    <div className="space-y-4 h-full flex flex-col overflow-hidden">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex flex-col h-full overflow-hidden">
+        <div className="overflow-x-auto pb-1 -mx-1 px-1">
+          <TabsList className="grid w-full min-w-[400px] grid-cols-5 h-9 md:h-10">
+            <TabsTrigger value="alerts" className="gap-0.5 md:gap-1 text-[10px] md:text-xs px-1">
+              <AlertTriangle className="w-3 h-3 md:w-3.5 md:h-3.5" />
+              <span className="hidden sm:inline">Alertas</span>
+              {totalAlertsCount > 0 && <Badge variant="destructive" className="ml-0.5 h-4 w-4 p-0 text-[10px]">{totalAlertsCount}</Badge>}
+            </TabsTrigger>
+            <TabsTrigger value="quotations" className="gap-0.5 md:gap-1 text-[10px] md:text-xs px-1"><FileText className="w-3 h-3 md:w-3.5 md:h-3.5" /><span className="hidden sm:inline">Cotações</span></TabsTrigger>
+            <TabsTrigger value="orders" className="gap-0.5 md:gap-1 text-[10px] md:text-xs px-1"><Truck className="w-3 h-3 md:w-3.5 md:h-3.5" /><span className="hidden sm:inline">Pedidos</span></TabsTrigger>
+            <TabsTrigger value="contracts" className="gap-0.5 md:gap-1 text-[10px] md:text-xs px-1"><ClipboardList className="w-3 h-3 md:w-3.5 md:h-3.5" /><span className="hidden sm:inline">Contratações</span></TabsTrigger>
+            <TabsTrigger value="leadtime" className="gap-0.5 md:gap-1 text-[10px] md:text-xs px-1"><Clock className="w-3 h-3 md:w-3.5 md:h-3.5" /><span className="hidden sm:inline">Lead Time</span></TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Alerts Tab */}
-        <TabsContent value="alerts" className="flex-1 overflow-auto mt-4 space-y-4">
+        <TabsContent value="alerts" className="flex-1 overflow-y-auto mt-2 md:mt-4 space-y-3 md:space-y-4">
           {/* Material Alerts by Family */}
           {visibleMaterialAlerts.length > 0 && (
             <Card 
@@ -1284,9 +1287,9 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                   Alertas de Cotação - Lead Time ({visibleMaterialAlerts.length} famílias)
                 </CardTitle>
               </CardHeader>
-              <CardContent onClick={(e) => e.stopPropagation()}>
-                <ScrollArea className="h-[400px]">
-                  <div className="space-y-2 pr-4">
+          <CardContent onClick={(e) => e.stopPropagation()}>
+                <ScrollArea className="h-[300px] md:h-[400px]">
+                  <div className="space-y-2 pr-2 md:pr-4">
                     {visibleMaterialAlerts.map((alert) => {
                       const isExpanded = expandedAlertFamilies.has(alert.familyId);
                       const totalValue = alert.items.reduce((sum, i) => sum + i.totalValue, 0);
@@ -1301,27 +1304,27 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                           });
                         }}>
                           <CollapsibleTrigger asChild>
-                            <div className={`p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors ${
+                            <div className={`p-2 md:p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors ${
                               alert.priority === 'urgent' ? 'bg-red-50 border-red-200 dark:bg-red-900/20' : 
                               alert.priority === 'warning' ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20' : 
                               'bg-blue-50 border-blue-200 dark:bg-blue-900/20'
                             }`}>
-                              <div className="flex items-center gap-3">
-                                {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: alert.familyColor }} />
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <p className="font-medium text-sm">{alert.familyName}</p>
-                                    <Badge variant="secondary" className="text-xs">{alert.items.length} itens (agrupados)</Badge>
+                              <div className="flex items-start md:items-center gap-2 md:gap-3 flex-wrap md:flex-nowrap">
+                                {isExpanded ? <ChevronDown className="w-4 h-4 shrink-0 mt-0.5 md:mt-0" /> : <ChevronRight className="w-4 h-4 shrink-0 mt-0.5 md:mt-0" />}
+                                <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: alert.familyColor }} />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1 md:gap-2 flex-wrap">
+                                    <p className="font-medium text-xs md:text-sm">{alert.familyName}</p>
+                                    <Badge variant="secondary" className="text-[10px] md:text-xs">{alert.items.length} itens</Badge>
                                   </div>
-                                  <p className="text-xs text-muted-foreground">
-                                    Lead time: {alert.leadTimeDays} dias • 
-                                    {alert.daysUntilDue <= 0 ? ' Vencido!' : ` Iniciar cotação em ${alert.daysUntilDue} dias`}
+                                  <p className="text-[10px] md:text-xs text-muted-foreground">
+                                    Lead: {alert.leadTimeDays}d • 
+                                    {alert.daysUntilDue <= 0 ? ' Vencido!' : ` ${alert.daysUntilDue}d`}
                                   </p>
                                 </div>
-                                <div className="text-right">
-                                  <p className="font-medium text-sm">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}</p>
-                                  <Badge className={`text-xs ${
+                                <div className="text-right shrink-0">
+                                  <p className="font-medium text-xs md:text-sm">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}</p>
+                                  <Badge className={`text-[10px] md:text-xs ${
                                     alert.priority === 'urgent' ? 'bg-red-500' : 
                                     alert.priority === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
                                   }`}>
@@ -1331,48 +1334,40 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                                 {canEdit && (
                                 <Button 
                                     size="sm" 
-                                    className="shrink-0 bg-blue-600 hover:bg-blue-700"
+                                    className="shrink-0 bg-blue-600 hover:bg-blue-700 text-[10px] md:text-xs h-7 md:h-8 px-2 md:px-3"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      // Auto-create quotation from alert
                                       createQuotationFromAlert(alert);
                                     }}
                                   >
-                                    <FileText className="w-3 h-3 mr-1" />
-                                    Cotar Agora
+                                    <FileText className="w-3 h-3 mr-0.5 md:mr-1" />
+                                    <span className="hidden md:inline">Cotar Agora</span>
+                                    <span className="md:hidden">Cotar</span>
                                   </Button>
                                 )}
                               </div>
                             </div>
                           </CollapsibleTrigger>
                           <CollapsibleContent>
-                            <div className="mt-1 ml-6 border rounded-lg overflow-hidden">
+                            <div className="mt-1 ml-2 md:ml-6 border rounded-lg overflow-x-auto">
                               <Table>
                                 <TableHeader>
                                   <TableRow className="bg-muted/30">
-                                    <TableHead className="text-xs">Insumo</TableHead>
-                                    <TableHead className="text-xs text-right">Qtd Necessária</TableHead>
-                                    <TableHead className="text-xs text-right">Em Estoque</TableHead>
-                                    <TableHead className="text-xs text-right">A Comprar</TableHead>
-                                    <TableHead className="text-xs">Un</TableHead>
-                                    <TableHead className="text-xs text-right">Valor Unit.</TableHead>
-                                    <TableHead className="text-xs text-right">Valor Total</TableHead>
-                                    <TableHead className="text-xs">Casas</TableHead>
+                                    <TableHead className="text-[10px] md:text-xs">Insumo</TableHead>
+                                    <TableHead className="text-[10px] md:text-xs text-right">A Comprar</TableHead>
+                                    <TableHead className="text-[10px] md:text-xs">Un</TableHead>
+                                    <TableHead className="text-[10px] md:text-xs text-right hidden sm:table-cell">Valor Unit.</TableHead>
+                                    <TableHead className="text-[10px] md:text-xs text-right">Total</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {alert.items.map(item => (
                                     <TableRow key={item.id}>
-                                      <TableCell className="text-sm">{item.name}</TableCell>
-                                      <TableCell className="text-sm text-right">{item.totalQuantity.toLocaleString('pt-BR')}</TableCell>
-                                      <TableCell className="text-sm text-right text-green-600">{item.stockQuantity.toLocaleString('pt-BR')}</TableCell>
-                                      <TableCell className="text-sm text-right font-medium text-orange-600">{item.needQuantity.toLocaleString('pt-BR')}</TableCell>
-                                      <TableCell className="text-sm">{item.unit}</TableCell>
-                                      <TableCell className="text-sm text-right">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitValue)}</TableCell>
-                                      <TableCell className="text-sm text-right font-medium">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.totalValue)}</TableCell>
-                                      <TableCell className="text-xs text-muted-foreground max-w-[100px] truncate" title={item.houseIds.join(', ')}>
-                                        {item.houseIds.slice(0, 5).join(', ')}{item.houseIds.length > 5 ? ` +${item.houseIds.length - 5}` : ''}
-                                      </TableCell>
+                                      <TableCell className="text-xs md:text-sm max-w-[120px] truncate">{item.name}</TableCell>
+                                      <TableCell className="text-xs md:text-sm text-right font-medium text-orange-600">{item.needQuantity.toLocaleString('pt-BR')}</TableCell>
+                                      <TableCell className="text-xs md:text-sm">{item.unit}</TableCell>
+                                      <TableCell className="text-xs md:text-sm text-right hidden sm:table-cell">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitValue)}</TableCell>
+                                      <TableCell className="text-xs md:text-sm text-right font-medium">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.totalValue)}</TableCell>
                                     </TableRow>
                                   ))}
                                 </TableBody>
@@ -1394,31 +1389,31 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
             className="cursor-pointer hover:border-orange-400 transition-colors"
             onClick={() => laborAlertsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
           >
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Hammer className="w-5 h-5 text-orange-500" />
-                Alertas de Mão de Obra ({laborAlerts.length})
+            <CardHeader className="pb-2 md:pb-3">
+              <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                <Hammer className="w-4 h-4 md:w-5 md:h-5 text-orange-500" />
+                Alertas Mão de Obra ({laborAlerts.length})
               </CardTitle>
             </CardHeader>
             <CardContent onClick={(e) => e.stopPropagation()}>
               {laborAlerts.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">Nenhum alerta de mão de obra</p>
+                <p className="text-center text-muted-foreground py-6 md:py-8 text-sm">Nenhum alerta de mão de obra</p>
               ) : (
-                <ScrollArea className="h-[300px]">
-                  <div className="space-y-2 pr-4">
+                <ScrollArea className="h-[200px] md:h-[300px]">
+                  <div className="space-y-2 pr-2 md:pr-4">
                     {laborAlerts.map((alert, idx) => (
-                      <div key={idx} className={`p-3 rounded-lg border ${alert.type === 'urgent' ? 'bg-red-50 border-red-200 dark:bg-red-900/20' : 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20'}`}>
-                        <div className="flex items-center gap-3">
-                          {alert.type === 'urgent' ? <AlertTriangle className="w-4 h-4 text-red-500" /> : <Clock className="w-4 h-4 text-yellow-500" />}
-                          <div className="flex-1">
-                            <p className="font-medium text-sm">{alert.message}</p>
-                            <Badge variant="outline" className="text-xs mt-1">{CATEGORY_LABELS[alert.category as keyof typeof CATEGORY_LABELS] || alert.category}</Badge>
+                      <div key={idx} className={`p-2 md:p-3 rounded-lg border ${alert.type === 'urgent' ? 'bg-red-50 border-red-200 dark:bg-red-900/20' : 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20'}`}>
+                        <div className="flex items-start md:items-center gap-2 md:gap-3 flex-wrap md:flex-nowrap">
+                          {alert.type === 'urgent' ? <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5 md:mt-0" /> : <Clock className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5 md:mt-0" />}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-xs md:text-sm">{alert.message}</p>
+                            <Badge variant="outline" className="text-[10px] md:text-xs mt-1">{CATEGORY_LABELS[alert.category as keyof typeof CATEGORY_LABELS] || alert.category}</Badge>
                           </div>
                           {canEdit && (
                             <Button 
                               size="sm" 
                               variant="outline" 
-                              className="shrink-0"
+                              className="shrink-0 text-[10px] md:text-xs h-7 md:h-8 px-2 md:px-3"
                               onClick={() => {
                                 const scopeItem = alertsData.scopeItems.find(s => s.id === alert.scopeId);
                                 if (scopeItem) {
@@ -1433,8 +1428,9 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                                 setActiveTab('contracts');
                               }}
                             >
-                              <ClipboardList className="w-3 h-3 mr-1" />
-                              Contratar
+                              <ClipboardList className="w-3 h-3 mr-0.5 md:mr-1" />
+                              <span className="hidden md:inline">Contratar</span>
+                              <span className="md:hidden">+</span>
                             </Button>
                           )}
                         </div>
@@ -1447,11 +1443,9 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
           </Card>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Card><CardContent className="pt-4"><div className="flex items-center gap-2 mb-1"><FileText className="w-4 h-4 text-blue-500" /><span className="text-xs">Cotações Pendentes</span></div><p className="text-2xl font-bold">{alertsData.pendingQuotations}</p></CardContent></Card>
-            <Card><CardContent className="pt-4"><div className="flex items-center gap-2 mb-1"><Truck className="w-4 h-4 text-orange-500" /><span className="text-xs">Em Trânsito</span></div><p className="text-2xl font-bold">{alertsData.inTransitOrders}</p></CardContent></Card>
-            <Card><CardContent className="pt-4"><div className="flex items-center gap-2 mb-1"><CheckCircle2 className="w-4 h-4 text-green-500" /><span className="text-xs">Insumos Cadastrados</span></div><p className="text-2xl font-bold">{inputs.length || '-'}</p></CardContent></Card>
-            <Card><CardContent className="pt-4"><div className="flex items-center gap-2 mb-1"><Users className="w-4 h-4" /><span className="text-xs">Fornecedores</span></div><p className="text-2xl font-bold">{suppliers.length || '-'}</p></CardContent></Card>
+          <div className="grid grid-cols-2 gap-2 md:gap-3">
+            <Card><CardContent className="pt-3 md:pt-4 p-3"><div className="flex items-center gap-1.5 md:gap-2 mb-1"><FileText className="w-3 h-3 md:w-4 md:h-4 text-blue-500" /><span className="text-[10px] md:text-xs">Cotações Pendentes</span></div><p className="text-lg md:text-2xl font-bold">{alertsData.pendingQuotations}</p></CardContent></Card>
+            <Card><CardContent className="pt-3 md:pt-4 p-3"><div className="flex items-center gap-1.5 md:gap-2 mb-1"><Truck className="w-3 h-3 md:w-4 md:h-4 text-orange-500" /><span className="text-[10px] md:text-xs">Em Trânsito</span></div><p className="text-lg md:text-2xl font-bold">{alertsData.inTransitOrders}</p></CardContent></Card>
           </div>
         </TabsContent>
 

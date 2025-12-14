@@ -144,7 +144,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         collapsible="offcanvas"
       >
         {/* Header with Logo */}
-        <SidebarHeader className="px-4 py-5">
+        <SidebarHeader className="px-4 py-5 border-b border-border/30">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
               <img src={obraMapLogo} alt="ObraMap" className="h-9 w-9 object-contain" />
@@ -153,28 +153,28 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
           </div>
         </SidebarHeader>
 
-        <SidebarContent className="px-3">
+        <SidebarContent className="px-3 overflow-y-auto">
           {/* Menu Principal */}
           <SidebarGroup>
-            <SidebarGroupLabel className="text-muted-foreground/70 text-xs font-medium uppercase tracking-wider px-3 mb-1">
+            <SidebarGroupLabel className="text-foreground/80 text-xs font-semibold uppercase tracking-wider px-3 mb-2 mt-2">
               Menu Principal
             </SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu className="space-y-0.5">
+              <SidebarMenu className="space-y-1">
                 {mainMenuItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       onClick={() => handleViewChange(item.view)}
                       isActive={activeView === item.view}
                       className={cn(
-                        "w-full justify-start gap-3 px-3 py-2.5 rounded-md transition-all duration-150",
+                        "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
                         activeView === item.view 
-                          ? "bg-accent text-accent-foreground font-medium" 
-                          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                          ? "bg-primary text-primary-foreground font-medium shadow-sm" 
+                          : "text-foreground hover:bg-accent hover:text-accent-foreground"
                       )}
                     >
                       <item.icon className="h-5 w-5 shrink-0" />
-                      <span className="text-sm">{item.title}</span>
+                      <span className="text-sm font-medium">{item.title}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -183,48 +183,48 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
           </SidebarGroup>
 
           {/* Gerenciamento - Visível para todos, mas ações de criar/editar apenas para quem pode editar */}
-          <SidebarGroup className="mt-6">
-            <SidebarGroupLabel className="text-muted-foreground/70 text-xs font-medium uppercase tracking-wider px-3 mb-1">
+          <SidebarGroup className="mt-4">
+            <SidebarGroupLabel className="text-foreground/80 text-xs font-semibold uppercase tracking-wider px-3 mb-2">
               Gerenciamento
             </SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu className="space-y-0.5">
+              <SidebarMenu className="space-y-1">
                 {canEdit && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => setNewProjectOpen(true)}
-                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                      className="w-full justify-start gap-3 px-3 py-3 rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-150"
                     >
                       <Plus className="h-5 w-5 shrink-0" />
-                      <span className="text-sm">Nova Obra</span>
+                      <span className="text-sm font-medium">Nova Obra</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     onClick={() => setProjectsListOpen(true)}
-                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                    className="w-full justify-start gap-3 px-3 py-3 rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-150"
                   >
                     <Building2 className="h-5 w-5 shrink-0" />
-                    <span className="text-sm">Cadastro de Obras</span>
+                    <span className="text-sm font-medium">Cadastro de Obras</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     onClick={() => setQuadrasDialogOpen(true)}
-                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                    className="w-full justify-start gap-3 px-3 py-3 rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-150"
                   >
                     <Grid3X3 className="h-5 w-5 shrink-0" />
-                    <span className="text-sm">Cadastro de Quadras</span>
+                    <span className="text-sm font-medium">Cadastro de Quadras</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     onClick={() => setMacrosDialogOpen(true)}
-                    className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                    className="w-full justify-start gap-3 px-3 py-3 rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-150"
                   >
                     <Layers className="h-5 w-5 shrink-0" />
-                    <span className="text-sm">Etapas e Serviços</span>
+                    <span className="text-sm font-medium">Etapas e Serviços</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
@@ -232,14 +232,14 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                     onClick={() => handleViewChange("inputs")}
                     isActive={activeView === "inputs"}
                     className={cn(
-                      "w-full justify-start gap-3 px-3 py-2.5 rounded-md transition-all duration-150",
+                      "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
                       activeView === "inputs" 
-                        ? "bg-accent text-accent-foreground font-medium" 
-                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                        ? "bg-primary text-primary-foreground font-medium shadow-sm" 
+                        : "text-foreground hover:bg-accent hover:text-accent-foreground"
                     )}
                   >
                     <Box className="h-5 w-5 shrink-0" />
-                    <span className="text-sm">Cadastro de Insumos</span>
+                    <span className="text-sm font-medium">Cadastro de Insumos</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
@@ -247,24 +247,24 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                     onClick={() => handleViewChange("suppliers")}
                     isActive={activeView === "suppliers"}
                     className={cn(
-                      "w-full justify-start gap-3 px-3 py-2.5 rounded-md transition-all duration-150",
+                      "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
                       activeView === "suppliers" 
-                        ? "bg-accent text-accent-foreground font-medium" 
-                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                        ? "bg-primary text-primary-foreground font-medium shadow-sm" 
+                        : "text-foreground hover:bg-accent hover:text-accent-foreground"
                     )}
                   >
                     <Truck className="h-5 w-5 shrink-0" />
-                    <span className="text-sm">Cadastro de Fornecedores</span>
+                    <span className="text-sm font-medium">Cadastro de Fornecedores</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 {isAdmin && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => setUsersDialogOpen(true)}
-                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                      className="w-full justify-start gap-3 px-3 py-3 rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-150"
                     >
                       <Users className="h-5 w-5 shrink-0" />
-                      <span className="text-sm">Gerenciar Usuários</span>
+                      <span className="text-sm font-medium">Gerenciar Usuários</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
@@ -272,10 +272,10 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => setSettingsOpen(true)}
-                      className="w-full justify-start gap-3 px-3 py-2.5 rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-all duration-150"
+                      className="w-full justify-start gap-3 px-3 py-3 rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-150"
                     >
                       <Settings className="h-5 w-5 shrink-0" />
-                      <span className="text-sm">Configurações</span>
+                      <span className="text-sm font-medium">Configurações</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}

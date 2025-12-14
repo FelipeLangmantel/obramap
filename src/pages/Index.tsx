@@ -72,15 +72,15 @@ function IndexContent() {
         
         <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
           {/* Top Header */}
-          <header className="h-14 bg-card border-b border-border px-2 md:px-6 flex items-center gap-2 md:gap-4 shrink-0">
+          <header className="min-h-[56px] bg-card border-b border-border px-2 md:px-6 flex items-center gap-2 md:gap-4 shrink-0 flex-wrap py-2">
             <SidebarTriggerButton />
-            <h2 className="text-sm md:text-xl font-semibold text-foreground whitespace-nowrap shrink-0 truncate">
+            <h2 className="text-sm md:text-xl font-semibold text-foreground whitespace-nowrap shrink-0 truncate max-w-[120px] md:max-w-none">
               {viewTitles[activeView]}
             </h2>
             
-            <div className="flex-1 min-w-0" />
+            <div className="flex-1 min-w-0 hidden md:block" />
             
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-1.5 md:gap-3 shrink-0 flex-wrap ml-auto">
               <ProjectSelector />
               {(activeView === "map" || activeView === "charts") && <FilterBar />}
             </div>
