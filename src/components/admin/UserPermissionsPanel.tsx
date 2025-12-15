@@ -310,31 +310,37 @@ export function UserPermissionsPanel() {
     try {
       const existingPermission = permissions[selectedUserId];
       
+      const permissionData = {
+        department: editingPermission.department || "geral",
+        allowed_project_ids: editingPermission.allowed_project_ids && editingPermission.allowed_project_ids.length > 0 
+          ? editingPermission.allowed_project_ids 
+          : null,
+        visible_menus: editingPermission.visible_menus,
+        visible_management_sections: editingPermission.visible_management_sections,
+        updated_at: new Date().toISOString(),
+      };
+
+      console.log("Saving permissions for user:", selectedUserId, permissionData);
+
       if (existingPermission?.id) {
+        // Update existing permission
         const { error } = await supabase
           .from("user_permissions")
-          .update({
-            department: editingPermission.department,
-            allowed_project_ids: editingPermission.allowed_project_ids,
-            visible_menus: editingPermission.visible_menus,
-            visible_management_sections: editingPermission.visible_management_sections,
-          })
+          .update(permissionData)
           .eq("id", existingPermission.id);
         if (error) throw error;
       } else {
+        // Insert new permission
         const { error } = await supabase.from("user_permissions").insert({
           user_id: selectedUserId,
-          department: editingPermission.department,
-          allowed_project_ids: editingPermission.allowed_project_ids,
-          visible_menus: editingPermission.visible_menus,
-          visible_management_sections: editingPermission.visible_management_sections,
+          ...permissionData,
         });
         if (error) throw error;
       }
 
-      toast.success("Permissões salvas!");
+      toast.success("Permissões salvas com sucesso!");
       setIsPermissionDialogOpen(false);
-      fetchData();
+      await fetchData();
     } catch (error) {
       console.error("Error saving permission:", error);
       toast.error("Erro ao salvar permissões");
