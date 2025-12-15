@@ -46,7 +46,7 @@ import { NewProjectDialog } from "@/components/NewProjectDialog";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
-import obraMapLogo from "@/assets/obramap-logo.png";
+import obraMapLogo from "@/assets/obramap-logo-new.png";
 
 type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow";
 
@@ -146,8 +146,8 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         {/* Header with Logo */}
         <SidebarHeader className="px-4 py-5 border-b border-border bg-background">
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 overflow-hidden">
-              <img src={obraMapLogo} alt="ObraMap" className="h-9 w-9 object-contain" />
+            <div className="h-12 w-12 flex items-center justify-center shrink-0">
+              <img src={obraMapLogo} alt="ObraMap" className="h-12 w-12 object-contain drop-shadow-sm" />
             </div>
             <h1 className="text-xl font-bold text-foreground tracking-tight">ObraMap</h1>
           </div>
