@@ -76,51 +76,6 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
 
   const needsWeightAdjustment = weightAnalysis.overallTotalWeight !== 100;
 
-  const suggestWeightDistribution = () => {
-    // Count total scopes across all macros
-    const totalScopes = macrosTemplate.reduce((sum, macro) => sum + macro.scopes.length, 0);
-    
-    if (totalScopes === 0) return;
-    
-    // If overall weight is 0, distribute evenly across all scopes
-    if (weightAnalysis.overallTotalWeight === 0) {
-      const weightPerScope = Math.round((100 / totalScopes) * 10) / 10;
-      let remaining = 100;
-      let scopeCount = 0;
-      
-      macrosTemplate.forEach(macro => {
-        macro.scopes.forEach((scope, index) => {
-          scopeCount++;
-          // Last scope gets the remaining to ensure exactly 100
-          if (scopeCount === totalScopes) {
-            updateScope(macro.id, scope.id, { weight: Math.round(remaining * 10) / 10 });
-          } else {
-            updateScope(macro.id, scope.id, { weight: weightPerScope });
-            remaining -= weightPerScope;
-          }
-        });
-      });
-    } else {
-      // Proportional distribution based on existing weights
-      const factor = 100 / weightAnalysis.overallTotalWeight;
-      let remaining = 100;
-      let scopeCount = 0;
-      
-      macrosTemplate.forEach(macro => {
-        macro.scopes.forEach((scope, index) => {
-          scopeCount++;
-          // Last scope gets the remaining to ensure exactly 100
-          if (scopeCount === totalScopes) {
-            updateScope(macro.id, scope.id, { weight: Math.round(remaining * 10) / 10 });
-          } else {
-            const newWeight = Math.round(scope.weight * factor * 10) / 10;
-            updateScope(macro.id, scope.id, { weight: newWeight });
-            remaining -= newWeight;
-          }
-        });
-      });
-    }
-  };
 
   const confirmOrExecute = (action: () => void) => {
     if (hasData) {
@@ -235,12 +190,12 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
   // Pull weights automatically from the project's budget
   const handlePullWeightsFromBudget = async () => {
     if (!currentProject) return;
-    
+
     try {
       // Load all scope items for the project
       const { data: itemsData, error: itemsError } = await supabase
         .from('scope_items')
-        .select('scope_id, macro_id, unit_value, quantity')
+        .select('scope_id, unit_value, quantity')
         .eq('project_id', currentProject.id);
 
       if (itemsError) throw itemsError;
@@ -255,88 +210,123 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
         .select('scope_id, scope_name, macro_name')
         .eq('project_id', currentProject.id);
 
-      // Create a mapping from scope_id to scope_name (from scope_costs)
-      const scopeIdToName: Record<string, { scopeName: string; macroName: string }> = {};
-      if (costsData) {
-        costsData.forEach(cost => {
-          scopeIdToName[cost.scope_id] = {
-            scopeName: cost.scope_name.toLowerCase().trim(),
-            macroName: cost.macro_name.toLowerCase().trim()
-          };
-        });
-      }
+      if (costsError) throw costsError;
 
-      // Calculate total cost per scope (using both scope_id and name-based matching)
-      const scopeTotalsById: Record<string, number> = {};
-      const scopeTotalsByName: Record<string, number> = {}; // key: "macroName|scopeName"
-      
-      itemsData.forEach(item => {
-        const total = Number(item.unit_value) * Number(item.quantity);
-        
-        // Sum by scope_id
-        scopeTotalsById[item.scope_id] = (scopeTotalsById[item.scope_id] || 0) + total;
-        
-        // Also sum by name (for matching when IDs don't align)
-        const nameMapping = scopeIdToName[item.scope_id];
-        if (nameMapping) {
-          const nameKey = `${nameMapping.macroName}|${nameMapping.scopeName}`;
-          scopeTotalsByName[nameKey] = (scopeTotalsByName[nameKey] || 0) + total;
-        }
+      const normalizeKeyPart = (value: string) => value.toLowerCase().trim();
+      const makeKey = (macroName: string, scopeName: string) => `${normalizeKeyPart(macroName)}|${normalizeKeyPart(scopeName)}`;
+
+      // Legacy scope_id -> { macroName, scopeName }
+      const legacyScopeIdToNames: Record<string, { macroName: string; scopeName: string }> = {};
+      (costsData || []).forEach((cost) => {
+        legacyScopeIdToNames[cost.scope_id] = {
+          macroName: cost.macro_name,
+          scopeName: cost.scope_name,
+        };
       });
 
-      // Calculate grand total
-      const grandTotal = Object.values(scopeTotalsById).reduce((sum, val) => sum + val, 0);
-      
+      // Current template indexes
+      const currentScopeIds = new Set<string>();
+      const currentNameToScopeId: Record<string, string> = {};
+      macrosTemplate.forEach((macro) => {
+        macro.scopes.forEach((scope) => {
+          currentScopeIds.add(scope.id);
+          currentNameToScopeId[makeKey(macro.name, scope.name)] = scope.id;
+        });
+      });
+
+      const findScopeIdByNames = (macroName: string, scopeName: string) => {
+        const exact = currentNameToScopeId[makeKey(macroName, scopeName)];
+        if (exact) return exact;
+
+        const macroN = normalizeKeyPart(macroName);
+        const scopeN = normalizeKeyPart(scopeName);
+
+        // Partial match fallback (kept small): contains/contained-by
+        for (const [key, scopeId] of Object.entries(currentNameToScopeId)) {
+          const [kMacro, kScope] = key.split('|');
+          const macroOk = macroN.includes(kMacro) || kMacro.includes(macroN);
+          const scopeOk = scopeN.includes(kScope) || kScope.includes(scopeN);
+          if (macroOk && scopeOk) return scopeId;
+        }
+
+        return null;
+      };
+
+      // Aggregate ONLY items that can be mapped to the current macrosTemplate (matches ProjectCostsView behavior)
+      const totalsByScopeId: Record<string, number> = {};
+      let ignoredCount = 0;
+      let ignoredTotal = 0;
+
+      for (const item of itemsData) {
+        const total = Number(item.unit_value) * Number(item.quantity);
+        if (!Number.isFinite(total) || total === 0) continue;
+
+        let targetScopeId: string | null = null;
+
+        if (currentScopeIds.has(item.scope_id)) {
+          targetScopeId = item.scope_id;
+        } else {
+          const legacy = legacyScopeIdToNames[item.scope_id];
+          if (legacy) {
+            targetScopeId = findScopeIdByNames(legacy.macroName, legacy.scopeName);
+          }
+        }
+
+        if (targetScopeId) {
+          totalsByScopeId[targetScopeId] = (totalsByScopeId[targetScopeId] || 0) + total;
+        } else {
+          ignoredCount++;
+          ignoredTotal += total;
+        }
+      }
+
+      const grandTotal = Object.values(totalsByScopeId).reduce((sum, val) => sum + val, 0);
+
       if (grandTotal === 0) {
-        toast.error('O orçamento não tem valores. Adicione valores aos itens primeiro.');
+        toast.error('Não foi possível calcular os pesos: itens não estão vinculados aos serviços atuais.');
         return;
       }
 
-      // Calculate and update weights for each scope
-      let updated = 0;
+      // Compute rounded weights (1 decimal) and fix rounding drift to total exactly 100%
+      const computedWeights: Record<string, number> = {};
+      let sumRounded = 0;
+      let maxScopeId: string | null = null;
+      let maxScopeTotal = -Infinity;
+
       for (const macro of macrosTemplate) {
         for (const scope of macro.scopes) {
-          // Try to find total by scope_id first
-          let scopeTotal = scopeTotalsById[scope.id] || 0;
-          
-          // If not found by ID, try to match by name
-          if (scopeTotal === 0) {
-            const macroNameLower = macro.name.toLowerCase().trim();
-            const scopeNameLower = scope.name.toLowerCase().trim();
-            
-            // Try exact match first
-            const exactKey = `${macroNameLower}|${scopeNameLower}`;
-            scopeTotal = scopeTotalsByName[exactKey] || 0;
-            
-            // If still not found, try partial matching
-            if (scopeTotal === 0) {
-              for (const [key, total] of Object.entries(scopeTotalsByName)) {
-                const [keyMacro, keyScope] = key.split('|');
-                // Match if scope names are similar (contain each other)
-                if (
-                  (scopeNameLower.includes(keyScope) || keyScope.includes(scopeNameLower)) &&
-                  (macroNameLower.includes(keyMacro) || keyMacro.includes(macroNameLower))
-                ) {
-                  scopeTotal = total;
-                  break;
-                }
-              }
-            }
-          }
-          
-          const newWeight = Math.round((scopeTotal / grandTotal) * 100 * 10) / 10; // Round to 1 decimal
-          
-          if (newWeight > 0) {
-            await updateScope(macro.id, scope.id, { weight: newWeight });
-            updated++;
+          const scopeTotal = totalsByScopeId[scope.id] || 0;
+          const w = (scopeTotal / grandTotal) * 100;
+          const rounded = Math.round(w * 10) / 10;
+          computedWeights[scope.id] = rounded;
+          sumRounded += rounded;
+
+          if (scopeTotal > maxScopeTotal) {
+            maxScopeTotal = scopeTotal;
+            maxScopeId = scope.id;
           }
         }
       }
 
-      if (updated > 0) {
-        toast.success(`Pesos atualizados para ${updated} serviços baseados no orçamento!`);
-      } else {
-        toast.warning('Nenhum peso pôde ser calculado. Verifique se os serviços têm itens no orçamento.');
+      const drift = Math.round((100 - sumRounded) * 10) / 10;
+      if (maxScopeId && drift !== 0) {
+        computedWeights[maxScopeId] = Math.max(0, Math.round((computedWeights[maxScopeId] + drift) * 10) / 10);
+      }
+
+      // Update weights
+      let updated = 0;
+      for (const macro of macrosTemplate) {
+        for (const scope of macro.scopes) {
+          const newWeight = computedWeights[scope.id] ?? 0;
+          await updateScope(macro.id, scope.id, { weight: newWeight });
+          updated++;
+        }
+      }
+
+      toast.success(`Pesos atualizados para ${updated} serviços com base no orçamento.`);
+
+      if (ignoredCount > 0) {
+        console.warn('Budget items ignored (unmapped to current scopes):', { ignoredCount, ignoredTotal });
       }
     } catch (error) {
       console.error('Error pulling weights from budget:', error);
@@ -518,16 +508,6 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                   )}
                 </div>
               </div>
-              {needsWeightAdjustment && canEdit && (
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  className="border-orange-300 text-orange-700 hover:bg-orange-100"
-                  onClick={suggestWeightDistribution}
-                >
-                  Ajustar Automaticamente
-                </Button>
-              )}
             </div>
             <Progress 
               value={Math.min(weightAnalysis.overallTotalWeight, 100)} 
