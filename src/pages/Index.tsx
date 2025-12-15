@@ -35,7 +35,22 @@ type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "intera
 
 function IndexContent() {
   const [activeView, setActiveView] = useState<ViewType>("map");
-  const { selectedHouse, isLoading, projects } = useConstruction();
+  const { selectedHouse, isLoading, projects, currentProject, setCurrentProject } = useConstruction();
+  const { canAccessProject, permissions, isAdmin } = useAuth();
+
+  // Auto-select first accessible project if current project is not accessible
+  useEffect(() => {
+    if (!isLoading && projects.length > 0) {
+      const accessibleProjects = projects.filter(p => canAccessProject(p.id));
+      
+      // If no current project or current project is not accessible, select first accessible one
+      if (!currentProject || !canAccessProject(currentProject.id)) {
+        if (accessibleProjects.length > 0) {
+          setCurrentProject(accessibleProjects[0].id);
+        }
+      }
+    }
+  }, [isLoading, projects, currentProject, canAccessProject, setCurrentProject, permissions, isAdmin]);
 
   if (isLoading) {
     return (

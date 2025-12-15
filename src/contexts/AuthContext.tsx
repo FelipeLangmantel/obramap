@@ -188,10 +188,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.id, refreshPermissions]);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+    
+    // Register session on successful login
+    if (!error && data.user) {
+      try {
+        await supabase.from("user_sessions").insert({
+          user_id: data.user.id,
+          ip_address: null, // Could be fetched from an external service if needed
+          user_agent: navigator.userAgent,
+          is_active: true,
+        });
+      } catch (sessionError) {
+        console.error("Error registering session:", sessionError);
+      }
+    }
+    
     return { error };
   };
 
@@ -212,6 +227,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    // Mark current session as inactive before signing out
+    if (user?.id) {
+      try {
+        await supabase
+          .from("user_sessions")
+          .update({ is_active: false, logout_at: new Date().toISOString() })
+          .eq("user_id", user.id)
+          .eq("is_active", true);
+      } catch (error) {
+        console.error("Error updating session on logout:", error);
+      }
+    }
+    
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
