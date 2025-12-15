@@ -238,26 +238,54 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
     
     try {
       // Load all scope items for the project
-      const { data: itemsData, error } = await supabase
+      const { data: itemsData, error: itemsError } = await supabase
         .from('scope_items')
-        .select('scope_id, unit_value, quantity')
+        .select('scope_id, macro_id, unit_value, quantity')
         .eq('project_id', currentProject.id);
 
-      if (error) throw error;
+      if (itemsError) throw itemsError;
       if (!itemsData || itemsData.length === 0) {
         toast.error('Nenhum item de orçamento encontrado. Adicione itens ao orçamento primeiro.');
         return;
       }
 
-      // Calculate total cost per scope
-      const scopeTotals: Record<string, number> = {};
+      // Load scope_costs to get scope_name mappings (for legacy scope_ids)
+      const { data: costsData, error: costsError } = await supabase
+        .from('scope_costs')
+        .select('scope_id, scope_name, macro_name')
+        .eq('project_id', currentProject.id);
+
+      // Create a mapping from scope_id to scope_name (from scope_costs)
+      const scopeIdToName: Record<string, { scopeName: string; macroName: string }> = {};
+      if (costsData) {
+        costsData.forEach(cost => {
+          scopeIdToName[cost.scope_id] = {
+            scopeName: cost.scope_name.toLowerCase().trim(),
+            macroName: cost.macro_name.toLowerCase().trim()
+          };
+        });
+      }
+
+      // Calculate total cost per scope (using both scope_id and name-based matching)
+      const scopeTotalsById: Record<string, number> = {};
+      const scopeTotalsByName: Record<string, number> = {}; // key: "macroName|scopeName"
+      
       itemsData.forEach(item => {
         const total = Number(item.unit_value) * Number(item.quantity);
-        scopeTotals[item.scope_id] = (scopeTotals[item.scope_id] || 0) + total;
+        
+        // Sum by scope_id
+        scopeTotalsById[item.scope_id] = (scopeTotalsById[item.scope_id] || 0) + total;
+        
+        // Also sum by name (for matching when IDs don't align)
+        const nameMapping = scopeIdToName[item.scope_id];
+        if (nameMapping) {
+          const nameKey = `${nameMapping.macroName}|${nameMapping.scopeName}`;
+          scopeTotalsByName[nameKey] = (scopeTotalsByName[nameKey] || 0) + total;
+        }
       });
 
       // Calculate grand total
-      const grandTotal = Object.values(scopeTotals).reduce((sum, val) => sum + val, 0);
+      const grandTotal = Object.values(scopeTotalsById).reduce((sum, val) => sum + val, 0);
       
       if (grandTotal === 0) {
         toast.error('O orçamento não tem valores. Adicione valores aos itens primeiro.');
@@ -268,7 +296,34 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
       let updated = 0;
       for (const macro of macrosTemplate) {
         for (const scope of macro.scopes) {
-          const scopeTotal = scopeTotals[scope.id] || 0;
+          // Try to find total by scope_id first
+          let scopeTotal = scopeTotalsById[scope.id] || 0;
+          
+          // If not found by ID, try to match by name
+          if (scopeTotal === 0) {
+            const macroNameLower = macro.name.toLowerCase().trim();
+            const scopeNameLower = scope.name.toLowerCase().trim();
+            
+            // Try exact match first
+            const exactKey = `${macroNameLower}|${scopeNameLower}`;
+            scopeTotal = scopeTotalsByName[exactKey] || 0;
+            
+            // If still not found, try partial matching
+            if (scopeTotal === 0) {
+              for (const [key, total] of Object.entries(scopeTotalsByName)) {
+                const [keyMacro, keyScope] = key.split('|');
+                // Match if scope names are similar (contain each other)
+                if (
+                  (scopeNameLower.includes(keyScope) || keyScope.includes(scopeNameLower)) &&
+                  (macroNameLower.includes(keyMacro) || keyMacro.includes(macroNameLower))
+                ) {
+                  scopeTotal = total;
+                  break;
+                }
+              }
+            }
+          }
+          
           const newWeight = Math.round((scopeTotal / grandTotal) * 100 * 10) / 10; // Round to 1 decimal
           
           if (newWeight > 0) {
