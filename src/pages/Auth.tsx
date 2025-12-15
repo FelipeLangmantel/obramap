@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
-import obraMapLogo from "@/assets/obramap-logo.png";
+import obraMapLogo from "@/assets/obramap-logo-new.png";
 
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -81,11 +81,11 @@ export default function Auth() {
       <div className="flex-1 flex items-center justify-center p-4">
         <Card className="w-full max-w-md shadow-xl border-border/50">
           <CardHeader className="text-center space-y-4">
-            <div className="mx-auto w-20 h-20 rounded-full flex items-center justify-center overflow-hidden">
+            <div className="mx-auto w-24 h-24 flex items-center justify-center">
               <img 
                 src={obraMapLogo} 
                 alt="ObraMap Logo" 
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain drop-shadow-md"
               />
             </div>
             <div>
