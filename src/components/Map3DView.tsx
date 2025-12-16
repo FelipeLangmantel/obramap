@@ -275,9 +275,10 @@ function Scene({
         rotateSpeed={0.8}
         enableDamping={true}
         dampingFactor={0.08}
+        // Mobile touch controls - improved for better interaction
         touches={{
-          ONE: 1, // ROTATE - one finger touch
-          TWO: 2  // DOLLY_PAN - two finger touch
+          ONE: THREE.TOUCH.ROTATE, // One finger: rotate
+          TWO: THREE.TOUCH.DOLLY_PAN // Two fingers: zoom and pan
         }}
       />
       

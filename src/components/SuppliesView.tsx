@@ -415,9 +415,11 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
     }
   }, [activeTab, loadTabData]);
 
-  // Get scopes that have planned production (future only)
+  // Get scopes that have planned production (future only) - match by ID and by name
   const scopesWithPlannedProduction = useMemo(() => {
-    return new Set(plannedProductions.map(pp => pp.scope_id));
+    const scopeIds = new Set(plannedProductions.map(pp => pp.scope_id));
+    const scopeNames = new Set(plannedProductions.map(pp => pp.scope_name.toLowerCase().trim()));
+    return { scopeIds, scopeNames };
   }, [plannedProductions]);
 
   // Calculate labor alerts
@@ -427,8 +429,11 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
 
     // Labor alerts - only show for scopes with planned production and if executed houses exceed contracted
     alertsData.scopeItems.filter(item => item.category === 'labor').forEach(item => {
-      // Only show alerts for scopes that have planned production
-      if (!scopesWithPlannedProduction.has(item.scope_id)) return;
+      // Only show alerts for scopes that have planned production - match by ID or name
+      const itemNameLower = item.name.toLowerCase().trim();
+      const hasPlannedProduction = scopesWithPlannedProduction.scopeIds.has(item.scope_id) || 
+                                    scopesWithPlannedProduction.scopeNames.has(itemNameLower);
+      if (!hasPlannedProduction) return;
       
       const contract = laborContracts.find(c => c.scope_id === item.scope_id && c.status === 'active');
       const executed = executedHouses[item.scope_id] || 0;
@@ -474,24 +479,34 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
     
     if (alertFamilies.length === 0 || plannedProductions.length === 0) return [];
     
-    // Get total planned houses from future productions (excluding initial database)
+    // Get total planned houses from future productions - map by both ID and name for matching
     const plannedHousesByScope: Record<string, number[]> = {};
+    const plannedHousesByScopeName: Record<string, number[]> = {};
     plannedProductions.forEach(pp => {
       if (!plannedHousesByScope[pp.scope_id]) plannedHousesByScope[pp.scope_id] = [];
       plannedHousesByScope[pp.scope_id].push(...pp.planned_house_ids);
+      
+      const scopeNameKey = pp.scope_name.toLowerCase().trim();
+      if (!plannedHousesByScopeName[scopeNameKey]) plannedHousesByScopeName[scopeNameKey] = [];
+      plannedHousesByScopeName[scopeNameKey].push(...pp.planned_house_ids);
     });
     
     // Group material scope items by family, only for scopes with planned production
-    const materialItems = alertsData.scopeItems.filter(item => 
-      item.category === 'material' && plannedHousesByScope[item.scope_id]
-    );
+    // Match by ID or by scope name
+    const materialItems = alertsData.scopeItems.filter(item => {
+      if (item.category !== 'material') return false;
+      const itemNameKey = item.name.toLowerCase().trim();
+      return plannedHousesByScope[item.scope_id] || plannedHousesByScopeName[itemNameKey];
+    });
     
     const itemsByFamily: Record<string, { item: typeof materialItems[0]; plannedHouses: number; plannedHouseIds: number[] }[]> = {};
     
     materialItems.forEach(item => {
       const familyName = item.material_family || 'Geral';
       if (!itemsByFamily[familyName]) itemsByFamily[familyName] = [];
-      const plannedHouseIds = [...new Set(plannedHousesByScope[item.scope_id] || [])];
+      // Get planned houses by ID or by name
+      const itemNameKey = item.name.toLowerCase().trim();
+      const plannedHouseIds = [...new Set(plannedHousesByScope[item.scope_id] || plannedHousesByScopeName[itemNameKey] || [])];
       const plannedHouses = plannedHouseIds.length;
       if (plannedHouses > 0) {
         itemsByFamily[familyName].push({ item, plannedHouses, plannedHouseIds });
