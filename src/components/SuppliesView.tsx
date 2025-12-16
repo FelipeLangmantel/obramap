@@ -21,6 +21,7 @@ import { format, addDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { LaborContractsView } from "./LaborContractsView";
 import { ImportInputsDialog } from "./ImportInputsDialog";
+import { useSupplyAlerts, MaterialAlert, LaborAlert } from "@/hooks/useSupplyAlerts";
 
 interface MaterialFamily {
   id: string;
@@ -159,26 +160,7 @@ interface PlannedProduction {
   week_end: string;
 }
 
-interface MaterialAlert {
-  familyId: string;
-  familyName: string;
-  familyColor: string;
-  leadTimeDays: number;
-  priority: 'urgent' | 'warning' | 'info';
-  dueDate: Date;
-  daysUntilDue: number;
-  items: {
-    id: string;
-    name: string;
-    totalQuantity: number;
-    stockQuantity: number;
-    needQuantity: number;
-    unit: string;
-    unitValue: number;
-    totalValue: number;
-    houseIds: number[];
-  }[];
-}
+// MaterialAlert is now imported from useSupplyAlerts hook
 
 const CATEGORY_LABELS = {
   material: 'Material',
@@ -221,6 +203,14 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   const { canEdit } = useAuth();
   const projectId = currentProject?.id;
 
+  // Use the new supply alerts hook for automatic calculation
+  const { 
+    materialAlerts: hookMaterialAlerts, 
+    laborAlerts: hookLaborAlerts, 
+    isLoading: alertsLoading,
+    refetch: refetchAlerts 
+  } = useSupplyAlerts(projectId);
+
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -232,7 +222,6 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   const [quotations, setQuotations] = useState<QuotationRequest[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [laborContracts, setLaborContracts] = useState<LaborContract[]>([]);
-  const [executedHouses, setExecutedHouses] = useState<Record<string, number>>({});
   const [alertsData, setAlertsData] = useState<{ scopeItems: ScopeItem[], pendingQuotations: number, inTransitOrders: number }>({ scopeItems: [], pendingQuotations: 0, inTransitOrders: 0 });
   const [dataLoaded, setDataLoaded] = useState<Record<string, boolean>>({});
 
@@ -337,15 +326,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         lead_time_days: f.lead_time_days || 7 
       })));
       
-      if (prodRes.data) {
-        const executed: Record<string, number> = {};
-        // Only count non-initial database productions (already contracted/purchased)
-        prodRes.data.filter(p => !p.is_initial_database).forEach(p => {
-          if (!executed[p.scope_id]) executed[p.scope_id] = 0;
-          executed[p.scope_id] += (p.house_ids?.length || 0);
-        });
-        setExecutedHouses(executed);
-      }
+      // Executed houses are now handled by useSupplyAlerts hook
     } catch (error) {
       console.error('Error loading alert data:', error);
     } finally {
@@ -415,201 +396,12 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
     }
   }, [activeTab, loadTabData]);
 
-  // Get scopes that have planned production (future only) - match by ID and by name
-  const scopesWithPlannedProduction = useMemo(() => {
-    const scopeIds = new Set(plannedProductions.map(pp => pp.scope_id));
-    const scopeNames = new Set(plannedProductions.map(pp => pp.scope_name.toLowerCase().trim()));
-    return { scopeIds, scopeNames };
-  }, [plannedProductions]);
-
-  // Calculate labor alerts
-  const laborAlerts = useMemo(() => {
-    const alertsList: { type: 'warning' | 'urgent' | 'info'; message: string; category: string; dueDate: Date; scopeId?: string; macroId?: string; scopeName?: string; unitValue?: number }[] = [];
-    const today = new Date();
-
-    // Labor alerts - only show for scopes with planned production and if executed houses exceed contracted
-    alertsData.scopeItems.filter(item => item.category === 'labor').forEach(item => {
-      // Only show alerts for scopes that have planned production - match by ID or name
-      const itemNameLower = item.name.toLowerCase().trim();
-      const hasPlannedProduction = scopesWithPlannedProduction.scopeIds.has(item.scope_id) || 
-                                    scopesWithPlannedProduction.scopeNames.has(itemNameLower);
-      if (!hasPlannedProduction) return;
-      
-      const contract = laborContracts.find(c => c.scope_id === item.scope_id && c.status === 'active');
-      const executed = executedHouses[item.scope_id] || 0;
-      
-      if (contract) {
-        // Only show if executed houses exceed contracted
-        if (executed >= contract.contracted_houses) {
-          alertsList.push({
-            type: 'urgent',
-            message: `Mão de obra para "${item.name}" precisa ser renovada (${executed}/${contract.contracted_houses} casas)`,
-            category: 'labor',
-            dueDate: today,
-            scopeId: item.id,
-            macroId: item.macro_id,
-            scopeName: item.name,
-            unitValue: item.unit_value
-          });
-        }
-      } else if (item.quantity > 0) {
-        alertsList.push({
-          type: 'warning',
-          message: `Contratar mão de obra para "${item.name}"`,
-          category: 'labor',
-          dueDate: addDays(today, 7),
-          scopeId: item.id,
-          macroId: item.macro_id,
-          scopeName: item.name,
-          unitValue: item.unit_value
-        });
-      }
-    });
-
-    return alertsList.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
-  }, [alertsData.scopeItems, laborContracts, executedHouses, scopesWithPlannedProduction]);
+  // Use alerts from hook - no more local calculations needed
+  const materialAlerts = hookMaterialAlerts;
+  const laborAlerts = hookLaborAlerts;
 
   // State to track which alerts have been quoted (by family ID)
   const [quotedAlertFamilies, setQuotedAlertFamilies] = useState<Set<string>>(new Set());
-
-  // Calculate material alerts based on lead time - only for planned future production
-  // GROUP ITEMS BY NAME within each family and sum quantities
-  const materialAlerts = useMemo((): MaterialAlert[] => {
-    const today = new Date();
-    
-    if (alertFamilies.length === 0 || plannedProductions.length === 0) return [];
-    
-    // Get total planned houses from future productions - map by both ID and name for matching
-    const plannedHousesByScope: Record<string, number[]> = {};
-    const plannedHousesByScopeName: Record<string, number[]> = {};
-    plannedProductions.forEach(pp => {
-      if (!plannedHousesByScope[pp.scope_id]) plannedHousesByScope[pp.scope_id] = [];
-      plannedHousesByScope[pp.scope_id].push(...pp.planned_house_ids);
-      
-      const scopeNameKey = pp.scope_name.toLowerCase().trim();
-      if (!plannedHousesByScopeName[scopeNameKey]) plannedHousesByScopeName[scopeNameKey] = [];
-      plannedHousesByScopeName[scopeNameKey].push(...pp.planned_house_ids);
-    });
-    
-    // Group material scope items by family, only for scopes with planned production
-    // Match by ID or by scope name
-    const materialItems = alertsData.scopeItems.filter(item => {
-      if (item.category !== 'material') return false;
-      const itemNameKey = item.name.toLowerCase().trim();
-      return plannedHousesByScope[item.scope_id] || plannedHousesByScopeName[itemNameKey];
-    });
-    
-    const itemsByFamily: Record<string, { item: typeof materialItems[0]; plannedHouses: number; plannedHouseIds: number[] }[]> = {};
-    
-    materialItems.forEach(item => {
-      const familyName = item.material_family || 'Geral';
-      if (!itemsByFamily[familyName]) itemsByFamily[familyName] = [];
-      // Get planned houses by ID or by name
-      const itemNameKey = item.name.toLowerCase().trim();
-      const plannedHouseIds = [...new Set(plannedHousesByScope[item.scope_id] || plannedHousesByScopeName[itemNameKey] || [])];
-      const plannedHouses = plannedHouseIds.length;
-      if (plannedHouses > 0) {
-        itemsByFamily[familyName].push({ item, plannedHouses, plannedHouseIds });
-      }
-    });
-    
-    // Create alerts for each family based on lead time
-    const alerts: MaterialAlert[] = [];
-    
-    Object.entries(itemsByFamily).forEach(([familyName, itemsData]) => {
-      const family = alertFamilies.find(f => f.name === familyName);
-      if (!family || itemsData.length === 0) return;
-      
-      const leadTimeDays = family.lead_time_days || 7;
-      
-      // GROUP AND SUM items with the same name within the family
-      const groupedByName: Record<string, {
-        totalQuantity: number;
-        stockQuantity: number;
-        unit: string;
-        unitValue: number;
-        houseIds: Set<number>;
-        ids: string[];
-      }> = {};
-      
-      itemsData.forEach(({ item, plannedHouses, plannedHouseIds }) => {
-        const normalizedName = item.name.trim().toLowerCase();
-        const matchingInput = inputs.find(i => i.name.toLowerCase() === normalizedName && i.category === 'material');
-        const stockQuantity = matchingInput?.stock_quantity || 0;
-        
-        if (!groupedByName[normalizedName]) {
-          groupedByName[normalizedName] = {
-            totalQuantity: 0,
-            stockQuantity,
-            unit: item.unit,
-            unitValue: item.unit_value,
-            houseIds: new Set(),
-            ids: []
-          };
-        }
-        
-        groupedByName[normalizedName].totalQuantity += item.quantity * plannedHouses;
-        groupedByName[normalizedName].ids.push(item.id);
-        plannedHouseIds.forEach(h => groupedByName[normalizedName].houseIds.add(h));
-        // Use the highest unit value if there are different values
-        if (item.unit_value > groupedByName[normalizedName].unitValue) {
-          groupedByName[normalizedName].unitValue = item.unit_value;
-        }
-      });
-      
-      // Convert grouped items to alert items
-      const alertItems = Object.entries(groupedByName).map(([name, data]) => {
-        const needQuantity = Math.max(0, data.totalQuantity - data.stockQuantity);
-        // Find the original item name with proper casing
-        const originalItem = itemsData.find(d => d.item.name.trim().toLowerCase() === name);
-        
-        return {
-          id: data.ids.join(','), // Store all IDs
-          name: originalItem?.item.name || name,
-          totalQuantity: data.totalQuantity,
-          stockQuantity: data.stockQuantity,
-          needQuantity,
-          unit: data.unit,
-          unitValue: data.unitValue,
-          totalValue: needQuantity * data.unitValue,
-          houseIds: Array.from(data.houseIds)
-        };
-      }).filter(item => item.needQuantity > 0); // Only show items that need to be purchased
-      
-      // Skip families with no items to purchase
-      if (alertItems.length === 0) return;
-      
-      // Due date is based on earliest planned production for this family
-      const earliestPlanned = plannedProductions
-        .filter(pp => itemsData.some(id => id.item.scope_id === pp.scope_id))
-        .sort((a, b) => new Date(a.week_start).getTime() - new Date(b.week_start).getTime())[0];
-      
-      const dueDate = earliestPlanned 
-        ? addDays(new Date(earliestPlanned.week_start), -leadTimeDays)
-        : addDays(today, leadTimeDays);
-      
-      const daysUntilDue = differenceInDays(dueDate, today);
-      
-      // Determine priority based on days until due
-      let priority: 'urgent' | 'warning' | 'info' = 'info';
-      if (daysUntilDue <= 3) priority = 'urgent';
-      else if (daysUntilDue <= 7) priority = 'warning';
-      
-      alerts.push({
-        familyId: family.id,
-        familyName: family.name,
-        familyColor: family.color,
-        leadTimeDays,
-        priority,
-        dueDate,
-        daysUntilDue,
-        items: alertItems
-      });
-    });
-    
-    // Sort by days until due (most urgent first)
-    return alerts.sort((a, b) => a.daysUntilDue - b.daysUntilDue);
-  }, [alertsData.scopeItems, alertFamilies, plannedProductions, inputs]);
 
   // Filter out alerts that already have pending quotations
   const visibleMaterialAlerts = useMemo(() => {
@@ -622,7 +414,6 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
       const quoted = new Set<string>();
       quotations.filter(q => q.status === 'pending').forEach(q => {
         materialAlerts.forEach(alert => {
-          // If quotation title contains family name, consider it quoted
           if (q.title.toLowerCase().includes(alert.familyName.toLowerCase())) {
             quoted.add(alert.familyId);
           }
@@ -1422,7 +1213,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                           {alert.type === 'urgent' ? <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5 md:mt-0" /> : <Clock className="w-4 h-4 text-yellow-500 shrink-0 mt-0.5 md:mt-0" />}
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-xs md:text-sm">{alert.message}</p>
-                            <Badge variant="outline" className="text-[10px] md:text-xs mt-1">{CATEGORY_LABELS[alert.category as keyof typeof CATEGORY_LABELS] || alert.category}</Badge>
+                            <Badge variant="outline" className="text-[10px] md:text-xs mt-1">Mão de Obra</Badge>
                           </div>
                           {canEdit && (
                             <Button 
@@ -1430,16 +1221,13 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                               variant="outline" 
                               className="shrink-0 text-[10px] md:text-xs h-7 md:h-8 px-2 md:px-3"
                               onClick={() => {
-                                const scopeItem = alertsData.scopeItems.find(s => s.id === alert.scopeId);
-                                if (scopeItem) {
-                                  setLaborContractPrefill({
-                                    scopeId: scopeItem.scope_id,
-                                    macroId: alert.macroId || scopeItem.macro_id,
-                                    scopeName: alert.scopeName || scopeItem.name,
-                                    houses: currentProject?.totalHouses || 0,
-                                    unitValue: alert.unitValue || scopeItem.unit_value || 0
-                                  });
-                                }
+                                setLaborContractPrefill({
+                                  scopeId: alert.scopeId,
+                                  macroId: alert.macroId,
+                                  scopeName: alert.scopeName,
+                                  houses: alert.plannedHouses,
+                                  unitValue: alert.unitValue
+                                });
                                 setActiveTab('contracts');
                               }}
                             >
