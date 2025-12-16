@@ -151,6 +151,11 @@ export function SuppliersManagementView() {
     }
   };
 
+  const getProjectName = (projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    return project?.name || 'Obra não encontrada';
+  };
+
   const SupplierCard = ({ supplier }: { supplier: Supplier }) => (
     <Card key={supplier.id}>
       <CardContent className="p-4">
@@ -165,9 +170,15 @@ export function SuppliersManagementView() {
               }>
                 {supplier.supplier_type === 'labor' ? 'MO' : supplier.supplier_type === 'equipment' ? 'EQP' : 'MAT'}
               </Badge>
-              <Badge variant={supplier.supplier_scope === 'global' ? 'default' : 'secondary'} className="text-xs">
-                {supplier.supplier_scope === 'global' ? 'Geral' : projects.find(p => p.id === supplier.project_id)?.name || 'Obra'}
-              </Badge>
+              {supplier.supplier_scope === 'global' ? (
+                <Badge variant="default" className="text-xs bg-primary">
+                  Todas as Obras
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="text-xs">
+                  {getProjectName(supplier.project_id)}
+                </Badge>
+              )}
             </div>
             {supplier.cnpj_cpf && <p className="text-sm text-muted-foreground">CPF/CNPJ: {supplier.cnpj_cpf}</p>}
             {supplier.email && <p className="text-sm text-muted-foreground">{supplier.email}</p>}
@@ -289,15 +300,26 @@ export function SuppliersManagementView() {
                     
                     {newSupplier.supplier_scope === 'project' && (
                       <div>
-                        <Label>Obra</Label>
+                        <Label>Obra *</Label>
                         <Select 
                           value={newSupplier.selected_project_id || defaultProjectId || ''} 
                           onValueChange={(v) => setNewSupplier({ ...newSupplier, selected_project_id: v })}
                         >
-                          <SelectTrigger><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione a obra">
+                              {newSupplier.selected_project_id 
+                                ? projects.find(p => p.id === newSupplier.selected_project_id)?.name 
+                                : 'Selecione a obra'}
+                            </SelectValue>
+                          </SelectTrigger>
                           <SelectContent>
                             {projects.map(project => (
-                              <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>
+                              <SelectItem key={project.id} value={project.id}>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{project.name}</span>
+                                  <span className="text-xs text-muted-foreground">{project.location}</span>
+                                </div>
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
