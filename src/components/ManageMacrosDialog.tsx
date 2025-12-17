@@ -1,7 +1,8 @@
 import { useState, DragEvent, useMemo } from "react";
-import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy, Eye, Scale, Upload, FileUp, Download, Printer, Calculator } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy, Eye, Scale, Upload, FileUp, Download, Printer, Calculator, Lock, Unlock } from "lucide-react";
 import { CopyMacrosDialog } from "./CopyMacrosDialog";
 import { ImportMacrosDialog } from "./ImportMacrosDialog";
+import { ImportWeightsFromBudgetDialog } from "./ImportWeightsFromBudgetDialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -502,16 +503,56 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
             </div>
           )}
 
-          {/* Weight Total Display */}
-          <div className="flex items-center gap-2 p-3 rounded-lg border bg-secondary/30 border-border">
-            <Scale className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">
-              Peso Total: {weightAnalysis.overallTotalWeight.toFixed(1)}%
-            </span>
+          {/* Weight Mode and Total Display */}
+          <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 rounded-lg border ${
+            currentProject.weightMode === "manual" && needsWeightAdjustment 
+              ? "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800"
+              : "bg-secondary/30 border-border"
+          }`}>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+              <div className="flex items-center gap-2">
+                <Scale className={`w-4 h-4 ${currentProject.weightMode === "manual" && needsWeightAdjustment ? "text-orange-600" : "text-muted-foreground"}`} />
+                <span className={`text-sm font-medium ${currentProject.weightMode === "manual" && needsWeightAdjustment ? "text-orange-800 dark:text-orange-200" : ""}`}>
+                  Peso Total: {weightAnalysis.overallTotalWeight.toFixed(1)}%
+                </span>
+                <Badge variant={currentProject.weightMode === "automatic" ? "default" : "secondary"} className="text-xs">
+                  {currentProject.weightMode === "automatic" ? (
+                    <>
+                      <Lock className="w-3 h-3 mr-1" />
+                      Orçamento
+                    </>
+                  ) : (
+                    <>
+                      <Unlock className="w-3 h-3 mr-1" />
+                      Manual
+                    </>
+                  )}
+                </Badge>
+              </div>
+              {currentProject.weightMode === "manual" && needsWeightAdjustment && (
+                <p className="text-xs text-orange-600 dark:text-orange-400">
+                  A soma deve ser 100%. Diferença: {(100 - weightAnalysis.overallTotalWeight).toFixed(1)}%
+                </p>
+              )}
+            </div>
+            {canEdit && (
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={() => setShowImportWeightsDialog(true)}
+                className="text-xs"
+              >
+                <Calculator className="w-3 h-3 mr-1" />
+                Importar Pesos do Orçamento
+              </Button>
+            )}
           </div>
 
           <p className="text-xs text-muted-foreground">
             Arraste os itens ou use as setas para reorganizar a ordem das etapas e serviços.
+            {currentProject.weightMode === "automatic" && (
+              <span className="text-primary ml-1">(Pesos bloqueados - modo automático ativo)</span>
+            )}
           </p>
           
           <div className="flex-1 overflow-y-auto space-y-4 py-2 sm:py-4 min-h-0">
@@ -725,6 +766,12 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                                     <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab" />
                                     <span className="text-sm">{scope.name}</span>
                                     <span className="text-xs text-muted-foreground">(Peso: {scope.weight}%)</span>
+                                    {currentProject.weightMode === "automatic" && (
+                                      <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                        <Lock className="w-2 h-2 mr-0.5" />
+                                        Orçamento
+                                      </Badge>
+                                    )}
                                   </div>
                                   {canEdit && (
                                     <div className="flex gap-1">
@@ -751,6 +798,8 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                                         variant="ghost" 
                                         className="h-7 w-7"
                                         onClick={() => setEditingScope({ macroId: macro.id, scope: { ...scope } })}
+                                        disabled={currentProject.weightMode === "automatic"}
+                                        title={currentProject.weightMode === "automatic" ? "Pesos bloqueados - modo automático ativo" : "Editar serviço"}
                                       >
                                         <Pencil className="w-3.5 h-3.5" />
                                       </Button>
@@ -847,11 +896,9 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
         mode="structure"
       />
 
-      <ImportMacrosDialog 
+      <ImportWeightsFromBudgetDialog 
         open={showImportWeightsDialog} 
         onOpenChange={setShowImportWeightsDialog}
-        onImport={handleImportWeights}
-        mode="weights"
       />
 
       {/* Critical Delete Alert */}
