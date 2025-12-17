@@ -80,6 +80,7 @@ export function useProjectPersistence() {
         legendFollowMacros: p.legend_follow_macros ?? false,
         customLegendItems: (p.custom_legend_items as unknown as LegendItem[]) || DEFAULT_LEGEND_ITEMS,
         displayOrder: p.display_order ?? 0,
+        weightMode: (p as any).weight_mode || "manual",
       });
     }
 

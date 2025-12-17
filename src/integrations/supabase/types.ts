@@ -666,6 +666,7 @@ export type Database = {
           total_houses: number
           unit_size: number
           updated_at: string
+          weight_mode: string
         }
         Insert: {
           contractor: string
@@ -685,6 +686,7 @@ export type Database = {
           total_houses?: number
           unit_size?: number
           updated_at?: string
+          weight_mode?: string
         }
         Update: {
           contractor?: string
@@ -704,6 +706,7 @@ export type Database = {
           total_houses?: number
           unit_size?: number
           updated_at?: string
+          weight_mode?: string
         }
         Relationships: []
       }

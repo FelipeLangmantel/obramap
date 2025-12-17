@@ -38,6 +38,7 @@ export interface Project {
   legendFollowMacros: boolean;
   customLegendItems: LegendItem[];
   displayOrder: number;
+  weightMode: "automatic" | "manual";
 }
 
 interface ConstructionContextType {
@@ -45,7 +46,7 @@ interface ConstructionContextType {
   projects: Project[];
   currentProject: Project | null;
   setCurrentProject: (projectId: string | null) => void;
-  addProject: (project: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete" | "legendFollowMacros" | "customLegendItems" | "displayOrder">) => Promise<string>;
+  addProject: (project: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete" | "legendFollowMacros" | "customLegendItems" | "displayOrder" | "weightMode">) => Promise<string>;
   reorderProjects: (orderedProjectIds: string[]) => Promise<void>;
   updateProject: (projectId: string, updates: Partial<Project>) => void;
   deleteProject: (projectId: string) => void;
@@ -351,6 +352,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             legendFollowMacros: p.legend_follow_macros ?? false,
             customLegendItems: (p.custom_legend_items as unknown as LegendItem[]) || DEFAULT_LEGEND_ITEMS,
             displayOrder: p.display_order ?? 0,
+            weightMode: (p as any).weight_mode || "manual",
           });
         }
 
