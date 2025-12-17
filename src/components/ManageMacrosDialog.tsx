@@ -502,37 +502,12 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
             </div>
           )}
 
-          {/* Weight Analysis Alert */}
-          <div className={`p-3 rounded-lg border ${needsWeightAdjustment ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800' : 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800'}`}>
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Scale className={`w-4 h-4 ${needsWeightAdjustment ? 'text-orange-600' : 'text-green-600'}`} />
-                <div>
-                  <span className={`text-sm font-medium ${needsWeightAdjustment ? 'text-orange-800 dark:text-orange-200' : 'text-green-800 dark:text-green-200'}`}>
-                    Peso Total: {weightAnalysis.overallTotalWeight.toFixed(1)}%
-                  </span>
-                  {needsWeightAdjustment && (
-                    <p className="text-xs text-orange-600 dark:text-orange-400">
-                      A soma dos pesos deve ser 100% para cálculos precisos. Diferença: {(100 - weightAnalysis.overallTotalWeight).toFixed(1)}%
-                    </p>
-                  )}
-                </div>
-              </div>
-              {needsWeightAdjustment && canEdit && (
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  className="border-orange-300 text-orange-700 hover:bg-orange-100"
-                  onClick={suggestWeightDistribution}
-                >
-                  Ajustar Automaticamente
-                </Button>
-              )}
-            </div>
-            <Progress 
-              value={Math.min(weightAnalysis.overallTotalWeight, 100)} 
-              className="mt-2 h-2"
-            />
+          {/* Weight Total Display */}
+          <div className="flex items-center gap-2 p-3 rounded-lg border bg-secondary/30 border-border">
+            <Scale className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm font-medium">
+              Peso Total: {weightAnalysis.overallTotalWeight.toFixed(1)}%
+            </span>
           </div>
 
           <p className="text-xs text-muted-foreground">
@@ -589,16 +564,6 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                       <Upload className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                       <span className="hidden sm:inline">Importar Etapas</span>
                       <span className="sm:hidden">Importar</span>
-                    </Button>
-                    <Button 
-                      variant="default"
-                      onClick={handlePullWeightsFromBudget}
-                      title="Puxar pesos automaticamente do orçamento da obra"
-                      className="flex-1 sm:flex-none text-xs sm:text-sm"
-                    >
-                      <Calculator className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                      <span className="hidden sm:inline">Autoajuste de Pesos</span>
-                      <span className="sm:hidden">Autoajuste</span>
                     </Button>
                   </div>
                 )}
