@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Calculator, Download, Pencil, Lock, Unlock, AlertTriangle, FileText, Check } from "lucide-react";
+import { Calculator, Download, Pencil, Lock, Unlock, AlertTriangle, FileText, Check, Home } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -18,14 +18,14 @@ interface ImportWeightsFromBudgetDialogProps {
 }
 
 interface BudgetSummary {
-  totalValue: number;
+  unitValue: number; // Valor unitário da casa
   scopeCount: number;
   macroCount: number;
   hasData: boolean;
 }
 
 export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeightsFromBudgetDialogProps) {
-  const { currentProject, updateScope, updateProject } = useConstruction();
+  const { currentProject, updateProject } = useConstruction();
   const [selectedMode, setSelectedMode] = useState<"automatic" | "manual">("manual");
   const [budgetSummary, setBudgetSummary] = useState<BudgetSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,6 +44,7 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
     setIsLoading(true);
 
     try {
+      // Fetch scope_items to calculate the unit value per house
       const { data: itemsData, error } = await supabase
         .from('scope_items')
         .select('scope_id, macro_id, unit_value, quantity')
@@ -52,36 +53,50 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
       if (error) throw error;
 
       if (!itemsData || itemsData.length === 0) {
-        setBudgetSummary({ totalValue: 0, scopeCount: 0, macroCount: 0, hasData: false });
+        setBudgetSummary({ unitValue: 0, scopeCount: 0, macroCount: 0, hasData: false });
       } else {
-        const totalValue = itemsData.reduce((sum, item) => sum + (Number(item.unit_value) * Number(item.quantity)), 0);
+        // Calculate the unit value (value per house)
+        const unitValue = itemsData.reduce((sum, item) => {
+          return sum + (Number(item.unit_value || 0) * Number(item.quantity || 0));
+        }, 0);
+        
         const uniqueScopes = new Set(itemsData.map(i => i.scope_id));
         const uniqueMacros = new Set(itemsData.map(i => i.macro_id));
         
         setBudgetSummary({
-          totalValue,
+          unitValue,
           scopeCount: uniqueScopes.size,
           macroCount: uniqueMacros.size,
-          hasData: totalValue > 0
+          hasData: unitValue > 0
         });
       }
     } catch (error) {
       console.error('Error loading budget summary:', error);
-      setBudgetSummary({ totalValue: 0, scopeCount: 0, macroCount: 0, hasData: false });
+      setBudgetSummary({ unitValue: 0, scopeCount: 0, macroCount: 0, hasData: false });
     }
     setIsLoading(false);
   };
 
   const handleApply = async () => {
     if (!currentProject) return;
+    
+    // Prevent double-click
+    if (isApplying) return;
     setIsApplying(true);
 
     try {
       if (selectedMode === "automatic") {
-        // Import weights from budget - get all scope_items with their values
+        // Validate that we have budget data
+        if (!budgetSummary?.hasData || budgetSummary.unitValue <= 0) {
+          toast.error('O valor unitário da casa é zero ou inválido. Adicione itens ao orçamento primeiro.');
+          setIsApplying(false);
+          return;
+        }
+
+        // Fetch scope_items to calculate weights based on unit value per house
         const { data: itemsData, error: itemsError } = await supabase
           .from('scope_items')
-          .select('scope_id, macro_id, unit_value, quantity, name')
+          .select('scope_id, macro_id, unit_value, quantity')
           .eq('project_id', currentProject.id);
 
         if (itemsError) throw itemsError;
@@ -92,46 +107,75 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
           return;
         }
 
-        // Calculate totals by macro_id and scope_id from scope_items
-        const scopeTotals: Record<string, number> = {};
-        const macroTotals: Record<string, number> = {};
-        let grandTotal = 0;
-        
-        itemsData.forEach(item => {
-          const itemTotal = Number(item.unit_value || 0) * Number(item.quantity || 0);
-          grandTotal += itemTotal;
-          
-          // Group by macro_id and scope_id
-          const key = `${item.macro_id}|${item.scope_id}`;
-          scopeTotals[key] = (scopeTotals[key] || 0) + itemTotal;
-          macroTotals[item.macro_id] = (macroTotals[item.macro_id] || 0) + itemTotal;
-        });
+        // Calculate the UNIT VALUE (value per house) - this is the base for weight calculation
+        const unitValue = itemsData.reduce((sum, item) => {
+          return sum + (Number(item.unit_value || 0) * Number(item.quantity || 0));
+        }, 0);
 
-        console.log('[Weight Import] Scope totals:', scopeTotals);
-        console.log('[Weight Import] Grand total:', grandTotal);
-
-        if (grandTotal === 0) {
-          toast.error('O orçamento não tem valores. Adicione valores aos itens primeiro.');
+        if (unitValue <= 0) {
+          toast.error('O valor unitário da casa é zero. Adicione valores aos itens primeiro.');
           setIsApplying(false);
           return;
         }
 
-        // Calculate and update weights for each scope in macrosTemplate
-        let updated = 0;
+        // Calculate totals by scope (macro_id|scope_id)
+        const scopeTotals: Record<string, number> = {};
+        
+        itemsData.forEach(item => {
+          const itemTotal = Number(item.unit_value || 0) * Number(item.quantity || 0);
+          const key = `${item.macro_id}|${item.scope_id}`;
+          scopeTotals[key] = (scopeTotals[key] || 0) + itemTotal;
+        });
+
+        // Calculate weights for each scope in macrosTemplate
+        // Formula: Weight = (scope value / unit house value) * 100
+        let totalWeight = 0;
         const updatedMacros = currentProject.macrosTemplate.map(macro => {
           const updatedScopes = macro.scopes.map(scope => {
             const key = `${macro.id}|${scope.id}`;
             const scopeTotal = scopeTotals[key] || 0;
-            const newWeight = Math.round((scopeTotal / grandTotal) * 100 * 10) / 10;
-            
-            if (scopeTotal > 0) {
-              console.log(`[Weight Import] ${macro.name} > ${scope.name}: R$ ${scopeTotal.toFixed(2)} = ${newWeight}%`);
-              updated++;
-            }
-            
+            // Round to 1 decimal place
+            const newWeight = Math.round((scopeTotal / unitValue) * 1000) / 10;
+            totalWeight += newWeight;
             return { ...scope, weight: newWeight };
           });
           return { ...macro, scopes: updatedScopes };
+        });
+
+        // Normalize weights to ensure they sum to exactly 100%
+        if (totalWeight > 0 && Math.abs(totalWeight - 100) > 0.1) {
+          const factor = 100 / totalWeight;
+          let adjustedTotal = 0;
+          
+          updatedMacros.forEach(macro => {
+            macro.scopes.forEach(scope => {
+              scope.weight = Math.round(scope.weight * factor * 10) / 10;
+              adjustedTotal += scope.weight;
+            });
+          });
+          
+          // Fix any rounding error by adjusting the last non-zero scope
+          const diff = Math.round((100 - adjustedTotal) * 10) / 10;
+          if (diff !== 0) {
+            for (let i = updatedMacros.length - 1; i >= 0; i--) {
+              const macro = updatedMacros[i];
+              for (let j = macro.scopes.length - 1; j >= 0; j--) {
+                if (macro.scopes[j].weight > 0) {
+                  macro.scopes[j].weight = Math.round((macro.scopes[j].weight + diff) * 10) / 10;
+                  break;
+                }
+              }
+              break;
+            }
+          }
+        }
+
+        // Count updated scopes
+        let updatedCount = 0;
+        updatedMacros.forEach(macro => {
+          macro.scopes.forEach(scope => {
+            if (scope.weight > 0) updatedCount++;
+          });
         });
 
         // Update the project's macrosTemplate with new weights
@@ -139,46 +183,44 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
           .from('projects')
           .update({ 
             macros_template: updatedMacros as unknown as Json,
-            weight_mode: selectedMode 
+            weight_mode: 'automatic'
           })
           .eq('id', currentProject.id);
 
         if (updateError) throw updateError;
 
-        // Update local state
+        // Update local state synchronously
         updateProject(currentProject.id, { 
           macrosTemplate: updatedMacros,
-          weightMode: selectedMode 
+          weightMode: "automatic"
         });
 
-        // Log action
-        console.log(`[Weight Import] User applied automatic weights from budget. Project: ${currentProject.name}, Updated: ${updated} scopes, Total: R$ ${grandTotal.toFixed(2)}`);
+        console.log(`[Weight Import] Applied. Unit Value: R$ ${unitValue.toFixed(2)}, Updated: ${updatedCount} scopes`);
         
-        toast.success(`Pesos importados do orçamento! ${updated} serviços atualizados.`);
+        toast.success(`Pesos importados! ${updatedCount} serviços com base no valor unitário de ${formatCurrency(unitValue)}`);
       } else {
         // Manual mode - just update the weight_mode
         const { error: updateError } = await supabase
           .from('projects')
-          .update({ weight_mode: selectedMode })
+          .update({ weight_mode: 'manual' })
           .eq('id', currentProject.id);
 
         if (updateError) throw updateError;
 
         // Update local state
-        updateProject(currentProject.id, { weightMode: selectedMode });
-        
-        // Log action
-        console.log(`[Weight Mode] User changed weight mode to "${selectedMode}". Project: ${currentProject.name}, Time: ${new Date().toISOString()}`);
+        updateProject(currentProject.id, { weightMode: "manual" });
         
         toast.success('Modo de pesos alterado para manual.');
       }
 
+      // Close modal after successful application
       onOpenChange(false);
     } catch (error) {
       console.error('Error applying weights:', error);
-      toast.error('Erro ao aplicar configuração de pesos');
+      toast.error('Erro ao aplicar configuração de pesos. Tente novamente.');
+    } finally {
+      setIsApplying(false);
     }
-    setIsApplying(false);
   };
 
   const formatCurrency = (value: number) => {
@@ -199,7 +241,7 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
             Configurar Pesos das Etapas
           </DialogTitle>
           <DialogDescription>
-            Escolha como os pesos das etapas e serviços serão calculados
+            Os pesos são calculados com base no custo por unidade habitacional
           </DialogDescription>
         </DialogHeader>
 
@@ -222,20 +264,20 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
             </Badge>
           </div>
 
-          {/* Budget Summary */}
+          {/* Budget Summary - UNIT VALUE PER HOUSE */}
           {isLoading ? (
             <div className="p-4 text-center text-muted-foreground">Carregando dados do orçamento...</div>
           ) : (
             <div className="p-3 rounded-lg border border-border bg-card">
               <div className="flex items-center gap-2 mb-2">
-                <FileText className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Resumo do Orçamento</span>
+                <Home className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Custo por Unidade Habitacional</span>
               </div>
               {hasBudget ? (
                 <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
-                    <p className="text-lg font-semibold text-primary">{formatCurrency(budgetSummary!.totalValue)}</p>
-                    <p className="text-xs text-muted-foreground">Valor Total</p>
+                    <p className="text-lg font-semibold text-primary">{formatCurrency(budgetSummary!.unitValue)}</p>
+                    <p className="text-xs text-muted-foreground">Valor Unitário</p>
                   </div>
                   <div>
                     <p className="text-lg font-semibold">{budgetSummary!.macroCount}</p>
@@ -250,7 +292,7 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
                 <Alert>
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription>
-                    Nenhum orçamento cadastrado. Adicione itens em "Custos de Obra" para usar pesos automáticos.
+                    Nenhum orçamento unitário cadastrado. Adicione itens em "Custos de Obra" para usar pesos automáticos.
                   </AlertDescription>
                 </Alert>
               )}
@@ -289,7 +331,7 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
                   </Badge>
                 </Label>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Os pesos serão calculados automaticamente com base nos valores do orçamento. 
+                  Os pesos serão calculados com base no valor unitário da casa. 
                   A edição manual ficará bloqueada.
                 </p>
                 {!hasBudget && (
@@ -326,8 +368,8 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
           {/* Weight Formula Info */}
           <div className="p-3 rounded-lg bg-muted/50 border border-border">
             <p className="text-xs text-muted-foreground">
-              <strong>Fórmula de cálculo automático:</strong><br />
-              Peso do serviço = (valor do serviço ÷ valor total da obra) × 100<br />
+              <strong>Fórmula de cálculo:</strong><br />
+              Peso do serviço = (valor do serviço ÷ valor unitário da casa) × 100<br />
               Peso da etapa = soma dos pesos dos serviços
             </p>
           </div>
@@ -337,7 +379,10 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isApplying}>
             Cancelar
           </Button>
-          <Button onClick={handleApply} disabled={isApplying || (selectedMode === "automatic" && !hasBudget)}>
+          <Button 
+            onClick={handleApply} 
+            disabled={isApplying || (selectedMode === "automatic" && !hasBudget)}
+          >
             {isApplying ? (
               "Aplicando..."
             ) : (
