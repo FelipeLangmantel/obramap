@@ -44,180 +44,177 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
     setIsLoading(true);
 
     try {
-      // Fetch scope_items to calculate the unit value per house
       const { data: itemsData, error } = await supabase
-        .from('scope_items')
-        .select('scope_id, macro_id, unit_value, quantity')
-        .eq('project_id', currentProject.id);
+        .from("scope_items")
+        .select("scope_id, unit_value, quantity")
+        .eq("project_id", currentProject.id);
 
       if (error) throw error;
 
-      if (!itemsData || itemsData.length === 0) {
-        setBudgetSummary({ unitValue: 0, scopeCount: 0, macroCount: 0, hasData: false });
-      } else {
-        // Calculate the unit value (value per house)
-        const unitValue = itemsData.reduce((sum, item) => {
-          return sum + (Number(item.unit_value || 0) * Number(item.quantity || 0));
-        }, 0);
-        
-        const uniqueScopes = new Set(itemsData.map(i => i.scope_id));
-        const uniqueMacros = new Set(itemsData.map(i => i.macro_id));
-        
-        setBudgetSummary({
-          unitValue,
-          scopeCount: uniqueScopes.size,
-          macroCount: uniqueMacros.size,
-          hasData: unitValue > 0
-        });
-      }
+      // Only consider items whose scope_id exists in the current macros template
+      const validScopeIds = new Set(
+        currentProject.macrosTemplate.flatMap((m) => m.scopes.map((s) => s.id))
+      );
+
+      const matchedItems = (itemsData || []).filter((i) => validScopeIds.has(i.scope_id));
+
+      const unitValue = matchedItems.reduce(
+        (sum, item) => sum + Number(item.unit_value || 0) * Number(item.quantity || 0),
+        0
+      );
+
+      const macroCount = currentProject.macrosTemplate.length;
+      const scopeCount = currentProject.macrosTemplate.reduce((acc, m) => acc + m.scopes.length, 0);
+
+      setBudgetSummary({
+        unitValue,
+        scopeCount,
+        macroCount,
+        hasData: unitValue > 0,
+      });
     } catch (error) {
-      console.error('Error loading budget summary:', error);
+      console.error("Error loading budget summary:", error);
       setBudgetSummary({ unitValue: 0, scopeCount: 0, macroCount: 0, hasData: false });
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleApply = async () => {
     if (!currentProject) return;
-    
+
     // Prevent double-click
     if (isApplying) return;
     setIsApplying(true);
 
     try {
       if (selectedMode === "automatic") {
-        // Validate that we have budget data
+        // Validate unit value
         if (!budgetSummary?.hasData || budgetSummary.unitValue <= 0) {
-          toast.error('O valor unitário da casa é zero ou inválido. Adicione itens ao orçamento primeiro.');
-          setIsApplying(false);
+          toast.error(
+            "Não foi encontrado custo unitário válido. Verifique se os itens do orçamento estão vinculados aos serviços do projeto."
+          );
           return;
         }
 
-        // Fetch scope_items to calculate weights based on unit value per house
         const { data: itemsData, error: itemsError } = await supabase
-          .from('scope_items')
-          .select('scope_id, macro_id, unit_value, quantity')
-          .eq('project_id', currentProject.id);
+          .from("scope_items")
+          .select("scope_id, unit_value, quantity")
+          .eq("project_id", currentProject.id);
 
         if (itemsError) throw itemsError;
 
-        if (!itemsData || itemsData.length === 0) {
-          toast.error('Nenhum item de orçamento encontrado. Adicione itens em "Custos de Obra" primeiro.');
-          setIsApplying(false);
+        const validScopeIds = new Set(
+          currentProject.macrosTemplate.flatMap((m) => m.scopes.map((s) => s.id))
+        );
+
+        const matchedItems = (itemsData || []).filter((i) => validScopeIds.has(i.scope_id));
+
+        if (matchedItems.length === 0) {
+          toast.error(
+            "Nenhum item do orçamento está vinculado aos serviços atuais (IDs não correspondem). Ajuste o orçamento para usar os mesmos serviços do projeto."
+          );
           return;
         }
 
-        // Calculate the UNIT VALUE (value per house) - this is the base for weight calculation
-        const unitValue = itemsData.reduce((sum, item) => {
-          return sum + (Number(item.unit_value || 0) * Number(item.quantity || 0));
-        }, 0);
+        // Base value MUST be the unit value of the house (same calculation as Custos de Obra)
+        const unitValue = matchedItems.reduce(
+          (sum, item) => sum + Number(item.unit_value || 0) * Number(item.quantity || 0),
+          0
+        );
 
         if (unitValue <= 0) {
-          toast.error('O valor unitário da casa é zero. Adicione valores aos itens primeiro.');
-          setIsApplying(false);
+          toast.error("O valor unitário da casa é zero. Adicione valores aos itens primeiro.");
           return;
         }
 
-        // Calculate totals by scope (macro_id|scope_id)
-        const scopeTotals: Record<string, number> = {};
-        
-        itemsData.forEach(item => {
+        // Totals per scope_id
+        const totalsByScopeId: Record<string, number> = {};
+        for (const item of matchedItems) {
           const itemTotal = Number(item.unit_value || 0) * Number(item.quantity || 0);
-          const key = `${item.macro_id}|${item.scope_id}`;
-          scopeTotals[key] = (scopeTotals[key] || 0) + itemTotal;
-        });
+          totalsByScopeId[item.scope_id] = (totalsByScopeId[item.scope_id] || 0) + itemTotal;
+        }
 
-        // Calculate weights for each scope in macrosTemplate
-        // Formula: Weight = (scope value / unit house value) * 100
+        // Calculate weights and normalize to exactly 100%
         let totalWeight = 0;
-        const updatedMacros = currentProject.macrosTemplate.map(macro => {
-          const updatedScopes = macro.scopes.map(scope => {
-            const key = `${macro.id}|${scope.id}`;
-            const scopeTotal = scopeTotals[key] || 0;
-            // Round to 1 decimal place
-            const newWeight = Math.round((scopeTotal / unitValue) * 1000) / 10;
+        const updatedMacros = currentProject.macrosTemplate.map((macro) => {
+          const updatedScopes = macro.scopes.map((scope) => {
+            const scopeTotal = totalsByScopeId[scope.id] || 0;
+            const newWeight = Math.round(((scopeTotal / unitValue) * 100) * 10) / 10; // 1 decimal
             totalWeight += newWeight;
             return { ...scope, weight: newWeight };
           });
           return { ...macro, scopes: updatedScopes };
         });
 
-        // Normalize weights to ensure they sum to exactly 100%
-        if (totalWeight > 0 && Math.abs(totalWeight - 100) > 0.1) {
+        // Normalize (handle rounding) to force exactly 100%
+        if (totalWeight > 0) {
           const factor = 100 / totalWeight;
           let adjustedTotal = 0;
-          
-          updatedMacros.forEach(macro => {
-            macro.scopes.forEach(scope => {
+
+          updatedMacros.forEach((macro) => {
+            macro.scopes.forEach((scope) => {
               scope.weight = Math.round(scope.weight * factor * 10) / 10;
               adjustedTotal += scope.weight;
             });
           });
-          
-          // Fix any rounding error by adjusting the last non-zero scope
+
           const diff = Math.round((100 - adjustedTotal) * 10) / 10;
           if (diff !== 0) {
-            for (let i = updatedMacros.length - 1; i >= 0; i--) {
-              const macro = updatedMacros[i];
-              for (let j = macro.scopes.length - 1; j >= 0; j--) {
-                if (macro.scopes[j].weight > 0) {
-                  macro.scopes[j].weight = Math.round((macro.scopes[j].weight + diff) * 10) / 10;
-                  break;
+            outer: for (let i = updatedMacros.length - 1; i >= 0; i--) {
+              for (let j = updatedMacros[i].scopes.length - 1; j >= 0; j--) {
+                if (updatedMacros[i].scopes[j].weight > 0) {
+                  updatedMacros[i].scopes[j].weight =
+                    Math.round((updatedMacros[i].scopes[j].weight + diff) * 10) / 10;
+                  break outer;
                 }
               }
-              break;
             }
           }
         }
 
-        // Count updated scopes
-        let updatedCount = 0;
-        updatedMacros.forEach(macro => {
-          macro.scopes.forEach(scope => {
-            if (scope.weight > 0) updatedCount++;
-          });
-        });
+        // Final validation
+        const finalSum = Math.round(
+          updatedMacros.reduce((sum, m) => sum + m.scopes.reduce((s, sc) => s + sc.weight, 0), 0) * 10
+        ) / 10;
+        if (finalSum !== 100) {
+          toast.error(`Falha ao normalizar pesos (total = ${finalSum}%). Tente novamente.`);
+          return;
+        }
 
-        // Update the project's macrosTemplate with new weights
+        // Persist in one write (prevents UI loops and is faster)
         const { error: updateError } = await supabase
-          .from('projects')
-          .update({ 
+          .from("projects")
+          .update({
             macros_template: updatedMacros as unknown as Json,
-            weight_mode: 'automatic'
+            weight_mode: "automatic",
           })
-          .eq('id', currentProject.id);
+          .eq("id", currentProject.id);
 
         if (updateError) throw updateError;
 
-        // Update local state synchronously
-        updateProject(currentProject.id, { 
+        updateProject(currentProject.id, {
           macrosTemplate: updatedMacros,
-          weightMode: "automatic"
+          weightMode: "automatic",
         });
 
-        console.log(`[Weight Import] Applied. Unit Value: R$ ${unitValue.toFixed(2)}, Updated: ${updatedCount} scopes`);
-        
-        toast.success(`Pesos importados! ${updatedCount} serviços com base no valor unitário de ${formatCurrency(unitValue)}`);
+        toast.success(`Pesos importados com base no valor unitário: ${formatCurrency(unitValue)}`);
       } else {
-        // Manual mode - just update the weight_mode
         const { error: updateError } = await supabase
-          .from('projects')
-          .update({ weight_mode: 'manual' })
-          .eq('id', currentProject.id);
+          .from("projects")
+          .update({ weight_mode: "manual" })
+          .eq("id", currentProject.id);
 
         if (updateError) throw updateError;
 
-        // Update local state
         updateProject(currentProject.id, { weightMode: "manual" });
-        
-        toast.success('Modo de pesos alterado para manual.');
+        toast.success("Modo de pesos alterado para manual.");
       }
 
-      // Close modal after successful application
       onOpenChange(false);
     } catch (error) {
-      console.error('Error applying weights:', error);
-      toast.error('Erro ao aplicar configuração de pesos. Tente novamente.');
+      console.error("Error applying weights:", error);
+      toast.error("Erro ao aplicar configuração de pesos. Tente novamente.");
     } finally {
       setIsApplying(false);
     }
