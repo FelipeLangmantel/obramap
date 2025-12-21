@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { supabase } from "@/integrations/supabase/client";
+import { Json } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 
 interface ImportWeightsFromBudgetDialogProps {
@@ -77,46 +78,37 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
 
     try {
       if (selectedMode === "automatic") {
-        // Import weights from budget
+        // Import weights from budget - get all scope_items with their values
         const { data: itemsData, error: itemsError } = await supabase
           .from('scope_items')
-          .select('scope_id, macro_id, unit_value, quantity')
+          .select('scope_id, macro_id, unit_value, quantity, name')
           .eq('project_id', currentProject.id);
 
         if (itemsError) throw itemsError;
 
-        // Load scope_costs for name mappings
-        const { data: costsData } = await supabase
-          .from('scope_costs')
-          .select('scope_id, scope_name, macro_name')
-          .eq('project_id', currentProject.id);
-
-        const scopeIdToName: Record<string, { scopeName: string; macroName: string }> = {};
-        if (costsData) {
-          costsData.forEach(cost => {
-            scopeIdToName[cost.scope_id] = {
-              scopeName: cost.scope_name.toLowerCase().trim(),
-              macroName: cost.macro_name.toLowerCase().trim()
-            };
-          });
+        if (!itemsData || itemsData.length === 0) {
+          toast.error('Nenhum item de orçamento encontrado. Adicione itens em "Custos de Obra" primeiro.');
+          setIsApplying(false);
+          return;
         }
 
-        // Calculate totals
-        const scopeTotalsById: Record<string, number> = {};
-        const scopeTotalsByName: Record<string, number> = {};
+        // Calculate totals by macro_id and scope_id from scope_items
+        const scopeTotals: Record<string, number> = {};
+        const macroTotals: Record<string, number> = {};
+        let grandTotal = 0;
         
-        (itemsData || []).forEach(item => {
-          const total = Number(item.unit_value) * Number(item.quantity);
-          scopeTotalsById[item.scope_id] = (scopeTotalsById[item.scope_id] || 0) + total;
+        itemsData.forEach(item => {
+          const itemTotal = Number(item.unit_value || 0) * Number(item.quantity || 0);
+          grandTotal += itemTotal;
           
-          const nameMapping = scopeIdToName[item.scope_id];
-          if (nameMapping) {
-            const nameKey = `${nameMapping.macroName}|${nameMapping.scopeName}`;
-            scopeTotalsByName[nameKey] = (scopeTotalsByName[nameKey] || 0) + total;
-          }
+          // Group by macro_id and scope_id
+          const key = `${item.macro_id}|${item.scope_id}`;
+          scopeTotals[key] = (scopeTotals[key] || 0) + itemTotal;
+          macroTotals[item.macro_id] = (macroTotals[item.macro_id] || 0) + itemTotal;
         });
 
-        const grandTotal = Object.values(scopeTotalsById).reduce((sum, val) => sum + val, 0);
+        console.log('[Weight Import] Scope totals:', scopeTotals);
+        console.log('[Weight Import] Grand total:', grandTotal);
 
         if (grandTotal === 0) {
           toast.error('O orçamento não tem valores. Adicione valores aos itens primeiro.');
@@ -124,60 +116,62 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
           return;
         }
 
-        // Calculate and update weights
+        // Calculate and update weights for each scope in macrosTemplate
         let updated = 0;
-        for (const macro of currentProject.macrosTemplate) {
-          for (const scope of macro.scopes) {
-            let scopeTotal = scopeTotalsById[scope.id] || 0;
-            
-            if (scopeTotal === 0) {
-              const macroNameLower = macro.name.toLowerCase().trim();
-              const scopeNameLower = scope.name.toLowerCase().trim();
-              const exactKey = `${macroNameLower}|${scopeNameLower}`;
-              scopeTotal = scopeTotalsByName[exactKey] || 0;
-              
-              if (scopeTotal === 0) {
-                for (const [key, total] of Object.entries(scopeTotalsByName)) {
-                  const [keyMacro, keyScope] = key.split('|');
-                  if (
-                    (scopeNameLower.includes(keyScope) || keyScope.includes(scopeNameLower)) &&
-                    (macroNameLower.includes(keyMacro) || keyMacro.includes(macroNameLower))
-                  ) {
-                    scopeTotal = total;
-                    break;
-                  }
-                }
-              }
-            }
-            
+        const updatedMacros = currentProject.macrosTemplate.map(macro => {
+          const updatedScopes = macro.scopes.map(scope => {
+            const key = `${macro.id}|${scope.id}`;
+            const scopeTotal = scopeTotals[key] || 0;
             const newWeight = Math.round((scopeTotal / grandTotal) * 100 * 10) / 10;
             
-            if (newWeight > 0 || scopeTotal === 0) {
-              await updateScope(macro.id, scope.id, { weight: newWeight });
-              if (newWeight > 0) updated++;
+            if (scopeTotal > 0) {
+              console.log(`[Weight Import] ${macro.name} > ${scope.name}: R$ ${scopeTotal.toFixed(2)} = ${newWeight}%`);
+              updated++;
             }
-          }
-        }
+            
+            return { ...scope, weight: newWeight };
+          });
+          return { ...macro, scopes: updatedScopes };
+        });
+
+        // Update the project's macrosTemplate with new weights
+        const { error: updateError } = await supabase
+          .from('projects')
+          .update({ 
+            macros_template: updatedMacros as unknown as Json,
+            weight_mode: selectedMode 
+          })
+          .eq('id', currentProject.id);
+
+        if (updateError) throw updateError;
+
+        // Update local state
+        updateProject(currentProject.id, { 
+          macrosTemplate: updatedMacros,
+          weightMode: selectedMode 
+        });
 
         // Log action
-        console.log(`[Weight Import] User applied automatic weights from budget. Project: ${currentProject.name}, Updated: ${updated} scopes, Mode: automatic`);
+        console.log(`[Weight Import] User applied automatic weights from budget. Project: ${currentProject.name}, Updated: ${updated} scopes, Total: R$ ${grandTotal.toFixed(2)}`);
         
         toast.success(`Pesos importados do orçamento! ${updated} serviços atualizados.`);
+      } else {
+        // Manual mode - just update the weight_mode
+        const { error: updateError } = await supabase
+          .from('projects')
+          .update({ weight_mode: selectedMode })
+          .eq('id', currentProject.id);
+
+        if (updateError) throw updateError;
+
+        // Update local state
+        updateProject(currentProject.id, { weightMode: selectedMode });
+        
+        // Log action
+        console.log(`[Weight Mode] User changed weight mode to "${selectedMode}". Project: ${currentProject.name}, Time: ${new Date().toISOString()}`);
+        
+        toast.success('Modo de pesos alterado para manual.');
       }
-
-      // Update project weight mode
-      const { error: updateError } = await supabase
-        .from('projects')
-        .update({ weight_mode: selectedMode })
-        .eq('id', currentProject.id);
-
-      if (updateError) throw updateError;
-
-      // Update local state
-      updateProject(currentProject.id, { weightMode: selectedMode });
-      
-      // Log action
-      console.log(`[Weight Mode] User changed weight mode to "${selectedMode}". Project: ${currentProject.name}, Time: ${new Date().toISOString()}`);
 
       onOpenChange(false);
     } catch (error) {
