@@ -125,7 +125,6 @@ function CameraController({
   modelLoaded?: boolean;
 }) {
   const { camera, controls, scene } = useThree();
-  const lastPositionRef = useRef<THREE.Vector3>(new THREE.Vector3());
   const hasInitializedRef = useRef(false);
   const hasAutoFitRef = useRef(false);
   
@@ -210,22 +209,24 @@ function CameraController({
     }
   }, [resetTrigger, moveToSavedPosition, fitCameraToScene, savedPosition, savedTarget]);
 
-  // Track camera position changes for manual saving - reduced frequency
+  // Track camera position changes only on control end - much more efficient
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (camera.position.distanceTo(lastPositionRef.current) > 0.5) {
-        lastPositionRef.current.copy(camera.position);
-        if (onCameraChange && controls && (controls as any).target) {
-          const target = (controls as any).target;
-          onCameraChange(
-            [camera.position.x, camera.position.y, camera.position.z],
-            [target.x, target.y, target.z]
-          );
-        }
-      }
-    }, 1000);
+    if (!controls) return;
     
-    return () => clearInterval(interval);
+    const handleEnd = () => {
+      if (onCameraChange && (controls as any).target) {
+        const target = (controls as any).target;
+        onCameraChange(
+          [camera.position.x, camera.position.y, camera.position.z],
+          [target.x, target.y, target.z]
+        );
+      }
+    };
+    
+    (controls as any).addEventListener?.('end', handleEnd);
+    return () => {
+      (controls as any).removeEventListener?.('end', handleEnd);
+    };
   }, [camera, controls, onCameraChange]);
 
   return null;
@@ -270,11 +271,10 @@ function Scene({
         maxPolarAngle={Math.PI / 2}
         minDistance={1}
         maxDistance={200}
-        zoomSpeed={0.8}
-        panSpeed={0.6}
-        rotateSpeed={0.5}
-        enableDamping={true}
-        dampingFactor={0.1}
+        zoomSpeed={1.2}
+        panSpeed={1.0}
+        rotateSpeed={0.8}
+        enableDamping={false}
         touches={{
           ONE: THREE.TOUCH.ROTATE,
           TWO: THREE.TOUCH.DOLLY_PAN
