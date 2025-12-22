@@ -210,10 +210,10 @@ function CameraController({
     }
   }, [resetTrigger, moveToSavedPosition, fitCameraToScene, savedPosition, savedTarget]);
 
-  // Track camera position changes for manual saving
+  // Track camera position changes for manual saving - reduced frequency
   useEffect(() => {
     const interval = setInterval(() => {
-      if (camera.position.distanceTo(lastPositionRef.current) > 0.1) {
+      if (camera.position.distanceTo(lastPositionRef.current) > 0.5) {
         lastPositionRef.current.copy(camera.position);
         if (onCameraChange && controls && (controls as any).target) {
           const target = (controls as any).target;
@@ -223,7 +223,7 @@ function CameraController({
           );
         }
       }
-    }, 500);
+    }, 1000);
     
     return () => clearInterval(interval);
   }, [camera, controls, onCameraChange]);
@@ -270,15 +270,19 @@ function Scene({
         maxPolarAngle={Math.PI / 2}
         minDistance={1}
         maxDistance={200}
-        zoomSpeed={1.5}
-        panSpeed={1.2}
-        rotateSpeed={0.8}
+        zoomSpeed={0.8}
+        panSpeed={0.6}
+        rotateSpeed={0.5}
         enableDamping={true}
-        dampingFactor={0.08}
-        // Mobile touch controls - improved for better interaction
+        dampingFactor={0.1}
         touches={{
-          ONE: THREE.TOUCH.ROTATE, // One finger: rotate
-          TWO: THREE.TOUCH.DOLLY_PAN // Two fingers: zoom and pan
+          ONE: THREE.TOUCH.ROTATE,
+          TWO: THREE.TOUCH.DOLLY_PAN
+        }}
+        mouseButtons={{
+          LEFT: THREE.MOUSE.ROTATE,
+          MIDDLE: THREE.MOUSE.DOLLY,
+          RIGHT: THREE.MOUSE.PAN
         }}
       />
       
@@ -914,7 +918,16 @@ export function Map3DView() {
           </div>
         )}
         
-        <Canvas shadows>
+        <Canvas 
+          shadows 
+          dpr={[1, 1.5]}
+          gl={{ 
+            antialias: true,
+            powerPreference: "high-performance",
+            stencil: false,
+            depth: true
+          }}
+        >
           <Scene
             modelData={modelData}
             markers={markers}
