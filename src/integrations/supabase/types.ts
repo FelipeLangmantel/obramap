@@ -14,6 +14,59 @@ export type Database = {
   }
   public: {
     Tables: {
+      board_decisions: {
+        Row: {
+          action_taken: string
+          alert_origin: string
+          created_at: string
+          decision_date: string
+          id: string
+          location: string | null
+          project_id: string
+          projected_impact_cost: number | null
+          projected_impact_days: number | null
+          risk_type: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          action_taken: string
+          alert_origin: string
+          created_at?: string
+          decision_date?: string
+          id?: string
+          location?: string | null
+          project_id: string
+          projected_impact_cost?: number | null
+          projected_impact_days?: number | null
+          risk_type: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          action_taken?: string
+          alert_origin?: string
+          created_at?: string
+          decision_date?: string
+          id?: string
+          location?: string | null
+          project_id?: string
+          projected_impact_cost?: number | null
+          projected_impact_days?: number | null
+          risk_type?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "board_decisions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       category_lead_times: {
         Row: {
           category: string

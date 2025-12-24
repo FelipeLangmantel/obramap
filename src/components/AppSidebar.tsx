@@ -30,7 +30,8 @@ import {
   Box,
   Package,
   Truck,
-  Wallet
+  Wallet,
+  Crown
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -48,7 +49,7 @@ import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import obraMapLogo from "@/assets/obramap-logo-new.png";
 
-type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow";
+type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions";
 
 interface AppSidebarProps {
   activeView: ViewType;
@@ -135,6 +136,12 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       title: "Fluxo Financeiro", 
       view: "financial-flow" as const, 
       icon: Wallet,
+      permissionId: "financeiro"
+    },
+    { 
+      title: "Painel da Diretoria", 
+      view: "board-decisions" as const, 
+      icon: Crown,
       permissionId: "financeiro"
     },
   ];
