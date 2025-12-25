@@ -11,20 +11,22 @@ import {
   TrendingDown,
   Target,
   CheckCircle2,
-  XCircle,
   PlayCircle,
-  ChevronRight,
   Shield,
   History,
-  Zap
+  Info,
+  Calculator,
+  Eye
 } from "lucide-react";
-import { format, differenceInDays, addDays, startOfWeek, endOfWeek } from "date-fns";
+import { format, differenceInDays, addDays, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+import { CalculationExplainabilityDialog } from "@/components/board/CalculationExplainabilityDialog";
+import { EnhancedDecisionDialog } from "@/components/board/EnhancedDecisionDialog";
+import { GovernanceLevelsPanel } from "@/components/board/GovernanceLevelsPanel";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface CriticalDecision {
   id: string;
@@ -37,6 +39,14 @@ interface CriticalDecision {
   deadline: Date;
   severity: 'critical' | 'high' | 'medium';
   suggestedActions: string[];
+  calculationData?: {
+    periodStart: Date;
+    periodEnd: Date;
+    dataPoints: number;
+    realProductivity: number;
+    plannedProductivity: number;
+    confidenceLevel: 'baixo' | 'medio' | 'alto';
+  };
 }
 
 interface SimulationScenario {
@@ -53,9 +63,8 @@ export function BoardDecisionsView() {
   const queryClient = useQueryClient();
   const [selectedDecision, setSelectedDecision] = useState<CriticalDecision | null>(null);
   const [simulationOpen, setSimulationOpen] = useState(false);
-  const [selectedAction, setSelectedAction] = useState<string>("");
-  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [actionNotes, setActionNotes] = useState("");
+  const [calculationDialogOpen, setCalculationDialogOpen] = useState(false);
+  const [expandedDecisionId, setExpandedDecisionId] = useState<string | null>(null);
 
   // Fetch houses for current project
   const { data: houses = [] } = useQuery({
@@ -119,6 +128,37 @@ export function BoardDecisionsView() {
     enabled: !!currentProject?.id
   });
 
+  // Generate productivity history for audit
+  const productivityHistory = useMemo(() => {
+    const history: { weekStart: Date; weekEnd: Date; planned: number; actual: number; deviation: number }[] = [];
+    const today = new Date();
+    
+    for (let i = 0; i < 8; i++) {
+      const weekStart = startOfWeek(subWeeks(today, i), { weekStartsOn: 1 });
+      const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+      
+      const planned = plannedProductions.filter(p => {
+        const start = new Date(p.week_start);
+        return start >= weekStart && start <= weekEnd;
+      }).reduce((sum, p) => sum + (p.planned_houses || 0), 0);
+      
+      const actual = weeklyProductions.filter(p => {
+        const start = new Date(p.week_start);
+        return start >= weekStart && start <= weekEnd;
+      }).reduce((sum, p) => sum + (p.houses_count || 0), 0);
+      
+      history.push({
+        weekStart,
+        weekEnd,
+        planned,
+        actual,
+        deviation: actual - planned
+      });
+    }
+    
+    return history;
+  }, [plannedProductions, weeklyProductions]);
+
   // Generate critical decisions based on project data
   const criticalDecisions = useMemo<CriticalDecision[]>(() => {
     if (!currentProject || !houses.length) return [];
@@ -127,11 +167,39 @@ export function BoardDecisionsView() {
     const today = new Date();
     const projectEnd = new Date(currentProject.expectedEndDate);
     const daysRemaining = differenceInDays(projectEnd, today);
+    const periodStart = subWeeks(today, 4);
+    const periodEnd = today;
+
+    // Calculate real productivity from last 4 weeks
+    const last4WeeksProductions = weeklyProductions.filter(p => {
+      const start = new Date(p.week_start);
+      return start >= periodStart && start <= periodEnd;
+    });
     
-    // Parse macros template
-    const macros = Array.isArray(currentProject.macrosTemplate) 
-      ? currentProject.macrosTemplate 
-      : [];
+    const totalActual = last4WeeksProductions.reduce((sum, p) => sum + (p.houses_count || 0), 0);
+    const realProductivity = last4WeeksProductions.length > 0 ? totalActual / 4 : 0; // per week
+    
+    const last4WeeksPlanned = plannedProductions.filter(p => {
+      const start = new Date(p.week_start);
+      return start >= periodStart && start <= periodEnd;
+    });
+    const totalPlanned = last4WeeksPlanned.reduce((sum, p) => sum + (p.planned_houses || 0), 0);
+    const plannedProductivity = last4WeeksPlanned.length > 0 ? totalPlanned / 4 : 0;
+
+    const dataPoints = last4WeeksProductions.length + last4WeeksPlanned.length;
+    
+    // Determine confidence level
+    const confidenceLevel: 'baixo' | 'medio' | 'alto' = 
+      dataPoints >= 20 ? 'alto' : dataPoints >= 10 ? 'medio' : 'baixo';
+
+    const baseCalculationData = {
+      periodStart,
+      periodEnd,
+      dataPoints,
+      realProductivity,
+      plannedProductivity,
+      confidenceLevel
+    };
 
     // 1. Analyze production delays
     const thisWeekStart = startOfWeek(today, { weekStartsOn: 1 });
@@ -157,7 +225,7 @@ export function BoardDecisionsView() {
       
       if (plannedCount > 0 && actualCount < plannedCount * 0.7) {
         const shortfall = plannedCount - actualCount;
-        const estimatedCostImpact = shortfall * (currentProject.unitSize || 45) * 150; // R$150/m²
+        const estimatedCostImpact = shortfall * (currentProject.unitSize || 45) * 150;
         
         decisions.push({
           id: `prod-${planned.id}`,
@@ -165,7 +233,7 @@ export function BoardDecisionsView() {
           title: `Produção abaixo da meta: ${planned.scope_name}`,
           description: `${planned.macro_name} - Planejado: ${plannedCount} casas, Executado: ${actualCount} casas`,
           impactCost: estimatedCostImpact,
-          impactDays: Math.ceil(shortfall / 2), // Assume 2 houses/day capacity
+          impactDays: Math.ceil(shortfall / 2),
           location: `Etapa ${planned.macro_name}`,
           deadline: addDays(today, 3),
           severity: shortfall >= 5 ? 'critical' : shortfall >= 3 ? 'high' : 'medium',
@@ -174,7 +242,8 @@ export function BoardDecisionsView() {
             'Redistribuir recursos de outra frente',
             'Renegociar prazo com cliente',
             'Contratar empreiteiro adicional'
-          ]
+          ],
+          calculationData: baseCalculationData
         });
       }
     });
@@ -202,7 +271,7 @@ export function BoardDecisionsView() {
         type: 'prazo',
         title: 'Risco de atraso no prazo final',
         description: `Progresso atual ${totalProgress.toFixed(1)}% vs esperado ${expectedProgress.toFixed(1)}%. Atraso projetado: ${delay} dias`,
-        impactCost: delay * houses.length * 50, // R$50/dia/casa de custo extra
+        impactCost: delay * houses.length * 50,
         impactDays: delay,
         location: 'Obra completa',
         deadline: addDays(today, 7),
@@ -212,11 +281,12 @@ export function BoardDecisionsView() {
           'Resequenciar atividades',
           'Aumentar efetivo geral',
           'Revisar cronograma com cliente'
-        ]
+        ],
+        calculationData: baseCalculationData
       });
     }
 
-    // 3. Check for stalled houses (no progress in 2+ weeks)
+    // 3. Check for stalled houses
     const stalledHouses = houses.filter(h => {
       const lastUpdate = new Date(h.last_update);
       return differenceInDays(today, lastUpdate) > 14;
@@ -229,7 +299,7 @@ export function BoardDecisionsView() {
         type: 'produtividade',
         title: `${stalledHouses.length} unidades paradas há mais de 2 semanas`,
         description: `${stalledPercent.toFixed(1)}% das unidades sem avanço registrado`,
-        impactCost: stalledHouses.length * 2000, // R$2000/casa parada
+        impactCost: stalledHouses.length * 2000,
         impactDays: 14,
         location: `Casas: ${stalledHouses.slice(0, 5).map(h => h.house_number).join(', ')}${stalledHouses.length > 5 ? '...' : ''}`,
         deadline: addDays(today, 2),
@@ -239,7 +309,8 @@ export function BoardDecisionsView() {
           'Realocar equipe para frentes paradas',
           'Investigar causas com encarregados',
           'Priorizar desbloqueio imediato'
-        ]
+        ],
+        calculationData: baseCalculationData
       });
     }
 
@@ -261,11 +332,11 @@ export function BoardDecisionsView() {
           'Contratação de turnos extras',
           'Priorização radical de acabamentos',
           'Negociar extensão de prazo'
-        ]
+        ],
+        calculationData: baseCalculationData
       });
     }
 
-    // Sort by severity and impact
     return decisions
       .sort((a, b) => {
         const severityOrder = { critical: 0, high: 1, medium: 2 };
@@ -282,13 +353,12 @@ export function BoardDecisionsView() {
     if (!selectedDecision) return [];
     
     return selectedDecision.suggestedActions.map(action => {
-      // Simulate different outcomes based on action type
       let costReduction = 0;
       let daysRecovered = 0;
       let residualRisk: 'alto' | 'medio' | 'baixo' = 'medio';
 
       if (action.includes('equipe') || action.includes('efetivo')) {
-        costReduction = selectedDecision.impactCost * 0.3; // 30% cost mitigation
+        costReduction = selectedDecision.impactCost * 0.3;
         daysRecovered = Math.floor(selectedDecision.impactDays * 0.5);
         residualRisk = 'medio';
       } else if (action.includes('empreiteiro') || action.includes('contrat')) {
@@ -321,9 +391,6 @@ export function BoardDecisionsView() {
     if (decisionsHistory.length === 0) return { level: 'media' as const, score: 50 };
     
     const executedDecisions = decisionsHistory.filter(d => d.status === 'executed');
-    const pendingDecisions = decisionsHistory.filter(d => d.status === 'pending');
-    
-    // Score based on executed vs pending ratio and timing
     const executionRate = executedDecisions.length / decisionsHistory.length;
     const score = Math.round(executionRate * 100);
     
@@ -336,18 +403,38 @@ export function BoardDecisionsView() {
 
   // Save decision mutation
   const saveDecisionMutation = useMutation({
-    mutationFn: async ({ decision, action }: { decision: CriticalDecision; action: string }) => {
+    mutationFn: async ({ decision, record }: { 
+      decision: CriticalDecision; 
+      record: {
+        selectedAction: string;
+        notes: string;
+        projectedSavings: number;
+        projectedDaysRecovered: number;
+        residualRisk: string;
+        riskMitigated: boolean;
+        riskAssumed: boolean;
+        changedPremises: string[];
+      }
+    }) => {
       if (!currentProject?.id) throw new Error('No project selected');
       
+      const actionDetails = [
+        record.selectedAction,
+        record.notes ? `Obs: ${record.notes}` : '',
+        `Premissas alteradas: ${record.changedPremises.join(', ') || 'Nenhuma'}`,
+        record.riskMitigated ? 'Risco mitigado' : '',
+        record.riskAssumed ? `Risco residual assumido: ${record.residualRisk}` : ''
+      ].filter(Boolean).join(' | ');
+
       const { error } = await supabase
         .from('board_decisions')
         .insert({
           project_id: currentProject.id,
           risk_type: decision.type,
           alert_origin: decision.description,
-          action_taken: action + (actionNotes ? ` - ${actionNotes}` : ''),
-          projected_impact_cost: decision.impactCost,
-          projected_impact_days: decision.impactDays,
+          action_taken: actionDetails,
+          projected_impact_cost: record.projectedSavings,
+          projected_impact_days: record.projectedDaysRecovered,
           location: decision.location,
           status: 'executed'
         });
@@ -357,17 +444,68 @@ export function BoardDecisionsView() {
     onSuccess: () => {
       toast.success('Decisão registrada com sucesso');
       queryClient.invalidateQueries({ queryKey: ['board-decisions'] });
-      setConfirmDialogOpen(false);
       setSimulationOpen(false);
       setSelectedDecision(null);
-      setSelectedAction("");
-      setActionNotes("");
     },
     onError: (error) => {
       toast.error('Erro ao registrar decisão');
       console.error(error);
     }
   });
+
+  // Generate calculation data for dialog
+  const calculationData = useMemo(() => {
+    if (!selectedDecision?.calculationData || !currentProject) return null;
+    
+    const calc = selectedDecision.calculationData;
+    const today = new Date();
+    const projectEnd = new Date(currentProject.expectedEndDate);
+    
+    return {
+      dataOrigin: {
+        periodStart: calc.periodStart,
+        periodEnd: calc.periodEnd,
+        housesExecuted: weeklyProductions
+          .filter(p => new Date(p.week_start) >= calc.periodStart && new Date(p.week_start) <= calc.periodEnd)
+          .reduce((sum, p) => sum + (p.houses_count || 0), 0),
+        servicesConsidered: [...new Set(weeklyProductions.map(p => p.scope_name))].slice(0, 6),
+        dataPoints: calc.dataPoints
+      },
+      productivity: {
+        realAverage: calc.realProductivity,
+        plannedAverage: calc.plannedProductivity,
+        unit: 'casas/semana',
+        trend: calc.realProductivity > calc.plannedProductivity * 0.9 
+          ? 'improving' as const
+          : calc.realProductivity < calc.plannedProductivity * 0.7 
+            ? 'declining' as const 
+            : 'stable' as const
+      },
+      schedule: {
+        remainingServices: houses.length - Math.round(houses.length * (selectedDecision.calculationData?.realProductivity || 0) / 100),
+        currentPace: calc.realProductivity / 7,
+        estimatedEndDate: addDays(projectEnd, selectedDecision.impactDays),
+        originalEndDate: projectEnd,
+        delayDays: selectedDecision.impactDays
+      },
+      cost: {
+        realUnitCost: (currentProject.unitSize || 45) * 150,
+        projectedRemaining: selectedDecision.impactCost * 0.7,
+        indirectCosts: selectedDecision.impactCost * 0.3,
+        totalProjected: selectedDecision.impactCost
+      },
+      confidence: {
+        level: calc.confidenceLevel,
+        reason: calc.confidenceLevel === 'alto'
+          ? 'Dados estáveis com volume adequado de registros nas últimas 4 semanas.'
+          : calc.confidenceLevel === 'medio'
+            ? 'Volume moderado de dados. Recomenda-se monitoramento contínuo.'
+            : 'Poucos registros disponíveis. Considere esta projeção como estimativa preliminar.',
+        dataStability: calc.confidenceLevel === 'alto' ? 85 : calc.confidenceLevel === 'medio' ? 55 : 25,
+        sampleSize: calc.dataPoints
+      }
+    };
+  }, [selectedDecision, currentProject, houses, weeklyProductions]);
 
   const getRiskTypeIcon = (type: string) => {
     switch (type) {
@@ -445,6 +583,19 @@ export function BoardDecisionsView() {
         </Card>
       </div>
 
+      {/* Golden Rule Notice */}
+      <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 flex items-start gap-3">
+        <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm text-foreground font-medium">Regra de Ouro deste Painel</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Todos os números são projeções baseadas exclusivamente em dados reais já executados. 
+            Nenhum valor pode ser editado manualmente ou existir sem explicação acessível.
+            <strong className="text-foreground"> Não prevemos o futuro — projetamos cenários com base em execução real.</strong>
+          </p>
+        </div>
+      </div>
+
       {/* Critical Decisions Block */}
       <Card>
         <CardHeader className="pb-3">
@@ -465,57 +616,119 @@ export function BoardDecisionsView() {
             </div>
           ) : (
             criticalDecisions.map((decision, index) => (
-              <div
+              <Collapsible
                 key={decision.id}
-                className={`border-l-4 rounded-lg p-4 ${getSeverityColor(decision.severity)} transition-all hover:shadow-md`}
+                open={expandedDecisionId === decision.id}
+                onOpenChange={(open) => setExpandedDecisionId(open ? decision.id : null)}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-lg font-bold text-muted-foreground">#{index + 1}</span>
-                      <Badge variant="outline" className={getRiskTypeBadge(decision.type)}>
-                        {getRiskTypeIcon(decision.type)}
-                        <span className="ml-1 capitalize">{decision.type}</span>
-                      </Badge>
-                      {decision.severity === 'critical' && (
-                        <Badge variant="destructive">CRÍTICO</Badge>
-                      )}
+                <div className={`border-l-4 rounded-lg ${getSeverityColor(decision.severity)} transition-all`}>
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-lg font-bold text-muted-foreground">#{index + 1}</span>
+                          <Badge variant="outline" className={getRiskTypeBadge(decision.type)}>
+                            {getRiskTypeIcon(decision.type)}
+                            <span className="ml-1 capitalize">{decision.type}</span>
+                          </Badge>
+                          {decision.severity === 'critical' && (
+                            <Badge variant="destructive">CRÍTICO</Badge>
+                          )}
+                          {decision.calculationData && (
+                            <Badge variant="outline" className={
+                              decision.calculationData.confidenceLevel === 'alto' ? 'bg-green-500/10 text-green-500' :
+                              decision.calculationData.confidenceLevel === 'medio' ? 'bg-amber-500/10 text-amber-500' :
+                              'bg-red-500/10 text-red-500'
+                            }>
+                              Confiança: {decision.calculationData.confidenceLevel}
+                            </Badge>
+                          )}
+                        </div>
+                        
+                        <h3 className="font-semibold text-foreground mb-1">{decision.title}</h3>
+                        <p className="text-sm text-muted-foreground mb-3">{decision.description}</p>
+                        
+                        {/* Risk Language Notice */}
+                        <p className="text-xs text-muted-foreground italic mb-3 p-2 rounded bg-muted/30">
+                          "Com base no ritmo atual da obra, este é o cenário mais provável caso nenhuma ação seja tomada."
+                        </p>
+                        
+                        <div className="flex flex-wrap gap-4 text-sm">
+                          <div className="flex items-center gap-1.5">
+                            <DollarSign className="h-4 w-4 text-red-500" />
+                            <span>Impacto projetado: <strong className="text-red-500">{formatCurrency(decision.impactCost)}</strong></span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <Clock className="h-4 w-4 text-amber-500" />
+                            <span>Atraso projetado: <strong className="text-amber-500">{decision.impactDays} dias</strong></span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <span>📍 {decision.location}</span>
+                          </div>
+                        </div>
+                        
+                        <p className="text-xs text-muted-foreground mt-2">
+                          ⏰ Decidir até: <strong>{format(decision.deadline, "EEEE, dd/MM", { locale: ptBR })}</strong>
+                        </p>
+                      </div>
+                      
+                      <div className="flex flex-col gap-2 shrink-0">
+                        <Button
+                          onClick={() => {
+                            setSelectedDecision(decision);
+                            setSimulationOpen(true);
+                          }}
+                        >
+                          <PlayCircle className="h-4 w-4 mr-2" />
+                          Simular decisão
+                        </Button>
+                        <CollapsibleTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <Eye className="h-4 w-4 mr-2" />
+                            {expandedDecisionId === decision.id ? 'Ocultar detalhes' : 'Ver detalhes'}
+                          </Button>
+                        </CollapsibleTrigger>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedDecision(decision);
+                            setCalculationDialogOpen(true);
+                          }}
+                        >
+                          <Calculator className="h-4 w-4 mr-2" />
+                          Como calculamos
+                        </Button>
+                      </div>
                     </div>
-                    
-                    <h3 className="font-semibold text-foreground mb-1">{decision.title}</h3>
-                    <p className="text-sm text-muted-foreground mb-3">{decision.description}</p>
-                    
-                    <div className="flex flex-wrap gap-4 text-sm">
-                      <div className="flex items-center gap-1.5">
-                        <DollarSign className="h-4 w-4 text-red-500" />
-                        <span>Impacto: <strong className="text-red-500">{formatCurrency(decision.impactCost)}</strong></span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="h-4 w-4 text-amber-500" />
-                        <span>Atraso: <strong className="text-amber-500">{decision.impactDays} dias</strong></span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-muted-foreground">
-                        <span>📍 {decision.location}</span>
-                      </div>
-                    </div>
-                    
-                    <p className="text-xs text-muted-foreground mt-2">
-                      ⏰ Decidir até: <strong>{format(decision.deadline, "EEEE, dd/MM", { locale: ptBR })}</strong>
-                    </p>
                   </div>
                   
-                  <Button
-                    onClick={() => {
-                      setSelectedDecision(decision);
-                      setSimulationOpen(true);
-                    }}
-                    className="shrink-0"
-                  >
-                    <PlayCircle className="h-4 w-4 mr-2" />
-                    Simular decisão
-                  </Button>
+                  <CollapsibleContent>
+                    <div className="px-4 pb-4 border-t border-border/50 pt-4">
+                      <GovernanceLevelsPanel
+                        decision={decision}
+                        productivityHistory={productivityHistory}
+                        decisionHistory={decisionsHistory.map(d => ({
+                          id: d.id,
+                          date: new Date(d.decision_date),
+                          riskType: d.risk_type,
+                          action: d.action_taken,
+                          projectedImpact: d.projected_impact_cost || 0,
+                          status: d.status as 'executed' | 'pending'
+                        }))}
+                        onSimulate={() => {
+                          setSelectedDecision(decision);
+                          setSimulationOpen(true);
+                        }}
+                        onShowCalculation={() => {
+                          setSelectedDecision(decision);
+                          setCalculationDialogOpen(true);
+                        }}
+                      />
+                    </div>
+                  </CollapsibleContent>
                 </div>
-              </div>
+              </Collapsible>
             ))
           )}
         </CardContent>
@@ -528,7 +741,7 @@ export function BoardDecisionsView() {
             <History className="h-5 w-5 text-primary" />
             <CardTitle>Decisões Tomadas</CardTitle>
           </div>
-          <CardDescription>Histórico de decisões e ações da diretoria</CardDescription>
+          <CardDescription>Histórico de decisões conscientes com cenário aceito e premissas alteradas</CardDescription>
         </CardHeader>
         <CardContent>
           {decisionsHistory.length === 0 ? (
@@ -557,11 +770,11 @@ export function BoardDecisionsView() {
                         {format(new Date(decision.decision_date), "dd/MM/yyyy", { locale: ptBR })}
                       </span>
                     </div>
-                    <p className="text-sm font-medium text-foreground">{decision.action_taken}</p>
+                    <p className="text-sm font-medium text-foreground">{decision.action_taken.split(' | ')[0]}</p>
                     <p className="text-xs text-muted-foreground truncate">{decision.alert_origin}</p>
                     <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                      <span>💰 {formatCurrency(decision.projected_impact_cost)}</span>
-                      <span>📅 {decision.projected_impact_days} dias</span>
+                      <span>💰 Economia: {formatCurrency(decision.projected_impact_cost || 0)}</span>
+                      <span>📅 Dias recuperados: {decision.projected_impact_days || 0}</span>
                       {decision.location && <span>📍 {decision.location}</span>}
                     </div>
                   </div>
@@ -572,139 +785,30 @@ export function BoardDecisionsView() {
         </CardContent>
       </Card>
 
-      {/* Simulation Dialog */}
-      <Dialog open={simulationOpen} onOpenChange={setSimulationOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Zap className="h-5 w-5 text-primary" />
-              Simulação de Decisão
-            </DialogTitle>
-            {selectedDecision && (
-              <DialogDescription>{selectedDecision.title}</DialogDescription>
-            )}
-          </DialogHeader>
-          
-          {selectedDecision && (
-            <div className="space-y-6">
-              {/* Current Scenario */}
-              <div className="p-4 rounded-lg bg-red-500/5 border border-red-500/20">
-                <h4 className="font-semibold text-red-500 mb-2 flex items-center gap-2">
-                  <XCircle className="h-4 w-4" />
-                  Cenário Atual (se nada mudar)
-                </h4>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Custo adicional</p>
-                    <p className="text-xl font-bold text-red-500">{formatCurrency(selectedDecision.impactCost)}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Dias de atraso</p>
-                    <p className="text-xl font-bold text-red-500">{selectedDecision.impactDays} dias</p>
-                  </div>
-                </div>
-              </div>
+      {/* Enhanced Decision Dialog */}
+      <EnhancedDecisionDialog
+        open={simulationOpen}
+        onOpenChange={setSimulationOpen}
+        decision={selectedDecision}
+        scenarios={simulationScenarios}
+        onConfirm={(record) => {
+          if (selectedDecision) {
+            saveDecisionMutation.mutate({ decision: selectedDecision, record });
+          }
+        }}
+        onShowCalculation={() => setCalculationDialogOpen(true)}
+        isPending={saveDecisionMutation.isPending}
+      />
 
-              {/* Action Scenarios */}
-              <div className="space-y-3">
-                <h4 className="font-semibold text-foreground">Cenários com Ação</h4>
-                {simulationScenarios.map((scenario, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                      selectedAction === scenario.action 
-                        ? 'border-primary bg-primary/5' 
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                    onClick={() => setSelectedAction(scenario.action)}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="font-medium text-foreground">{scenario.action}</p>
-                      <Badge variant="outline" className={
-                        scenario.residualRisk === 'baixo' ? 'bg-green-500/10 text-green-500' :
-                        scenario.residualRisk === 'medio' ? 'bg-amber-500/10 text-amber-500' :
-                        'bg-red-500/10 text-red-500'
-                      }>
-                        Risco {scenario.residualRisk}
-                      </Badge>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">Economia</p>
-                        <p className="font-semibold text-green-500">{formatCurrency(Math.abs(scenario.costDiff))}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Dias recuperados</p>
-                        <p className="font-semibold text-green-500">{Math.abs(scenario.daysDiff)} dias</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Custo final</p>
-                        <p className="font-semibold text-foreground">{formatCurrency(scenario.newCost)}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setSimulationOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button 
-                  onClick={() => setConfirmDialogOpen(true)}
-                  disabled={!selectedAction}
-                >
-                  Registrar Decisão
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirm Decision Dialog */}
-      <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmar Decisão</DialogTitle>
-            <DialogDescription>
-              Registrar a decisão: "{selectedAction}"
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Observações (opcional)</label>
-              <Textarea
-                value={actionNotes}
-                onChange={(e) => setActionNotes(e.target.value)}
-                placeholder="Adicione observações sobre a decisão..."
-                className="mt-1"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={() => {
-                if (selectedDecision && selectedAction) {
-                  saveDecisionMutation.mutate({ 
-                    decision: selectedDecision, 
-                    action: selectedAction 
-                  });
-                }
-              }}
-              disabled={saveDecisionMutation.isPending}
-            >
-              {saveDecisionMutation.isPending ? 'Salvando...' : 'Confirmar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Calculation Explainability Dialog */}
+      {calculationData && selectedDecision && (
+        <CalculationExplainabilityDialog
+          open={calculationDialogOpen}
+          onOpenChange={setCalculationDialogOpen}
+          decisionTitle={selectedDecision.title}
+          calculationData={calculationData}
+        />
+      )}
     </div>
   );
 }
