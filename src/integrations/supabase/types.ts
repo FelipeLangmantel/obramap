@@ -129,6 +129,234 @@ export type Database = {
         }
         Relationships: []
       }
+      delivery_checklist_items: {
+        Row: {
+          category: string
+          checked_at: string | null
+          checked_by: string | null
+          created_at: string
+          id: string
+          inspection_id: string
+          is_conforming: boolean | null
+          is_critical: boolean
+          item_name: string
+          observation: string | null
+          photo_url: string | null
+          template_id: string | null
+        }
+        Insert: {
+          category: string
+          checked_at?: string | null
+          checked_by?: string | null
+          created_at?: string
+          id?: string
+          inspection_id: string
+          is_conforming?: boolean | null
+          is_critical?: boolean
+          item_name: string
+          observation?: string | null
+          photo_url?: string | null
+          template_id?: string | null
+        }
+        Update: {
+          category?: string
+          checked_at?: string | null
+          checked_by?: string | null
+          created_at?: string
+          id?: string
+          inspection_id?: string
+          is_conforming?: boolean | null
+          is_critical?: boolean
+          item_name?: string
+          observation?: string | null
+          photo_url?: string | null
+          template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_checklist_items_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_inspections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_checklist_items_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_checklist_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_checklist_templates: {
+        Row: {
+          category: string
+          created_at: string
+          display_order: number
+          id: string
+          is_critical: boolean
+          item_name: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_critical?: boolean
+          item_name: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_critical?: boolean
+          item_name?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      delivery_inspections: {
+        Row: {
+          created_at: string
+          delivery_date: string | null
+          house_id: string
+          house_number: number
+          id: string
+          inspection_date: string | null
+          inspector_id: string | null
+          inspector_name: string | null
+          notes: string | null
+          project_id: string
+          scheduled_delivery_date: string | null
+          status: Database["public"]["Enums"]["delivery_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_date?: string | null
+          house_id: string
+          house_number: number
+          id?: string
+          inspection_date?: string | null
+          inspector_id?: string | null
+          inspector_name?: string | null
+          notes?: string | null
+          project_id: string
+          scheduled_delivery_date?: string | null
+          status?: Database["public"]["Enums"]["delivery_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delivery_date?: string | null
+          house_id?: string
+          house_number?: number
+          id?: string
+          inspection_date?: string | null
+          inspector_id?: string | null
+          inspector_name?: string | null
+          notes?: string | null
+          project_id?: string
+          scheduled_delivery_date?: string | null
+          status?: Database["public"]["Enums"]["delivery_status"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      delivery_issues: {
+        Row: {
+          category: string
+          checklist_item_id: string | null
+          created_at: string
+          description: string
+          due_date: string | null
+          house_id: string
+          house_number: number
+          id: string
+          inspection_id: string
+          photo_after_url: string | null
+          photo_before_url: string | null
+          project_id: string
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          responsible_id: string | null
+          responsible_name: string | null
+          severity: Database["public"]["Enums"]["issue_severity"]
+          sla_days: number
+          status: Database["public"]["Enums"]["issue_status"]
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          checklist_item_id?: string | null
+          created_at?: string
+          description: string
+          due_date?: string | null
+          house_id: string
+          house_number: number
+          id?: string
+          inspection_id: string
+          photo_after_url?: string | null
+          photo_before_url?: string | null
+          project_id: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          responsible_id?: string | null
+          responsible_name?: string | null
+          severity?: Database["public"]["Enums"]["issue_severity"]
+          sla_days?: number
+          status?: Database["public"]["Enums"]["issue_status"]
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          checklist_item_id?: string | null
+          created_at?: string
+          description?: string
+          due_date?: string | null
+          house_id?: string
+          house_number?: number
+          id?: string
+          inspection_id?: string
+          photo_after_url?: string | null
+          photo_before_url?: string | null
+          project_id?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          responsible_id?: string | null
+          responsible_name?: string | null
+          severity?: Database["public"]["Enums"]["issue_severity"]
+          sla_days?: number
+          status?: Database["public"]["Enums"]["issue_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_issues_checklist_item_id_fkey"
+            columns: ["checklist_item_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_checklist_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_issues_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_inspections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delivery_tracking: {
         Row: {
           created_at: string
@@ -1472,6 +1700,19 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "editor" | "viewer"
+      delivery_status:
+        | "em_vistoria"
+        | "entrega_agendada"
+        | "entregue_sem_pendencias"
+        | "entregue_com_pendencias"
+        | "pos_obra_em_atendimento"
+        | "unidade_encerrada"
+      issue_severity: "critica" | "media" | "leve"
+      issue_status:
+        | "aberta"
+        | "em_execucao"
+        | "aguardando_validacao"
+        | "encerrada"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1600,6 +1841,21 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "editor", "viewer"],
+      delivery_status: [
+        "em_vistoria",
+        "entrega_agendada",
+        "entregue_sem_pendencias",
+        "entregue_com_pendencias",
+        "pos_obra_em_atendimento",
+        "unidade_encerrada",
+      ],
+      issue_severity: ["critica", "media", "leve"],
+      issue_status: [
+        "aberta",
+        "em_execucao",
+        "aguardando_validacao",
+        "encerrada",
+      ],
     },
   },
 } as const

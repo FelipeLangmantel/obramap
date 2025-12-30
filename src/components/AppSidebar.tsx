@@ -31,7 +31,8 @@ import {
   Package,
   Truck,
   Wallet,
-  Crown
+  Crown,
+  ClipboardCheck
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -49,7 +50,7 @@ import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import obraMapLogo from "@/assets/obramap-logo-new.png";
 
-type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions";
+type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery";
 
 interface AppSidebarProps {
   activeView: ViewType;
@@ -143,6 +144,12 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       view: "board-decisions" as const, 
       icon: Crown,
       permissionId: "financeiro"
+    },
+    { 
+      title: "Entrega & Pós-Obra", 
+      view: "delivery" as const, 
+      icon: ClipboardCheck,
+      permissionId: "producao"
     },
   ];
 
