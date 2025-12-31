@@ -21,6 +21,7 @@ import { InputsManagementView } from "@/components/InputsManagementView";
 import { SuppliersManagementView } from "@/components/SuppliersManagementView";
 import { FinancialFlowView } from "@/components/FinancialFlowView";
 import { BoardDecisionsView } from "@/components/BoardDecisionsView";
+import DeliveryView from "@/components/DeliveryView";
 import { Loader2, Menu } from "lucide-react";
 
 // Sidebar trigger button - visible on all screen sizes
@@ -32,7 +33,7 @@ function SidebarTriggerButton() {
   );
 }
 
-type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions";
+type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery";
 
 function IndexContent() {
   const [activeView, setActiveView] = useState<ViewType>("map");
@@ -76,7 +77,8 @@ function IndexContent() {
     inputs: "Cadastro de Insumos",
     suppliers: "Cadastro de Fornecedores",
     "financial-flow": "Fluxo Financeiro",
-    "board-decisions": "Painel da Diretoria"
+    "board-decisions": "Painel da Diretoria",
+    delivery: "Entrega & Pós-Obra"
   };
 
   return (
@@ -196,6 +198,12 @@ function IndexContent() {
                 {activeView === "board-decisions" && (
                   <div className="flex-1">
                     <BoardDecisionsView />
+                  </div>
+                )}
+
+                {activeView === "delivery" && (
+                  <div className="flex-1">
+                    <DeliveryView />
                   </div>
                 )}
               </div>
