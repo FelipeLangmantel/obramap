@@ -22,6 +22,7 @@ import { SuppliersManagementView } from "@/components/SuppliersManagementView";
 import { FinancialFlowView } from "@/components/FinancialFlowView";
 import { BoardDecisionsView } from "@/components/BoardDecisionsView";
 import DeliveryView from "@/components/DeliveryView";
+import SmartPlanningView from "@/components/smart-planning/SmartPlanningView";
 import { Loader2, Menu } from "lucide-react";
 
 // Sidebar trigger button - visible on all screen sizes
@@ -33,7 +34,7 @@ function SidebarTriggerButton() {
   );
 }
 
-type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery";
+type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning";
 
 function IndexContent() {
   const [activeView, setActiveView] = useState<ViewType>("map");
