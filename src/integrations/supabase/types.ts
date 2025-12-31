@@ -129,6 +129,66 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_work_logs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          house_ids: number[]
+          id: string
+          log_date: string
+          notes: string | null
+          project_id: string
+          stage_id: string
+          team_id: string | null
+          units_completed: number
+          updated_at: string
+          weather: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          house_ids?: number[]
+          id?: string
+          log_date?: string
+          notes?: string | null
+          project_id: string
+          stage_id: string
+          team_id?: string | null
+          units_completed?: number
+          updated_at?: string
+          weather?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          house_ids?: number[]
+          id?: string
+          log_date?: string
+          notes?: string | null
+          project_id?: string
+          stage_id?: string
+          team_id?: string | null
+          units_completed?: number
+          updated_at?: string
+          weather?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_work_logs_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "planning_stages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_work_logs_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "planning_teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delivery_checklist_items: {
         Row: {
           category: string
@@ -826,6 +886,186 @@ export type Database = {
           },
         ]
       }
+      planning_alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          description: string
+          id: string
+          impact_days: number | null
+          is_resolved: boolean
+          project_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          stage_id: string | null
+          title: string
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string
+          description: string
+          id?: string
+          impact_days?: number | null
+          is_resolved?: boolean
+          project_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          stage_id?: string | null
+          title: string
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          description?: string
+          id?: string
+          impact_days?: number | null
+          is_resolved?: boolean
+          project_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          stage_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planning_alerts_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "planning_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planning_simulations: {
+        Row: {
+          applied_at: string | null
+          applied_by: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_applied: boolean
+          name: string
+          project_id: string
+          results: Json | null
+          simulation_data: Json
+        }
+        Insert: {
+          applied_at?: string | null
+          applied_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_applied?: boolean
+          name: string
+          project_id: string
+          results?: Json | null
+          simulation_data?: Json
+        }
+        Update: {
+          applied_at?: string | null
+          applied_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_applied?: boolean
+          name?: string
+          project_id?: string
+          results?: Json | null
+          simulation_data?: Json
+        }
+        Relationships: []
+      }
+      planning_stages: {
+        Row: {
+          color: string
+          created_at: string
+          depends_on: string | null
+          duration_days: number | null
+          id: string
+          name: string
+          planned_productivity: number
+          planned_teams: number
+          project_id: string
+          sequence_order: number
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          depends_on?: string | null
+          duration_days?: number | null
+          id?: string
+          name: string
+          planned_productivity?: number
+          planned_teams?: number
+          project_id: string
+          sequence_order?: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          depends_on?: string | null
+          duration_days?: number | null
+          id?: string
+          name?: string
+          planned_productivity?: number
+          planned_teams?: number
+          project_id?: string
+          sequence_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planning_stages_depends_on_fkey"
+            columns: ["depends_on"]
+            isOneToOne: false
+            referencedRelation: "planning_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planning_teams: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          project_id: string
+          stage_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          project_id: string
+          stage_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          project_id?: string
+          stage_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planning_teams_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "planning_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       production_deviations: {
         Row: {
           actual_count: number
@@ -897,6 +1137,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      productivity_library: {
+        Row: {
+          created_at: string
+          default_productivity: number
+          id: string
+          project_id: string | null
+          sample_count: number
+          source: string
+          stage_name: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_productivity?: number
+          id?: string
+          project_id?: string | null
+          sample_count?: number
+          source?: string
+          stage_name: string
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_productivity?: number
+          id?: string
+          project_id?: string | null
+          sample_count?: number
+          source?: string
+          stage_name?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
