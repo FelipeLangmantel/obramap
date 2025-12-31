@@ -44,7 +44,7 @@ type DeliveryStatus = 'em_vistoria' | 'entrega_agendada' | 'entregue_sem_pendenc
 type IssueStatus = 'aberta' | 'em_execucao' | 'aguardando_validacao' | 'encerrada';
 
 const DeliveryView: React.FC = () => {
-  const { selectedProject } = useConstruction();
+  const { currentProject } = useConstruction();
   const { isAdmin, canEdit } = useAuth();
   
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -52,10 +52,6 @@ const DeliveryView: React.FC = () => {
   const [issues, setIssues] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [houses, setHouses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [inspections, setInspections] = useState<any[]>([]);
-  const [issues, setIssues] = useState<any[]>([]);
-  const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   const [searchTerm, setSearchTerm] = useState("");
@@ -89,13 +85,13 @@ const DeliveryView: React.FC = () => {
   };
 
   useEffect(() => {
-    if (selectedProject) {
+    if (currentProject) {
       loadData();
     }
-  }, [selectedProject]);
+  }, [currentProject]);
 
   const loadData = async () => {
-    if (!selectedProject) return;
+    if (!currentProject) return;
     
     setLoading(true);
     try {
@@ -103,22 +99,22 @@ const DeliveryView: React.FC = () => {
         supabase
           .from('delivery_inspections')
           .select('*')
-          .eq('project_id', selectedProject.id)
+          .eq('project_id', currentProject.id)
           .order('house_number'),
         supabase
           .from('delivery_issues')
           .select('*')
-          .eq('project_id', selectedProject.id)
+          .eq('project_id', currentProject.id)
           .order('created_at', { ascending: false }),
         supabase
           .from('delivery_checklist_templates')
           .select('*')
-          .eq('project_id', selectedProject.id)
+          .eq('project_id', currentProject.id)
           .order('category, display_order'),
         supabase
           .from('houses')
           .select('*')
-          .eq('project_id', selectedProject.id)
+          .eq('project_id', currentProject.id)
           .order('house_number')
       ]);
 
@@ -148,7 +144,7 @@ const DeliveryView: React.FC = () => {
       const { data, error } = await supabase
         .from('delivery_inspections')
         .insert({
-          project_id: selectedProject!.id,
+          project_id: currentProject!.id,
           house_id: house.id,
           house_number: house.house_number,
           status: 'em_vistoria' as DeliveryStatus
@@ -186,7 +182,7 @@ const DeliveryView: React.FC = () => {
     !inspections.some(i => i.house_id === house.id)
   );
 
-  if (!selectedProject) {
+  if (!currentProject) {
     return (
       <div className="flex items-center justify-center h-64">
         <p className="text-muted-foreground">Selecione um projeto para continuar</p>
@@ -472,7 +468,7 @@ const DeliveryView: React.FC = () => {
         {isAdmin && (
           <TabsContent value="settings" className="mt-6">
             <ChecklistTemplateManager
-              projectId={selectedProject.id}
+              projectId={currentProject!.id}
               templates={templates}
               onUpdate={loadData}
               isAdmin={isAdmin}
