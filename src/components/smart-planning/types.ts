@@ -8,8 +8,12 @@ export interface PlanningStage {
   duration_days: number | null;
   depends_on: string | null;
   color: string;
+  is_baseline: boolean;
+  baseline_created_at: string | null;
   created_at: string;
   updated_at: string;
+  // Linked to existing macro
+  macro_id?: string;
 }
 
 export interface PlanningTeam {
@@ -18,7 +22,14 @@ export interface PlanningTeam {
   stage_id: string;
   name: string;
   is_active: boolean;
+  professionals_count: number;
+  helpers_count: number;
   created_at: string;
+}
+
+export interface TeamComposition {
+  professionals: number;
+  helpers: number;
 }
 
 export interface ProductivityTemplate {
@@ -92,6 +103,23 @@ export interface SimulationResults {
   cost_impact?: number;
 }
 
+export interface PlanningBaseline {
+  id: string;
+  project_id: string;
+  name: string;
+  version_number: number;
+  baseline_data: BaselineData;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface BaselineData {
+  stages: PlanningStage[];
+  teams: PlanningTeam[];
+  projected_end_date: string;
+  total_duration_days: number;
+}
+
 export interface GanttTask {
   id: string;
   name: string;
@@ -121,4 +149,15 @@ export interface ProductivityMetrics {
   actualProductivity: number;
   variance: number;
   variancePercent: number;
+}
+
+export interface StageConfigInput {
+  macroId: string;
+  macroName: string;
+  color: string;
+  planned_productivity: number;
+  planned_teams: number;
+  team_composition: TeamComposition;
+  depends_on: string | null;
+  sequence_order: number;
 }

@@ -939,6 +939,36 @@ export type Database = {
           },
         ]
       }
+      planning_baselines: {
+        Row: {
+          baseline_data: Json
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          project_id: string
+          version_number: number
+        }
+        Insert: {
+          baseline_data?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          project_id: string
+          version_number?: number
+        }
+        Update: {
+          baseline_data?: Json
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          project_id?: string
+          version_number?: number
+        }
+        Relationships: []
+      }
       planning_simulations: {
         Row: {
           applied_at: string | null
@@ -983,11 +1013,13 @@ export type Database = {
       }
       planning_stages: {
         Row: {
+          baseline_created_at: string | null
           color: string
           created_at: string
           depends_on: string | null
           duration_days: number | null
           id: string
+          is_baseline: boolean
           name: string
           planned_productivity: number
           planned_teams: number
@@ -996,11 +1028,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          baseline_created_at?: string | null
           color?: string
           created_at?: string
           depends_on?: string | null
           duration_days?: number | null
           id?: string
+          is_baseline?: boolean
           name: string
           planned_productivity?: number
           planned_teams?: number
@@ -1009,11 +1043,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          baseline_created_at?: string | null
           color?: string
           created_at?: string
           depends_on?: string | null
           duration_days?: number | null
           id?: string
+          is_baseline?: boolean
           name?: string
           planned_productivity?: number
           planned_teams?: number
@@ -1034,25 +1070,31 @@ export type Database = {
       planning_teams: {
         Row: {
           created_at: string
+          helpers_count: number
           id: string
           is_active: boolean
           name: string
+          professionals_count: number
           project_id: string
           stage_id: string
         }
         Insert: {
           created_at?: string
+          helpers_count?: number
           id?: string
           is_active?: boolean
           name: string
+          professionals_count?: number
           project_id: string
           stage_id: string
         }
         Update: {
           created_at?: string
+          helpers_count?: number
           id?: string
           is_active?: boolean
           name?: string
+          professionals_count?: number
           project_id?: string
           stage_id?: string
         }

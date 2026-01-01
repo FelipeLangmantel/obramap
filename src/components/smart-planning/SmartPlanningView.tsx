@@ -10,6 +10,7 @@ import { usePlanningCalculations } from './hooks/usePlanningCalculations';
 import { PlanningOnboarding } from './PlanningOnboarding';
 import { GanttChart } from './GanttChart';
 import { LineOfBalance } from './LineOfBalance';
+import { DailyWorkLogDialog } from './DailyWorkLogDialog';
 import { 
   BarChart3, 
   Calendar, 
@@ -18,16 +19,21 @@ import {
   Clock, 
   Target,
   Layers,
-  Loader2
+  Loader2,
+  PlayCircle,
+  BookOpen,
+  Plus
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { PlanningStage } from './types';
+import { PlanningStage, TeamComposition } from './types';
+import { toast } from 'sonner';
 
 export function SmartPlanningView() {
   const { currentProject } = useConstruction();
   const { isAdmin, canEdit } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [showWorkLogDialog, setShowWorkLogDialog] = useState(false);
   
   const {
     stages,
@@ -35,9 +41,13 @@ export function SmartPlanningView() {
     templates,
     workLogs,
     alerts,
+    baselines,
     loading,
     isSetupComplete,
-    addStage,
+    hasBaseline,
+    addStageWithTeams,
+    createBaseline,
+    addWorkLog,
     loadData
   } = usePlanningData(currentProject?.id);
 
@@ -55,11 +65,25 @@ export function SmartPlanningView() {
     projectStartDate: currentProject?.startDate || ''
   });
 
-  const handleOnboardingComplete = async (stagesData: Omit<PlanningStage, 'id' | 'created_at' | 'updated_at'>[]) => {
+  const handleOnboardingComplete = async (
+    stagesData: Omit<PlanningStage, 'id' | 'created_at' | 'updated_at'>[],
+    teamCompositions: Record<string, TeamComposition>
+  ) => {
     for (const stage of stagesData) {
-      await addStage(stage);
+      const macroId = (stage as any).macro_id;
+      const composition = teamCompositions[macroId] || { professionals: 1, helpers: 1 };
+      await addStageWithTeams(stage, composition);
     }
     await loadData();
+  };
+
+  const handleStartPlanning = async () => {
+    if (!canEdit) {
+      toast.error('Você não tem permissão para iniciar o planejamento');
+      return;
+    }
+    
+    await createBaseline('Planejamento Inicial');
   };
 
   if (!currentProject) {
@@ -84,6 +108,7 @@ export function SmartPlanningView() {
         <PlanningOnboarding
           projectId={currentProject.id}
           totalUnits={currentProject.totalHouses}
+          macrosTemplate={currentProject.macrosTemplate}
           templates={templates}
           onComplete={handleOnboardingComplete}
         />
@@ -92,9 +117,64 @@ export function SmartPlanningView() {
   }
 
   const unresolvedAlerts = alerts.filter(a => !a.is_resolved);
+  const latestBaseline = baselines[0];
 
   return (
     <div className="space-y-4 h-full flex flex-col">
+      {/* Planning Status Banner */}
+      {!hasBaseline && (
+        <Card className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-amber-100 dark:bg-amber-900 rounded-full">
+                  <BookOpen className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-amber-900 dark:text-amber-100">
+                    Planejamento em Rascunho
+                  </h3>
+                  <p className="text-sm text-amber-700 dark:text-amber-300">
+                    Clique em "Iniciar Planejamento" para congelar a versão inicial e ativar o comparativo Planejado × Realizado.
+                  </p>
+                </div>
+              </div>
+              <Button onClick={handleStartPlanning} className="gap-2" disabled={!canEdit}>
+                <PlayCircle className="h-4 w-4" />
+                Iniciar Planejamento
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {hasBaseline && latestBaseline && (
+        <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
+          <CardContent className="py-3">
+            <div className="flex items-center gap-3">
+              <div className="p-1.5 bg-green-100 dark:bg-green-900 rounded-full">
+                <Target className="h-4 w-4 text-green-600 dark:text-green-400" />
+              </div>
+              <div className="flex-1">
+                <span className="text-sm text-green-700 dark:text-green-300">
+                  <strong>Planejamento Ativo</strong> - {latestBaseline.name} 
+                  (iniciado em {format(new Date(latestBaseline.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })})
+                </span>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowWorkLogDialog(true)}
+                className="gap-1"
+              >
+                <Plus className="h-3 w-3" />
+                Diário de Obra
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
         <TabsList className="grid grid-cols-4 w-full max-w-2xl">
           <TabsTrigger value="dashboard" className="gap-2">
@@ -260,6 +340,16 @@ export function SmartPlanningView() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Daily Work Log Dialog */}
+      <DailyWorkLogDialog
+        open={showWorkLogDialog}
+        onOpenChange={setShowWorkLogDialog}
+        projectId={currentProject.id}
+        stages={stages}
+        teams={teams}
+        onSubmit={addWorkLog}
+      />
     </div>
   );
 }
