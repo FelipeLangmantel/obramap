@@ -79,7 +79,8 @@ function IndexContent() {
     suppliers: "Cadastro de Fornecedores",
     "financial-flow": "Fluxo Financeiro",
     "board-decisions": "Painel da Diretoria",
-    delivery: "Entrega & Pós-Obra"
+    delivery: "Entrega & Pós-Obra",
+    "smart-planning": "Planejamento Inteligente"
   };
 
   return (
@@ -205,6 +206,12 @@ function IndexContent() {
                 {activeView === "delivery" && (
                   <div className="flex-1">
                     <DeliveryView />
+                  </div>
+                )}
+
+                {activeView === "smart-planning" && (
+                  <div className="flex-1">
+                    <SmartPlanningView />
                   </div>
                 )}
               </div>
