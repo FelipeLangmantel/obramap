@@ -50,7 +50,7 @@ import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import obraMapLogo from "@/assets/obramap-logo-new.png";
 
-type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery";
+type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning";
 
 interface AppSidebarProps {
   activeView: ViewType;
@@ -150,6 +150,12 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       view: "delivery" as const, 
       icon: ClipboardCheck,
       permissionId: "producao"
+    },
+    { 
+      title: "Planejamento Inteligente", 
+      view: "smart-planning" as const, 
+      icon: Target,
+      permissionId: "planejamento"
     },
   ];
 
