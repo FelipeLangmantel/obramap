@@ -6,7 +6,9 @@ import {
   ProductivityTemplate, 
   DailyWorkLog,
   PlanningAlert,
-  PlanningSimulation
+  PlanningSimulation,
+  PlanningBaseline,
+  TeamComposition
 } from '../types';
 import { toast } from 'sonner';
 
@@ -17,8 +19,10 @@ export function usePlanningData(projectId: string | undefined) {
   const [workLogs, setWorkLogs] = useState<DailyWorkLog[]>([]);
   const [alerts, setAlerts] = useState<PlanningAlert[]>([]);
   const [simulations, setSimulations] = useState<PlanningSimulation[]>([]);
+  const [baselines, setBaselines] = useState<PlanningBaseline[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSetupComplete, setIsSetupComplete] = useState(false);
+  const [hasBaseline, setHasBaseline] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!projectId) return;
@@ -31,7 +35,8 @@ export function usePlanningData(projectId: string | undefined) {
         templatesRes,
         workLogsRes,
         alertsRes,
-        simulationsRes
+        simulationsRes,
+        baselinesRes
       ] = await Promise.all([
         supabase
           .from('planning_stages')
@@ -63,7 +68,12 @@ export function usePlanningData(projectId: string | undefined) {
           .select('*')
           .eq('project_id', projectId)
           .eq('is_applied', false)
-          .order('created_at', { ascending: false })
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('planning_baselines')
+          .select('*')
+          .eq('project_id', projectId)
+          .order('version_number', { ascending: false })
       ]);
 
       if (stagesRes.data) {
@@ -75,6 +85,10 @@ export function usePlanningData(projectId: string | undefined) {
       if (workLogsRes.data) setWorkLogs(workLogsRes.data as DailyWorkLog[]);
       if (alertsRes.data) setAlerts(alertsRes.data as PlanningAlert[]);
       if (simulationsRes.data) setSimulations(simulationsRes.data as unknown as PlanningSimulation[]);
+      if (baselinesRes.data) {
+        setBaselines(baselinesRes.data as unknown as PlanningBaseline[]);
+        setHasBaseline(baselinesRes.data.length > 0);
+      }
     } catch (error) {
       console.error('Error loading planning data:', error);
       toast.error('Erro ao carregar dados de planejamento');
@@ -86,7 +100,41 @@ export function usePlanningData(projectId: string | undefined) {
     loadData();
   }, [loadData]);
 
-  // Stage CRUD
+  // Stage CRUD with team compositions
+  const addStageWithTeams = async (
+    stage: Omit<PlanningStage, 'id' | 'created_at' | 'updated_at'>,
+    teamComposition: TeamComposition
+  ) => {
+    const { data, error } = await supabase
+      .from('planning_stages')
+      .insert(stage)
+      .select()
+      .single();
+    
+    if (error) {
+      toast.error('Erro ao adicionar etapa');
+      return null;
+    }
+    
+    // Auto-create teams with composition
+    const teamInserts = [];
+    for (let i = 1; i <= stage.planned_teams; i++) {
+      teamInserts.push({
+        project_id: projectId!,
+        stage_id: data.id,
+        name: `Equipe ${stage.name} ${i}`,
+        professionals_count: teamComposition.professionals,
+        helpers_count: teamComposition.helpers
+      });
+    }
+    
+    if (teamInserts.length > 0) {
+      await supabase.from('planning_teams').insert(teamInserts);
+    }
+    
+    return data as PlanningStage;
+  };
+
   const addStage = async (stage: Omit<PlanningStage, 'id' | 'created_at' | 'updated_at'>) => {
     const { data, error } = await supabase
       .from('planning_stages')
@@ -224,7 +272,6 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const applySimulation = async (simulationId: string) => {
-    // Apply simulation logic would go here
     const { error } = await supabase
       .from('planning_simulations')
       .update({ 
@@ -242,6 +289,121 @@ export function usePlanningData(projectId: string | undefined) {
     await loadData();
   };
 
+  // Baseline (Freeze planning)
+  const createBaseline = async (name: string = 'Planejamento Inicial') => {
+    const baselineData = {
+      stages: stages,
+      teams: teams,
+      projected_end_date: new Date().toISOString(),
+      total_duration_days: stages.reduce((sum, s) => sum + (s.duration_days || 0), 0)
+    };
+
+    const { data, error } = await supabase
+      .from('planning_baselines')
+      .insert({
+        project_id: projectId!,
+        name,
+        version_number: baselines.length + 1,
+        baseline_data: baselineData as any
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      toast.error('Erro ao criar baseline');
+      return null;
+    }
+
+    // Mark stages as baseline
+    await supabase
+      .from('planning_stages')
+      .update({ 
+        is_baseline: true, 
+        baseline_created_at: new Date().toISOString() 
+      })
+      .eq('project_id', projectId!);
+    
+    toast.success('Planejamento iniciado oficialmente!');
+    await loadData();
+    return data as unknown as PlanningBaseline;
+  };
+
+  // Team management
+  const addTeamToStage = async (stageId: string, professionals: number = 1, helpers: number = 1) => {
+    const stage = stages.find(s => s.id === stageId);
+    if (!stage) return;
+
+    const existingTeams = teams.filter(t => t.stage_id === stageId);
+    const newTeamNumber = existingTeams.length + 1;
+
+    const { error } = await supabase
+      .from('planning_teams')
+      .insert({
+        project_id: projectId!,
+        stage_id: stageId,
+        name: `Equipe ${stage.name} ${newTeamNumber}`,
+        professionals_count: professionals,
+        helpers_count: helpers
+      });
+
+    if (error) {
+      toast.error('Erro ao adicionar equipe');
+      return;
+    }
+
+    // Update stage planned_teams count
+    await supabase
+      .from('planning_stages')
+      .update({ planned_teams: stage.planned_teams + 1 })
+      .eq('id', stageId);
+
+    toast.success('Equipe adicionada');
+    await loadData();
+  };
+
+  const removeTeamFromStage = async (teamId: string) => {
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return;
+
+    const stage = stages.find(s => s.id === team.stage_id);
+    if (!stage || stage.planned_teams <= 1) {
+      toast.error('A etapa precisa ter pelo menos uma equipe');
+      return;
+    }
+
+    const { error } = await supabase
+      .from('planning_teams')
+      .delete()
+      .eq('id', teamId);
+
+    if (error) {
+      toast.error('Erro ao remover equipe');
+      return;
+    }
+
+    await supabase
+      .from('planning_stages')
+      .update({ planned_teams: stage.planned_teams - 1 })
+      .eq('id', stage.id);
+
+    toast.success('Equipe removida');
+    await loadData();
+  };
+
+  const updateTeam = async (teamId: string, updates: Partial<PlanningTeam>) => {
+    const { error } = await supabase
+      .from('planning_teams')
+      .update(updates)
+      .eq('id', teamId);
+
+    if (error) {
+      toast.error('Erro ao atualizar equipe');
+      return;
+    }
+
+    await loadData();
+  };
+
   return {
     stages,
     teams,
@@ -249,16 +411,23 @@ export function usePlanningData(projectId: string | undefined) {
     workLogs,
     alerts,
     simulations,
+    baselines,
     loading,
     isSetupComplete,
+    hasBaseline,
     loadData,
     addStage,
+    addStageWithTeams,
     updateStage,
     deleteStage,
     addWorkLog,
     updateWorkLog,
     resolveAlert,
     createSimulation,
-    applySimulation
+    applySimulation,
+    createBaseline,
+    addTeamToStage,
+    removeTeamFromStage,
+    updateTeam
   };
 }
