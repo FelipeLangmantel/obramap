@@ -11,6 +11,9 @@ import { PlanningOnboarding } from './PlanningOnboarding';
 import { GanttChart } from './GanttChart';
 import { LineOfBalance } from './LineOfBalance';
 import { DailyWorkLogDialog } from './DailyWorkLogDialog';
+import { DeletePlanningDialog } from './DeletePlanningDialog';
+import { TeamManagementPanel } from './TeamManagementPanel';
+import { PredecessorEditor } from './PredecessorEditor';
 import { 
   BarChart3, 
   Calendar, 
@@ -22,7 +25,11 @@ import {
   Loader2,
   PlayCircle,
   BookOpen,
-  Plus
+  Plus,
+  Users,
+  Trash2,
+  Link2,
+  Settings
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -34,6 +41,9 @@ export function SmartPlanningView() {
   const { isAdmin, canEdit } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showWorkLogDialog, setShowWorkLogDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showTeamPanel, setShowTeamPanel] = useState(false);
+  const [editingPredecessor, setEditingPredecessor] = useState<PlanningStage | null>(null);
   
   const {
     stages,
@@ -42,14 +52,24 @@ export function SmartPlanningView() {
     workLogs,
     alerts,
     baselines,
+    completedUnitsInfo,
     loading,
     isSetupComplete,
     hasBaseline,
     addStageWithTeams,
     createBaseline,
     addWorkLog,
-    loadData
+    loadData,
+    deleteAllPlanningData,
+    updateStagePredecessor,
+    addTeamToStage,
+    removeTeamFromStage,
+    updateTeam
   } = usePlanningData(currentProject?.id);
+
+  // Calculate remaining units (discount already executed)
+  const completedUnitsTotal = completedUnitsInfo.reduce((sum, c) => sum + c.completedUnits, 0);
+  const remainingUnits = Math.max(0, (currentProject?.totalHouses || 0) - Math.floor(completedUnitsTotal / stages.length || 0));
 
   const {
     ganttTasks,
@@ -161,15 +181,34 @@ export function SmartPlanningView() {
                   (iniciado em {format(new Date(latestBaseline.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })})
                 </span>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setShowWorkLogDialog(true)}
-                className="gap-1"
-              >
-                <Plus className="h-3 w-3" />
-                Diário de Obra
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setShowTeamPanel(true)}
+                  className="gap-1"
+                >
+                  <Users className="h-3 w-3" />
+                  Equipes
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setShowWorkLogDialog(true)}
+                  className="gap-1"
+                >
+                  <Plus className="h-3 w-3" />
+                  Diário de Obra
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="gap-1 text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -350,6 +389,38 @@ export function SmartPlanningView() {
         teams={teams}
         onSubmit={addWorkLog}
       />
+
+      {/* Delete Planning Dialog */}
+      <DeletePlanningDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        planningName={latestBaseline?.name || 'Planejamento'}
+        onConfirm={deleteAllPlanningData}
+      />
+
+      {/* Team Management Panel */}
+      <TeamManagementPanel
+        open={showTeamPanel}
+        onOpenChange={setShowTeamPanel}
+        stages={stages}
+        teams={teams}
+        onAddTeam={addTeamToStage}
+        onRemoveTeam={removeTeamFromStage}
+        onUpdateTeam={updateTeam}
+      />
+
+      {/* Predecessor Editor */}
+      {editingPredecessor && (
+        <PredecessorEditor
+          open={!!editingPredecessor}
+          onOpenChange={() => setEditingPredecessor(null)}
+          stages={stages}
+          currentStage={editingPredecessor}
+          onSave={(predecessorId, latencyDays) => 
+            updateStagePredecessor(editingPredecessor.id, predecessorId, latencyDays)
+          }
+        />
+      )}
     </div>
   );
 }

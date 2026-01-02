@@ -7,6 +7,7 @@ export interface PlanningStage {
   planned_teams: number;
   duration_days: number | null;
   depends_on: string | null;
+  latency_days: number;
   color: string;
   is_baseline: boolean;
   baseline_created_at: string | null;
@@ -14,6 +15,12 @@ export interface PlanningStage {
   updated_at: string;
   // Linked to existing macro
   macro_id?: string;
+  // Linked to scope for service-level planning
+  scope_id?: string;
+  is_service_level: boolean;
+  // Track already completed units at planning start
+  completed_units_at_start: number;
+  version_id?: string;
 }
 
 export interface PlanningTeam {
@@ -159,5 +166,29 @@ export interface StageConfigInput {
   planned_teams: number;
   team_composition: TeamComposition;
   depends_on: string | null;
+  latency_days: number;
   sequence_order: number;
+  // For service-level planning
+  scopeId?: string;
+  scopeName?: string;
+  isServiceLevel: boolean;
+  // Completed units at start
+  completedUnitsAtStart: number;
+}
+
+export interface PlanningVersion {
+  id: string;
+  project_id: string;
+  version_number: number;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface CompletedUnitsInfo {
+  macroId: string;
+  macroName: string;
+  completedUnits: number;
+  totalHouseIds: number[];
 }

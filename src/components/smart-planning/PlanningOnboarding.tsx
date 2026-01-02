@@ -50,7 +50,10 @@ export function PlanningOnboarding({
         planned_teams: 1,
         team_composition: { professionals: 1, helpers: 1 },
         depends_on: index > 0 ? macrosTemplate[index - 1].id : null,
-        sequence_order: index + 1
+        latency_days: 0,
+        sequence_order: index + 1,
+        isServiceLevel: false,
+        completedUnitsAtStart: 0
       };
     });
   }, [macrosTemplate, templates]);
@@ -96,10 +99,13 @@ export function PlanningOnboarding({
         planned_teams: s.planned_teams,
         duration_days: calculateDuration(s),
         depends_on: null,
+        latency_days: s.latency_days,
         color: s.color,
         is_baseline: false,
         baseline_created_at: null,
-        macro_id: s.macroId
+        macro_id: s.macroId,
+        is_service_level: s.isServiceLevel,
+        completed_units_at_start: s.completedUnitsAtStart
       }));
       
       const teamCompositions: Record<string, TeamComposition> = {};
