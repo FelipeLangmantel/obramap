@@ -1015,47 +1015,65 @@ export type Database = {
         Row: {
           baseline_created_at: string | null
           color: string
+          completed_units_at_start: number | null
           created_at: string
           depends_on: string | null
           duration_days: number | null
           id: string
           is_baseline: boolean
+          is_service_level: boolean | null
+          latency_days: number | null
+          macro_id: string | null
           name: string
           planned_productivity: number
           planned_teams: number
           project_id: string
+          scope_id: string | null
           sequence_order: number
           updated_at: string
+          version_id: string | null
         }
         Insert: {
           baseline_created_at?: string | null
           color?: string
+          completed_units_at_start?: number | null
           created_at?: string
           depends_on?: string | null
           duration_days?: number | null
           id?: string
           is_baseline?: boolean
+          is_service_level?: boolean | null
+          latency_days?: number | null
+          macro_id?: string | null
           name: string
           planned_productivity?: number
           planned_teams?: number
           project_id: string
+          scope_id?: string | null
           sequence_order?: number
           updated_at?: string
+          version_id?: string | null
         }
         Update: {
           baseline_created_at?: string | null
           color?: string
+          completed_units_at_start?: number | null
           created_at?: string
           depends_on?: string | null
           duration_days?: number | null
           id?: string
           is_baseline?: boolean
+          is_service_level?: boolean | null
+          latency_days?: number | null
+          macro_id?: string | null
           name?: string
           planned_productivity?: number
           planned_teams?: number
           project_id?: string
+          scope_id?: string | null
           sequence_order?: number
           updated_at?: string
+          version_id?: string | null
         }
         Relationships: [
           {
@@ -1063,6 +1081,13 @@ export type Database = {
             columns: ["depends_on"]
             isOneToOne: false
             referencedRelation: "planning_stages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planning_stages_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "planning_versions"
             referencedColumns: ["id"]
           },
         ]
@@ -1104,6 +1129,44 @@ export type Database = {
             columns: ["stage_id"]
             isOneToOne: false
             referencedRelation: "planning_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planning_versions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          project_id: string
+          version_number: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          project_id: string
+          version_number?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          project_id?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planning_versions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
