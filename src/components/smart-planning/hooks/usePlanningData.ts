@@ -8,9 +8,7 @@ import {
   PlanningAlert,
   PlanningSimulation,
   PlanningBaseline,
-  TeamComposition,
-  PlanningVersion,
-  CompletedUnitsInfo
+  TeamComposition
 } from '../types';
 import { toast } from 'sonner';
 
@@ -22,8 +20,6 @@ export function usePlanningData(projectId: string | undefined) {
   const [alerts, setAlerts] = useState<PlanningAlert[]>([]);
   const [simulations, setSimulations] = useState<PlanningSimulation[]>([]);
   const [baselines, setBaselines] = useState<PlanningBaseline[]>([]);
-  const [versions, setVersions] = useState<PlanningVersion[]>([]);
-  const [completedUnitsInfo, setCompletedUnitsInfo] = useState<CompletedUnitsInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSetupComplete, setIsSetupComplete] = useState(false);
   const [hasBaseline, setHasBaseline] = useState(false);
@@ -40,9 +36,7 @@ export function usePlanningData(projectId: string | undefined) {
         workLogsRes,
         alertsRes,
         simulationsRes,
-        baselinesRes,
-        versionsRes,
-        weeklyProductionsRes
+        baselinesRes
       ] = await Promise.all([
         supabase
           .from('planning_stages')
@@ -79,17 +73,7 @@ export function usePlanningData(projectId: string | undefined) {
           .from('planning_baselines')
           .select('*')
           .eq('project_id', projectId)
-          .order('version_number', { ascending: false }),
-        supabase
-          .from('planning_versions')
-          .select('*')
-          .eq('project_id', projectId)
-          .order('version_number', { ascending: false }),
-        // Fetch weekly productions to calculate completed units
-        supabase
-          .from('weekly_productions')
-          .select('*')
-          .eq('project_id', projectId)
+          .order('version_number', { ascending: false })
       ]);
 
       if (stagesRes.data) {
@@ -104,25 +88,6 @@ export function usePlanningData(projectId: string | undefined) {
       if (baselinesRes.data) {
         setBaselines(baselinesRes.data as unknown as PlanningBaseline[]);
         setHasBaseline(baselinesRes.data.length > 0);
-      }
-      if (versionsRes.data) setVersions(versionsRes.data as PlanningVersion[]);
-      
-      // Calculate completed units per macro from weekly productions
-      if (weeklyProductionsRes.data) {
-        const completedByMacro: Record<string, CompletedUnitsInfo> = {};
-        for (const prod of weeklyProductionsRes.data) {
-          if (!completedByMacro[prod.macro_id]) {
-            completedByMacro[prod.macro_id] = {
-              macroId: prod.macro_id,
-              macroName: prod.macro_name,
-              completedUnits: 0,
-              totalHouseIds: []
-            };
-          }
-          completedByMacro[prod.macro_id].completedUnits += prod.houses_count;
-          completedByMacro[prod.macro_id].totalHouseIds.push(...(prod.house_ids || []));
-        }
-        setCompletedUnitsInfo(Object.values(completedByMacro));
       }
     } catch (error) {
       console.error('Error loading planning data:', error);
@@ -215,7 +180,6 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const deleteStage = async (stageId: string) => {
-    // Cascade delete is handled by database constraints
     const { error } = await supabase
       .from('planning_stages')
       .delete()
@@ -226,63 +190,6 @@ export function usePlanningData(projectId: string | undefined) {
       return;
     }
     
-    toast.success('Etapa e dados associados removidos');
-    await loadData();
-  };
-
-  // Delete all planning data with cascade (for complete reset)
-  const deleteAllPlanningData = async () => {
-    if (!projectId) return;
-    
-    try {
-      // Delete stages (cascade will remove teams, work logs, alerts)
-      await supabase
-        .from('planning_stages')
-        .delete()
-        .eq('project_id', projectId);
-      
-      // Delete baselines
-      await supabase
-        .from('planning_baselines')
-        .delete()
-        .eq('project_id', projectId);
-      
-      // Delete simulations
-      await supabase
-        .from('planning_simulations')
-        .delete()
-        .eq('project_id', projectId);
-      
-      // Delete versions
-      await supabase
-        .from('planning_versions')
-        .delete()
-        .eq('project_id', projectId);
-      
-      toast.success('Planejamento excluído com sucesso');
-      await loadData();
-    } catch (error) {
-      console.error('Error deleting planning data:', error);
-      toast.error('Erro ao excluir planejamento');
-    }
-  };
-
-  // Update stage predecessor and latency
-  const updateStagePredecessor = async (stageId: string, predecessorId: string | null, latencyDays: number) => {
-    const { error } = await supabase
-      .from('planning_stages')
-      .update({ 
-        depends_on: predecessorId,
-        latency_days: latencyDays
-      })
-      .eq('id', stageId);
-    
-    if (error) {
-      toast.error('Erro ao atualizar predecessora');
-      return;
-    }
-    
-    toast.success('Predecessora atualizada');
     await loadData();
   };
 
@@ -505,8 +412,6 @@ export function usePlanningData(projectId: string | undefined) {
     alerts,
     simulations,
     baselines,
-    versions,
-    completedUnitsInfo,
     loading,
     isSetupComplete,
     hasBaseline,
@@ -515,8 +420,6 @@ export function usePlanningData(projectId: string | undefined) {
     addStageWithTeams,
     updateStage,
     deleteStage,
-    deleteAllPlanningData,
-    updateStagePredecessor,
     addWorkLog,
     updateWorkLog,
     resolveAlert,
