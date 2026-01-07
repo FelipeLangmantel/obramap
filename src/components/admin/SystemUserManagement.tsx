@@ -298,17 +298,19 @@ export default function SystemUserManagement() {
     }
 
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .delete()
-        .eq("id", user.id);
+      // Call edge function to delete user from auth.users (which cascades to profiles)
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { user_id: user.user_id }
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
       toast.success("Usuário excluído com sucesso!");
       fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting user:", error);
-      toast.error("Erro ao excluir usuário");
+      toast.error(error.message || "Erro ao excluir usuário");
     }
   };
 
