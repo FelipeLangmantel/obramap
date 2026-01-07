@@ -54,6 +54,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { MeasurementSelector } from "./production/MeasurementSelector";
+import { useMeasurements, MeasurementWithServices, MeasurementService } from "@/hooks/useMeasurements";
 
 interface WeeklyProduction {
   id: string;
@@ -232,7 +233,19 @@ export function WeeklyProductionView() {
     }
   }, [analysisPeriod, currentProject]);
 
-  // Load productions and planned periods
+  // Use new measurements hook
+  const { 
+    measurementsWithServices,
+    getRegisteredServiceIds,
+    registerProduction: registerNewProduction,
+    isLoading: isMeasurementsLoading
+  } = useMeasurements({ projectId: currentProject?.id });
+
+  // Selected measurement from new system
+  const [selectedMeasurementNew, setSelectedMeasurementNew] = useState<MeasurementWithServices | null>(null);
+  const [selectedServiceNew, setSelectedServiceNew] = useState<MeasurementService | null>(null);
+
+  // Load productions and planned periods (legacy support)
   useEffect(() => {
     if (!currentProject) return;
     
@@ -270,6 +283,24 @@ export function WeeklyProductionView() {
 
     loadData();
   }, [currentProject]);
+
+  // When new measurement/service is selected, auto-fill form
+  useEffect(() => {
+    if (selectedMeasurementNew && selectedServiceNew) {
+      // Set dates from measurement
+      setMeasurementStartDate(selectedMeasurementNew.start_date);
+      setMeasurementEndDate(selectedMeasurementNew.end_date);
+      
+      // Set macro and scope from service
+      setSelectedMacro(selectedServiceNew.macro_id);
+      setTimeout(() => setSelectedScope(selectedServiceNew.scope_id), 100);
+      
+      // Set planned houses from service
+      if (selectedServiceNew.planned_house_ids?.length > 0) {
+        setSelectedHouses(selectedServiceNew.planned_house_ids);
+      }
+    }
+  }, [selectedMeasurementNew, selectedServiceNew]);
 
   // Toggle house selection
   const toggleHouse = (houseId: number) => {
@@ -331,7 +362,7 @@ export function WeeklyProductionView() {
     }
   };
 
-  // Save production record
+  // Save production record - now also saves to new productions table
   const handleSave = async () => {
     if (!currentProject || !selectedScope || selectedHouses.length === 0) {
       toast.error("Selecione um serviço e pelo menos uma casa");
@@ -345,7 +376,36 @@ export function WeeklyProductionView() {
 
     setIsSaving(true);
     try {
-      // Save production record
+      // Determine if this is from a measurement or unplanned
+      const isUnplanned = !selectedMeasurementNew || !selectedServiceNew;
+      const measurementId = selectedMeasurementNew?.id || null;
+      const measurementServiceId = selectedServiceNew?.id || null;
+
+      // 1. Save to new productions table
+      const { error: newProductionError } = await supabase
+        .from('productions')
+        .insert({
+          project_id: currentProject.id,
+          measurement_id: measurementId,
+          measurement_service_id: measurementServiceId,
+          macro_id: macro.id,
+          macro_name: macro.name,
+          macro_color: macro.color,
+          scope_id: scope.id,
+          scope_name: scope.name,
+          house_ids: selectedHouses,
+          houses_count: selectedHouses.length,
+          production_date: format(new Date(), 'yyyy-MM-dd'),
+          is_initial_database: isInitialDatabase,
+          is_unplanned: isUnplanned,
+          notes: null
+        });
+
+      if (newProductionError) {
+        console.error('Error saving to new productions table:', newProductionError);
+      }
+
+      // 2. Also save to legacy weekly_productions for backward compatibility
       const { error } = await supabase
         .from('weekly_productions')
         .insert({
@@ -372,7 +432,7 @@ export function WeeklyProductionView() {
         const houseMacros = (house?.macros as any[]) || [];
         const houseMacro = houseMacros.find(m => m.id === macro.id);
         const houseScope = houseMacro?.scopes?.find((s: any) => s.id === scope.id);
-                          const currentProgress = houseScope?.progress || 0;
+        const currentProgress = houseScope?.progress || 0;
         const remainingPercent = 100 - currentProgress;
         
         // Get the percentage to add (from custom mode or default to remaining)
@@ -398,6 +458,8 @@ export function WeeklyProductionView() {
       setSelectedScope("");
       setHousePercentages({});
       setMassPercentage(100);
+      setSelectedMeasurementNew(null);
+      setSelectedServiceNew(null);
     } catch (error) {
       console.error('Error saving production:', error);
       toast.error("Erro ao salvar produção");
@@ -710,34 +772,155 @@ export function WeeklyProductionView() {
         </TabsList>
 
         <TabsContent value="register" className="flex-1 overflow-auto mt-4 space-y-4">
-          {/* Measurement Selector - Main navigation */}
-          {!isInitialDatabase && !isAddingUnplanned && plannedPeriods.length > 0 && (
-            <MeasurementSelector
-              plannedPeriods={plannedPeriods}
-              registeredScopeIds={registeredPlannedIds}
-              selectedMeasurement={selectedMeasurementNum}
-              onMeasurementChange={setSelectedMeasurementNum}
-              selectedPeriod={selectedPlannedPeriod}
-              onPeriodChange={setSelectedPlannedPeriod}
-              onApplyService={(period) => {
-                setIsAddingUnplanned(false);
-                setMeasurementStartDate(period.week_start);
-                setMeasurementEndDate(period.week_end);
-                setSelectedMacro(period.macro_id);
-                setTimeout(() => setSelectedScope(period.scope_id), 100);
-                if (period.planned_house_ids?.length > 0) {
-                  setSelectedHouses(period.planned_house_ids);
-                }
-                toast.success(`Serviço "${period.scope_name}" aplicado com ${period.planned_houses} casas`);
-              }}
-              onAddUnplannedService={() => {
-                setIsAddingUnplanned(true);
-                setSelectedPlannedPeriod(null);
-                setSelectedMacro("");
-                setSelectedScope("");
-                setSelectedHouses([]);
-              }}
-            />
+          {/* Measurement Selector - Priority: new measurements table, fallback to legacy */}
+          {!isInitialDatabase && !isAddingUnplanned && (
+            <>
+              {/* New measurement system - only show if we have measurements in new table */}
+              {measurementsWithServices.length > 0 ? (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5" />
+                      Medição
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Measurement selector */}
+                    <Select
+                      value={selectedMeasurementNew?.id || ""}
+                      onValueChange={(value) => {
+                        const measurement = measurementsWithServices.find(m => m.id === value) || null;
+                        setSelectedMeasurementNew(measurement);
+                        setSelectedServiceNew(null);
+                        setSelectedMeasurementNum(measurement?.measurement_number || null);
+                      }}
+                      disabled={isMeasurementsLoading}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Selecione a medição..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {measurementsWithServices.map(m => (
+                          <SelectItem key={m.id} value={m.id}>
+                            <div className="flex items-center gap-3 py-1">
+                              <Badge variant="default" className="text-xs">
+                                {m.measurement_number}ª Medição
+                              </Badge>
+                              <span className="text-sm">
+                                {m.servicesCount} serviço(s) · {m.totalHouses} casas
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {format(parseISO(m.start_date), 'dd/MM', { locale: ptBR })} - {format(parseISO(m.end_date), 'dd/MM', { locale: ptBR })}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Services for selected measurement */}
+                    {selectedMeasurementNew && selectedMeasurementNew.services.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="text-sm font-medium text-muted-foreground">Serviços da Medição:</div>
+                        <ScrollArea className="h-[180px] pr-4">
+                          <div className="space-y-2">
+                            {selectedMeasurementNew.services.map(service => {
+                              const registeredIds = getRegisteredServiceIds(selectedMeasurementNew.id);
+                              const isRegistered = registeredIds.includes(service.id);
+                              const isSelected = selectedServiceNew?.id === service.id;
+                              
+                              return (
+                                <button
+                                  key={service.id}
+                                  onClick={() => !isRegistered && setSelectedServiceNew(isSelected ? null : service)}
+                                  disabled={isRegistered}
+                                  className={`w-full p-3 rounded-lg border text-left transition-all ${
+                                    isRegistered 
+                                      ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 opacity-60 cursor-not-allowed"
+                                      : isSelected
+                                        ? "bg-primary/10 border-primary ring-2 ring-primary/20"
+                                        : "bg-background hover:bg-muted/50 border-border hover:border-primary/50"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <div 
+                                        className="w-3 h-3 rounded-full" 
+                                        style={{ backgroundColor: service.macro_color }}
+                                      />
+                                      <span className="font-medium text-sm">{service.scope_name}</span>
+                                      <Badge variant="outline" className="text-xs">
+                                        {service.macro_name}
+                                      </Badge>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="secondary" className="text-xs">
+                                        <Home className="w-3 h-3 mr-1" />
+                                        {service.planned_houses}
+                                      </Badge>
+                                      {isRegistered && (
+                                        <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                      )}
+                                    </div>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full"
+                      onClick={() => {
+                        setIsAddingUnplanned(true);
+                        setSelectedMeasurementNew(null);
+                        setSelectedServiceNew(null);
+                        setSelectedPlannedPeriod(null);
+                        setSelectedMacro("");
+                        setSelectedScope("");
+                        setSelectedHouses([]);
+                      }}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Serviço não previsto
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : plannedPeriods.length > 0 ? (
+                // Legacy measurement selector - fallback
+                <MeasurementSelector
+                  plannedPeriods={plannedPeriods}
+                  registeredScopeIds={registeredPlannedIds}
+                  selectedMeasurement={selectedMeasurementNum}
+                  onMeasurementChange={setSelectedMeasurementNum}
+                  selectedPeriod={selectedPlannedPeriod}
+                  onPeriodChange={setSelectedPlannedPeriod}
+                  onApplyService={(period) => {
+                    setIsAddingUnplanned(false);
+                    setMeasurementStartDate(period.week_start);
+                    setMeasurementEndDate(period.week_end);
+                    setSelectedMacro(period.macro_id);
+                    setTimeout(() => setSelectedScope(period.scope_id), 100);
+                    if (period.planned_house_ids?.length > 0) {
+                      setSelectedHouses(period.planned_house_ids);
+                    }
+                    toast.success(`Serviço "${period.scope_name}" aplicado com ${period.planned_houses} casas`);
+                  }}
+                  onAddUnplannedService={() => {
+                    setIsAddingUnplanned(true);
+                    setSelectedPlannedPeriod(null);
+                    setSelectedMacro("");
+                    setSelectedScope("");
+                    setSelectedHouses([]);
+                  }}
+                />
+              ) : null}
+            </>
           )}
 
           {/* Mode indicator for unplanned service */}
