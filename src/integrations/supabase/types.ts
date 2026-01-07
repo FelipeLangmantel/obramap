@@ -2089,6 +2089,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_create_company: { Args: { company_name: string }; Returns: Json }
       admin_exists: { Args: never; Returns: boolean }
       count_orphan_projects: { Args: never; Returns: number }
       create_system_admin: {

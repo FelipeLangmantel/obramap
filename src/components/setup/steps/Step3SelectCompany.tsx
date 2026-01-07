@@ -68,27 +68,37 @@ export const Step3SelectCompany: React.FC<Step3SelectCompanyProps> = ({
     setIsCreating(true);
 
     try {
-      // Generate slug using the RPC function
-      const { data: slug, error: slugError } = await supabase
-        .rpc('generate_unique_slug', { company_name: newCompanyName });
+      // Use admin RPC function to create company (bypasses RLS)
+      const { data: result, error: rpcError } = await supabase
+        .rpc('admin_create_company', { company_name: newCompanyName.trim() });
 
-      if (slugError) throw slugError;
+      if (rpcError) throw rpcError;
 
-      // Create the company
-      const { data, error } = await supabase
-        .from('companies')
-        .insert({ 
-          name: newCompanyName.trim(),
-          slug: slug 
-        })
-        .select('id, name, slug')
-        .single();
+      const typedResult = result as { 
+        success: boolean; 
+        error?: string; 
+        code?: string;
+        company?: { id: string; name: string; slug: string };
+      };
 
-      if (error) throw error;
+      if (!typedResult.success) {
+        if (typedResult.code === 'DUPLICATE_NAME') {
+          toast.error('Já existe uma empresa com este nome.');
+        } else if (typedResult.code === 'UNAUTHORIZED') {
+          toast.error('Apenas SYSTEM_ADMIN pode criar empresas.');
+        } else {
+          toast.error(typedResult.error || 'Erro ao criar empresa');
+        }
+        return;
+      }
+
+      if (!typedResult.company) {
+        throw new Error('Empresa criada mas dados não retornados');
+      }
 
       toast.success('Empresa criada com sucesso!');
-      setCompanies(prev => [...prev, data]);
-      onCompanySelected(data.id, data.name);
+      setCompanies(prev => [...prev, typedResult.company!]);
+      onCompanySelected(typedResult.company.id, typedResult.company.name);
       setNewCompanyName('');
       setActiveTab('select');
     } catch (err: any) {

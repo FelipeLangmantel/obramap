@@ -99,13 +99,25 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
         return;
       }
 
+      // Check if result has ADMIN_EXISTS code - block creation
+      const { data: checkResult } = await supabase.rpc('promote_to_system_admin', {
+        admin_email: formData.email
+      });
+      
+      const result = checkResult as { success: boolean; error?: string; code?: string } | null;
+      if (result?.code === 'ADMIN_EXISTS') {
+        setError('Já existe um SYSTEM_ADMIN no sistema. Não é possível criar outro.');
+        setIsLoading(false);
+        return;
+      }
+
       // User doesn't exist, validate full form for new user creation
       if (!validateFormForNewUser()) {
         setIsLoading(false);
         return;
       }
 
-      // Create new user
+      // Check for existing user with same email in auth
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -120,7 +132,7 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
       if (signUpError) {
         // Check if user already exists error
         if (signUpError.message.includes('already registered') || signUpError.message.includes('already been registered')) {
-          setError('Usuário já existe mas não foi encontrado no sistema. Entre em contato com suporte.');
+          setError('Este e-mail já está cadastrado. O usuário deveria ter sido promovido automaticamente.');
         } else {
           throw signUpError;
         }
@@ -136,7 +148,14 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
         admin_display_name: formData.fullName
       });
 
-      if (rpcError) throw rpcError;
+      if (rpcError) {
+        // Check for system admin already exists
+        if (rpcError.message?.includes('System admin already exists')) {
+          setError('Já existe um SYSTEM_ADMIN no sistema. Não é possível criar outro.');
+          return;
+        }
+        throw rpcError;
+      }
 
       setSuccess(true);
       toast.success('SYSTEM_ADMIN criado com sucesso!');
