@@ -871,6 +871,100 @@ export type Database = {
           },
         ]
       }
+      measurement_services: {
+        Row: {
+          created_at: string
+          id: string
+          macro_color: string
+          macro_id: string
+          macro_name: string
+          measurement_id: string
+          notes: string | null
+          planned_house_ids: number[]
+          planned_houses: number
+          scope_id: string
+          scope_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          macro_color?: string
+          macro_id: string
+          macro_name: string
+          measurement_id: string
+          notes?: string | null
+          planned_house_ids?: number[]
+          planned_houses?: number
+          scope_id: string
+          scope_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          macro_color?: string
+          macro_id?: string
+          macro_name?: string
+          measurement_id?: string
+          notes?: string | null
+          planned_house_ids?: number[]
+          planned_houses?: number
+          scope_id?: string
+          scope_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "measurement_services_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "measurements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      measurements: {
+        Row: {
+          created_at: string
+          end_date: string
+          id: string
+          measurement_number: number
+          notes: string | null
+          project_id: string
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          end_date: string
+          id?: string
+          measurement_number: number
+          notes?: string | null
+          project_id: string
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          id?: string
+          measurement_number?: number
+          notes?: string | null
+          project_id?: string
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "measurements_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planned_productions: {
         Row: {
           created_at: string
@@ -1283,6 +1377,91 @@ export type Database = {
           },
           {
             foreignKeyName: "production_deviations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      productions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          house_ids: number[]
+          houses_count: number
+          id: string
+          is_initial_database: boolean
+          is_unplanned: boolean
+          macro_color: string
+          macro_id: string
+          macro_name: string
+          measurement_id: string | null
+          measurement_service_id: string | null
+          notes: string | null
+          production_date: string
+          project_id: string
+          scope_id: string
+          scope_name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          house_ids?: number[]
+          houses_count?: number
+          id?: string
+          is_initial_database?: boolean
+          is_unplanned?: boolean
+          macro_color?: string
+          macro_id: string
+          macro_name: string
+          measurement_id?: string | null
+          measurement_service_id?: string | null
+          notes?: string | null
+          production_date?: string
+          project_id: string
+          scope_id: string
+          scope_name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          house_ids?: number[]
+          houses_count?: number
+          id?: string
+          is_initial_database?: boolean
+          is_unplanned?: boolean
+          macro_color?: string
+          macro_id?: string
+          macro_name?: string
+          measurement_id?: string | null
+          measurement_service_id?: string | null
+          notes?: string | null
+          production_date?: string
+          project_id?: string
+          scope_id?: string
+          scope_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "productions_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "productions_measurement_service_id_fkey"
+            columns: ["measurement_service_id"]
+            isOneToOne: false
+            referencedRelation: "measurement_services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "productions_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"

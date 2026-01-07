@@ -333,7 +333,7 @@ export function PlannedProductionTab() {
     };
   }, [currentProject]);
 
-  // Save planned production
+  // Save planned production - also creates/updates measurements table
   const handleSave = async () => {
     if (!currentProject || !selectedScope || selectedHouseIds.length === 0) {
       toast.error("Selecione ao menos uma casa para planejar");
@@ -346,6 +346,78 @@ export function PlannedProductionTab() {
 
     setIsSaving(true);
     try {
+      // 1. Create or get measurement record in the new measurements table
+      let measurementId: string | null = null;
+      
+      // Check if measurement already exists for this number
+      const { data: existingMeasurement } = await supabase
+        .from('measurements')
+        .select('id')
+        .eq('project_id', currentProject.id)
+        .eq('measurement_number', measurementNumber)
+        .maybeSingle();
+      
+      if (existingMeasurement) {
+        measurementId = existingMeasurement.id;
+      } else {
+        // Create new measurement
+        const { data: newMeasurement, error: measurementError } = await supabase
+          .from('measurements')
+          .insert({
+            project_id: currentProject.id,
+            measurement_number: measurementNumber,
+            start_date: planStartDate,
+            end_date: planEndDate,
+            notes: null
+          })
+          .select()
+          .single();
+        
+        if (measurementError) {
+          // If duplicate error, fetch existing
+          if (measurementError.code === '23505') {
+            const { data: fetchedMeasurement } = await supabase
+              .from('measurements')
+              .select('id')
+              .eq('project_id', currentProject.id)
+              .eq('measurement_number', measurementNumber)
+              .single();
+            measurementId = fetchedMeasurement?.id || null;
+          } else {
+            console.error('Error creating measurement:', measurementError);
+          }
+        } else {
+          measurementId = newMeasurement.id;
+        }
+      }
+
+      // 2. Add service to measurement_services (with duplicate protection)
+      if (measurementId) {
+        const { error: serviceError } = await supabase
+          .from('measurement_services')
+          .insert({
+            measurement_id: measurementId,
+            macro_id: macro.id,
+            macro_name: macro.name,
+            macro_color: macro.color,
+            scope_id: scope.id,
+            scope_name: scope.name,
+            planned_house_ids: selectedHouseIds,
+            planned_houses: selectedHouseIds.length,
+            notes: notes || null
+          });
+        
+        if (serviceError) {
+          if (serviceError.code === '23505') {
+            toast.error('Este serviço já está cadastrado nesta medição.');
+            setIsSaving(false);
+            return;
+          }
+          console.error('Error creating measurement service:', serviceError);
+        }
+      }
+
+      // 3. Also save to legacy planned_productions for backward compatibility
       const { error } = await supabase
         .from('planned_productions')
         .insert({
