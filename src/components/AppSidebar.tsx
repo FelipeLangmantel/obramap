@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Sidebar,
   SidebarContent,
@@ -37,6 +38,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { UserPermissionsPanel } from "@/components/admin/UserPermissionsPanel";
+import { ModuleUnderDevelopmentDialog } from "@/components/ModuleUnderDevelopmentDialog";
 import {
   Dialog,
   DialogContent,
@@ -57,16 +59,74 @@ interface AppSidebarProps {
   onViewChange: (view: ViewType) => void;
 }
 
+interface CompanyModule {
+  module_key: string;
+  module_name: string;
+  status: "active" | "development" | "disabled";
+  description: string | null;
+  expected_benefits: string | null;
+}
+
+// Mapear views para module_keys do banco
+const VIEW_TO_MODULE_KEY: Record<string, string> = {
+  "map": "mapa_obras",
+  "interactive-map": "mapa_obras",
+  "3d-map": "mapa_obras",
+  "charts": "mapa_obras",
+  "production": "producao",
+  "planning": "planejamento_inteligente",
+  "smart-planning": "planejamento_inteligente",
+  "costs": "custos",
+  "supplies": "suprimentos",
+  "financial-flow": "financeiro",
+  "board-decisions": "diretoria",
+  "delivery": "entrega",
+};
+
 export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const { state, setOpen } = useSidebar();
   const collapsed = state === "collapsed";
-  const { profile, role, signOut, isAdmin, canEdit, canAccessMenu, canAccessManagement, canAccessProject } = useAuth();
+  const { profile, company, role, signOut, isAdmin, canEdit, canAccessMenu, canAccessManagement, canAccessProject, systemRole, isCompanyAdmin } = useAuth();
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
   const [projectsListOpen, setProjectsListOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [macrosDialogOpen, setMacrosDialogOpen] = useState(false);
   const [quadrasDialogOpen, setQuadrasDialogOpen] = useState(false);
+  const [companyModules, setCompanyModules] = useState<CompanyModule[]>([]);
+  const [devModuleDialog, setDevModuleDialog] = useState<CompanyModule | null>(null);
+
+  // Buscar módulos da empresa do usuário
+  useEffect(() => {
+    const fetchModules = async () => {
+      if (!company?.id) return;
+
+      const { data, error } = await supabase
+        .from("company_modules")
+        .select("module_key, module_name, status, description, expected_benefits")
+        .eq("company_id", company.id);
+
+      if (!error && data) {
+        setCompanyModules(data as CompanyModule[]);
+      }
+    };
+
+    fetchModules();
+  }, [company?.id]);
+
+  const getModuleStatus = (viewKey: string): "active" | "development" | "disabled" | null => {
+    const moduleKey = VIEW_TO_MODULE_KEY[viewKey];
+    if (!moduleKey) return "active"; // Se não mapeado, considera ativo
+    
+    const module = companyModules.find(m => m.module_key === moduleKey);
+    return module?.status || "active";
+  };
+
+  const getModuleInfo = (viewKey: string): CompanyModule | null => {
+    const moduleKey = VIEW_TO_MODULE_KEY[viewKey];
+    if (!moduleKey) return null;
+    return companyModules.find(m => m.module_key === moduleKey) || null;
+  };
 
   const getInitials = (name: string) => {
     return name
@@ -78,8 +138,9 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   };
 
   const getRoleLabel = () => {
-    if (role === "admin") return "Administrador";
-    if (role === "editor") return "Editor";
+    // Priorizar system_role para exibição
+    if (systemRole === "admin" || isCompanyAdmin) return "Administrador";
+    if (systemRole === "editor" || role === "editor") return "Editor";
     return "Usuário";
   };
 
@@ -159,10 +220,31 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     },
   ];
 
-  // Filter menu items based on user permissions
-  const visibleMenuItems = mainMenuItems.filter(item => canAccessMenu(item.permissionId));
+  // Filter menu items based on user permissions AND module status
+  const visibleMenuItems = mainMenuItems.filter(item => {
+    // Primeiro verificar permissões do usuário
+    if (!canAccessMenu(item.permissionId)) return false;
+    
+    // Depois verificar status do módulo da empresa
+    const moduleStatus = getModuleStatus(item.view);
+    // Ocultar módulos desativados
+    if (moduleStatus === "disabled") return false;
+    
+    return true;
+  });
 
   const handleViewChange = (view: ViewType) => {
+    const moduleStatus = getModuleStatus(view);
+    
+    // Se módulo em desenvolvimento, mostrar modal
+    if (moduleStatus === "development") {
+      const moduleInfo = getModuleInfo(view);
+      if (moduleInfo) {
+        setDevModuleDialog(moduleInfo);
+        return;
+      }
+    }
+    
     onViewChange(view);
   };
 
@@ -194,23 +276,34 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="space-y-1">
-                {visibleMenuItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      onClick={() => handleViewChange(item.view)}
-                      isActive={activeView === item.view}
-                      className={cn(
-                        "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
-                        activeView === item.view 
-                          ? "bg-primary text-primary-foreground font-semibold shadow-sm" 
-                          : "text-foreground hover:bg-accent hover:text-accent-foreground font-medium"
-                      )}
-                    >
-                      <item.icon className="h-5 w-5 shrink-0" />
-                      <span className="text-sm">{item.title}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {visibleMenuItems.map((item) => {
+                  const moduleStatus = getModuleStatus(item.view);
+                  const isDevelopment = moduleStatus === "development";
+                  
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        onClick={() => handleViewChange(item.view)}
+                        isActive={activeView === item.view}
+                        className={cn(
+                          "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
+                          activeView === item.view 
+                            ? "bg-primary text-primary-foreground font-semibold shadow-sm" 
+                            : "text-foreground hover:bg-accent hover:text-accent-foreground font-medium",
+                          isDevelopment && "opacity-70"
+                        )}
+                      >
+                        <item.icon className="h-5 w-5 shrink-0" />
+                        <span className="text-sm">{item.title}</span>
+                        {isDevelopment && (
+                          <span className="ml-auto text-xs bg-yellow-500/20 text-yellow-600 px-1.5 py-0.5 rounded">
+                            Em breve
+                          </span>
+                        )}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -269,7 +362,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                 {canAccessManagement("insumos") && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      onClick={() => handleViewChange("inputs")}
+                      onClick={() => onViewChange("inputs")}
                       isActive={activeView === "inputs"}
                       className={cn(
                         "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
@@ -286,7 +379,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                 {canAccessManagement("fornecedores") && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
-                      onClick={() => handleViewChange("suppliers")}
+                      onClick={() => onViewChange("suppliers")}
                       isActive={activeView === "suppliers"}
                       className={cn(
                         "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
@@ -300,7 +393,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
-                {isAdmin && canAccessManagement("usuarios") && (
+                {(isAdmin || isCompanyAdmin) && canAccessManagement("usuarios") && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => setUsersDialogOpen(true)}
@@ -364,6 +457,12 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
           <UserPermissionsPanel />
         </DialogContent>
       </Dialog>
+
+      <ModuleUnderDevelopmentDialog 
+        open={!!devModuleDialog}
+        onOpenChange={(open) => !open && setDevModuleDialog(null)}
+        module={devModuleDialog}
+      />
 
       <ProjectsListDialog open={projectsListOpen} onOpenChange={setProjectsListOpen} />
       <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} />

@@ -72,7 +72,7 @@ const userSchema = z.object({
   display_name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").max(100),
   email: z.string().email("Email inválido"),
   company_id: z.string().uuid("Selecione uma empresa"),
-  system_role: z.enum(["admin", "user"], { required_error: "Selecione um perfil" }),
+  system_role: z.enum(["admin", "editor", "user"], { required_error: "Selecione um perfil" }),
 });
 
 export default function SystemUserManagement() {
@@ -92,7 +92,7 @@ export default function SystemUserManagement() {
     display_name: "",
     email: "",
     company_id: "",
-    system_role: "user" as "admin" | "user",
+    system_role: "user" as "admin" | "editor" | "user",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -318,7 +318,7 @@ export default function SystemUserManagement() {
       display_name: user.display_name,
       email: user.email,
       company_id: user.company_id || "",
-      system_role: user.system_role as "admin" | "user",
+      system_role: user.system_role as "admin" | "editor" | "user",
     });
     setIsEditDialogOpen(true);
   };
@@ -359,7 +359,7 @@ export default function SystemUserManagement() {
       display_name: "",
       email: "",
       company_id: "",
-      system_role: "user",
+      system_role: "user" as "admin" | "editor" | "user",
     });
     setErrors({});
     setTempPassword(null);
@@ -407,6 +407,8 @@ export default function SystemUserManagement() {
         return <Badge variant="destructive" className="gap-1"><Shield className="h-3 w-3" />System Admin</Badge>;
       case "admin":
         return <Badge className="bg-primary/20 text-primary gap-1"><Shield className="h-3 w-3" />Administrador</Badge>;
+      case "editor":
+        return <Badge className="bg-blue-500/20 text-blue-600 gap-1"><Pencil className="h-3 w-3" />Editor</Badge>;
       default:
         return <Badge variant="secondary" className="gap-1"><UserIcon className="h-3 w-3" />Usuário</Badge>;
     }
@@ -699,14 +701,15 @@ export default function SystemUserManagement() {
                 <Label htmlFor="system_role">Perfil na Empresa *</Label>
                 <Select
                   value={formData.system_role}
-                  onValueChange={(value: "admin" | "user") => setFormData({ ...formData, system_role: value })}
+                  onValueChange={(value: "admin" | "editor" | "user") => setFormData({ ...formData, system_role: value })}
                 >
                   <SelectTrigger className={errors.system_role ? "border-destructive" : ""}>
                     <SelectValue placeholder="Selecione o perfil" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">Administrador (gerencia a empresa)</SelectItem>
-                    <SelectItem value="user">Usuário (acesso padrão)</SelectItem>
+                    <SelectItem value="editor">Editor (edita dados, sem gerenciar usuários)</SelectItem>
+                    <SelectItem value="user">Usuário (apenas visualização)</SelectItem>
                   </SelectContent>
                 </Select>
                 {errors.system_role && (
@@ -772,14 +775,15 @@ export default function SystemUserManagement() {
               <Label htmlFor="edit_system_role">Perfil na Empresa *</Label>
               <Select
                 value={formData.system_role}
-                onValueChange={(value: "admin" | "user") => setFormData({ ...formData, system_role: value })}
+                onValueChange={(value: "admin" | "editor" | "user") => setFormData({ ...formData, system_role: value })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o perfil" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Administrador (gerencia a empresa)</SelectItem>
-                  <SelectItem value="user">Usuário (acesso padrão)</SelectItem>
+                  <SelectItem value="editor">Editor (edita dados, sem gerenciar usuários)</SelectItem>
+                  <SelectItem value="user">Usuário (apenas visualização)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
