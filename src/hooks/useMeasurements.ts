@@ -70,36 +70,49 @@ export function useMeasurements({ projectId }: UseMeasurementsOptions) {
 
   // Load all measurements data
   const loadData = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId) {
+      setMeasurements([]);
+      setMeasurementServices([]);
+      setProductions([]);
+      return;
+    }
     
     setIsLoading(true);
     try {
-      const [measurementsResult, servicesResult, productionsResult] = await Promise.all([
-        supabase
-          .from('measurements')
-          .select('*')
-          .eq('project_id', projectId)
-          .order('measurement_number', { ascending: true }),
-        supabase
-          .from('measurement_services')
-          .select('*')
-          .in('measurement_id', (await supabase
-            .from('measurements')
-            .select('id')
-            .eq('project_id', projectId)).data?.map(m => m.id) || []),
-        supabase
-          .from('productions')
-          .select('*')
-          .eq('project_id', projectId)
-          .order('production_date', { ascending: false })
-      ]);
+      // First get measurements
+      const measurementsResult = await supabase
+        .from('measurements')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('measurement_number', { ascending: true });
 
       if (measurementsResult.error) throw measurementsResult.error;
-      if (servicesResult.error) throw servicesResult.error;
+      
+      const measurementIds = measurementsResult.data?.map(m => m.id) || [];
+      
+      // Only fetch services if there are measurements
+      let servicesData: MeasurementService[] = [];
+      if (measurementIds.length > 0) {
+        const servicesResult = await supabase
+          .from('measurement_services')
+          .select('*')
+          .in('measurement_id', measurementIds);
+        
+        if (servicesResult.error) throw servicesResult.error;
+        servicesData = servicesResult.data || [];
+      }
+      
+      // Fetch productions
+      const productionsResult = await supabase
+        .from('productions')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('production_date', { ascending: false });
+
       if (productionsResult.error) throw productionsResult.error;
 
       setMeasurements(measurementsResult.data || []);
-      setMeasurementServices(servicesResult.data || []);
+      setMeasurementServices(servicesData);
       setProductions(productionsResult.data || []);
     } catch (error) {
       console.error('Error loading measurements data:', error);
@@ -389,6 +402,51 @@ export function useMeasurements({ projectId }: UseMeasurementsOptions) {
     }
   }, []);
 
+  // Delete a complete measurement with all services and productions (cascade)
+  const deleteMeasurement = useCallback(async (measurementId: string): Promise<boolean> => {
+    try {
+      // 1. Delete all productions linked to services of this measurement
+      const servicesToDelete = measurementServices.filter(s => s.measurement_id === measurementId);
+      for (const service of servicesToDelete) {
+        await supabase
+          .from('productions')
+          .delete()
+          .eq('measurement_service_id', service.id);
+      }
+      
+      // 2. Also delete productions directly linked to measurement
+      await supabase
+        .from('productions')
+        .delete()
+        .eq('measurement_id', measurementId);
+
+      // 3. Delete all measurement_services
+      await supabase
+        .from('measurement_services')
+        .delete()
+        .eq('measurement_id', measurementId);
+
+      // 4. Delete the measurement itself
+      const { error } = await supabase
+        .from('measurements')
+        .delete()
+        .eq('id', measurementId);
+
+      if (error) throw error;
+
+      // Update local state
+      setMeasurements(prev => prev.filter(m => m.id !== measurementId));
+      setMeasurementServices(prev => prev.filter(s => s.measurement_id !== measurementId));
+      setProductions(prev => prev.filter(p => p.measurement_id !== measurementId));
+      
+      return true;
+    } catch (error) {
+      console.error('Error deleting measurement:', error);
+      toast.error('Erro ao excluir medição');
+      return false;
+    }
+  }, [measurementServices]);
+
   // Get services for a specific measurement
   const getServicesForMeasurement = useCallback((measurementId: string): MeasurementService[] => {
     return measurementServices.filter(s => s.measurement_id === measurementId);
@@ -441,6 +499,7 @@ export function useMeasurements({ projectId }: UseMeasurementsOptions) {
     addServiceToMeasurement,
     updateServiceInMeasurement,
     deleteServiceFromMeasurement,
+    deleteMeasurement,
     registerProduction,
     deleteProduction,
     

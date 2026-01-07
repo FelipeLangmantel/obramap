@@ -241,9 +241,36 @@ export function WeeklyProductionView() {
     isLoading: isMeasurementsLoading
   } = useMeasurements({ projectId: currentProject?.id });
 
-  // Selected measurement from new system
+  // Selected measurement from new system - reset on project change
   const [selectedMeasurementNew, setSelectedMeasurementNew] = useState<MeasurementWithServices | null>(null);
   const [selectedServiceNew, setSelectedServiceNew] = useState<MeasurementService | null>(null);
+  
+  // Reset measurement selection when project changes or measurements reload
+  useEffect(() => {
+    setSelectedMeasurementNew(null);
+    setSelectedServiceNew(null);
+  }, [currentProject?.id]);
+  
+  // Validate selected measurement still exists after data reload
+  useEffect(() => {
+    if (selectedMeasurementNew && measurementsWithServices.length > 0) {
+      const stillExists = measurementsWithServices.find(m => m.id === selectedMeasurementNew.id);
+      if (!stillExists) {
+        setSelectedMeasurementNew(null);
+        setSelectedServiceNew(null);
+      } else {
+        // Update with fresh data
+        setSelectedMeasurementNew(stillExists);
+        // Validate selected service
+        if (selectedServiceNew) {
+          const serviceExists = stillExists.services.find(s => s.id === selectedServiceNew.id);
+          if (!serviceExists) {
+            setSelectedServiceNew(null);
+          }
+        }
+      }
+    }
+  }, [measurementsWithServices]);
 
   // Load productions and planned periods (legacy support)
   useEffect(() => {

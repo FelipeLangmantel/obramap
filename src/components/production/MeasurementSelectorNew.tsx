@@ -38,17 +38,22 @@ export function MeasurementSelectorNew({
   onAddUnplannedService,
   isLoading
 }: MeasurementSelectorNewProps) {
+  // Filter only valid measurements (in case of stale data)
+  const validMeasurements = useMemo(() => {
+    return measurements.filter(m => m && m.id);
+  }, [measurements]);
+
   // Services for selected measurement
   const servicesForMeasurement = useMemo(() => {
     if (!selectedMeasurement) return [];
-    return selectedMeasurement.services;
+    return selectedMeasurement.services || [];
   }, [selectedMeasurement]);
 
   // Stats for selected measurement
   const measurementStats = useMemo(() => {
     if (!selectedMeasurement) return null;
     
-    const totalServices = selectedMeasurement.servicesCount;
+    const totalServices = selectedMeasurement.servicesCount || 0;
     const registeredCount = servicesForMeasurement.filter(s => 
       registeredServiceIds.includes(s.id)
     ).length;
@@ -58,11 +63,25 @@ export function MeasurementSelectorNew({
       totalServices,
       registeredCount,
       pendingCount,
-      totalHouses: selectedMeasurement.totalHouses
+      totalHouses: selectedMeasurement.totalHouses || 0
     };
   }, [selectedMeasurement, servicesForMeasurement, registeredServiceIds]);
 
-  if (measurements.length === 0) {
+  // Show loading state or empty state
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center">
+          <div className="animate-pulse flex flex-col items-center">
+            <div className="h-12 w-12 bg-muted rounded-full mb-3" />
+            <div className="h-4 w-32 bg-muted rounded" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (validMeasurements.length === 0) {
     return (
       <Card className="border-dashed border-2">
         <CardContent className="p-6 text-center">
@@ -88,7 +107,7 @@ export function MeasurementSelectorNew({
         <Select
           value={selectedMeasurement?.id || ""}
           onValueChange={(value) => {
-            const measurement = measurements.find(m => m.id === value) || null;
+            const measurement = validMeasurements.find(m => m.id === value) || null;
             onMeasurementSelect(measurement);
             onServiceSelect(null);
           }}
@@ -98,7 +117,7 @@ export function MeasurementSelectorNew({
             <SelectValue placeholder="Selecione a medição..." />
           </SelectTrigger>
           <SelectContent>
-            {measurements.map(m => (
+            {validMeasurements.map(m => (
               <SelectItem key={m.id} value={m.id}>
                 <div className="flex items-center gap-3 py-1">
                   <Badge variant="default" className="text-xs">
