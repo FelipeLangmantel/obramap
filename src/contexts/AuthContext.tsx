@@ -314,8 +314,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isSystemAdmin = systemRole === "system_admin";
-  const isCompanyAdmin = systemRole === "admin";
-  const isAdmin = role === "admin" || isSystemAdmin;
+  // isCompanyAdmin: true se system_role="admin" OU se role legado="admin" (e não é system_admin)
+  const isCompanyAdmin = (systemRole === "admin") || (role === "admin" && systemRole !== "system_admin");
+  // isAdmin legacy: considera tanto system_role quanto role da tabela user_roles
+  const isAdmin = role === "admin" || systemRole === "admin" || isSystemAdmin;
   const isEditor = role === "editor";
   const canEdit = isAdmin || isEditor || isCompanyAdmin;
   const mustChangePassword = profile?.must_change_password || false;

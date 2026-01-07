@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,14 +21,39 @@ const passwordSchema = z.object({
 
 export default function ChangePassword() {
   const navigate = useNavigate();
-  const { updatePassword, isSystemAdmin, signOut } = useAuth();
+  const location = useLocation();
+  const { updatePassword, isSystemAdmin, signOut, session, user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Detectar se veio de link de recuperação de senha
+  useEffect(() => {
+    const hashParams = new URLSearchParams(location.hash.substring(1));
+    const type = hashParams.get('type');
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+    
+    if (type === 'recovery' && accessToken) {
+      setIsRecoveryMode(true);
+      // Estabelecer sessão com os tokens do link de recuperação
+      supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken || '',
+      }).then(({ error }) => {
+        if (error) {
+          console.error('Erro ao estabelecer sessão de recuperação:', error);
+          toast.error('Link de recuperação inválido ou expirado. Solicite um novo.');
+          navigate('/auth');
+        }
+      });
+    }
+  }, [location, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,9 +74,24 @@ export default function ChangePassword() {
         return;
       }
 
+      // Verificar se há sessão ativa
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      
+      if (!currentSession) {
+        toast.error("Sessão expirada. Por favor, faça login novamente ou solicite novo link de recuperação.");
+        navigate('/auth');
+        setIsLoading(false);
+        return;
+      }
+
       const { error } = await updatePassword(newPassword);
       if (error) {
-        toast.error("Erro ao alterar senha: " + error.message);
+        if (error.message.includes('Auth session missing')) {
+          toast.error("Sessão expirada. Por favor, solicite um novo link de recuperação.");
+          navigate('/auth');
+        } else {
+          toast.error("Erro ao alterar senha: " + error.message);
+        }
       } else {
         toast.success("Senha alterada com sucesso!");
         // Redirecionar baseado no papel

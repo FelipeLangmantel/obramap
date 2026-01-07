@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ const loginSchema = z.object({
 
 export default function Auth() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, signIn, isLoading: authLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -26,6 +27,19 @@ export default function Auth() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const { mustChangePassword, isSystemAdmin } = useAuth();
+
+  // Detectar se veio de link de recuperação e redirecionar
+  useEffect(() => {
+    const hashParams = new URLSearchParams(location.hash.substring(1));
+    const type = hashParams.get('type');
+    const accessToken = hashParams.get('access_token');
+    
+    if (type === 'recovery' && accessToken) {
+      // Redirecionar para change-password mantendo os parâmetros do hash
+      navigate(`/change-password${location.hash}`);
+      return;
+    }
+  }, [location, navigate]);
 
   useEffect(() => {
     if (user && !authLoading) {
