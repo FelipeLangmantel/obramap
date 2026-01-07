@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { SystemSetupWizard, OrphanDataCounts } from './SystemSetupWizard';
 import { Loader2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SystemSetupCheckProps {
   children: React.ReactNode;
@@ -13,10 +15,16 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
   const [needsAdmin, setNeedsAdmin] = useState(false);
   const [hasOrphanData, setHasOrphanData] = useState(false);
   const [orphanCounts, setOrphanCounts] = useState<OrphanDataCounts | null>(null);
+  const { user, isSystemAdmin, isLoading: authLoading } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
+    // Wait for auth to finish loading
+    if (authLoading) return;
+    
     checkSystemStatus();
-  }, []);
+  }, [authLoading, user, isSystemAdmin]);
 
   const checkSystemStatus = async () => {
     try {
@@ -30,7 +38,27 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
         setNeedsAdmin(!adminExists);
       }
 
-      // Check for orphan data
+      // If admin exists and current user is system admin, redirect to dashboard
+      if (adminExists && user && isSystemAdmin) {
+        // Only redirect if not already on admin routes
+        if (!location.pathname.startsWith('/admin')) {
+          navigate('/admin/dashboard', { replace: true });
+          return;
+        }
+        // Admin exists and user is system admin - no setup needed
+        setNeedsSetup(false);
+        setIsLoading(false);
+        return;
+      }
+
+      // If admin exists but user is not system admin, no setup needed
+      if (adminExists) {
+        setNeedsSetup(false);
+        setIsLoading(false);
+        return;
+      }
+
+      // Check for orphan data only if admin doesn't exist
       const { data: orphanData, error: orphanError } = await supabase.rpc('get_orphan_data_counts');
       if (orphanError) {
         console.error('Error checking orphan data:', orphanError);
@@ -40,9 +68,8 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
         setHasOrphanData(counts.has_orphan_data);
       }
 
-      // Determine if setup is needed
-      const orphanCounts = orphanData as unknown as OrphanDataCounts | null;
-      setNeedsSetup(!adminExists || orphanCounts?.has_orphan_data);
+      // Setup is needed only if no admin exists
+      setNeedsSetup(true);
     } catch (error) {
       console.error('Error checking system status:', error);
       // On error, show the setup wizard
@@ -59,7 +86,7 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
     window.location.href = '/auth';
   };
 
-  if (isLoading) {
+  if (isLoading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -70,7 +97,7 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
     );
   }
 
-  if (needsSetup) {
+  if (needsSetup && needsAdmin) {
     return (
       <SystemSetupWizard
         onComplete={handleSetupComplete}
