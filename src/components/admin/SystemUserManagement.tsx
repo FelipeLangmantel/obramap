@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
@@ -20,21 +21,35 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Plus, Users, Search, KeyRound, UserX, UserCheck, Copy } from "lucide-react";
+import { 
+  Loader2, 
+  Plus, 
+  Users, 
+  Search, 
+  KeyRound, 
+  UserX, 
+  UserCheck, 
+  Copy, 
+  Building2, 
+  ChevronRight, 
+  ChevronDown,
+  Shield,
+  User as UserIcon,
+  Trash2,
+  Pencil
+} from "lucide-react";
 import { z } from "zod";
 
 interface Company {
   id: string;
   name: string;
+  slug: string;
 }
 
 interface UserProfile {
@@ -47,7 +62,10 @@ interface UserProfile {
   system_role: string;
   must_change_password: boolean;
   created_at: string;
-  company?: Company;
+}
+
+interface CompanyWithUsers extends Company {
+  users: UserProfile[];
 }
 
 const userSchema = z.object({
@@ -58,13 +76,17 @@ const userSchema = z.object({
 });
 
 export default function SystemUserManagement() {
-  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [companiesWithUsers, setCompaniesWithUsers] = useState<CompanyWithUsers[]>([]);
+  const [orphanUsers, setOrphanUsers] = useState<UserProfile[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   
   const [formData, setFormData] = useState({
     display_name: "",
@@ -83,24 +105,49 @@ export default function SystemUserManagement() {
           .order("display_name"),
         supabase
           .from("companies")
-          .select("id, name")
+          .select("id, name, slug")
           .order("name"),
       ]);
 
       if (usersResult.error) throw usersResult.error;
       if (companiesResult.error) throw companiesResult.error;
 
-      // Map users with companies
-      const usersWithCompany = (usersResult.data || []).map((user) => ({
+      const users = (usersResult.data || []).map((user) => ({
         ...user,
         status: (user as any).status || 'active',
         system_role: (user as any).system_role || 'user',
         must_change_password: (user as any).must_change_password || false,
-        company: companiesResult.data?.find((c) => c.id === user.company_id),
       })) as UserProfile[];
 
-      setUsers(usersWithCompany);
-      setCompanies(companiesResult.data || []);
+      const companiesData = companiesResult.data || [];
+      setCompanies(companiesData);
+
+      // Organizar usuários por empresa
+      const companiesMap = new Map<string, CompanyWithUsers>();
+      companiesData.forEach((company) => {
+        companiesMap.set(company.id, { ...company, users: [] });
+      });
+
+      const orphans: UserProfile[] = [];
+      users.forEach((user) => {
+        // Ignorar SYSTEM_ADMIN (não aparece agrupado em empresa)
+        if (user.system_role === 'system_admin') {
+          orphans.push(user);
+          return;
+        }
+
+        if (user.company_id && companiesMap.has(user.company_id)) {
+          companiesMap.get(user.company_id)!.users.push(user);
+        } else {
+          orphans.push(user);
+        }
+      });
+
+      setCompaniesWithUsers(Array.from(companiesMap.values()));
+      setOrphanUsers(orphans);
+
+      // Expandir todas as empresas por padrão
+      setExpandedCompanies(new Set(companiesData.map(c => c.id)));
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("Erro ao carregar dados");
@@ -157,48 +204,35 @@ export default function SystemUserManagement() {
       // Gerar senha temporária
       const password = generateTempPassword();
 
-      // Criar usuário no Auth
-      const { data: authData, error: authError } = await supabase.auth.admin?.createUser?.({
+      // Usar signup normal
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email.trim().toLowerCase(),
         password: password,
-        email_confirm: true,
-        user_metadata: {
-          display_name: formData.display_name.trim(),
-        },
-      }) || { data: null, error: new Error("Admin API não disponível") };
-
-      // Se não tiver admin API, usar signup normal
-      if (authError || !authData) {
-        // Usar signup normal como fallback
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: formData.email.trim().toLowerCase(),
-          password: password,
-          options: {
-            data: {
-              display_name: formData.display_name.trim(),
-            },
+        options: {
+          data: {
+            display_name: formData.display_name.trim(),
           },
-        });
+        },
+      });
 
-        if (signUpError) throw signUpError;
-        if (!signUpData.user) throw new Error("Falha ao criar usuário");
+      if (signUpError) throw signUpError;
+      if (!signUpData.user) throw new Error("Falha ao criar usuário");
 
-        // Aguardar um pouco para o trigger criar o profile
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Aguardar um pouco para o trigger criar o profile
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        // Atualizar o profile com os dados corretos
-        const { error: updateError } = await supabase
-          .from("profiles")
-          .update({
-            company_id: formData.company_id,
-            system_role: formData.system_role,
-            must_change_password: true,
-            status: 'active',
-          } as any)
-          .eq("user_id", signUpData.user.id);
+      // Atualizar o profile com os dados corretos
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({
+          company_id: formData.company_id,
+          system_role: formData.system_role,
+          must_change_password: true,
+          status: 'active',
+        } as any)
+        .eq("user_id", signUpData.user.id);
 
-        if (updateError) throw updateError;
-      }
+      if (updateError) throw updateError;
 
       setTempPassword(password);
       toast.success("Usuário criado com sucesso!");
@@ -230,21 +264,17 @@ export default function SystemUserManagement() {
   };
 
   const handleResetPassword = async (user: UserProfile) => {
-    if (!confirm(`Deseja gerar uma nova senha temporária para ${user.display_name}?`)) {
+    if (!confirm(`Deseja enviar email de redefinição de senha para ${user.display_name}?`)) {
       return;
     }
 
     try {
-      const password = generateTempPassword();
-
-      // Usar a API de reset (envia email)
       const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
         redirectTo: `${window.location.origin}/change-password`,
       });
 
       if (error) throw error;
 
-      // Marcar que precisa trocar senha
       await supabase
         .from("profiles")
         .update({ must_change_password: true } as any)
@@ -257,6 +287,73 @@ export default function SystemUserManagement() {
     }
   };
 
+  const handleDeleteUser = async (user: UserProfile) => {
+    if (user.system_role === 'system_admin') {
+      toast.error("Não é possível excluir um SYSTEM_ADMIN");
+      return;
+    }
+
+    if (!confirm(`Tem certeza que deseja excluir ${user.display_name}? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .delete()
+        .eq("id", user.id);
+
+      if (error) throw error;
+      toast.success("Usuário excluído com sucesso!");
+      fetchData();
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      toast.error("Erro ao excluir usuário");
+    }
+  };
+
+  const handleEditUser = (user: UserProfile) => {
+    setEditingUser(user);
+    setFormData({
+      display_name: user.display_name,
+      email: user.email,
+      company_id: user.company_id || "",
+      system_role: user.system_role as "admin" | "user",
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+
+    setErrors({});
+    setIsSubmitting(true);
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          display_name: formData.display_name.trim(),
+          company_id: formData.company_id || null,
+          system_role: formData.system_role,
+        } as any)
+        .eq("id", editingUser.id);
+
+      if (error) throw error;
+
+      toast.success("Usuário atualizado com sucesso!");
+      setIsEditDialogOpen(false);
+      setEditingUser(null);
+      fetchData();
+    } catch (error: any) {
+      console.error("Error updating user:", error);
+      toast.error(error.message || "Erro ao atualizar usuário");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       display_name: "",
@@ -266,6 +363,7 @@ export default function SystemUserManagement() {
     });
     setErrors({});
     setTempPassword(null);
+    setEditingUser(null);
   };
 
   const copyToClipboard = (text: string) => {
@@ -273,21 +371,44 @@ export default function SystemUserManagement() {
     toast.success("Copiado para a área de transferência!");
   };
 
-  const filteredUsers = users.filter(
-    (u) =>
-      u.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.company?.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const toggleCompany = (companyId: string) => {
+    setExpandedCompanies(prev => {
+      const next = new Set(prev);
+      if (next.has(companyId)) {
+        next.delete(companyId);
+      } else {
+        next.add(companyId);
+      }
+      return next;
+    });
+  };
+
+  const filteredCompaniesWithUsers = companiesWithUsers
+    .map(company => ({
+      ...company,
+      users: company.users.filter(u => 
+        u.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.email.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    }))
+    .filter(company => 
+      company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      company.users.length > 0
+    );
+
+  const filteredOrphanUsers = orphanUsers.filter(u =>
+    u.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getRoleBadge = (role: string) => {
     switch (role) {
       case "system_admin":
-        return <Badge variant="destructive">System Admin</Badge>;
+        return <Badge variant="destructive" className="gap-1"><Shield className="h-3 w-3" />System Admin</Badge>;
       case "admin":
-        return <Badge variant="default">Admin</Badge>;
+        return <Badge className="bg-primary/20 text-primary gap-1"><Shield className="h-3 w-3" />Administrador</Badge>;
       default:
-        return <Badge variant="secondary">Usuário</Badge>;
+        return <Badge variant="secondary" className="gap-1"><UserIcon className="h-3 w-3" />Usuário</Badge>;
     }
   };
 
@@ -302,6 +423,72 @@ export default function SystemUserManagement() {
       </Badge>
     );
   };
+
+  const UserRow = ({ user }: { user: UserProfile }) => (
+    <div className="flex items-center justify-between py-3 px-4 hover:bg-muted/50 border-b last:border-b-0">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+          <UserIcon className="h-4 w-4 text-primary" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="font-medium truncate">{user.display_name}</span>
+            {user.must_change_password && (
+              <Badge variant="outline" className="text-xs shrink-0">Senha temp.</Badge>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        {getRoleBadge(user.system_role)}
+        {getStatusBadge(user.status)}
+        <div className="flex items-center gap-1">
+          {user.system_role !== 'system_admin' && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleEditUser(user)}
+                title="Editar usuário"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleResetPassword(user)}
+                title="Redefinir senha"
+              >
+                <KeyRound className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleToggleStatus(user)}
+                title={user.status === "active" ? "Desativar" : "Ativar"}
+              >
+                {user.status === "active" ? (
+                  <UserX className="h-4 w-4 text-destructive" />
+                ) : (
+                  <UserCheck className="h-4 w-4 text-green-600" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleDeleteUser(user)}
+                title="Excluir usuário"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   if (isLoading) {
     return (
@@ -319,8 +506,13 @@ export default function SystemUserManagement() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Usuários</CardTitle>
-              <CardDescription>Gerencie os usuários do sistema</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Usuários por Empresa
+              </CardTitle>
+              <CardDescription>
+                Gerencie os usuários do sistema organizados por empresa
+              </CardDescription>
             </div>
             <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
               <Plus className="h-4 w-4 mr-2" />
@@ -333,7 +525,7 @@ export default function SystemUserManagement() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar usuários..."
+                placeholder="Buscar usuários ou empresas..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -341,76 +533,82 @@ export default function SystemUserManagement() {
             </div>
           </div>
 
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Empresa</TableHead>
-                  <TableHead>Perfil</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-[120px]">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredUsers.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground">
-                      Nenhum usuário encontrado
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4 text-muted-foreground" />
-                          {user.display_name}
-                          {user.must_change_password && (
-                            <Badge variant="outline" className="text-xs">
-                              Senha temp.
-                            </Badge>
+          <ScrollArea className="h-[500px]">
+            <div className="space-y-3">
+              {filteredCompaniesWithUsers.map((company) => (
+                <Collapsible
+                  key={company.id}
+                  open={expandedCompanies.has(company.id)}
+                  onOpenChange={() => toggleCompany(company.id)}
+                >
+                  <div className="rounded-lg border">
+                    <CollapsibleTrigger className="w-full">
+                      <div className="flex items-center justify-between p-4 hover:bg-muted/50">
+                        <div className="flex items-center gap-3">
+                          {expandedCompanies.has(company.id) ? (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
                           )}
+                          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <Building2 className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="text-left">
+                            <h3 className="font-semibold">{company.name}</h3>
+                            <p className="text-sm text-muted-foreground">
+                              {company.users.length} usuário{company.users.length !== 1 ? 's' : ''}
+                            </p>
+                          </div>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{user.email}</TableCell>
-                      <TableCell>{user.company?.name || "-"}</TableCell>
-                      <TableCell>{getRoleBadge(user.system_role)}</TableCell>
-                      <TableCell>{getStatusBadge(user.status)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleResetPassword(user)}
-                            title="Redefinir senha"
-                          >
-                            <KeyRound className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleToggleStatus(user)}
-                            title={user.status === "active" ? "Desativar" : "Ativar"}
-                          >
-                            {user.status === "active" ? (
-                              <UserX className="h-4 w-4 text-destructive" />
-                            ) : (
-                              <UserCheck className="h-4 w-4 text-green-600" />
-                            )}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                        <Badge variant="outline">{company.slug}</Badge>
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="border-t">
+                        {company.users.length === 0 ? (
+                          <div className="py-6 text-center text-muted-foreground text-sm">
+                            Nenhum usuário nesta empresa
+                          </div>
+                        ) : (
+                          company.users.map((user) => (
+                            <UserRow key={user.id} user={user} />
+                          ))
+                        )}
+                      </div>
+                    </CollapsibleContent>
+                  </div>
+                </Collapsible>
+              ))}
+
+              {/* Usuários sem empresa (System Admins e órfãos) */}
+              {filteredOrphanUsers.length > 0 && (
+                <div className="rounded-lg border border-dashed">
+                  <div className="p-4 border-b">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                        <Shield className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold">Administradores do Sistema</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Usuários com acesso global à plataforma
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    {filteredOrphanUsers.map((user) => (
+                      <UserRow key={user.id} user={user} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
         </CardContent>
       </Card>
 
+      {/* Dialog de Novo Usuário */}
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
         <DialogContent>
           <DialogHeader>
@@ -498,7 +696,7 @@ export default function SystemUserManagement() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="system_role">Perfil *</Label>
+                <Label htmlFor="system_role">Perfil na Empresa *</Label>
                 <Select
                   value={formData.system_role}
                   onValueChange={(value: "admin" | "user") => setFormData({ ...formData, system_role: value })}
@@ -507,8 +705,8 @@ export default function SystemUserManagement() {
                     <SelectValue placeholder="Selecione o perfil" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="admin">Admin (Administrador da empresa)</SelectItem>
-                    <SelectItem value="user">Usuário (Acesso normal)</SelectItem>
+                    <SelectItem value="admin">Administrador (gerencia a empresa)</SelectItem>
+                    <SelectItem value="user">Usuário (acesso padrão)</SelectItem>
                   </SelectContent>
                 </Select>
                 {errors.system_role && (
@@ -527,6 +725,75 @@ export default function SystemUserManagement() {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Editar Usuário */}
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => { setIsEditDialogOpen(open); if (!open) resetForm(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Usuário</DialogTitle>
+            <DialogDescription>
+              Altere os dados do usuário {editingUser?.email}
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleUpdateUser} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit_display_name">Nome Completo *</Label>
+              <Input
+                id="edit_display_name"
+                value={formData.display_name}
+                onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
+                placeholder="Nome do usuário"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit_company_id">Empresa</Label>
+              <Select
+                value={formData.company_id}
+                onValueChange={(value) => setFormData({ ...formData, company_id: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione uma empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {companies.map((company) => (
+                    <SelectItem key={company.id} value={company.id}>
+                      {company.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit_system_role">Perfil na Empresa *</Label>
+              <Select
+                value={formData.system_role}
+                onValueChange={(value: "admin" | "user") => setFormData({ ...formData, system_role: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o perfil" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Administrador (gerencia a empresa)</SelectItem>
+                  <SelectItem value="user">Usuário (acesso padrão)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Salvar Alterações
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </>
