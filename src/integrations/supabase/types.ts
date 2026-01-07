@@ -109,6 +109,7 @@ export type Database = {
           id: string
           logo_url: string | null
           name: string
+          slug: string
           updated_at: string
         }
         Insert: {
@@ -117,6 +118,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name: string
+          slug: string
           updated_at?: string
         }
         Update: {
@@ -125,6 +127,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name?: string
+          slug?: string
           updated_at?: string
         }
         Relationships: []
@@ -1286,6 +1289,9 @@ export type Database = {
           display_name: string
           email: string
           id: string
+          must_change_password: boolean | null
+          status: string | null
+          system_role: Database["public"]["Enums"]["system_role"] | null
           updated_at: string
           user_id: string
         }
@@ -1295,6 +1301,9 @@ export type Database = {
           display_name: string
           email: string
           id?: string
+          must_change_password?: boolean | null
+          status?: string | null
+          system_role?: Database["public"]["Enums"]["system_role"] | null
           updated_at?: string
           user_id: string
         }
@@ -1304,6 +1313,9 @@ export type Database = {
           display_name?: string
           email?: string
           id?: string
+          must_change_password?: boolean | null
+          status?: string | null
+          system_role?: Database["public"]["Enums"]["system_role"] | null
           updated_at?: string
           user_id?: string
         }
@@ -1311,6 +1323,7 @@ export type Database = {
       }
       projects: {
         Row: {
+          company_id: string | null
           contractor: string
           created_at: string
           custom_legend_items: Json
@@ -1331,6 +1344,7 @@ export type Database = {
           weight_mode: string
         }
         Insert: {
+          company_id?: string | null
           contractor: string
           created_at?: string
           custom_legend_items?: Json
@@ -1351,6 +1365,7 @@ export type Database = {
           weight_mode?: string
         }
         Update: {
+          company_id?: string | null
           contractor?: string
           created_at?: string
           custom_legend_items?: Json
@@ -1370,7 +1385,15 @@ export type Database = {
           updated_at?: string
           weight_mode?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       purchase_order_items: {
         Row: {
@@ -2067,6 +2090,9 @@ export type Database = {
     }
     Functions: {
       admin_exists: { Args: never; Returns: boolean }
+      generate_temp_password: { Args: never; Returns: string }
+      generate_unique_slug: { Args: { company_name: string }; Returns: string }
+      get_user_company_id: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -2076,6 +2102,19 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_company_admin: {
+        Args: { _company_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_system_admin: { Args: { _user_id: string }; Returns: boolean }
+      user_belongs_to_company: {
+        Args: { _company_id: string; _user_id: string }
+        Returns: boolean
+      }
+      user_must_change_password: {
+        Args: { _user_id: string }
         Returns: boolean
       }
     }
@@ -2094,6 +2133,7 @@ export type Database = {
         | "em_execucao"
         | "aguardando_validacao"
         | "encerrada"
+      system_role: "system_admin" | "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2237,6 +2277,7 @@ export const Constants = {
         "aguardando_validacao",
         "encerrada",
       ],
+      system_role: ["system_admin", "admin", "user"],
     },
   },
 } as const
