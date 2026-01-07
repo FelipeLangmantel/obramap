@@ -3,6 +3,7 @@ import { House, Macro, Scope, Quadra, MACROS_TEMPLATE, calculateHouseProgress, D
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 export interface LegendItem {
   id: string;
@@ -122,6 +123,7 @@ const jsonToMacros = (json: Json): Macro[] => {
 const FILTER_STORAGE_KEY = "obramap_main_filters";
 
 export function ConstructionProvider({ children }: { children: ReactNode }) {
+  const { profile } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
@@ -392,6 +394,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         project_type: projectData.projectType,
         macros_template: macrosToJson(macrosTemplate),
         setup_complete: false,
+        company_id: profile?.company_id || null,
       })
       .select()
       .single();
