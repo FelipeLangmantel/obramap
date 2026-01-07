@@ -2123,6 +2123,7 @@ export type Database = {
         Args: { target_company_id: string }
         Returns: Json
       }
+      promote_to_system_admin: { Args: { admin_email: string }; Returns: Json }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean

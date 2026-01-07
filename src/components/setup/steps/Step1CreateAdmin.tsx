@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
-import { Shield, AlertTriangle, CheckCircle2, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Shield, AlertTriangle, CheckCircle2, Loader2, Eye, EyeOff, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Step1CreateAdminProps {
@@ -29,8 +29,17 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [wasPromoted, setWasPromoted] = useState(false);
 
   const validateForm = () => {
+    if (!formData.email.trim() || !formData.email.includes('@')) {
+      setError('E-mail válido é obrigatório');
+      return false;
+    }
+    return true;
+  };
+
+  const validateFormForNewUser = () => {
     if (!formData.fullName.trim()) {
       setError('Nome completo é obrigatório');
       return false;
@@ -50,6 +59,25 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
     return true;
   };
 
+  const tryPromoteExistingUser = async (): Promise<{ success: boolean; userId?: string }> => {
+    const { data, error: rpcError } = await supabase.rpc('promote_to_system_admin', {
+      admin_email: formData.email
+    });
+
+    if (rpcError) {
+      console.error('Error promoting user:', rpcError);
+      return { success: false };
+    }
+
+    const result = data as { success: boolean; user_id?: string; error?: string; code?: string };
+    
+    if (result.success && result.user_id) {
+      return { success: true, userId: result.user_id };
+    }
+
+    return { success: false };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -59,7 +87,25 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
     setIsLoading(true);
 
     try {
-      // 1. Create the user in Supabase Auth
+      // First, try to promote existing user
+      const promoteResult = await tryPromoteExistingUser();
+      
+      if (promoteResult.success && promoteResult.userId) {
+        // User existed and was promoted
+        setWasPromoted(true);
+        setSuccess(true);
+        toast.success('Usuário existente promovido para SYSTEM_ADMIN com sucesso!');
+        onAdminCreated(promoteResult.userId);
+        return;
+      }
+
+      // User doesn't exist, validate full form for new user creation
+      if (!validateFormForNewUser()) {
+        setIsLoading(false);
+        return;
+      }
+
+      // Create new user
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -71,10 +117,19 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
         }
       });
 
-      if (signUpError) throw signUpError;
+      if (signUpError) {
+        // Check if user already exists error
+        if (signUpError.message.includes('already registered') || signUpError.message.includes('already been registered')) {
+          setError('Usuário já existe mas não foi encontrado no sistema. Entre em contato com suporte.');
+        } else {
+          throw signUpError;
+        }
+        return;
+      }
+      
       if (!authData.user) throw new Error('Falha ao criar usuário');
 
-      // 2. Update the profile to be a system_admin using the RPC function
+      // Update the profile to be a system_admin using the RPC function
       const { error: rpcError } = await supabase.rpc('create_system_admin', {
         admin_user_id: authData.user.id,
         admin_email: formData.email,
@@ -99,15 +154,22 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
       <div className="space-y-6 text-center py-8">
         <div className="flex justify-center">
           <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
-            <CheckCircle2 className="h-10 w-10 text-green-600" />
+            {wasPromoted ? (
+              <UserCheck className="h-10 w-10 text-green-600" />
+            ) : (
+              <CheckCircle2 className="h-10 w-10 text-green-600" />
+            )}
           </div>
         </div>
         <div>
           <h3 className="text-xl font-semibold text-foreground">
-            SYSTEM_ADMIN Criado com Sucesso!
+            {wasPromoted ? 'Usuário Promovido com Sucesso!' : 'SYSTEM_ADMIN Criado com Sucesso!'}
           </h3>
           <p className="text-muted-foreground mt-2">
-            O administrador do sistema foi configurado e já pode gerenciar o ObraMap.
+            {wasPromoted 
+              ? 'Usuário existente encontrado. Papel atualizado para SYSTEM_ADMIN com sucesso.'
+              : 'O administrador do sistema foi configurado e já pode gerenciar o ObraMap.'
+            }
           </p>
         </div>
         <Button onClick={onNext} className="gap-2">
@@ -129,9 +191,32 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
         </AlertDescription>
       </Alert>
 
+      <Alert className="border-blue-500/50 bg-blue-50 dark:bg-blue-950/20">
+        <UserCheck className="h-4 w-4 text-blue-600" />
+        <AlertDescription className="text-blue-800 dark:text-blue-200">
+          <strong>Dica:</strong> Se você informar um e-mail de usuário já existente, 
+          ele será automaticamente promovido para SYSTEM_ADMIN sem criar registro duplicado.
+        </AlertDescription>
+      </Alert>
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="fullName">Nome Completo</Label>
+          <Label htmlFor="email">E-mail</Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="admin@empresa.com"
+            value={formData.email}
+            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+            disabled={isLoading}
+          />
+          <p className="text-xs text-muted-foreground">
+            Informe o e-mail. Se o usuário já existir, será promovido automaticamente.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="fullName">Nome Completo <span className="text-muted-foreground">(apenas para novos usuários)</span></Label>
           <Input
             id="fullName"
             type="text"
@@ -143,19 +228,7 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="email">E-mail</Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="admin@empresa.com"
-            value={formData.email}
-            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-            disabled={isLoading}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="password">Senha</Label>
+          <Label htmlFor="password">Senha <span className="text-muted-foreground">(apenas para novos usuários)</span></Label>
           <div className="relative">
             <Input
               id="password"
@@ -178,7 +251,7 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+          <Label htmlFor="confirmPassword">Confirmar Senha <span className="text-muted-foreground">(apenas para novos usuários)</span></Label>
           <div className="relative">
             <Input
               id="confirmPassword"
@@ -211,12 +284,12 @@ export const Step1CreateAdmin: React.FC<Step1CreateAdminProps> = ({
           {isLoading ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Criando...
+              Processando...
             </>
           ) : (
             <>
               <Shield className="h-4 w-4" />
-              Criar SYSTEM_ADMIN e Continuar
+              Criar ou Promover SYSTEM_ADMIN
             </>
           )}
         </Button>
