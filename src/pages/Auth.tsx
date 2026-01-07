@@ -25,11 +25,19 @@ export default function Auth() {
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const { mustChangePassword, isSystemAdmin } = useAuth();
+
   useEffect(() => {
     if (user && !authLoading) {
-      navigate("/");
+      if (mustChangePassword) {
+        navigate("/change-password");
+      } else if (isSystemAdmin) {
+        navigate("/admin");
+      } else {
+        navigate("/");
+      }
     }
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, mustChangePassword, isSystemAdmin, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

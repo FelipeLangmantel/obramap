@@ -2,13 +2,24 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-export type AppRole = "admin" | "editor" | "viewer";
+export type SystemRole = "system_admin" | "admin" | "user";
+export type AppRole = "admin" | "editor" | "viewer"; // Legacy - para compatibilidade
+
+interface Company {
+  id: string;
+  name: string;
+  slug: string;
+}
 
 interface Profile {
   id: string;
   user_id: string;
   display_name: string;
   email: string;
+  company_id: string | null;
+  status: string;
+  must_change_password: boolean;
+  system_role: SystemRole;
 }
 
 interface UserPermission {
@@ -24,12 +35,17 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
-  role: AppRole | null;
+  company: Company | null;
+  systemRole: SystemRole | null;
+  role: AppRole | null; // Legacy
   permissions: UserPermission | null;
   isLoading: boolean;
-  isAdmin: boolean;
-  isEditor: boolean;
+  isSystemAdmin: boolean;
+  isCompanyAdmin: boolean;
+  isAdmin: boolean; // Legacy
+  isEditor: boolean; // Legacy
   canEdit: boolean;
+  mustChangePassword: boolean;
   canAccessMenu: (menuId: string) => boolean;
   canAccessManagement: (sectionId: string) => boolean;
   canAccessProject: (projectId: string) => boolean;
@@ -37,6 +53,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,24 +65,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [company, setCompany] = useState<Company | null>(null);
+  const [systemRole, setSystemRole] = useState<SystemRole | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
   const [permissions, setPermissions] = useState<UserPermission | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUserData = useCallback(async (userId: string) => {
     try {
-      // Fetch profile
-      const { data: profileData } = await supabase
+      // Fetch profile with new fields
+      const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select("*")
         .eq("user_id", userId)
         .single();
 
-      if (profileData) {
-        setProfile(profileData);
+      if (profileError) {
+        console.error("Error fetching profile:", profileError);
+        return;
       }
 
-      // Fetch role using RPC
+      if (profileData) {
+        const typedProfile: Profile = {
+          id: profileData.id,
+          user_id: profileData.user_id,
+          display_name: profileData.display_name,
+          email: profileData.email,
+          company_id: profileData.company_id,
+          status: (profileData as any).status || 'active',
+          must_change_password: (profileData as any).must_change_password || false,
+          system_role: (profileData as any).system_role || 'user',
+        };
+        setProfile(typedProfile);
+        setSystemRole(typedProfile.system_role);
+
+        // Fetch company if user has company_id
+        if (typedProfile.company_id) {
+          const { data: companyData } = await supabase
+            .from("companies")
+            .select("id, name, slug")
+            .eq("id", typedProfile.company_id)
+            .single();
+
+          if (companyData) {
+            setCompany(companyData);
+          }
+        }
+      }
+
+      // Fetch legacy role using RPC (para compatibilidade)
       const { data: roleData } = await supabase.rpc("get_user_role", {
         _user_id: userId,
       });
@@ -91,7 +139,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           visible_management_sections: (permData.visible_management_sections as string[]) || DEFAULT_MANAGEMENT,
         });
       } else {
-        // No permissions set = full access
         setPermissions(null);
       }
     } catch (error) {
@@ -106,32 +153,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.id, fetchUserData]);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
 
-        // Defer Supabase calls with setTimeout to prevent deadlock
         if (session?.user) {
           setTimeout(() => {
             fetchUserData(session.user.id);
           }, 0);
         } else {
           setProfile(null);
+          setCompany(null);
+          setSystemRole(null);
           setRole(null);
           setPermissions(null);
         }
 
         if (event === "SIGNED_OUT") {
           setProfile(null);
+          setCompany(null);
+          setSystemRole(null);
           setRole(null);
           setPermissions(null);
         }
       }
     );
 
-    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -162,8 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           table: 'user_permissions',
           filter: `user_id=eq.${user.id}`,
         },
-        (payload) => {
-          console.log('Permissions changed:', payload);
+        () => {
           refreshPermissions();
         }
       )
@@ -172,11 +219,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         {
           event: '*',
           schema: 'public',
-          table: 'user_roles',
+          table: 'profiles',
           filter: `user_id=eq.${user.id}`,
         },
-        (payload) => {
-          console.log('Role changed:', payload);
+        () => {
           refreshPermissions();
         }
       )
@@ -193,12 +239,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
     });
     
-    // Register session on successful login
     if (!error && data.user) {
       try {
         await supabase.from("user_sessions").insert({
           user_id: data.user.id,
-          ip_address: null, // Could be fetched from an external service if needed
+          ip_address: null,
           user_agent: navigator.userAgent,
           is_active: true,
         });
@@ -227,7 +272,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    // Mark current session as inactive before signing out
     if (user?.id) {
       try {
         await supabase
@@ -244,33 +288,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setSession(null);
     setProfile(null);
+    setCompany(null);
+    setSystemRole(null);
     setRole(null);
     setPermissions(null);
   };
 
-  const isAdmin = role === "admin";
-  const isEditor = role === "editor";
-  const canEdit = isAdmin || isEditor;
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
 
-  // Permission check functions
+    if (!error && user?.id) {
+      // Atualizar flag must_change_password
+      await supabase
+        .from("profiles")
+        .update({ must_change_password: false } as any)
+        .eq("user_id", user.id);
+      
+      // Refresh profile
+      await fetchUserData(user.id);
+    }
+
+    return { error };
+  };
+
+  const isSystemAdmin = systemRole === "system_admin";
+  const isCompanyAdmin = systemRole === "admin";
+  const isAdmin = role === "admin" || isSystemAdmin;
+  const isEditor = role === "editor";
+  const canEdit = isAdmin || isEditor || isCompanyAdmin;
+  const mustChangePassword = profile?.must_change_password || false;
+
   const canAccessMenu = useCallback((menuId: string): boolean => {
-    if (isAdmin) return true; // Admins have full access
-    if (!permissions) return true; // No permissions set = full access
+    if (isSystemAdmin) return false; // System admin não acessa menus da empresa
+    if (isCompanyAdmin) return true;
+    if (!permissions) return true;
     return permissions.visible_menus.includes(menuId);
-  }, [isAdmin, permissions]);
+  }, [isSystemAdmin, isCompanyAdmin, permissions]);
 
   const canAccessManagement = useCallback((sectionId: string): boolean => {
-    if (isAdmin) return true; // Admins have full access
-    if (!permissions) return true; // No permissions set = full access
+    if (isSystemAdmin) return false;
+    if (isCompanyAdmin) return true;
+    if (!permissions) return true;
     return permissions.visible_management_sections.includes(sectionId);
-  }, [isAdmin, permissions]);
+  }, [isSystemAdmin, isCompanyAdmin, permissions]);
 
   const canAccessProject = useCallback((projectId: string): boolean => {
-    if (isAdmin) return true; // Admins have full access
-    if (!permissions) return true; // No permissions set = full access
-    if (!permissions.allowed_project_ids || permissions.allowed_project_ids.length === 0) return true; // No restriction
+    if (isSystemAdmin) return false;
+    if (isCompanyAdmin) return true;
+    if (!permissions) return true;
+    if (!permissions.allowed_project_ids || permissions.allowed_project_ids.length === 0) return true;
     return permissions.allowed_project_ids.includes(projectId);
-  }, [isAdmin, permissions]);
+  }, [isSystemAdmin, isCompanyAdmin, permissions]);
 
   return (
     <AuthContext.Provider
@@ -278,12 +348,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         session,
         profile,
+        company,
+        systemRole,
         role,
         permissions,
         isLoading,
+        isSystemAdmin,
+        isCompanyAdmin,
         isAdmin,
         isEditor,
         canEdit,
+        mustChangePassword,
         canAccessMenu,
         canAccessManagement,
         canAccessProject,
@@ -291,6 +366,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signUp,
         signOut,
+        updatePassword,
       }}
     >
       {children}
