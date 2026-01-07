@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
-export type SystemRole = "system_admin" | "admin" | "user";
+export type SystemRole = "system_admin" | "admin" | "editor" | "user";
 export type AppRole = "admin" | "editor" | "viewer"; // Legacy - para compatibilidade
 
 interface Company {

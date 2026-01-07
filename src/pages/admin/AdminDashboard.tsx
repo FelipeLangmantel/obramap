@@ -1,15 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "sonner";
-import { Loader2, Building2, Users, LogOut, Plus, Settings } from "lucide-react";
+import { Loader2, Building2, Users, LogOut, Package } from "lucide-react";
 import obraMapLogo from "@/assets/obramap-logo-new.png";
 import CompanyManagement from "@/components/admin/CompanyManagement";
 import SystemUserManagement from "@/components/admin/SystemUserManagement";
+import CompanyModulesManagement from "@/components/admin/CompanyModulesManagement";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -17,6 +17,31 @@ export default function AdminDashboard() {
   const [companiesCount, setCompaniesCount] = useState(0);
   const [usersCount, setUsersCount] = useState(0);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
+
+  const fetchStats = useCallback(async () => {
+    if (!isSystemAdmin) return;
+
+    try {
+      // Check if migration is needed
+      const { data: status } = await supabase.rpc('check_legacy_data_status');
+      if (status && (status as any).needs_migration) {
+        navigate('/admin/migration');
+        return;
+      }
+
+      const [companiesResult, usersResult] = await Promise.all([
+        supabase.from("companies").select("id", { count: "exact", head: true }),
+        supabase.from("profiles").select("id", { count: "exact", head: true }).neq("system_role", "system_admin"),
+      ]);
+
+      setCompaniesCount(companiesResult.count || 0);
+      setUsersCount(usersResult.count || 0);
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+    } finally {
+      setIsLoadingStats(false);
+    }
+  }, [isSystemAdmin, navigate]);
 
   useEffect(() => {
     if (!authLoading) {
@@ -36,35 +61,38 @@ export default function AdminDashboard() {
   }, [user, isSystemAdmin, authLoading, mustChangePassword, navigate]);
 
   useEffect(() => {
-    const fetchStats = async () => {
-      if (!isSystemAdmin) return;
-
-      try {
-        // Check if migration is needed
-        const { data: status } = await supabase.rpc('check_legacy_data_status');
-        if (status && (status as any).needs_migration) {
-          navigate('/admin/migration');
-          return;
-        }
-
-        const [companiesResult, usersResult] = await Promise.all([
-          supabase.from("companies").select("id", { count: "exact", head: true }),
-          supabase.from("profiles").select("id", { count: "exact", head: true }),
-        ]);
-
-        setCompaniesCount(companiesResult.count || 0);
-        setUsersCount(usersResult.count || 0);
-      } catch (error) {
-        console.error("Error fetching stats:", error);
-      } finally {
-        setIsLoadingStats(false);
-      }
-    };
-
     if (isSystemAdmin && !authLoading) {
       fetchStats();
     }
-  }, [isSystemAdmin, authLoading, navigate]);
+  }, [isSystemAdmin, authLoading, fetchStats]);
+
+  // Realtime subscription para atualizar stats automaticamente
+  useEffect(() => {
+    if (!isSystemAdmin) return;
+
+    const companiesChannel = supabase
+      .channel('admin-companies-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'companies' },
+        () => fetchStats()
+      )
+      .subscribe();
+
+    const profilesChannel = supabase
+      .channel('admin-profiles-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        () => fetchStats()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(companiesChannel);
+      supabase.removeChannel(profilesChannel);
+    };
+  }, [isSystemAdmin, fetchStats]);
 
   const handleLogout = async () => {
     await signOut();
@@ -128,14 +156,14 @@ export default function AdminDashboard() {
               ) : (
                 <div className="text-2xl font-bold">{usersCount}</div>
               )}
-              <p className="text-xs text-muted-foreground">usuários no sistema</p>
+              <p className="text-xs text-muted-foreground">usuários nas empresas</p>
             </CardContent>
           </Card>
         </div>
 
         {/* Management Tabs */}
         <Tabs defaultValue="companies" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsList className="grid w-full grid-cols-3 max-w-lg">
             <TabsTrigger value="companies" className="flex items-center gap-2">
               <Building2 className="h-4 w-4" />
               Empresas
@@ -143,6 +171,10 @@ export default function AdminDashboard() {
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Usuários
+            </TabsTrigger>
+            <TabsTrigger value="modules" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              Módulos
             </TabsTrigger>
           </TabsList>
 
@@ -152,6 +184,10 @@ export default function AdminDashboard() {
 
           <TabsContent value="users">
             <SystemUserManagement />
+          </TabsContent>
+
+          <TabsContent value="modules">
+            <CompanyModulesManagement />
           </TabsContent>
         </Tabs>
       </main>

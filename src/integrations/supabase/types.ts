@@ -132,6 +132,50 @@ export type Database = {
         }
         Relationships: []
       }
+      company_modules: {
+        Row: {
+          company_id: string
+          created_at: string
+          description: string | null
+          expected_benefits: string | null
+          id: string
+          module_key: string
+          module_name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          description?: string | null
+          expected_benefits?: string | null
+          id?: string
+          module_key: string
+          module_name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          expected_benefits?: string | null
+          id?: string
+          module_key?: string
+          module_name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_modules_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_work_logs: {
         Row: {
           created_at: string
@@ -2127,6 +2171,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      init_company_modules: {
+        Args: { target_company_id: string }
+        Returns: undefined
       }
       is_company_admin: {
         Args: { _company_id: string; _user_id: string }
