@@ -59,6 +59,13 @@ import { z } from "zod";
 
 type AppRole = "admin" | "editor" | "viewer";
 
+// Mapeamento de roles para labels corretos da empresa
+const ROLE_LABELS: Record<AppRole, string> = {
+  admin: "Administrador",
+  editor: "Editor",
+  viewer: "Usuário", // Corrigido de "Visualizador" para "Usuário"
+};
+
 interface UserWithRole {
   id: string;
   user_id: string;
@@ -98,13 +105,17 @@ interface UserSession {
   is_active: boolean;
 }
 
+// Módulos do sistema atualizados conforme especificação
 const MENU_OPTIONS = [
-  { id: "dashboard", label: "Dashboard", icon: "📊" },
-  { id: "producao", label: "Produção", icon: "🏗️" },
-  { id: "financeiro", label: "Financeiro", icon: "💰" },
-  { id: "suprimentos", label: "Suprimentos", icon: "📦" },
+  { id: "mapa", label: "Mapa de Obras", icon: "🗺️" },
   { id: "planejamento", label: "Planejamento", icon: "📅" },
-  { id: "mapa", label: "Mapa", icon: "🗺️" },
+  { id: "smart-planning", label: "Planejamento Inteligente", icon: "🎯" },
+  { id: "producao", label: "Produção", icon: "🏗️" },
+  { id: "custos", label: "Custos da Obra", icon: "💰" },
+  { id: "suprimentos", label: "Suprimentos", icon: "📦" },
+  { id: "financeiro", label: "Fluxo Financeiro", icon: "💳" },
+  { id: "entrega", label: "Entrega & Pós-Obra", icon: "📋" },
+  { id: "diretoria", label: "Painel da Diretoria", icon: "👑" },
   { id: "graficos", label: "Gráficos", icon: "📈" },
 ];
 
@@ -450,11 +461,11 @@ export function UserPermissionsPanel() {
   const getRoleBadge = (role: AppRole) => {
     switch (role) {
       case "admin":
-        return <Badge className="bg-primary/20 text-primary"><Shield className="h-3 w-3 mr-1" />Admin</Badge>;
+        return <Badge className="bg-primary/20 text-primary"><Shield className="h-3 w-3 mr-1" />Administrador</Badge>;
       case "editor":
         return <Badge className="bg-amber-500/20 text-amber-600"><Pencil className="h-3 w-3 mr-1" />Editor</Badge>;
       case "viewer":
-        return <Badge className="bg-muted text-muted-foreground"><Eye className="h-3 w-3 mr-1" />Visualizador</Badge>;
+        return <Badge className="bg-muted text-muted-foreground"><Eye className="h-3 w-3 mr-1" />Usuário</Badge>;
     }
   };
 
@@ -543,9 +554,9 @@ export function UserPermissionsPanel() {
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="viewer">Visualizador</SelectItem>
+                              <SelectItem value="viewer">Usuário</SelectItem>
                               <SelectItem value="editor">Editor</SelectItem>
-                              <SelectItem value="admin">Admin</SelectItem>
+                              <SelectItem value="admin">Administrador</SelectItem>
                             </SelectContent>
                           </Select>
                           <Button
@@ -576,28 +587,40 @@ export function UserPermissionsPanel() {
 
           <Card className="bg-muted/50">
             <CardContent className="pt-6">
-              <h4 className="font-semibold mb-3">Níveis de Acesso</h4>
+              <h4 className="font-semibold mb-3">Perfis da Empresa</h4>
               <div className="grid md:grid-cols-3 gap-4 text-sm">
-                <div className="p-3 bg-background rounded-lg">
+                <div className="p-3 bg-background rounded-lg border-l-4 border-l-primary">
                   <div className="flex items-center gap-2 mb-2">
                     <Shield className="h-4 w-4 text-primary" />
                     <span className="font-medium">Administrador</span>
                   </div>
-                  <p className="text-muted-foreground">Acesso total. Pode gerenciar usuários, configurações e todas as obras.</p>
+                  <ul className="text-muted-foreground space-y-1 text-xs">
+                    <li>• Gerenciar usuários da empresa</li>
+                    <li>• Definir perfis e acessos por módulo</li>
+                    <li>• Acesso total às obras da empresa</li>
+                  </ul>
                 </div>
-                <div className="p-3 bg-background rounded-lg">
+                <div className="p-3 bg-background rounded-lg border-l-4 border-l-amber-500">
                   <div className="flex items-center gap-2 mb-2">
                     <Pencil className="h-4 w-4 text-amber-500" />
                     <span className="font-medium">Editor</span>
                   </div>
-                  <p className="text-muted-foreground">Pode editar avanços, atualizar progresso e modificar dados das obras permitidas.</p>
+                  <ul className="text-muted-foreground space-y-1 text-xs">
+                    <li>• Editar dados operacionais</li>
+                    <li>• Lançar produção, custos, planejamento</li>
+                    <li>• Não gerencia usuários</li>
+                  </ul>
                 </div>
-                <div className="p-3 bg-background rounded-lg">
+                <div className="p-3 bg-background rounded-lg border-l-4 border-l-muted-foreground">
                   <div className="flex items-center gap-2 mb-2">
                     <Eye className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">Visualizador</span>
+                    <span className="font-medium">Usuário</span>
                   </div>
-                  <p className="text-muted-foreground">Apenas visualização e simulações. <strong>Não pode salvar nenhuma alteração.</strong></p>
+                  <ul className="text-muted-foreground space-y-1 text-xs">
+                    <li>• Apenas visualização</li>
+                    <li>• Acesso a dashboards e relatórios</li>
+                    <li>• <strong>Não pode salvar alterações</strong></li>
+                  </ul>
                 </div>
               </div>
             </CardContent>
@@ -778,15 +801,15 @@ export function UserPermissionsPanel() {
               {errors.password && <p className="text-sm text-destructive">{errors.password}</p>}
             </div>
             <div className="space-y-2">
-              <Label>Função</Label>
+              <Label>Perfil</Label>
               <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="viewer">Visualizador</SelectItem>
-                  <SelectItem value="editor">Editor</SelectItem>
-                  <SelectItem value="admin">Administrador</SelectItem>
+                  <SelectItem value="viewer">Usuário (apenas visualização)</SelectItem>
+                  <SelectItem value="editor">Editor (pode editar dados)</SelectItem>
+                  <SelectItem value="admin">Administrador (acesso total)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

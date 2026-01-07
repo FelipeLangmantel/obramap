@@ -80,7 +80,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const getRoleLabel = () => {
     if (role === "admin") return "Administrador";
     if (role === "editor") return "Editor";
-    return "Visualizador";
+    return "Usuário";
   };
 
   // Menu items mapped to permission IDs
