@@ -78,38 +78,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from("profiles")
         .select("*")
         .eq("user_id", userId)
-        .single();
+        .maybeSingle();
 
+      // If profile doesn't exist (user deleted) or is inaccessible, force sign out
       if (profileError) {
         console.error("Error fetching profile:", profileError);
+        await supabase.auth.signOut();
         return;
       }
 
-      if (profileData) {
-        const typedProfile: Profile = {
-          id: profileData.id,
-          user_id: profileData.user_id,
-          display_name: profileData.display_name,
-          email: profileData.email,
-          company_id: profileData.company_id,
-          status: (profileData as any).status || 'active',
-          must_change_password: (profileData as any).must_change_password || false,
-          system_role: (profileData as any).system_role || 'user',
-        };
-        setProfile(typedProfile);
-        setSystemRole(typedProfile.system_role);
+      if (!profileData) {
+        // Profile removed => user must lose access immediately
+        await supabase.auth.signOut();
+        return;
+      }
 
-        // Fetch company if user has company_id
-        if (typedProfile.company_id) {
-          const { data: companyData } = await supabase
-            .from("companies")
-            .select("id, name, slug")
-            .eq("id", typedProfile.company_id)
-            .single();
+      // Block inactive users
+      const status = ((profileData as any).status || "active") as string;
+      if (status !== "active") {
+        await supabase.auth.signOut();
+        return;
+      }
 
-          if (companyData) {
-            setCompany(companyData);
-          }
+      const typedProfile: Profile = {
+        id: profileData.id,
+        user_id: profileData.user_id,
+        display_name: profileData.display_name,
+        email: profileData.email,
+        company_id: profileData.company_id,
+        status,
+        must_change_password: (profileData as any).must_change_password || false,
+        system_role: (profileData as any).system_role || 'user',
+      };
+      setProfile(typedProfile);
+      setSystemRole(typedProfile.system_role);
+
+      // Fetch company if user has company_id
+      if (typedProfile.company_id) {
+        const { data: companyData } = await supabase
+          .from("companies")
+          .select("id, name, slug")
+          .eq("id", typedProfile.company_id)
+          .single();
+
+        if (companyData) {
+          setCompany(companyData);
         }
       }
 
