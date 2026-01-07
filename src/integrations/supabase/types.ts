@@ -2090,8 +2090,18 @@ export type Database = {
     }
     Functions: {
       admin_exists: { Args: never; Returns: boolean }
+      count_orphan_projects: { Args: never; Returns: number }
+      create_system_admin: {
+        Args: {
+          admin_display_name: string
+          admin_email: string
+          admin_user_id: string
+        }
+        Returns: boolean
+      }
       generate_temp_password: { Args: never; Returns: string }
       generate_unique_slug: { Args: { company_name: string }; Returns: string }
+      get_orphan_data_counts: { Args: never; Returns: Json }
       get_user_company_id: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
@@ -2109,6 +2119,10 @@ export type Database = {
         Returns: boolean
       }
       is_system_admin: { Args: { _user_id: string }; Returns: boolean }
+      migrate_orphan_data_to_company: {
+        Args: { target_company_id: string }
+        Returns: Json
+      }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
