@@ -517,14 +517,83 @@ export function PlannedProductionTab() {
     }
   };
 
-  // Delete planned production
+  // Delete planned production with cascade deletion
   const handleDelete = async (id: string) => {
     try {
+      // Get the planned production to find related measurement data
+      const planToDelete = plannedProductions.find(p => p.id === id);
+      if (!planToDelete || !currentProject) {
+        toast.error("Planejamento não encontrado");
+        return;
+      }
+
+      // 1. Find the measurement_service that matches this planned production
+      const { data: measurementServices } = await supabase
+        .from('measurement_services')
+        .select('id, measurement_id')
+        .eq('macro_id', planToDelete.macro_id)
+        .eq('scope_id', planToDelete.scope_id);
+
+      // Filter to find the one from the same measurement number
+      if (measurementServices && measurementServices.length > 0) {
+        for (const service of measurementServices) {
+          // Check if this service is in the same measurement period
+          const { data: measurement } = await supabase
+            .from('measurements')
+            .select('id, measurement_number')
+            .eq('id', service.measurement_id)
+            .eq('project_id', currentProject.id)
+            .eq('measurement_number', planToDelete.measurement_number || 0)
+            .maybeSingle();
+
+          if (measurement) {
+            // 2. Delete productions linked to this measurement_service
+            await supabase
+              .from('productions')
+              .delete()
+              .eq('measurement_service_id', service.id);
+
+            // 3. Delete weekly_productions linked to same scope/macro/period
+            await supabase
+              .from('weekly_productions')
+              .delete()
+              .eq('project_id', currentProject.id)
+              .eq('macro_id', planToDelete.macro_id)
+              .eq('scope_id', planToDelete.scope_id)
+              .eq('week_start', planToDelete.week_start)
+              .eq('week_end', planToDelete.week_end);
+
+            // 4. Delete the measurement_service
+            await supabase
+              .from('measurement_services')
+              .delete()
+              .eq('id', service.id);
+
+            // 5. Check if measurement has any remaining services
+            const { count } = await supabase
+              .from('measurement_services')
+              .select('id', { count: 'exact', head: true })
+              .eq('measurement_id', measurement.id);
+
+            // 6. If no more services, delete the measurement
+            if (count === 0) {
+              await supabase
+                .from('measurements')
+                .delete()
+                .eq('id', measurement.id);
+            }
+          }
+        }
+      }
+
+      // 7. Delete the planned_production itself
       await supabase.from('planned_productions').delete().eq('id', id);
       setPlannedProductions(prev => prev.filter(p => p.id !== id));
-      toast.success("Planejamento removido");
+      
+      toast.success("Planejamento e dados relacionados removidos com sucesso");
     } catch (error) {
-      toast.error("Erro ao remover");
+      console.error('Error deleting planned production:', error);
+      toast.error("Erro ao remover planejamento");
     }
   };
 
