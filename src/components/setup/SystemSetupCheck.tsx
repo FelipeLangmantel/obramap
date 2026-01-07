@@ -28,24 +28,37 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
 
   const checkSystemStatus = async () => {
     try {
-      // Check if admin exists
+      // Check if admin exists using RPC
       const { data: adminExists, error: adminError } = await supabase.rpc('admin_exists');
       if (adminError) {
         console.error('Error checking admin:', adminError);
-        // If the function doesn't exist, assume setup is needed
         setNeedsAdmin(true);
       } else {
         setNeedsAdmin(!adminExists);
       }
 
-      // If admin exists and current user is system admin, redirect to dashboard
+      // If admin exists and current user is system admin
       if (adminExists && user && isSystemAdmin) {
-        // Only redirect if not already on admin routes
-        if (!location.pathname.startsWith('/admin')) {
-          navigate('/admin/dashboard', { replace: true });
-          return;
+        // Check if there's orphan data that needs migration
+        const { data: status, error: statusError } = await supabase.rpc('check_legacy_data_status');
+        
+        if (!statusError && status) {
+          const typedStatus = status as unknown as { needs_migration: boolean; has_orphan_data: boolean };
+          
+          if (typedStatus.needs_migration) {
+            // Redirect to migration panel if not already there
+            if (!location.pathname.startsWith('/admin/migration')) {
+              navigate('/admin/migration', { replace: true });
+              return;
+            }
+          } else if (!location.pathname.startsWith('/admin')) {
+            // No migration needed, go to dashboard
+            navigate('/admin/dashboard', { replace: true });
+            return;
+          }
         }
-        // Admin exists and user is system admin - no setup needed
+        
+        // No setup needed
         setNeedsSetup(false);
         setIsLoading(false);
         return;
@@ -58,7 +71,7 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
         return;
       }
 
-      // Check for orphan data only if admin doesn't exist
+      // Check for orphan data only if admin doesn't exist (initial setup)
       const { data: orphanData, error: orphanError } = await supabase.rpc('get_orphan_data_counts');
       if (orphanError) {
         console.error('Error checking orphan data:', orphanError);
@@ -82,7 +95,7 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
 
   const handleSetupComplete = () => {
     setNeedsSetup(false);
-    // Reload the page to ensure fresh state
+    // Check if migration is needed after setup
     window.location.href = '/auth';
   };
 
@@ -97,6 +110,7 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
     );
   }
 
+  // Only show wizard if NO admin exists (first time setup)
   if (needsSetup && needsAdmin) {
     return (
       <SystemSetupWizard

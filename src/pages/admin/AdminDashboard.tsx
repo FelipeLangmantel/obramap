@@ -40,6 +40,13 @@ export default function AdminDashboard() {
       if (!isSystemAdmin) return;
 
       try {
+        // Check if migration is needed
+        const { data: status } = await supabase.rpc('check_legacy_data_status');
+        if (status && (status as any).needs_migration) {
+          navigate('/admin/migration');
+          return;
+        }
+
         const [companiesResult, usersResult] = await Promise.all([
           supabase.from("companies").select("id", { count: "exact", head: true }),
           supabase.from("profiles").select("id", { count: "exact", head: true }),
@@ -57,7 +64,7 @@ export default function AdminDashboard() {
     if (isSystemAdmin && !authLoading) {
       fetchStats();
     }
-  }, [isSystemAdmin, authLoading]);
+  }, [isSystemAdmin, authLoading, navigate]);
 
   const handleLogout = async () => {
     await signOut();
