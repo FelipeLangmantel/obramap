@@ -833,40 +833,98 @@ export type Database = {
       material_families: {
         Row: {
           color: string | null
+          company_id: string | null
           created_at: string
           display_order: number
           icon: string | null
           id: string
+          is_labor: boolean
           lead_time_days: number
           name: string
           project_id: string
         }
         Insert: {
           color?: string | null
+          company_id?: string | null
           created_at?: string
           display_order?: number
           icon?: string | null
           id?: string
+          is_labor?: boolean
           lead_time_days?: number
           name: string
           project_id: string
         }
         Update: {
           color?: string | null
+          company_id?: string | null
           created_at?: string
           display_order?: number
           icon?: string | null
           id?: string
+          is_labor?: boolean
           lead_time_days?: number
           name?: string
           project_id?: string
         }
         Relationships: [
           {
+            foreignKeyName: "material_families_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "material_families_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      materials: {
+        Row: {
+          company_id: string
+          created_at: string
+          family_id: string | null
+          id: string
+          name: string
+          unit: string
+          unit_value: number | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          family_id?: string | null
+          id?: string
+          name: string
+          unit?: string
+          unit_value?: number | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          family_id?: string | null
+          id?: string
+          name?: string
+          unit?: string
+          unit_value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "materials_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "materials_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "material_families"
             referencedColumns: ["id"]
           },
         ]
@@ -1544,6 +1602,48 @@ export type Database = {
         }
         Relationships: []
       }
+      project_lead_times: {
+        Row: {
+          created_at: string
+          family_id: string
+          id: string
+          lead_time_days: number
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          family_id: string
+          id?: string
+          lead_time_days?: number
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          family_id?: string
+          id?: string
+          lead_time_days?: number
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_lead_times_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "material_families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_lead_times_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           company_id: string | null
@@ -2007,6 +2107,51 @@ export type Database = {
           },
         ]
       }
+      service_materials: {
+        Row: {
+          created_at: string
+          id: string
+          macro_id: string
+          material_id: string
+          project_id: string
+          quantity_per_house: number
+          scope_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          macro_id: string
+          material_id: string
+          project_id: string
+          quantity_per_house?: number
+          scope_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          macro_id?: string
+          material_id?: string
+          project_id?: string
+          quantity_per_house?: number
+          scope_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_materials_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_materials_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplier_quotes: {
         Row: {
           created_at: string
@@ -2119,6 +2264,73 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "suppliers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_alerts: {
+        Row: {
+          created_at: string
+          family_id: string
+          id: string
+          measurement_id: string | null
+          notes: string | null
+          order_by_date: string
+          project_id: string
+          required_date: string
+          status: string
+          total_quantity: number
+          total_value: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          family_id: string
+          id?: string
+          measurement_id?: string | null
+          notes?: string | null
+          order_by_date: string
+          project_id: string
+          required_date: string
+          status?: string
+          total_quantity?: number
+          total_value?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          family_id?: string
+          id?: string
+          measurement_id?: string | null
+          notes?: string | null
+          order_by_date?: string
+          project_id?: string
+          required_date?: string
+          status?: string
+          total_quantity?: number
+          total_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_alerts_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "material_families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_alerts_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_alerts_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -2365,6 +2577,14 @@ export type Database = {
         Returns: Json
       }
       promote_to_system_admin: { Args: { admin_email: string }; Returns: Json }
+      recalc_alerts_for_measurement: {
+        Args: { p_measurement_id: string }
+        Returns: undefined
+      }
+      regenerate_supply_alerts: {
+        Args: { p_project_id: string }
+        Returns: undefined
+      }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
