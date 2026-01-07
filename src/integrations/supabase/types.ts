@@ -2090,7 +2090,20 @@ export type Database = {
     }
     Functions: {
       admin_create_company: { Args: { company_name: string }; Returns: Json }
+      admin_create_company_admin: {
+        Args: {
+          admin_display_name: string
+          admin_email: string
+          target_company_id: string
+        }
+        Returns: Json
+      }
       admin_exists: { Args: never; Returns: boolean }
+      check_legacy_data_status: { Args: never; Returns: Json }
+      complete_orphan_data_migration: {
+        Args: { target_company_id: string }
+        Returns: Json
+      }
       count_orphan_projects: { Args: never; Returns: number }
       create_system_admin: {
         Args: {
