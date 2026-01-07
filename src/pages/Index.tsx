@@ -16,7 +16,7 @@ import { PlanningView } from "@/components/PlanningView";
 import { ProjectCostsView } from "@/components/ProjectCostsView";
 import { InteractiveMapView } from "@/components/InteractiveMapView";
 import { Map3DView } from "@/components/Map3DView";
-import { SuppliesView } from "@/components/SuppliesView";
+import { SuppliesJITView } from "@/components/supplies";
 import { InputsManagementView } from "@/components/InputsManagementView";
 import { SuppliersManagementView } from "@/components/SuppliersManagementView";
 import { FinancialFlowView } from "@/components/FinancialFlowView";
@@ -175,7 +175,7 @@ function IndexContent() {
 
                 {activeView === "supplies" && (
                   <div className="flex-1">
-                    <SuppliesView />
+                    <SuppliesJITView />
                   </div>
                 )}
 

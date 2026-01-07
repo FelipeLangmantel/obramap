@@ -1,8 +1,13 @@
 # Documentação Técnica - ObraMap
 
 **Sistema de Gestão de Obras**  
-**Versão:** Janeiro 2026  
+**Versão:** Janeiro 2026 (atualizado com Suprimentos JIT)  
 **Desenvolvido por:** Felipe Langmantel
+
+> **NOTA:** O módulo de Suprimentos foi refatorado para modelo Just-in-Time (JIT).
+> Novas tabelas: `materials`, `service_materials`, `project_lead_times`, `supply_alerts`.
+> Funções RPC: `regenerate_supply_alerts()`, `recalc_alerts_for_measurement()`.
+> Triggers automáticos recalculam alertas quando planejamento ou lead times mudam.
 
 ---
 
