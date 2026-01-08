@@ -10,26 +10,6 @@ export interface MaterialFamily {
   project_id: string | null;
 }
 
-export interface Material {
-  id: string;
-  company_id: string;
-  family_id: string | null;
-  name: string;
-  unit: string;
-  unit_value: number;
-  family?: MaterialFamily;
-}
-
-export interface ServiceMaterial {
-  id: string;
-  project_id: string;
-  macro_id: string;
-  scope_id: string;
-  material_id: string;
-  quantity_per_house: number;
-  material?: Material;
-}
-
 export interface ProjectLeadTime {
   id: string;
   project_id: string;
@@ -38,20 +18,39 @@ export interface ProjectLeadTime {
   family?: MaterialFamily;
 }
 
+export interface ScopeItem {
+  id: string;
+  name: string;
+  category: 'material' | 'labor' | 'equipment';
+  quantity: number;
+  unit: string;
+  unit_value: number;
+  scope_id: string;
+  macro_id: string;
+  material_family?: string;
+}
+
 export interface SupplyAlert {
   id: string;
   project_id: string;
   measurement_id: string | null;
-  family_id: string;
+  family_id: string | null;
+  scope_id: string | null;
+  macro_id: string | null;
+  scope_item_id: string | null;
+  is_labor: boolean;
+  week_start: string | null;
+  week_end: string | null;
   required_date: string;
   order_by_date: string;
-  status: 'pending' | 'ordered' | 'delivered' | 'delayed';
+  status: 'pending' | 'quoted' | 'approved' | 'ordered' | 'in_transit' | 'delivered' | 'contracted' | 'delayed';
   total_quantity: number;
   total_value: number;
   notes: string | null;
   created_at: string;
   updated_at: string;
   family?: MaterialFamily;
+  scope_item?: ScopeItem;
   measurement?: {
     id: string;
     measurement_number: number;
@@ -79,18 +78,26 @@ export interface ProductionImpact {
   delayDays: number;
 }
 
-export type SupplyAlertStatus = 'pending' | 'ordered' | 'delivered' | 'delayed';
+export type SupplyAlertStatus = 'pending' | 'quoted' | 'approved' | 'ordered' | 'in_transit' | 'delivered' | 'contracted' | 'delayed';
 
 export const ALERT_STATUS_LABELS: Record<SupplyAlertStatus, string> = {
   pending: 'Pendente',
+  quoted: 'Cotado',
+  approved: 'Aprovado',
   ordered: 'Pedido',
+  in_transit: 'Em Trânsito',
   delivered: 'Entregue',
+  contracted: 'Contratado',
   delayed: 'Atrasado'
 };
 
 export const ALERT_STATUS_COLORS: Record<SupplyAlertStatus, string> = {
   pending: 'bg-yellow-500',
-  ordered: 'bg-blue-500',
+  quoted: 'bg-blue-400',
+  approved: 'bg-blue-600',
+  ordered: 'bg-purple-500',
+  in_transit: 'bg-orange-500',
   delivered: 'bg-green-500',
+  contracted: 'bg-teal-500',
   delayed: 'bg-red-500'
 };

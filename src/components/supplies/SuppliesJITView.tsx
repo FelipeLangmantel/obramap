@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Package, Settings, RefreshCw, Clock, Truck, FileText } from 'lucide-react';
+import { Package, Settings, RefreshCw, Clock, Truck, FileText, ShoppingCart, ClipboardList, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,14 +10,15 @@ import { SupplyAlertsList } from './SupplyAlertsList';
 import { LeadTimeConfig } from './LeadTimeConfig';
 import { useSupplyAlerts } from './hooks/useSupplyAlerts';
 import { LaborContractsView } from '@/components/LaborContractsView';
+import { SuppliesView } from '@/components/SuppliesView';
 
-type TabType = 'dashboard' | 'alerts' | 'leadtime' | 'contracts';
+type TabType = 'alerts' | 'quotations' | 'orders' | 'contracts' | 'leadtime';
 
 interface SuppliesJITViewProps {
   initialTab?: TabType;
 }
 
-export function SuppliesJITView({ initialTab = 'dashboard' }: SuppliesJITViewProps) {
+export function SuppliesJITView({ initialTab = 'alerts' }: SuppliesJITViewProps) {
   const { currentProject } = useConstruction();
   const { canEdit } = useAuth();
   const projectId = currentProject?.id;
@@ -50,68 +51,6 @@ export function SuppliesJITView({ initialTab = 'dashboard' }: SuppliesJITViewPro
     );
   }
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Suprimentos JIT</h2>
-          <p className="text-muted-foreground">
-            Gestão de compras Just-in-Time baseada no planejamento
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {canEdit && (
-            <Button variant="outline" onClick={regenerateAlerts} disabled={isLoading}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Recalcular Alertas
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Dashboard KPIs */}
-      <SupplyDashboard kpis={kpis} isLoading={isLoading} />
-
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TabType)}>
-        <TabsList>
-          <TabsTrigger value="dashboard" className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            Alertas
-          </TabsTrigger>
-          <TabsTrigger value="leadtime" className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            Lead Times
-          </TabsTrigger>
-          <TabsTrigger value="contracts" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            Contratos MO
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="dashboard" className="mt-4">
-          <SupplyAlertsList 
-            alerts={alerts}
-            isLoading={isLoading}
-            canEdit={canEdit}
-            onUpdateStatus={updateAlertStatus}
-          />
-        </TabsContent>
-
-        <TabsContent value="leadtime" className="mt-4">
-          <LeadTimeConfig 
-            families={families}
-            projectLeadTimes={projectLeadTimes}
-            canEdit={canEdit}
-            onSave={saveProjectLeadTime}
-          />
-        </TabsContent>
-
-        <TabsContent value="contracts" className="mt-4">
-          <LaborContractsView />
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
+  // Use the original SuppliesView which has the full workflow
+  return <SuppliesView initialTab={activeTab} />;
 }
