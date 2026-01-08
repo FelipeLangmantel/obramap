@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Package, Truck, FileText, Clock, AlertTriangle, CheckCircle2, Plus, Settings, Users, Search, Calendar, DollarSign, Loader2, Eye, Edit2, Trash2, Send, Check, X, Box, Layers, Hammer, Wrench, ChevronDown, ChevronRight, ClipboardList, Upload } from "lucide-react";
+import { Package, Truck, FileText, Clock, AlertTriangle, CheckCircle2, Plus, Settings, Users, Search, Calendar, DollarSign, Loader2, Eye, Edit2, Trash2, Send, Check, X, Box, Layers, Hammer, Wrench, ChevronDown, ChevronRight, ClipboardList, Upload, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1270,8 +1270,40 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
     return <Card><CardContent className="p-8 flex items-center justify-center gap-2"><Loader2 className="w-5 h-5 animate-spin" /><span>Carregando...</span></CardContent></Card>;
   }
 
+  // JIT Alert regeneration
+  const regenerateJITAlerts = async () => {
+    if (!projectId) return;
+    try {
+      const { error } = await supabase.rpc('regenerate_supply_alerts', {
+        p_project_id: projectId
+      });
+      if (error) throw error;
+      toast.success('Alertas JIT regenerados com sucesso');
+      loadAlertData();
+    } catch (error) {
+      console.error('Error regenerating JIT alerts:', error);
+      toast.error('Erro ao regenerar alertas JIT');
+    }
+  };
+
   return (
     <div className="space-y-4 h-full flex flex-col overflow-hidden">
+      {/* Header with JIT regeneration */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg md:text-xl font-bold tracking-tight">Suprimentos JIT</h2>
+          <p className="text-xs md:text-sm text-muted-foreground">
+            Gestão de compras Just-in-Time baseada no planejamento
+          </p>
+        </div>
+        {canEdit && (
+          <Button variant="outline" size="sm" onClick={regenerateJITAlerts}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">Recalcular</span>
+          </Button>
+        )}
+      </div>
+
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex flex-col h-full overflow-hidden">
         <div className="overflow-x-auto pb-1 -mx-1 px-1">
           <TabsList className="grid w-full min-w-[400px] grid-cols-5 h-9 md:h-10">

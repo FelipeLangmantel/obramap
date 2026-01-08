@@ -4,10 +4,12 @@
 **Versão:** Janeiro 2026 (atualizado com Suprimentos JIT)  
 **Desenvolvido por:** Felipe Langmantel
 
-> **NOTA:** O módulo de Suprimentos foi refatorado para modelo Just-in-Time (JIT).
-> Novas tabelas: `materials`, `service_materials`, `project_lead_times`, `supply_alerts`.
-> Funções RPC: `regenerate_supply_alerts()`, `recalc_alerts_for_measurement()`.
-> Triggers automáticos recalculam alertas quando planejamento ou lead times mudam.
+> **NOTA JIT (v2):** O módulo de Suprimentos foi integrado ao modelo Just-in-Time (JIT).
+> Os alertas são gerados automaticamente a partir do orçamento (scope_items/inputs) × casas planejadas (planned_productions).
+> Fluxo completo restaurado: Alertas → Cotações → Aprovação → Pedidos → Rastreamento → Entrega.
+> Fluxo de MO: Alertas → Contratos de Mão de Obra → Fechar Medição → Produção.
+> Novas colunas em `supply_alerts`: scope_id, macro_id, scope_item_id, is_labor, week_start, week_end.
+> Funções RPC: `regenerate_supply_alerts(p_project_id)` usa scope_items como fonte, não tabela materials.
 
 ---
 

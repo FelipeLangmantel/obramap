@@ -2276,43 +2276,61 @@ export type Database = {
           created_at: string
           family_id: string
           id: string
+          is_labor: boolean | null
+          macro_id: string | null
           measurement_id: string | null
           notes: string | null
           order_by_date: string
           project_id: string
           required_date: string
+          scope_id: string | null
+          scope_item_id: string | null
           status: string
           total_quantity: number
           total_value: number
           updated_at: string
+          week_end: string | null
+          week_start: string | null
         }
         Insert: {
           created_at?: string
           family_id: string
           id?: string
+          is_labor?: boolean | null
+          macro_id?: string | null
           measurement_id?: string | null
           notes?: string | null
           order_by_date: string
           project_id: string
           required_date: string
+          scope_id?: string | null
+          scope_item_id?: string | null
           status?: string
           total_quantity?: number
           total_value?: number
           updated_at?: string
+          week_end?: string | null
+          week_start?: string | null
         }
         Update: {
           created_at?: string
           family_id?: string
           id?: string
+          is_labor?: boolean | null
+          macro_id?: string | null
           measurement_id?: string | null
           notes?: string | null
           order_by_date?: string
           project_id?: string
           required_date?: string
+          scope_id?: string | null
+          scope_item_id?: string | null
           status?: string
           total_quantity?: number
           total_value?: number
           updated_at?: string
+          week_end?: string | null
+          week_start?: string | null
         }
         Relationships: [
           {
@@ -2334,6 +2352,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_alerts_scope_item_id_fkey"
+            columns: ["scope_item_id"]
+            isOneToOne: false
+            referencedRelation: "scope_items"
             referencedColumns: ["id"]
           },
         ]
