@@ -1,11 +1,12 @@
-import { Package, Clock, AlertTriangle, CheckCircle2, Truck, TrendingUp, DollarSign, Calendar, XCircle, Pause } from 'lucide-react';
+import { Package, Clock, AlertTriangle, CheckCircle2, Truck, TrendingUp, DollarSign, Calendar } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { SupplyKPIs } from './types';
+import { Badge } from '@/components/ui/badge';
+import { SupplyKPIs, ALERT_STATUS_COLORS } from './types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 interface SupplyDashboardProps {
-  kpis: SupplyKPIs | null;
+  kpis: SupplyKPIs;
   isLoading: boolean;
 }
 
@@ -22,111 +23,100 @@ export function SupplyDashboard({ kpis, isLoading }: SupplyDashboardProps) {
     return format(new Date(dateStr), 'dd/MM/yyyy', { locale: ptBR });
   };
 
-  if (!kpis && !isLoading) {
-    return (
-      <div className="text-center text-muted-foreground py-4">
-        Sem dados disponíveis
-      </div>
-    );
-  }
-
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      {/* Pedidos Atrasados */}
-      <Card className="border-l-4 border-l-red-500">
+      {/* Compras Pendentes */}
+      <Card className="border-l-4 border-l-yellow-500">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Pedidos Atrasados
+            Compras Pendentes
           </CardTitle>
-          <XCircle className="h-4 w-4 text-red-500" />
+          <Package className="h-4 w-4 text-yellow-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-red-600">
-            {isLoading ? '-' : kpis?.delayed_orders || 0}
-          </div>
-          <div className="flex items-center gap-2 mt-2">
-            <Clock className="h-3 w-3 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">
-              Média: {kpis?.avg_delay_days || 0} dias
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Entregas no Prazo */}
-      <Card className="border-l-4 border-l-green-500">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Entregas no Prazo
-          </CardTitle>
-          <CheckCircle2 className="h-4 w-4 text-green-500" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold text-green-600">
-            {isLoading ? '-' : kpis?.on_time_delivered || 0}
-          </div>
-          <div className="flex items-center gap-2 mt-2">
-            <TrendingUp className="h-3 w-3 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">
-              Atrasadas: {kpis?.late_delivered || 0}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Compras Críticas */}
-      <Card className="border-l-4 border-l-orange-500">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Compras Críticas
-          </CardTitle>
-          <AlertTriangle className="h-4 w-4 text-orange-500" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold text-orange-600">
-            {isLoading ? '-' : kpis?.critical_purchases || 0}
+          <div className="text-2xl font-bold">
+            {isLoading ? '-' : kpis.pendingAlerts}
           </div>
           <div className="flex items-center gap-2 mt-2">
             <Calendar className="h-3 w-3 text-muted-foreground" />
             <span className="text-xs text-muted-foreground">
-              Próxima: {formatDate(kpis?.next_order_date || null)}
+              Próxima: {formatDate(kpis.nextOrderDate)}
             </span>
           </div>
+          {kpis.totalPendingValue > 0 && (
+            <div className="flex items-center gap-2 mt-1">
+              <DollarSign className="h-3 w-3 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">
+                {formatCurrency(kpis.totalPendingValue)}
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Produção Parada */}
-      <Card className="border-l-4 border-l-purple-500">
+      {/* Atrasos */}
+      <Card className="border-l-4 border-l-red-500">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Produção Parada
+            Atrasos
           </CardTitle>
-          <Pause className="h-4 w-4 text-purple-500" />
+          <AlertTriangle className="h-4 w-4 text-red-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-purple-600">
-            {isLoading ? '-' : kpis?.production_stopped || 0}
+          <div className="text-2xl font-bold">
+            {isLoading ? '-' : kpis.delayedAlerts}
           </div>
           <div className="flex items-center gap-2 mt-2">
-            <Package className="h-3 w-3 text-muted-foreground" />
+            <Clock className="h-3 w-3 text-muted-foreground" />
             <span className="text-xs text-muted-foreground">
-              Sem pedido: {kpis?.planned_without_order || 0}
+              Média: {kpis.avgDelayDays} dias
             </span>
           </div>
         </CardContent>
       </Card>
 
-      {/* Valor Total Pendente - Full Width */}
-      <Card className="border-l-4 border-l-blue-500 md:col-span-2 lg:col-span-4">
+      {/* Em Pedido */}
+      <Card className="border-l-4 border-l-blue-500">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Valor Total de Compras Pendentes
+            Em Pedido
           </CardTitle>
-          <DollarSign className="h-4 w-4 text-blue-500" />
+          <Truck className="h-4 w-4 text-blue-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold text-blue-600">
-            {isLoading ? '-' : formatCurrency(kpis?.total_pending_value || 0)}
+          <div className="text-2xl font-bold">
+            {isLoading ? '-' : kpis.orderedAlerts}
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs text-muted-foreground">
+              Aguardando entrega
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Performance Logística */}
+      <Card className="border-l-4 border-l-green-500">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Performance
+          </CardTitle>
+          <TrendingUp className="h-4 w-4 text-green-500" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">
+            {isLoading ? '-' : `${kpis.onTimeDeliveryRate}%`}
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            <CheckCircle2 className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">
+              Entregas no prazo
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-xs text-muted-foreground">
+              {kpis.deliveredAlerts} entregas realizadas
+            </span>
           </div>
         </CardContent>
       </Card>

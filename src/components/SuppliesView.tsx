@@ -21,8 +21,7 @@ import { format, addDays, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { LaborContractsView } from "./LaborContractsView";
 import { ImportInputsDialog } from "./ImportInputsDialog";
-import { SupplyDashboard } from "./supplies/SupplyDashboard";
-import { SupplyKPIs } from "./supplies/types";
+
 interface MaterialFamily {
   id: string;
   name: string;
@@ -236,7 +235,6 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   const [executedHouses, setExecutedHouses] = useState<Record<string, number>>({});
   const [alertsData, setAlertsData] = useState<{ scopeItems: ScopeItem[], pendingQuotations: number, inTransitOrders: number }>({ scopeItems: [], pendingQuotations: 0, inTransitOrders: 0 });
   const [dataLoaded, setDataLoaded] = useState<Record<string, boolean>>({});
-  const [supplyKpis, setSupplyKpis] = useState<SupplyKPIs | null>(null);
 
   // Dialog states
   const [inputDialogOpen, setInputDialogOpen] = useState(false);
@@ -312,7 +310,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
     setIsLoading(true);
 
     try {
-      const [scopeRes, quotRes, ordersRes, laborRes, prodRes, plannedRes, familiesRes, kpisRes] = await Promise.all([
+      const [scopeRes, quotRes, ordersRes, laborRes, prodRes, plannedRes, familiesRes] = await Promise.all([
         supabase.from('scope_items').select('id, name, category, quantity, unit, unit_value, scope_id, macro_id, material_family').eq('project_id', projectId),
         supabase.from('quotation_requests').select('id, status').eq('project_id', projectId).eq('status', 'pending'),
         supabase.from('purchase_orders').select('id, status').eq('project_id', projectId).eq('status', 'in_transit'),
@@ -320,9 +318,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         // Only get non-initial database productions for executed count
         supabase.from('weekly_productions').select('scope_id, house_ids, is_initial_database').eq('project_id', projectId),
         supabase.from('planned_productions').select('*').eq('project_id', projectId).gte('week_start', new Date().toISOString().split('T')[0]),
-        supabase.from('material_families').select('*').order('display_order'),
-        // Load backend KPIs
-        supabase.rpc('get_supply_kpis', { p_project_id: projectId })
+        supabase.from('material_families').select('*').order('display_order')
       ]);
 
       if (scopeRes.data) {
@@ -340,11 +336,6 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         color: f.color || '#9ca3af', 
         lead_time_days: f.lead_time_days || 7 
       })));
-      
-      // Set backend KPIs
-      if (kpisRes.data && typeof kpisRes.data === 'object' && !Array.isArray(kpisRes.data)) {
-        setSupplyKpis(kpisRes.data as unknown as SupplyKPIs);
-      }
       
       if (prodRes.data) {
         const executed: Record<string, number> = {};
@@ -1330,9 +1321,6 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
 
         {/* Alerts Tab */}
         <TabsContent value="alerts" className="flex-1 overflow-y-auto mt-2 md:mt-4 space-y-3 md:space-y-4">
-          {/* Backend-driven KPI Dashboard */}
-          <SupplyDashboard kpis={supplyKpis} isLoading={isLoading} />
-          
           {/* Material Alerts by Family */}
           {visibleMaterialAlerts.length > 0 && (
             <Card 

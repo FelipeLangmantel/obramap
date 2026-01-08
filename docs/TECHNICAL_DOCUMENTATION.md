@@ -1,35 +1,15 @@
 # Documentação Técnica - ObraMap
 
 **Sistema de Gestão de Obras**  
-**Versão:** Janeiro 2026 (atualizado com Suprimentos JIT v3 - Backend-Driven)  
+**Versão:** Janeiro 2026 (atualizado com Suprimentos JIT)  
 **Desenvolvido por:** Felipe Langmantel
 
-> **NOTA JIT (v3):** O módulo de Suprimentos é agora 100% orientado ao backend.
->
-> **Cards Gerenciais (KPIs):** Calculados pelo RPC `get_supply_kpis(p_project_id)`:
-> - Pedidos atrasados (expected_delivery_date < hoje, não entregue)
-> - Entregas no prazo vs atrasadas
-> - Compras críticas (is_critical = true)
-> - Produção parada (alertas delayed com planned_use_date <= hoje)
-> - Itens planejados sem pedido (status = pending)
->
-> **Validações de Backend:**
-> - `validate_measurement_no_overlap()`: Bloqueia medições com período sobreposto
-> - `validate_measurement_service_houses()`: Bloqueia casas já planejadas ou executadas
-> - `update_measurement_status_on_production()`: Marca medição como "executed" ao lançar produção
->
-> **Reprocessamento Automático (Triggers):**
-> - `trigger_regen_alerts_planned_productions`: Regenera alertas ao alterar planejamento
-> - `trigger_regen_alerts_project_lead_times`: Regenera alertas ao alterar lead times
-> - `trigger_update_alert_from_order`: Atualiza status dos alertas ao alterar pedidos
->
-> **Fluxo completo:**
-> - Materiais: Alertas → Cotações → Aprovação → Pedidos → Rastreamento → Entrega
-> - Mão de Obra: Alertas → Contratos → Fechar Medição (`close_labor_measurement`) → Produção
->
-> **Novas colunas em `supply_alerts`:** planned_use_date, actual_delivery_date, delay_days, is_critical
-> **Nova coluna em `measurements`:** status (planned, in_progress, executed, closed)
-> **Funções RPC:** `get_supply_kpis`, `get_available_measurements`, `close_labor_measurement`
+> **NOTA JIT (v2):** O módulo de Suprimentos foi integrado ao modelo Just-in-Time (JIT).
+> Os alertas são gerados automaticamente a partir do orçamento (scope_items/inputs) × casas planejadas (planned_productions).
+> Fluxo completo restaurado: Alertas → Cotações → Aprovação → Pedidos → Rastreamento → Entrega.
+> Fluxo de MO: Alertas → Contratos de Mão de Obra → Fechar Medição → Produção.
+> Novas colunas em `supply_alerts`: scope_id, macro_id, scope_item_id, is_labor, week_start, week_end.
+> Funções RPC: `regenerate_supply_alerts(p_project_id)` usa scope_items como fonte, não tabela materials.
 
 ---
 

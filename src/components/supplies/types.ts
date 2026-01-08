@@ -1,4 +1,4 @@
-// Types for JIT Supply Management - Backend-Driven
+// Types for JIT Supply Management
 
 export interface MaterialFamily {
   id: string;
@@ -43,11 +43,7 @@ export interface SupplyAlert {
   week_end: string | null;
   required_date: string;
   order_by_date: string;
-  planned_use_date: string | null;
-  actual_delivery_date: string | null;
-  delay_days: number;
-  is_critical: boolean;
-  status: SupplyAlertStatus;
+  status: 'pending' | 'quoted' | 'approved' | 'ordered' | 'in_transit' | 'delivered' | 'contracted' | 'delayed';
   total_quantity: number;
   total_value: number;
   notes: string | null;
@@ -60,25 +56,10 @@ export interface SupplyAlert {
     measurement_number: number;
     start_date: string;
     end_date: string;
-    status: string;
   };
 }
 
-// Backend-driven KPIs (from get_supply_kpis RPC)
 export interface SupplyKPIs {
-  delayed_orders: number;
-  on_time_delivered: number;
-  late_delivered: number;
-  critical_purchases: number;
-  planned_without_order: number;
-  avg_delay_days: number;
-  production_stopped: number;
-  total_pending_value: number;
-  next_order_date: string | null;
-}
-
-// Legacy KPI interface for backward compatibility
-export interface LegacySupplyKPIs {
   pendingAlerts: number;
   delayedAlerts: number;
   orderedAlerts: number;
@@ -119,14 +100,4 @@ export const ALERT_STATUS_COLORS: Record<SupplyAlertStatus, string> = {
   delivered: 'bg-green-500',
   contracted: 'bg-teal-500',
   delayed: 'bg-red-500'
-};
-
-// Measurement status for backend validation
-export type MeasurementStatus = 'planned' | 'in_progress' | 'executed' | 'closed';
-
-export const MEASUREMENT_STATUS_LABELS: Record<MeasurementStatus, string> = {
-  planned: 'Planejada',
-  in_progress: 'Em Andamento',
-  executed: 'Executada',
-  closed: 'Fechada'
 };
