@@ -991,6 +991,7 @@ export type Database = {
           notes: string | null
           project_id: string
           start_date: string
+          status: string | null
           updated_at: string
         }
         Insert: {
@@ -1001,6 +1002,7 @@ export type Database = {
           notes?: string | null
           project_id: string
           start_date: string
+          status?: string | null
           updated_at?: string
         }
         Update: {
@@ -1011,6 +1013,7 @@ export type Database = {
           notes?: string | null
           project_id?: string
           start_date?: string
+          status?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2273,14 +2276,18 @@ export type Database = {
       }
       supply_alerts: {
         Row: {
+          actual_delivery_date: string | null
           created_at: string
+          delay_days: number | null
           family_id: string
           id: string
+          is_critical: boolean | null
           is_labor: boolean | null
           macro_id: string | null
           measurement_id: string | null
           notes: string | null
           order_by_date: string
+          planned_use_date: string | null
           project_id: string
           required_date: string
           scope_id: string | null
@@ -2293,14 +2300,18 @@ export type Database = {
           week_start: string | null
         }
         Insert: {
+          actual_delivery_date?: string | null
           created_at?: string
+          delay_days?: number | null
           family_id: string
           id?: string
+          is_critical?: boolean | null
           is_labor?: boolean | null
           macro_id?: string | null
           measurement_id?: string | null
           notes?: string | null
           order_by_date: string
+          planned_use_date?: string | null
           project_id: string
           required_date: string
           scope_id?: string | null
@@ -2313,14 +2324,18 @@ export type Database = {
           week_start?: string | null
         }
         Update: {
+          actual_delivery_date?: string | null
           created_at?: string
+          delay_days?: number | null
           family_id?: string
           id?: string
+          is_critical?: boolean | null
           is_labor?: boolean | null
           macro_id?: string | null
           measurement_id?: string | null
           notes?: string | null
           order_by_date?: string
+          planned_use_date?: string | null
           project_id?: string
           required_date?: string
           scope_id?: string | null
@@ -2560,6 +2575,10 @@ export type Database = {
       }
       admin_exists: { Args: never; Returns: boolean }
       check_legacy_data_status: { Args: never; Returns: Json }
+      close_labor_measurement: {
+        Args: { p_contract_id: string; p_house_ids: number[]; p_notes?: string }
+        Returns: undefined
+      }
       complete_orphan_data_migration: {
         Args: { target_company_id: string }
         Returns: Json
@@ -2575,7 +2594,19 @@ export type Database = {
       }
       generate_temp_password: { Args: never; Returns: string }
       generate_unique_slug: { Args: { company_name: string }; Returns: string }
+      get_available_measurements: {
+        Args: { p_project_id: string }
+        Returns: {
+          end_date: string
+          id: string
+          measurement_number: number
+          notes: string
+          start_date: string
+          status: string
+        }[]
+      }
       get_orphan_data_counts: { Args: never; Returns: Json }
+      get_supply_kpis: { Args: { p_project_id: string }; Returns: Json }
       get_user_company_id: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
