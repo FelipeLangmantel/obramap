@@ -932,6 +932,7 @@ export type Database = {
       measurement_services: {
         Row: {
           created_at: string
+          family_id: string | null
           id: string
           macro_color: string
           macro_id: string
@@ -946,6 +947,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          family_id?: string | null
           id?: string
           macro_color?: string
           macro_id: string
@@ -960,6 +962,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          family_id?: string | null
           id?: string
           macro_color?: string
           macro_id?: string
@@ -973,6 +976,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "measurement_services_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "material_families"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "measurement_services_measurement_id_fkey"
             columns: ["measurement_id"]
