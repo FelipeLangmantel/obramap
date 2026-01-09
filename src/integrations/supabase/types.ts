@@ -2287,8 +2287,11 @@ export type Database = {
           measurement_id: string | null
           notes: string | null
           order_by_date: string
+          planned_production_id: string | null
           planned_use_date: string | null
           project_id: string
+          purchase_order_id: string | null
+          quotation_id: string | null
           required_date: string
           scope_id: string | null
           scope_item_id: string | null
@@ -2311,8 +2314,11 @@ export type Database = {
           measurement_id?: string | null
           notes?: string | null
           order_by_date: string
+          planned_production_id?: string | null
           planned_use_date?: string | null
           project_id: string
+          purchase_order_id?: string | null
+          quotation_id?: string | null
           required_date: string
           scope_id?: string | null
           scope_item_id?: string | null
@@ -2335,8 +2341,11 @@ export type Database = {
           measurement_id?: string | null
           notes?: string | null
           order_by_date?: string
+          planned_production_id?: string | null
           planned_use_date?: string | null
           project_id?: string
+          purchase_order_id?: string | null
+          quotation_id?: string | null
           required_date?: string
           scope_id?: string | null
           scope_item_id?: string | null
@@ -2367,6 +2376,20 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_alerts_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_alerts_quotation_id_fkey"
+            columns: ["quotation_id"]
+            isOneToOne: false
+            referencedRelation: "quotation_requests"
             referencedColumns: ["id"]
           },
           {
@@ -2584,6 +2607,20 @@ export type Database = {
         Returns: Json
       }
       count_orphan_projects: { Args: never; Returns: number }
+      create_order_from_alert: {
+        Args: {
+          p_alert_id: string
+          p_expected_delivery_date?: string
+          p_notes?: string
+          p_order_number?: string
+          p_supplier_id: string
+        }
+        Returns: string
+      }
+      create_quotation_from_alert: {
+        Args: { p_alert_id: string; p_notes?: string; p_title?: string }
+        Returns: string
+      }
       create_system_admin: {
         Args: {
           admin_display_name: string
@@ -2606,6 +2643,35 @@ export type Database = {
         }[]
       }
       get_orphan_data_counts: { Args: never; Returns: Json }
+      get_pending_supply_alerts: {
+        Args: { p_project_id: string }
+        Returns: {
+          actual_delivery_date: string
+          created_at: string
+          delay_days: number
+          family_id: string
+          id: string
+          is_critical: boolean
+          is_labor: boolean
+          macro_id: string
+          measurement_id: string
+          notes: string
+          order_by_date: string
+          planned_use_date: string
+          project_id: string
+          purchase_order_id: string
+          quotation_id: string
+          required_date: string
+          scope_id: string
+          scope_item_id: string
+          status: string
+          total_quantity: number
+          total_value: number
+          updated_at: string
+          week_end: string
+          week_start: string
+        }[]
+      }
       get_supply_kpis: { Args: { p_project_id: string }; Returns: Json }
       get_user_company_id: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
@@ -2647,6 +2713,10 @@ export type Database = {
       }
       user_must_change_password: {
         Args: { _user_id: string }
+        Returns: boolean
+      }
+      validate_alert_for_quotation: {
+        Args: { p_alert_id: string }
         Returns: boolean
       }
     }
