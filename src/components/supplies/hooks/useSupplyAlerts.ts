@@ -23,6 +23,7 @@ export function useSupplyAlerts(projectId: string | undefined) {
     setIsLoading(true);
     try {
       const [alertsRes, familiesRes, leadTimesRes, kpisRes] = await Promise.all([
+        // BUG FIX: Only fetch pending/delayed alerts for the Alerts tab
         supabase
           .from('supply_alerts')
           .select(`
@@ -32,6 +33,7 @@ export function useSupplyAlerts(projectId: string | undefined) {
             scope_item:scope_items(id, name, category, quantity, unit, unit_value, scope_id, macro_id)
           `)
           .eq('project_id', projectId)
+          .in('status', ['pending', 'delayed'])
           .order('order_by_date', { ascending: true }),
         supabase
           .from('material_families')
@@ -114,9 +116,15 @@ export function useSupplyAlerts(projectId: string | undefined) {
       
       if (error) throw error;
       
-      setAlerts(prev => prev.map(a => 
-        a.id === alertId ? { ...a, status } : a
-      ));
+      // BUG FIX: Remove from local state if status changed to non-pending/delayed
+      // This prevents the alert from reappearing when navigating back
+      if (status !== 'pending' && status !== 'delayed') {
+        setAlerts(prev => prev.filter(a => a.id !== alertId));
+      } else {
+        setAlerts(prev => prev.map(a => 
+          a.id === alertId ? { ...a, status } : a
+        ));
+      }
       
       // Reload KPIs after status change
       const { data: newKpis } = await supabase.rpc('get_supply_kpis', { p_project_id: projectId });
@@ -130,6 +138,62 @@ export function useSupplyAlerts(projectId: string | undefined) {
       toast.error('Erro ao atualizar status');
     }
   }, [projectId]);
+
+  // Create quotation from alert using transactional RPC
+  const createQuotationFromAlert = useCallback(async (alertId: string, title?: string, notes?: string) => {
+    try {
+      const { data, error } = await supabase.rpc('create_quotation_from_alert', {
+        p_alert_id: alertId,
+        p_title: title || null,
+        p_notes: notes || null
+      });
+      
+      if (error) throw error;
+      
+      // Remove alert from local state since it's now quoted
+      setAlerts(prev => prev.filter(a => a.id !== alertId));
+      
+      toast.success('Cotação criada com sucesso');
+      await loadData();
+      return data as string;
+    } catch (error: any) {
+      console.error('Error creating quotation:', error);
+      toast.error(error.message || 'Erro ao criar cotação');
+      throw error;
+    }
+  }, [loadData]);
+
+  // Create purchase order from alert using transactional RPC
+  const createOrderFromAlert = useCallback(async (
+    alertId: string, 
+    supplierId: string,
+    orderNumber?: string,
+    expectedDeliveryDate?: string,
+    notes?: string
+  ) => {
+    try {
+      const { data, error } = await supabase.rpc('create_order_from_alert', {
+        p_alert_id: alertId,
+        p_supplier_id: supplierId,
+        p_order_number: orderNumber || null,
+        p_expected_delivery_date: expectedDeliveryDate || null,
+        p_notes: notes || null
+      });
+      
+      if (error) throw error;
+      
+      // Remove alert from local state since it's now ordered
+      setAlerts(prev => prev.filter(a => a.id !== alertId));
+      
+      toast.success('Pedido de compra criado com sucesso');
+      await loadData();
+      return data as string;
+    } catch (error: any) {
+      console.error('Error creating order:', error);
+      toast.error(error.message || 'Erro ao criar pedido');
+      throw error;
+    }
+  }, [loadData]);
 
   const saveProjectLeadTime = useCallback(async (familyId: string, leadTimeDays: number) => {
     if (!projectId) return;
@@ -207,6 +271,8 @@ export function useSupplyAlerts(projectId: string | undefined) {
     regenerateAlerts,
     updateAlertStatus,
     saveProjectLeadTime,
-    closeLaborMeasurement
+    closeLaborMeasurement,
+    createQuotationFromAlert,
+    createOrderFromAlert
   };
 }

@@ -51,6 +51,8 @@ export interface SupplyAlert {
   total_quantity: number;
   total_value: number;
   notes: string | null;
+  quotation_id: string | null;
+  purchase_order_id: string | null;
   created_at: string;
   updated_at: string;
   family?: MaterialFamily;
