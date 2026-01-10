@@ -4642,6 +4642,10 @@ export type Database = {
         Args: { p_alert_id: string }
         Returns: boolean
       }
+      validate_contract_ready: {
+        Args: { p_contract_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin" | "editor" | "viewer"
