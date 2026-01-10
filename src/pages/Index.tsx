@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ConstructionProvider, useConstruction } from "@/contexts/ConstructionContext";
+import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -250,11 +250,7 @@ const Index = () => {
     return null;
   }
 
-  return (
-    <ConstructionProvider>
-      <IndexContent />
-    </ConstructionProvider>
-  );
+  return <IndexContent />;
 };
 
 export default Index;

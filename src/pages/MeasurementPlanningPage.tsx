@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { ConstructionProvider, useConstruction } from "@/contexts/ConstructionContext";
+import { useConstruction } from "@/contexts/ConstructionContext";
 import { useMeasurementPlanning } from "@/hooks/useMeasurementPlanning";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,16 +13,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Save, TrendingUp, TrendingDown, DollarSign, Target } from "lucide-react";
+import { ArrowLeft, Save, TrendingUp, TrendingDown, DollarSign, Target, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MeasurementPlanningTable } from "@/components/planning/MeasurementPlanningTable";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 
-function MeasurementPlanningContent() {
+export default function MeasurementPlanningPage() {
   const navigate = useNavigate();
   const { user, isLoading: authLoading, canAccessProject } = useAuth();
-  const { projects, currentProject, setCurrentProject } = useConstruction();
+  const { projects, currentProject, setCurrentProject, isLoading: constructionLoading } = useConstruction();
   const [selectedMeasurementId, setSelectedMeasurementId] = useState<string>("");
   
   const {
@@ -87,7 +87,7 @@ function MeasurementPlanningContent() {
     }
   };
 
-  if (authLoading) {
+  if (authLoading || constructionLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Skeleton className="h-12 w-48" />
@@ -95,15 +95,21 @@ function MeasurementPlanningContent() {
     );
   }
 
+  if (!user) {
+    return null;
+  }
+
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <div className="flex min-h-screen w-full bg-background">
-        <AppSidebar activeView="planning" onViewChange={() => {}} />
+        <AppSidebar activeView="planning" onViewChange={() => navigate("/")} />
         
         <main className="flex-1 overflow-auto">
           <div className="sticky top-0 z-10 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b px-4 py-3">
             <div className="flex items-center gap-4">
-              <SidebarTrigger />
+              <SidebarTrigger className="p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors">
+                <Menu className="h-6 w-6" />
+              </SidebarTrigger>
               <Button 
                 variant="ghost" 
                 size="icon"
@@ -286,13 +292,5 @@ function MeasurementPlanningContent() {
         </main>
       </div>
     </SidebarProvider>
-  );
-}
-
-export default function MeasurementPlanningPage() {
-  return (
-    <ConstructionProvider>
-      <MeasurementPlanningContent />
-    </ConstructionProvider>
   );
 }
