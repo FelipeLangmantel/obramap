@@ -44,11 +44,11 @@ export default function Auth() {
   useEffect(() => {
     if (user && !authLoading) {
       if (mustChangePassword) {
-        navigate("/change-password");
+        navigate("/change-password", { replace: true });
       } else if (isSystemAdmin) {
-        navigate("/admin");
+        navigate("/admin/dashboard", { replace: true });
       } else {
-        navigate("/");
+        navigate("/", { replace: true });
       }
     }
   }, [user, authLoading, mustChangePassword, isSystemAdmin, navigate]);
@@ -80,8 +80,8 @@ export default function Auth() {
           toast.error(error.message);
         }
       } else {
+        // Redirecionamento é feito no useEffect acima, após carregar perfil/permissões
         toast.success("Login realizado com sucesso!");
-        navigate("/");
       }
     } catch (error) {
       toast.error("Erro inesperado. Tente novamente.");
