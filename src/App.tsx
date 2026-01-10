@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import { ConstructionProvider } from "./contexts/ConstructionContext";
 import { SystemSetupCheck } from "./components/setup/SystemSetupCheck";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -23,17 +24,19 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <SystemSetupCheck>
-            <Routes>
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/change-password" element={<ChangePassword />} />
-              <Route path="/admin/dashboard" element={<AdminDashboard />} />
-              <Route path="/admin/migration" element={<LegacyDataMigration />} />
-              <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
-              <Route path="/" element={<Index />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </SystemSetupCheck>
+          <ConstructionProvider>
+            <SystemSetupCheck>
+              <Routes>
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/change-password" element={<ChangePassword />} />
+                <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                <Route path="/admin/migration" element={<LegacyDataMigration />} />
+                <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
+                <Route path="/" element={<Index />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </SystemSetupCheck>
+          </ConstructionProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
