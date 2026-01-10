@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 import { toast } from "sonner";
 
 export interface ContractService {
@@ -28,8 +29,9 @@ export interface ProjectContract {
 }
 
 export function useProjectContract() {
-  const { company, profile } = useAuth();
+  const { company } = useAuth();
   const { currentProject } = useConstruction();
+  const { currentStep, advanceToStep } = useProjectSetupFlow();
   
   const [contract, setContract] = useState<ProjectContract | null>(null);
   const [services, setServices] = useState<ContractService[]>([]);
@@ -69,6 +71,12 @@ export function useProjectContract() {
           notes: contractData.notes,
         });
 
+        // ✅ Se já existe contrato no backend, garantir progressão do fluxo
+        // (evita casos onde o contrato foi criado mas o setup_step ficou preso em budget_defined)
+        if (currentStep && currentStep !== "contract_defined" && currentStep !== "long_term_planned") {
+          await advanceToStep("contract_defined");
+        }
+
         // Sync contract services from budget (calls RPC to import missing services)
         await supabase.rpc("sync_contract_services", {
           p_project_id: currentProject.id,
@@ -85,17 +93,19 @@ export function useProjectContract() {
         if (servicesError) throw servicesError;
 
         if (servicesData && servicesData.length > 0) {
-          setServices(servicesData.map(s => ({
-            id: s.id,
-            macro_id: s.macro_id,
-            macro_name: s.macro_name,
-            scope_id: s.scope_id,
-            scope_name: s.scope_name,
-            unit_revenue_value: Number(s.unit_revenue_value),
-            max_cost_value: Number(s.max_cost_value),
-            cost_percent: Number(s.cost_percent),
-            status: s.status,
-          })));
+          setServices(
+            servicesData.map((s) => ({
+              id: s.id,
+              macro_id: s.macro_id,
+              macro_name: s.macro_name,
+              scope_id: s.scope_id,
+              scope_name: s.scope_name,
+              unit_revenue_value: Number(s.unit_revenue_value),
+              max_cost_value: Number(s.max_cost_value),
+              cost_percent: Number(s.cost_percent),
+              status: s.status,
+            }))
+          );
         } else {
           // Load services from scope_costs (budget) as fallback
           await loadServicesFromBudget();
@@ -131,7 +141,7 @@ export function useProjectContract() {
     } finally {
       setLoading(false);
     }
-  }, [currentProject?.id, company?.id]);
+  }, [currentProject?.id, company?.id, currentStep, advanceToStep]);
 
   const loadServicesFromBudget = async () => {
     if (!currentProject?.id) return;
@@ -332,6 +342,15 @@ export function useProjectContract() {
         .insert(servicesToInsert);
 
       if (servicesError) throw servicesError;
+
+      // ✅ Ao salvar contrato, garantir progressão do fluxo
+      try {
+        if (currentStep && currentStep !== "contract_defined" && currentStep !== "long_term_planned") {
+          await advanceToStep("contract_defined");
+        }
+      } catch {
+        // não bloquear o salvamento por falha de progressão
+      }
 
       toast.success("Contrato salvo com sucesso!");
       return true;
