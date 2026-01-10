@@ -1,0 +1,310 @@
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useConstruction } from "@/contexts/ConstructionContext";
+import { toast } from "sonner";
+
+export interface ContractService {
+  id?: string;
+  macro_id: string;
+  macro_name: string;
+  scope_id: string;
+  scope_name: string;
+  unit_revenue_value: number;
+  max_cost_value: number;
+  cost_percent: number;
+  status: string;
+}
+
+export interface ProjectContract {
+  id?: string;
+  contract_number: string | null;
+  contract_date: string | null;
+  contract_value_total: number;
+  cost_target_percent: number;
+  target_margin_percent: number | null;
+  target_profit_value: number | null;
+  notes: string | null;
+}
+
+export function useProjectContract() {
+  const { company, profile } = useAuth();
+  const { currentProject } = useConstruction();
+  
+  const [contract, setContract] = useState<ProjectContract | null>(null);
+  const [services, setServices] = useState<ContractService[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [hasPlanning, setHasPlanning] = useState(false);
+
+  // Load contract and services
+  const loadData = useCallback(async () => {
+    if (!currentProject?.id || !company?.id) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Load existing contract
+      const { data: contractData, error: contractError } = await supabase
+        .from("project_contracts")
+        .select("*")
+        .eq("project_id", currentProject.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (contractError) throw contractError;
+
+      if (contractData) {
+        setContract({
+          id: contractData.id,
+          contract_number: contractData.contract_number,
+          contract_date: contractData.contract_date,
+          contract_value_total: contractData.contract_value_total,
+          cost_target_percent: contractData.cost_target_percent,
+          target_margin_percent: contractData.target_margin_percent,
+          target_profit_value: contractData.target_profit_value,
+          notes: contractData.notes,
+        });
+
+        // Load existing contract services
+        const { data: servicesData, error: servicesError } = await supabase
+          .from("project_contract_services")
+          .select("*")
+          .eq("contract_id", contractData.id)
+          .order("macro_name", { ascending: true });
+
+        if (servicesError) throw servicesError;
+
+        if (servicesData && servicesData.length > 0) {
+          setServices(servicesData.map(s => ({
+            id: s.id,
+            macro_id: s.macro_id,
+            macro_name: s.macro_name,
+            scope_id: s.scope_id,
+            scope_name: s.scope_name,
+            unit_revenue_value: Number(s.unit_revenue_value),
+            max_cost_value: Number(s.max_cost_value),
+            cost_percent: Number(s.cost_percent),
+            status: s.status,
+          })));
+        } else {
+          // Load services from measurement_services
+          await loadServicesFromMeasurements();
+        }
+
+        // Check if planning exists
+        const { data: planningData } = await supabase
+          .from("planning_versions")
+          .select("id")
+          .eq("project_id", currentProject.id)
+          .eq("is_active", true)
+          .limit(1);
+
+        setHasPlanning((planningData?.length || 0) > 0);
+      } else {
+        // Create default contract
+        setContract({
+          contract_number: null,
+          contract_date: new Date().toISOString().split("T")[0],
+          contract_value_total: 0,
+          cost_target_percent: 70,
+          target_margin_percent: 30,
+          target_profit_value: 0,
+          notes: null,
+        });
+
+        // Load services from measurement_services
+        await loadServicesFromMeasurements();
+      }
+    } catch (error) {
+      console.error("Error loading contract data:", error);
+      toast.error("Erro ao carregar dados do contrato");
+    } finally {
+      setLoading(false);
+    }
+  }, [currentProject?.id, company?.id]);
+
+  const loadServicesFromMeasurements = async () => {
+    if (!currentProject?.id) return;
+
+    const { data: measurementServices, error } = await supabase
+      .from("measurement_services")
+      .select("macro_id, macro_name, scope_id, scope_name")
+      .eq("project_id", currentProject.id);
+
+    if (error) {
+      console.error("Error loading measurement services:", error);
+      return;
+    }
+
+    // Get unique combinations
+    const uniqueServices = new Map<string, ContractService>();
+    measurementServices?.forEach(ms => {
+      const key = `${ms.macro_id}-${ms.scope_id}`;
+      if (!uniqueServices.has(key)) {
+        uniqueServices.set(key, {
+          macro_id: ms.macro_id,
+          macro_name: ms.macro_name,
+          scope_id: ms.scope_id,
+          scope_name: ms.scope_name,
+          unit_revenue_value: 0,
+          max_cost_value: 0,
+          cost_percent: 0,
+          status: "pending",
+        });
+      }
+    });
+
+    setServices(Array.from(uniqueServices.values()));
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Update service value
+  const updateServiceValue = useCallback((
+    macroId: string,
+    scopeId: string,
+    value: number
+  ) => {
+    const costPercent = contract?.cost_target_percent || 70;
+    
+    setServices(prev => prev.map(s => {
+      if (s.macro_id === macroId && s.scope_id === scopeId) {
+        const maxCost = value * (costPercent / 100);
+        return {
+          ...s,
+          unit_revenue_value: value,
+          max_cost_value: maxCost,
+          cost_percent: value > 0 ? costPercent : 0,
+          status: value > 0 ? "ok" : "pending",
+        };
+      }
+      return s;
+    }));
+  }, [contract?.cost_target_percent]);
+
+  // Recalculate all costs when target percent changes
+  const updateCostTarget = useCallback((newPercent: number) => {
+    setContract(prev => prev ? { ...prev, cost_target_percent: newPercent, target_margin_percent: 100 - newPercent } : null);
+    
+    setServices(prev => prev.map(s => ({
+      ...s,
+      max_cost_value: s.unit_revenue_value * (newPercent / 100),
+      cost_percent: s.unit_revenue_value > 0 ? newPercent : 0,
+    })));
+  }, []);
+
+  // Calculate totals
+  const totals = {
+    totalRevenue: services.reduce((acc, s) => acc + s.unit_revenue_value, 0),
+    totalMaxCost: services.reduce((acc, s) => acc + s.max_cost_value, 0),
+    projectedMargin: services.reduce((acc, s) => acc + (s.unit_revenue_value - s.max_cost_value), 0),
+    servicesWithoutPrice: services.filter(s => s.unit_revenue_value === 0).length,
+  };
+
+  // Save contract
+  const saveContract = async (): Promise<boolean> => {
+    if (!currentProject?.id || !company?.id || !contract) {
+      toast.error("Dados do projeto não disponíveis");
+      return false;
+    }
+
+    setSaving(true);
+    try {
+      let contractId = contract.id;
+
+      // Upsert contract
+      if (contractId) {
+        const { error } = await supabase
+          .from("project_contracts")
+          .update({
+            contract_number: contract.contract_number,
+            contract_date: contract.contract_date,
+            contract_value_total: totals.totalRevenue,
+            cost_target_percent: contract.cost_target_percent,
+            target_margin_percent: contract.target_margin_percent,
+            target_profit_value: totals.projectedMargin,
+            notes: contract.notes,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", contractId);
+
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from("project_contracts")
+          .insert({
+            company_id: company.id,
+            project_id: currentProject.id,
+            contract_number: contract.contract_number,
+            contract_date: contract.contract_date,
+            contract_value_total: totals.totalRevenue,
+            cost_target_percent: contract.cost_target_percent,
+            target_margin_percent: contract.target_margin_percent,
+            target_profit_value: totals.projectedMargin,
+            notes: contract.notes,
+          })
+          .select("id")
+          .single();
+
+        if (error) throw error;
+        contractId = data.id;
+        setContract(prev => prev ? { ...prev, id: contractId } : null);
+      }
+
+      // Delete existing services and insert new ones
+      await supabase
+        .from("project_contract_services")
+        .delete()
+        .eq("contract_id", contractId!);
+
+      const servicesToInsert = services.map(s => ({
+        company_id: company.id,
+        project_id: currentProject.id,
+        contract_id: contractId!,
+        macro_id: s.macro_id,
+        macro_name: s.macro_name,
+        scope_id: s.scope_id,
+        scope_name: s.scope_name,
+        unit_revenue_value: s.unit_revenue_value,
+        max_cost_value: s.max_cost_value,
+        cost_percent: s.cost_percent,
+        status: s.status,
+      }));
+
+      const { error: servicesError } = await supabase
+        .from("project_contract_services")
+        .insert(servicesToInsert);
+
+      if (servicesError) throw servicesError;
+
+      toast.success("Contrato salvo com sucesso!");
+      return true;
+    } catch (error) {
+      console.error("Error saving contract:", error);
+      toast.error("Erro ao salvar contrato");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return {
+    contract,
+    setContract,
+    services,
+    loading,
+    saving,
+    hasPlanning,
+    totals,
+    updateServiceValue,
+    updateCostTarget,
+    saveContract,
+    reload: loadData,
+  };
+}

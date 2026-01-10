@@ -1,0 +1,220 @@
+import { useState, useRef, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ContractService } from "@/hooks/useProjectContract";
+import { cn } from "@/lib/utils";
+import { Layers, Check, AlertTriangle } from "lucide-react";
+
+interface ContractServicesTableProps {
+  services: ContractService[];
+  updateServiceValue: (macroId: string, scopeId: string, value: number) => void;
+  isEditing: boolean;
+  costPercent: number;
+}
+
+// Cores suaves para macros
+const MACRO_COLORS: Record<string, string> = {};
+const COLOR_PALETTE = [
+  "bg-blue-50 border-l-blue-400",
+  "bg-emerald-50 border-l-emerald-400",
+  "bg-purple-50 border-l-purple-400",
+  "bg-orange-50 border-l-orange-400",
+  "bg-pink-50 border-l-pink-400",
+  "bg-cyan-50 border-l-cyan-400",
+  "bg-yellow-50 border-l-yellow-400",
+  "bg-indigo-50 border-l-indigo-400",
+];
+
+function getMacroColor(macroId: string): string {
+  if (!MACRO_COLORS[macroId]) {
+    const index = Object.keys(MACRO_COLORS).length % COLOR_PALETTE.length;
+    MACRO_COLORS[macroId] = COLOR_PALETTE[index];
+  }
+  return MACRO_COLORS[macroId];
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+  }).format(value);
+}
+
+function parseCurrencyInput(value: string): number {
+  // Remove currency symbol and formatting
+  const cleaned = value.replace(/[R$\s.]/g, "").replace(",", ".");
+  return parseFloat(cleaned) || 0;
+}
+
+interface EditableCellProps {
+  value: number;
+  onSave: (value: number) => void;
+  isEditing: boolean;
+}
+
+function EditableCell({ value, onSave, isEditing }: EditableCellProps) {
+  const [localValue, setLocalValue] = useState(value.toString());
+  const [isFocused, setIsFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setLocalValue(value.toFixed(2));
+    }
+  }, [value, isFocused]);
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    const parsed = parseCurrencyInput(localValue);
+    if (parsed !== value) {
+      onSave(parsed);
+    }
+    setLocalValue(parsed.toFixed(2));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      inputRef.current?.blur();
+    }
+    if (e.key === "Tab") {
+      // Allow natural tab behavior
+    }
+  };
+
+  if (!isEditing) {
+    return (
+      <span className={cn(
+        "font-mono text-right block",
+        value === 0 ? "text-muted-foreground" : "text-foreground"
+      )}>
+        {formatCurrency(value)}
+      </span>
+    );
+  }
+
+  return (
+    <Input
+      ref={inputRef}
+      type="text"
+      value={isFocused ? localValue : formatCurrency(value)}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onFocus={() => {
+        setIsFocused(true);
+        setLocalValue(value.toString());
+      }}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      className={cn(
+        "w-28 text-right font-mono h-8 px-2",
+        value === 0 && "border-yellow-400 bg-yellow-50"
+      )}
+    />
+  );
+}
+
+export function ContractServicesTable({
+  services,
+  updateServiceValue,
+  isEditing,
+  costPercent,
+}: ContractServicesTableProps) {
+  // Group services by macro
+  const groupedServices = services.reduce((acc, service) => {
+    const key = service.macro_id;
+    if (!acc[key]) {
+      acc[key] = {
+        macro_name: service.macro_name,
+        services: [],
+      };
+    }
+    acc[key].services.push(service);
+    return acc;
+  }, {} as Record<string, { macro_name: string; services: ContractService[] }>);
+
+  return (
+    <Card className="border-none shadow-sm">
+      <CardHeader className="pb-4">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Layers className="h-5 w-5 text-primary" />
+          Matriz de Serviços do Contrato
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="w-[200px] font-semibold">Etapa (Macro)</TableHead>
+                <TableHead className="w-[250px] font-semibold">Serviço (Scope)</TableHead>
+                <TableHead className="w-[150px] text-right font-semibold">
+                  Preço Contrato (R$)
+                </TableHead>
+                <TableHead className="w-[150px] text-right font-semibold">
+                  Custo Máx. (R$)
+                </TableHead>
+                <TableHead className="w-[80px] text-center font-semibold">% Custo</TableHead>
+                <TableHead className="w-[100px] text-center font-semibold">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {Object.entries(groupedServices).map(([macroId, group]) => (
+                group.services.map((service, idx) => (
+                  <TableRow
+                    key={`${service.macro_id}-${service.scope_id}`}
+                    className={cn(
+                      "border-l-4 transition-colors hover:bg-accent/30",
+                      getMacroColor(macroId)
+                    )}
+                  >
+                    <TableCell className="font-medium">
+                      {idx === 0 ? group.macro_name : ""}
+                    </TableCell>
+                    <TableCell>{service.scope_name}</TableCell>
+                    <TableCell className="text-right">
+                      <EditableCell
+                        value={service.unit_revenue_value}
+                        onSave={(value) => updateServiceValue(service.macro_id, service.scope_id, value)}
+                        isEditing={isEditing}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-muted-foreground">
+                      {formatCurrency(service.max_cost_value)}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="outline" className="font-mono">
+                        {service.unit_revenue_value > 0 ? `${costPercent}%` : "—"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {service.unit_revenue_value > 0 ? (
+                        <Badge className="bg-green-500/10 text-green-600 hover:bg-green-500/20">
+                          <Check className="h-3 w-3 mr-1" />
+                          OK
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20">
+                          <AlertTriangle className="h-3 w-3 mr-1" />
+                          Pendente
+                        </Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ))}
+              {services.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    Nenhum serviço encontrado. Cadastre serviços em "Etapas e Serviços" primeiro.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

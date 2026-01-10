@@ -15,6 +15,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import LegacyDataMigration from "./pages/admin/LegacyDataMigration";
 import MeasurementPlanningPage from "./pages/MeasurementPlanningPage";
 import LongTermPlanningPage from "./pages/LongTermPlanningPage";
+import ProjectContractPage from "./pages/ProjectContractPage";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +47,7 @@ const App = () => (
               <Route path="/admin/migration" element={<LegacyDataMigration />} />
               <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
               <Route path="/long-term-planning" element={<LongTermPlanningPage />} />
+              <Route path="/project-contract" element={<ProjectContractPage />} />
               <Route path="/" element={<Index />} />
               <Route path="*" element={<NotFound />} />
             </Route>

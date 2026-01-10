@@ -33,6 +33,7 @@ import {
   Package,
   Truck,
   Wallet,
+  FileText,
   Crown,
   ClipboardCheck,
   Calculator,
@@ -58,13 +59,14 @@ import obraMapLogo from "@/assets/obramap-logo-new.png";
 type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning";
 
 // Views com rotas separadas (navegam para página diferente)
-type RouteViewType = "measurement-planning" | "long-term-planning";
+type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract";
 type MenuViewType = ViewType | RouteViewType;
 
 // Mapeamento de views para rotas
 const ROUTE_VIEWS: Record<RouteViewType, string> = {
   "measurement-planning": "/measurement-planning",
   "long-term-planning": "/long-term-planning",
+  "project-contract": "/project-contract",
 };
 
 interface AppSidebarProps {
@@ -207,6 +209,12 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       view: "long-term-planning", 
       icon: Calendar,
       permissionId: "planejamento"
+    },
+    { 
+      title: "Contrato da Obra", 
+      view: "project-contract", 
+      icon: FileText,
+      permissionId: "financeiro"
     },
     {
       title: "Custos da Obra", 

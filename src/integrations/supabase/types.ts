@@ -2395,9 +2395,84 @@ export type Database = {
         }
         Relationships: []
       }
+      project_contract_services: {
+        Row: {
+          company_id: string
+          contract_id: string
+          cost_percent: number
+          created_at: string
+          id: string
+          macro_id: string
+          macro_name: string
+          max_cost_value: number
+          project_id: string
+          scope_id: string
+          scope_name: string
+          status: string
+          unit_revenue_value: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          contract_id: string
+          cost_percent?: number
+          created_at?: string
+          id?: string
+          macro_id: string
+          macro_name: string
+          max_cost_value?: number
+          project_id: string
+          scope_id: string
+          scope_name: string
+          status?: string
+          unit_revenue_value?: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          contract_id?: string
+          cost_percent?: number
+          created_at?: string
+          id?: string
+          macro_id?: string
+          macro_name?: string
+          max_cost_value?: number
+          project_id?: string
+          scope_id?: string
+          scope_name?: string
+          status?: string
+          unit_revenue_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_contract_services_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_contract_services_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "project_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_contract_services_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_contracts: {
         Row: {
           company_id: string
+          contract_date: string | null
+          contract_number: string | null
           contract_value_total: number
           cost_target_percent: number
           created_at: string
@@ -2411,6 +2486,8 @@ export type Database = {
         }
         Insert: {
           company_id: string
+          contract_date?: string | null
+          contract_number?: string | null
           contract_value_total?: number
           cost_target_percent?: number
           created_at?: string
@@ -2424,6 +2501,8 @@ export type Database = {
         }
         Update: {
           company_id?: string
+          contract_date?: string | null
+          contract_number?: string | null
           contract_value_total?: number
           cost_target_percent?: number
           created_at?: string
