@@ -3598,6 +3598,16 @@ export type Database = {
         Args: { p_measurement_id: string; p_new_risk: string }
         Returns: undefined
       }
+      generate_service_planning_targets: {
+        Args: {
+          p_measurement_number: number
+          p_period_end: string
+          p_period_start: string
+          p_project_id: string
+          p_scenario_id?: string
+        }
+        Returns: Json
+      }
       generate_service_risk_alert: {
         Args: { p_new_risk: string; p_service_id: string }
         Returns: undefined
