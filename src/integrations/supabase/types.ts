@@ -2674,6 +2674,64 @@ export type Database = {
           },
         ]
       }
+      purchase_requests: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          id: string
+          notes: string | null
+          planning_period_id: string
+          project_id: string
+          requested_by: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          planning_period_id: string
+          project_id: string
+          requested_by?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          planning_period_id?: string
+          project_id?: string
+          requested_by?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_pr_company"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_pr_project"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_requests_planning_period_id_fkey"
+            columns: ["planning_period_id"]
+            isOneToOne: false
+            referencedRelation: "planning_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quadras: {
         Row: {
           created_at: string
