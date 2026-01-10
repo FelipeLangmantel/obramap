@@ -2674,6 +2674,64 @@ export type Database = {
           },
         ]
       }
+      purchase_request_items: {
+        Row: {
+          created_at: string | null
+          id: string
+          input_id: string
+          input_name: string | null
+          period_supply_requirement_id: string
+          purchase_request_id: string
+          quantity_requested: number
+          unit: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          input_id: string
+          input_name?: string | null
+          period_supply_requirement_id: string
+          purchase_request_id: string
+          quantity_requested?: number
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          input_id?: string
+          input_name?: string | null
+          period_supply_requirement_id?: string
+          purchase_request_id?: string
+          quantity_requested?: number
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_request_items_input_id_fkey"
+            columns: ["input_id"]
+            isOneToOne: false
+            referencedRelation: "inputs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_request_items_period_supply_requirement_id_fkey"
+            columns: ["period_supply_requirement_id"]
+            isOneToOne: false
+            referencedRelation: "period_supply_requirements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_request_items_purchase_request_id_fkey"
+            columns: ["purchase_request_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_requests: {
         Row: {
           company_id: string
