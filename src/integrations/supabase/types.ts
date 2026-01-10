@@ -1318,6 +1318,170 @@ export type Database = {
         }
         Relationships: []
       }
+      planning_periods: {
+        Row: {
+          company_id: string
+          contract_percent: number
+          created_at: string
+          end_date: string
+          financial_balance_estimate: number
+          id: string
+          notes: string | null
+          period_number: number
+          planned_cost_estimate: number
+          planning_version_id: string
+          project_id: string
+          revenue_expected: number
+          revenue_target: number
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          contract_percent?: number
+          created_at?: string
+          end_date: string
+          financial_balance_estimate?: number
+          id?: string
+          notes?: string | null
+          period_number: number
+          planned_cost_estimate?: number
+          planning_version_id: string
+          project_id: string
+          revenue_expected?: number
+          revenue_target?: number
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          contract_percent?: number
+          created_at?: string
+          end_date?: string
+          financial_balance_estimate?: number
+          id?: string
+          notes?: string | null
+          period_number?: number
+          planned_cost_estimate?: number
+          planning_version_id?: string
+          project_id?: string
+          revenue_expected?: number
+          revenue_target?: number
+          start_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planning_periods_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planning_periods_planning_version_id_fkey"
+            columns: ["planning_version_id"]
+            isOneToOne: false
+            referencedRelation: "planning_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planning_periods_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      planning_services: {
+        Row: {
+          company_id: string
+          created_at: string
+          estimated_cost: number
+          helpers_per_team: number
+          id: string
+          macro_color: string
+          macro_id: string
+          macro_name: string
+          notes: string | null
+          planned_house_ids: number[]
+          planned_houses: number
+          planning_period_id: string
+          productivity_expected: number
+          professionals_per_team: number
+          project_id: string
+          scope_id: string
+          scope_name: string
+          teams_expected: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          estimated_cost?: number
+          helpers_per_team?: number
+          id?: string
+          macro_color?: string
+          macro_id: string
+          macro_name: string
+          notes?: string | null
+          planned_house_ids?: number[]
+          planned_houses?: number
+          planning_period_id: string
+          productivity_expected?: number
+          professionals_per_team?: number
+          project_id: string
+          scope_id: string
+          scope_name: string
+          teams_expected?: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          estimated_cost?: number
+          helpers_per_team?: number
+          id?: string
+          macro_color?: string
+          macro_id?: string
+          macro_name?: string
+          notes?: string | null
+          planned_house_ids?: number[]
+          planned_houses?: number
+          planning_period_id?: string
+          productivity_expected?: number
+          professionals_per_team?: number
+          project_id?: string
+          scope_id?: string
+          scope_name?: string
+          teams_expected?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planning_services_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planning_services_planning_period_id_fkey"
+            columns: ["planning_period_id"]
+            isOneToOne: false
+            referencedRelation: "planning_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planning_services_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planning_simulations: {
         Row: {
           applied_at: string | null
@@ -1484,6 +1648,7 @@ export type Database = {
       }
       planning_versions: {
         Row: {
+          company_id: string
           created_at: string
           created_by: string | null
           id: string
@@ -1493,6 +1658,7 @@ export type Database = {
           version_number: number
         }
         Insert: {
+          company_id: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -1502,6 +1668,7 @@ export type Database = {
           version_number?: number
         }
         Update: {
+          company_id?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -1511,6 +1678,13 @@ export type Database = {
           version_number?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "planning_versions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "planning_versions_project_id_fkey"
             columns: ["project_id"]
@@ -2890,6 +3064,10 @@ export type Database = {
         Returns: number
       }
       check_legacy_data_status: { Args: never; Returns: Json }
+      clone_planning_version: {
+        Args: { p_new_name: string; p_source_version_id: string }
+        Returns: string
+      }
       close_labor_measurement: {
         Args: { p_contract_id: string; p_house_ids: number[]; p_notes?: string }
         Returns: undefined
@@ -3034,6 +3212,10 @@ export type Database = {
           week_start: string
         }[]
       }
+      get_planning_version_summary: {
+        Args: { p_version_id: string }
+        Returns: Json
+      }
       get_project_contract_value: {
         Args: { p_project_id: string }
         Returns: number
@@ -3088,6 +3270,10 @@ export type Database = {
       }
       recalculate_measurement_totals: {
         Args: { p_measurement_id: string }
+        Returns: undefined
+      }
+      recalculate_planning_period_financials: {
+        Args: { p_period_id: string }
         Returns: undefined
       }
       recalculate_service_cost: {
