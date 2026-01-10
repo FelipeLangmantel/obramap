@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from "react";
-import { House, Macro, Scope, Quadra, MACROS_TEMPLATE, calculateHouseProgress, DEFAULT_MACRO_COLORS } from "@/data/constructionData";
+import { House, Macro, Scope, Quadra, EMPTY_MACROS_TEMPLATE, calculateHouseProgress, DEFAULT_MACRO_COLORS } from "@/data/constructionData";
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 import { toast } from "sonner";
@@ -124,8 +124,9 @@ const macrosToJson = (macros: Macro[]): Json => {
 };
 
 // Helper to convert Json to Macro[]
+// Retorna array vazio se não houver dados - usuário deve configurar manualmente
 const jsonToMacros = (json: Json): Macro[] => {
-  if (!json || !Array.isArray(json)) return JSON.parse(JSON.stringify(MACROS_TEMPLATE));
+  if (!json || !Array.isArray(json)) return [];
   return json as unknown as Macro[];
 };
 
@@ -429,7 +430,8 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addProject = useCallback(async (projectData: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete" | "legendFollowMacros" | "customLegendItems">): Promise<string> => {
-    const macrosTemplate = JSON.parse(JSON.stringify(MACROS_TEMPLATE));
+    // Template vazio - usuário deve configurar etapas manualmente
+    const macrosTemplate: Macro[] = [];
     
     // Get company_id via RPC function (safer than relying on profile state)
     const { data: companyId, error: companyError } = await supabase

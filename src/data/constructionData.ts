@@ -57,6 +57,10 @@ export const DEFAULT_MACRO_COLORS = [
   "#0891b2", // cyan-600
 ];
 
+// Template vazio para novas obras - usuário deve configurar manualmente
+export const EMPTY_MACROS_TEMPLATE: Macro[] = [];
+
+// Template legado com etapas predefinidas (mantido apenas para referência/importação)
 export const MACROS_TEMPLATE: Macro[] = [
   {
     id: "macro1",
@@ -133,7 +137,6 @@ export const MACROS_TEMPLATE: Macro[] = [
     ],
   },
 ];
-
 export const QUADRAS: Quadra[] = [
   { id: "A", name: "Quadra A", houses: [1, 2, 3, 4, 5, 6] },
   { id: "B", name: "Quadra B", houses: [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27] },

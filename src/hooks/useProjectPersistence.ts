@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { House, Macro, Quadra, MACROS_TEMPLATE } from "@/data/constructionData";
+import { House, Macro, Quadra } from "@/data/constructionData";
 import { Project, LegendItem, DEFAULT_LEGEND_ITEMS } from "@/contexts/ConstructionContext";
 import { Json } from "@/integrations/supabase/types";
 

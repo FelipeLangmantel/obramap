@@ -1,5 +1,5 @@
 import { useState, DragEvent, useMemo } from "react";
-import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy, Eye, Scale, Upload, FileUp, Download, Printer, Calculator, Lock, Unlock } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy, Eye, Scale, Upload, FileUp, Download, Printer, Calculator, Lock, Unlock, Layers } from "lucide-react";
 import { CopyMacrosDialog } from "./CopyMacrosDialog";
 import { ImportMacrosDialog } from "./ImportMacrosDialog";
 import { ImportWeightsFromBudgetDialog } from "./ImportWeightsFromBudgetDialog";
@@ -605,6 +605,42 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                       <Upload className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
                       <span className="hidden sm:inline">Importar Etapas</span>
                       <span className="sm:hidden">Importar</span>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {macrosTemplate.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-12 px-4 bg-secondary/30 rounded-lg border border-dashed border-border">
+                <Layers className="w-12 h-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium text-foreground mb-2">Nenhuma etapa cadastrada</h3>
+                <p className="text-sm text-muted-foreground text-center max-w-md mb-4">
+                  Esta obra ainda não possui etapas e serviços configurados. Configure as etapas para começar a acompanhar o progresso da obra.
+                </p>
+                {canEdit && (
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    <Button 
+                      variant="default"
+                      onClick={() => setShowAddMacro(true)}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Adicionar Etapa
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      onClick={() => setShowCopyDialog(true)}
+                    >
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copiar de Outra Obra
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      onClick={() => setShowImportDialog(true)}
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Importar
                     </Button>
                   </div>
                 )}

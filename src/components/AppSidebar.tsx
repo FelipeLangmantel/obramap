@@ -505,7 +505,14 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       />
 
       <ProjectsListDialog open={projectsListOpen} onOpenChange={setProjectsListOpen} />
-      <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} />
+      <NewProjectDialog 
+        open={newProjectOpen} 
+        onOpenChange={setNewProjectOpen}
+        onProjectCreated={() => {
+          // Abrir dialog de etapas após criar obra
+          setMacrosDialogOpen(true);
+        }}
+      />
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <ManageMacrosDialog open={macrosDialogOpen} onOpenChange={setMacrosDialogOpen} />
       <ManageQuadrasDialog open={quadrasDialogOpen} onOpenChange={setQuadrasDialogOpen} />
