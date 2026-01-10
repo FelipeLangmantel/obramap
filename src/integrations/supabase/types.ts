@@ -3390,6 +3390,10 @@ export type Database = {
         Args: { p_new_name: string; p_source_version_id: string }
         Returns: string
       }
+      clone_services_to_scenario: {
+        Args: { p_scenario_id: string }
+        Returns: Json
+      }
       close_labor_measurement: {
         Args: { p_contract_id: string; p_house_ids: number[]; p_notes?: string }
         Returns: undefined
@@ -3491,8 +3495,8 @@ export type Database = {
       estimate_service_duration_days: {
         Args: {
           p_planned_houses: number
-          p_productivity_expected: number
-          p_teams_expected: number
+          p_productivity: number
+          p_teams: number
         }
         Returns: number
       }
