@@ -4021,6 +4021,10 @@ export type Database = {
         Args: { p_service_id: string }
         Returns: undefined
       }
+      recalculate_service_planning_period_realized: {
+        Args: { p_service_id: string }
+        Returns: undefined
+      }
       recalculate_service_real_results: {
         Args: { p_service_id: string }
         Returns: undefined
