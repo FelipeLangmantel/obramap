@@ -12,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ImportBudgetItemsDialog } from "./ImportBudgetItemsDialog";
+import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 
 interface ScopeItem {
   id?: string;
@@ -96,6 +97,8 @@ export function BudgetItemsEditor({
   compact = false,
   scrollPositionKey
 }: BudgetItemsEditorProps) {
+  const { currentStep, advanceToStep } = useProjectSetupFlow();
+
   const [items, setItems] = useState<ScopeItem[]>([]);
   const [families, setFamilies] = useState<MaterialFamily[]>([]);
   const [inputs, setInputs] = useState<InputItem[]>([]);
@@ -483,6 +486,12 @@ export function BudgetItemsEditor({
           const updated = [...items];
           updated[index] = { ...item, id: data.id, isNew: false, isEditing: false };
           setItems(updated);
+
+          // ✅ Orçamento salvo -> liberar Contrato da Obra (avança setup_step para budget_defined)
+          if (currentStep === "project_created" || currentStep === "blocks_configured" || currentStep === "services_defined") {
+            await advanceToStep("budget_defined");
+          }
+
           return;
         }
       }
@@ -490,6 +499,12 @@ export function BudgetItemsEditor({
       const updated = [...items];
       updated[index] = { ...item, isNew: false, isEditing: false };
       setItems(updated);
+
+      // ✅ Orçamento salvo -> liberar Contrato da Obra (avança setup_step para budget_defined)
+      if (currentStep === "project_created" || currentStep === "blocks_configured" || currentStep === "services_defined") {
+        await advanceToStep("budget_defined");
+      }
+
       toast.success('Item salvo!');
     } catch (error) {
       console.error('Error saving item:', error);
