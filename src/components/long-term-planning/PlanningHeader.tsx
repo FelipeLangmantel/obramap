@@ -13,6 +13,7 @@ interface PlanningHeaderProps {
     total_revenue: number;
     projected_result: number;
   };
+  totalHouses: number; // Total de casas do projeto (não planejadas)
   hasChanges: boolean;
   saving: boolean;
   onSave: () => void;
@@ -22,6 +23,7 @@ interface PlanningHeaderProps {
 export function PlanningHeader({
   activeVersion,
   overallTotals,
+  totalHouses,
   hasChanges,
   saving,
   onSave,
@@ -91,7 +93,7 @@ export function PlanningHeader({
         <Card>
           <CardContent className="p-4">
             <div className="text-xs text-muted-foreground">Total Casas</div>
-            <div className="text-2xl font-bold">{overallTotals.total_houses}</div>
+            <div className="text-2xl font-bold">{totalHouses}</div>
           </CardContent>
         </Card>
 
