@@ -2589,6 +2589,7 @@ export type Database = {
           name: string
           project_type: string
           setup_complete: boolean
+          setup_step: string
           start_date: string
           total_houses: number
           unit_size: number
@@ -2610,6 +2611,7 @@ export type Database = {
           name: string
           project_type?: string
           setup_complete?: boolean
+          setup_step?: string
           start_date: string
           total_houses?: number
           unit_size?: number
@@ -2631,6 +2633,7 @@ export type Database = {
           name?: string
           project_type?: string
           setup_complete?: boolean
+          setup_step?: string
           start_date?: string
           total_houses?: number
           unit_size?: number

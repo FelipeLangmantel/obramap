@@ -10,10 +10,16 @@ import { LongTermPlanningMatrix } from "@/components/long-term-planning/LongTerm
 import { PlanningHeader } from "@/components/long-term-planning/PlanningHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ModuleBlockedAlert } from "@/components/ModuleBlockedAlert";
+import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 
 export default function LongTermPlanningPage() {
   const navigate = useNavigate();
   const { currentProject } = useConstruction();
+  const { canAccessModule } = useProjectSetupFlow();
+
+  // Verificar se pode acessar o módulo ANTES de carregar dados
+  const canAccess = canAccessModule("long-term-planning");
 
   const {
     activeVersion,
@@ -30,7 +36,7 @@ export default function LongTermPlanningPage() {
     savePlanning,
     refresh,
     retryInit,
-  } = useLongTermPlanning(currentProject?.id);
+  } = useLongTermPlanning(canAccess ? currentProject?.id : undefined);
 
   const handleViewChange = () => {
     // Não faz nada - só para satisfazer o AppSidebar
@@ -73,6 +79,8 @@ export default function LongTermPlanningPage() {
                   Selecione um projeto para visualizar o planejamento.
                 </AlertDescription>
               </Alert>
+            ) : !canAccess ? (
+              <ModuleBlockedAlert moduleKey="long-term-planning" moduleName="Planejamento de Longo Prazo" />
             ) : initializing ? (
               <div className="flex flex-col items-center justify-center py-20 space-y-4">
                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
