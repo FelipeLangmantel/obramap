@@ -39,7 +39,7 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
 
     // Run at most once per auth identity (anonymous vs user id + sysadmin flag)
     const key = `${user?.id ?? 'anon'}|${isSystemAdmin ? 'sys' : 'nosys'}`;
-    if (lastCheckKeyRef.current === key && !isLoading) return;
+    if (lastCheckKeyRef.current === key) return;
 
     inFlightRef.current = true;
     lastCheckKeyRef.current = key;
@@ -115,7 +115,7 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
       setIsLoading(false);
       inFlightRef.current = false;
     }
-  }, [isSystemAdmin, location.pathname, navigate, user?.id, isLoading]);
+  }, [isSystemAdmin, location.pathname, navigate, user?.id]);
 
   useEffect(() => {
     if (authLoading) return;

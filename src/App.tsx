@@ -24,19 +24,29 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <ConstructionProvider>
-            <SystemSetupCheck>
-              <Routes>
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/change-password" element={<ChangePassword />} />
-                <Route path="/admin/dashboard" element={<AdminDashboard />} />
-                <Route path="/admin/migration" element={<LegacyDataMigration />} />
-                <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
-                <Route path="/" element={<Index />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </SystemSetupCheck>
-          </ConstructionProvider>
+          <Routes>
+            {/* Auth routes - fora do SystemSetupCheck e ConstructionProvider */}
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/change-password" element={<ChangePassword />} />
+            
+            {/* Rotas protegidas com setup check */}
+            <Route
+              path="/*"
+              element={
+                <ConstructionProvider>
+                  <SystemSetupCheck>
+                    <Routes>
+                      <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                      <Route path="/admin/migration" element={<LegacyDataMigration />} />
+                      <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
+                      <Route path="/" element={<Index />} />
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </SystemSetupCheck>
+                </ConstructionProvider>
+              }
+            />
+          </Routes>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
