@@ -4605,6 +4605,14 @@ export type Database = {
         Args: { p_alert_id: string; p_resolved_by?: string }
         Returns: undefined
       }
+      set_contract_macro_value: {
+        Args: {
+          p_contract_id: string
+          p_macro_id: string
+          p_total_value: number
+        }
+        Returns: Json
+      }
       sync_contract_services: {
         Args: { p_company_id: string; p_project_id: string }
         Returns: Json
