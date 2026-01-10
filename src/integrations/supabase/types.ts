@@ -4388,6 +4388,14 @@ export type Database = {
         Args: { target_company_id: string }
         Returns: undefined
       }
+      initialize_long_term_planning: {
+        Args: {
+          p_company_id: string
+          p_number_of_periods?: number
+          p_project_id: string
+        }
+        Returns: Json
+      }
       is_company_admin: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
