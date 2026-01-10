@@ -2609,6 +2609,8 @@ export type Database = {
           actual_delivery_date: string | null
           created_at: string
           created_by: string | null
+          delivered_at: string | null
+          delivery_status: string | null
           expected_delivery_date: string | null
           id: string
           notes: string | null
@@ -2624,6 +2626,8 @@ export type Database = {
           actual_delivery_date?: string | null
           created_at?: string
           created_by?: string | null
+          delivered_at?: string | null
+          delivery_status?: string | null
           expected_delivery_date?: string | null
           id?: string
           notes?: string | null
@@ -2639,6 +2643,8 @@ export type Database = {
           actual_delivery_date?: string | null
           created_at?: string
           created_by?: string | null
+          delivered_at?: string | null
+          delivery_status?: string | null
           expected_delivery_date?: string | null
           id?: string
           notes?: string | null
@@ -4358,6 +4364,10 @@ export type Database = {
         Args: { p_service_id: string }
         Returns: undefined
       }
+      recalculate_supply_risk_on_orders: {
+        Args: { p_project_id: string }
+        Returns: undefined
+      }
       regenerate_supply_alerts: {
         Args: { p_project_id: string }
         Returns: undefined
@@ -4369,6 +4379,10 @@ export type Database = {
       reopen_planning_period: { Args: { p_period_id: string }; Returns: Json }
       resolve_risk_alert: {
         Args: { p_alert_id: string; p_resolved_by?: string }
+        Returns: undefined
+      }
+      sync_supply_on_delivery: {
+        Args: { p_purchase_order_id: string }
         Returns: undefined
       }
       unlink_houses_from_measurement: {
