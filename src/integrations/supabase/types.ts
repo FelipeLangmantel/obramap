@@ -1573,6 +1573,7 @@ export type Database = {
           end_date: string
           financial_balance_estimate: number
           global_target_percent: number | null
+          houses_at_risk: number | null
           id: string
           is_closed: boolean | null
           is_executed: boolean
@@ -1584,8 +1585,11 @@ export type Database = {
           planning_version_id: string
           project_id: string
           projected_result: number | null
+          result_at_risk: number | null
+          revenue_at_risk: number | null
           revenue_expected: number
           revenue_target: number
+          services_at_risk: number | null
           start_date: string
           status: string | null
           target_revenue_total: number | null
@@ -1600,6 +1604,7 @@ export type Database = {
           end_date: string
           financial_balance_estimate?: number
           global_target_percent?: number | null
+          houses_at_risk?: number | null
           id?: string
           is_closed?: boolean | null
           is_executed?: boolean
@@ -1611,8 +1616,11 @@ export type Database = {
           planning_version_id: string
           project_id: string
           projected_result?: number | null
+          result_at_risk?: number | null
+          revenue_at_risk?: number | null
           revenue_expected?: number
           revenue_target?: number
+          services_at_risk?: number | null
           start_date: string
           status?: string | null
           target_revenue_total?: number | null
@@ -1627,6 +1635,7 @@ export type Database = {
           end_date?: string
           financial_balance_estimate?: number
           global_target_percent?: number | null
+          houses_at_risk?: number | null
           id?: string
           is_closed?: boolean | null
           is_executed?: boolean
@@ -1638,8 +1647,11 @@ export type Database = {
           planning_version_id?: string
           project_id?: string
           projected_result?: number | null
+          result_at_risk?: number | null
+          revenue_at_risk?: number | null
           revenue_expected?: number
           revenue_target?: number
+          services_at_risk?: number | null
           start_date?: string
           status?: string | null
           target_revenue_total?: number | null
