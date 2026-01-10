@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -36,7 +35,13 @@ function SidebarTriggerButton() {
 
 type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning";
 
-function IndexContent() {
+/**
+ * ✅ Index agora é puro - sem redirects
+ * O SetupFlowGuard já garantiu que:
+ * - Usuário está autenticado
+ * - Tem acesso a esta rota
+ */
+function Index() {
   const [activeView, setActiveView] = useState<ViewType>("map");
   const { selectedHouse, isLoading, projects, currentProject, setCurrentProject } = useConstruction();
   const { canAccessProject } = useAuth();
@@ -47,17 +52,13 @@ function IndexContent() {
 
   useEffect(() => {
     // ✅ Proteção contra execução duplicada
-    if (hasAutoSelectedRef.current) {
-      console.log("[INDEX EFFECT] Already auto-selected, skipping");
-      return;
-    }
+    if (hasAutoSelectedRef.current) return;
     if (isLoading) return;
     if (projects.length === 0) return;
     
     // ✅ Se já tem projeto atual válido, não faz nada
     if (currentProject && canAccessProject(currentProject.id)) {
       hasAutoSelectedRef.current = true;
-      console.log("[INDEX EFFECT] Current project is valid, skipping auto-select");
       return;
     }
 
@@ -69,9 +70,9 @@ function IndexContent() {
 
     // ✅ Seleciona apenas uma vez
     hasAutoSelectedRef.current = true;
-    console.log("[INDEX EFFECT] Auto-selecting first accessible project:", accessibleProjects[0].id);
+    console.log("[INDEX] Auto-selecting first accessible project:", accessibleProjects[0].id);
     setCurrentProject(accessibleProjects[0].id);
-  }, [isLoading, projects.length, currentProject?.id]); // ✅ Deps mínimas
+  }, [isLoading, projects.length, currentProject?.id, canAccessProject, setCurrentProject]);
 
   if (isLoading) {
     return (
@@ -245,30 +246,5 @@ function IndexContent() {
     </SidebarProvider>
   );
 }
-
-const Index = () => {
-  const navigate = useNavigate();
-  const { user, isLoading: authLoading } = useAuth();
-
-  useEffect(() => {
-    if (!authLoading && !user) {
-      navigate("/auth");
-    }
-  }, [user, authLoading, navigate]);
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
-
-  return <IndexContent />;
-};
 
 export default Index;
