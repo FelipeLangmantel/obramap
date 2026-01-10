@@ -2923,6 +2923,7 @@ export type Database = {
       service_planning_targets: {
         Row: {
           company_id: string
+          contract_id: string | null
           created_at: string
           deviation_cost: number | null
           deviation_houses: number | null
@@ -2932,6 +2933,7 @@ export type Database = {
           is_locked: boolean | null
           macro_id: string | null
           macro_name: string | null
+          measurement_id: string | null
           measurement_number: number | null
           period_end: string
           period_start: string
@@ -2948,11 +2950,14 @@ export type Database = {
           scenario_id: string | null
           scope_id: string | null
           scope_name: string | null
+          target_margin_percent: number | null
+          target_profit_value: number | null
           teams_planned: number
           updated_at: string
         }
         Insert: {
           company_id: string
+          contract_id?: string | null
           created_at?: string
           deviation_cost?: number | null
           deviation_houses?: number | null
@@ -2962,6 +2967,7 @@ export type Database = {
           is_locked?: boolean | null
           macro_id?: string | null
           macro_name?: string | null
+          measurement_id?: string | null
           measurement_number?: number | null
           period_end: string
           period_start: string
@@ -2978,11 +2984,14 @@ export type Database = {
           scenario_id?: string | null
           scope_id?: string | null
           scope_name?: string | null
+          target_margin_percent?: number | null
+          target_profit_value?: number | null
           teams_planned?: number
           updated_at?: string
         }
         Update: {
           company_id?: string
+          contract_id?: string | null
           created_at?: string
           deviation_cost?: number | null
           deviation_houses?: number | null
@@ -2992,6 +3001,7 @@ export type Database = {
           is_locked?: boolean | null
           macro_id?: string | null
           macro_name?: string | null
+          measurement_id?: string | null
           measurement_number?: number | null
           period_end?: string
           period_start?: string
@@ -3008,6 +3018,8 @@ export type Database = {
           scenario_id?: string | null
           scope_id?: string | null
           scope_name?: string | null
+          target_margin_percent?: number | null
+          target_profit_value?: number | null
           teams_planned?: number
           updated_at?: string
         }
@@ -3017,6 +3029,20 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_planning_targets_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "project_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_planning_targets_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "measurements"
             referencedColumns: ["id"]
           },
           {
