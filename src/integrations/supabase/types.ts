@@ -929,6 +929,62 @@ export type Database = {
           },
         ]
       }
+      measurement_houses: {
+        Row: {
+          company_id: string
+          created_at: string
+          house_id: string
+          id: string
+          measurement_id: string
+          project_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          house_id: string
+          id?: string
+          measurement_id: string
+          project_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          house_id?: string
+          id?: string
+          measurement_id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "measurement_houses_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "measurement_houses_house_id_fkey"
+            columns: ["house_id"]
+            isOneToOne: false
+            referencedRelation: "houses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "measurement_houses_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "measurement_houses_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       measurement_services: {
         Row: {
           company_id: string | null
@@ -2754,6 +2810,17 @@ export type Database = {
           status: string
         }[]
       }
+      get_measurement_house_count: {
+        Args: { p_measurement_id: string }
+        Returns: number
+      }
+      get_measurement_houses: {
+        Args: { p_measurement_id: string }
+        Returns: {
+          house_id: string
+          house_number: number
+        }[]
+      }
       get_measurement_revenue_expected: {
         Args: { p_measurement_id: string }
         Returns: number
@@ -2817,7 +2884,20 @@ export type Database = {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
       }
+      is_house_in_active_measurement: {
+        Args: { p_company_id: string; p_house_id: string; p_project_id: string }
+        Returns: boolean
+      }
       is_system_admin: { Args: { _user_id: string }; Returns: boolean }
+      link_houses_to_measurement: {
+        Args: {
+          p_company_id: string
+          p_house_ids: string[]
+          p_measurement_id: string
+          p_project_id: string
+        }
+        Returns: Json
+      }
       migrate_orphan_data_to_company: {
         Args: { target_company_id: string }
         Returns: Json
@@ -2830,6 +2910,15 @@ export type Database = {
       regenerate_supply_alerts: {
         Args: { p_project_id: string }
         Returns: undefined
+      }
+      unlink_houses_from_measurement: {
+        Args: {
+          p_company_id: string
+          p_house_ids: string[]
+          p_measurement_id: string
+          p_project_id: string
+        }
+        Returns: Json
       }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
