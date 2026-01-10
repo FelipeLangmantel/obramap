@@ -10,6 +10,7 @@ interface SystemSetupCheckProps {
 }
 
 const RPC_TIMEOUT_MS = 12000;
+const SETUP_CHECK_CACHE_KEY = "obramap_system_setup_checked";
 
 type RpcResult<T> = { data: T; error: any };
 
@@ -39,6 +40,14 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
 
     // Run at most once per auth identity (anonymous vs user id + sysadmin flag)
     const key = `${user?.id ?? 'anon'}|${isSystemAdmin ? 'sys' : 'nosys'}`;
+
+    // Persisted cache (survives remounts) to avoid "loop" sensação na navegação
+    if (sessionStorage.getItem(SETUP_CHECK_CACHE_KEY) === key) {
+      lastCheckKeyRef.current = key;
+      setIsLoading(false);
+      return;
+    }
+
     if (lastCheckKeyRef.current === key) return;
 
     inFlightRef.current = true;
@@ -108,10 +117,11 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
       setNeedsSetup(true);
     } catch (error) {
       console.error('Error checking system status:', error);
-      // Fail-open to allow login if backend calls hang; setup wizard will still appear if we can detect it
+      // Fail-open to allow app if backend calls hang
       setNeedsSetup(false);
       setNeedsAdmin(false);
     } finally {
+      sessionStorage.setItem(SETUP_CHECK_CACHE_KEY, key);
       setIsLoading(false);
       inFlightRef.current = false;
     }
