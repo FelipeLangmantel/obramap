@@ -1255,6 +1255,102 @@ export type Database = {
           },
         ]
       }
+      period_supply_requirements: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          id: string
+          input_id: string
+          input_name: string | null
+          macro_id: string | null
+          planning_period_id: string
+          project_id: string
+          quantity_delivered: number | null
+          quantity_ordered: number | null
+          quantity_required: number
+          quantity_reserved: number | null
+          scope_id: string | null
+          service_plan_id: string
+          status: string | null
+          unit: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          id?: string
+          input_id: string
+          input_name?: string | null
+          macro_id?: string | null
+          planning_period_id: string
+          project_id: string
+          quantity_delivered?: number | null
+          quantity_ordered?: number | null
+          quantity_required?: number
+          quantity_reserved?: number | null
+          scope_id?: string | null
+          service_plan_id: string
+          status?: string | null
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          id?: string
+          input_id?: string
+          input_name?: string | null
+          macro_id?: string | null
+          planning_period_id?: string
+          project_id?: string
+          quantity_delivered?: number | null
+          quantity_ordered?: number | null
+          quantity_required?: number
+          quantity_reserved?: number | null
+          scope_id?: string | null
+          service_plan_id?: string
+          status?: string | null
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_psr_company"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_psr_project"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "period_supply_requirements_input_id_fkey"
+            columns: ["input_id"]
+            isOneToOne: false
+            referencedRelation: "inputs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "period_supply_requirements_planning_period_id_fkey"
+            columns: ["planning_period_id"]
+            isOneToOne: false
+            referencedRelation: "planning_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "period_supply_requirements_service_plan_id_fkey"
+            columns: ["service_plan_id"]
+            isOneToOne: false
+            referencedRelation: "service_planning_by_period"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       planned_productions: {
         Row: {
           created_at: string
