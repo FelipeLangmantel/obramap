@@ -2680,6 +2680,72 @@ export type Database = {
           },
         ]
       }
+      scenario_services: {
+        Row: {
+          created_at: string | null
+          id: string
+          macro_id: string | null
+          macro_name: string | null
+          measurement_service_id: string | null
+          planned_cost: number | null
+          planned_houses: number
+          productivity_expected: number | null
+          scenario_id: string
+          scope_id: string | null
+          scope_name: string | null
+          simulated_duration_days: number | null
+          teams_expected: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          macro_id?: string | null
+          macro_name?: string | null
+          measurement_service_id?: string | null
+          planned_cost?: number | null
+          planned_houses?: number
+          productivity_expected?: number | null
+          scenario_id: string
+          scope_id?: string | null
+          scope_name?: string | null
+          simulated_duration_days?: number | null
+          teams_expected?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          macro_id?: string | null
+          macro_name?: string | null
+          measurement_service_id?: string | null
+          planned_cost?: number | null
+          planned_houses?: number
+          productivity_expected?: number | null
+          scenario_id?: string
+          scope_id?: string | null
+          scope_name?: string | null
+          simulated_duration_days?: number | null
+          teams_expected?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scenario_services_measurement_service_id_fkey"
+            columns: ["measurement_service_id"]
+            isOneToOne: false
+            referencedRelation: "measurement_services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scenario_services_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "planning_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scope_costs: {
         Row: {
           created_at: string
