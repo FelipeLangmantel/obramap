@@ -2924,6 +2924,10 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string
+          deviation_cost: number | null
+          deviation_houses: number | null
+          deviation_productivity: number | null
+          execution_status: string | null
           id: string
           is_locked: boolean | null
           macro_id: string | null
@@ -2937,7 +2941,10 @@ export type Database = {
           planned_margin: number
           planned_revenue: number
           productivity_planned: number
+          productivity_real: number | null
           project_id: string
+          realized_cost: number | null
+          realized_houses: number | null
           scenario_id: string | null
           scope_id: string | null
           scope_name: string | null
@@ -2947,6 +2954,10 @@ export type Database = {
         Insert: {
           company_id: string
           created_at?: string
+          deviation_cost?: number | null
+          deviation_houses?: number | null
+          deviation_productivity?: number | null
+          execution_status?: string | null
           id?: string
           is_locked?: boolean | null
           macro_id?: string | null
@@ -2960,7 +2971,10 @@ export type Database = {
           planned_margin?: number
           planned_revenue?: number
           productivity_planned?: number
+          productivity_real?: number | null
           project_id: string
+          realized_cost?: number | null
+          realized_houses?: number | null
           scenario_id?: string | null
           scope_id?: string | null
           scope_name?: string | null
@@ -2970,6 +2984,10 @@ export type Database = {
         Update: {
           company_id?: string
           created_at?: string
+          deviation_cost?: number | null
+          deviation_houses?: number | null
+          deviation_productivity?: number | null
+          execution_status?: string | null
           id?: string
           is_locked?: boolean | null
           macro_id?: string | null
@@ -2983,7 +3001,10 @@ export type Database = {
           planned_margin?: number
           planned_revenue?: number
           productivity_planned?: number
+          productivity_real?: number | null
           project_id?: string
+          realized_cost?: number | null
+          realized_houses?: number | null
           scenario_id?: string | null
           scope_id?: string | null
           scope_name?: string | null
@@ -3825,6 +3846,10 @@ export type Database = {
       recalculate_service_cost: {
         Args: { p_service_id: string }
         Returns: number
+      }
+      recalculate_service_execution_deviation: {
+        Args: { p_measurement_number: number; p_project_id: string }
+        Returns: undefined
       }
       recalculate_service_forecast: {
         Args: { p_service_id: string }
