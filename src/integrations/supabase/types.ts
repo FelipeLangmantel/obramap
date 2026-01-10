@@ -1402,6 +1402,8 @@ export type Database = {
       }
       planning_periods: {
         Row: {
+          closed_at: string | null
+          closed_by: string | null
           company_id: string
           contract_percent: number
           created_at: string
@@ -1409,6 +1411,7 @@ export type Database = {
           financial_balance_estimate: number
           global_target_percent: number | null
           id: string
+          is_closed: boolean | null
           is_executed: boolean
           name: string | null
           notes: string | null
@@ -1426,6 +1429,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
           company_id: string
           contract_percent?: number
           created_at?: string
@@ -1433,6 +1438,7 @@ export type Database = {
           financial_balance_estimate?: number
           global_target_percent?: number | null
           id?: string
+          is_closed?: boolean | null
           is_executed?: boolean
           name?: string | null
           notes?: string | null
@@ -1450,6 +1456,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          closed_at?: string | null
+          closed_by?: string | null
           company_id?: string
           contract_percent?: number
           created_at?: string
@@ -1457,6 +1465,7 @@ export type Database = {
           financial_balance_estimate?: number
           global_target_percent?: number | null
           id?: string
+          is_closed?: boolean | null
           is_executed?: boolean
           name?: string | null
           notes?: string | null
@@ -3674,6 +3683,7 @@ export type Database = {
         Args: { p_measurement_id: string; p_notes?: string }
         Returns: Json
       }
+      close_planning_period: { Args: { p_period_id: string }; Returns: Json }
       compare_planning_versions: {
         Args: { p_project_id: string }
         Returns: Json
@@ -4041,6 +4051,7 @@ export type Database = {
         Args: { p_measurement_id: string; p_reason: string }
         Returns: Json
       }
+      reopen_planning_period: { Args: { p_period_id: string }; Returns: Json }
       resolve_risk_alert: {
         Args: { p_alert_id: string; p_resolved_by?: string }
         Returns: undefined
