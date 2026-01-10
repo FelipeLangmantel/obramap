@@ -3120,7 +3120,9 @@ export type Database = {
           macro_name: string | null
           performance_percent: number | null
           planned_cost: number | null
+          planned_end_date: string | null
           planned_revenue: number | null
+          planned_start_date: string | null
           planning_period_id: string
           project_id: string
           projected_result: number | null
@@ -3131,6 +3133,8 @@ export type Database = {
           scope_id: string | null
           scope_name: string | null
           status: string | null
+          supply_deadline: string | null
+          supply_risk: boolean | null
           target_houses: number | null
           unit_cost_value: number | null
           unit_revenue_value: number | null
@@ -3145,7 +3149,9 @@ export type Database = {
           macro_name?: string | null
           performance_percent?: number | null
           planned_cost?: number | null
+          planned_end_date?: string | null
           planned_revenue?: number | null
+          planned_start_date?: string | null
           planning_period_id: string
           project_id: string
           projected_result?: number | null
@@ -3156,6 +3162,8 @@ export type Database = {
           scope_id?: string | null
           scope_name?: string | null
           status?: string | null
+          supply_deadline?: string | null
+          supply_risk?: boolean | null
           target_houses?: number | null
           unit_cost_value?: number | null
           unit_revenue_value?: number | null
@@ -3170,7 +3178,9 @@ export type Database = {
           macro_name?: string | null
           performance_percent?: number | null
           planned_cost?: number | null
+          planned_end_date?: string | null
           planned_revenue?: number | null
+          planned_start_date?: string | null
           planning_period_id?: string
           project_id?: string
           projected_result?: number | null
@@ -3181,6 +3191,8 @@ export type Database = {
           scope_id?: string | null
           scope_name?: string | null
           status?: string | null
+          supply_deadline?: string | null
+          supply_risk?: boolean | null
           target_houses?: number | null
           unit_cost_value?: number | null
           unit_revenue_value?: number | null
