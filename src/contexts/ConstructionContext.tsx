@@ -246,7 +246,6 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
 
       // Avoid re-hydrating the same project repeatedly
       if (hydratedProjectIdsRef.current.has(projectId)) return;
-      hydratedProjectIdsRef.current.add(projectId);
 
       // Load quadras + houses only for the active project
       const [{ data: quadrasData, error: quadrasError }, { data: housesData, error: housesError }] =
@@ -263,8 +262,11 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
               .eq("project_id", projectId)
               .order("house_number", { ascending: true }),
           ]),
-          12000
+          30000
         );
+
+      // Mark as hydrated ONLY after the fetch succeeds (prevents permanent "hydrated" when timeout happens)
+      hydratedProjectIdsRef.current.add(projectId);
 
       if (quadrasError) console.error("Error loading quadras:", quadrasError);
       if (housesError) console.error("Error loading houses:", housesError);
@@ -414,7 +416,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         const firstProjectId = loadedProjects[0]?.id ?? null;
         if (firstProjectId) {
           setCurrentProjectId(firstProjectId);
-          await hydrateProject(firstProjectId);
+          // Hydration will happen via the dedicated effect (and is protected against loops)
         } else {
           setCurrentProjectId(null);
         }
@@ -470,7 +472,9 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
               .eq("project_id", currentProjectId)
               .order("house_number", { ascending: true }),
           ]),
-          new Promise<any>((_, reject) => setTimeout(() => reject(new Error("timeout")), 12000)),
+          new Promise<any>((_, reject) =>
+            setTimeout(() => reject(new Error("timeout")), 30000)
+          ),
         ]);
 
         const quadras: Quadra[] = (quadrasData || []).map((q: any) => ({
