@@ -132,7 +132,7 @@ const jsonToMacros = (json: Json): Macro[] => {
 const FILTER_STORAGE_KEY = "obramap_main_filters";
 
 export function ConstructionProvider({ children }: { children: ReactNode }) {
-  const { profile } = useAuth();
+  const { user, profile, isLoading: authLoading, isSystemAdmin } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
@@ -143,12 +143,12 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   const [filterScope, setFilterScopeState] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
   
-  // ✅ Flags para controlar execução única de efeitos
-  const initialLoadDone = useRef(false);
+  // ✅ Flags para controlar carregamento e evitar loops
   const filtersLoadedRef = useRef(false);
   const projectsRef = useRef<Project[] | null>(null);
   const hydratedProjectIdsRef = useRef<Set<string>>(new Set());
   const isHydratingRef = useRef(false);
+  const lastProjectsLoadKeyRef = useRef<string | null>(null);
 
   const currentProject = projects.find((p) => p.id === currentProjectId) || null;
 
@@ -224,151 +224,45 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     }
   }, [currentProjectId]);
 
-  // ✅ Load projects from database on mount (lightweight list first, then hydrate only the active project)
+  // ✅ Load projects ONLY when user/company changes (never by timers/loading/hydration)
   useEffect(() => {
-    if (initialLoadDone.current) {
-      console.log("[PROJECT EFFECT] Initial load already done, skipping");
+    if (authLoading) return;
+
+    // Logout -> hard reset
+    if (!user) {
+      setProjects([]);
+      setCurrentProjectId(null);
+      setSelectedHouse(null);
+      hydratedProjectIdsRef.current.clear();
+      projectsRef.current = null;
+      lastProjectsLoadKeyRef.current = null;
+      setIsLoading(false);
       return;
     }
-    initialLoadDone.current = true;
-    console.log("[PROJECT EFFECT] Starting initial project load");
 
-    const withTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
-      return Promise.race([
-        promise,
-        new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
-      ]);
-    };
+    // Regular users must have a company context
+    if (!isSystemAdmin && !profile?.company_id) {
+      setProjects([]);
+      setCurrentProjectId(null);
+      setIsLoading(false);
+      return;
+    }
 
-    const hydrateProject = async (projectId: string) => {
-      const project = (projectsRef.current ?? []).find((p) => p.id === projectId);
-      if (!project) return;
+    const loadKey = isSystemAdmin
+      ? `sys:${user.id}`
+      : `company:${profile?.company_id}|user:${user.id}`;
 
-      // Avoid re-hydrating the same project repeatedly
-      if (hydratedProjectIdsRef.current.has(projectId)) return;
+    if (lastProjectsLoadKeyRef.current === loadKey) return;
+    lastProjectsLoadKeyRef.current = loadKey;
 
-      // Load quadras + houses only for the active project
-      const [{ data: quadrasData, error: quadrasError }, { data: housesData, error: housesError }] =
-        await withTimeout(
-          Promise.all([
-            supabase
-              .from("quadras")
-              .select("*")
-              .eq("project_id", projectId)
-              .order("display_order", { ascending: true }),
-            supabase
-              .from("houses")
-              .select("*")
-              .eq("project_id", projectId)
-              .order("house_number", { ascending: true }),
-          ]),
-          30000
-        );
+    console.log("[PROJECT EFFECT] Loading projects for:", loadKey);
 
-      // Mark as hydrated ONLY after the fetch succeeds (prevents permanent "hydrated" when timeout happens)
-      hydratedProjectIdsRef.current.add(projectId);
-
-      if (quadrasError) console.error("Error loading quadras:", quadrasError);
-      if (housesError) console.error("Error loading houses:", housesError);
-
-      const quadras: Quadra[] = (quadrasData || []).map((q) => ({
-        id: q.id,
-        name: q.name,
-        houses: q.house_ids || [],
-      }));
-
-      const projectTemplate = project.macrosTemplate;
-
-      const houses: House[] = (housesData || []).map((h) => {
-        const houseMacros = jsonToMacros(h.macros);
-
-        // Check if house macros match template structure
-        const needsSync = projectTemplate.length > 0 && (
-          houseMacros.length !== projectTemplate.length ||
-          !projectTemplate.every((tm) => houseMacros.some((hm) => hm.id === tm.id))
-        );
-
-        if (needsSync) {
-          const syncedMacros = projectTemplate.map((templateMacro) => {
-            const existingMacro =
-              houseMacros.find((m) => m.id === templateMacro.id) ||
-              houseMacros.find((m) => m.name.toLowerCase() === templateMacro.name.toLowerCase());
-
-            if (existingMacro) {
-              const syncedScopes = templateMacro.scopes.map((templateScope) => {
-                const existingScope =
-                  existingMacro.scopes.find((s) => s.id === templateScope.id) ||
-                  existingMacro.scopes.find(
-                    (s) => s.name.toLowerCase() === templateScope.name.toLowerCase()
-                  );
-
-                return existingScope
-                  ? {
-                      ...templateScope,
-                      progress: existingScope.progress,
-                      startDate: existingScope.startDate,
-                      endDate: existingScope.endDate,
-                    }
-                  : { ...templateScope, progress: 0, startDate: null, endDate: null };
-              });
-              return { ...templateMacro, scopes: syncedScopes };
-            }
-
-            return {
-              ...templateMacro,
-              scopes: templateMacro.scopes.map((s) => ({
-                ...s,
-                progress: 0,
-                startDate: null,
-                endDate: null,
-              })),
-            };
-          });
-
-          // Best effort: persist sync asynchronously
-          supabase
-            .from("houses")
-            .update({ macros: macrosToJson(syncedMacros) })
-            .eq("project_id", projectId)
-            .eq("house_number", h.house_number)
-            .then(({ error }) => {
-              if (error) console.error("Error syncing house:", error);
-            });
-
-          return {
-            id: h.house_number,
-            quadra: h.quadra_id || "",
-            area: h.area,
-            type: h.type,
-            constructorName: h.constructor_name || "",
-            expectedDate: h.expected_date || "",
-            lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
-            macros: syncedMacros,
-          };
-        }
-
-        return {
-          id: h.house_number,
-          quadra: h.quadra_id || "",
-          area: h.area,
-          type: h.type,
-          constructorName: h.constructor_name || "",
-          expectedDate: h.expected_date || "",
-          lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
-          macros: houseMacros,
-        };
-      });
-
-      setProjects((prev) =>
-        prev.map((p) => (p.id === projectId ? { ...p, quadras, houses } : p))
-      );
-
-      // Keep selectedHouse consistent when switching/hydrating
-      if (projectId === currentProjectId && selectedHouse) {
-        const updated = houses.find((h) => h.id === selectedHouse.id);
-        if (updated) setSelectedHouse(updated);
-      }
-    };
+    // Reset project-scoped state when switching tenant/user
+    setProjects([]);
+    setCurrentProjectId(null);
+    setSelectedHouse(null);
+    hydratedProjectIdsRef.current.clear();
+    projectsRef.current = null;
 
     const loadProjects = async () => {
       setIsLoading(true);
@@ -412,14 +306,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
 
         setProjects(loadedProjects);
         projectsRef.current = loadedProjects;
-
-        const firstProjectId = loadedProjects[0]?.id ?? null;
-        if (firstProjectId) {
-          setCurrentProjectId(firstProjectId);
-          // Hydration will happen via the dedicated effect (and is protected against loops)
-        } else {
-          setCurrentProjectId(null);
-        }
+        setCurrentProjectId(loadedProjects[0]?.id ?? null);
       } catch (error) {
         console.error("Error loading projects:", error);
       } finally {
@@ -428,7 +315,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     };
 
     loadProjects();
-  }, []);
+  }, [authLoading, user?.id, isSystemAdmin, profile?.company_id]);
 
   // Hydrate project data when switching projects (quadras/houses only)
   useEffect(() => {
