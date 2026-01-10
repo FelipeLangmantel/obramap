@@ -990,6 +990,7 @@ export type Database = {
           company_id: string
           created_at: string
           family_id: string | null
+          financial_result: number
           helpers_per_team: number
           id: string
           macro_color: string
@@ -1001,10 +1002,13 @@ export type Database = {
           planned_house_ids: number[]
           planned_houses: number
           productivity_expected: number
+          productivity_real: number
           professionals_per_team: number
           project_id: string
+          realized_cost: number
           scope_id: string
           scope_name: string
+          service_status: string
           teams_expected: number
           updated_at: string
         }
@@ -1012,6 +1016,7 @@ export type Database = {
           company_id: string
           created_at?: string
           family_id?: string | null
+          financial_result?: number
           helpers_per_team?: number
           id?: string
           macro_color?: string
@@ -1023,10 +1028,13 @@ export type Database = {
           planned_house_ids?: number[]
           planned_houses?: number
           productivity_expected?: number
+          productivity_real?: number
           professionals_per_team?: number
           project_id: string
+          realized_cost?: number
           scope_id: string
           scope_name: string
+          service_status?: string
           teams_expected?: number
           updated_at?: string
         }
@@ -1034,6 +1042,7 @@ export type Database = {
           company_id?: string
           created_at?: string
           family_id?: string | null
+          financial_result?: number
           helpers_per_team?: number
           id?: string
           macro_color?: string
@@ -1045,10 +1054,13 @@ export type Database = {
           planned_house_ids?: number[]
           planned_houses?: number
           productivity_expected?: number
+          productivity_real?: number
           professionals_per_team?: number
           project_id?: string
+          realized_cost?: number
           scope_id?: string
           scope_name?: string
+          service_status?: string
           teams_expected?: number
           updated_at?: string
         }
@@ -3069,6 +3081,10 @@ export type Database = {
       recalculate_service_cost: {
         Args: { p_service_id: string }
         Returns: number
+      }
+      recalculate_service_real_results: {
+        Args: { p_service_id: string }
+        Returns: undefined
       }
       regenerate_supply_alerts: {
         Args: { p_project_id: string }
