@@ -228,8 +228,17 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (authLoading) return;
 
+    // Debug: detect why reload happens
+    console.log("[PROJECT EFFECT] deps", {
+      userId: user?.id ?? null,
+      isSystemAdmin,
+      companyId: profile?.company_id ?? null,
+      prevKey: lastProjectsLoadKeyRef.current,
+    });
+
     // Logout -> hard reset
     if (!user) {
+      console.log("[PROJECT EFFECT] No user -> reset");
       setProjects([]);
       setCurrentProjectId(null);
       setSelectedHouse(null);
@@ -240,24 +249,25 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Regular users must have a company context
+    // Regular users: wait until company_id exists (don't clear/reload in the meantime)
     if (!isSystemAdmin && !profile?.company_id) {
-      setProjects([]);
-      setCurrentProjectId(null);
-      setIsLoading(false);
+      console.log("[PROJECT EFFECT] Waiting for company_id...");
+      setIsLoading(true);
       return;
     }
 
     const loadKey = isSystemAdmin
       ? `sys:${user.id}`
-      : `company:${profile?.company_id}|user:${user.id}`;
+      : `company:${profile!.company_id}|user:${user.id}`;
 
-    if (lastProjectsLoadKeyRef.current === loadKey) return;
-    lastProjectsLoadKeyRef.current = loadKey;
+    if (lastProjectsLoadKeyRef.current === loadKey) {
+      return;
+    }
 
     console.log("[PROJECT EFFECT] Loading projects for:", loadKey);
+    lastProjectsLoadKeyRef.current = loadKey;
 
-    // Reset project-scoped state when switching tenant/user
+    // Reset project-scoped state ONLY when the key actually changed
     setProjects([]);
     setCurrentProjectId(null);
     setSelectedHouse(null);
