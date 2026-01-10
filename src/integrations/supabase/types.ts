@@ -2877,7 +2877,9 @@ export type Database = {
           project_id: string
           purchase_order_id: string | null
           quotation_id: string | null
+          related_service_id: string | null
           required_date: string
+          risk_of_stop: boolean | null
           scope_id: string | null
           scope_item_id: string | null
           status: string
@@ -2904,7 +2906,9 @@ export type Database = {
           project_id: string
           purchase_order_id?: string | null
           quotation_id?: string | null
+          related_service_id?: string | null
           required_date: string
+          risk_of_stop?: boolean | null
           scope_id?: string | null
           scope_item_id?: string | null
           status?: string
@@ -2931,7 +2935,9 @@ export type Database = {
           project_id?: string
           purchase_order_id?: string | null
           quotation_id?: string | null
+          related_service_id?: string | null
           required_date?: string
+          risk_of_stop?: boolean | null
           scope_id?: string | null
           scope_item_id?: string | null
           status?: string
@@ -2975,6 +2981,13 @@ export type Database = {
             columns: ["quotation_id"]
             isOneToOne: false
             referencedRelation: "quotation_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_alerts_related_service_id_fkey"
+            columns: ["related_service_id"]
+            isOneToOne: false
+            referencedRelation: "measurement_services"
             referencedColumns: ["id"]
           },
           {
@@ -3311,6 +3324,18 @@ export type Database = {
         Args: { p_new_risk: string; p_service_id: string }
         Returns: undefined
       }
+      generate_supply_risk_alert: {
+        Args: {
+          p_company_id: string
+          p_input_name: string
+          p_macro_name: string
+          p_project_id: string
+          p_scope_name: string
+          p_service_id: string
+          p_supply_alert_id: string
+        }
+        Returns: undefined
+      }
       generate_temp_password: { Args: never; Returns: string }
       generate_unique_slug: { Args: { company_name: string }; Returns: string }
       get_available_measurements: {
@@ -3353,6 +3378,10 @@ export type Database = {
       }
       get_measurement_vs_planning: {
         Args: { p_measurement_id: string }
+        Returns: Json
+      }
+      get_operational_risk_dashboard: {
+        Args: { p_project_id: string }
         Returns: Json
       }
       get_orphan_data_counts: { Args: never; Returns: Json }
@@ -3418,6 +3447,18 @@ export type Database = {
         }[]
       }
       get_supply_kpis: { Args: { p_project_id: string }; Returns: Json }
+      get_supply_risk_summary: {
+        Args: { p_project_id: string }
+        Returns: {
+          forecast_end_date: string
+          inputs_at_risk: number
+          macro_name: string
+          max_days_overdue: number
+          risk_level: string
+          scope_name: string
+          service_id: string
+        }[]
+      }
       get_user_company_id: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
@@ -3456,6 +3497,10 @@ export type Database = {
         Args: { p_measurement_id: string; p_planning_period_id: string }
         Returns: Json
       }
+      link_supply_to_service: {
+        Args: { p_service_id: string; p_supply_alert_id: string }
+        Returns: undefined
+      }
       migrate_orphan_data_to_company: {
         Args: { target_company_id: string }
         Returns: Json
@@ -3481,6 +3526,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: undefined
       }
+      recalculate_project_supply_risks: {
+        Args: { p_project_id: string }
+        Returns: undefined
+      }
       recalculate_service_cost: {
         Args: { p_service_id: string }
         Returns: number
@@ -3490,6 +3539,10 @@ export type Database = {
         Returns: undefined
       }
       recalculate_service_real_results: {
+        Args: { p_service_id: string }
+        Returns: undefined
+      }
+      recalculate_supply_risk: {
         Args: { p_service_id: string }
         Returns: undefined
       }
