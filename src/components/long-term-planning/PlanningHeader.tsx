@@ -1,21 +1,12 @@
 import { Save, RefreshCw, TrendingUp, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { PlanningVersion } from "@/hooks/useLongTermPlanning";
 
 interface PlanningHeaderProps {
-  versions: PlanningVersion[];
-  selectedVersionId: string | null;
-  onVersionChange: (versionId: string) => void;
+  activeVersion: PlanningVersion | null;
   overallTotals: {
     total_houses: number;
     total_cost: number;
@@ -29,9 +20,7 @@ interface PlanningHeaderProps {
 }
 
 export function PlanningHeader({
-  versions,
-  selectedVersionId,
-  onVersionChange,
+  activeVersion,
   overallTotals,
   hasChanges,
   saving,
@@ -68,31 +57,11 @@ export function PlanningHeader({
       {/* Controles */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-muted-foreground">
-            Versão:
-          </label>
-          <Select
-            value={selectedVersionId || ""}
-            onValueChange={onVersionChange}
-          >
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Selecione uma versão" />
-            </SelectTrigger>
-            <SelectContent>
-              {versions.map((version) => (
-                <SelectItem key={version.id} value={version.id}>
-                  <div className="flex items-center gap-2">
-                    <span>{version.name}</span>
-                    {version.is_active && (
-                      <Badge variant="secondary" className="text-xs">
-                        Ativa
-                      </Badge>
-                    )}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {activeVersion && (
+            <Badge variant="outline" className="text-sm">
+              {activeVersion.name}
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
