@@ -20,19 +20,21 @@ import ProjectContractPage from "./pages/ProjectContractPage";
 
 const queryClient = new QueryClient();
 
+/**
+ * ✅ ProtectedLayout: SystemSetupCheck + ProjectRequiredGuard
+ * - Não contém Providers (estão no topo)
+ * - Apenas renderiza ou redireciona
+ */
 function ProtectedLayout() {
   return (
-    <ConstructionProvider>
-      <SystemSetupCheck>
-        <Outlet />
-      </SystemSetupCheck>
-    </ConstructionProvider>
+    <SystemSetupCheck>
+      <Outlet />
+    </SystemSetupCheck>
   );
 }
 
 /**
- * Layout for routes that require an active project to be selected.
- * Wraps the outlet with ProjectRequiredGuard to ensure project context.
+ * Layout para rotas que requerem projeto ativo.
  */
 function ProjectRequiredLayout() {
   return (
@@ -42,36 +44,45 @@ function ProjectRequiredLayout() {
   );
 }
 
+/**
+ * ✅ ESTRUTURA CORRETA:
+ * - AuthProvider e ConstructionProvider apenas uma vez no topo
+ * - Nunca dentro de rotas ou layouts
+ * - Guards apenas renderizam ou redirecionam
+ */
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        {/* ✅ Providers no topo - apenas uma vez */}
         <AuthProvider>
-          <Routes>
-            {/* Auth routes - fora do setup check */}
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/change-password" element={<ChangePassword />} />
+          <ConstructionProvider>
+            <Routes>
+              {/* Auth routes - fora do setup check */}
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/change-password" element={<ChangePassword />} />
 
-            {/* Rotas protegidas */}
-            <Route element={<ProtectedLayout />}>
-              {/* Admin routes - não requerem projeto ativo */}
-              <Route path="/admin/dashboard" element={<AdminDashboard />} />
-              <Route path="/admin/migration" element={<LegacyDataMigration />} />
-              
-              {/* Rotas que requerem projeto ativo */}
-              <Route element={<ProjectRequiredLayout />}>
-                <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
-                <Route path="/long-term-planning" element={<LongTermPlanningPage />} />
-                <Route path="/project-contract" element={<ProjectContractPage />} />
+              {/* Rotas protegidas com SystemSetupCheck */}
+              <Route element={<ProtectedLayout />}>
+                {/* Admin routes - não requerem projeto ativo */}
+                <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                <Route path="/admin/migration" element={<LegacyDataMigration />} />
+                
+                {/* Rotas que requerem projeto ativo */}
+                <Route element={<ProjectRequiredLayout />}>
+                  <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
+                  <Route path="/long-term-planning" element={<LongTermPlanningPage />} />
+                  <Route path="/project-contract" element={<ProjectContractPage />} />
+                </Route>
+                
+                {/* Index pode mostrar estado vazio se não houver projetos */}
+                <Route path="/" element={<Index />} />
+                <Route path="*" element={<NotFound />} />
               </Route>
-              
-              {/* Index pode mostrar estado vazio se não houver projetos */}
-              <Route path="/" element={<Index />} />
-              <Route path="*" element={<NotFound />} />
-            </Route>
-          </Routes>
+            </Routes>
+          </ConstructionProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
@@ -79,4 +90,3 @@ const App = () => (
 );
 
 export default App;
-

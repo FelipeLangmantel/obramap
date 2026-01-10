@@ -8,11 +8,10 @@ interface ProjectRequiredGuardProps {
 }
 
 /**
- * Route guard that ensures a project is selected before accessing protected modules.
- * 
  * ✅ REGRAS DO GUARD:
  * - NÃO faz setState
  * - NÃO faz RPC/mutations
+ * - NÃO chama setCurrentProject
  * - Apenas render children ou Navigate
  */
 export function ProjectRequiredGuard({ children }: ProjectRequiredGuardProps) {
@@ -39,6 +38,6 @@ export function ProjectRequiredGuard({ children }: ProjectRequiredGuardProps) {
     return <Navigate to="/" replace />;
   }
 
-  // All good - render children
+  // ✅ All good - render children (sem setState)
   return <>{children}</>;
 }
