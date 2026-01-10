@@ -144,10 +144,11 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const initialLoadDone = useRef(false);
   const filtersLoadedRef = useRef(false);
+  const projectsRef = useRef<Project[] | null>(null);
+  const hydratedProjectIdsRef = useRef<Set<string>>(new Set());
 
-  const currentProject = projects.find(p => p.id === currentProjectId) || null;
+  const currentProject = projects.find((p) => p.id === currentProjectId) || null;
 
-  // Load filters from localStorage when project changes
   useEffect(() => {
     if (!currentProjectId) return;
     
@@ -220,132 +221,163 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     }
   }, [currentProjectId]);
 
-  // Load projects from database on mount
+  // Load projects from database on mount (lightweight list first, then hydrate only the active project)
   useEffect(() => {
     if (initialLoadDone.current) return;
     initialLoadDone.current = true;
+
+    const withTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+      ]);
+    };
+
+    const hydrateProject = async (projectId: string) => {
+      const project = (projectsRef.current ?? []).find((p) => p.id === projectId);
+      if (!project) return;
+
+      // Avoid re-hydrating the same project repeatedly
+      if (hydratedProjectIdsRef.current.has(projectId)) return;
+      hydratedProjectIdsRef.current.add(projectId);
+
+      // Load quadras + houses only for the active project
+      const [{ data: quadrasData, error: quadrasError }, { data: housesData, error: housesError }] =
+        await withTimeout(
+          Promise.all([
+            supabase
+              .from("quadras")
+              .select("*")
+              .eq("project_id", projectId)
+              .order("display_order", { ascending: true }),
+            supabase
+              .from("houses")
+              .select("*")
+              .eq("project_id", projectId)
+              .order("house_number", { ascending: true }),
+          ]),
+          12000
+        );
+
+      if (quadrasError) console.error("Error loading quadras:", quadrasError);
+      if (housesError) console.error("Error loading houses:", housesError);
+
+      const quadras: Quadra[] = (quadrasData || []).map((q) => ({
+        id: q.id,
+        name: q.name,
+        houses: q.house_ids || [],
+      }));
+
+      const projectTemplate = project.macrosTemplate;
+
+      const houses: House[] = (housesData || []).map((h) => {
+        const houseMacros = jsonToMacros(h.macros);
+
+        // Check if house macros match template structure
+        const needsSync = projectTemplate.length > 0 && (
+          houseMacros.length !== projectTemplate.length ||
+          !projectTemplate.every((tm) => houseMacros.some((hm) => hm.id === tm.id))
+        );
+
+        if (needsSync) {
+          const syncedMacros = projectTemplate.map((templateMacro) => {
+            const existingMacro =
+              houseMacros.find((m) => m.id === templateMacro.id) ||
+              houseMacros.find((m) => m.name.toLowerCase() === templateMacro.name.toLowerCase());
+
+            if (existingMacro) {
+              const syncedScopes = templateMacro.scopes.map((templateScope) => {
+                const existingScope =
+                  existingMacro.scopes.find((s) => s.id === templateScope.id) ||
+                  existingMacro.scopes.find(
+                    (s) => s.name.toLowerCase() === templateScope.name.toLowerCase()
+                  );
+
+                return existingScope
+                  ? {
+                      ...templateScope,
+                      progress: existingScope.progress,
+                      startDate: existingScope.startDate,
+                      endDate: existingScope.endDate,
+                    }
+                  : { ...templateScope, progress: 0, startDate: null, endDate: null };
+              });
+              return { ...templateMacro, scopes: syncedScopes };
+            }
+
+            return {
+              ...templateMacro,
+              scopes: templateMacro.scopes.map((s) => ({
+                ...s,
+                progress: 0,
+                startDate: null,
+                endDate: null,
+              })),
+            };
+          });
+
+          // Best effort: persist sync asynchronously
+          supabase
+            .from("houses")
+            .update({ macros: macrosToJson(syncedMacros) })
+            .eq("project_id", projectId)
+            .eq("house_number", h.house_number)
+            .then(({ error }) => {
+              if (error) console.error("Error syncing house:", error);
+            });
+
+          return {
+            id: h.house_number,
+            quadra: h.quadra_id || "",
+            area: h.area,
+            type: h.type,
+            constructorName: h.constructor_name || "",
+            expectedDate: h.expected_date || "",
+            lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
+            macros: syncedMacros,
+          };
+        }
+
+        return {
+          id: h.house_number,
+          quadra: h.quadra_id || "",
+          area: h.area,
+          type: h.type,
+          constructorName: h.constructor_name || "",
+          expectedDate: h.expected_date || "",
+          lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
+          macros: houseMacros,
+        };
+      });
+
+      setProjects((prev) =>
+        prev.map((p) => (p.id === projectId ? { ...p, quadras, houses } : p))
+      );
+
+      // Keep selectedHouse consistent when switching/hydrating
+      if (projectId === currentProjectId && selectedHouse) {
+        const updated = houses.find((h) => h.id === selectedHouse.id);
+        if (updated) setSelectedHouse(updated);
+      }
+    };
 
     const loadProjects = async () => {
       setIsLoading(true);
       try {
         const { data: projectsData, error: projectsError } = await supabase
-          .from('projects')
-          .select('*')
-          .order('display_order', { ascending: true });
+          .from("projects")
+          .select("*")
+          .order("display_order", { ascending: true });
 
         if (projectsError) {
-          console.error('Error loading projects:', projectsError);
-          setIsLoading(false);
+          console.error("Error loading projects:", projectsError);
           return;
         }
 
-        const loadedProjects: Project[] = [];
-
-        for (const p of projectsData || []) {
-          // Load quadras for this project (ordered by display_order)
-          const { data: quadrasData } = await supabase
-            .from('quadras')
-            .select('*')
-            .eq('project_id', p.id)
-            .order('display_order', { ascending: true });
-
-          // Load houses for this project
-          const { data: housesData } = await supabase
-            .from('houses')
-            .select('*')
-            .eq('project_id', p.id)
-            .order('house_number', { ascending: true });
-
-          const quadras: Quadra[] = (quadrasData || []).map(q => ({
-            id: q.id,
-            name: q.name,
-            houses: q.house_ids || [],
-          }));
-
+        const loadedProjects: Project[] = (projectsData || []).map((p) => {
           const projectTemplate = jsonToMacros(p.macros_template);
 
-          // Sync houses with project template - preserve progress but use template IDs
-          const houses: House[] = (housesData || []).map(h => {
-            const houseMacros = jsonToMacros(h.macros);
-            
-            // Check if house macros match template structure
-            const needsSync = projectTemplate.length > 0 && (
-              houseMacros.length !== projectTemplate.length ||
-              !projectTemplate.every(tm => houseMacros.some(hm => hm.id === tm.id))
-            );
-
-            if (needsSync) {
-              // Sync house macros to match template, preserving progress by name matching
-              const syncedMacros = projectTemplate.map(templateMacro => {
-                // Try to find by ID first, then by name
-                const existingMacro = houseMacros.find(m => m.id === templateMacro.id) ||
-                  houseMacros.find(m => m.name.toLowerCase() === templateMacro.name.toLowerCase());
-                
-                if (existingMacro) {
-                  const syncedScopes = templateMacro.scopes.map(templateScope => {
-                    // Try to find by ID first, then by name
-                    const existingScope = existingMacro.scopes.find(s => s.id === templateScope.id) ||
-                      existingMacro.scopes.find(s => s.name.toLowerCase() === templateScope.name.toLowerCase());
-                    
-                    return existingScope
-                      ? { ...templateScope, progress: existingScope.progress, startDate: existingScope.startDate, endDate: existingScope.endDate }
-                      : { ...templateScope, progress: 0, startDate: null, endDate: null };
-                  });
-                  return { ...templateMacro, scopes: syncedScopes };
-                }
-                return { ...templateMacro, scopes: templateMacro.scopes.map(s => ({ ...s, progress: 0, startDate: null, endDate: null })) };
-              });
-              
-              return {
-                id: h.house_number,
-                quadra: h.quadra_id || "",
-                area: h.area,
-                type: h.type,
-                constructorName: h.constructor_name || "",
-                expectedDate: h.expected_date || "",
-                lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
-                macros: syncedMacros,
-              };
-            }
-
-            return {
-              id: h.house_number,
-              quadra: h.quadra_id || "",
-              area: h.area,
-              type: h.type,
-              constructorName: h.constructor_name || "",
-              expectedDate: h.expected_date || "",
-              lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
-              macros: houseMacros,
-            };
-          });
-
-          // If houses needed sync, persist to database
-          const housesToSync = (housesData || []).filter((h, i) => {
-            const houseMacros = jsonToMacros(h.macros);
-            return projectTemplate.length > 0 && (
-              houseMacros.length !== projectTemplate.length ||
-              !projectTemplate.every(tm => houseMacros.some(hm => hm.id === tm.id))
-            );
-          });
-
-          if (housesToSync.length > 0) {
-            console.log(`Syncing ${housesToSync.length} houses with project template...`);
-            for (const house of houses) {
-              if (housesToSync.some(h => h.house_number === house.id)) {
-                supabase
-                  .from('houses')
-                  .update({ macros: macrosToJson(house.macros) })
-                  .eq('project_id', p.id)
-                  .eq('house_number', house.id)
-                  .then(({ error }) => {
-                    if (error) console.error('Error syncing house:', error);
-                  });
-              }
-            }
-          }
-
-          loadedProjects.push({
+          return {
             id: p.id,
             name: p.name,
             location: p.location,
@@ -355,31 +387,106 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             totalHouses: p.total_houses,
             unitSize: p.unit_size,
             projectType: p.project_type,
-            houses,
-            quadras,
+            houses: [],
+            quadras: [],
             macrosTemplate: projectTemplate,
             createdAt: p.created_at,
             setupComplete: p.setup_complete,
             setupStep: ((p as any).setup_step as ProjectSetupStep) || "project_created",
             legendFollowMacros: p.legend_follow_macros ?? false,
-            customLegendItems: (p.custom_legend_items as unknown as LegendItem[]) || DEFAULT_LEGEND_ITEMS,
+            customLegendItems:
+              (p.custom_legend_items as unknown as LegendItem[]) || DEFAULT_LEGEND_ITEMS,
             displayOrder: p.display_order ?? 0,
             weightMode: (p as any).weight_mode || "manual",
-          });
-        }
+          };
+        });
 
         setProjects(loadedProjects);
-        if (loadedProjects.length > 0) {
-          setCurrentProjectId(loadedProjects[0].id);
+        projectsRef.current = loadedProjects;
+
+        const firstProjectId = loadedProjects[0]?.id ?? null;
+        if (firstProjectId) {
+          setCurrentProjectId(firstProjectId);
+          await hydrateProject(firstProjectId);
+        } else {
+          setCurrentProjectId(null);
         }
       } catch (error) {
-        console.error('Error loading projects:', error);
+        console.error("Error loading projects:", error);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     loadProjects();
   }, []);
+
+  // Hydrate project data when switching projects (quadras/houses only)
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
+
+  useEffect(() => {
+    if (!currentProjectId) return;
+    // Only hydrate if we don't already have houses loaded for this project
+    if (hydratedProjectIdsRef.current.has(currentProjectId)) return;
+
+    (async () => {
+      setIsLoading(true);
+      try {
+        // reuse the same hydration path by temporarily allowing it through
+        hydratedProjectIdsRef.current.delete(currentProjectId);
+        const project = projects.find((p) => p.id === currentProjectId);
+        if (!project) return;
+
+        // hydrate inline (duplicated small call to avoid function re-creation deps)
+        const [{ data: quadrasData }, { data: housesData }] = await Promise.race([
+          Promise.all([
+            supabase
+              .from("quadras")
+              .select("*")
+              .eq("project_id", currentProjectId)
+              .order("display_order", { ascending: true }),
+            supabase
+              .from("houses")
+              .select("*")
+              .eq("project_id", currentProjectId)
+              .order("house_number", { ascending: true }),
+          ]),
+          new Promise<any>((_, reject) => setTimeout(() => reject(new Error("timeout")), 12000)),
+        ]);
+
+        const quadras: Quadra[] = (quadrasData || []).map((q: any) => ({
+          id: q.id,
+          name: q.name,
+          houses: q.house_ids || [],
+        }));
+
+        const projectTemplate = project.macrosTemplate;
+
+        const houses: House[] = (housesData || []).map((h: any) => ({
+          id: h.house_number,
+          quadra: h.quadra_id || "",
+          area: h.area,
+          type: h.type,
+          constructorName: h.constructor_name || "",
+          expectedDate: h.expected_date || "",
+          lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
+          macros: jsonToMacros(h.macros),
+        }));
+
+        hydratedProjectIdsRef.current.add(currentProjectId);
+        setProjects((prev) =>
+          prev.map((p) => (p.id === currentProjectId ? { ...p, quadras, houses } : p))
+        );
+      } catch (e) {
+        console.error("Error hydrating project:", e);
+        hydratedProjectIdsRef.current.delete(currentProjectId);
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, [currentProjectId, projects]);
 
   const setCurrentProject = useCallback((projectId: string | null) => {
     setCurrentProjectId(projectId);
