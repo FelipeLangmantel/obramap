@@ -4379,6 +4379,7 @@ export type Database = {
         Args: { p_measurement_id: string }
         Returns: Json
       }
+      get_my_company_id: { Args: never; Returns: string }
       get_operational_risk_dashboard: {
         Args: { p_project_id: string }
         Returns: Json
