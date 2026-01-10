@@ -3403,6 +3403,10 @@ export type Database = {
           status: string
         }[]
       }
+      get_contract_financial_dashboard: {
+        Args: { p_contract_id: string }
+        Returns: Json
+      }
       get_measurement_cost_summary: {
         Args: { p_measurement_id: string }
         Returns: Json
