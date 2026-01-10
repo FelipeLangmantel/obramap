@@ -3261,6 +3261,7 @@ export type Database = {
           planned_start_date: string | null
           planning_period_id: string
           production_capacity: number | null
+          productivity_planned: number | null
           project_id: string
           projected_result: number | null
           real_result: number | null
@@ -3273,6 +3274,7 @@ export type Database = {
           supply_deadline: string | null
           supply_risk: boolean | null
           target_houses: number | null
+          teams_planned: number | null
           unit_cost_value: number | null
           unit_revenue_value: number | null
           updated_at: string | null
@@ -3293,6 +3295,7 @@ export type Database = {
           planned_start_date?: string | null
           planning_period_id: string
           production_capacity?: number | null
+          productivity_planned?: number | null
           project_id: string
           projected_result?: number | null
           real_result?: number | null
@@ -3305,6 +3308,7 @@ export type Database = {
           supply_deadline?: string | null
           supply_risk?: boolean | null
           target_houses?: number | null
+          teams_planned?: number | null
           unit_cost_value?: number | null
           unit_revenue_value?: number | null
           updated_at?: string | null
@@ -3325,6 +3329,7 @@ export type Database = {
           planned_start_date?: string | null
           planning_period_id?: string
           production_capacity?: number | null
+          productivity_planned?: number | null
           project_id?: string
           projected_result?: number | null
           real_result?: number | null
@@ -3337,6 +3342,7 @@ export type Database = {
           supply_deadline?: string | null
           supply_risk?: boolean | null
           target_houses?: number | null
+          teams_planned?: number | null
           unit_cost_value?: number | null
           unit_revenue_value?: number | null
           updated_at?: string | null
