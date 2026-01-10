@@ -198,13 +198,20 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
     return <Navigate to="/auth" replace />;
   }
 
-  // ✅ 4. System admin tem acesso total
+  // ✅ 4. System admin tem acesso total (ANTES de verificar projetos)
+  // System admin ignora completamente o fluxo de setup de obra
   if (isSystemAdmin) {
-    console.log("[SETUP GUARD] System admin, granting full access");
+    console.log("[SETUP GUARD] System admin, granting full access (bypassing project checks)");
     return <>{children}</>;
   }
 
-  // ✅ 5. Carregando projetos
+  // ✅ 5. Rotas admin requerem apenas autenticação (não precisa de projeto)
+  if (location.pathname.startsWith("/admin")) {
+    console.log("[SETUP GUARD] Admin route, granting access");
+    return <>{children}</>;
+  }
+
+  // ✅ 6. Carregando projetos (apenas para usuários normais em rotas não-admin)
   if (projectsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -214,11 +221,6 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
         </div>
       </div>
     );
-  }
-
-  // ✅ 6. Rotas admin requerem apenas autenticação
-  if (location.pathname.startsWith("/admin")) {
-    return <>{children}</>;
   }
 
   // ✅ 7. Se não tem projetos disponíveis
