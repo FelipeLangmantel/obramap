@@ -69,6 +69,12 @@ export function useProjectContract() {
           notes: contractData.notes,
         });
 
+        // Sync contract services from budget (calls RPC to import missing services)
+        await supabase.rpc("sync_contract_services", {
+          p_project_id: currentProject.id,
+          p_company_id: company.id,
+        });
+
         // Load existing contract services
         const { data: servicesData, error: servicesError } = await supabase
           .from("project_contract_services")
@@ -91,8 +97,8 @@ export function useProjectContract() {
             status: s.status,
           })));
         } else {
-          // Load services from measurement_services
-          await loadServicesFromMeasurements();
+          // Load services from scope_costs (budget) as fallback
+          await loadServicesFromBudget();
         }
 
         // Check if planning exists
@@ -116,8 +122,8 @@ export function useProjectContract() {
           notes: null,
         });
 
-        // Load services from measurement_services
-        await loadServicesFromMeasurements();
+        // Load services from scope_costs (budget)
+        await loadServicesFromBudget();
       }
     } catch (error) {
       console.error("Error loading contract data:", error);
@@ -127,38 +133,82 @@ export function useProjectContract() {
     }
   }, [currentProject?.id, company?.id]);
 
-  const loadServicesFromMeasurements = async () => {
+  const loadServicesFromBudget = async () => {
     if (!currentProject?.id) return;
 
-    const { data: measurementServices, error } = await supabase
+    // First try scope_costs (budget data)
+    const { data: scopeCosts, error: scopeCostsError } = await supabase
+      .from("scope_costs")
+      .select("macro_id, macro_name, scope_id, scope_name")
+      .eq("project_id", currentProject.id);
+
+    if (!scopeCostsError && scopeCosts && scopeCosts.length > 0) {
+      const uniqueServices = new Map<string, ContractService>();
+      scopeCosts.forEach(sc => {
+        const key = `${sc.macro_id}-${sc.scope_id}`;
+        if (!uniqueServices.has(key)) {
+          uniqueServices.set(key, {
+            macro_id: sc.macro_id,
+            macro_name: sc.macro_name,
+            scope_id: sc.scope_id,
+            scope_name: sc.scope_name,
+            unit_revenue_value: 0,
+            max_cost_value: 0,
+            cost_percent: 0,
+            status: "pending",
+          });
+        }
+      });
+      setServices(Array.from(uniqueServices.values()));
+      return;
+    }
+
+    // Second: try measurement_services
+    const { data: measurementServices, error: msError } = await supabase
       .from("measurement_services")
       .select("macro_id, macro_name, scope_id, scope_name")
       .eq("project_id", currentProject.id);
 
-    if (error) {
-      console.error("Error loading measurement services:", error);
+    if (!msError && measurementServices && measurementServices.length > 0) {
+      const uniqueServices = new Map<string, ContractService>();
+      measurementServices.forEach(ms => {
+        const key = `${ms.macro_id}-${ms.scope_id}`;
+        if (!uniqueServices.has(key)) {
+          uniqueServices.set(key, {
+            macro_id: ms.macro_id,
+            macro_name: ms.macro_name,
+            scope_id: ms.scope_id,
+            scope_name: ms.scope_name,
+            unit_revenue_value: 0,
+            max_cost_value: 0,
+            cost_percent: 0,
+            status: "pending",
+          });
+        }
+      });
+      setServices(Array.from(uniqueServices.values()));
       return;
     }
 
-    // Get unique combinations
-    const uniqueServices = new Map<string, ContractService>();
-    measurementServices?.forEach(ms => {
-      const key = `${ms.macro_id}-${ms.scope_id}`;
-      if (!uniqueServices.has(key)) {
-        uniqueServices.set(key, {
-          macro_id: ms.macro_id,
-          macro_name: ms.macro_name,
-          scope_id: ms.scope_id,
-          scope_name: ms.scope_name,
-          unit_revenue_value: 0,
-          max_cost_value: 0,
-          cost_percent: 0,
-          status: "pending",
+    // Final fallback: use project's macrosTemplate from context
+    if (currentProject?.macrosTemplate && currentProject.macrosTemplate.length > 0) {
+      const servicesFromTemplate: ContractService[] = [];
+      currentProject.macrosTemplate.forEach(macro => {
+        macro.scopes.forEach(scope => {
+          servicesFromTemplate.push({
+            macro_id: macro.id,
+            macro_name: macro.name,
+            scope_id: scope.id,
+            scope_name: scope.name,
+            unit_revenue_value: 0,
+            max_cost_value: 0,
+            cost_percent: 0,
+            status: "pending",
+          });
         });
-      }
-    });
-
-    setServices(Array.from(uniqueServices.values()));
+      });
+      setServices(servicesFromTemplate);
+    }
   };
 
   useEffect(() => {
