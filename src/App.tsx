@@ -6,8 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ConstructionProvider } from "./contexts/ConstructionContext";
-import { SystemSetupCheck } from "./components/setup/SystemSetupCheck";
-import { ProjectRequiredGuard } from "./components/guards/ProjectRequiredGuard";
+import { SetupFlowGuard } from "./components/guards/SetupFlowGuard";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ChangePassword from "./pages/ChangePassword";
@@ -21,34 +20,25 @@ import ProjectContractPage from "./pages/ProjectContractPage";
 const queryClient = new QueryClient();
 
 /**
- * ✅ ProtectedLayout: SystemSetupCheck + ProjectRequiredGuard
- * - Não contém Providers (estão no topo)
- * - Apenas renderiza ou redireciona
+ * ✅ ARQUITETURA SIMPLIFICADA:
+ * - Um único guard central (SetupFlowGuard) para todas as rotas protegidas
+ * - Sem guards aninhados
+ * - Sem redirects em useEffect dentro de páginas
+ * - Lógica clara: loading -> check -> render ou redirect
  */
 function ProtectedLayout() {
   return (
-    <SystemSetupCheck>
+    <SetupFlowGuard>
       <Outlet />
-    </SystemSetupCheck>
+    </SetupFlowGuard>
   );
 }
 
 /**
- * Layout para rotas que requerem projeto ativo.
- */
-function ProjectRequiredLayout() {
-  return (
-    <ProjectRequiredGuard>
-      <Outlet />
-    </ProjectRequiredGuard>
-  );
-}
-
-/**
- * ✅ ESTRUTURA CORRETA:
- * - AuthProvider e ConstructionProvider apenas uma vez no topo
- * - Nunca dentro de rotas ou layouts
- * - Guards apenas renderizam ou redirecionam
+ * ✅ ESTRUTURA:
+ * - AuthProvider e ConstructionProvider no topo (apenas uma vez)
+ * - Rotas de auth fora do guard
+ * - Todas as outras rotas passam pelo SetupFlowGuard único
  */
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -56,28 +46,25 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        {/* ✅ Providers no topo - apenas uma vez */}
         <AuthProvider>
           <ConstructionProvider>
             <Routes>
-              {/* Auth routes - fora do setup check */}
+              {/* Auth routes - fora do guard */}
               <Route path="/auth" element={<Auth />} />
               <Route path="/change-password" element={<ChangePassword />} />
 
-              {/* Rotas protegidas com SystemSetupCheck */}
+              {/* Todas as rotas protegidas usam o guard único */}
               <Route element={<ProtectedLayout />}>
-                {/* Admin routes - não requerem projeto ativo */}
+                {/* Admin routes */}
                 <Route path="/admin/dashboard" element={<AdminDashboard />} />
                 <Route path="/admin/migration" element={<LegacyDataMigration />} />
                 
-                {/* Rotas que requerem projeto ativo */}
-                <Route element={<ProjectRequiredLayout />}>
-                  <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
-                  <Route path="/long-term-planning" element={<LongTermPlanningPage />} />
-                  <Route path="/project-contract" element={<ProjectContractPage />} />
-                </Route>
+                {/* Rotas de módulos - o guard controla acesso baseado em setup_step */}
+                <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
+                <Route path="/long-term-planning" element={<LongTermPlanningPage />} />
+                <Route path="/project-contract" element={<ProjectContractPage />} />
                 
-                {/* Index pode mostrar estado vazio se não houver projetos */}
+                {/* Index e fallback */}
                 <Route path="/" element={<Index />} />
                 <Route path="*" element={<NotFound />} />
               </Route>
