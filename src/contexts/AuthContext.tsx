@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -71,7 +71,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [permissions, setPermissions] = useState<UserPermission | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // ✅ Flags para controlar execução única
+  const authListenerRegistered = useRef(false);
+  const isFetchingUserData = useRef(false);
+  const hasFetchedUserData = useRef<string | null>(null);
+
   const fetchUserData = useCallback(async (userId: string) => {
+    // ✅ Proteção contra execução duplicada
+    if (isFetchingUserData.current) {
+      console.log("[AUTH EFFECT] fetchUserData already in progress, skipping");
+      return;
+    }
+    if (hasFetchedUserData.current === userId) {
+      console.log("[AUTH EFFECT] fetchUserData already completed for user:", userId);
+      return;
+    }
+
+    isFetchingUserData.current = true;
+    console.log("[AUTH EFFECT] fetchUserData starting for user:", userId);
+
     try {
       // Fetch profile with new fields
       const { data: profileData, error: profileError } = await supabase
@@ -154,24 +172,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setPermissions(null);
       }
+
+      hasFetchedUserData.current = userId;
+      console.log("[AUTH EFFECT] fetchUserData completed for user:", userId);
     } catch (error) {
       console.error("Error fetching user data:", error);
+    } finally {
+      isFetchingUserData.current = false;
     }
   }, []);
 
   const refreshPermissions = useCallback(async () => {
     if (user?.id) {
+      // Reset flag to allow re-fetch
+      hasFetchedUserData.current = null;
       await fetchUserData(user.id);
     }
   }, [user?.id, fetchUserData]);
 
+  // ✅ Listener registrado APENAS UMA VEZ com array vazio
   useEffect(() => {
+    if (authListenerRegistered.current) {
+      console.log("[AUTH EFFECT] Listener already registered, skipping");
+      return;
+    }
+    authListenerRegistered.current = true;
+    console.log("[AUTH EFFECT] Registering auth listener");
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        console.log("[AUTH EFFECT] Auth state changed:", event);
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user) {
+          // Defer to avoid race conditions
           setTimeout(() => {
             fetchUserData(session.user.id);
           }, 0);
@@ -181,6 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSystemRole(null);
           setRole(null);
           setPermissions(null);
+          hasFetchedUserData.current = null;
         }
 
         if (event === "SIGNED_OUT") {
@@ -189,11 +225,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSystemRole(null);
           setRole(null);
           setPermissions(null);
+          hasFetchedUserData.current = null;
         }
       }
     );
 
+    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("[AUTH EFFECT] Initial session check");
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -206,12 +245,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, [fetchUserData]);
+    return () => {
+      console.log("[AUTH EFFECT] Unsubscribing auth listener");
+      subscription.unsubscribe();
+    };
+  }, []); // ✅ Array vazio - nunca re-executa
 
   // Set up realtime subscription for permission changes
   useEffect(() => {
     if (!user?.id) return;
+
+    console.log("[AUTH EFFECT] Setting up realtime for user:", user.id);
 
     const channel = supabase
       .channel('user-permissions-changes')
@@ -224,6 +268,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           filter: `user_id=eq.${user.id}`,
         },
         () => {
+          console.log("[AUTH EFFECT] Permission change detected");
           refreshPermissions();
         }
       )
@@ -236,6 +281,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           filter: `user_id=eq.${user.id}`,
         },
         () => {
+          console.log("[AUTH EFFECT] Profile change detected");
           refreshPermissions();
         }
       )
@@ -253,6 +299,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     
     if (!error && data.user) {
+      // Reset fetch flag for new login
+      hasFetchedUserData.current = null;
+      
       try {
         await supabase.from("user_sessions").insert({
           user_id: data.user.id,
@@ -297,6 +346,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
     
+    // Reset all flags
+    hasFetchedUserData.current = null;
+    
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
@@ -320,6 +372,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("user_id", user.id);
       
       // Refresh profile
+      hasFetchedUserData.current = null;
       await fetchUserData(user.id);
     }
 
