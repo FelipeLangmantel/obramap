@@ -35,11 +35,11 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
   const inFlightRef = useRef(false);
   const lastCheckKeyRef = useRef<string | null>(null);
 
-  const checkSystemStatus = useCallback(async () => {
+  const checkSystemStatus = useCallback(async (userId: string | undefined, sysAdmin: boolean) => {
     if (inFlightRef.current) return;
 
     // Run at most once per auth identity (anonymous vs user id + sysadmin flag)
-    const key = `${user?.id ?? 'anon'}|${isSystemAdmin ? 'sys' : 'nosys'}`;
+    const key = `${userId ?? 'anon'}|${sysAdmin ? 'sys' : 'nosys'}`;
 
     // Persisted cache (survives remounts) to avoid "loop" sensação na navegação
     if (sessionStorage.getItem(SETUP_CHECK_CACHE_KEY) === key) {
@@ -69,7 +69,7 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
       }
 
       // If admin exists and current user is system admin
-      if (adminExists && user && isSystemAdmin) {
+      if (adminExists && userId && sysAdmin) {
         const { data: status, error: statusError } = (await withTimeout(
           supabase.rpc('check_legacy_data_status') as any,
           RPC_TIMEOUT_MS
@@ -81,21 +81,33 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
           if (typedStatus.needs_migration) {
             if (!location.pathname.startsWith('/admin/migration')) {
               navigate('/admin/migration', { replace: true });
+              sessionStorage.setItem(SETUP_CHECK_CACHE_KEY, key);
+              setIsLoading(false);
+              inFlightRef.current = false;
               return;
             }
           } else if (!location.pathname.startsWith('/admin')) {
             navigate('/admin/dashboard', { replace: true });
+            sessionStorage.setItem(SETUP_CHECK_CACHE_KEY, key);
+            setIsLoading(false);
+            inFlightRef.current = false;
             return;
           }
         }
 
         setNeedsSetup(false);
+        sessionStorage.setItem(SETUP_CHECK_CACHE_KEY, key);
+        setIsLoading(false);
+        inFlightRef.current = false;
         return;
       }
 
       // If admin exists but user is not system admin, no setup needed
       if (adminExists) {
         setNeedsSetup(false);
+        sessionStorage.setItem(SETUP_CHECK_CACHE_KEY, key);
+        setIsLoading(false);
+        inFlightRef.current = false;
         return;
       }
 
@@ -121,16 +133,16 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
       setNeedsSetup(false);
       setNeedsAdmin(false);
     } finally {
-      sessionStorage.setItem(SETUP_CHECK_CACHE_KEY, key);
+      sessionStorage.setItem(SETUP_CHECK_CACHE_KEY, `${userId ?? 'anon'}|${sysAdmin ? 'sys' : 'nosys'}`);
       setIsLoading(false);
       inFlightRef.current = false;
     }
-  }, [isSystemAdmin, location.pathname, navigate, user?.id]);
+  }, [location.pathname, navigate]);
 
   useEffect(() => {
     if (authLoading) return;
-    checkSystemStatus();
-  }, [authLoading, checkSystemStatus]);
+    checkSystemStatus(user?.id, isSystemAdmin);
+  }, [authLoading, user?.id, isSystemAdmin, checkSystemStatus]);
 
   const handleSetupComplete = () => {
     setNeedsSetup(false);
