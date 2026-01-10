@@ -2920,6 +2920,100 @@ export type Database = {
           },
         ]
       }
+      service_planning_targets: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          is_locked: boolean | null
+          macro_id: string | null
+          macro_name: string | null
+          measurement_number: number | null
+          period_end: string
+          period_start: string
+          planned_cost: number
+          planned_duration_days: number
+          planned_houses: number
+          planned_margin: number
+          planned_revenue: number
+          productivity_planned: number
+          project_id: string
+          scenario_id: string | null
+          scope_id: string | null
+          scope_name: string | null
+          teams_planned: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          is_locked?: boolean | null
+          macro_id?: string | null
+          macro_name?: string | null
+          measurement_number?: number | null
+          period_end: string
+          period_start: string
+          planned_cost?: number
+          planned_duration_days?: number
+          planned_houses?: number
+          planned_margin?: number
+          planned_revenue?: number
+          productivity_planned?: number
+          project_id: string
+          scenario_id?: string | null
+          scope_id?: string | null
+          scope_name?: string | null
+          teams_planned?: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_locked?: boolean | null
+          macro_id?: string | null
+          macro_name?: string | null
+          measurement_number?: number | null
+          period_end?: string
+          period_start?: string
+          planned_cost?: number
+          planned_duration_days?: number
+          planned_houses?: number
+          planned_margin?: number
+          planned_revenue?: number
+          productivity_planned?: number
+          project_id?: string
+          scenario_id?: string | null
+          scope_id?: string | null
+          scope_name?: string | null
+          teams_planned?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_planning_targets_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_planning_targets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_planning_targets_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "planning_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplier_quotes: {
         Row: {
           created_at: string
