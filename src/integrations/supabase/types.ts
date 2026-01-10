@@ -1107,6 +1107,7 @@ export type Database = {
           measurement_number: number
           notes: string | null
           planned_cost: number
+          planning_period_id: string | null
           project_id: string
           realized_cost: number
           revenue_expected: number
@@ -1127,6 +1128,7 @@ export type Database = {
           measurement_number: number
           notes?: string | null
           planned_cost?: number
+          planning_period_id?: string | null
           project_id: string
           realized_cost?: number
           revenue_expected?: number
@@ -1147,6 +1149,7 @@ export type Database = {
           measurement_number?: number
           notes?: string | null
           planned_cost?: number
+          planning_period_id?: string | null
           project_id?: string
           realized_cost?: number
           revenue_expected?: number
@@ -1162,6 +1165,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "measurements_planning_period_id_fkey"
+            columns: ["planning_period_id"]
+            isOneToOne: false
+            referencedRelation: "planning_periods"
             referencedColumns: ["id"]
           },
           {
@@ -3182,6 +3192,10 @@ export type Database = {
         Args: { p_measurement_id: string }
         Returns: number
       }
+      get_measurement_vs_planning: {
+        Args: { p_measurement_id: string }
+        Returns: Json
+      }
       get_orphan_data_counts: { Args: never; Returns: Json }
       get_pending_supply_alerts: {
         Args: { p_project_id: string }
@@ -3211,6 +3225,10 @@ export type Database = {
           week_end: string
           week_start: string
         }[]
+      }
+      get_planning_version_execution_summary: {
+        Args: { p_version_id: string }
+        Returns: Json
       }
       get_planning_version_summary: {
         Args: { p_version_id: string }
@@ -3257,6 +3275,10 @@ export type Database = {
           p_measurement_id: string
           p_project_id: string
         }
+        Returns: Json
+      }
+      link_measurement_to_planning_period: {
+        Args: { p_measurement_id: string; p_planning_period_id: string }
         Returns: Json
       }
       migrate_orphan_data_to_company: {
