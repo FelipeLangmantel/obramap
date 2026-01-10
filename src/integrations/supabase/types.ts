@@ -4605,6 +4605,10 @@ export type Database = {
         Args: { p_alert_id: string; p_resolved_by?: string }
         Returns: undefined
       }
+      sync_contract_services: {
+        Args: { p_company_id: string; p_project_id: string }
+        Returns: Json
+      }
       sync_supply_on_delivery: {
         Args: { p_purchase_order_id: string }
         Returns: undefined
