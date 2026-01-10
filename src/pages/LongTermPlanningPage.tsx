@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Calendar, AlertCircle } from "lucide-react";
+import { ArrowLeft, Calendar, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -9,26 +9,27 @@ import { useLongTermPlanning } from "@/hooks/useLongTermPlanning";
 import { LongTermPlanningMatrix } from "@/components/long-term-planning/LongTermPlanningMatrix";
 import { PlanningHeader } from "@/components/long-term-planning/PlanningHeader";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function LongTermPlanningPage() {
   const navigate = useNavigate();
   const { currentProject } = useConstruction();
 
   const {
-    versions,
-    selectedVersionId,
-    setSelectedVersionId,
+    activeVersion,
     periods,
     serviceRows,
     loading,
+    initializing,
     saving,
     hasChanges,
+    initError,
     updateCellValue,
     periodSummaries,
     overallTotals,
     savePlanning,
     refresh,
+    retryInit,
   } = useLongTermPlanning(currentProject?.id);
 
   const handleViewChange = () => {
@@ -72,12 +73,41 @@ export default function LongTermPlanningPage() {
                   Selecione um projeto para visualizar o planejamento.
                 </AlertDescription>
               </Alert>
+            ) : initializing ? (
+              <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                <p className="text-muted-foreground">
+                  Inicializando planejamento do projeto...
+                </p>
+              </div>
+            ) : initError ? (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Erro ao inicializar planejamento</AlertTitle>
+                <AlertDescription className="mt-2">
+                  <p>{initError}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={retryInit}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Tentar novamente
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : !activeVersion ? (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Nenhuma versão de planejamento encontrada.
+                </AlertDescription>
+              </Alert>
             ) : (
               <>
                 <PlanningHeader
-                  versions={versions}
-                  selectedVersionId={selectedVersionId}
-                  onVersionChange={setSelectedVersionId}
+                  activeVersion={activeVersion}
                   overallTotals={overallTotals}
                   hasChanges={hasChanges}
                   saving={saving}
@@ -90,18 +120,11 @@ export default function LongTermPlanningPage() {
                     <Skeleton className="h-12 w-full" />
                     <Skeleton className="h-96 w-full" />
                   </div>
-                ) : versions.length === 0 ? (
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      Nenhuma versão de planejamento encontrada. Crie uma versão no módulo de Planejamento Inteligente.
-                    </AlertDescription>
-                  </Alert>
                 ) : periods.length === 0 ? (
                   <Alert>
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
-                      Nenhum período encontrado para esta versão. Crie períodos no módulo de Planejamento Inteligente.
+                      Nenhum período encontrado para esta versão.
                     </AlertDescription>
                   </Alert>
                 ) : serviceRows.length === 0 ? (

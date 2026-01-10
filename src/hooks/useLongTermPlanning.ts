@@ -48,42 +48,87 @@ export interface PeriodSummary {
 
 export function useLongTermPlanning(projectId: string | undefined) {
   const { company } = useAuth();
-  const [versions, setVersions] = useState<PlanningVersion[]>([]);
-  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [activeVersion, setActiveVersion] = useState<PlanningVersion | null>(null);
   const [periods, setPeriods] = useState<PlanningPeriod[]>([]);
   const [serviceRows, setServiceRows] = useState<ServiceRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
 
-  // Carregar versões de planejamento do projeto
-  const loadVersions = useCallback(async () => {
+  // Buscar ou inicializar planejamento
+  const initializePlanning = useCallback(async () => {
     if (!projectId || !company?.id) return;
 
-    const { data, error } = await supabase
-      .from("planning_versions")
-      .select("id, name, version_number, is_active")
-      .eq("project_id", projectId)
-      .eq("company_id", company.id)
-      .order("version_number", { ascending: false });
+    setInitializing(true);
+    setInitError(null);
 
-    if (error) {
-      console.error("Erro ao carregar versões:", error);
-      return;
+    try {
+      // Buscar versão ativa
+      const { data: versions, error: versionsError } = await supabase
+        .from("planning_versions")
+        .select("id, name, version_number, is_active")
+        .eq("project_id", projectId)
+        .eq("company_id", company.id)
+        .eq("is_active", true)
+        .limit(1);
+
+      if (versionsError) throw versionsError;
+
+      if (versions && versions.length > 0) {
+        // Versão ativa encontrada
+        setActiveVersion(versions[0]);
+      } else {
+        // Nenhuma versão ativa - inicializar planejamento via RPC
+        console.log("Nenhuma versão encontrada, inicializando planejamento...");
+        
+        const { data: rpcResult, error: rpcError } = await supabase
+          .rpc("initialize_long_term_planning", {
+            p_project_id: projectId,
+            p_company_id: company.id,
+            p_number_of_periods: 6,
+          });
+
+        if (rpcError) {
+          console.error("Erro na RPC:", rpcError);
+          throw new Error(rpcError.message || "Erro ao inicializar planejamento");
+        }
+
+        const result = rpcResult as { success: boolean; error?: string; planning_version_id?: string };
+
+        if (!result.success) {
+          if (result.error === "contract_not_found") {
+            throw new Error("Contrato do projeto não encontrado. Configure o contrato antes de criar o planejamento.");
+          }
+          throw new Error(result.error || "Erro desconhecido ao inicializar");
+        }
+
+        // Buscar a versão recém-criada
+        const { data: newVersion, error: newVersionError } = await supabase
+          .from("planning_versions")
+          .select("id, name, version_number, is_active")
+          .eq("id", result.planning_version_id)
+          .single();
+
+        if (newVersionError) throw newVersionError;
+
+        setActiveVersion(newVersion);
+        toast.success("Planejamento inicializado com sucesso!");
+      }
+    } catch (error) {
+      console.error("Erro ao inicializar planejamento:", error);
+      const errorMessage = error instanceof Error ? error.message : "Erro ao carregar planejamento";
+      setInitError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setInitializing(false);
     }
+  }, [projectId, company?.id]);
 
-    setVersions(data || []);
-
-    // Selecionar a versão ativa por padrão
-    const activeVersion = data?.find(v => v.is_active);
-    if (activeVersion && !selectedVersionId) {
-      setSelectedVersionId(activeVersion.id);
-    }
-  }, [projectId, company?.id, selectedVersionId]);
-
-  // Carregar períodos da versão selecionada
+  // Carregar períodos da versão ativa
   const loadPeriods = useCallback(async () => {
-    if (!projectId || !company?.id || !selectedVersionId) {
+    if (!projectId || !company?.id || !activeVersion?.id) {
       setPeriods([]);
       return;
     }
@@ -93,8 +138,8 @@ export function useLongTermPlanning(projectId: string | undefined) {
       .select("id, period_number, name, start_date, end_date, is_closed")
       .eq("project_id", projectId)
       .eq("company_id", company.id)
-      .eq("planning_version_id", selectedVersionId)
-      .order("start_date", { ascending: true });
+      .eq("planning_version_id", activeVersion.id)
+      .order("period_number", { ascending: true });
 
     if (error) {
       console.error("Erro ao carregar períodos:", error);
@@ -102,11 +147,11 @@ export function useLongTermPlanning(projectId: string | undefined) {
     }
 
     setPeriods(data || []);
-  }, [projectId, company?.id, selectedVersionId]);
+  }, [projectId, company?.id, activeVersion?.id]);
 
   // Carregar serviços e dados da matriz
   const loadMatrixData = useCallback(async () => {
-    if (!projectId || !company?.id || !selectedVersionId || periods.length === 0) {
+    if (!projectId || !company?.id || !activeVersion?.id || periods.length === 0) {
       setServiceRows([]);
       return;
     }
@@ -214,7 +259,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
     } finally {
       setLoading(false);
     }
-  }, [projectId, company?.id, selectedVersionId, periods]);
+  }, [projectId, company?.id, activeVersion?.id, periods]);
 
   // Atualizar valor de uma célula
   const updateCellValue = useCallback((
@@ -364,10 +409,20 @@ export function useLongTermPlanning(projectId: string | undefined) {
     }
   }, [projectId, company?.id, serviceRows, loadMatrixData]);
 
+  // Retry initialization
+  const retryInit = useCallback(() => {
+    setInitError(null);
+    initializePlanning();
+  }, [initializePlanning]);
+
   // Efeitos
   useEffect(() => {
-    loadVersions();
-  }, [loadVersions]);
+    setActiveVersion(null);
+    setPeriods([]);
+    setServiceRows([]);
+    setInitError(null);
+    initializePlanning();
+  }, [initializePlanning]);
 
   useEffect(() => {
     loadPeriods();
@@ -378,18 +433,19 @@ export function useLongTermPlanning(projectId: string | undefined) {
   }, [loadMatrixData]);
 
   return {
-    versions,
-    selectedVersionId,
-    setSelectedVersionId,
+    activeVersion,
     periods,
     serviceRows,
     loading,
+    initializing,
     saving,
     hasChanges,
+    initError,
     updateCellValue,
     periodSummaries,
     overallTotals,
     savePlanning,
     refresh: loadMatrixData,
+    retryInit,
   };
 }
