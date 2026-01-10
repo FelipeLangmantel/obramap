@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useMeasurementPlanning } from "@/hooks/useMeasurementPlanning";
+import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -18,12 +19,17 @@ import { cn } from "@/lib/utils";
 import { MeasurementPlanningTable } from "@/components/planning/MeasurementPlanningTable";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { ModuleBlockedAlert } from "@/components/ModuleBlockedAlert";
 
 export default function MeasurementPlanningPage() {
   const navigate = useNavigate();
   const { user, isLoading: authLoading, canAccessProject } = useAuth();
   const { projects, currentProject, setCurrentProject, isLoading: constructionLoading } = useConstruction();
+  const { canAccessModule } = useProjectSetupFlow();
   const [selectedMeasurementId, setSelectedMeasurementId] = useState<string>("");
+  
+  // Verificar se pode acessar o módulo
+  const canAccess = canAccessModule("measurement-planning");
   
   const {
     measurements,
@@ -36,7 +42,7 @@ export default function MeasurementPlanningPage() {
     updateTarget,
     saveTargets,
     totals,
-  } = useMeasurementPlanning(currentProject?.id || null);
+  } = useMeasurementPlanning(canAccess ? currentProject?.id || null : null);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -133,6 +139,11 @@ export default function MeasurementPlanningPage() {
           </div>
 
           <div className="p-6 space-y-6">
+            {/* Verificar acesso ao módulo */}
+            {!canAccess ? (
+              <ModuleBlockedAlert moduleKey="measurement-planning" moduleName="Planejamento por Medição" />
+            ) : (
+            <>
             {/* Seletores */}
             <div className="flex flex-wrap gap-4">
               <div className="flex-1 min-w-[200px] max-w-[300px]">
@@ -287,6 +298,8 @@ export default function MeasurementPlanningPage() {
                   Selecione um projeto para começar.
                 </p>
               </Card>
+            )}
+            </>
             )}
           </div>
         </main>

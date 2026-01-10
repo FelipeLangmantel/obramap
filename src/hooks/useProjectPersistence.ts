@@ -77,6 +77,7 @@ export function useProjectPersistence() {
         macrosTemplate: jsonToMacros(p.macros_template),
         createdAt: p.created_at,
         setupComplete: p.setup_complete,
+        setupStep: (p as any).setup_step || "project_created",
         legendFollowMacros: p.legend_follow_macros ?? false,
         customLegendItems: (p.custom_legend_items as unknown as LegendItem[]) || DEFAULT_LEGEND_ITEMS,
         displayOrder: p.display_order ?? 0,

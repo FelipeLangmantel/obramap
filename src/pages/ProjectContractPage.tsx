@@ -3,10 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useProjectContract } from "@/hooks/useProjectContract";
+import { useConstruction } from "@/contexts/ConstructionContext";
+import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 import { ContractHeader } from "@/components/contract/ContractHeader";
 import { ContractSummaryCards } from "@/components/contract/ContractSummaryCards";
 import { ContractServicesTable } from "@/components/contract/ContractServicesTable";
 import { ContractConfigCard } from "@/components/contract/ContractConfigCard";
+import { ModuleBlockedAlert } from "@/components/ModuleBlockedAlert";
 import { Button } from "@/components/ui/button";
 import { Loader2, Save, ArrowRight, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
@@ -23,6 +26,12 @@ import {
 
 export default function ProjectContractPage() {
   const navigate = useNavigate();
+  const { currentProject } = useConstruction();
+  const { canAccessModule } = useProjectSetupFlow();
+
+  // Verificar se pode acessar o módulo
+  const canAccess = canAccessModule("project-contract");
+
   const {
     contract,
     setContract,
@@ -73,6 +82,22 @@ export default function ProjectContractPage() {
       toast.info("Planejamento existente pode precisar de ajustes");
     }
   };
+
+  // Verificar se pode acessar antes de carregar
+  if (!canAccess) {
+    return (
+      <SidebarProvider>
+        <div className="flex min-h-screen w-full bg-background">
+          <AppSidebar activeView="costs" onViewChange={() => {}} />
+          <SidebarInset className="flex-1">
+            <div className="container mx-auto py-6 px-4 max-w-7xl">
+              <ModuleBlockedAlert moduleKey="project-contract" moduleName="Contrato da Obra" />
+            </div>
+          </SidebarInset>
+        </div>
+      </SidebarProvider>
+    );
+  }
 
   if (loading) {
     return (

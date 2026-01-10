@@ -21,6 +21,14 @@ export const DEFAULT_LEGEND_ITEMS: LegendItem[] = [
   { id: "concluido", name: "Concluído", color: "#22c55e", minPercent: 99.1, maxPercent: 100 },
 ];
 
+export type ProjectSetupStep = 
+  | "project_created"
+  | "blocks_configured"
+  | "services_defined"
+  | "budget_defined"
+  | "contract_defined"
+  | "long_term_planned";
+
 export interface Project {
   id: string;
   name: string;
@@ -36,6 +44,7 @@ export interface Project {
   macrosTemplate: Macro[];
   createdAt: string;
   setupComplete: boolean;
+  setupStep: ProjectSetupStep;
   legendFollowMacros: boolean;
   customLegendItems: LegendItem[];
   displayOrder: number;
@@ -47,7 +56,7 @@ interface ConstructionContextType {
   projects: Project[];
   currentProject: Project | null;
   setCurrentProject: (projectId: string | null) => void;
-  addProject: (project: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete" | "legendFollowMacros" | "customLegendItems" | "displayOrder" | "weightMode">) => Promise<string>;
+  addProject: (project: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete" | "setupStep" | "legendFollowMacros" | "customLegendItems" | "displayOrder" | "weightMode">) => Promise<string>;
   reorderProjects: (orderedProjectIds: string[]) => Promise<void>;
   updateProject: (projectId: string, updates: Partial<Project>) => void;
   deleteProject: (projectId: string) => void;
@@ -351,6 +360,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             macrosTemplate: projectTemplate,
             createdAt: p.created_at,
             setupComplete: p.setup_complete,
+            setupStep: ((p as any).setup_step as ProjectSetupStep) || "project_created",
             legendFollowMacros: p.legend_follow_macros ?? false,
             customLegendItems: (p.custom_legend_items as unknown as LegendItem[]) || DEFAULT_LEGEND_ITEMS,
             displayOrder: p.display_order ?? 0,
