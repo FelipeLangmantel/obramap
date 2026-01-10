@@ -9,6 +9,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { BudgetItemsEditor } from "./BudgetItemsEditor";
@@ -79,6 +80,7 @@ const COSTS_TAB_STORAGE_KEY = "obramap_costs_tab";
 export function ProjectCostsView() {
   const { currentProject } = useConstruction();
   const { canEdit } = useAuth();
+  const { currentStep, advanceToStep } = useProjectSetupFlow();
   const [scopeCosts, setScopeCosts] = useState<ScopeCost[]>([]);
   const [plannedProductions, setPlannedProductions] = useState<PlannedProduction[]>([]);
   const [activeTab, setActiveTab] = useState<"overview" | "details">(() => {
@@ -170,13 +172,20 @@ export function ProjectCostsView() {
       }
 
       setScopeCosts(Object.values(costsByScope));
+
+      // ✅ Se existe orçamento (itens), liberar Contrato da Obra para obras novas
+      if ((itemsData?.length ?? 0) > 0) {
+        if (currentStep === "project_created" || currentStep === "blocks_configured" || currentStep === "services_defined") {
+          await advanceToStep("budget_defined");
+        }
+      }
     } catch (error) {
       console.error('Error loading costs:', error);
       toast.error('Erro ao carregar custos');
     } finally {
       setIsLoading(false);
     }
-  }, [currentProject?.id, macros]);
+  }, [currentProject?.id, macros, currentStep, advanceToStep]);
 
   // Load costs on mount and when project changes
   useEffect(() => {

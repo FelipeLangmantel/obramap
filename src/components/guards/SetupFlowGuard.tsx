@@ -241,7 +241,14 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
     const requiredIndex = STEP_ORDER.indexOf(requiredStep);
 
     if (currentStepIndex < requiredIndex) {
-      // Redirecionar para a página principal - a página de destino vai mostrar o alerta de módulo bloqueado
+      // ✅ Para /project-contract, deixamos a própria página mostrar o alerta de bloqueio
+      // (evita o redirecionamento para o mapa, que parecia “bug” para o usuário).
+      if (location.pathname === "/project-contract") {
+        console.log(`[SETUP GUARD] Contract route blocked (needs ${requiredStep}, current ${currentStep}) -> rendering page to show blocked message`);
+        return <>{children}</>;
+      }
+
+      // Para outras rotas, mantém o redirect seguro
       console.log(`[SETUP GUARD] Route ${location.pathname} requires ${requiredStep}, current is ${currentStep}, redirecting to /`);
       return <Navigate to="/" replace />;
     }
