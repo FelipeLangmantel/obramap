@@ -4336,6 +4336,10 @@ export type Database = {
         Args: { p_planning_period_id: string }
         Returns: undefined
       }
+      recalculate_period_supply_impact: {
+        Args: { p_planning_period_id: string }
+        Returns: undefined
+      }
       recalculate_planning_period_financials: {
         Args: { p_period_id: string }
         Returns: undefined
