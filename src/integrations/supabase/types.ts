@@ -1580,6 +1580,93 @@ export type Database = {
           },
         ]
       }
+      production_logs: {
+        Row: {
+          company_id: string
+          cost_realized: number
+          created_at: string
+          execution_date: string
+          house_id: string
+          id: string
+          is_initial_database: boolean
+          is_unplanned: boolean
+          measurement_id: string | null
+          notes: string | null
+          project_id: string
+          quantity_executed: number
+          service_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          cost_realized?: number
+          created_at?: string
+          execution_date?: string
+          house_id: string
+          id?: string
+          is_initial_database?: boolean
+          is_unplanned?: boolean
+          measurement_id?: string | null
+          notes?: string | null
+          project_id: string
+          quantity_executed?: number
+          service_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          cost_realized?: number
+          created_at?: string
+          execution_date?: string
+          house_id?: string
+          id?: string
+          is_initial_database?: boolean
+          is_unplanned?: boolean
+          measurement_id?: string | null
+          notes?: string | null
+          project_id?: string
+          quantity_executed?: number
+          service_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_logs_house_id_fkey"
+            columns: ["house_id"]
+            isOneToOne: false
+            referencedRelation: "houses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_logs_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_logs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_logs_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "measurement_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       productions: {
         Row: {
           created_at: string
@@ -2826,6 +2913,22 @@ export type Database = {
           p_notes?: string
           p_order_number?: string
           p_supplier_id: string
+        }
+        Returns: string
+      }
+      create_production_log: {
+        Args: {
+          p_company_id: string
+          p_cost: number
+          p_execution_date?: string
+          p_house_id: string
+          p_is_initial_database?: boolean
+          p_is_unplanned?: boolean
+          p_measurement_id: string
+          p_notes?: string
+          p_project_id: string
+          p_quantity: number
+          p_service_id: string
         }
         Returns: string
       }
