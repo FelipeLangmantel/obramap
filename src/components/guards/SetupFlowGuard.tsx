@@ -241,10 +241,12 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
     const requiredIndex = STEP_ORDER.indexOf(requiredStep);
 
     if (currentStepIndex < requiredIndex) {
-      // ✅ Para /project-contract, deixamos a própria página mostrar o alerta de bloqueio
-      // (evita o redirecionamento para o mapa, que parecia “bug” para o usuário).
-      if (location.pathname === "/project-contract") {
-        console.log(`[SETUP GUARD] Contract route blocked (needs ${requiredStep}, current ${currentStep}) -> rendering page to show blocked message`);
+      // ✅ Para rotas que precisam mostrar alerta de bloqueio ao invés de redirecionar
+      // Isso evita que o usuário seja redirecionado para o mapa sem entender o motivo
+      const routesWithInPageAlert = ["/project-contract", "/long-term-planning", "/measurement-planning"];
+      
+      if (routesWithInPageAlert.includes(location.pathname)) {
+        console.log(`[SETUP GUARD] Route ${location.pathname} blocked (needs ${requiredStep}, current ${currentStep}) -> rendering page to show blocked message`);
         return <>{children}</>;
       }
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 import { toast } from "sonner";
 
 export interface PlanningPeriod {
@@ -48,6 +49,7 @@ export interface PeriodSummary {
 
 export function useLongTermPlanning(projectId: string | undefined) {
   const { company } = useAuth();
+  const { currentStep, advanceToStep } = useProjectSetupFlow();
   const [activeVersion, setActiveVersion] = useState<PlanningVersion | null>(null);
   const [periods, setPeriods] = useState<PlanningPeriod[]>([]);
   const [serviceRows, setServiceRows] = useState<ServiceRow[]>([]);
@@ -399,6 +401,11 @@ export function useLongTermPlanning(projectId: string | undefined) {
       toast.success("Planejamento salvo com sucesso!");
       setHasChanges(false);
 
+      // ✅ Avançar setup_step para long_term_planned (libera measurement-planning)
+      if (currentStep !== "long_term_planned") {
+        await advanceToStep("long_term_planned");
+      }
+
       // Recarregar dados para atualizar IDs
       await loadMatrixData();
     } catch (error) {
@@ -407,7 +414,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
     } finally {
       setSaving(false);
     }
-  }, [projectId, company?.id, serviceRows, loadMatrixData]);
+  }, [projectId, company?.id, serviceRows, loadMatrixData, currentStep, advanceToStep]);
 
   // Retry initialization
   const retryInit = useCallback(() => {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -11,7 +11,7 @@ import { ContractServicesTable } from "@/components/contract/ContractServicesTab
 import { ContractConfigCard } from "@/components/contract/ContractConfigCard";
 import { ModuleBlockedAlert } from "@/components/ModuleBlockedAlert";
 import { Button } from "@/components/ui/button";
-import { Loader2, Save, ArrowRight, AlertTriangle } from "lucide-react";
+import { Loader2, Save, ArrowRight, AlertTriangle, Edit } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -27,7 +27,7 @@ import {
 export default function ProjectContractPage() {
   const navigate = useNavigate();
   const { currentProject } = useConstruction();
-  const { canAccessModule } = useProjectSetupFlow();
+  const { canAccessModule, advanceToStep, currentStep } = useProjectSetupFlow();
 
   // Verificar se pode acessar o módulo
   const canAccess = canAccessModule("project-contract");
@@ -46,10 +46,22 @@ export default function ProjectContractPage() {
   } = useProjectContract();
 
   const [showPlanningWarning, setShowPlanningWarning] = useState(false);
-  const [isEditing, setIsEditing] = useState(!contract?.id);
+  const [pendingNavigate, setPendingNavigate] = useState(false);
+  
+  // ✅ isEditing: true se não tem contrato salvo, false se já tem
+  const [isEditing, setIsEditing] = useState(true);
+  
+  // Atualizar estado de edição quando contrato carregar
+  useEffect(() => {
+    if (!loading && contract) {
+      // Se já tem contrato salvo, começa em modo visualização
+      setIsEditing(!contract.id);
+    }
+  }, [loading, contract?.id]);
 
   const handleSaveAndContinue = async () => {
     if (hasPlanning) {
+      setPendingNavigate(true);
       setShowPlanningWarning(true);
       return;
     }
@@ -58,6 +70,7 @@ export default function ProjectContractPage() {
 
   const handleSave = async () => {
     if (hasPlanning) {
+      setPendingNavigate(false);
       setShowPlanningWarning(true);
       return;
     }
@@ -68,6 +81,13 @@ export default function ProjectContractPage() {
     const success = await saveContract();
     if (success) {
       setIsEditing(false);
+      
+      // ✅ Avançar setup_step para contract_defined (libera long-term-planning)
+      if (currentStep !== "contract_defined" && currentStep !== "long_term_planned") {
+        await advanceToStep("contract_defined");
+        toast.success("Contrato salvo! Planejamento de Longo Prazo liberado.");
+      }
+      
       if (navigateToPlanning) {
         navigate("/long-term-planning");
       }
@@ -76,10 +96,23 @@ export default function ProjectContractPage() {
 
   const confirmSaveWithPlanning = async () => {
     setShowPlanningWarning(false);
+    const shouldNavigate = pendingNavigate;
+    setPendingNavigate(false);
+    
     const success = await saveContract();
     if (success) {
       setIsEditing(false);
-      toast.info("Planejamento existente pode precisar de ajustes");
+      
+      // ✅ Avançar setup_step para contract_defined
+      if (currentStep !== "contract_defined" && currentStep !== "long_term_planned") {
+        await advanceToStep("contract_defined");
+      }
+      
+      toast.info("Contrato atualizado. Planejamento existente pode precisar de ajustes.");
+      
+      if (shouldNavigate) {
+        navigate("/long-term-planning");
+      }
     }
   };
 
@@ -149,41 +182,65 @@ export default function ProjectContractPage() {
             />
 
             {/* Action Buttons */}
-            {isEditing && (
-              <div className="flex justify-end gap-3 pt-4 border-t">
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              {!isEditing && contract?.id && (
                 <Button
                   variant="outline"
-                  onClick={() => setIsEditing(false)}
-                  disabled={saving}
+                  onClick={() => setIsEditing(true)}
                 >
-                  Cancelar
+                  <Edit className="h-4 w-4 mr-2" />
+                  Editar Contrato
                 </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={saving}
-                  variant="secondary"
-                >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
+              )}
+              
+              {isEditing && (
+                <>
+                  {contract?.id && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsEditing(false)}
+                      disabled={saving}
+                    >
+                      Cancelar
+                    </Button>
                   )}
-                  Salvar Contrato
-                </Button>
+                  <Button
+                    onClick={handleSave}
+                    disabled={saving}
+                    variant="secondary"
+                  >
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-2" />
+                    )}
+                    Salvar Contrato
+                  </Button>
+                  <Button
+                    onClick={handleSaveAndContinue}
+                    disabled={saving}
+                    className="bg-primary hover:bg-primary/90"
+                  >
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <ArrowRight className="h-4 w-4 mr-2" />
+                    )}
+                    Salvar e Ir para Planejamento
+                  </Button>
+                </>
+              )}
+              
+              {!isEditing && contract?.id && (
                 <Button
-                  onClick={handleSaveAndContinue}
-                  disabled={saving}
+                  onClick={() => navigate("/long-term-planning")}
                   className="bg-primary hover:bg-primary/90"
                 >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <ArrowRight className="h-4 w-4 mr-2" />
-                  )}
-                  Salvar e Ir para Planejamento
+                  <ArrowRight className="h-4 w-4 mr-2" />
+                  Ir para Planejamento
                 </Button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </SidebarInset>
       </div>
@@ -203,7 +260,9 @@ export default function ProjectContractPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setPendingNavigate(false)}>
+              Cancelar
+            </AlertDialogCancel>
             <AlertDialogAction onClick={confirmSaveWithPlanning}>
               Continuar e Salvar
             </AlertDialogAction>
