@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { SystemSetupWizard, OrphanDataCounts } from './SystemSetupWizard';
@@ -7,6 +7,18 @@ import { useAuth } from '@/contexts/AuthContext';
 
 interface SystemSetupCheckProps {
   children: React.ReactNode;
+}
+
+const RPC_TIMEOUT_MS = 12000;
+
+type RpcResult<T> = { data: T; error: any };
+
+function withTimeout<T>(promiseLike: PromiseLike<T>, ms: number): Promise<T> {
+  const promise = Promise.resolve(promiseLike as any) as Promise<T>;
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('RPC timeout')), ms)),
+  ]);
 }
 
 export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) => {
@@ -19,17 +31,27 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
   const navigate = useNavigate();
   const location = useLocation();
 
-  useEffect(() => {
-    // Wait for auth to finish loading
-    if (authLoading) return;
-    
-    checkSystemStatus();
-  }, [authLoading, user, isSystemAdmin]);
+  const inFlightRef = useRef(false);
+  const lastCheckKeyRef = useRef<string | null>(null);
 
-  const checkSystemStatus = async () => {
+  const checkSystemStatus = useCallback(async () => {
+    if (inFlightRef.current) return;
+
+    // Run at most once per auth identity (anonymous vs user id + sysadmin flag)
+    const key = `${user?.id ?? 'anon'}|${isSystemAdmin ? 'sys' : 'nosys'}`;
+    if (lastCheckKeyRef.current === key && !isLoading) return;
+
+    inFlightRef.current = true;
+    lastCheckKeyRef.current = key;
+    setIsLoading(true);
+
     try {
       // Check if admin exists using RPC
-      const { data: adminExists, error: adminError } = await supabase.rpc('admin_exists');
+      const { data: adminExists, error: adminError } = (await withTimeout(
+        supabase.rpc('admin_exists') as any,
+        RPC_TIMEOUT_MS
+      )) as RpcResult<boolean | null>;
+
       if (adminError) {
         console.error('Error checking admin:', adminError);
         setNeedsAdmin(true);
@@ -39,40 +61,41 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
 
       // If admin exists and current user is system admin
       if (adminExists && user && isSystemAdmin) {
-        // Check if there's orphan data that needs migration
-        const { data: status, error: statusError } = await supabase.rpc('check_legacy_data_status');
-        
+        const { data: status, error: statusError } = (await withTimeout(
+          supabase.rpc('check_legacy_data_status') as any,
+          RPC_TIMEOUT_MS
+        )) as RpcResult<unknown>;
+
         if (!statusError && status) {
           const typedStatus = status as unknown as { needs_migration: boolean; has_orphan_data: boolean };
-          
+
           if (typedStatus.needs_migration) {
-            // Redirect to migration panel if not already there
             if (!location.pathname.startsWith('/admin/migration')) {
               navigate('/admin/migration', { replace: true });
               return;
             }
           } else if (!location.pathname.startsWith('/admin')) {
-            // No migration needed, go to dashboard
             navigate('/admin/dashboard', { replace: true });
             return;
           }
         }
-        
-        // No setup needed
+
         setNeedsSetup(false);
-        setIsLoading(false);
         return;
       }
 
       // If admin exists but user is not system admin, no setup needed
       if (adminExists) {
         setNeedsSetup(false);
-        setIsLoading(false);
         return;
       }
 
       // Check for orphan data only if admin doesn't exist (initial setup)
-      const { data: orphanData, error: orphanError } = await supabase.rpc('get_orphan_data_counts');
+      const { data: orphanData, error: orphanError } = (await withTimeout(
+        supabase.rpc('get_orphan_data_counts') as any,
+        RPC_TIMEOUT_MS
+      )) as RpcResult<unknown>;
+
       if (orphanError) {
         console.error('Error checking orphan data:', orphanError);
       } else if (orphanData) {
@@ -85,17 +108,22 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
       setNeedsSetup(true);
     } catch (error) {
       console.error('Error checking system status:', error);
-      // On error, show the setup wizard
-      setNeedsSetup(true);
-      setNeedsAdmin(true);
+      // Fail-open to allow login if backend calls hang; setup wizard will still appear if we can detect it
+      setNeedsSetup(false);
+      setNeedsAdmin(false);
     } finally {
       setIsLoading(false);
+      inFlightRef.current = false;
     }
-  };
+  }, [isSystemAdmin, location.pathname, navigate, user?.id, isLoading]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    checkSystemStatus();
+  }, [authLoading, checkSystemStatus]);
 
   const handleSetupComplete = () => {
     setNeedsSetup(false);
-    // Check if migration is needed after setup
     window.location.href = '/auth';
   };
 
@@ -124,3 +152,4 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
 
   return <>{children}</>;
 };
+
