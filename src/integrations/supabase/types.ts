@@ -931,6 +931,7 @@ export type Database = {
       }
       measurement_services: {
         Row: {
+          company_id: string | null
           created_at: string
           family_id: string | null
           id: string
@@ -941,11 +942,13 @@ export type Database = {
           notes: string | null
           planned_house_ids: number[]
           planned_houses: number
+          project_id: string | null
           scope_id: string
           scope_name: string
           updated_at: string
         }
         Insert: {
+          company_id?: string | null
           created_at?: string
           family_id?: string | null
           id?: string
@@ -956,11 +959,13 @@ export type Database = {
           notes?: string | null
           planned_house_ids?: number[]
           planned_houses?: number
+          project_id?: string | null
           scope_id: string
           scope_name: string
           updated_at?: string
         }
         Update: {
+          company_id?: string | null
           created_at?: string
           family_id?: string | null
           id?: string
@@ -971,11 +976,19 @@ export type Database = {
           notes?: string | null
           planned_house_ids?: number[]
           planned_houses?: number
+          project_id?: string | null
           scope_id?: string
           scope_name?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "measurement_services_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "measurement_services_family_id_fkey"
             columns: ["family_id"]
@@ -990,43 +1003,84 @@ export type Database = {
             referencedRelation: "measurements"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "measurement_services_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
         ]
       }
       measurements: {
         Row: {
+          company_id: string
+          contract_percent_planned: number
           created_at: string
           end_date: string
+          financial_result: number
+          financial_status: string
           id: string
           measurement_number: number
           notes: string | null
+          planned_cost: number
           project_id: string
+          realized_cost: number
+          revenue_expected: number
+          revenue_target: number
           start_date: string
           status: string | null
+          type: string
           updated_at: string
         }
         Insert: {
+          company_id: string
+          contract_percent_planned?: number
           created_at?: string
           end_date: string
+          financial_result?: number
+          financial_status?: string
           id?: string
           measurement_number: number
           notes?: string | null
+          planned_cost?: number
           project_id: string
+          realized_cost?: number
+          revenue_expected?: number
+          revenue_target?: number
           start_date: string
           status?: string | null
+          type?: string
           updated_at?: string
         }
         Update: {
+          company_id?: string
+          contract_percent_planned?: number
           created_at?: string
           end_date?: string
+          financial_result?: number
+          financial_status?: string
           id?: string
           measurement_number?: number
           notes?: string | null
+          planned_cost?: number
           project_id?: string
+          realized_cost?: number
+          revenue_expected?: number
+          revenue_target?: number
           start_date?: string
           status?: string | null
+          type?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "measurements_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "measurements_project_id_fkey"
             columns: ["project_id"]
@@ -2699,6 +2753,10 @@ export type Database = {
           start_date: string
           status: string
         }[]
+      }
+      get_measurement_revenue_expected: {
+        Args: { p_measurement_id: string }
+        Returns: number
       }
       get_orphan_data_counts: { Args: never; Returns: Json }
       get_pending_supply_alerts: {
