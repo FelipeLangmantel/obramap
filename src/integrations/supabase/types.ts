@@ -4414,6 +4414,16 @@ export type Database = {
         Args: { p_service_id: string; p_supply_alert_id: string }
         Returns: undefined
       }
+      log_production_for_planned_house: {
+        Args: {
+          p_cost: number
+          p_execution_date: string
+          p_house_id: string
+          p_quantity: number
+          p_service_plan_id: string
+        }
+        Returns: Json
+      }
       migrate_orphan_data_to_company: {
         Args: { target_company_id: string }
         Returns: Json
