@@ -3205,6 +3205,84 @@ export type Database = {
           },
         ]
       }
+      service_house_allocations: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          house_id: string
+          id: string
+          macro_id: string | null
+          planning_period_id: string
+          project_id: string
+          scope_id: string | null
+          service_plan_id: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          house_id: string
+          id?: string
+          macro_id?: string | null
+          planning_period_id: string
+          project_id: string
+          scope_id?: string | null
+          service_plan_id: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          house_id?: string
+          id?: string
+          macro_id?: string | null
+          planning_period_id?: string
+          project_id?: string
+          scope_id?: string | null
+          service_plan_id?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_sha_company"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_sha_project"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_house_allocations_house_id_fkey"
+            columns: ["house_id"]
+            isOneToOne: false
+            referencedRelation: "houses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_house_allocations_planning_period_id_fkey"
+            columns: ["planning_period_id"]
+            isOneToOne: false
+            referencedRelation: "planning_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_house_allocations_service_plan_id_fkey"
+            columns: ["service_plan_id"]
+            isOneToOne: false
+            referencedRelation: "service_planning_by_period"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_materials: {
         Row: {
           created_at: string
