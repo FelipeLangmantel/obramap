@@ -4186,6 +4186,10 @@ export type Database = {
         Args: { p_measurement_id: string }
         Returns: undefined
       }
+      recalculate_period_item_supply_risk: {
+        Args: { p_planning_period_id: string }
+        Returns: undefined
+      }
       recalculate_period_supply_deadlines: {
         Args: { p_planning_period_id: string }
         Returns: undefined
