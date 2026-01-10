@@ -1336,6 +1336,7 @@ export type Database = {
           end_date: string
           financial_balance_estimate: number
           id: string
+          is_executed: boolean
           notes: string | null
           period_number: number
           planned_cost_estimate: number
@@ -1353,6 +1354,7 @@ export type Database = {
           end_date: string
           financial_balance_estimate?: number
           id?: string
+          is_executed?: boolean
           notes?: string | null
           period_number: number
           planned_cost_estimate?: number
@@ -1370,6 +1372,7 @@ export type Database = {
           end_date?: string
           financial_balance_estimate?: number
           id?: string
+          is_executed?: boolean
           notes?: string | null
           period_number?: number
           planned_cost_estimate?: number
