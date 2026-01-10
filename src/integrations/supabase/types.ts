@@ -4064,6 +4064,10 @@ export type Database = {
         Returns: Json
       }
       admin_exists: { Args: never; Returns: boolean }
+      allocate_house_to_service_period: {
+        Args: { p_house_id: string; p_service_plan_id: string }
+        Returns: Json
+      }
       calculate_service_planned_cost: {
         Args: {
           p_company_id: string
