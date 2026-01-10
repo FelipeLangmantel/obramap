@@ -12,6 +12,7 @@ import ChangePassword from "./pages/ChangePassword";
 import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import LegacyDataMigration from "./pages/admin/LegacyDataMigration";
+import MeasurementPlanningPage from "./pages/MeasurementPlanningPage";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ const App = () => (
               <Route path="/change-password" element={<ChangePassword />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/admin/migration" element={<LegacyDataMigration />} />
+              <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
               <Route path="/" element={<Index />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

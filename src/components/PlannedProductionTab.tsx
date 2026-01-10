@@ -121,7 +121,7 @@ const COSTS_STORAGE_KEY = "obramap_scope_costs";
 
 export function PlannedProductionTab() {
   const { currentProject } = useConstruction();
-  const { canEdit } = useAuth();
+  const { canEdit, company } = useAuth();
   const printRef = useRef<HTMLDivElement>(null);
   
   const [selectedMacro, setSelectedMacro] = useState<string>("");
@@ -364,12 +364,13 @@ export function PlannedProductionTab() {
         const { data: newMeasurement, error: measurementError } = await supabase
           .from('measurements')
           .insert({
+            company_id: company!.id,
             project_id: currentProject.id,
             measurement_number: measurementNumber,
             start_date: planStartDate,
             end_date: planEndDate,
             notes: null
-          })
+          } as any)
           .select()
           .single();
         
@@ -396,6 +397,8 @@ export function PlannedProductionTab() {
         const { error: serviceError } = await supabase
           .from('measurement_services')
           .insert({
+            company_id: company!.id,
+            project_id: currentProject.id,
             measurement_id: measurementId,
             macro_id: macro.id,
             macro_name: macro.name,
@@ -405,7 +408,7 @@ export function PlannedProductionTab() {
             planned_house_ids: selectedHouseIds,
             planned_houses: selectedHouseIds.length,
             notes: notes || null
-          });
+          } as any);
         
         if (serviceError) {
           if (serviceError.code === '23505') {
