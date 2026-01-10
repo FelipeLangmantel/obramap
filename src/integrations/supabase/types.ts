@@ -4081,6 +4081,10 @@ export type Database = {
         Args: { p_planning_period_id: string }
         Returns: Json
       }
+      generate_quotation_from_purchase_request: {
+        Args: { p_purchase_request_id: string }
+        Returns: Json
+      }
       generate_service_planning_for_period: {
         Args: {
           p_company_id: string
