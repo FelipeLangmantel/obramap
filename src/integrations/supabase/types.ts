@@ -3089,6 +3089,10 @@ export type Database = {
         Args: { p_measurement_id: string; p_notes?: string }
         Returns: Json
       }
+      compare_planning_versions: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       complete_orphan_data_migration: {
         Args: { target_company_id: string }
         Returns: Json
@@ -3176,6 +3180,10 @@ export type Database = {
         Args: { p_measurement_id: string }
         Returns: Json
       }
+      get_measurement_dashboard: {
+        Args: { p_measurement_id: string }
+        Returns: Json
+      }
       get_measurement_financial_summary: {
         Args: { p_measurement_id: string }
         Returns: Json
@@ -3244,6 +3252,10 @@ export type Database = {
       get_project_cost_target_percent: {
         Args: { p_project_id: string }
         Returns: number
+      }
+      get_project_execution_dashboard: {
+        Args: { p_project_id: string }
+        Returns: Json
       }
       get_supply_kpis: { Args: { p_project_id: string }; Returns: Json }
       get_user_company_id: { Args: { _user_id: string }; Returns: string }
