@@ -1779,6 +1779,44 @@ export type Database = {
           },
         ]
       }
+      production_exceptions: {
+        Row: {
+          approved_by: string | null
+          company_id: string
+          created_at: string
+          id: string
+          production_log_id: string
+          project_id: string
+          reason: string
+        }
+        Insert: {
+          approved_by?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          production_log_id: string
+          project_id: string
+          reason: string
+        }
+        Update: {
+          approved_by?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          production_log_id?: string
+          project_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_exceptions_production_log_id_fkey"
+            columns: ["production_log_id"]
+            isOneToOne: false
+            referencedRelation: "production_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       production_logs: {
         Row: {
           company_id: string
@@ -3097,6 +3135,15 @@ export type Database = {
         Args: { target_company_id: string }
         Returns: Json
       }
+      correct_production_log: {
+        Args: {
+          p_correction_reason: string
+          p_new_cost?: number
+          p_new_quantity?: number
+          p_production_log_id: string
+        }
+        Returns: Json
+      }
       count_orphan_projects: { Args: never; Returns: number }
       create_measurement_service_with_cost: {
         Args: {
@@ -3142,6 +3189,21 @@ export type Database = {
           p_service_id: string
         }
         Returns: string
+      }
+      create_production_log_with_exception: {
+        Args: {
+          p_company_id: string
+          p_cost_realized: number
+          p_exception_reason: string
+          p_execution_date: string
+          p_house_id: string
+          p_measurement_id: string
+          p_notes: string
+          p_project_id: string
+          p_quantity_executed: number
+          p_service_id: string
+        }
+        Returns: Json
       }
       create_quotation_from_alert: {
         Args: { p_alert_id: string; p_notes?: string; p_title?: string }
