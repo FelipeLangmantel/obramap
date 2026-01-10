@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { SystemSetupWizard, OrphanDataCounts } from './SystemSetupWizard';
 import { Loader2 } from 'lucide-react';
@@ -24,9 +24,10 @@ function withTimeout<T>(promiseLike: PromiseLike<T>, ms: number): Promise<T> {
 
 /**
  * ✅ REGRAS DO GUARD:
- * - NÃO faz setState que cause loops
- * - Navega apenas quando necessário
- * - Cache em sessionStorage para evitar re-checks
+ * - NÃO navega automaticamente (apenas mostra wizard ou children)
+ * - NÃO modifica estado global que cause loops
+ * - Usa cache em sessionStorage para evitar re-checks
+ * - Apenas loading -> wizard ou children
  */
 export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
@@ -34,8 +35,9 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
   const [needsAdmin, setNeedsAdmin] = useState(false);
   const [hasOrphanData, setHasOrphanData] = useState(false);
   const [orphanCounts, setOrphanCounts] = useState<OrphanDataCounts | null>(null);
+  const [shouldShowAdminRedirect, setShouldShowAdminRedirect] = useState(false);
+  const [adminRedirectPath, setAdminRedirectPath] = useState<string | null>(null);
   const { user, isSystemAdmin, isLoading: authLoading } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
 
   // ✅ Flags para controlar execução única
@@ -90,20 +92,15 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
         if (!statusError && status) {
           const typedStatus = status as unknown as { needs_migration: boolean; has_orphan_data: boolean };
 
+          // ✅ NÃO navega automaticamente - apenas sinaliza necessidade
           if (typedStatus.needs_migration) {
             if (!location.pathname.startsWith('/admin/migration')) {
-              sessionStorage.setItem(SETUP_CHECK_CACHE_KEY, key);
-              setIsLoading(false);
-              inFlightRef.current = false;
-              navigate('/admin/migration', { replace: true });
-              return;
+              setShouldShowAdminRedirect(true);
+              setAdminRedirectPath('/admin/migration');
             }
           } else if (!location.pathname.startsWith('/admin')) {
-            sessionStorage.setItem(SETUP_CHECK_CACHE_KEY, key);
-            setIsLoading(false);
-            inFlightRef.current = false;
-            navigate('/admin/dashboard', { replace: true });
-            return;
+            setShouldShowAdminRedirect(true);
+            setAdminRedirectPath('/admin/dashboard');
           }
         }
 
@@ -149,7 +146,7 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
       setIsLoading(false);
       inFlightRef.current = false;
     }
-  }, [location.pathname, navigate]);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -182,6 +179,26 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
         hasOrphanData={hasOrphanData}
         orphanCounts={orphanCounts}
       />
+    );
+  }
+
+  // ✅ Se é system admin e precisa ir para admin, renderiza link ao invés de navegar
+  if (shouldShowAdminRedirect && adminRedirectPath && !location.pathname.startsWith('/admin')) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4 p-6 bg-card border rounded-lg shadow-sm max-w-md text-center">
+          <h2 className="text-lg font-semibold">Área Administrativa</h2>
+          <p className="text-muted-foreground">
+            Você está logado como administrador do sistema.
+          </p>
+          <a 
+            href={adminRedirectPath}
+            className="inline-flex items-center justify-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+          >
+            Acessar Painel Administrativo
+          </a>
+        </div>
+      </div>
     );
   }
 

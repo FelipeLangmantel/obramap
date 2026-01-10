@@ -47,7 +47,10 @@ function IndexContent() {
 
   useEffect(() => {
     // ✅ Proteção contra execução duplicada
-    if (hasAutoSelectedRef.current) return;
+    if (hasAutoSelectedRef.current) {
+      console.log("[INDEX EFFECT] Already auto-selected, skipping");
+      return;
+    }
     if (isLoading) return;
     if (projects.length === 0) return;
     
@@ -59,13 +62,16 @@ function IndexContent() {
     }
 
     const accessibleProjects = projects.filter((p) => canAccessProject(p.id));
-    if (accessibleProjects.length === 0) return;
+    if (accessibleProjects.length === 0) {
+      hasAutoSelectedRef.current = true;
+      return;
+    }
 
     // ✅ Seleciona apenas uma vez
     hasAutoSelectedRef.current = true;
     console.log("[INDEX EFFECT] Auto-selecting first accessible project:", accessibleProjects[0].id);
     setCurrentProject(accessibleProjects[0].id);
-  }, [isLoading, projects.length]); // ✅ Deps mínimas para evitar loop
+  }, [isLoading, projects.length, currentProject?.id]); // ✅ Deps mínimas
 
   if (isLoading) {
     return (
