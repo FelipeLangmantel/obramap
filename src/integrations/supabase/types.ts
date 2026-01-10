@@ -3246,6 +3246,8 @@ export type Database = {
       }
       service_planning_by_period: {
         Row: {
+          available_days: number | null
+          capacity_status: string | null
           company_id: string
           contract_id: string | null
           created_at: string | null
@@ -3258,6 +3260,7 @@ export type Database = {
           planned_revenue: number | null
           planned_start_date: string | null
           planning_period_id: string
+          production_capacity: number | null
           project_id: string
           projected_result: number | null
           real_result: number | null
@@ -3275,6 +3278,8 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          available_days?: number | null
+          capacity_status?: string | null
           company_id: string
           contract_id?: string | null
           created_at?: string | null
@@ -3287,6 +3292,7 @@ export type Database = {
           planned_revenue?: number | null
           planned_start_date?: string | null
           planning_period_id: string
+          production_capacity?: number | null
           project_id: string
           projected_result?: number | null
           real_result?: number | null
@@ -3304,6 +3310,8 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          available_days?: number | null
+          capacity_status?: string | null
           company_id?: string
           contract_id?: string | null
           created_at?: string | null
@@ -3316,6 +3324,7 @@ export type Database = {
           planned_revenue?: number | null
           planned_start_date?: string | null
           planning_period_id?: string
+          production_capacity?: number | null
           project_id?: string
           projected_result?: number | null
           real_result?: number | null
