@@ -1615,6 +1615,54 @@ export type Database = {
         }
         Relationships: []
       }
+      project_contracts: {
+        Row: {
+          company_id: string
+          contract_value_total: number
+          cost_target_percent: number
+          created_at: string
+          id: string
+          notes: string | null
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          contract_value_total?: number
+          cost_target_percent?: number
+          created_at?: string
+          id?: string
+          notes?: string | null
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          contract_value_total?: number
+          cost_target_percent?: number
+          created_at?: string
+          id?: string
+          notes?: string | null
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_contracts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_contracts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_lead_times: {
         Row: {
           created_at: string
@@ -2681,6 +2729,14 @@ export type Database = {
           week_end: string
           week_start: string
         }[]
+      }
+      get_project_contract_value: {
+        Args: { p_project_id: string }
+        Returns: number
+      }
+      get_project_cost_target_percent: {
+        Args: { p_project_id: string }
+        Returns: number
       }
       get_supply_kpis: { Args: { p_project_id: string }; Returns: Json }
       get_user_company_id: { Args: { _user_id: string }; Returns: string }
