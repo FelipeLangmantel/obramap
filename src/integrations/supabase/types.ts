@@ -67,6 +67,73 @@ export type Database = {
           },
         ]
       }
+      budget_service_inputs: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          id: string
+          input_id: string
+          input_name: string | null
+          macro_id: string
+          project_id: string
+          quantity_per_unit: number
+          scope_id: string
+          service_name: string | null
+          unit: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          id?: string
+          input_id: string
+          input_name?: string | null
+          macro_id: string
+          project_id: string
+          quantity_per_unit?: number
+          scope_id: string
+          service_name?: string | null
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          id?: string
+          input_id?: string
+          input_name?: string | null
+          macro_id?: string
+          project_id?: string
+          quantity_per_unit?: number
+          scope_id?: string
+          service_name?: string | null
+          unit?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_service_inputs_input_id_fkey"
+            columns: ["input_id"]
+            isOneToOne: false
+            referencedRelation: "inputs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_bsi_company"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_bsi_project"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       category_lead_times: {
         Row: {
           category: string
