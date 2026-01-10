@@ -58,6 +58,8 @@ export function useLongTermPlanning(projectId: string | undefined) {
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
+  const [contractId, setContractId] = useState<string | null>(null);
+  const [totalHouses, setTotalHouses] = useState<number>(0);
 
   // Buscar ou inicializar planejamento
   const initializePlanning = useCallback(async () => {
@@ -67,6 +69,26 @@ export function useLongTermPlanning(projectId: string | undefined) {
     setInitError(null);
 
     try {
+      // Buscar contrato do projeto e total de casas
+      const [contractResult, housesResult] = await Promise.all([
+        supabase
+          .from("project_contracts")
+          .select("id")
+          .eq("project_id", projectId)
+          .order("created_at", { ascending: false })
+          .limit(1),
+        supabase
+          .from("houses")
+          .select("id", { count: "exact", head: true })
+          .eq("project_id", projectId),
+      ]);
+
+      if (contractResult.data && contractResult.data.length > 0) {
+        setContractId(contractResult.data[0].id);
+      }
+
+      setTotalHouses(housesResult.count || 0);
+
       // Buscar versão ativa
       const { data: versions, error: versionsError } = await supabase
         .from("planning_versions")
@@ -339,7 +361,26 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
   // Salvar alterações
   const savePlanning = useCallback(async () => {
-    if (!projectId || !company?.id) return;
+    if (!projectId || !company?.id) return false;
+
+    // Verificar se temos contract_id
+    let currentContractId = contractId;
+    if (!currentContractId) {
+      const { data: contractData } = await supabase
+        .from("project_contracts")
+        .select("id")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (contractData && contractData.length > 0) {
+        currentContractId = contractData[0].id;
+        setContractId(currentContractId);
+      } else {
+        toast.error("Contrato do projeto não encontrado. Configure o contrato primeiro.");
+        return false;
+      }
+    }
 
     setSaving(true);
 
@@ -354,6 +395,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
               id: cellData.id || undefined,
               company_id: company.id,
               project_id: projectId,
+              contract_id: currentContractId,
               planning_period_id: periodId,
               macro_id: row.macro_id,
               macro_name: row.macro_name,
@@ -408,13 +450,15 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
       // Recarregar dados para atualizar IDs
       await loadMatrixData();
+      return true;
     } catch (error) {
       console.error("Erro ao salvar:", error);
       toast.error("Erro ao salvar planejamento");
+      return false;
     } finally {
       setSaving(false);
     }
-  }, [projectId, company?.id, serviceRows, loadMatrixData, currentStep, advanceToStep]);
+  }, [projectId, company?.id, contractId, serviceRows, loadMatrixData, currentStep, advanceToStep]);
 
   // Retry initialization
   const retryInit = useCallback(() => {
@@ -451,6 +495,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
     updateCellValue,
     periodSummaries,
     overallTotals,
+    totalHouses,
     savePlanning,
     refresh: loadMatrixData,
     retryInit,
