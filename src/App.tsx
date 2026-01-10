@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ConstructionProvider } from "./contexts/ConstructionContext";
 import { SystemSetupCheck } from "./components/setup/SystemSetupCheck";
+import { ProjectRequiredGuard } from "./components/guards/ProjectRequiredGuard";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ChangePassword from "./pages/ChangePassword";
@@ -29,6 +30,18 @@ function ProtectedLayout() {
   );
 }
 
+/**
+ * Layout for routes that require an active project to be selected.
+ * Wraps the outlet with ProjectRequiredGuard to ensure project context.
+ */
+function ProjectRequiredLayout() {
+  return (
+    <ProjectRequiredGuard>
+      <Outlet />
+    </ProjectRequiredGuard>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -43,11 +56,18 @@ const App = () => (
 
             {/* Rotas protegidas */}
             <Route element={<ProtectedLayout />}>
+              {/* Admin routes - não requerem projeto ativo */}
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/admin/migration" element={<LegacyDataMigration />} />
-              <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
-              <Route path="/long-term-planning" element={<LongTermPlanningPage />} />
-              <Route path="/project-contract" element={<ProjectContractPage />} />
+              
+              {/* Rotas que requerem projeto ativo */}
+              <Route element={<ProjectRequiredLayout />}>
+                <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
+                <Route path="/long-term-planning" element={<LongTermPlanningPage />} />
+                <Route path="/project-contract" element={<ProjectContractPage />} />
+              </Route>
+              
+              {/* Index pode mostrar estado vazio se não houver projetos */}
               <Route path="/" element={<Index />} />
               <Route path="*" element={<NotFound />} />
             </Route>

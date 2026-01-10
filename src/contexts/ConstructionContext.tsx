@@ -384,11 +384,26 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   const setCurrentProject = useCallback((projectId: string | null) => {
     setCurrentProjectId(projectId);
     setSelectedHouse(null);
-    // Don't reset filters here - they are loaded from localStorage per project
+    // Reset filter states to defaults when switching projects
+    // The useEffect will then load the correct filters for the new project from localStorage
+    setFilterQuadraState("all");
+    setFilterStatusState("all");
+    setFilterModeState("status");
+    setFilterMacroState("all");
+    setFilterScopeState("all");
   }, []);
 
   const addProject = useCallback(async (projectData: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete" | "legendFollowMacros" | "customLegendItems">): Promise<string> => {
     const macrosTemplate = JSON.parse(JSON.stringify(MACROS_TEMPLATE));
+    
+    // Get company_id via RPC function (safer than relying on profile state)
+    const { data: companyId, error: companyError } = await supabase
+      .rpc('get_my_company_id');
+    
+    if (companyError) {
+      console.error('Error getting company_id:', companyError);
+      // Continue with null - system_admin users may not have company_id
+    }
     
     // Insert project to database first to get real UUID
     const { data: newProjectData, error: projectError } = await supabase
@@ -404,14 +419,14 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         project_type: projectData.projectType,
         macros_template: macrosToJson(macrosTemplate),
         setup_complete: false,
-        company_id: profile?.company_id || null,
+        company_id: companyId || null,
       })
       .select()
       .single();
 
     if (projectError || !newProjectData) {
       console.error('Error creating project:', projectError);
-      toast.error("Erro ao criar projeto");
+      toast.error("Erro ao criar projeto: " + (projectError?.message || "Erro desconhecido"));
       return "";
     }
 
