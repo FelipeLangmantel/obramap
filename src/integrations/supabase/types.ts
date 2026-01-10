@@ -2938,6 +2938,113 @@ export type Database = {
           },
         ]
       }
+      service_planning_by_period: {
+        Row: {
+          company_id: string
+          contract_id: string | null
+          created_at: string | null
+          id: string
+          macro_id: string | null
+          macro_name: string | null
+          performance_percent: number | null
+          planned_cost: number | null
+          planned_revenue: number | null
+          planning_period_id: string
+          project_id: string
+          projected_result: number | null
+          real_result: number | null
+          realized_cost: number | null
+          realized_houses: number | null
+          realized_revenue: number | null
+          scope_id: string | null
+          scope_name: string | null
+          status: string | null
+          target_houses: number | null
+          unit_cost_value: number | null
+          unit_revenue_value: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          contract_id?: string | null
+          created_at?: string | null
+          id?: string
+          macro_id?: string | null
+          macro_name?: string | null
+          performance_percent?: number | null
+          planned_cost?: number | null
+          planned_revenue?: number | null
+          planning_period_id: string
+          project_id: string
+          projected_result?: number | null
+          real_result?: number | null
+          realized_cost?: number | null
+          realized_houses?: number | null
+          realized_revenue?: number | null
+          scope_id?: string | null
+          scope_name?: string | null
+          status?: string | null
+          target_houses?: number | null
+          unit_cost_value?: number | null
+          unit_revenue_value?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          contract_id?: string | null
+          created_at?: string | null
+          id?: string
+          macro_id?: string | null
+          macro_name?: string | null
+          performance_percent?: number | null
+          planned_cost?: number | null
+          planned_revenue?: number | null
+          planning_period_id?: string
+          project_id?: string
+          projected_result?: number | null
+          real_result?: number | null
+          realized_cost?: number | null
+          realized_houses?: number | null
+          realized_revenue?: number | null
+          scope_id?: string | null
+          scope_name?: string | null
+          status?: string | null
+          target_houses?: number | null
+          unit_cost_value?: number | null
+          unit_revenue_value?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_spbp_company"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_spbp_contract"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "project_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_spbp_project"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_planning_by_period_planning_period_id_fkey"
+            columns: ["planning_period_id"]
+            isOneToOne: false
+            referencedRelation: "planning_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_planning_targets: {
         Row: {
           company_id: string
