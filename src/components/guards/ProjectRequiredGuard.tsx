@@ -18,7 +18,13 @@ export function ProjectRequiredGuard({ children }: ProjectRequiredGuardProps) {
   const { currentProject, projects, isLoading } = useConstruction();
   const { isSystemAdmin, canAccessProject, isLoading: authLoading } = useAuth();
 
-  // Show loading while checking
+  // ✅ System admin bypasses all project checks
+  if (isSystemAdmin) {
+    console.log("[ProjectRequiredGuard] System admin detected, granting immediate access");
+    return <>{children}</>;
+  }
+
+  // Show loading while checking (only for non-admins)
   if (isLoading || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -27,10 +33,8 @@ export function ProjectRequiredGuard({ children }: ProjectRequiredGuardProps) {
     );
   }
 
-  // Get accessible projects for non-system admins
-  const accessibleProjects = isSystemAdmin
-    ? projects
-    : projects.filter((p) => canAccessProject(p.id));
+  // Get accessible projects for regular users
+  const accessibleProjects = projects.filter((p) => canAccessProject(p.id));
 
   // No projects or no current project? Redirect to home
   if (accessibleProjects.length === 0 || !currentProject) {
