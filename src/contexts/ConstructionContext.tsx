@@ -61,6 +61,7 @@ interface ConstructionContextType {
   updateProject: (projectId: string, updates: Partial<Project>) => void;
   deleteProject: (projectId: string) => void;
   completeProjectSetup: (projectId: string) => void;
+  advanceSetupStep: (step: ProjectSetupStep) => Promise<boolean>;
   
   // Quadras (for current project)
   addQuadra: (name: string, houseIds: number[]) => void;
@@ -697,6 +698,54 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       .update({ setup_complete: true })
       .eq('id', projectId);
   }, []);
+
+  // Ordem hierárquica das etapas de setup
+  const STEP_ORDER: ProjectSetupStep[] = [
+    "project_created",
+    "blocks_configured",
+    "services_defined",
+    "budget_defined",
+    "contract_defined",
+    "long_term_planned",
+  ];
+
+  // Avançar etapa de setup do projeto atual
+  const advanceSetupStep = useCallback(async (step: ProjectSetupStep): Promise<boolean> => {
+    if (!currentProjectId) return false;
+    
+    const project = projects.find(p => p.id === currentProjectId);
+    if (!project) return false;
+    
+    const currentStep = project.setupStep || "project_created";
+    const currentIndex = STEP_ORDER.indexOf(currentStep);
+    const targetIndex = STEP_ORDER.indexOf(step);
+    
+    // Só pode avançar, não retroceder
+    if (targetIndex <= currentIndex) return true;
+
+    try {
+      const { error } = await supabase
+        .from("projects")
+        .update({ setup_step: step })
+        .eq("id", currentProjectId);
+
+      if (error) {
+        console.error("Erro ao atualizar etapa:", error);
+        return false;
+      }
+
+      // Atualizar estado local
+      setProjects(prev => prev.map(p => 
+        p.id === currentProjectId ? { ...p, setupStep: step } : p
+      ));
+
+      console.log(`[SETUP] Projeto avançou para etapa: ${step}`);
+      return true;
+    } catch (error) {
+      console.error("Erro ao avançar etapa:", error);
+      return false;
+    }
+  }, [currentProjectId, projects]);
 
   // Quadra management
   const addQuadra = useCallback(async (name: string, houseIds: number[]) => {
@@ -1671,6 +1720,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         updateProject,
         deleteProject,
         completeProjectSetup,
+        advanceSetupStep,
         addQuadra,
         updateQuadra,
         deleteQuadra,

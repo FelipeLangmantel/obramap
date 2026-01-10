@@ -1,17 +1,8 @@
 import { useCallback, useMemo } from "react";
-import { useConstruction } from "@/contexts/ConstructionContext";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { useConstruction, ProjectSetupStep } from "@/contexts/ConstructionContext";
 
-// Definição das etapas de configuração do projeto
-export type ProjectSetupStep = 
-  | "project_created"
-  | "blocks_configured"
-  | "services_defined"
-  | "budget_defined"
-  | "contract_defined"
-  | "long_term_planned";
+// Re-export for convenience
+export type { ProjectSetupStep } from "@/contexts/ConstructionContext";
 
 // Ordem hierárquica das etapas
 const STEP_ORDER: ProjectSetupStep[] = [
@@ -98,7 +89,6 @@ export interface ProjectSetupFlowResult {
   
   // Avanço de etapas
   advanceToStep: (step: ProjectSetupStep) => Promise<boolean>;
-  refreshSetupStep: () => Promise<void>;
   
   // Helpers
   getNextStep: () => ProjectSetupStep | null;
@@ -107,8 +97,7 @@ export interface ProjectSetupFlowResult {
 }
 
 export function useProjectSetupFlow(): ProjectSetupFlowResult {
-  const { currentProject } = useConstruction();
-  const { profile } = useAuth();
+  const { currentProject, advanceSetupStep } = useConstruction();
 
   // Etapa atual do projeto
   const currentStep = useMemo((): ProjectSetupStep | null => {
@@ -161,54 +150,10 @@ export function useProjectSetupFlow(): ProjectSetupFlowResult {
     return STEP_ORDER[stepIndex + 1];
   }, [stepIndex]);
 
-  // Avançar para uma etapa específica
+  // Avançar para uma etapa específica (usa a função do contexto)
   const advanceToStep = useCallback(async (step: ProjectSetupStep): Promise<boolean> => {
-    if (!currentProject) return false;
-    
-    const targetIndex = STEP_ORDER.indexOf(step);
-    // Só pode avançar, não retroceder
-    if (targetIndex <= stepIndex) return true;
-
-    try {
-      const { error } = await supabase
-        .from("projects")
-        .update({ setup_step: step })
-        .eq("id", currentProject.id);
-
-      if (error) {
-        console.error("Erro ao atualizar etapa:", error);
-        toast.error("Erro ao atualizar configuração da obra");
-        return false;
-      }
-
-      // Força refresh do projeto (será implementado no ConstructionContext)
-      toast.success(`Etapa "${STEP_LABELS[step]}" concluída!`);
-      return true;
-    } catch (error) {
-      console.error("Erro ao avançar etapa:", error);
-      return false;
-    }
-  }, [currentProject, stepIndex]);
-
-  // Atualizar etapa do projeto
-  const refreshSetupStep = useCallback(async () => {
-    if (!currentProject) return;
-
-    try {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("setup_step")
-        .eq("id", currentProject.id)
-        .single();
-
-      if (!error && data) {
-        // O ConstructionContext deve atualizar o projeto
-        console.log("Setup step atualizado:", data.setup_step);
-      }
-    } catch (error) {
-      console.error("Erro ao atualizar setup step:", error);
-    }
-  }, [currentProject]);
+    return advanceSetupStep(step);
+  }, [advanceSetupStep]);
 
   return {
     currentStep,
@@ -217,7 +162,6 @@ export function useProjectSetupFlow(): ProjectSetupFlowResult {
     getBlockedMessage,
     isStepComplete,
     advanceToStep,
-    refreshSetupStep,
     getNextStep,
     getRequiredStep,
     allSteps: STEP_ORDER,

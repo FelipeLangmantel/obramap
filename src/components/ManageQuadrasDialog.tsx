@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 import {
   Dialog,
   DialogContent,
@@ -77,6 +78,7 @@ function getNextInSequence(names: string[], pattern: NamingPattern): string {
 
 export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogProps) {
   const { currentProject, addQuadra, updateQuadra, deleteQuadra, reorderQuadras } = useConstruction();
+  const { advanceToStep, currentStep } = useProjectSetupFlow();
   
   const [newQuadraName, setNewQuadraName] = useState("");
   const [selectedHouseIds, setSelectedHouseIds] = useState<number[]>([]);
@@ -91,6 +93,17 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
   const [dragMode, setDragMode] = useState<'select' | 'deselect'>('select');
   const dragStartRef = useRef<number | null>(null);
   const isEditingRef = useRef<boolean>(false);
+
+  // Avançar etapa de setup ao fechar se tiver quadras configuradas
+  const handleOpenChange = useCallback(async (isOpen: boolean) => {
+    if (!isOpen && currentProject && currentProject.quadras.length > 0) {
+      if (currentStep === "project_created") {
+        await advanceToStep("blocks_configured");
+        toast.success("Etapa 'Quadras e Casas' concluída!");
+      }
+    }
+    onOpenChange(isOpen);
+  }, [currentProject, currentStep, advanceToStep, onOpenChange]);
 
   // Detect current naming pattern
   const namingPattern = useMemo(() => {
@@ -286,7 +299,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
 
   if (!currentProject) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cadastro de Quadras</DialogTitle>
@@ -302,7 +315,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
   const unassignedHouses = getUnassignedHouses();
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 text-lg">

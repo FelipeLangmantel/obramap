@@ -1,4 +1,4 @@
-import { useState, DragEvent, useMemo } from "react";
+import { useState, DragEvent, useMemo, useCallback } from "react";
 import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy, Eye, Scale, Upload, FileUp, Download, Printer, Calculator, Lock, Unlock, Layers } from "lucide-react";
 import { CopyMacrosDialog } from "./CopyMacrosDialog";
 import { ImportMacrosDialog } from "./ImportMacrosDialog";
@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 import { useAuth } from "@/contexts/AuthContext";
 import { Scope } from "@/data/constructionData";
 import { DEFAULT_MACRO_COLORS } from "@/data/constructionData";
@@ -35,6 +36,7 @@ interface ExtractedMacro {
 
 export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogProps) {
   const { currentProject, addMacro, updateMacro, deleteMacro, addScope, updateScope, deleteScope, resetProjectData, reorderMacros, reorderScopes } = useConstruction();
+  const { advanceToStep, currentStep } = useProjectSetupFlow();
   const { canEdit } = useAuth();
   
   const [editingMacro, setEditingMacro] = useState<{ id: string; name: string; color: string } | null>(null);
