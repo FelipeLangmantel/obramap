@@ -25,20 +25,11 @@ const STEP_ORDER: ProjectSetupStep[] = [
 ];
 
 // Mapeamento de rotas para etapa mínima necessária
+// IMPORTANTE: Rotas não listadas aqui são acessíveis livremente
 const ROUTE_REQUIREMENTS: Record<string, ProjectSetupStep> = {
   "/project-contract": "budget_defined",
   "/long-term-planning": "contract_defined",
   "/measurement-planning": "long_term_planned",
-};
-
-// Próxima etapa obrigatória baseada no setup_step atual
-const NEXT_STEP_ROUTE: Record<ProjectSetupStep, string> = {
-  project_created: "/",
-  blocks_configured: "/",
-  services_defined: "/",
-  budget_defined: "/project-contract",
-  contract_defined: "/long-term-planning",
-  long_term_planned: "/",
 };
 
 const RPC_TIMEOUT_MS = 12000;
@@ -250,9 +241,9 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
     const requiredIndex = STEP_ORDER.indexOf(requiredStep);
 
     if (currentStepIndex < requiredIndex) {
-      const redirectTo = NEXT_STEP_ROUTE[currentStep] || "/";
-      console.log(`[SETUP GUARD] Route ${location.pathname} requires ${requiredStep}, current is ${currentStep}, redirecting to ${redirectTo}`);
-      return <Navigate to={redirectTo} replace />;
+      // Redirecionar para a página principal - a página de destino vai mostrar o alerta de módulo bloqueado
+      console.log(`[SETUP GUARD] Route ${location.pathname} requires ${requiredStep}, current is ${currentStep}, redirecting to /`);
+      return <Navigate to="/" replace />;
     }
   }
 
