@@ -6,10 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { ArrowRight, Building2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface NewProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onProjectCreated?: (projectId: string) => void;
 }
 
 const PROJECT_TYPES = [
@@ -21,8 +23,8 @@ const PROJECT_TYPES = [
   "Loteamento",
 ];
 
-export function NewProjectDialog({ open, onOpenChange }: NewProjectDialogProps) {
-  const { addProject } = useConstruction();
+export function NewProjectDialog({ open, onOpenChange, onProjectCreated }: NewProjectDialogProps) {
+  const { addProject, setCurrentProject } = useConstruction();
   
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
@@ -39,7 +41,7 @@ export function NewProjectDialog({ open, onOpenChange }: NewProjectDialogProps) 
     
     setIsSubmitting(true);
     try {
-      await addProject({
+      const projectId = await addProject({
         name,
         location,
         contractor,
@@ -50,17 +52,27 @@ export function NewProjectDialog({ open, onOpenChange }: NewProjectDialogProps) 
         projectType: projectType || "Residencial Popular",
       });
       
-      // Reset form
-      setName("");
-      setLocation("");
-      setContractor("");
-      setStartDate("");
-      setExpectedEndDate("");
-      setTotalHouses("");
-      setUnitSize("");
-      setProjectType("");
-      
-      onOpenChange(false);
+      if (projectId) {
+        // Selecionar a nova obra como atual
+        await setCurrentProject(projectId);
+        
+        toast.success("Obra criada! Configure as etapas e serviços.");
+        
+        // Reset form
+        setName("");
+        setLocation("");
+        setContractor("");
+        setStartDate("");
+        setExpectedEndDate("");
+        setTotalHouses("");
+        setUnitSize("");
+        setProjectType("");
+        
+        onOpenChange(false);
+        
+        // Notificar que projeto foi criado para abrir dialog de etapas
+        onProjectCreated?.(projectId);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -165,9 +177,12 @@ export function NewProjectDialog({ open, onOpenChange }: NewProjectDialogProps) 
             </Select>
           </div>
 
-          <div className="p-4 bg-secondary/50 rounded-lg">
-            <p className="text-sm text-muted-foreground">
-              Após cadastrar, você poderá configurar as quadras e distribuir as casas no mapa visual.
+          <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
+            <p className="text-sm text-foreground font-medium">
+              Após cadastrar, você será direcionado para configurar as etapas e serviços da obra.
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              A lista inicia vazia - você poderá adicionar manualmente, copiar de outra obra ou importar.
             </p>
           </div>
         </div>
