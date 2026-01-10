@@ -4361,6 +4361,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: undefined
       }
+      recalculate_service_capacity: {
+        Args: { p_service_planning_id: string }
+        Returns: undefined
+      }
       recalculate_service_cost: {
         Args: { p_service_id: string }
         Returns: number
