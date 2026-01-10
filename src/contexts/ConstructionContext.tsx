@@ -142,10 +142,13 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   const [filterMacro, setFilterMacroState] = useState<string>("all");
   const [filterScope, setFilterScopeState] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
+  
+  // ✅ Flags para controlar execução única de efeitos
   const initialLoadDone = useRef(false);
   const filtersLoadedRef = useRef(false);
   const projectsRef = useRef<Project[] | null>(null);
   const hydratedProjectIdsRef = useRef<Set<string>>(new Set());
+  const isHydratingRef = useRef(false);
 
   const currentProject = projects.find((p) => p.id === currentProjectId) || null;
 
@@ -221,10 +224,14 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     }
   }, [currentProjectId]);
 
-  // Load projects from database on mount (lightweight list first, then hydrate only the active project)
+  // ✅ Load projects from database on mount (lightweight list first, then hydrate only the active project)
   useEffect(() => {
-    if (initialLoadDone.current) return;
+    if (initialLoadDone.current) {
+      console.log("[PROJECT EFFECT] Initial load already done, skipping");
+      return;
+    }
     initialLoadDone.current = true;
+    console.log("[PROJECT EFFECT] Starting initial project load");
 
     const withTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
       return Promise.race([
@@ -428,16 +435,26 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!currentProjectId) return;
-    // Only hydrate if we don't already have houses loaded for this project
-    if (hydratedProjectIdsRef.current.has(currentProjectId)) return;
+    // ✅ Only hydrate if we don't already have houses loaded for this project
+    if (hydratedProjectIdsRef.current.has(currentProjectId)) {
+      console.log("[PROJECT EFFECT] Project already hydrated:", currentProjectId);
+      return;
+    }
+    // ✅ Prevent parallel hydration
+    if (isHydratingRef.current) {
+      console.log("[PROJECT EFFECT] Hydration already in progress, skipping");
+      return;
+    }
+
+    const project = projects.find((p) => p.id === currentProjectId);
+    if (!project) return;
+
+    isHydratingRef.current = true;
+    console.log("[PROJECT EFFECT] Hydrating project:", currentProjectId);
 
     (async () => {
       setIsLoading(true);
       try {
-        // reuse the same hydration path by temporarily allowing it through
-        hydratedProjectIdsRef.current.delete(currentProjectId);
-        const project = projects.find((p) => p.id === currentProjectId);
-        if (!project) return;
 
         // hydrate inline (duplicated small call to avoid function re-creation deps)
         const [{ data: quadrasData }, { data: housesData }] = await Promise.race([
@@ -484,13 +501,20 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         hydratedProjectIdsRef.current.delete(currentProjectId);
       } finally {
         setIsLoading(false);
+        isHydratingRef.current = false;
+        console.log("[PROJECT EFFECT] Hydration complete for:", currentProjectId);
       }
     })();
-  }, [currentProjectId, projects]);
+  }, [currentProjectId]); // ✅ Removido 'projects' das deps para evitar loop
 
+  // ✅ 5. RESETAR ESTADOS AO TROCAR DE PROJETO
   const setCurrentProject = useCallback((projectId: string | null) => {
+    console.log("[PROJECT EFFECT] Switching to project:", projectId);
+    
+    // ✅ Limpa todos os estados de módulos ao trocar de obra
     setCurrentProjectId(projectId);
     setSelectedHouse(null);
+    
     // Reset filter states to defaults when switching projects
     // The useEffect will then load the correct filters for the new project from localStorage
     setFilterQuadraState("all");
@@ -498,6 +522,9 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     setFilterModeState("status");
     setFilterMacroState("all");
     setFilterScopeState("all");
+    
+    // ✅ Marca que este projeto precisa ser hidratado se ainda não foi
+    // (não remove do cache para evitar re-fetch desnecessário)
   }, []);
 
   const addProject = useCallback(async (projectData: Omit<Project, "id" | "houses" | "quadras" | "macrosTemplate" | "createdAt" | "setupComplete" | "legendFollowMacros" | "customLegendItems">): Promise<string> => {

@@ -22,6 +22,12 @@ function withTimeout<T>(promiseLike: PromiseLike<T>, ms: number): Promise<T> {
   ]);
 }
 
+/**
+ * ✅ REGRAS DO GUARD:
+ * - NÃO faz setState que cause loops
+ * - Navega apenas quando necessário
+ * - Cache em sessionStorage para evitar re-checks
+ */
 export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [needsSetup, setNeedsSetup] = useState(false);
@@ -32,27 +38,33 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
   const navigate = useNavigate();
   const location = useLocation();
 
+  // ✅ Flags para controlar execução única
   const inFlightRef = useRef(false);
-  const lastCheckKeyRef = useRef<string | null>(null);
+  const hasCheckedRef = useRef(false);
 
   const checkSystemStatus = useCallback(async (userId: string | undefined, sysAdmin: boolean) => {
-    if (inFlightRef.current) return;
+    // ✅ Proteção contra execução duplicada
+    if (inFlightRef.current) {
+      console.log("[SETUP CHECK] Already in flight, skipping");
+      return;
+    }
+    if (hasCheckedRef.current) {
+      console.log("[SETUP CHECK] Already checked, skipping");
+      return;
+    }
 
-    // Run at most once per auth identity (anonymous vs user id + sysadmin flag)
+    // Check sessionStorage cache first
     const key = `${userId ?? 'anon'}|${sysAdmin ? 'sys' : 'nosys'}`;
-
-    // Persisted cache (survives remounts) to avoid "loop" sensação na navegação
     if (sessionStorage.getItem(SETUP_CHECK_CACHE_KEY) === key) {
-      lastCheckKeyRef.current = key;
+      console.log("[SETUP CHECK] Cache hit, skipping RPC");
+      hasCheckedRef.current = true;
       setIsLoading(false);
       return;
     }
 
-    if (lastCheckKeyRef.current === key) return;
-
     inFlightRef.current = true;
-    lastCheckKeyRef.current = key;
-    setIsLoading(true);
+    hasCheckedRef.current = true;
+    console.log("[SETUP CHECK] Starting check for:", key);
 
     try {
       // Check if admin exists using RPC
@@ -80,17 +92,17 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
 
           if (typedStatus.needs_migration) {
             if (!location.pathname.startsWith('/admin/migration')) {
-              navigate('/admin/migration', { replace: true });
               sessionStorage.setItem(SETUP_CHECK_CACHE_KEY, key);
               setIsLoading(false);
               inFlightRef.current = false;
+              navigate('/admin/migration', { replace: true });
               return;
             }
           } else if (!location.pathname.startsWith('/admin')) {
-            navigate('/admin/dashboard', { replace: true });
             sessionStorage.setItem(SETUP_CHECK_CACHE_KEY, key);
             setIsLoading(false);
             inFlightRef.current = false;
+            navigate('/admin/dashboard', { replace: true });
             return;
           }
         }
@@ -141,6 +153,7 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
 
   useEffect(() => {
     if (authLoading) return;
+    console.log("[SETUP CHECK EFFECT] Triggering check");
     checkSystemStatus(user?.id, isSystemAdmin);
   }, [authLoading, user?.id, isSystemAdmin, checkSystemStatus]);
 
@@ -174,4 +187,3 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
 
   return <>{children}</>;
 };
-

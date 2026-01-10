@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -41,23 +41,31 @@ function IndexContent() {
   const { selectedHouse, isLoading, projects, currentProject, setCurrentProject } = useConstruction();
   const { canAccessProject } = useAuth();
 
-  // Auto-seleciona a primeira obra acessível (apenas uma vez por mudança relevante)
+  // ✅ Auto-seleciona a primeira obra acessível APENAS se não houver projeto atual
+  // Usa ref para evitar múltiplas execuções
+  const hasAutoSelectedRef = useRef(false);
+
   useEffect(() => {
+    // ✅ Proteção contra execução duplicada
+    if (hasAutoSelectedRef.current) return;
     if (isLoading) return;
     if (projects.length === 0) return;
+    
+    // ✅ Se já tem projeto atual válido, não faz nada
+    if (currentProject && canAccessProject(currentProject.id)) {
+      hasAutoSelectedRef.current = true;
+      console.log("[INDEX EFFECT] Current project is valid, skipping auto-select");
+      return;
+    }
 
     const accessibleProjects = projects.filter((p) => canAccessProject(p.id));
     if (accessibleProjects.length === 0) return;
 
-    const desiredProjectId =
-      !currentProject || !canAccessProject(currentProject.id)
-        ? accessibleProjects[0].id
-        : currentProject.id;
-
-    if (!currentProject || currentProject.id !== desiredProjectId) {
-      setCurrentProject(desiredProjectId);
-    }
-  }, [isLoading, projects, currentProject?.id, canAccessProject, setCurrentProject]);
+    // ✅ Seleciona apenas uma vez
+    hasAutoSelectedRef.current = true;
+    console.log("[INDEX EFFECT] Auto-selecting first accessible project:", accessibleProjects[0].id);
+    setCurrentProject(accessibleProjects[0].id);
+  }, [isLoading, projects.length]); // ✅ Deps mínimas para evitar loop
 
   if (isLoading) {
     return (

@@ -6,9 +6,6 @@ import "./index.css";
 const container = document.getElementById("root");
 if (container) {
   const root = createRoot(container);
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
+  // StrictMode removido temporariamente para evitar duplicação de efeitos
+  root.render(<App />);
 }
