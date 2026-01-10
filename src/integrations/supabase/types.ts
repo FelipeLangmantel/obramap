@@ -2894,6 +2894,10 @@ export type Database = {
         Args: { p_contract_id: string; p_house_ids: number[]; p_notes?: string }
         Returns: undefined
       }
+      close_measurement: {
+        Args: { p_measurement_id: string; p_notes?: string }
+        Returns: Json
+      }
       complete_orphan_data_migration: {
         Args: { target_company_id: string }
         Returns: Json
@@ -2978,6 +2982,10 @@ export type Database = {
         }[]
       }
       get_measurement_cost_summary: {
+        Args: { p_measurement_id: string }
+        Returns: Json
+      }
+      get_measurement_financial_summary: {
         Args: { p_measurement_id: string }
         Returns: Json
       }
@@ -3078,6 +3086,10 @@ export type Database = {
         Args: { p_measurement_id: string }
         Returns: undefined
       }
+      recalculate_measurement_totals: {
+        Args: { p_measurement_id: string }
+        Returns: undefined
+      }
       recalculate_service_cost: {
         Args: { p_service_id: string }
         Returns: number
@@ -3089,6 +3101,10 @@ export type Database = {
       regenerate_supply_alerts: {
         Args: { p_project_id: string }
         Returns: undefined
+      }
+      reopen_measurement: {
+        Args: { p_measurement_id: string; p_reason: string }
+        Returns: Json
       }
       unlink_houses_from_measurement: {
         Args: {
