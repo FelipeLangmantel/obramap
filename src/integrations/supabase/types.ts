@@ -991,6 +991,9 @@ export type Database = {
           created_at: string
           family_id: string | null
           financial_result: number
+          forecast_end_date: string | null
+          forecast_final_cost: number | null
+          forecast_risk: string | null
           helpers_per_team: number
           id: string
           macro_color: string
@@ -1017,6 +1020,9 @@ export type Database = {
           created_at?: string
           family_id?: string | null
           financial_result?: number
+          forecast_end_date?: string | null
+          forecast_final_cost?: number | null
+          forecast_risk?: string | null
           helpers_per_team?: number
           id?: string
           macro_color?: string
@@ -1043,6 +1049,9 @@ export type Database = {
           created_at?: string
           family_id?: string | null
           financial_result?: number
+          forecast_end_date?: string | null
+          forecast_final_cost?: number | null
+          forecast_risk?: string | null
           helpers_per_team?: number
           id?: string
           macro_color?: string
@@ -1103,6 +1112,9 @@ export type Database = {
           end_date: string
           financial_result: number
           financial_status: string
+          forecast_cost: number | null
+          forecast_result: number | null
+          forecast_risk: string | null
           id: string
           measurement_number: number
           notes: string | null
@@ -1124,6 +1136,9 @@ export type Database = {
           end_date: string
           financial_result?: number
           financial_status?: string
+          forecast_cost?: number | null
+          forecast_result?: number | null
+          forecast_risk?: string | null
           id?: string
           measurement_number: number
           notes?: string | null
@@ -1145,6 +1160,9 @@ export type Database = {
           end_date?: string
           financial_result?: number
           financial_status?: string
+          forecast_cost?: number | null
+          forecast_result?: number | null
+          forecast_risk?: string | null
           id?: string
           measurement_number?: number
           notes?: string | null
@@ -2488,6 +2506,66 @@ export type Database = {
           },
         ]
       }
+      risk_alerts: {
+        Row: {
+          alert_type: string
+          company_id: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          level: string
+          measurement_id: string | null
+          message: string
+          project_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          service_id: string | null
+        }
+        Insert: {
+          alert_type: string
+          company_id: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          level?: string
+          measurement_id?: string | null
+          message: string
+          project_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          service_id?: string | null
+        }
+        Update: {
+          alert_type?: string
+          company_id?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          level?: string
+          measurement_id?: string | null
+          message?: string
+          project_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          service_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "risk_alerts_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "risk_alerts_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "measurement_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scope_costs: {
         Row: {
           created_at: string
@@ -3225,6 +3303,14 @@ export type Database = {
         }
         Returns: number
       }
+      generate_measurement_risk_alert: {
+        Args: { p_measurement_id: string; p_new_risk: string }
+        Returns: undefined
+      }
+      generate_service_risk_alert: {
+        Args: { p_new_risk: string; p_service_id: string }
+        Returns: undefined
+      }
       generate_temp_password: { Args: never; Returns: string }
       generate_unique_slug: { Args: { company_name: string }; Returns: string }
       get_available_measurements: {
@@ -3319,6 +3405,18 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: Json
       }
+      get_project_risk_alerts: {
+        Args: { p_project_id: string }
+        Returns: {
+          alert_type: string
+          created_at: string
+          id: string
+          level: string
+          measurement_number: number
+          message: string
+          service_name: string
+        }[]
+      }
       get_supply_kpis: { Args: { p_project_id: string }; Returns: Json }
       get_user_company_id: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
@@ -3367,6 +3465,10 @@ export type Database = {
         Args: { p_measurement_id: string }
         Returns: undefined
       }
+      recalculate_measurement_forecast: {
+        Args: { p_measurement_id: string }
+        Returns: undefined
+      }
       recalculate_measurement_totals: {
         Args: { p_measurement_id: string }
         Returns: undefined
@@ -3375,9 +3477,17 @@ export type Database = {
         Args: { p_period_id: string }
         Returns: undefined
       }
+      recalculate_project_forecasts: {
+        Args: { p_project_id: string }
+        Returns: undefined
+      }
       recalculate_service_cost: {
         Args: { p_service_id: string }
         Returns: number
+      }
+      recalculate_service_forecast: {
+        Args: { p_service_id: string }
+        Returns: undefined
       }
       recalculate_service_real_results: {
         Args: { p_service_id: string }
@@ -3390,6 +3500,10 @@ export type Database = {
       reopen_measurement: {
         Args: { p_measurement_id: string; p_reason: string }
         Returns: Json
+      }
+      resolve_risk_alert: {
+        Args: { p_alert_id: string; p_resolved_by?: string }
+        Returns: undefined
       }
       unlink_houses_from_measurement: {
         Args: {
