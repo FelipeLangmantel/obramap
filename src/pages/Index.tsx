@@ -39,21 +39,25 @@ type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "intera
 function IndexContent() {
   const [activeView, setActiveView] = useState<ViewType>("map");
   const { selectedHouse, isLoading, projects, currentProject, setCurrentProject } = useConstruction();
-  const { canAccessProject, permissions, isAdmin } = useAuth();
+  const { canAccessProject } = useAuth();
 
-  // Auto-select first accessible project if current project is not accessible
+  // Auto-seleciona a primeira obra acessível (apenas uma vez por mudança relevante)
   useEffect(() => {
-    if (!isLoading && projects.length > 0) {
-      const accessibleProjects = projects.filter(p => canAccessProject(p.id));
-      
-      // If no current project or current project is not accessible, select first accessible one
-      if (!currentProject || !canAccessProject(currentProject.id)) {
-        if (accessibleProjects.length > 0) {
-          setCurrentProject(accessibleProjects[0].id);
-        }
-      }
+    if (isLoading) return;
+    if (projects.length === 0) return;
+
+    const accessibleProjects = projects.filter((p) => canAccessProject(p.id));
+    if (accessibleProjects.length === 0) return;
+
+    const desiredProjectId =
+      !currentProject || !canAccessProject(currentProject.id)
+        ? accessibleProjects[0].id
+        : currentProject.id;
+
+    if (!currentProject || currentProject.id !== desiredProjectId) {
+      setCurrentProject(desiredProjectId);
     }
-  }, [isLoading, projects, currentProject, canAccessProject, setCurrentProject, permissions, isAdmin]);
+  }, [isLoading, projects, currentProject?.id, canAccessProject, setCurrentProject]);
 
   if (isLoading) {
     return (
