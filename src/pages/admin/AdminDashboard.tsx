@@ -44,20 +44,24 @@ export default function AdminDashboard() {
   }, [isSystemAdmin, navigate]);
 
   useEffect(() => {
-    if (!authLoading) {
-      if (!user) {
-        navigate("/auth");
-        return;
-      }
-      if (mustChangePassword) {
-        navigate("/change-password");
-        return;
-      }
-      if (!isSystemAdmin) {
-        navigate("/");
-        return;
-      }
+    // ✅ Wait for auth to finish loading before any redirects
+    if (authLoading) return;
+
+    if (!user) {
+      navigate("/auth");
+      return;
     }
+    if (mustChangePassword) {
+      navigate("/change-password");
+      return;
+    }
+    // ✅ System admin check - no dependency on company/project
+    if (!isSystemAdmin) {
+      console.log("[AdminDashboard] Non-admin user, redirecting to /");
+      navigate("/");
+      return;
+    }
+    console.log("[AdminDashboard] System admin access granted");
   }, [user, isSystemAdmin, authLoading, mustChangePassword, navigate]);
 
   useEffect(() => {

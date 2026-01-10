@@ -150,9 +150,18 @@ export const SystemSetupCheck: React.FC<SystemSetupCheckProps> = ({ children }) 
 
   useEffect(() => {
     if (authLoading) return;
+    
+    // ✅ System admin on admin routes - bypass all checks
+    if (isSystemAdmin && location.pathname.startsWith('/admin')) {
+      console.log("[SETUP CHECK EFFECT] System admin on admin route, bypassing");
+      hasCheckedRef.current = true;
+      setIsLoading(false);
+      return;
+    }
+    
     console.log("[SETUP CHECK EFFECT] Triggering check");
     checkSystemStatus(user?.id, isSystemAdmin);
-  }, [authLoading, user?.id, isSystemAdmin, checkSystemStatus]);
+  }, [authLoading, user?.id, isSystemAdmin, checkSystemStatus, location.pathname]);
 
   const handleSetupComplete = () => {
     setNeedsSetup(false);
