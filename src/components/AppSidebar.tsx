@@ -35,7 +35,8 @@ import {
   Wallet,
   Crown,
   ClipboardCheck,
-  Calculator
+  Calculator,
+  Calendar
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -57,12 +58,13 @@ import obraMapLogo from "@/assets/obramap-logo-new.png";
 type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning";
 
 // Views com rotas separadas (navegam para página diferente)
-type RouteViewType = "measurement-planning";
+type RouteViewType = "measurement-planning" | "long-term-planning";
 type MenuViewType = ViewType | RouteViewType;
 
 // Mapeamento de views para rotas
 const ROUTE_VIEWS: Record<RouteViewType, string> = {
   "measurement-planning": "/measurement-planning",
+  "long-term-planning": "/long-term-planning",
 };
 
 interface AppSidebarProps {
@@ -201,6 +203,12 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       permissionId: "planejamento"
     },
     { 
+      title: "Planej. Longo Prazo", 
+      view: "long-term-planning", 
+      icon: Calendar,
+      permissionId: "planejamento"
+    },
+    {
       title: "Custos da Obra", 
       view: "costs", 
       icon: DollarSign,
