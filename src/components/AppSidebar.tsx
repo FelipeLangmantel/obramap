@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -33,7 +34,8 @@ import {
   Truck,
   Wallet,
   Crown,
-  ClipboardCheck
+  ClipboardCheck,
+  Calculator
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -52,7 +54,16 @@ import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import obraMapLogo from "@/assets/obramap-logo-new.png";
 
-type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "measurement-planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning";
+type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning";
+
+// Views com rotas separadas (navegam para página diferente)
+type RouteViewType = "measurement-planning";
+type MenuViewType = ViewType | RouteViewType;
+
+// Mapeamento de views para rotas
+const ROUTE_VIEWS: Record<RouteViewType, string> = {
+  "measurement-planning": "/measurement-planning",
+};
 
 interface AppSidebarProps {
   activeView: ViewType;
@@ -84,6 +95,7 @@ const VIEW_TO_MODULE_KEY: Record<string, string> = {
 };
 
 export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
+  const navigate = useNavigate();
   const { state, setOpen } = useSidebar();
   const collapsed = state === "collapsed";
   const { profile, company, role, signOut, isAdmin, canEdit, canAccessMenu, canAccessManagement, canAccessProject, systemRole, isCompanyAdmin } = useAuth();
@@ -145,82 +157,82 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   };
 
   // Menu items mapped to permission IDs
-  const mainMenuItems = [
+  const mainMenuItems: { title: string; view: MenuViewType; icon: any; permissionId: string }[] = [
     { 
       title: "Mapa de Obras", 
-      view: "map" as const, 
+      view: "map", 
       icon: LayoutDashboard,
       permissionId: "dashboard"
     },
     { 
       title: "Mapa Interativo", 
-      view: "interactive-map" as const, 
+      view: "interactive-map", 
       icon: Map,
       permissionId: "mapa"
     },
     { 
       title: "Mapa 3D", 
-      view: "3d-map" as const, 
+      view: "3d-map", 
       icon: Box,
       permissionId: "mapa"
     },
     { 
       title: "Gráficos", 
-      view: "charts" as const, 
+      view: "charts", 
       icon: BarChart3,
       permissionId: "graficos"
     },
     { 
       title: "Produção Semanal", 
-      view: "production" as const, 
+      view: "production", 
       icon: ClipboardList,
       permissionId: "producao"
     },
     { 
       title: "Planejamento", 
-      view: "planning" as const, 
+      view: "planning", 
       icon: Target,
       permissionId: "planejamento"
     },
     { 
       title: "Planej. Medição", 
-      view: "measurement-planning" as const, 
-      icon: Target,
+      view: "measurement-planning", 
+      icon: Calculator,
       permissionId: "planejamento"
     },
     { 
       title: "Custos da Obra", 
-      view: "costs" as const, 
+      view: "costs", 
       icon: DollarSign,
       permissionId: "financeiro"
     },
     { 
       title: "Suprimentos", 
-      view: "supplies" as const, 
+      view: "supplies", 
       icon: Package,
       permissionId: "suprimentos"
     },
     { 
       title: "Fluxo Financeiro", 
-      view: "financial-flow" as const, 
+      view: "financial-flow", 
       icon: Wallet,
       permissionId: "financeiro"
     },
     { 
       title: "Painel da Diretoria", 
-      view: "board-decisions" as const, 
+      view: "board-decisions", 
       icon: Crown,
       permissionId: "financeiro"
     },
     { 
       title: "Entrega & Pós-Obra", 
-      view: "delivery" as const, 
+      view: "delivery", 
       icon: ClipboardCheck,
       permissionId: "producao"
     },
     { 
       title: "Planejamento Inteligente", 
-      view: "smart-planning" as const, 
+      view: "smart-planning", 
       icon: Target,
       permissionId: "planejamento"
     },
@@ -239,7 +251,13 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     return true;
   });
 
-  const handleViewChange = (view: ViewType) => {
+  const handleViewChange = (view: MenuViewType) => {
+    // Se for uma view com rota separada, navegar
+    if (view in ROUTE_VIEWS) {
+      navigate(ROUTE_VIEWS[view as RouteViewType]);
+      return;
+    }
+
     const moduleStatus = getModuleStatus(view);
     
     // Se módulo em desenvolvimento, mostrar modal
@@ -251,7 +269,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       }
     }
     
-    onViewChange(view);
+    onViewChange(view as ViewType);
   };
 
   const handleToggleSidebar = () => {

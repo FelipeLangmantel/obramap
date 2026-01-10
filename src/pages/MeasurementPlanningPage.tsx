@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useConstruction } from "@/contexts/ConstructionContext";
+import { ConstructionProvider, useConstruction } from "@/contexts/ConstructionContext";
 import { useMeasurementPlanning } from "@/hooks/useMeasurementPlanning";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +19,7 @@ import { MeasurementPlanningTable } from "@/components/planning/MeasurementPlann
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 
-export default function MeasurementPlanningPage() {
+function MeasurementPlanningContent() {
   const navigate = useNavigate();
   const { user, isLoading: authLoading, canAccessProject } = useAuth();
   const { projects, currentProject, setCurrentProject } = useConstruction();
@@ -286,5 +286,13 @@ export default function MeasurementPlanningPage() {
         </main>
       </div>
     </SidebarProvider>
+  );
+}
+
+export default function MeasurementPlanningPage() {
+  return (
+    <ConstructionProvider>
+      <MeasurementPlanningContent />
+    </ConstructionProvider>
   );
 }
