@@ -2144,7 +2144,10 @@ export type Database = {
           created_at: string
           id: string
           notes: string | null
+          performance_status: string | null
           project_id: string
+          target_margin_percent: number | null
+          target_profit_value: number | null
           updated_at: string
         }
         Insert: {
@@ -2154,7 +2157,10 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          performance_status?: string | null
           project_id: string
+          target_margin_percent?: number | null
+          target_profit_value?: number | null
           updated_at?: string
         }
         Update: {
@@ -2164,7 +2170,10 @@ export type Database = {
           created_at?: string
           id?: string
           notes?: string | null
+          performance_status?: string | null
           project_id?: string
+          target_margin_percent?: number | null
+          target_profit_value?: number | null
           updated_at?: string
         }
         Relationships: [
