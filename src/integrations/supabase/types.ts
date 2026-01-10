@@ -176,6 +176,60 @@ export type Database = {
           },
         ]
       }
+      contract_receipts: {
+        Row: {
+          amount_received: number
+          contract_id: string
+          created_at: string
+          id: string
+          measurement_id: string | null
+          notes: string | null
+          receipt_date: string
+          reference: string | null
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          amount_received: number
+          contract_id: string
+          created_at?: string
+          id?: string
+          measurement_id?: string | null
+          notes?: string | null
+          receipt_date?: string
+          reference?: string | null
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_received?: number
+          contract_id?: string
+          created_at?: string
+          id?: string
+          measurement_id?: string | null
+          notes?: string | null
+          receipt_date?: string
+          reference?: string | null
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_receipts_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "project_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_receipts_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "measurements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_work_logs: {
         Row: {
           created_at: string
