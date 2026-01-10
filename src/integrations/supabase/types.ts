@@ -987,54 +987,69 @@ export type Database = {
       }
       measurement_services: {
         Row: {
-          company_id: string | null
+          company_id: string
           created_at: string
           family_id: string | null
+          helpers_per_team: number
           id: string
           macro_color: string
           macro_id: string
           macro_name: string
           measurement_id: string
           notes: string | null
+          planned_cost: number
           planned_house_ids: number[]
           planned_houses: number
-          project_id: string | null
+          productivity_expected: number
+          professionals_per_team: number
+          project_id: string
           scope_id: string
           scope_name: string
+          teams_expected: number
           updated_at: string
         }
         Insert: {
-          company_id?: string | null
+          company_id: string
           created_at?: string
           family_id?: string | null
+          helpers_per_team?: number
           id?: string
           macro_color?: string
           macro_id: string
           macro_name: string
           measurement_id: string
           notes?: string | null
+          planned_cost?: number
           planned_house_ids?: number[]
           planned_houses?: number
-          project_id?: string | null
+          productivity_expected?: number
+          professionals_per_team?: number
+          project_id: string
           scope_id: string
           scope_name: string
+          teams_expected?: number
           updated_at?: string
         }
         Update: {
-          company_id?: string | null
+          company_id?: string
           created_at?: string
           family_id?: string | null
+          helpers_per_team?: number
           id?: string
           macro_color?: string
           macro_id?: string
           macro_name?: string
           measurement_id?: string
           notes?: string | null
+          planned_cost?: number
           planned_house_ids?: number[]
           planned_houses?: number
-          project_id?: string | null
+          productivity_expected?: number
+          professionals_per_team?: number
+          project_id?: string
           scope_id?: string
           scope_name?: string
+          teams_expected?: number
           updated_at?: string
         }
         Relationships: [
@@ -2765,6 +2780,16 @@ export type Database = {
         Returns: Json
       }
       admin_exists: { Args: never; Returns: boolean }
+      calculate_service_planned_cost: {
+        Args: {
+          p_company_id: string
+          p_macro_id: string
+          p_planned_houses: number
+          p_project_id: string
+          p_scope_id: string
+        }
+        Returns: number
+      }
       check_legacy_data_status: { Args: never; Returns: Json }
       close_labor_measurement: {
         Args: { p_contract_id: string; p_house_ids: number[]; p_notes?: string }
@@ -2775,6 +2800,25 @@ export type Database = {
         Returns: Json
       }
       count_orphan_projects: { Args: never; Returns: number }
+      create_measurement_service_with_cost: {
+        Args: {
+          p_company_id: string
+          p_family_id?: string
+          p_helpers_per_team?: number
+          p_macro_color: string
+          p_macro_id: string
+          p_macro_name: string
+          p_measurement_id: string
+          p_planned_house_ids: number[]
+          p_productivity_expected?: number
+          p_professionals_per_team?: number
+          p_project_id: string
+          p_scope_id: string
+          p_scope_name: string
+          p_teams_expected?: number
+        }
+        Returns: string
+      }
       create_order_from_alert: {
         Args: {
           p_alert_id: string
@@ -2797,6 +2841,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      estimate_service_duration_days: {
+        Args: {
+          p_planned_houses: number
+          p_productivity_expected: number
+          p_teams_expected: number
+        }
+        Returns: number
+      }
       generate_temp_password: { Args: never; Returns: string }
       generate_unique_slug: { Args: { company_name: string }; Returns: string }
       get_available_measurements: {
@@ -2809,6 +2861,10 @@ export type Database = {
           start_date: string
           status: string
         }[]
+      }
+      get_measurement_cost_summary: {
+        Args: { p_measurement_id: string }
+        Returns: Json
       }
       get_measurement_house_count: {
         Args: { p_measurement_id: string }
@@ -2906,6 +2962,10 @@ export type Database = {
       recalc_alerts_for_measurement: {
         Args: { p_measurement_id: string }
         Returns: undefined
+      }
+      recalculate_service_cost: {
+        Args: { p_service_id: string }
+        Returns: number
       }
       regenerate_supply_alerts: {
         Args: { p_project_id: string }
