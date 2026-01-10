@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Calendar, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,11 +13,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ModuleBlockedAlert } from "@/components/ModuleBlockedAlert";
 import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function LongTermPlanningPage() {
   const navigate = useNavigate();
   const { currentProject } = useConstruction();
-  const { canAccessModule } = useProjectSetupFlow();
+  const { canAccessModule, currentStep, advanceToStep } = useProjectSetupFlow();
 
   // Verificar se pode acessar o módulo ANTES de carregar dados
   const canAccess = canAccessModule("long-term-planning");
@@ -37,6 +39,27 @@ export default function LongTermPlanningPage() {
     refresh,
     retryInit,
   } = useLongTermPlanning(canAccess ? currentProject?.id : undefined);
+
+  // ✅ Auto-correção: se o contrato existe mas o setup_step não avançou,
+  // avançar para liberar o planejamento.
+  useEffect(() => {
+    const run = async () => {
+      if (!currentProject?.id) return;
+      if (canAccess) return;
+      if (currentStep !== "budget_defined") return;
+
+      const { count } = await supabase
+        .from("project_contracts")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", currentProject.id);
+
+      if ((count ?? 0) > 0) {
+        await advanceToStep("contract_defined");
+      }
+    };
+
+    run();
+  }, [canAccess, currentProject?.id, currentStep, advanceToStep]);
 
   const handleViewChange = () => {
     // Não faz nada - só para satisfazer o AppSidebar
