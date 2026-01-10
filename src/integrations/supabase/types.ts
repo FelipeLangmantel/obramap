@@ -1407,16 +1407,22 @@ export type Database = {
           created_at: string
           end_date: string
           financial_balance_estimate: number
+          global_target_percent: number | null
           id: string
           is_executed: boolean
+          name: string | null
           notes: string | null
           period_number: number
           planned_cost_estimate: number
+          planned_cost_total: number | null
           planning_version_id: string
           project_id: string
+          projected_result: number | null
           revenue_expected: number
           revenue_target: number
           start_date: string
+          status: string | null
+          target_revenue_total: number | null
           updated_at: string
         }
         Insert: {
@@ -1425,16 +1431,22 @@ export type Database = {
           created_at?: string
           end_date: string
           financial_balance_estimate?: number
+          global_target_percent?: number | null
           id?: string
           is_executed?: boolean
+          name?: string | null
           notes?: string | null
           period_number: number
           planned_cost_estimate?: number
+          planned_cost_total?: number | null
           planning_version_id: string
           project_id: string
+          projected_result?: number | null
           revenue_expected?: number
           revenue_target?: number
           start_date: string
+          status?: string | null
+          target_revenue_total?: number | null
           updated_at?: string
         }
         Update: {
@@ -1443,16 +1455,22 @@ export type Database = {
           created_at?: string
           end_date?: string
           financial_balance_estimate?: number
+          global_target_percent?: number | null
           id?: string
           is_executed?: boolean
+          name?: string | null
           notes?: string | null
           period_number?: number
           planned_cost_estimate?: number
+          planned_cost_total?: number | null
           planning_version_id?: string
           project_id?: string
+          projected_result?: number | null
           revenue_expected?: number
           revenue_target?: number
           start_date?: string
+          status?: string | null
+          target_revenue_total?: number | null
           updated_at?: string
         }
         Relationships: [
