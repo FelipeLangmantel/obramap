@@ -1574,6 +1574,7 @@ export type Database = {
           financial_balance_estimate: number
           global_target_percent: number | null
           houses_at_risk: number | null
+          houses_capacity_risk: number | null
           id: string
           is_closed: boolean | null
           is_executed: boolean
@@ -1590,6 +1591,7 @@ export type Database = {
           revenue_expected: number
           revenue_target: number
           services_at_risk: number | null
+          services_capacity_risk: number | null
           start_date: string
           status: string | null
           target_revenue_total: number | null
@@ -1605,6 +1607,7 @@ export type Database = {
           financial_balance_estimate?: number
           global_target_percent?: number | null
           houses_at_risk?: number | null
+          houses_capacity_risk?: number | null
           id?: string
           is_closed?: boolean | null
           is_executed?: boolean
@@ -1621,6 +1624,7 @@ export type Database = {
           revenue_expected?: number
           revenue_target?: number
           services_at_risk?: number | null
+          services_capacity_risk?: number | null
           start_date: string
           status?: string | null
           target_revenue_total?: number | null
@@ -1636,6 +1640,7 @@ export type Database = {
           financial_balance_estimate?: number
           global_target_percent?: number | null
           houses_at_risk?: number | null
+          houses_capacity_risk?: number | null
           id?: string
           is_closed?: boolean | null
           is_executed?: boolean
@@ -1652,6 +1657,7 @@ export type Database = {
           revenue_expected?: number
           revenue_target?: number
           services_at_risk?: number | null
+          services_capacity_risk?: number | null
           start_date?: string
           status?: string | null
           target_revenue_total?: number | null
