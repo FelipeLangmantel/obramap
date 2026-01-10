@@ -174,7 +174,7 @@ export function useMeasurements({ projectId }: UseMeasurementsOptions) {
           start_date: startDate,
           end_date: endDate,
           notes: notes || null
-        })
+        } as any)
         .select()
         .single();
 
@@ -228,7 +228,7 @@ export function useMeasurements({ projectId }: UseMeasurementsOptions) {
           planned_house_ids: service.planned_house_ids,
           planned_houses: service.planned_house_ids.length,
           notes: service.notes || null
-        })
+        } as any)
         .select()
         .single();
 

@@ -2953,6 +2953,8 @@ export type Database = {
           target_margin_percent: number | null
           target_profit_value: number | null
           teams_planned: number
+          unit_cost_value: number | null
+          unit_revenue_value: number | null
           updated_at: string
         }
         Insert: {
@@ -2987,6 +2989,8 @@ export type Database = {
           target_margin_percent?: number | null
           target_profit_value?: number | null
           teams_planned?: number
+          unit_cost_value?: number | null
+          unit_revenue_value?: number | null
           updated_at?: string
         }
         Update: {
@@ -3021,6 +3025,8 @@ export type Database = {
           target_margin_percent?: number | null
           target_profit_value?: number | null
           teams_planned?: number
+          unit_cost_value?: number | null
+          unit_revenue_value?: number | null
           updated_at?: string
         }
         Relationships: [
