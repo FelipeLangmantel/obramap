@@ -4147,6 +4147,10 @@ export type Database = {
         Args: { p_house_id: string; p_service_plan_id: string }
         Returns: Json
       }
+      apply_contract_to_planning: {
+        Args: { p_contract_id: string }
+        Returns: Json
+      }
       calculate_service_planned_cost: {
         Args: {
           p_company_id: string
