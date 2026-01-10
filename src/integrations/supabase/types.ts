@@ -3882,6 +3882,10 @@ export type Database = {
         Args: { p_measurement_id: string; p_new_risk: string }
         Returns: undefined
       }
+      generate_period_supply_requirements: {
+        Args: { p_planning_period_id: string }
+        Returns: Json
+      }
       generate_service_planning_for_period: {
         Args: {
           p_company_id: string
