@@ -57,10 +57,8 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
   // Drag state for scopes
   const [draggedScope, setDraggedScope] = useState<{ macroId: string; scopeId: string } | null>(null);
 
-  if (!currentProject) return null;
-
-  const macrosTemplate = currentProject.macrosTemplate;
-  const hasData = currentProject.setupComplete && currentProject.houses.some(h => 
+  const macrosTemplate = currentProject?.macrosTemplate ?? [];
+  const hasData = currentProject?.setupComplete && currentProject.houses.some(h => 
     h.macros.some(m => m.scopes.some(s => s.progress > 0))
   );
 
@@ -74,6 +72,8 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
     const overallTotalWeight = macroWeights.reduce((sum, m) => sum + m.totalWeight, 0);
     return { macroWeights, overallTotalWeight };
   }, [macrosTemplate]);
+
+  if (!currentProject) return null;
 
   const needsWeightAdjustment = weightAnalysis.overallTotalWeight !== 100;
 
