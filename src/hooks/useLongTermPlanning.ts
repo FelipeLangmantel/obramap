@@ -61,6 +61,20 @@ export function useLongTermPlanning(projectId: string | undefined) {
   const [contractId, setContractId] = useState<string | null>(null);
   const [totalHouses, setTotalHouses] = useState<number>(0);
 
+  // ✅ Reset completo de estado quando projectId muda
+  useEffect(() => {
+    setActiveVersion(null);
+    setPeriods([]);
+    setServiceRows([]);
+    setLoading(false);
+    setInitializing(false);
+    setSaving(false);
+    setHasChanges(false);
+    setInitError(null);
+    setContractId(null);
+    setTotalHouses(0);
+  }, [projectId]);
+
   // Buscar ou inicializar planejamento
   const initializePlanning = useCallback(async () => {
     if (!projectId || !company?.id) return;
@@ -363,6 +377,16 @@ export function useLongTermPlanning(projectId: string | undefined) {
   const savePlanning = useCallback(async () => {
     if (!projectId || !company?.id) return false;
 
+    // ✅ Validar se algum serviço excede o total de casas do projeto
+    for (const row of serviceRows) {
+      if (row.total_planned > totalHouses && totalHouses > 0) {
+        toast.error(
+          `O serviço "${row.macro_name} - ${row.scope_name}" está planejado para ${row.total_planned} casas, mas o projeto tem apenas ${totalHouses} casas.`
+        );
+        return false;
+      }
+    }
+
     // Verificar se temos contract_id
     let currentContractId = contractId;
     if (!currentContractId) {
@@ -458,7 +482,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
     } finally {
       setSaving(false);
     }
-  }, [projectId, company?.id, contractId, serviceRows, loadMatrixData, currentStep, advanceToStep]);
+  }, [projectId, company?.id, contractId, serviceRows, totalHouses, loadMatrixData, currentStep, advanceToStep]);
 
   // Retry initialization
   const retryInit = useCallback(() => {
@@ -466,14 +490,11 @@ export function useLongTermPlanning(projectId: string | undefined) {
     initializePlanning();
   }, [initializePlanning]);
 
-  // Efeitos
+  // ✅ Efeito de inicialização - roda quando projectId ou company mudam
   useEffect(() => {
-    setActiveVersion(null);
-    setPeriods([]);
-    setServiceRows([]);
-    setInitError(null);
+    if (!projectId || !company?.id) return;
     initializePlanning();
-  }, [initializePlanning]);
+  }, [projectId, company?.id, initializePlanning]);
 
   useEffect(() => {
     loadPeriods();

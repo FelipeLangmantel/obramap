@@ -39,6 +39,15 @@ export function useProjectContract() {
   const [saving, setSaving] = useState(false);
   const [hasPlanning, setHasPlanning] = useState(false);
 
+  // ✅ Reset completo de estado quando projectId muda
+  useEffect(() => {
+    setContract(null);
+    setServices([]);
+    setLoading(true);
+    setSaving(false);
+    setHasPlanning(false);
+  }, [currentProject?.id]);
+
   // Load contract and services
   const loadData = useCallback(async () => {
     if (!currentProject?.id || !company?.id) {

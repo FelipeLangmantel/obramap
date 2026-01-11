@@ -141,7 +141,7 @@ export default function LongTermPlanningPage() {
                 <PlanningHeader
                   activeVersion={activeVersion}
                   overallTotals={overallTotals}
-                  totalHouses={totalHouses || currentProject?.totalHouses || 0}
+                  totalHouses={totalHouses}
                   hasChanges={hasChanges}
                   saving={saving}
                   onSave={savePlanning}
@@ -172,7 +172,7 @@ export default function LongTermPlanningPage() {
                     periods={periods}
                     serviceRows={serviceRows}
                     periodSummaries={periodSummaries}
-                    totalHouses={currentProject.totalHouses}
+                    totalHouses={totalHouses}
                     onCellChange={updateCellValue}
                   />
                 )}
