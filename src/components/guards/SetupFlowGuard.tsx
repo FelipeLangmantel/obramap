@@ -24,13 +24,18 @@ const STEP_ORDER: ProjectSetupStep[] = [
   "long_term_planned",
 ];
 
+// ✅ DEBUG MODE: Todos os bloqueios de rota desabilitados temporariamente
 // Mapeamento de rotas para etapa mínima necessária
 // IMPORTANTE: Rotas não listadas aqui são acessíveis livremente
 const ROUTE_REQUIREMENTS: Record<string, ProjectSetupStep> = {
-  "/project-contract": "budget_defined",
-  "/long-term-planning": "contract_defined",
-  "/measurement-planning": "long_term_planned",
+  // 🔧 DESABILITADO PARA DEBUG - Permitir navegação livre
+  // "/project-contract": "budget_defined",
+  // "/long-term-planning": "contract_defined",
+  // "/measurement-planning": "long_term_planned",
 };
+
+// ✅ DEBUG: Habilitar logs detalhados
+const DEBUG_MODE = true;
 
 const RPC_TIMEOUT_MS = 12000;
 const SETUP_CACHE_KEY = "obramap_system_setup_checked";
@@ -214,8 +219,12 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
     );
   }
 
-  // ✅ 7. Se não tem projetos disponíveis
+  // ✅ 7. Se não tem projetos disponíveis (DEBUG: não redirecionar)
   if (projects.length === 0) {
+    if (DEBUG_MODE) {
+      console.log("[SETUP GUARD] DEBUG: No projects, but allowing navigation for debug");
+      return <>{children}</>;
+    }
     if (location.pathname === "/") {
       return <>{children}</>;
     }
@@ -223,8 +232,12 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
     return <Navigate to="/" replace />;
   }
 
-  // ✅ 8. Se não tem projeto selecionado
+  // ✅ 8. Se não tem projeto selecionado (DEBUG: não redirecionar)
   if (!currentProject) {
+    if (DEBUG_MODE) {
+      console.log("[SETUP GUARD] DEBUG: No current project, but allowing navigation for debug");
+      return <>{children}</>;
+    }
     if (location.pathname === "/") {
       return <>{children}</>;
     }
