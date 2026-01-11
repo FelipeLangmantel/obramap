@@ -77,7 +77,15 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
   // Buscar ou inicializar planejamento
   const initializePlanning = useCallback(async () => {
-    if (!projectId || !company?.id) return;
+    console.log("=== INIT PLANNING DEBUG ===");
+    console.log("projectId:", projectId);
+    console.log("company.id:", company?.id);
+    console.log("===========================");
+
+    if (!projectId || !company?.id) {
+      console.warn("INIT BLOCKED: projectId ou company.id ausente");
+      return;
+    }
 
     setInitializing(true);
     setInitError(null);
@@ -97,11 +105,19 @@ export function useLongTermPlanning(projectId: string | undefined) {
           .eq("project_id", projectId),
       ]);
 
+      console.log("CONTRACT RESULT:", contractResult);
+      console.log("HOUSES RESULT:", housesResult);
+
       if (contractResult.data && contractResult.data.length > 0) {
         setContractId(contractResult.data[0].id);
+        console.log("contractId SET:", contractResult.data[0].id);
+      } else {
+        console.warn("Nenhum contrato encontrado para projectId:", projectId);
       }
 
-      setTotalHouses(housesResult.count || 0);
+      const houseCount = housesResult.count || 0;
+      setTotalHouses(houseCount);
+      console.log("totalHouses SET:", houseCount);
 
       // Buscar versão ativa
       const { data: versions, error: versionsError } = await supabase
@@ -375,11 +391,32 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
   // Salvar alterações
   const savePlanning = useCallback(async () => {
-    if (!projectId || !company?.id) return false;
+    // ✅ DEBUG LOG: Payload completo antes do save
+    console.log("=== SAVE PLANNING DEBUG ===");
+    console.log("projectId:", projectId);
+    console.log("company.id:", company?.id);
+    console.log("contractId (estado):", contractId);
+    console.log("activeVersion:", activeVersion);
+    console.log("totalHouses:", totalHouses);
+    console.log("serviceRows count:", serviceRows.length);
+    console.log("serviceRows:", JSON.stringify(serviceRows.slice(0, 2), null, 2));
+    console.log("periods:", periods);
+    console.log("===========================");
+
+    if (!projectId || !company?.id) {
+      console.error("SAVE BLOCKED: projectId ou company.id ausente", { projectId, companyId: company?.id });
+      toast.error("Projeto ou empresa não identificados");
+      return false;
+    }
 
     // ✅ Validar se algum serviço excede o total de casas do projeto
     for (const row of serviceRows) {
       if (row.total_planned > totalHouses && totalHouses > 0) {
+        console.warn("VALIDATION FAIL: casas excedidas", { 
+          service: `${row.macro_name} - ${row.scope_name}`,
+          planned: row.total_planned,
+          max: totalHouses
+        });
         toast.error(
           `O serviço "${row.macro_name} - ${row.scope_name}" está planejado para ${row.total_planned} casas, mas o projeto tem apenas ${totalHouses} casas.`
         );
@@ -390,22 +427,28 @@ export function useLongTermPlanning(projectId: string | undefined) {
     // Verificar se temos contract_id
     let currentContractId = contractId;
     if (!currentContractId) {
-      const { data: contractData } = await supabase
+      console.log("contractId não encontrado no estado, buscando do banco...");
+      const { data: contractData, error: contractError } = await supabase
         .from("project_contracts")
         .select("id")
         .eq("project_id", projectId)
         .order("created_at", { ascending: false })
         .limit(1);
 
+      console.log("Busca de contrato:", { contractData, contractError });
+
       if (contractData && contractData.length > 0) {
         currentContractId = contractData[0].id;
         setContractId(currentContractId);
+        console.log("contractId encontrado:", currentContractId);
       } else {
+        console.error("SAVE BLOCKED: contrato não encontrado para projectId:", projectId);
         toast.error("Contrato do projeto não encontrado. Configure o contrato primeiro.");
         return false;
       }
     }
 
+    console.log("SAVE PROCEEDING com contractId:", currentContractId);
     setSaving(true);
 
     try {
@@ -475,14 +518,20 @@ export function useLongTermPlanning(projectId: string | undefined) {
       // Recarregar dados para atualizar IDs
       await loadMatrixData();
       return true;
-    } catch (error) {
-      console.error("Erro ao salvar:", error);
-      toast.error("Erro ao salvar planejamento");
+    } catch (error: any) {
+      console.error("=== SAVE ERROR ===");
+      console.error("Error object:", error);
+      console.error("Error message:", error?.message);
+      console.error("Error details:", error?.details);
+      console.error("Error hint:", error?.hint);
+      console.error("Error code:", error?.code);
+      console.error("==================");
+      toast.error(`Erro ao salvar planejamento: ${error?.message || "Erro desconhecido"}`);
       return false;
     } finally {
       setSaving(false);
     }
-  }, [projectId, company?.id, contractId, serviceRows, totalHouses, loadMatrixData, currentStep, advanceToStep]);
+  }, [projectId, company?.id, contractId, activeVersion, serviceRows, periods, totalHouses, loadMatrixData, currentStep, advanceToStep]);
 
   // Retry initialization
   const retryInit = useCallback(() => {
