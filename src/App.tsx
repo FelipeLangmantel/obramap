@@ -7,11 +7,13 @@ import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ConstructionProvider } from "./contexts/ConstructionContext";
 import { SetupFlowGuard } from "./components/guards/SetupFlowGuard";
+import { SystemAdminGuard } from "./components/guards/SystemAdminGuard";
+import { CompanyUserGuard } from "./components/guards/CompanyUserGuard";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ChangePassword from "./pages/ChangePassword";
 import NotFound from "./pages/NotFound";
-import AdminDashboard from "./pages/admin/AdminDashboard";
+import SystemDashboard from "./pages/system/SystemDashboard";
 import LegacyDataMigration from "./pages/admin/LegacyDataMigration";
 import MeasurementPlanningPage from "./pages/MeasurementPlanningPage";
 import LongTermPlanningPage from "./pages/LongTermPlanningPage";
@@ -20,26 +22,39 @@ import ProjectContractPage from "./pages/ProjectContractPage";
 const queryClient = new QueryClient();
 
 /**
- * ✅ ARQUITETURA SIMPLIFICADA:
- * - Um único guard central (SetupFlowGuard) para todas as rotas protegidas
- * - Sem guards aninhados
- * - Sem redirects em useEffect dentro de páginas
- * - Lógica clara: loading -> check -> render ou redirect
+ * ✅ ARQUITETURA DE NAVEGAÇÃO:
+ * 
+ * 1. ROTAS DE SISTEMA (/system/*):
+ *    - Acesso exclusivo para isSystemAdmin === true
+ *    - NÃO exigem company_id ou projeto selecionado
+ *    - Gerenciamento global de empresas, usuários e módulos
+ * 
+ * 2. ROTAS DE EMPRESA (/, /measurement-planning, etc.):
+ *    - Acesso para usuários de empresa (company_id definido)
+ *    - System Admin é redirecionado para /system/dashboard
+ *    - Seguem fluxo de setup da obra
  */
-function ProtectedLayout() {
+
+/** Layout para rotas de System Admin */
+function SystemLayout() {
   return (
-    <SetupFlowGuard>
+    <SystemAdminGuard>
       <Outlet />
-    </SetupFlowGuard>
+    </SystemAdminGuard>
   );
 }
 
-/**
- * ✅ ESTRUTURA:
- * - AuthProvider e ConstructionProvider no topo (apenas uma vez)
- * - Rotas de auth fora do guard
- * - Todas as outras rotas passam pelo SetupFlowGuard único
- */
+/** Layout para rotas de usuário de empresa */
+function CompanyLayout() {
+  return (
+    <CompanyUserGuard>
+      <SetupFlowGuard>
+        <Outlet />
+      </SetupFlowGuard>
+    </CompanyUserGuard>
+  );
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -49,22 +64,24 @@ const App = () => (
         <AuthProvider>
           <ConstructionProvider>
             <Routes>
-              {/* Auth routes - fora do guard */}
+              {/* Auth routes - fora de qualquer guard */}
               <Route path="/auth" element={<Auth />} />
               <Route path="/change-password" element={<ChangePassword />} />
 
-              {/* Todas as rotas protegidas usam o guard único */}
-              <Route element={<ProtectedLayout />}>
-                {/* Admin routes */}
-                <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              {/* ========== ROTAS DE SISTEMA (System Admin) ========== */}
+              <Route element={<SystemLayout />}>
+                <Route path="/system/dashboard" element={<SystemDashboard />} />
+                <Route path="/system/migration" element={<LegacyDataMigration />} />
+                {/* Fallback de admin antigo para novo sistema */}
+                <Route path="/admin/dashboard" element={<SystemDashboard />} />
                 <Route path="/admin/migration" element={<LegacyDataMigration />} />
-                
-                {/* Rotas de módulos - o guard controla acesso baseado em setup_step */}
+              </Route>
+
+              {/* ========== ROTAS DE EMPRESA (Usuários comuns) ========== */}
+              <Route element={<CompanyLayout />}>
                 <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
                 <Route path="/long-term-planning" element={<LongTermPlanningPage />} />
                 <Route path="/project-contract" element={<ProjectContractPage />} />
-                
-                {/* Index e fallback */}
                 <Route path="/" element={<Index />} />
                 <Route path="*" element={<NotFound />} />
               </Route>

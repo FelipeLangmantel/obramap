@@ -46,8 +46,10 @@ export default function Auth() {
       if (mustChangePassword) {
         navigate("/change-password", { replace: true });
       } else if (isSystemAdmin) {
-        navigate("/admin/dashboard", { replace: true });
+        // System Admin → área de sistema
+        navigate("/system/dashboard", { replace: true });
       } else {
+        // Usuário de empresa → mapa de obras
         navigate("/", { replace: true });
       }
     }
