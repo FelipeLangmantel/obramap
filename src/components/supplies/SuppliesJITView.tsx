@@ -1,41 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Package, Settings, RefreshCw, Clock, Truck, FileText, ShoppingCart, ClipboardList, Users } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Package } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { useConstruction } from '@/contexts/ConstructionContext';
-import { useAuth } from '@/contexts/AuthContext';
-import { SupplyDashboard } from './SupplyDashboard';
-import { SupplyAlertsList } from './SupplyAlertsList';
-import { LeadTimeConfig } from './LeadTimeConfig';
-import { useSupplyAlerts } from './hooks/useSupplyAlerts';
-import { LaborContractsView } from '@/components/LaborContractsView';
-import { SuppliesView } from '@/components/SuppliesView';
+import { SupplyRequestsView } from './SupplyRequestsView';
 
-type TabType = 'alerts' | 'quotations' | 'orders' | 'contracts' | 'leadtime';
-
-interface SuppliesJITViewProps {
-  initialTab?: TabType;
-}
-
-export function SuppliesJITView({ initialTab = 'alerts' }: SuppliesJITViewProps) {
+export function SuppliesJITView() {
   const { currentProject } = useConstruction();
-  const { canEdit } = useAuth();
   const projectId = currentProject?.id;
-
-  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
-
-  const {
-    alerts,
-    families,
-    projectLeadTimes,
-    kpis,
-    isLoading,
-    loadData,
-    regenerateAlerts,
-    updateAlertStatus,
-    saveProjectLeadTime
-  } = useSupplyAlerts(projectId);
 
   if (!projectId) {
     return (
@@ -51,6 +21,6 @@ export function SuppliesJITView({ initialTab = 'alerts' }: SuppliesJITViewProps)
     );
   }
 
-  // Use the original SuppliesView which has the full workflow
-  return <SuppliesView initialTab={activeTab} />;
+  // Use the new status-based view
+  return <SupplyRequestsView />;
 }

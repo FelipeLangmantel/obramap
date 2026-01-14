@@ -3950,6 +3950,157 @@ export type Database = {
           },
         ]
       }
+      supply_requests: {
+        Row: {
+          created_at: string
+          family_id: string | null
+          id: string
+          is_critical: boolean | null
+          item_id: string | null
+          item_name: string
+          item_unit: string | null
+          macro_id: string | null
+          measurement_id: string | null
+          notes: string | null
+          order_by_date: string | null
+          project_id: string
+          purchase_order_id: string | null
+          quantity: number
+          quotation_id: string | null
+          required_date: string | null
+          scope_id: string | null
+          source_plan_id: string | null
+          status: Database["public"]["Enums"]["supply_request_status"]
+          supplier_id: string | null
+          total_value: number | null
+          unit_value: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          family_id?: string | null
+          id?: string
+          is_critical?: boolean | null
+          item_id?: string | null
+          item_name: string
+          item_unit?: string | null
+          macro_id?: string | null
+          measurement_id?: string | null
+          notes?: string | null
+          order_by_date?: string | null
+          project_id: string
+          purchase_order_id?: string | null
+          quantity?: number
+          quotation_id?: string | null
+          required_date?: string | null
+          scope_id?: string | null
+          source_plan_id?: string | null
+          status?: Database["public"]["Enums"]["supply_request_status"]
+          supplier_id?: string | null
+          total_value?: number | null
+          unit_value?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          family_id?: string | null
+          id?: string
+          is_critical?: boolean | null
+          item_id?: string | null
+          item_name?: string
+          item_unit?: string | null
+          macro_id?: string | null
+          measurement_id?: string | null
+          notes?: string | null
+          order_by_date?: string | null
+          project_id?: string
+          purchase_order_id?: string | null
+          quantity?: number
+          quotation_id?: string | null
+          required_date?: string | null
+          scope_id?: string | null
+          source_plan_id?: string | null
+          status?: Database["public"]["Enums"]["supply_request_status"]
+          supplier_id?: string | null
+          total_value?: number | null
+          unit_value?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_requests_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "material_families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_status_logs: {
+        Row: {
+          created_at: string
+          id: string
+          new_status: Database["public"]["Enums"]["supply_request_status"]
+          notes: string | null
+          old_status:
+            | Database["public"]["Enums"]["supply_request_status"]
+            | null
+          supply_request_id: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          new_status: Database["public"]["Enums"]["supply_request_status"]
+          notes?: string | null
+          old_status?:
+            | Database["public"]["Enums"]["supply_request_status"]
+            | null
+          supply_request_id: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          new_status?: Database["public"]["Enums"]["supply_request_status"]
+          notes?: string | null
+          old_status?:
+            | Database["public"]["Enums"]["supply_request_status"]
+            | null
+          supply_request_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_status_logs_supply_request_id_fkey"
+            columns: ["supply_request_id"]
+            isOneToOne: false
+            referencedRelation: "supply_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       units: {
         Row: {
           abbreviation: string
@@ -4319,6 +4470,10 @@ export type Database = {
         Args: { p_new_risk: string; p_service_id: string }
         Returns: undefined
       }
+      generate_supply_requests_from_planning: {
+        Args: { p_measurement_id?: string; p_project_id: string }
+        Returns: Json
+      }
       generate_supply_risk_alert: {
         Args: {
           p_company_id: string
@@ -4447,6 +4602,37 @@ export type Database = {
         }[]
       }
       get_supply_kpis: { Args: { p_project_id: string }; Returns: Json }
+      get_supply_requests_by_status: {
+        Args: { p_project_id: string; p_status?: string }
+        Returns: {
+          created_at: string
+          family_color: string
+          family_id: string
+          family_name: string
+          id: string
+          is_critical: boolean
+          item_id: string
+          item_name: string
+          item_unit: string
+          macro_id: string
+          measurement_id: string
+          notes: string
+          order_by_date: string
+          project_id: string
+          purchase_order_id: string
+          quantity: number
+          quotation_id: string
+          required_date: string
+          scope_id: string
+          source_plan_id: string
+          status: string
+          supplier_id: string
+          supplier_name: string
+          total_value: number
+          unit_value: number
+          updated_at: string
+        }[]
+      }
       get_supply_risk_summary: {
         Args: { p_project_id: string }
         Returns: {
@@ -4629,6 +4815,15 @@ export type Database = {
         Args: { p_purchase_order_id: string }
         Returns: undefined
       }
+      transition_supply_status: {
+        Args: {
+          p_new_status: string
+          p_notes?: string
+          p_request_id: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
       unlink_houses_from_measurement: {
         Args: {
           p_company_id: string
@@ -4670,6 +4865,12 @@ export type Database = {
         | "em_execucao"
         | "aguardando_validacao"
         | "encerrada"
+      supply_request_status:
+        | "alert"
+        | "quoted"
+        | "ordered"
+        | "delivered"
+        | "cancelled"
       system_role: "system_admin" | "admin" | "user"
     }
     CompositeTypes: {
@@ -4813,6 +5014,13 @@ export const Constants = {
         "em_execucao",
         "aguardando_validacao",
         "encerrada",
+      ],
+      supply_request_status: [
+        "alert",
+        "quoted",
+        "ordered",
+        "delivered",
+        "cancelled",
       ],
       system_role: ["system_admin", "admin", "user"],
     },
