@@ -11,3 +11,12 @@ verify_jwt = false
 
 [functions.parse-budget-items]
 verify_jwt = false
+
+[functions.parse-macros-import]
+verify_jwt = false
+
+[functions.delete-user]
+verify_jwt = false
+
+[functions.transition-supply-status]
+verify_jwt = false
