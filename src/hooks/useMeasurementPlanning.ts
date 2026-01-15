@@ -279,7 +279,34 @@ export function useMeasurementPlanning(projectId: string | null) {
 
       if (error) throw error;
 
-      toast.success("Planejamento salvo com sucesso!");
+      // ✅ Gerar requisitos de suprimentos após salvar os targets
+      const measurementId = targets[0]?.measurement_id;
+      let supplyItemsGenerated = 0;
+      
+      if (measurementId) {
+        try {
+          const { data: supplyResult, error: supplyError } = await supabase.rpc(
+            'generate_supply_requirements_from_targets',
+            { p_measurement_id: measurementId }
+          );
+          
+          if (supplyError) {
+            console.warn('Erro ao gerar requisitos de suprimentos:', supplyError);
+          } else {
+            const result = supplyResult as { success?: boolean; items_generated?: number; source?: string } | null;
+            if (result?.success) {
+              supplyItemsGenerated = result.items_generated || 0;
+              console.log(`✅ Medição ${measurementId}: ${supplyItemsGenerated} requisitos de insumos gerados (fonte: ${result.source || 'targets'})`);
+            }
+          }
+        } catch (err) {
+          console.warn('Falha ao gerar suprimentos:', err);
+        }
+      }
+
+      console.log(`=== SUPPLY REQUIREMENTS: ${supplyItemsGenerated} itens gerados para medição ${measurementId} ===`);
+      
+      toast.success(`Planejamento salvo!${supplyItemsGenerated > 0 ? ` ${supplyItemsGenerated} requisitos de insumos gerados.` : ''}`);
       return true;
     } catch (error) {
       console.error("Erro ao salvar targets:", error);

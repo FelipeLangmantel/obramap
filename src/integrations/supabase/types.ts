@@ -4431,6 +4431,10 @@ export type Database = {
         }
         Returns: number
       }
+      generate_all_supply_requirements_for_project: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       generate_measurement_risk_alert: {
         Args: { p_measurement_id: string; p_new_risk: string }
         Returns: undefined
@@ -4472,6 +4476,10 @@ export type Database = {
       }
       generate_supply_requests_from_planning: {
         Args: { p_measurement_id?: string; p_project_id: string }
+        Returns: Json
+      }
+      generate_supply_requirements_from_targets: {
+        Args: { p_measurement_id: string }
         Returns: Json
       }
       generate_supply_risk_alert: {
