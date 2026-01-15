@@ -507,7 +507,34 @@ export function useLongTermPlanning(projectId: string | undefined) {
         }
       }
 
-      toast.success("Planejamento salvo com sucesso!");
+      // ✅ Gerar requisitos de suprimentos para todos os períodos afetados
+      const affectedPeriodIds = [...new Set(upsertData.map(d => d.planning_period_id))];
+      let totalSupplyRequirements = 0;
+      
+      for (const periodId of affectedPeriodIds) {
+        try {
+          const { data: supplyResult, error: supplyError } = await supabase.rpc(
+            'generate_period_supply_requirements',
+            { p_planning_period_id: periodId }
+          );
+          
+          if (supplyError) {
+            console.warn(`Erro ao gerar requisitos de suprimentos para período ${periodId}:`, supplyError);
+          } else {
+            const result = supplyResult as { success?: boolean; items_generated?: number } | null;
+            if (result?.success) {
+              totalSupplyRequirements += result.items_generated || 0;
+              console.log(`✅ Período ${periodId}: ${result.items_generated} requisitos de insumos gerados`);
+            }
+          }
+        } catch (err) {
+          console.warn(`Falha ao gerar suprimentos para período ${periodId}:`, err);
+        }
+      }
+
+      console.log(`=== SUPPLY REQUIREMENTS TOTAL: ${totalSupplyRequirements} itens gerados para ${affectedPeriodIds.length} períodos ===`);
+      
+      toast.success(`Planejamento salvo! ${totalSupplyRequirements > 0 ? `${totalSupplyRequirements} requisitos de insumos gerados.` : ''}`);
       setHasChanges(false);
 
       // ✅ Avançar setup_step para long_term_planned (libera measurement-planning)
