@@ -281,30 +281,59 @@ export function useMeasurementPlanning(projectId: string | null) {
 
       // ✅ Gerar requisitos de suprimentos após salvar os targets
       const measurementId = targets[0]?.measurement_id;
+      const servicesWithHouses = targets.filter(t => t.planned_houses > 0);
       let supplyItemsGenerated = 0;
+      let supplyItemsRemoved = 0;
+      
+      console.log(`=== SUPPLY SYNC START (Measurement Planning) ===`);
+      console.log(`Serviços planejados encontrados: ${servicesWithHouses.length}`);
+      console.log(`Measurement ID: ${measurementId}`);
+      console.log(`Serviços:`, servicesWithHouses.map(s => ({ 
+        macro_id: s.macro_id, 
+        scope_id: s.scope_id, 
+        planned_houses: s.planned_houses 
+      })));
       
       if (measurementId) {
         try {
+          console.log(`📦 Gerando suprimentos para medição: ${measurementId}`);
+          
           const { data: supplyResult, error: supplyError } = await supabase.rpc(
             'generate_supply_requirements_from_targets',
             { p_measurement_id: measurementId }
           );
           
           if (supplyError) {
-            console.warn('Erro ao gerar requisitos de suprimentos:', supplyError);
+            console.error('❌ Erro ao gerar requisitos de suprimentos:', supplyError);
           } else {
-            const result = supplyResult as { success?: boolean; items_generated?: number; source?: string } | null;
+            const result = supplyResult as { 
+              success?: boolean; 
+              items_generated?: number; 
+              items_removed?: number;
+              source?: string;
+              measurement_id?: string;
+            } | null;
+            
+            console.log(`📋 Resultado RPC:`, result);
+            
             if (result?.success) {
               supplyItemsGenerated = result.items_generated || 0;
-              console.log(`✅ Medição ${measurementId}: ${supplyItemsGenerated} requisitos de insumos gerados (fonte: ${result.source || 'targets'})`);
+              supplyItemsRemoved = result.items_removed || 0;
+              console.log(`✅ Medição ${measurementId}: ${supplyItemsGenerated} insumos gerados, ${supplyItemsRemoved} removidos (fonte: ${result.source || 'targets'})`);
+            } else {
+              console.warn(`⚠️ RPC retornou success=false:`, result);
             }
           }
         } catch (err) {
-          console.warn('Falha ao gerar suprimentos:', err);
+          console.error('❌ Falha ao gerar suprimentos:', err);
         }
+      } else {
+        console.warn('⚠️ Nenhum measurement_id encontrado nos targets');
       }
 
-      console.log(`=== SUPPLY REQUIREMENTS: ${supplyItemsGenerated} itens gerados para medição ${measurementId} ===`);
+      console.log(`=== SUPPLY SYNC COMPLETE ===`);
+      console.log(`Total de insumos gerados: ${supplyItemsGenerated}`);
+      console.log(`Total de insumos removidos: ${supplyItemsRemoved}`);
       
       toast.success(`Planejamento salvo!${supplyItemsGenerated > 0 ? ` ${supplyItemsGenerated} requisitos de insumos gerados.` : ''}`);
       return true;
