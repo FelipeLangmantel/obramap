@@ -507,56 +507,12 @@ export function useLongTermPlanning(projectId: string | undefined) {
         }
       }
 
-      // ✅ Gerar requisitos de suprimentos para todos os períodos afetados
-      const affectedPeriodIds = [...new Set(upsertData.map(d => d.planning_period_id))];
-      const servicesWithHouses = upsertData.filter(d => d.target_houses > 0);
-      let totalSupplyRequirements = 0;
-      let totalItemsRemoved = 0;
+      // ✅ Planejamento de longo prazo salvo apenas em service_planning_by_period
+      // NÃO gera dados operacionais (measurement_services, suprimentos, etc.)
+      console.log(`=== PLANEJAMENTO ESTRATÉGICO SALVO ===`);
+      console.log(`Registros salvos em service_planning_by_period: ${upsertData.length}`);
       
-      console.log(`=== SUPPLY SYNC START ===`);
-      console.log(`Serviços planejados encontrados: ${servicesWithHouses.length}`);
-      console.log(`Períodos afetados: ${affectedPeriodIds.length}`, affectedPeriodIds);
-      
-      for (const periodId of affectedPeriodIds) {
-        try {
-          console.log(`📦 Gerando suprimentos para período: ${periodId}`);
-          
-          const { data: supplyResult, error: supplyError } = await supabase.rpc(
-            'generate_period_supply_requirements',
-            { p_planning_period_id: periodId }
-          );
-          
-          if (supplyError) {
-            console.error(`❌ Erro ao gerar requisitos para período ${periodId}:`, supplyError);
-          } else {
-            const result = supplyResult as { 
-              success?: boolean; 
-              items_generated?: number; 
-              items_removed?: number;
-              period_id?: string;
-            } | null;
-            
-            console.log(`📋 Resultado RPC para período ${periodId}:`, result);
-            
-            if (result?.success) {
-              totalSupplyRequirements += result.items_generated || 0;
-              totalItemsRemoved += result.items_removed || 0;
-              console.log(`✅ Período ${periodId}: ${result.items_generated} insumos gerados, ${result.items_removed} removidos`);
-            } else {
-              console.warn(`⚠️ RPC retornou success=false para período ${periodId}:`, result);
-            }
-          }
-        } catch (err) {
-          console.error(`❌ Falha ao gerar suprimentos para período ${periodId}:`, err);
-        }
-      }
-
-      console.log(`=== SUPPLY SYNC COMPLETE ===`);
-      console.log(`Total de insumos gerados: ${totalSupplyRequirements}`);
-      console.log(`Total de insumos removidos: ${totalItemsRemoved}`);
-      console.log(`Períodos processados: ${affectedPeriodIds.length}`);
-      
-      toast.success(`Planejamento salvo! ${totalSupplyRequirements > 0 ? `${totalSupplyRequirements} requisitos de insumos gerados.` : ''}`);
+      toast.success("Planejamento estratégico salvo com sucesso!");
       setHasChanges(false);
 
       // ✅ Avançar setup_step para long_term_planned (libera measurement-planning)
