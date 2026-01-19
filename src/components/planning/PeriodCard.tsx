@@ -2,17 +2,41 @@ import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Home, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Calendar, Home, DollarSign, TrendingUp, TrendingDown, CheckCircle2, Lock, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PlanningPeriod } from "@/hooks/usePeriodPlanning";
+import { PlanningPeriod, PeriodStatus } from "@/hooks/usePeriodPlanning";
 
 interface PeriodCardProps {
   period: PlanningPeriod;
   isSelected: boolean;
   onClick: () => void;
+  onApprove?: (periodId: string) => void;
+  isApproving?: boolean;
+  canApprove?: boolean;
 }
 
-export function PeriodCard({ period, isSelected, onClick }: PeriodCardProps) {
+const getStatusConfig = (status: PeriodStatus) => {
+  switch (status) {
+    case "approved":
+      return { label: "Aprovado", variant: "default" as const, icon: CheckCircle2, className: "bg-blue-500" };
+    case "executing":
+      return { label: "Em Execução", variant: "default" as const, icon: null, className: "bg-amber-500" };
+    case "closed":
+      return { label: "Fechado", variant: "secondary" as const, icon: Lock, className: "" };
+    default:
+      return { label: "Rascunho", variant: "outline" as const, icon: null, className: "" };
+  }
+};
+
+export function PeriodCard({ 
+  period, 
+  isSelected, 
+  onClick, 
+  onApprove,
+  isApproving,
+  canApprove = true 
+}: PeriodCardProps) {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -32,21 +56,37 @@ export function PeriodCard({ period, isSelected, onClick }: PeriodCardProps) {
     ? (period.total_planned_profit / period.total_planned_revenue) * 100
     : 0;
 
+  const statusConfig = getStatusConfig(period.status);
+  const isDraft = period.status === "draft" || period.status === "planned";
+  const isLocked = !isDraft;
+
+  const handleApproveClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onApprove && isDraft) {
+      onApprove(period.id);
+    }
+  };
+
   return (
     <Card
       className={cn(
         "cursor-pointer transition-all hover:shadow-md",
-        isSelected && "ring-2 ring-primary shadow-md"
+        isSelected && "ring-2 ring-primary shadow-md",
+        isLocked && "opacity-90"
       )}
       onClick={onClick}
     >
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base font-semibold">
-            {period.name || `Quinzena ${period.period_number}`}
-          </CardTitle>
-          <Badge variant={period.is_closed ? "secondary" : "outline"}>
-            {period.is_closed ? "Fechado" : period.status || "Planejado"}
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-base font-semibold">
+              {period.name || `Quinzena ${period.period_number}`}
+            </CardTitle>
+            {isLocked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+          </div>
+          <Badge variant={statusConfig.variant} className={statusConfig.className}>
+            {statusConfig.icon && <statusConfig.icon className="h-3 w-3 mr-1" />}
+            {statusConfig.label}
           </Badge>
         </div>
         <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
@@ -115,6 +155,29 @@ export function PeriodCard({ period, isSelected, onClick }: PeriodCardProps) {
             </span>
           </div>
         </div>
+
+        {/* Botão Aprovar Período */}
+        {isDraft && canApprove && onApprove && (
+          <Button
+            className="w-full mt-2"
+            variant="default"
+            size="sm"
+            onClick={handleApproveClick}
+            disabled={isApproving}
+          >
+            {isApproving ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Aprovando...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Aprovar Período
+              </>
+            )}
+          </Button>
+        )}
       </CardContent>
     </Card>
   );

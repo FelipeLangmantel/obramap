@@ -4,6 +4,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 import { toast } from "sonner";
 
+export type PeriodStatus = "draft" | "approved" | "executing" | "closed" | "planned";
+
 export interface PlanningPeriod {
   id: string;
   period_number: number;
@@ -11,6 +13,7 @@ export interface PlanningPeriod {
   start_date: string;
   end_date: string;
   is_closed: boolean | null;
+  status: PeriodStatus;
 }
 
 export interface PlanningVersion {
@@ -189,7 +192,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
     const { data, error } = await supabase
       .from("planning_periods")
-      .select("id, period_number, name, start_date, end_date, is_closed")
+      .select("id, period_number, name, start_date, end_date, is_closed, status")
       .eq("project_id", projectId)
       .eq("company_id", company.id)
       .eq("planning_version_id", activeVersion.id)
@@ -200,8 +203,28 @@ export function useLongTermPlanning(projectId: string | undefined) {
       return;
     }
 
-    setPeriods(data || []);
+    // Normalize status and ensure all required fields
+    const normalizedPeriods: PlanningPeriod[] = (data || []).map(p => ({
+      id: p.id,
+      period_number: p.period_number,
+      name: p.name,
+      start_date: p.start_date,
+      end_date: p.end_date,
+      is_closed: p.is_closed,
+      status: normalizeStatus(p.status),
+    }));
+
+    setPeriods(normalizedPeriods);
   }, [projectId, company?.id, activeVersion?.id]);
+
+  // Normalize status helper
+  const normalizeStatus = (status: string | null): PeriodStatus => {
+    if (!status) return "draft";
+    const s = status.toLowerCase();
+    if (s === "approved" || s === "executing" || s === "closed") return s as PeriodStatus;
+    if (s === "planned") return "draft";
+    return "draft";
+  };
 
   // Carregar serviços e dados da matriz
   const loadMatrixData = useCallback(async () => {

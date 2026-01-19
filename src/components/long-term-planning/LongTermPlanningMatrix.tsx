@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Lock, AlertTriangle } from "lucide-react";
+import { Lock, AlertTriangle, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -14,7 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import type { PlanningPeriod, ServiceRow, PeriodSummary } from "@/hooks/useLongTermPlanning";
+import type { PlanningPeriod, ServiceRow, PeriodSummary, PeriodStatus } from "@/hooks/useLongTermPlanning";
 
 interface LongTermPlanningMatrixProps {
   periods: PlanningPeriod[];
@@ -23,6 +23,23 @@ interface LongTermPlanningMatrixProps {
   totalHouses: number;
   onCellChange: (macroId: string, scopeId: string, periodId: string, value: number) => void;
 }
+
+const isEditable = (status: PeriodStatus): boolean => {
+  return status === "draft" || status === "planned";
+};
+
+const getStatusBadge = (status: PeriodStatus) => {
+  switch (status) {
+    case "approved":
+      return { label: "Aprovado", className: "bg-blue-500 text-white" };
+    case "executing":
+      return { label: "Em Execução", className: "bg-amber-500 text-white" };
+    case "closed":
+      return { label: "Fechado", className: "bg-muted text-muted-foreground" };
+    default:
+      return null;
+  }
+};
 
 export function LongTermPlanningMatrix({
   periods,
@@ -60,8 +77,9 @@ export function LongTermPlanningMatrix({
     return `${macroId}_${scopeId}_${periodId}`;
   };
 
-  const handleCellClick = (macroId: string, scopeId: string, periodId: string, isClosed: boolean) => {
-    if (isClosed) return;
+  const handleCellClick = (macroId: string, scopeId: string, periodId: string, period: PlanningPeriod) => {
+    // Only allow editing for draft/planned periods
+    if (!isEditable(period.status)) return;
     setEditingCell(getCellKey(macroId, scopeId, periodId));
   };
 
@@ -94,14 +112,15 @@ export function LongTermPlanningMatrix({
     } else if (e.key === "Tab") {
       e.preventDefault();
       handleCellBlur(macroId, scopeId, periodId, currentValue);
-      // Navegar para próxima célula
+      // Navegar para próxima célula editável
       const currentPeriodIndex = periods.findIndex(p => p.id === periodId);
-      if (currentPeriodIndex < periods.length - 1) {
-        const nextPeriod = periods[currentPeriodIndex + 1];
-        if (!nextPeriod.is_closed) {
+      for (let i = currentPeriodIndex + 1; i < periods.length; i++) {
+        const nextPeriod = periods[i];
+        if (isEditable(nextPeriod.status)) {
           setTimeout(() => {
             setEditingCell(getCellKey(macroId, scopeId, nextPeriod.id));
           }, 0);
+          break;
         }
       }
     }
@@ -135,22 +154,44 @@ export function LongTermPlanningMatrix({
             </TableHead>
 
             {/* Colunas de períodos */}
-            {periods.map((period) => (
-              <TableHead
-                key={period.id}
-                className="min-w-[100px] text-center font-semibold"
-              >
-                <div className="flex flex-col items-center gap-1">
-                  <span className="text-xs text-muted-foreground">
-                    P{period.period_number}
-                  </span>
-                  <span className="text-xs">{formatPeriodHeader(period)}</span>
-                  {period.is_closed && (
-                    <Lock className="h-3 w-3 text-muted-foreground" />
+            {periods.map((period) => {
+              const periodEditable = isEditable(period.status);
+              const statusBadge = getStatusBadge(period.status);
+              
+              return (
+                <TableHead
+                  key={period.id}
+                  className={cn(
+                    "min-w-[100px] text-center font-semibold",
+                    !periodEditable && "bg-muted/50"
                   )}
-                </div>
-              </TableHead>
-            ))}
+                >
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-muted-foreground">
+                        P{period.period_number}
+                      </span>
+                      {!periodEditable && (
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Lock className="h-3 w-3 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">Período bloqueado - já aprovado</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                    <span className="text-xs">{formatPeriodHeader(period)}</span>
+                    {statusBadge && (
+                      <Badge className={cn("text-[10px] h-4 px-1.5", statusBadge.className)}>
+                        {statusBadge.label}
+                      </Badge>
+                    )}
+                  </div>
+                </TableHead>
+              );
+            })}
           </TableRow>
 
           {/* Linha de resumo por período */}
@@ -162,8 +203,15 @@ export function LongTermPlanningMatrix({
             <TableCell className="sticky left-[280px] z-30 bg-muted/50" />
             {periods.map((period) => {
               const summary = getSummaryForPeriod(period.id);
+              const periodEditable = isEditable(period.status);
               return (
-                <TableCell key={period.id} className="text-center p-1">
+                <TableCell 
+                  key={period.id} 
+                  className={cn(
+                    "text-center p-1",
+                    !periodEditable && "bg-muted/30"
+                  )}
+                >
                   <div className="flex flex-col gap-0.5 text-xs">
                     <span className="font-semibold">{summary?.total_houses || 0}</span>
                     <span className="text-muted-foreground">
@@ -232,17 +280,17 @@ export function LongTermPlanningMatrix({
                   const cellData = row.periodValues[period.id];
                   const cellKey = getCellKey(row.macro_id, row.scope_id, period.id);
                   const isEditing = editingCell === cellKey;
-                  const isClosed = period.is_closed || false;
+                  const periodEditable = isEditable(period.status);
 
                   return (
                     <TableCell
                       key={period.id}
                       className={cn(
                         "text-center p-1",
-                        isClosed && "bg-muted/30",
-                        !isClosed && "cursor-pointer hover:bg-accent/50"
+                        !periodEditable && "bg-muted/20",
+                        periodEditable && "cursor-pointer hover:bg-accent/50"
                       )}
-                      onClick={() => handleCellClick(row.macro_id, row.scope_id, period.id, isClosed)}
+                      onClick={() => handleCellClick(row.macro_id, row.scope_id, period.id, period)}
                     >
                       {isEditing ? (
                         <Input
@@ -255,12 +303,17 @@ export function LongTermPlanningMatrix({
                           onKeyDown={(e) => handleKeyDown(e, row.macro_id, row.scope_id, period.id, cellData?.target_houses || 0)}
                         />
                       ) : (
-                        <span className={cn(
-                          "text-sm",
-                          (cellData?.target_houses || 0) === 0 && "text-muted-foreground"
-                        )}>
-                          {cellData?.target_houses || 0}
-                        </span>
+                        <div className="flex items-center justify-center gap-1">
+                          <span className={cn(
+                            "text-sm",
+                            (cellData?.target_houses || 0) === 0 && "text-muted-foreground"
+                          )}>
+                            {cellData?.target_houses || 0}
+                          </span>
+                          {!periodEditable && (cellData?.target_houses || 0) > 0 && (
+                            <ShieldCheck className="h-3 w-3 text-blue-500" />
+                          )}
+                        </div>
                       )}
                     </TableCell>
                   );
