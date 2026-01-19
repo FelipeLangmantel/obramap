@@ -39,7 +39,10 @@ export default function MeasurementPlanningPage() {
     isLoading,
     isLoadingServices,
     overallTotals,
+    canEdit,
     selectPeriod,
+    approvePeriod,
+    approvingPeriodId,
   } = usePeriodPlanning(canAccess ? currentProject?.id || null : null);
 
   // Redirect if not authenticated
@@ -199,6 +202,9 @@ export default function MeasurementPlanningPage() {
                         period={period}
                         isSelected={selectedPeriodId === period.id}
                         onClick={() => handlePeriodClick(period.id)}
+                        onApprove={canEdit ? approvePeriod : undefined}
+                        isApproving={approvingPeriodId === period.id}
+                        canApprove={canEdit}
                       />
                     ))}
                   </div>

@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
+export type PeriodStatus = "draft" | "approved" | "executing" | "closed" | "planned";
+
 export interface PlanningPeriod {
   id: string;
   project_id: string;
@@ -12,7 +14,7 @@ export interface PlanningPeriod {
   name: string | null;
   start_date: string;
   end_date: string;
-  status: string | null;
+  status: PeriodStatus;
   is_closed: boolean | null;
   // Campos calculados
   total_planned_houses: number;
@@ -44,8 +46,18 @@ export function usePeriodPlanning(projectId: string | null) {
   const [periodServices, setPeriodServices] = useState<PeriodService[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingServices, setIsLoadingServices] = useState(false);
+  const [approvingPeriodId, setApprovingPeriodId] = useState<string | null>(null);
 
   const canEdit = isAdmin || isCompanyAdmin;
+
+  // Normalize status to our PeriodStatus type
+  const normalizeStatus = (status: string | null): PeriodStatus => {
+    if (!status) return "draft";
+    const s = status.toLowerCase();
+    if (s === "approved" || s === "executing" || s === "closed") return s as PeriodStatus;
+    if (s === "planned") return "draft"; // Treat "planned" as "draft" for editing purposes
+    return "draft";
+  };
 
   // Carregar períodos do projeto (quinzenas do planejamento de longo prazo)
   const loadPeriods = useCallback(async () => {
@@ -104,6 +116,7 @@ export function usePeriodPlanning(projectId: string | null) {
           return {
             ...period,
             ...totals,
+            status: normalizeStatus(period.status),
           } as PlanningPeriod;
         })
       );
@@ -159,6 +172,41 @@ export function usePeriodPlanning(projectId: string | null) {
     }
   }, []);
 
+  // Aprovar período
+  const approvePeriod = useCallback(async (periodId: string) => {
+    setApprovingPeriodId(periodId);
+    try {
+      const { data, error } = await supabase.rpc("approve_planning_period", {
+        p_period_id: periodId,
+      });
+
+      if (error) throw error;
+
+      const result = data as { success: boolean; error?: string; measurement_id?: string };
+
+      if (!result.success) {
+        if (result.error === "period_not_found") {
+          toast.error("Período não encontrado");
+        } else if (result.error === "period_already_approved") {
+          toast.error("Este período já foi aprovado");
+        } else {
+          toast.error(result.error || "Erro ao aprovar período");
+        }
+        return false;
+      }
+
+      toast.success("Período aprovado com sucesso! Medição criada.");
+      await loadPeriods(); // Recarregar para atualizar status
+      return true;
+    } catch (error) {
+      console.error("Erro ao aprovar período:", error);
+      toast.error("Erro ao aprovar período");
+      return false;
+    } finally {
+      setApprovingPeriodId(null);
+    }
+  }, [loadPeriods]);
+
   // Selecionar período e carregar seus serviços
   const selectPeriod = useCallback(
     (periodId: string | null) => {
@@ -212,5 +260,7 @@ export function usePeriodPlanning(projectId: string | null) {
     overallTotals,
     selectPeriod,
     refreshPeriods: loadPeriods,
+    approvePeriod,
+    approvingPeriodId,
   };
 }
