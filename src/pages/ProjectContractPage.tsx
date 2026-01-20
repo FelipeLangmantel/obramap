@@ -9,7 +9,6 @@ import { ContractHeader } from "@/components/contract/ContractHeader";
 import { ContractSummaryCards } from "@/components/contract/ContractSummaryCards";
 import { ContractServicesTable } from "@/components/contract/ContractServicesTable";
 import { ContractConfigCard } from "@/components/contract/ContractConfigCard";
-import { ModuleBlockedAlert } from "@/components/ModuleBlockedAlert";
 import { Button } from "@/components/ui/button";
 import { Loader2, Save, ArrowRight, AlertTriangle, Edit } from "lucide-react";
 import { toast } from "sonner";
@@ -27,10 +26,7 @@ import {
 export default function ProjectContractPage() {
   const navigate = useNavigate();
   const { currentProject } = useConstruction();
-  const { canAccessModule, advanceToStep, currentStep } = useProjectSetupFlow();
-
-  // Verificar se pode acessar o módulo
-  const canAccess = canAccessModule("project-contract");
+  const { advanceToStep, currentStep } = useProjectSetupFlow();
 
   const {
     contract,
@@ -116,21 +112,6 @@ export default function ProjectContractPage() {
     }
   };
 
-  // Verificar se pode acessar antes de carregar
-  if (!canAccess) {
-    return (
-      <SidebarProvider>
-        <div className="flex min-h-screen w-full bg-background">
-          <AppSidebar activeView="costs" onViewChange={() => {}} />
-          <SidebarInset className="flex-1">
-            <div className="container mx-auto py-6 px-4 max-w-7xl">
-              <ModuleBlockedAlert moduleKey="project-contract" moduleName="Contrato da Obra" />
-            </div>
-          </SidebarInset>
-        </div>
-      </SidebarProvider>
-    );
-  }
 
   if (loading) {
     return (

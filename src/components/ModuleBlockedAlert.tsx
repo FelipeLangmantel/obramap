@@ -82,12 +82,7 @@ interface ModuleGuardProps {
   fallback?: React.ReactNode;
 }
 
-export function ModuleGuard({ moduleKey, moduleName, children, fallback }: ModuleGuardProps) {
-  const { canAccessModule } = useProjectSetupFlow();
-  
-  if (!canAccessModule(moduleKey)) {
-    return fallback || <ModuleBlockedAlert moduleKey={moduleKey} moduleName={moduleName} />;
-  }
-  
+// ✅ BLOQUEIO REMOVIDO: ModuleGuard sempre renderiza children
+export function ModuleGuard({ children }: ModuleGuardProps) {
   return <>{children}</>;
 }

@@ -117,15 +117,12 @@ export function useProjectSetupFlow(): ProjectSetupFlowResult {
     return stepIndex >= requiredIndex;
   }, [stepIndex]);
 
-  // Verificar se pode acessar um módulo
-  const canAccessModule = useCallback((moduleKey: string): boolean => {
-    if (!currentProject) return false;
-    
-    const requiredStep = MODULE_REQUIREMENTS[moduleKey];
-    if (!requiredStep) return true; // Módulo não mapeado = sempre disponível
-    
-    return isStepComplete(requiredStep);
-  }, [currentProject, isStepComplete]);
+  // ✅ BLOQUEIO REMOVIDO: Todos os módulos são acessíveis
+  // O setup_step é mantido apenas para exibição informativa
+  const canAccessModule = useCallback((_moduleKey: string): boolean => {
+    // Retorna true sempre - navegação livre
+    return true;
+  }, []);
 
   // Obter mensagem de bloqueio para um módulo
   const getBlockedMessage = useCallback((moduleKey: string): string | null => {
