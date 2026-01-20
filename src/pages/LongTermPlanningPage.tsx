@@ -11,17 +11,13 @@ import { LongTermPlanningMatrix } from "@/components/long-term-planning/LongTerm
 import { PlanningHeader } from "@/components/long-term-planning/PlanningHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ModuleBlockedAlert } from "@/components/ModuleBlockedAlert";
 import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function LongTermPlanningPage() {
   const navigate = useNavigate();
   const { currentProject } = useConstruction();
-  const { canAccessModule, currentStep, advanceToStep } = useProjectSetupFlow();
-
-  // Verificar se pode acessar o módulo ANTES de carregar dados
-  const canAccess = canAccessModule("long-term-planning");
+  const { currentStep, advanceToStep } = useProjectSetupFlow();
 
   const {
     activeVersion,
@@ -39,14 +35,13 @@ export default function LongTermPlanningPage() {
     savePlanning,
     refresh,
     retryInit,
-  } = useLongTermPlanning(canAccess ? currentProject?.id : undefined);
+  } = useLongTermPlanning(currentProject?.id);
 
   // ✅ Auto-correção: se o contrato existe mas o setup_step não avançou,
-  // avançar para liberar o planejamento.
+  // avançar para atualização informativa (mantido para consistência de dados)
   useEffect(() => {
     const run = async () => {
       if (!currentProject?.id) return;
-      if (canAccess) return;
       if (currentStep !== "budget_defined") return;
 
       const { count } = await supabase
@@ -60,7 +55,7 @@ export default function LongTermPlanningPage() {
     };
 
     run();
-  }, [canAccess, currentProject?.id, currentStep, advanceToStep]);
+  }, [currentProject?.id, currentStep, advanceToStep]);
 
   const handleViewChange = () => {
     // Não faz nada - só para satisfazer o AppSidebar
@@ -103,8 +98,6 @@ export default function LongTermPlanningPage() {
                   Selecione um projeto para visualizar o planejamento.
                 </AlertDescription>
               </Alert>
-            ) : !canAccess ? (
-              <ModuleBlockedAlert moduleKey="long-term-planning" moduleName="Planejamento de Longo Prazo" />
             ) : initializing ? (
               <div className="flex flex-col items-center justify-center py-20 space-y-4">
                 <Loader2 className="h-10 w-10 animate-spin text-primary" />

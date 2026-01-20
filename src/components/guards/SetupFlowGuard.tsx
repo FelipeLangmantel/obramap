@@ -6,36 +6,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { SystemSetupWizard, OrphanDataCounts } from "@/components/setup/SystemSetupWizard";
 import { Loader2 } from "lucide-react";
 
-type ProjectSetupStep =
-  | "project_created"
-  | "blocks_configured"
-  | "services_defined"
-  | "budget_defined"
-  | "contract_defined"
-  | "long_term_planned";
-
-// Ordem hierárquica das etapas
-const STEP_ORDER: ProjectSetupStep[] = [
-  "project_created",
-  "blocks_configured",
-  "services_defined",
-  "budget_defined",
-  "contract_defined",
-  "long_term_planned",
-];
-
-// ✅ DEBUG MODE: Todos os bloqueios de rota desabilitados temporariamente
-// Mapeamento de rotas para etapa mínima necessária
-// IMPORTANTE: Rotas não listadas aqui são acessíveis livremente
-const ROUTE_REQUIREMENTS: Record<string, ProjectSetupStep> = {
-  // 🔧 DESABILITADO PARA DEBUG - Permitir navegação livre
-  // "/project-contract": "budget_defined",
-  // "/long-term-planning": "contract_defined",
-  // "/measurement-planning": "long_term_planned",
-};
-
-// ✅ DEBUG: Habilitar logs detalhados
-const DEBUG_MODE = true;
+// ✅ BLOQUEIO DE SETUP REMOVIDO
+// O setup_step é mantido apenas para exibição informativa
+// Nenhuma rota é bloqueada baseada em etapas não concluídas
 
 const RPC_TIMEOUT_MS = 12000;
 const SETUP_CACHE_KEY = "obramap_system_setup_checked";
@@ -219,55 +192,19 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
     );
   }
 
-  // ✅ 7. Se não tem projetos disponíveis (DEBUG: não redirecionar)
+  // ✅ 7. NAVEGAÇÃO LIVRE - Não bloqueia por falta de projetos
+  // O usuário pode acessar qualquer rota livremente
   if (projects.length === 0) {
-    if (DEBUG_MODE) {
-      console.log("[SETUP GUARD] DEBUG: No projects, but allowing navigation for debug");
-      return <>{children}</>;
-    }
-    if (location.pathname === "/") {
-      return <>{children}</>;
-    }
-    console.log("[SETUP GUARD] No projects, redirecting to /");
-    return <Navigate to="/" replace />;
+    console.log("[SETUP GUARD] No projects, but allowing free navigation");
   }
 
-  // ✅ 8. Se não tem projeto selecionado (DEBUG: não redirecionar)
-  if (!currentProject) {
-    if (DEBUG_MODE) {
-      console.log("[SETUP GUARD] DEBUG: No current project, but allowing navigation for debug");
-      return <>{children}</>;
-    }
-    if (location.pathname === "/") {
-      return <>{children}</>;
-    }
-    console.log("[SETUP GUARD] No current project, redirecting to /");
-    return <Navigate to="/" replace />;
+  if (!currentProject && location.pathname !== "/") {
+    console.log("[SETUP GUARD] No current project, but allowing free navigation");
   }
 
-  // ✅ 9. Verificar requisitos de rota baseado no setup_step
-  const currentStep = currentProject.setupStep || "project_created";
-  const currentStepIndex = STEP_ORDER.indexOf(currentStep);
-  const requiredStep = ROUTE_REQUIREMENTS[location.pathname];
-
-  if (requiredStep) {
-    const requiredIndex = STEP_ORDER.indexOf(requiredStep);
-
-    if (currentStepIndex < requiredIndex) {
-      // ✅ Para rotas que precisam mostrar alerta de bloqueio ao invés de redirecionar
-      // Isso evita que o usuário seja redirecionado para o mapa sem entender o motivo
-      const routesWithInPageAlert = ["/project-contract", "/long-term-planning", "/measurement-planning"];
-      
-      if (routesWithInPageAlert.includes(location.pathname)) {
-        console.log(`[SETUP GUARD] Route ${location.pathname} blocked (needs ${requiredStep}, current ${currentStep}) -> rendering page to show blocked message`);
-        return <>{children}</>;
-      }
-
-      // Para outras rotas, mantém o redirect seguro
-      console.log(`[SETUP GUARD] Route ${location.pathname} requires ${requiredStep}, current is ${currentStep}, redirecting to /`);
-      return <Navigate to="/" replace />;
-    }
-  }
+  // ✅ 9. BLOQUEIO DE ROTA REMOVIDO - Navegação livre
+  // O setup_step é mantido apenas para exibição informativa
+  console.log(`[SETUP GUARD] Free navigation enabled - no route blocking based on setup_step`);
 
   // ✅ 10. Tudo OK, renderiza children
   return <>{children}</>;
