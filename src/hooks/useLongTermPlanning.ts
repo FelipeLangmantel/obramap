@@ -236,10 +236,11 @@ export function useLongTermPlanning(projectId: string | undefined) {
     setLoading(true);
 
     try {
-      // Buscar serviços únicos do orçamento executivo (measurement_services)
+      // Buscar serviços do contrato do projeto (NÃO de measurement_services)
+      // Isso mantém o isolamento estratégico - não depende de dados operacionais
       const { data: services, error: servicesError } = await supabase
-        .from("measurement_services")
-        .select("macro_id, macro_name, scope_id, scope_name, macro_color")
+        .from("project_contract_services")
+        .select("macro_id, macro_name, scope_id, scope_name")
         .eq("project_id", projectId)
         .eq("company_id", company.id);
 
@@ -257,7 +258,10 @@ export function useLongTermPlanning(projectId: string | undefined) {
       services?.forEach(s => {
         const key = `${s.macro_id}_${s.scope_id}`;
         if (!uniqueServicesMap.has(key)) {
-          uniqueServicesMap.set(key, s);
+          uniqueServicesMap.set(key, {
+            ...s,
+            macro_color: "#6b7280", // Default color for contract services
+          });
         }
       });
 
