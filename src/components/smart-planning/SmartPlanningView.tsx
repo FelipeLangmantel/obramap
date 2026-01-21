@@ -10,7 +10,7 @@ import { usePlanningCalculations } from './hooks/usePlanningCalculations';
 import { PlanningOnboarding } from './PlanningOnboarding';
 import { GanttChart } from './GanttChart';
 import { LineOfBalance } from './LineOfBalance';
-import { DailyWorkLogDialog } from './DailyWorkLogDialog';
+// DailyWorkLogDialog removido - funcionalidade operacional
 import { 
   BarChart3, 
   Calendar, 
@@ -21,8 +21,7 @@ import {
   Layers,
   Loader2,
   PlayCircle,
-  BookOpen,
-  Plus
+  BookOpen
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -31,10 +30,10 @@ import { toast } from 'sonner';
 
 export function SmartPlanningView() {
   const { currentProject } = useConstruction();
-  const { isAdmin, canEdit } = useAuth();
+  const { canEdit } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [showWorkLogDialog, setShowWorkLogDialog] = useState(false);
   
+  // Módulo estratégico - removido workLogDialog (operacional)
   const {
     stages,
     teams,
@@ -47,14 +46,13 @@ export function SmartPlanningView() {
     hasBaseline,
     addStageWithTeams,
     createBaseline,
-    addWorkLog,
+    // addWorkLog removido - operacional
     loadData
   } = usePlanningData(currentProject?.id);
 
   const {
     ganttTasks,
     lineOfBalanceData,
-    productivityMetrics,
     projectedEndDate,
     overallProgress
   } = usePlanningCalculations({
@@ -161,15 +159,7 @@ export function SmartPlanningView() {
                   (iniciado em {format(new Date(latestBaseline.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })})
                 </span>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setShowWorkLogDialog(true)}
-                className="gap-1"
-              >
-                <Plus className="h-3 w-3" />
-                Diário de Obra
-              </Button>
+              {/* Botão "Diário de Obra" removido - funcionalidade operacional */}
             </div>
           </CardContent>
         </Card>
@@ -341,15 +331,7 @@ export function SmartPlanningView() {
         </TabsContent>
       </Tabs>
 
-      {/* Daily Work Log Dialog */}
-      <DailyWorkLogDialog
-        open={showWorkLogDialog}
-        onOpenChange={setShowWorkLogDialog}
-        projectId={currentProject.id}
-        stages={stages}
-        teams={teams}
-        onSubmit={addWorkLog}
-      />
+      {/* DailyWorkLogDialog removido - funcionalidade operacional */}
     </div>
   );
 }

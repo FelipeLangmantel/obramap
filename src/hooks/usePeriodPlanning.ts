@@ -195,7 +195,7 @@ export function usePeriodPlanning(projectId: string | null) {
         return false;
       }
 
-      toast.success("Período aprovado com sucesso! Medição criada.");
+      toast.success("Período aprovado com sucesso!");
       await loadPeriods(); // Recarregar para atualizar status
       return true;
     } catch (error) {
