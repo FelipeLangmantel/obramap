@@ -40,10 +40,13 @@ import {
   FileDown,
   DollarSign,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Download
 } from "lucide-react";
 import { PlannedVsActualDialog } from "./PlannedVsActualDialog";
 import { PlannedVsActualView } from "./PlannedVsActualView";
+import { ImportFromMeasurementDialog } from "./planning/ImportFromMeasurementDialog";
+import { MeasurementSuggestion, PeriodForImport } from "@/hooks/useMeasurementSuggestions";
 import { format, startOfWeek, endOfWeek, addWeeks, parseISO, isBefore, isAfter, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -188,6 +191,10 @@ export function PlannedProductionTab() {
   
   // Expanded weeks state
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
+  
+  // Import from measurement dialog
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importedSuggestions, setImportedSuggestions] = useState<MeasurementSuggestion[]>([]);
 
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
@@ -1425,10 +1432,41 @@ export function PlannedProductionTab() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-1">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Target className="w-5 h-5" />
-              Planejar Produção
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Target className="w-5 h-5" />
+                Planejar Produção
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 text-xs"
+                onClick={() => setImportDialogOpen(true)}
+              >
+                <Download className="w-3.5 h-3.5" />
+                Importar da Medição
+              </Button>
+            </div>
+            
+            {/* Imported suggestions info */}
+            {importedSuggestions.length > 0 && (
+              <div className="mt-2 p-2 bg-primary/5 rounded-lg border border-primary/20">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">
+                    {importedSuggestions.length} serviço(s) importado(s)
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-xs"
+                    onClick={() => setImportedSuggestions([])}
+                  >
+                    <X className="w-3 h-3 mr-1" />
+                    Limpar
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Measurement Number */}
@@ -2241,6 +2279,37 @@ export function PlannedProductionTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Import from Measurement Dialog */}
+      <ImportFromMeasurementDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        projectId={currentProject?.id}
+        onImport={(suggestions, period) => {
+          // Preencher o formulário com os dados importados
+          setImportedSuggestions(suggestions);
+          
+          // Preencher datas do período
+          setPlanStartDate(period.start_date);
+          setPlanEndDate(period.end_date);
+          setMeasurementNumber(period.period_number);
+          
+          // Se houver apenas uma sugestão, preencher macro/scope automaticamente
+          if (suggestions.length === 1) {
+            const s = suggestions[0];
+            setSelectedMacro(s.macro_id);
+            // Delay para permitir que scopes seja recalculado
+            setTimeout(() => {
+              setSelectedScope(s.scope_id);
+            }, 100);
+          }
+          
+          toast.success(
+            `${suggestions.length} serviço(s) importado(s) do período ${period.period_number}. Edite conforme necessário e salve.`,
+            { duration: 5000 }
+          );
+        }}
+      />
     </div>
   );
 }
