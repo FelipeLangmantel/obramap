@@ -1,5 +1,6 @@
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { AlertTriangle, Users } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -68,9 +69,12 @@ export function PeriodServicesDialog({
       cost: acc.cost + s.planned_cost,
       revenue: acc.revenue + s.planned_revenue,
       profit: acc.profit + s.projected_result,
+      capacity: acc.capacity + s.expected_output,
     }),
-    { houses: 0, cost: 0, revenue: 0, profit: 0 }
+    { houses: 0, cost: 0, revenue: 0, profit: 0, capacity: 0 }
   );
+
+  const capacityGap = totals.capacity - totals.houses;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -97,82 +101,138 @@ export function PeriodServicesDialog({
               Nenhum serviço planejado para este período.
             </div>
           ) : (
-            <div className="rounded-lg border">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead className="min-w-[200px]">Serviço</TableHead>
-                    <TableHead className="text-right">Casas</TableHead>
-                    <TableHead className="text-right">Custo</TableHead>
-                    <TableHead className="text-right">Receita</TableHead>
-                    <TableHead className="text-right">Resultado</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {services.map((service, index) => {
-                    const margin = service.planned_revenue > 0
-                      ? (service.projected_result / service.planned_revenue) * 100
-                      : 0;
+            <>
+              {/* Resumo de Capacidade */}
+              {totals.capacity > 0 && (
+                <div className={cn(
+                  "mb-4 p-3 rounded-lg flex items-center gap-3",
+                  capacityGap < 0 ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"
+                )}>
+                  <Users className={cn("h-5 w-5", capacityGap < 0 ? "text-red-600" : "text-green-600")} />
+                  <div className="flex-1">
+                    <p className={cn("text-sm font-medium", capacityGap < 0 ? "text-red-700" : "text-green-700")}>
+                      Capacidade do Período: {totals.capacity} casas
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Demanda: {totals.houses} casas • 
+                      {capacityGap >= 0 
+                        ? ` Folga: +${capacityGap} casas` 
+                        : ` Déficit: ${capacityGap} casas`}
+                    </p>
+                  </div>
+                  {capacityGap < 0 && (
+                    <AlertTriangle className="h-5 w-5 text-red-500" />
+                  )}
+                </div>
+              )}
 
-                    return (
-                      <TableRow
-                        key={service.id}
-                        className={cn(index % 2 === 0 ? "bg-background" : "bg-muted/20")}
-                      >
-                        <TableCell>
-                          <div>
-                            <p className="font-medium text-sm">{service.macro_name}</p>
-                            <p className="text-xs text-muted-foreground">{service.scope_name}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {service.target_houses}
-                        </TableCell>
-                        <TableCell className="text-right text-sm">
-                          {formatCurrency(service.planned_cost)}
-                        </TableCell>
-                        <TableCell className="text-right text-sm">
-                          {formatCurrency(service.planned_revenue)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div>
-                            <span
-                              className={cn(
-                                "font-medium text-sm",
-                                service.projected_result >= 0 ? "text-green-600" : "text-red-600"
+              <div className="rounded-lg border">
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    <TableRow>
+                      <TableHead className="min-w-[200px]">Serviço</TableHead>
+                      <TableHead className="text-right">Casas</TableHead>
+                      <TableHead className="text-right">Equipes</TableHead>
+                      <TableHead className="text-right">Produtividade</TableHead>
+                      <TableHead className="text-right">Capacidade</TableHead>
+                      <TableHead className="text-right">Custo</TableHead>
+                      <TableHead className="text-right">Receita</TableHead>
+                      <TableHead className="text-right">Resultado</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {services.map((service, index) => {
+                      const margin = service.planned_revenue > 0
+                        ? (service.projected_result / service.planned_revenue) * 100
+                        : 0;
+                      const serviceCapacityGap = service.expected_output - service.target_houses;
+
+                      return (
+                        <TableRow
+                          key={service.id}
+                          className={cn(index % 2 === 0 ? "bg-background" : "bg-muted/20")}
+                        >
+                          <TableCell>
+                            <div>
+                              <p className="font-medium text-sm">{service.macro_name}</p>
+                              <p className="text-xs text-muted-foreground">{service.scope_name}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {service.target_houses}
+                          </TableCell>
+                          <TableCell className="text-right text-sm">
+                            {service.team_count}
+                          </TableCell>
+                          <TableCell className="text-right text-sm">
+                            {service.productivity_per_team.toFixed(1)}/sem
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className={cn(
+                                "text-sm font-medium",
+                                serviceCapacityGap < 0 ? "text-red-600" : "text-green-600"
+                              )}>
+                                {service.expected_output}
+                              </span>
+                              {serviceCapacityGap < 0 && (
+                                <AlertTriangle className="h-3 w-3 text-red-500" />
                               )}
-                            >
-                              {formatCurrency(service.projected_result)}
-                            </span>
-                            <span className="text-xs text-muted-foreground ml-1">
-                              ({margin.toFixed(1)}%)
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {getStatusBadge(service.status)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right text-sm">
+                            {formatCurrency(service.planned_cost)}
+                          </TableCell>
+                          <TableCell className="text-right text-sm">
+                            {formatCurrency(service.planned_revenue)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div>
+                              <span
+                                className={cn(
+                                  "font-medium text-sm",
+                                  service.projected_result >= 0 ? "text-green-600" : "text-red-600"
+                                )}
+                              >
+                                {formatCurrency(service.projected_result)}
+                              </span>
+                              <span className="text-xs text-muted-foreground ml-1">
+                                ({margin.toFixed(1)}%)
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {getStatusBadge(service.status)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
 
-                  {/* Linha de totais */}
-                  <TableRow className="bg-muted/50 font-semibold">
-                    <TableCell>Total</TableCell>
-                    <TableCell className="text-right">{totals.houses}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(totals.cost)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(totals.revenue)}</TableCell>
-                    <TableCell className="text-right">
-                      <span className={cn(totals.profit >= 0 ? "text-green-600" : "text-red-600")}>
-                        {formatCurrency(totals.profit)}
-                      </span>
-                    </TableCell>
-                    <TableCell />
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
+                    {/* Linha de totais */}
+                    <TableRow className="bg-muted/50 font-semibold">
+                      <TableCell>Total</TableCell>
+                      <TableCell className="text-right">{totals.houses}</TableCell>
+                      <TableCell className="text-right">-</TableCell>
+                      <TableCell className="text-right">-</TableCell>
+                      <TableCell className="text-right">
+                        <span className={cn(capacityGap >= 0 ? "text-green-600" : "text-red-600")}>
+                          {totals.capacity}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">{formatCurrency(totals.cost)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(totals.revenue)}</TableCell>
+                      <TableCell className="text-right">
+                        <span className={cn(totals.profit >= 0 ? "text-green-600" : "text-red-600")}>
+                          {formatCurrency(totals.profit)}
+                        </span>
+                      </TableCell>
+                      <TableCell />
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </div>
       </DialogContent>

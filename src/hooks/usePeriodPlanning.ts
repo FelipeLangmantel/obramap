@@ -21,6 +21,9 @@ export interface PlanningPeriod {
   total_planned_cost: number;
   total_planned_revenue: number;
   total_planned_profit: number;
+  // Campos de capacidade
+  total_capacity: number;
+  capacity_gap: number; // positive = surplus, negative = deficit
 }
 
 export interface PeriodService {
@@ -37,6 +40,10 @@ export interface PeriodService {
   productivity_planned: number | null;
   teams_planned: number | null;
   status: string | null;
+  // Campos de dimensionamento
+  team_count: number;
+  productivity_per_team: number;
+  expected_output: number;
 }
 
 export function usePeriodPlanning(projectId: string | null) {
@@ -100,7 +107,7 @@ export function usePeriodPlanning(projectId: string | null) {
         periodsData.map(async (period) => {
           const { data: services } = await supabase
             .from("service_planning_by_period")
-            .select("target_houses, planned_revenue, planned_cost, projected_result")
+            .select("target_houses, planned_revenue, planned_cost, projected_result, team_count, productivity_per_team, expected_output")
             .eq("planning_period_id", period.id);
 
           const totals = (services || []).reduce(
@@ -109,13 +116,17 @@ export function usePeriodPlanning(projectId: string | null) {
               total_planned_cost: acc.total_planned_cost + (s.planned_cost || 0),
               total_planned_revenue: acc.total_planned_revenue + (s.planned_revenue || 0),
               total_planned_profit: acc.total_planned_profit + (s.projected_result || 0),
+              total_capacity: acc.total_capacity + (s.expected_output || 0),
             }),
-            { total_planned_houses: 0, total_planned_cost: 0, total_planned_revenue: 0, total_planned_profit: 0 }
+            { total_planned_houses: 0, total_planned_cost: 0, total_planned_revenue: 0, total_planned_profit: 0, total_capacity: 0 }
           );
+
+          const capacity_gap = totals.total_capacity - totals.total_planned_houses;
 
           return {
             ...period,
             ...totals,
+            capacity_gap,
             status: normalizeStatus(period.status),
           } as PlanningPeriod;
         })
@@ -141,7 +152,7 @@ export function usePeriodPlanning(projectId: string | null) {
     try {
       const { data, error } = await supabase
         .from("service_planning_by_period")
-        .select("id, planning_period_id, macro_id, scope_id, macro_name, scope_name, target_houses, planned_revenue, planned_cost, projected_result, productivity_planned, teams_planned, status")
+        .select("id, planning_period_id, macro_id, scope_id, macro_name, scope_name, target_houses, planned_revenue, planned_cost, projected_result, productivity_planned, teams_planned, status, team_count, productivity_per_team, expected_output")
         .eq("planning_period_id", periodId)
         .order("macro_name", { ascending: true });
 
@@ -162,6 +173,9 @@ export function usePeriodPlanning(projectId: string | null) {
           productivity_planned: s.productivity_planned,
           teams_planned: s.teams_planned,
           status: s.status,
+          team_count: s.team_count || 1,
+          productivity_per_team: s.productivity_per_team || 0,
+          expected_output: s.expected_output || 0,
         }))
       );
     } catch (error) {

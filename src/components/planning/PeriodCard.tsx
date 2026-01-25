@@ -3,7 +3,7 @@ import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, Home, DollarSign, TrendingUp, TrendingDown, CheckCircle2, Lock, Loader2 } from "lucide-react";
+import { Calendar, Home, DollarSign, TrendingUp, TrendingDown, CheckCircle2, Lock, Loader2, Users, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PlanningPeriod, PeriodStatus } from "@/hooks/usePeriodPlanning";
 
@@ -95,13 +95,35 @@ export function PeriodCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {/* Casas */}
+        {/* Casas e Capacidade */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Home className="h-4 w-4" />
             <span>Casas Planejadas</span>
           </div>
           <span className="font-semibold">{period.total_planned_houses}</span>
+        </div>
+
+        {/* Capacidade Produtiva */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Users className="h-4 w-4" />
+            <span>Capacidade</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-sm">{period.total_capacity}</span>
+            {period.capacity_gap < 0 && (
+              <Badge variant="destructive" className="text-xs gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                -{Math.abs(period.capacity_gap)}
+              </Badge>
+            )}
+            {period.capacity_gap > 0 && (
+              <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50">
+                +{period.capacity_gap}
+              </Badge>
+            )}
+          </div>
         </div>
 
         {/* Custo */}
