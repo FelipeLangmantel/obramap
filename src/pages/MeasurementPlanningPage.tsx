@@ -22,7 +22,7 @@ import { PeriodServicesDialog } from "@/components/planning/PeriodServicesDialog
 
 export default function MeasurementPlanningPage() {
   const navigate = useNavigate();
-  const { user, isLoading: authLoading, canAccessProject } = useAuth();
+  const { user, isLoading: authLoading, canAccessProject, company } = useAuth();
   const { projects, currentProject, setCurrentProject, isLoading: constructionLoading } = useConstruction();
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -38,6 +38,8 @@ export default function MeasurementPlanningPage() {
     selectPeriod,
     changePeriodStatus,
     approvingPeriodId,
+    refreshServices,
+    deleteService,
   } = usePeriodPlanning(currentProject?.id || null);
 
   // Redirect if not authenticated
@@ -231,6 +233,11 @@ export default function MeasurementPlanningPage() {
         period={selectedPeriod}
         services={periodServices}
         isLoading={isLoadingServices}
+        canEdit={canEdit}
+        projectId={currentProject?.id || ""}
+        companyId={company?.id || ""}
+        onRefresh={refreshServices}
+        onDeleteService={deleteService}
       />
     </SidebarProvider>
   );

@@ -231,6 +231,38 @@ export function usePeriodPlanning(projectId: string | null) {
     }
   }, [loadPeriods]);
 
+  // Delete a service from a period
+  const deleteService = useCallback(async (serviceId: string) => {
+    try {
+      const { error } = await supabase
+        .from("service_planning_by_period")
+        .delete()
+        .eq("id", serviceId);
+
+      if (error) throw error;
+
+      toast.success("Serviço excluído com sucesso!");
+      // Reload both services and periods to update totals
+      if (selectedPeriodId) {
+        await loadPeriodServices(selectedPeriodId);
+      }
+      await loadPeriods();
+      return true;
+    } catch (error) {
+      console.error("Error deleting service:", error);
+      toast.error("Erro ao excluir serviço");
+      return false;
+    }
+  }, [selectedPeriodId, loadPeriodServices, loadPeriods]);
+
+  // Refresh services for current period
+  const refreshServices = useCallback(async () => {
+    if (selectedPeriodId) {
+      await loadPeriodServices(selectedPeriodId);
+      await loadPeriods(); // Also refresh period totals
+    }
+  }, [selectedPeriodId, loadPeriodServices, loadPeriods]);
+
   // Selecionar período e carregar seus serviços
   const selectPeriod = useCallback(
     (periodId: string | null) => {
@@ -284,6 +316,8 @@ export function usePeriodPlanning(projectId: string | null) {
     overallTotals,
     selectPeriod,
     refreshPeriods: loadPeriods,
+    refreshServices,
+    deleteService,
     approvePeriod,
     changePeriodStatus,
     approvingPeriodId,
