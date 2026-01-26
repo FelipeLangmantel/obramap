@@ -495,7 +495,6 @@ export function useLongTermPlanning(projectId: string | undefined) {
               macro_name: row.macro_name,
               scope_id: row.scope_id,
               scope_name: row.scope_name,
-              macro_color: row.macro_color,
               target_houses: cellData.target_houses,
               unit_cost_value: row.unit_cost_value,
               unit_revenue_value: row.unit_revenue_value,
