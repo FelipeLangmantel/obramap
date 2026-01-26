@@ -53,7 +53,7 @@ export function useMeasurementSuggestions({ projectId }: UseMeasurementSuggestio
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
 
-  // Carregar períodos disponíveis para importação (somente draft ou approved)
+  // Carregar períodos disponíveis para importação (somente approved ou released_to_weekly)
   const loadPeriods = useCallback(async () => {
     if (!projectId || !company?.id) {
       setPeriods([]);
@@ -77,7 +77,7 @@ export function useMeasurementSuggestions({ projectId }: UseMeasurementSuggestio
         return;
       }
 
-      // Buscar períodos da versão ativa
+      // Buscar períodos da versão ativa - APENAS approved ou released_to_weekly
       const { data: periodsData, error: periodsError } = await supabase
         .from("planning_periods")
         .select(`
@@ -90,6 +90,7 @@ export function useMeasurementSuggestions({ projectId }: UseMeasurementSuggestio
         `)
         .eq("project_id", projectId)
         .eq("planning_version_id", version.id)
+        .in("status", ["approved", "released_to_weekly"])
         .order("period_number", { ascending: true });
 
       if (periodsError) throw periodsError;

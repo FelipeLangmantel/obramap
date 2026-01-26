@@ -36,7 +36,7 @@ export default function MeasurementPlanningPage() {
     overallTotals,
     canEdit,
     selectPeriod,
-    approvePeriod,
+    changePeriodStatus,
     approvingPeriodId,
   } = usePeriodPlanning(currentProject?.id || null);
 
@@ -192,9 +192,9 @@ export default function MeasurementPlanningPage() {
                     period={period}
                     isSelected={selectedPeriodId === period.id}
                     onClick={() => handlePeriodClick(period.id)}
-                    onApprove={canEdit ? approvePeriod : undefined}
-                    isApproving={approvingPeriodId === period.id}
-                    canApprove={canEdit}
+                    onStatusChange={canEdit ? changePeriodStatus : undefined}
+                    isChangingStatus={approvingPeriodId === period.id}
+                    canEdit={canEdit}
                   />
                 ))}
               </div>

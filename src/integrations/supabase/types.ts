@@ -1593,7 +1593,7 @@ export type Database = {
           services_at_risk: number | null
           services_capacity_risk: number | null
           start_date: string
-          status: string | null
+          status: string
           target_revenue_total: number | null
           updated_at: string
         }
@@ -1626,7 +1626,7 @@ export type Database = {
           services_at_risk?: number | null
           services_capacity_risk?: number | null
           start_date: string
-          status?: string | null
+          status?: string
           target_revenue_total?: number | null
           updated_at?: string
         }
@@ -1659,7 +1659,7 @@ export type Database = {
           services_at_risk?: number | null
           services_capacity_risk?: number | null
           start_date?: string
-          status?: string | null
+          status?: string
           target_revenue_total?: number | null
           updated_at?: string
         }
@@ -4856,6 +4856,10 @@ export type Database = {
           p_measurement_id: string
           p_project_id: string
         }
+        Returns: Json
+      }
+      update_planning_period_status: {
+        Args: { p_new_status: string; p_period_id: string }
         Returns: Json
       }
       user_belongs_to_company: {

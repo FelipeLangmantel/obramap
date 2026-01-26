@@ -3,7 +3,7 @@ import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, Home, DollarSign, TrendingUp, TrendingDown, CheckCircle2, Lock, Loader2, Users, AlertTriangle } from "lucide-react";
+import { Calendar, Home, DollarSign, TrendingUp, TrendingDown, CheckCircle2, Lock, Loader2, Users, AlertTriangle, Play, Archive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PlanningPeriod, PeriodStatus } from "@/hooks/usePeriodPlanning";
 
@@ -11,17 +11,17 @@ interface PeriodCardProps {
   period: PlanningPeriod;
   isSelected: boolean;
   onClick: () => void;
-  onApprove?: (periodId: string) => void;
-  isApproving?: boolean;
-  canApprove?: boolean;
+  onStatusChange?: (periodId: string, newStatus: PeriodStatus) => void;
+  isChangingStatus?: boolean;
+  canEdit?: boolean;
 }
 
 const getStatusConfig = (status: PeriodStatus) => {
   switch (status) {
     case "approved":
       return { label: "Aprovado", variant: "default" as const, icon: CheckCircle2, className: "bg-blue-500" };
-    case "executing":
-      return { label: "Em Execução", variant: "default" as const, icon: null, className: "bg-amber-500" };
+    case "released_to_weekly":
+      return { label: "Liberado", variant: "default" as const, icon: Play, className: "bg-amber-500" };
     case "closed":
       return { label: "Fechado", variant: "secondary" as const, icon: Lock, className: "" };
     default:
@@ -29,13 +29,26 @@ const getStatusConfig = (status: PeriodStatus) => {
   }
 };
 
+const getNextAction = (status: PeriodStatus) => {
+  switch (status) {
+    case "draft":
+      return { nextStatus: "approved" as PeriodStatus, label: "Aprovar", icon: CheckCircle2 };
+    case "approved":
+      return { nextStatus: "released_to_weekly" as PeriodStatus, label: "Liberar Semanal", icon: Play };
+    case "released_to_weekly":
+      return { nextStatus: "closed" as PeriodStatus, label: "Fechar", icon: Archive };
+    default:
+      return null;
+  }
+};
+
 export function PeriodCard({ 
   period, 
   isSelected, 
   onClick, 
-  onApprove,
-  isApproving,
-  canApprove = true 
+  onStatusChange,
+  isChangingStatus,
+  canEdit = true 
 }: PeriodCardProps) {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -57,13 +70,13 @@ export function PeriodCard({
     : 0;
 
   const statusConfig = getStatusConfig(period.status);
-  const isDraft = period.status === "draft" || period.status === "planned";
-  const isLocked = !isDraft;
+  const nextAction = getNextAction(period.status);
+  const isLocked = period.status === "closed";
 
-  const handleApproveClick = (e: React.MouseEvent) => {
+  const handleActionClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onApprove && isDraft) {
-      onApprove(period.id);
+    if (onStatusChange && nextAction) {
+      onStatusChange(period.id, nextAction.nextStatus);
     }
   };
 
@@ -178,24 +191,24 @@ export function PeriodCard({
           </div>
         </div>
 
-        {/* Botão Aprovar Período */}
-        {isDraft && canApprove && onApprove && (
+        {/* Botão de Ação de Status */}
+        {nextAction && canEdit && onStatusChange && (
           <Button
             className="w-full mt-2"
-            variant="default"
+            variant={period.status === "released_to_weekly" ? "secondary" : "default"}
             size="sm"
-            onClick={handleApproveClick}
-            disabled={isApproving}
+            onClick={handleActionClick}
+            disabled={isChangingStatus}
           >
-            {isApproving ? (
+            {isChangingStatus ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Aprovando...
+                Processando...
               </>
             ) : (
               <>
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-                Aprovar Período
+                <nextAction.icon className="h-4 w-4 mr-2" />
+                {nextAction.label}
               </>
             )}
           </Button>

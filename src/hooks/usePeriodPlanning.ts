@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
-export type PeriodStatus = "draft" | "approved" | "executing" | "closed" | "planned";
+export type PeriodStatus = "draft" | "approved" | "released_to_weekly" | "closed";
 
 export interface PlanningPeriod {
   id: string;
@@ -61,8 +61,7 @@ export function usePeriodPlanning(projectId: string | null) {
   const normalizeStatus = (status: string | null): PeriodStatus => {
     if (!status) return "draft";
     const s = status.toLowerCase();
-    if (s === "approved" || s === "executing" || s === "closed") return s as PeriodStatus;
-    if (s === "planned") return "draft"; // Treat "planned" as "draft" for editing purposes
+    if (s === "approved" || s === "released_to_weekly" || s === "closed") return s as PeriodStatus;
     return "draft";
   };
 
@@ -186,35 +185,46 @@ export function usePeriodPlanning(projectId: string | null) {
     }
   }, []);
 
-  // Aprovar período
+  // Aprovar período (legacy - chama changePeriodStatus)
   const approvePeriod = useCallback(async (periodId: string) => {
+    return changePeriodStatus(periodId, "approved");
+  }, []);
+
+  // Mudar status do período (nova função genérica)
+  const changePeriodStatus = useCallback(async (periodId: string, newStatus: PeriodStatus) => {
     setApprovingPeriodId(periodId);
     try {
-      const { data, error } = await supabase.rpc("approve_planning_period", {
+      const { data, error } = await supabase.rpc("update_planning_period_status", {
         p_period_id: periodId,
+        p_new_status: newStatus,
       });
 
       if (error) throw error;
 
-      const result = data as { success: boolean; error?: string; measurement_id?: string };
+      const result = data as { success: boolean; error?: string; message?: string };
 
       if (!result.success) {
-        if (result.error === "period_not_found") {
-          toast.error("Período não encontrado");
-        } else if (result.error === "period_already_approved") {
-          toast.error("Este período já foi aprovado");
-        } else {
-          toast.error(result.error || "Erro ao aprovar período");
-        }
+        const errorMessages: Record<string, string> = {
+          period_not_found: "Período não encontrado",
+          period_is_closed: "Este período está fechado e não pode ser alterado",
+          invalid_status: "Status inválido",
+          invalid_transition: result.message || "Transição de status não permitida",
+        };
+        toast.error(errorMessages[result.error || ""] || "Erro ao alterar status");
         return false;
       }
 
-      toast.success("Período aprovado com sucesso!");
+      const statusLabels: Record<string, string> = {
+        approved: "aprovado",
+        released_to_weekly: "liberado para planejamento semanal",
+        closed: "fechado",
+      };
+      toast.success(`Período ${statusLabels[newStatus] || "atualizado"} com sucesso!`);
       await loadPeriods(); // Recarregar para atualizar status
       return true;
     } catch (error) {
-      console.error("Erro ao aprovar período:", error);
-      toast.error("Erro ao aprovar período");
+      console.error("Erro ao alterar status do período:", error);
+      toast.error("Erro ao alterar status do período");
       return false;
     } finally {
       setApprovingPeriodId(null);
@@ -275,6 +285,7 @@ export function usePeriodPlanning(projectId: string | null) {
     selectPeriod,
     refreshPeriods: loadPeriods,
     approvePeriod,
+    changePeriodStatus,
     approvingPeriodId,
   };
 }
