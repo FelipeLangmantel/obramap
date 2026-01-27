@@ -232,14 +232,14 @@ export function AddServiceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>
             {isEditing ? "Editar Serviço" : "Adicionar Serviço"}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 overflow-y-auto flex-1 min-h-0">
           {isLoadingServices ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -402,7 +402,7 @@ export function AddServiceDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex-shrink-0 pt-4 border-t">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
             Cancelar
           </Button>
