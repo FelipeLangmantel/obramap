@@ -1594,6 +1594,7 @@ export type Database = {
           services_capacity_risk: number | null
           start_date: string
           status: string
+          supplies_generated_at: string | null
           target_revenue_total: number | null
           updated_at: string
         }
@@ -1627,6 +1628,7 @@ export type Database = {
           services_capacity_risk?: number | null
           start_date: string
           status?: string
+          supplies_generated_at?: string | null
           target_revenue_total?: number | null
           updated_at?: string
         }
@@ -1660,6 +1662,7 @@ export type Database = {
           services_capacity_risk?: number | null
           start_date?: string
           status?: string
+          supplies_generated_at?: string | null
           target_revenue_total?: number | null
           updated_at?: string
         }
@@ -3968,6 +3971,7 @@ export type Database = {
           item_id: string | null
           item_name: string
           item_unit: string | null
+          lead_time_days: number | null
           macro_id: string | null
           measurement_id: string | null
           notes: string | null
@@ -3993,6 +3997,7 @@ export type Database = {
           item_id?: string | null
           item_name: string
           item_unit?: string | null
+          lead_time_days?: number | null
           macro_id?: string | null
           measurement_id?: string | null
           notes?: string | null
@@ -4018,6 +4023,7 @@ export type Database = {
           item_id?: string | null
           item_name?: string
           item_unit?: string | null
+          lead_time_days?: number | null
           macro_id?: string | null
           measurement_id?: string | null
           notes?: string | null
@@ -4486,6 +4492,10 @@ export type Database = {
       generate_service_risk_alert: {
         Args: { p_new_risk: string; p_service_id: string }
         Returns: undefined
+      }
+      generate_supplies_from_planning_period: {
+        Args: { p_period_id: string }
+        Returns: Json
       }
       generate_supply_requests_from_planning: {
         Args: { p_measurement_id?: string; p_project_id: string }

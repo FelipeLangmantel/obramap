@@ -16,6 +16,7 @@ export interface PlanningPeriod {
   end_date: string;
   status: PeriodStatus;
   is_closed: boolean | null;
+  supplies_generated_at: string | null;
   // Campos calculados
   total_planned_houses: number;
   total_planned_cost: number;
@@ -127,6 +128,7 @@ export function usePeriodPlanning(projectId: string | null) {
             ...totals,
             capacity_gap,
             status: normalizeStatus(period.status),
+            supplies_generated_at: period.supplies_generated_at,
           } as PlanningPeriod;
         })
       );
@@ -220,6 +222,30 @@ export function usePeriodPlanning(projectId: string | null) {
         closed: "fechado",
       };
       toast.success(`Período ${statusLabels[newStatus] || "atualizado"} com sucesso!`);
+
+      // Gerar suprimentos automaticamente quando aprovado
+      if (newStatus === "approved") {
+        toast.info("Gerando suprimentos automaticamente...");
+        const supplyResult = await supabase.rpc("generate_supplies_from_planning_period", {
+          p_period_id: periodId,
+        });
+
+        if (supplyResult.error) {
+          console.error("Erro ao gerar suprimentos:", supplyResult.error);
+          toast.warning("Período aprovado, mas houve erro ao gerar suprimentos");
+        } else {
+          const supplyData = supplyResult.data as { success: boolean; inserted_count?: number };
+          if (supplyData.success) {
+            // Atualizar timestamp de suprimentos gerados
+            await supabase
+              .from("planning_periods")
+              .update({ supplies_generated_at: new Date().toISOString() })
+              .eq("id", periodId);
+            toast.success(`Suprimentos gerados: ${supplyData.inserted_count || 0} itens`);
+          }
+        }
+      }
+
       await loadPeriods(); // Recarregar para atualizar status
       return true;
     } catch (error) {
@@ -231,7 +257,41 @@ export function usePeriodPlanning(projectId: string | null) {
     }
   }, [loadPeriods]);
 
-  // Delete a service from a period
+  // Gerar suprimentos a partir do planejamento aprovado
+  const generateSupplies = useCallback(async (periodId: string) => {
+    try {
+      const { data, error } = await supabase.rpc("generate_supplies_from_planning_period", {
+        p_period_id: periodId,
+      });
+
+      if (error) throw error;
+
+      const result = data as { success: boolean; error?: string; message?: string; inserted_count?: number; deleted_count?: number };
+
+      if (!result.success) {
+        const errorMessages: Record<string, string> = {
+          period_not_found: "Período não encontrado",
+          invalid_status: result.message || "Suprimentos só podem ser gerados para períodos aprovados",
+        };
+        toast.error(errorMessages[result.error || ""] || "Erro ao gerar suprimentos");
+        return false;
+      }
+
+      // Atualizar o campo supplies_generated_at
+      await supabase
+        .from("planning_periods")
+        .update({ supplies_generated_at: new Date().toISOString() })
+        .eq("id", periodId);
+
+      toast.success(`Suprimentos gerados: ${result.inserted_count || 0} itens criados`);
+      await loadPeriods();
+      return true;
+    } catch (error) {
+      console.error("Erro ao gerar suprimentos:", error);
+      toast.error("Erro ao gerar suprimentos");
+      return false;
+    }
+  }, [loadPeriods]);
   const deleteService = useCallback(async (serviceId: string) => {
     try {
       const { error } = await supabase
@@ -321,5 +381,6 @@ export function usePeriodPlanning(projectId: string | null) {
     approvePeriod,
     changePeriodStatus,
     approvingPeriodId,
+    generateSupplies,
   };
 }
