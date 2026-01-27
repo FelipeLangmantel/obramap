@@ -3,7 +3,7 @@ import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, Home, DollarSign, TrendingUp, TrendingDown, CheckCircle2, Lock, Loader2, Users, AlertTriangle, Play, Archive } from "lucide-react";
+import { Calendar, Home, DollarSign, TrendingUp, TrendingDown, CheckCircle2, Lock, Loader2, Users, AlertTriangle, Play, Archive, Package, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PlanningPeriod, PeriodStatus } from "@/hooks/usePeriodPlanning";
 
@@ -12,7 +12,9 @@ interface PeriodCardProps {
   isSelected: boolean;
   onClick: () => void;
   onStatusChange?: (periodId: string, newStatus: PeriodStatus) => void;
+  onGenerateSupplies?: (periodId: string) => void;
   isChangingStatus?: boolean;
+  isGeneratingSupplies?: boolean;
   canEdit?: boolean;
 }
 
@@ -47,7 +49,9 @@ export function PeriodCard({
   isSelected, 
   onClick, 
   onStatusChange,
+  onGenerateSupplies,
   isChangingStatus,
+  isGeneratingSupplies,
   canEdit = true 
 }: PeriodCardProps) {
   const formatCurrency = (value: number) => {
@@ -191,6 +195,28 @@ export function PeriodCard({
           </div>
         </div>
 
+        {/* Indicador de Suprimentos (apenas para aprovados ou posterior) */}
+        {(period.status === "approved" || period.status === "released_to_weekly" || period.status === "closed") && (
+          <div className="flex items-center justify-between pt-2 border-t">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Package className="h-4 w-4" />
+              <span>Suprimentos</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {period.supplies_generated_at ? (
+                <Badge variant="outline" className="text-xs text-emerald-600 border-emerald-200 bg-emerald-50">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Gerados
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-xs text-amber-600 border-amber-200 bg-amber-50">
+                  Pendente
+                </Badge>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Botão de Ação de Status */}
         {nextAction && canEdit && onStatusChange && (
           <Button
@@ -198,7 +224,7 @@ export function PeriodCard({
             variant={period.status === "released_to_weekly" ? "secondary" : "default"}
             size="sm"
             onClick={handleActionClick}
-            disabled={isChangingStatus}
+            disabled={isChangingStatus || isGeneratingSupplies}
           >
             {isChangingStatus ? (
               <>
@@ -209,6 +235,32 @@ export function PeriodCard({
               <>
                 <nextAction.icon className="h-4 w-4 mr-2" />
                 {nextAction.label}
+              </>
+            )}
+          </Button>
+        )}
+
+        {/* Botão de Regerar Suprimentos (apenas para aprovados) */}
+        {period.status === "approved" && canEdit && onGenerateSupplies && (
+          <Button
+            className="w-full mt-2"
+            variant="outline"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onGenerateSupplies(period.id);
+            }}
+            disabled={isGeneratingSupplies || isChangingStatus}
+          >
+            {isGeneratingSupplies ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Gerando...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                {period.supplies_generated_at ? "Regerar Suprimentos" : "Gerar Suprimentos"}
               </>
             )}
           </Button>

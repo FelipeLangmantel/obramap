@@ -40,7 +40,16 @@ export default function MeasurementPlanningPage() {
     approvingPeriodId,
     refreshServices,
     deleteService,
+    generateSupplies,
   } = usePeriodPlanning(currentProject?.id || null);
+
+  const [generatingSuppliesPeriodId, setGeneratingSuppliesPeriodId] = useState<string | null>(null);
+
+  const handleGenerateSupplies = async (periodId: string) => {
+    setGeneratingSuppliesPeriodId(periodId);
+    await generateSupplies(periodId);
+    setGeneratingSuppliesPeriodId(null);
+  };
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -195,7 +204,9 @@ export default function MeasurementPlanningPage() {
                     isSelected={selectedPeriodId === period.id}
                     onClick={() => handlePeriodClick(period.id)}
                     onStatusChange={canEdit ? changePeriodStatus : undefined}
+                    onGenerateSupplies={canEdit ? handleGenerateSupplies : undefined}
                     isChangingStatus={approvingPeriodId === period.id}
+                    isGeneratingSupplies={generatingSuppliesPeriodId === period.id}
                     canEdit={canEdit}
                   />
                 ))}
