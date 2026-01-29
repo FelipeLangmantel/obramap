@@ -292,6 +292,43 @@ export function usePeriodPlanning(projectId: string | null) {
       return false;
     }
   }, [loadPeriods]);
+
+  // Update period dates
+  const updatePeriodDates = useCallback(async (periodId: string, startDate: string, endDate: string) => {
+    try {
+      // First check the period status
+      const period = periods.find(p => p.id === periodId);
+      if (!period) {
+        toast.error("Período não encontrado");
+        return false;
+      }
+
+      // Only allow editing for draft or approved status
+      if (period.status === "released_to_weekly" || period.status === "closed") {
+        toast.error("Não é possível editar um período liberado ou fechado");
+        return false;
+      }
+
+      const { error } = await supabase
+        .from("planning_periods")
+        .update({ 
+          start_date: startDate, 
+          end_date: endDate,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", periodId);
+
+      if (error) throw error;
+
+      toast.success("Período atualizado com sucesso!");
+      await loadPeriods(); // Refresh to recalculate capacity
+      return true;
+    } catch (error) {
+      console.error("Erro ao atualizar período:", error);
+      toast.error("Erro ao atualizar período");
+      return false;
+    }
+  }, [periods, loadPeriods]);
   const deleteService = useCallback(async (serviceId: string) => {
     try {
       const { error } = await supabase
@@ -382,5 +419,6 @@ export function usePeriodPlanning(projectId: string | null) {
     changePeriodStatus,
     approvingPeriodId,
     generateSupplies,
+    updatePeriodDates,
   };
 }

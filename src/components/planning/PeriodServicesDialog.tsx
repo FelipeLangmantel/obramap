@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { AlertTriangle, Users, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { AlertTriangle, Users, Plus, Pencil, Trash2, Loader2, CalendarClock } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,7 @@ import {
 import { cn } from "@/lib/utils";
 import { PlanningPeriod, PeriodService } from "@/hooks/usePeriodPlanning";
 import { AddServiceDialog } from "./AddServiceDialog";
+import { EditPeriodDialog } from "./EditPeriodDialog";
 
 interface PeriodServicesDialogProps {
   open: boolean;
@@ -44,6 +45,7 @@ interface PeriodServicesDialogProps {
   companyId: string;
   onRefresh: () => void;
   onDeleteService: (serviceId: string) => Promise<boolean>;
+  onUpdatePeriodDates?: (periodId: string, startDate: string, endDate: string) => Promise<boolean>;
 }
 
 export function PeriodServicesDialog({
@@ -57,8 +59,10 @@ export function PeriodServicesDialog({
   companyId,
   onRefresh,
   onDeleteService,
+  onUpdatePeriodDates,
 }: PeriodServicesDialogProps) {
   const [addServiceOpen, setAddServiceOpen] = useState(false);
+  const [editPeriodOpen, setEditPeriodOpen] = useState(false);
   const [editingService, setEditingService] = useState<PeriodService | null>(null);
   const [deletingServiceId, setDeletingServiceId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -136,14 +140,28 @@ export function PeriodServicesDialog({
         <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <div className="flex items-center justify-between">
-              <div>
-                <DialogTitle>
-                  {period?.name || `Quinzena ${period?.period_number}`}
-                </DialogTitle>
-                {period && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Período: {formatDateRange(period.start_date, period.end_date)}
-                  </p>
+              <div className="flex items-center gap-3">
+                <div>
+                  <DialogTitle>
+                    {period?.name || `Quinzena ${period?.period_number}`}
+                  </DialogTitle>
+                  {period && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Período: {formatDateRange(period.start_date, period.end_date)}
+                    </p>
+                  )}
+                </div>
+                {/* Edit Period Button - only for draft/approved */}
+                {canEdit && (period?.status === "draft" || period?.status === "approved") && onUpdatePeriodDates && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setEditPeriodOpen(true)}
+                    title="Editar período"
+                  >
+                    <CalendarClock className="h-4 w-4" />
+                  </Button>
                 )}
               </div>
               {canEdit && periodAllowsEdit && (
@@ -357,6 +375,16 @@ export function PeriodServicesDialog({
         />
       )}
 
+      {/* Edit Period Dialog */}
+      {period && onUpdatePeriodDates && (
+        <EditPeriodDialog
+          open={editPeriodOpen}
+          onOpenChange={setEditPeriodOpen}
+          period={period}
+          onSave={onUpdatePeriodDates}
+        />
+      )}
+
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deletingServiceId} onOpenChange={(open) => !open && setDeletingServiceId(null)}>
         <AlertDialogContent>
@@ -372,7 +400,7 @@ export function PeriodServicesDialog({
             <AlertDialogAction
               onClick={handleDeleteConfirm}
               disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-destructive hover:bg-destructive/90"
             >
               {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Excluir

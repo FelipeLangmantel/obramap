@@ -41,6 +41,7 @@ export default function MeasurementPlanningPage() {
     refreshServices,
     deleteService,
     generateSupplies,
+    updatePeriodDates,
   } = usePeriodPlanning(currentProject?.id || null);
 
   const [generatingSuppliesPeriodId, setGeneratingSuppliesPeriodId] = useState<string | null>(null);
@@ -249,6 +250,7 @@ export default function MeasurementPlanningPage() {
         companyId={company?.id || ""}
         onRefresh={refreshServices}
         onDeleteService={deleteService}
+        onUpdatePeriodDates={updatePeriodDates}
       />
     </SidebarProvider>
   );
