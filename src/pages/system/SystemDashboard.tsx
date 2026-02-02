@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Building2, Users, LogOut, Package } from "lucide-react";
+import { Loader2, Building2, Users, LogOut, Package, Shield } from "lucide-react";
 import obraMapLogo from "@/assets/obramap-logo-new.png";
 import CompanyManagement from "@/components/admin/CompanyManagement";
 import SystemUserManagement from "@/components/admin/SystemUserManagement";
@@ -114,10 +114,16 @@ export default function SystemDashboard() {
               <p className="text-sm text-muted-foreground">Administração Global</p>
             </div>
           </div>
-          <Button variant="outline" onClick={handleLogout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Sair
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => navigate("/system/modules")}>
+              <Shield className="h-4 w-4 mr-2" />
+              Governança de Módulos
+            </Button>
+            <Button variant="outline" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Sair
+            </Button>
+          </div>
         </div>
       </header>
 

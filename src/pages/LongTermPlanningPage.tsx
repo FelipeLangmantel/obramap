@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 import { supabase } from "@/integrations/supabase/client";
+import { ModuleAccessGuard } from "@/components/guards/ModuleAccessGuard";
 
 export default function LongTermPlanningPage() {
   const navigate = useNavigate();
@@ -62,9 +63,10 @@ export default function LongTermPlanningPage() {
   };
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
-        <AppSidebar activeView="planning" onViewChange={handleViewChange} />
+    <ModuleAccessGuard moduleKey="long-term-planning">
+      <SidebarProvider>
+        <div className="min-h-screen flex w-full bg-background">
+          <AppSidebar activeView="planning" onViewChange={handleViewChange} />
 
         <main className="flex-1 overflow-auto">
           {/* Header */}
@@ -174,6 +176,7 @@ export default function LongTermPlanningPage() {
           </div>
         </main>
       </div>
-    </SidebarProvider>
+      </SidebarProvider>
+    </ModuleAccessGuard>
   );
 }

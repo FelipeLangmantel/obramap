@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { usePeriodPlanning } from "@/hooks/usePeriodPlanning";
+import { ModuleAccessGuard } from "@/components/guards/ModuleAccessGuard";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -93,9 +94,10 @@ export default function MeasurementPlanningPage() {
   }
 
   return (
-    <SidebarProvider defaultOpen={false}>
-      <div className="flex min-h-screen w-full bg-background">
-        <AppSidebar activeView="planning" onViewChange={() => navigate("/")} />
+    <ModuleAccessGuard moduleKey="measurement-planning">
+      <SidebarProvider defaultOpen={false}>
+        <div className="flex min-h-screen w-full bg-background">
+          <AppSidebar activeView="planning" onViewChange={() => navigate("/")} />
 
         <main className="flex-1 overflow-auto">
           <div className="sticky top-0 z-10 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b px-4 py-3">
@@ -252,6 +254,7 @@ export default function MeasurementPlanningPage() {
         onDeleteService={deleteService}
         onUpdatePeriodDates={updatePeriodDates}
       />
-    </SidebarProvider>
+      </SidebarProvider>
+    </ModuleAccessGuard>
   );
 }

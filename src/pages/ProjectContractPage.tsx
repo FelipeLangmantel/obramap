@@ -12,6 +12,7 @@ import { ContractConfigCard } from "@/components/contract/ContractConfigCard";
 import { Button } from "@/components/ui/button";
 import { Loader2, Save, ArrowRight, AlertTriangle, Edit } from "lucide-react";
 import { toast } from "sonner";
+import { ModuleAccessGuard } from "@/components/guards/ModuleAccessGuard";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -115,26 +116,29 @@ export default function ProjectContractPage() {
 
   if (loading) {
     return (
-      <SidebarProvider>
-        <div className="flex min-h-screen w-full bg-background">
-          <AppSidebar activeView="costs" onViewChange={() => {}} />
-          <SidebarInset className="flex-1">
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center space-y-4">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-                <p className="text-muted-foreground">Carregando contrato...</p>
+      <ModuleAccessGuard moduleKey="project-contract">
+        <SidebarProvider>
+          <div className="flex min-h-screen w-full bg-background">
+            <AppSidebar activeView="costs" onViewChange={() => {}} />
+            <SidebarInset className="flex-1">
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center space-y-4">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+                  <p className="text-muted-foreground">Carregando contrato...</p>
+                </div>
               </div>
-            </div>
-          </SidebarInset>
-        </div>
-      </SidebarProvider>
+            </SidebarInset>
+          </div>
+        </SidebarProvider>
+      </ModuleAccessGuard>
     );
   }
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-background">
-        <AppSidebar activeView="costs" onViewChange={() => {}} />
+    <ModuleAccessGuard moduleKey="project-contract">
+      <SidebarProvider>
+        <div className="flex min-h-screen w-full bg-background">
+          <AppSidebar activeView="costs" onViewChange={() => {}} />
         <SidebarInset className="flex-1">
           <div className="container mx-auto py-6 px-4 space-y-6 max-w-7xl">
             <ContractHeader 
@@ -250,6 +254,7 @@ export default function ProjectContractPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </SidebarProvider>
+      </SidebarProvider>
+    </ModuleAccessGuard>
   );
 }
