@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -62,8 +62,8 @@ type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "intera
 type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract";
 type MenuViewType = ViewType | RouteViewType;
 
-// Mapeamento de views para rotas
-const ROUTE_VIEWS: Record<RouteViewType, string> = {
+// Rotas dedicadas (navegam para páginas separadas)
+const DEDICATED_ROUTE_MAP: Record<RouteViewType, string> = {
   "measurement-planning": "/measurement-planning",
   "long-term-planning": "/long-term-planning",
   "project-contract": "/project-contract",
@@ -100,9 +100,24 @@ const VIEW_TO_MODULE_KEY: Record<string, string> = {
 
 export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const navigate = useNavigate();
-  const { state, setOpen } = useSidebar();
-  const collapsed = state === "collapsed";
-  const { profile, company, role, signOut, isAdmin, canEdit, canAccessMenu, canAccessManagement, canAccessProject, systemRole, isCompanyAdmin } = useAuth();
+  const location = useLocation();
+  useSidebar(); // Hook mantido para funcionalidade interna
+  
+  // ✅ CORREÇÃO CRÍTICA: Derivar item ativo da rota atual, não do estado
+  const getActiveView = (): MenuViewType => {
+    const pathname = location.pathname;
+    
+    // Verificar rotas dedicadas primeiro
+    if (pathname === "/measurement-planning") return "measurement-planning";
+    if (pathname === "/long-term-planning") return "long-term-planning";
+    if (pathname === "/project-contract") return "project-contract";
+    
+    // Se estiver na rota raiz, usar o activeView prop (estado interno do Index)
+    return activeView;
+  };
+  
+  const currentActiveView = getActiveView();
+  const { profile, company, signOut, isAdmin, canEdit, canAccessMenu, canAccessManagement, systemRole, isCompanyAdmin } = useAuth();
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
   const [projectsListOpen, setProjectsListOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -156,7 +171,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const getRoleLabel = () => {
     // Priorizar system_role para exibição
     if (systemRole === "admin" || isCompanyAdmin) return "Administrador";
-    if (systemRole === "editor" || role === "editor") return "Editor";
+    if (systemRole === "editor") return "Editor";
     return "Usuário";
   };
 
@@ -268,9 +283,9 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   });
 
   const handleViewChange = (view: MenuViewType) => {
-    // Se for uma view com rota separada, navegar
-    if (view in ROUTE_VIEWS) {
-      navigate(ROUTE_VIEWS[view as RouteViewType]);
+    // ✅ Se for uma view com rota dedicada, navegar para a página
+    if (view in DEDICATED_ROUTE_MAP) {
+      navigate(DEDICATED_ROUTE_MAP[view as RouteViewType]);
       return;
     }
 
@@ -285,11 +300,12 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       }
     }
     
+    // ✅ Se estiver em rota diferente de /, primeiro navegar para /
+    if (location.pathname !== "/") {
+      navigate("/");
+    }
+    
     onViewChange(view as ViewType);
-  };
-
-  const handleToggleSidebar = () => {
-    setOpen(!collapsed);
   };
 
   return (
@@ -319,15 +335,17 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                 {visibleMenuItems.map((item) => {
                   const moduleStatus = getModuleStatus(item.view);
                   const isDevelopment = moduleStatus === "development";
+                  // ✅ CORREÇÃO: Usar currentActiveView derivado da rota
+                  const isActive = currentActiveView === item.view;
                   
                   return (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         onClick={() => handleViewChange(item.view)}
-                        isActive={activeView === item.view}
+                        isActive={isActive}
                         className={cn(
                           "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
-                          activeView === item.view 
+                          isActive 
                             ? "bg-primary text-primary-foreground font-semibold shadow-sm" 
                             : "text-foreground hover:bg-accent hover:text-accent-foreground font-medium",
                           isDevelopment && "opacity-70"
@@ -336,7 +354,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                         <item.icon className="h-5 w-5 shrink-0" />
                         <span className="text-sm">{item.title}</span>
                         {isDevelopment && (
-                          <span className="ml-auto text-xs bg-yellow-500/20 text-yellow-600 px-1.5 py-0.5 rounded">
+                          <span className="ml-auto text-xs bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded">
                             Em breve
                           </span>
                         )}
@@ -403,10 +421,10 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => onViewChange("inputs")}
-                      isActive={activeView === "inputs"}
+                      isActive={currentActiveView === "inputs"}
                       className={cn(
                         "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
-                        activeView === "inputs" 
+                        currentActiveView === "inputs" 
                           ? "bg-primary text-primary-foreground font-medium shadow-sm" 
                           : "text-foreground hover:bg-accent hover:text-accent-foreground"
                       )}
@@ -420,10 +438,10 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => onViewChange("suppliers")}
-                      isActive={activeView === "suppliers"}
+                      isActive={currentActiveView === "suppliers"}
                       className={cn(
                         "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
-                        activeView === "suppliers" 
+                        currentActiveView === "suppliers" 
                           ? "bg-primary text-primary-foreground font-medium shadow-sm" 
                           : "text-foreground hover:bg-accent hover:text-accent-foreground"
                       )}
