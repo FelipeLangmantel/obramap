@@ -14,6 +14,7 @@ import Auth from "./pages/Auth";
 import ChangePassword from "./pages/ChangePassword";
 import NotFound from "./pages/NotFound";
 import SystemDashboard from "./pages/system/SystemDashboard";
+import SystemModulesPage from "./pages/system/SystemModulesPage";
 import LegacyDataMigration from "./pages/admin/LegacyDataMigration";
 import MeasurementPlanningPage from "./pages/MeasurementPlanningPage";
 import LongTermPlanningPage from "./pages/LongTermPlanningPage";
@@ -71,6 +72,7 @@ const App = () => (
               {/* ========== ROTAS DE SISTEMA (System Admin) ========== */}
               <Route element={<SystemLayout />}>
                 <Route path="/system/dashboard" element={<SystemDashboard />} />
+                <Route path="/system/modules" element={<SystemModulesPage />} />
                 <Route path="/system/migration" element={<LegacyDataMigration />} />
                 {/* Fallback de admin antigo para novo sistema */}
                 <Route path="/admin/dashboard" element={<SystemDashboard />} />

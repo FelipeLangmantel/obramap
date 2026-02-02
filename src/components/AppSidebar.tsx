@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSystemModules } from "@/hooks/useSystemModules";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Sidebar,
@@ -15,6 +16,7 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Badge } from "@/components/ui/badge";
 import { 
   LayoutDashboard, 
   ClipboardList,
@@ -37,7 +39,9 @@ import {
   Crown,
   ClipboardCheck,
   Calculator,
-  Calendar
+  Calendar,
+  Beaker,
+  EyeOff
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -117,7 +121,11 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   };
   
   const currentActiveView = getActiveView();
-  const { profile, company, signOut, isAdmin, canEdit, canAccessMenu, canAccessManagement, systemRole, isCompanyAdmin } = useAuth();
+  const { profile, company, signOut, isAdmin, canEdit, canAccessMenu, canAccessManagement, systemRole, isCompanyAdmin, isSystemAdmin } = useAuth();
+  
+  // ✅ Hook para governança global de módulos
+  const { isModuleEnabled, isModuleBeta } = useSystemModules();
+  
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
   const [projectsListOpen, setProjectsListOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -269,14 +277,20 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     },
   ];
 
-  // Filter menu items based on user permissions AND module status
+  // Filter menu items based on user permissions, company module status, AND system governance
   const visibleMenuItems = mainMenuItems.filter(item => {
     // Primeiro verificar permissões do usuário
     if (!canAccessMenu(item.permissionId)) return false;
     
+    // ✅ GOVERNANÇA GLOBAL: Verificar se módulo está habilitado no sistema
+    // System Admin sempre vê todos os módulos
+    if (!isSystemAdmin && !isModuleEnabled(item.view)) {
+      return false;
+    }
+    
     // Depois verificar status do módulo da empresa
     const moduleStatus = getModuleStatus(item.view);
-    // Ocultar módulos desativados
+    // Ocultar módulos desativados pela empresa
     if (moduleStatus === "disabled") return false;
     
     return true;
@@ -337,6 +351,9 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                   const isDevelopment = moduleStatus === "development";
                   // ✅ CORREÇÃO: Usar currentActiveView derivado da rota
                   const isActive = currentActiveView === item.view;
+                  // ✅ Status de governança global (apenas para System Admin)
+                  const isBeta = isModuleBeta(item.view);
+                  const isDisabledGlobally = !isModuleEnabled(item.view);
                   
                   return (
                     <SidebarMenuItem key={item.title}>
@@ -348,16 +365,33 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                           isActive 
                             ? "bg-primary text-primary-foreground font-semibold shadow-sm" 
                             : "text-foreground hover:bg-accent hover:text-accent-foreground font-medium",
-                          isDevelopment && "opacity-70"
+                          isDevelopment && "opacity-70",
+                          isDisabledGlobally && isSystemAdmin && "opacity-50"
                         )}
                       >
                         <item.icon className="h-5 w-5 shrink-0" />
                         <span className="text-sm">{item.title}</span>
-                        {isDevelopment && (
-                          <span className="ml-auto text-xs bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded">
-                            Em breve
-                          </span>
-                        )}
+                        
+                        {/* Badges de status para System Admin */}
+                        <div className="ml-auto flex items-center gap-1">
+                          {isSystemAdmin && isBeta && (
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-amber-500/10 text-amber-600 border-amber-500/30">
+                              <Beaker className="h-2.5 w-2.5 mr-0.5" />
+                              Beta
+                            </Badge>
+                          )}
+                          {isSystemAdmin && isDisabledGlobally && (
+                            <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
+                              <EyeOff className="h-2.5 w-2.5 mr-0.5" />
+                              Off
+                            </Badge>
+                          )}
+                          {isDevelopment && !isSystemAdmin && (
+                            <span className="text-xs bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded">
+                              Em breve
+                            </span>
+                          )}
+                        </div>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );

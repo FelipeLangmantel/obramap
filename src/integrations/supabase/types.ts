@@ -4116,6 +4116,42 @@ export type Database = {
           },
         ]
       }
+      system_modules: {
+        Row: {
+          created_at: string
+          description: string | null
+          display_order: number
+          id: string
+          is_beta: boolean
+          is_enabled: boolean
+          key: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          is_beta?: boolean
+          is_enabled?: boolean
+          key: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          is_beta?: boolean
+          is_enabled?: boolean
+          key?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       units: {
         Row: {
           abbreviation: string
@@ -4708,7 +4744,9 @@ export type Database = {
         Args: { p_company_id: string; p_house_id: string; p_project_id: string }
         Returns: boolean
       }
-      is_system_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_system_admin:
+        | { Args: never; Returns: boolean }
+        | { Args: { _user_id: string }; Returns: boolean }
       link_houses_to_measurement: {
         Args: {
           p_company_id: string
