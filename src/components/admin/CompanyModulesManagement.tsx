@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -34,53 +33,54 @@ interface Company {
   slug: string;
 }
 
-interface CompanyModule {
+interface SystemModule {
   id: string;
-  company_id: string;
-  module_key: string;
-  module_name: string;
-  status: "active" | "development" | "disabled";
+  key: string;
+  name: string;
   description: string | null;
-  expected_benefits: string | null;
+  display_order: number;
 }
 
-interface CompanyWithModules extends Company {
-  modules: CompanyModule[];
+interface CompanyModuleStatus {
+  id?: string;
+  company_id: string;
+  module_key: string;
+  status: "active" | "development" | "disabled";
 }
 
 export default function CompanyModulesManagement() {
-  const [companiesWithModules, setCompaniesWithModules] = useState<CompanyWithModules[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [systemModules, setSystemModules] = useState<SystemModule[]>([]);
+  const [companyModuleStatuses, setCompanyModuleStatuses] = useState<Map<string, CompanyModuleStatus>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
   const [updatingModule, setUpdatingModule] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
-      const [companiesResult, modulesResult] = await Promise.all([
+      const [companiesResult, systemModulesResult, companyModulesResult] = await Promise.all([
         supabase.from("companies").select("id, name, slug").order("name"),
-        supabase.from("company_modules").select("*").order("module_name"),
+        supabase.from("system_modules").select("id, key, name, description, display_order").order("display_order"),
+        supabase.from("company_modules").select("id, company_id, module_key, status"),
       ]);
 
       if (companiesResult.error) throw companiesResult.error;
-      if (modulesResult.error) throw modulesResult.error;
+      if (systemModulesResult.error) throw systemModulesResult.error;
+      if (companyModulesResult.error) throw companyModulesResult.error;
 
-      const companies = companiesResult.data || [];
-      const modules = (modulesResult.data || []) as CompanyModule[];
+      setCompanies(companiesResult.data || []);
+      setSystemModules(systemModulesResult.data || []);
 
-      // Agrupar módulos por empresa
-      const companiesMap = new Map<string, CompanyWithModules>();
-      companies.forEach((company) => {
-        companiesMap.set(company.id, { ...company, modules: [] });
+      // Create a map for quick lookup
+      const statusMap = new Map<string, CompanyModuleStatus>();
+      (companyModulesResult.data || []).forEach((cm: any) => {
+        const key = `${cm.company_id}-${cm.module_key}`;
+        statusMap.set(key, cm);
       });
+      setCompanyModuleStatuses(statusMap);
 
-      modules.forEach((module) => {
-        if (companiesMap.has(module.company_id)) {
-          companiesMap.get(module.company_id)!.modules.push(module);
-        }
-      });
-
-      setCompaniesWithModules(Array.from(companiesMap.values()));
-      setExpandedCompanies(new Set(companies.map(c => c.id)));
+      // Expand all companies by default
+      setExpandedCompanies(new Set(companiesResult.data?.map(c => c.id) || []));
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("Erro ao carregar dados");
@@ -105,27 +105,89 @@ export default function CompanyModulesManagement() {
     });
   };
 
-  const handleStatusChange = async (moduleId: string, newStatus: "active" | "development" | "disabled") => {
-    setUpdatingModule(moduleId);
-    try {
-      const { error } = await supabase
-        .from("company_modules")
-        .update({ status: newStatus })
-        .eq("id", moduleId);
+  const getModuleStatus = (companyId: string, moduleKey: string): "active" | "development" | "disabled" => {
+    const key = `${companyId}-${moduleKey}`;
+    const status = companyModuleStatuses.get(key);
+    return status?.status || "active"; // Default to active
+  };
 
-      if (error) throw error;
-      
+  const getActiveModulesCount = (companyId: string): number => {
+    return systemModules.filter(sm => {
+      const status = getModuleStatus(companyId, sm.key);
+      return status === "active" || status === "development";
+    }).length;
+  };
+
+  const handleStatusChange = async (
+    companyId: string, 
+    moduleKey: string, 
+    moduleName: string,
+    newStatus: "active" | "development" | "disabled"
+  ) => {
+    const updateKey = `${companyId}-${moduleKey}`;
+    setUpdatingModule(updateKey);
+
+    try {
+      const existingStatus = companyModuleStatuses.get(updateKey);
+
+      if (existingStatus?.id) {
+        // Update existing record
+        const { error } = await supabase
+          .from("company_modules")
+          .update({ 
+            status: newStatus,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", existingStatus.id);
+
+        if (error) throw error;
+
+        // Update local state
+        setCompanyModuleStatuses(prev => {
+          const next = new Map(prev);
+          next.set(updateKey, { ...existingStatus, status: newStatus });
+          return next;
+        });
+      } else {
+        // Insert new record
+        const sysModule = systemModules.find(m => m.key === moduleKey);
+        const { data, error } = await supabase
+          .from("company_modules")
+          .insert({
+            company_id: companyId,
+            module_key: moduleKey,
+            module_name: sysModule?.name || moduleName,
+            description: sysModule?.description || null,
+            status: newStatus,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // Update local state
+        setCompanyModuleStatuses(prev => {
+          const next = new Map(prev);
+          next.set(updateKey, {
+            id: data.id,
+            company_id: companyId,
+            module_key: moduleKey,
+            status: newStatus,
+          });
+          return next;
+        });
+      }
+
       toast.success("Status do módulo atualizado!");
-      fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating module status:", error);
-      toast.error("Erro ao atualizar status");
+      toast.error("Erro ao atualizar status: " + (error.message || "Erro desconhecido"));
     } finally {
       setUpdatingModule(null);
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: "active" | "development" | "disabled") => {
     switch (status) {
       case "active":
         return (
@@ -148,8 +210,6 @@ export default function CompanyModulesManagement() {
             Desativado
           </Badge>
         );
-      default:
-        return <Badge variant="outline">{status}</Badge>;
     }
   };
 
@@ -179,7 +239,7 @@ export default function CompanyModulesManagement() {
       <CardContent>
         <ScrollArea className="h-[500px]">
           <div className="space-y-3">
-            {companiesWithModules.map((company) => (
+            {companies.map((company) => (
               <Collapsible
                 key={company.id}
                 open={expandedCompanies.has(company.id)}
@@ -200,7 +260,7 @@ export default function CompanyModulesManagement() {
                         <div className="text-left">
                           <h3 className="font-semibold">{company.name}</h3>
                           <p className="text-sm text-muted-foreground">
-                            {company.modules.filter(m => m.status === "active").length} módulos ativos
+                            {getActiveModulesCount(company.id)} módulos ativos
                           </p>
                         </div>
                       </div>
@@ -208,59 +268,65 @@ export default function CompanyModulesManagement() {
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div className="border-t divide-y">
-                      {company.modules.length === 0 ? (
+                      {systemModules.length === 0 ? (
                         <div className="py-6 text-center text-muted-foreground text-sm">
-                          Nenhum módulo configurado
+                          Nenhum módulo configurado no sistema
                         </div>
                       ) : (
-                        company.modules.map((module) => (
-                          <div key={module.id} className="flex items-center justify-between py-3 px-4 hover:bg-muted/30">
-                            <div className="flex-1">
-                              <p className="font-medium">{module.module_name}</p>
-                              {module.description && (
-                                <p className="text-sm text-muted-foreground">{module.description}</p>
-                              )}
+                        systemModules.map((sysModule) => {
+                          const currentStatus = getModuleStatus(company.id, sysModule.key);
+                          const updateKey = `${company.id}-${sysModule.key}`;
+                          const isUpdating = updatingModule === updateKey;
+
+                          return (
+                            <div key={sysModule.id} className="flex items-center justify-between py-3 px-4 hover:bg-muted/30">
+                              <div className="flex-1">
+                                <p className="font-medium">{sysModule.name}</p>
+                                {sysModule.description && (
+                                  <p className="text-sm text-muted-foreground">{sysModule.description}</p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3">
+                                {getStatusBadge(currentStatus)}
+                                <Select
+                                  value={currentStatus}
+                                  onValueChange={(value: "active" | "development" | "disabled") => 
+                                    handleStatusChange(company.id, sysModule.key, sysModule.name, value)
+                                  }
+                                  disabled={isUpdating}
+                                >
+                                  <SelectTrigger className="w-[180px]">
+                                    {isUpdating ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <SelectValue />
+                                    )}
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="active">
+                                      <div className="flex items-center gap-2">
+                                        <Check className="h-3 w-3 text-green-600" />
+                                        Ativo
+                                      </div>
+                                    </SelectItem>
+                                    <SelectItem value="development">
+                                      <div className="flex items-center gap-2">
+                                        <Construction className="h-3 w-3 text-yellow-600" />
+                                        Em Desenvolvimento
+                                      </div>
+                                    </SelectItem>
+                                    <SelectItem value="disabled">
+                                      <div className="flex items-center gap-2">
+                                        <X className="h-3 w-3 text-red-600" />
+                                        Desativado
+                                      </div>
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              {getStatusBadge(module.status)}
-                              <Select
-                                value={module.status}
-                                onValueChange={(value: "active" | "development" | "disabled") => 
-                                  handleStatusChange(module.id, value)
-                                }
-                                disabled={updatingModule === module.id}
-                              >
-                                <SelectTrigger className="w-[180px]">
-                                  {updatingModule === module.id ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <SelectValue />
-                                  )}
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="active">
-                                    <div className="flex items-center gap-2">
-                                      <Check className="h-3 w-3 text-green-600" />
-                                      Ativo
-                                    </div>
-                                  </SelectItem>
-                                  <SelectItem value="development">
-                                    <div className="flex items-center gap-2">
-                                      <Construction className="h-3 w-3 text-yellow-600" />
-                                      Em Desenvolvimento
-                                    </div>
-                                  </SelectItem>
-                                  <SelectItem value="disabled">
-                                    <div className="flex items-center gap-2">
-                                      <X className="h-3 w-3 text-red-600" />
-                                      Desativado
-                                    </div>
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   </CollapsibleContent>
