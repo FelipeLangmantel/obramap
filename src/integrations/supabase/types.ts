@@ -4746,7 +4746,7 @@ export type Database = {
       }
       is_system_admin:
         | { Args: never; Returns: boolean }
-        | { Args: { _user_id: string }; Returns: boolean }
+        | { Args: { _user_id?: string }; Returns: boolean }
       link_houses_to_measurement: {
         Args: {
           p_company_id: string

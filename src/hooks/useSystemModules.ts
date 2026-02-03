@@ -41,6 +41,10 @@ export function useSystemModules(): UseSystemModulesReturn {
         .order("display_order", { ascending: true });
 
       if (fetchError) {
+        // Check for specific error about is_system_admin
+        if (fetchError.message?.includes("is_system_admin")) {
+          console.warn("[useSystemModules] RLS policy issue, retrying...");
+        }
         throw fetchError;
       }
 
