@@ -86,22 +86,6 @@ interface CompanyModule {
   expected_benefits: string | null;
 }
 
-// Mapear views para module_keys do banco
-const VIEW_TO_MODULE_KEY: Record<string, string> = {
-  "map": "mapa_obras",
-  "interactive-map": "mapa_obras",
-  "3d-map": "mapa_obras",
-  "charts": "mapa_obras",
-  "production": "producao",
-  "planning": "planejamento_inteligente",
-  "smart-planning": "planejamento_inteligente",
-  "costs": "custos",
-  "supplies": "suprimentos",
-  "financial-flow": "financeiro",
-  "board-decisions": "diretoria",
-  "delivery": "entrega",
-};
-
 export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -154,17 +138,13 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   }, [company?.id]);
 
   const getModuleStatus = (viewKey: string): "active" | "development" | "disabled" | null => {
-    const moduleKey = VIEW_TO_MODULE_KEY[viewKey];
-    if (!moduleKey) return "active"; // Se não mapeado, considera ativo
-    
-    const module = companyModules.find(m => m.module_key === moduleKey);
-    return module?.status || "active";
+    // Agora as chaves são iguais entre system_modules e company_modules
+    const module = companyModules.find(m => m.module_key === viewKey);
+    return module?.status || "active"; // Default ativo se não configurado
   };
 
   const getModuleInfo = (viewKey: string): CompanyModule | null => {
-    const moduleKey = VIEW_TO_MODULE_KEY[viewKey];
-    if (!moduleKey) return null;
-    return companyModules.find(m => m.module_key === moduleKey) || null;
+    return companyModules.find(m => m.module_key === viewKey) || null;
   };
 
   const getInitials = (name: string) => {
