@@ -1,12 +1,14 @@
+import { useNavigate } from "react-router-dom";
 import { useSystemModules, SystemModule } from "@/hooks/useSystemModules";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, Package, Shield, Beaker, Eye, EyeOff } from "lucide-react";
+import { Loader2, RefreshCw, Package, Shield, Beaker, Eye, EyeOff, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function SystemModulesPage() {
+  const navigate = useNavigate();
   const { modules, isLoading, error, updateModule, refetch } = useSystemModules();
 
   const handleToggleEnabled = async (module: SystemModule) => {
@@ -55,14 +57,19 @@ export default function SystemModulesPage() {
       <div className="container max-w-5xl py-8 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-              <Shield className="h-8 w-8 text-primary" />
-              Governança de Módulos
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Controle quais funcionalidades estão disponíveis para os usuários do sistema.
-            </p>
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate("/system/dashboard")}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+                <Shield className="h-8 w-8 text-primary" />
+                Governança Global de Módulos
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                Defina quais módulos estão disponíveis globalmente no sistema.
+              </p>
+            </div>
           </div>
           <Button onClick={refetch} variant="outline" size="sm">
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -121,11 +128,10 @@ export default function SystemModulesPage() {
                 <Shield className="h-5 w-5 text-muted-foreground" />
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-medium">Sobre a Governança de Módulos</p>
+                <p className="text-sm font-medium">Governança Global vs Por Empresa</p>
                 <p className="text-sm text-muted-foreground">
-                  Módulos <strong>desativados</strong> ficam invisíveis para usuários comuns e suas rotas são bloqueadas.
-                  Módulos em <strong>beta</strong> são exibidos com um badge de aviso. 
-                  Como System Admin, você sempre verá todos os módulos com seus respectivos status.
+                  Esta página controla a <strong>disponibilidade global</strong> dos módulos no sistema.
+                  Para configurar módulos <strong>por empresa</strong>, acesse a aba "Módulos" no Dashboard do Sistema.
                 </p>
               </div>
             </div>
@@ -174,11 +180,6 @@ export default function SystemModulesPage() {
                     </div>
                     <p className="text-sm text-muted-foreground truncate">
                       {module.description || `Módulo: ${module.key}`}
-                    </p>
-                    <p className="text-xs text-muted-foreground/70 mt-1">
-                      {module.is_enabled 
-                        ? "✓ Usuários verão este módulo" 
-                        : "✗ Usuários NÃO verão este módulo"}
                     </p>
                   </div>
 
