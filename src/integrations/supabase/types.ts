@@ -4597,6 +4597,57 @@ export type Database = {
         Args: { p_measurement_id: string }
         Returns: number
       }
+      get_measurement_supply_kpis: {
+        Args: { p_measurement_id: string; p_project_id: string }
+        Returns: {
+          critical_items: number
+          items_alert: number
+          items_delivered: number
+          items_ordered: number
+          items_quoted: number
+          percent_purchased: number
+          total_items: number
+          total_quantity: number
+          total_value: number
+          value_pending: number
+          value_purchased: number
+        }[]
+      }
+      get_measurement_supply_requests: {
+        Args: {
+          p_measurement_id: string
+          p_project_id: string
+          p_status?: string
+        }
+        Returns: {
+          created_at: string
+          family_color: string
+          family_id: string
+          family_name: string
+          id: string
+          is_critical: boolean
+          item_id: string
+          item_name: string
+          item_unit: string
+          macro_id: string
+          measurement_id: string
+          notes: string
+          order_by_date: string
+          project_id: string
+          purchase_order_id: string
+          quantity: number
+          quotation_id: string
+          required_date: string
+          scope_id: string
+          source_plan_id: string
+          status: string
+          supplier_id: string
+          supplier_name: string
+          total_value: number
+          unit_value: number
+          updated_at: string
+        }[]
+      }
       get_measurement_vs_planning: {
         Args: { p_measurement_id: string }
         Returns: Json
@@ -4669,6 +4720,25 @@ export type Database = {
         }[]
       }
       get_supply_kpis: { Args: { p_project_id: string }; Returns: Json }
+      get_supply_requests_by_measurement: {
+        Args: { p_project_id: string }
+        Returns: {
+          end_date: string
+          items_alert: number
+          items_delivered: number
+          items_ordered: number
+          items_quoted: number
+          measurement_id: string
+          measurement_number: number
+          measurement_status: string
+          percent_purchased: number
+          start_date: string
+          supply_status: string
+          total_items: number
+          total_quantity: number
+          total_value: number
+        }[]
+      }
       get_supply_requests_by_status: {
         Args: { p_project_id: string; p_status?: string }
         Returns: {
