@@ -3976,6 +3976,7 @@ export type Database = {
           measurement_id: string | null
           notes: string | null
           order_by_date: string | null
+          planning_period_id: string | null
           project_id: string
           purchase_order_id: string | null
           quantity: number
@@ -4002,6 +4003,7 @@ export type Database = {
           measurement_id?: string | null
           notes?: string | null
           order_by_date?: string | null
+          planning_period_id?: string | null
           project_id: string
           purchase_order_id?: string | null
           quantity?: number
@@ -4028,6 +4030,7 @@ export type Database = {
           measurement_id?: string | null
           notes?: string | null
           order_by_date?: string | null
+          planning_period_id?: string | null
           project_id?: string
           purchase_order_id?: string | null
           quantity?: number
@@ -4054,6 +4057,13 @@ export type Database = {
             columns: ["measurement_id"]
             isOneToOne: false
             referencedRelation: "measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_requests_planning_period_id_fkey"
+            columns: ["planning_period_id"]
+            isOneToOne: false
+            referencedRelation: "planning_periods"
             referencedColumns: ["id"]
           },
           {

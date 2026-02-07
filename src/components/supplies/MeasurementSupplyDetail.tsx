@@ -219,7 +219,7 @@
            <div>
              <div className="flex items-center gap-2">
                <Calendar className="h-5 w-5 text-muted-foreground" />
-               <h2 className="text-xl font-bold">Medição {measurement.measurement_number}</h2>
+               <h2 className="text-xl font-bold">Quinzena {measurement.measurement_number}</h2>
              </div>
              <p className="text-muted-foreground text-sm">
                {formatDateRange(measurement.start_date, measurement.end_date)}
@@ -323,7 +323,7 @@
        {/* Tabs */}
        <Card>
          <CardHeader>
-           <CardTitle>Materiais da Medição</CardTitle>
+           <CardTitle>Materiais da Quinzena</CardTitle>
            <CardDescription>
              Fluxo: Alerta → Cotação → Pedido → Entrega
            </CardDescription>
