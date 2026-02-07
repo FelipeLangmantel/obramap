@@ -54,17 +54,17 @@
    }
  
    if (measurements.length === 0) {
-     return (
-       <Card>
-         <CardContent className="py-8 text-center">
-           <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-           <h3 className="text-lg font-medium">Nenhuma Medição</h3>
-           <p className="text-muted-foreground mt-2">
-             Crie medições no Planejamento para gerar requisições de suprimentos.
-           </p>
-         </CardContent>
-       </Card>
-     );
+    return (
+        <Card>
+          <CardContent className="py-8 text-center">
+            <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-medium">Nenhuma Quinzena</h3>
+            <p className="text-muted-foreground mt-2">
+              Aprove períodos no Planejamento de Medições para gerar requisições de suprimentos.
+            </p>
+          </CardContent>
+        </Card>
+      );
    }
  
    return (
@@ -90,9 +90,9 @@
                    <div className="flex items-center gap-3 mb-2">
                      <div className="flex items-center gap-2">
                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                       <span className="font-semibold text-lg">
-                         Medição {measurement.measurement_number}
-                       </span>
+                        <span className="font-semibold text-lg">
+                          Quinzena {measurement.measurement_number}
+                        </span>
                      </div>
                      <Badge 
                        variant="outline" 

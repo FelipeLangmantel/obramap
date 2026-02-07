@@ -145,40 +145,39 @@
      }
    }, [loadMeasurementRequests]);
  
-   // Generate supplies for specific measurement
-   const generateForMeasurement = useCallback(async (measurementId: string): Promise<number> => {
-     if (!projectId) return 0;
- 
-     try {
-       const { data, error } = await supabase.rpc('generate_supply_requests_from_planning', {
-         p_project_id: projectId,
-         p_measurement_id: measurementId
-       });
- 
-       if (error) throw error;
- 
-       const result = data as { success: boolean; inserted_count: number; message: string };
-       
-       if (result.success) {
-         if (result.inserted_count > 0) {
-           toast.success(result.message);
-           await loadMeasurements();
-           if (selectedMeasurement?.measurement_id === measurementId) {
-             await loadMeasurementRequests(measurementId);
-           }
-         } else {
-           toast.info('Nenhuma nova requisição a criar');
-         }
-         return result.inserted_count;
-       }
-       
-       return 0;
-     } catch (error) {
-       console.error('Error generating supply requests:', error);
-       toast.error('Erro ao gerar requisições');
-       return 0;
-     }
-   }, [projectId, loadMeasurements, loadMeasurementRequests, selectedMeasurement]);
+  // Generate supplies for specific planning period
+    const generateForMeasurement = useCallback(async (planningPeriodId: string): Promise<number> => {
+      if (!projectId) return 0;
+
+      try {
+        const { data, error } = await supabase.rpc('generate_supplies_from_planning_period', {
+          p_period_id: planningPeriodId
+        });
+
+        if (error) throw error;
+
+        const result = data as { success: boolean; inserted_count: number; deleted_count: number; period_id: string };
+        
+        if (result.success) {
+          if (result.inserted_count > 0) {
+            toast.success(`${result.inserted_count} requisições criadas`);
+            await loadMeasurements();
+            if (selectedMeasurement?.measurement_id === planningPeriodId) {
+              await loadMeasurementRequests(planningPeriodId);
+            }
+          } else {
+            toast.info('Nenhuma nova requisição a criar');
+          }
+          return result.inserted_count;
+        }
+        
+        return 0;
+      } catch (error) {
+        console.error('Error generating supply requests:', error);
+        toast.error('Erro ao gerar requisições');
+        return 0;
+      }
+    }, [projectId, loadMeasurements, loadMeasurementRequests, selectedMeasurement]);
  
    // Group requests by family
    const getGroupedByFamily = useCallback((status?: string) => {
