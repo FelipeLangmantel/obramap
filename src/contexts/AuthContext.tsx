@@ -58,7 +58,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const DEFAULT_MENUS = ["dashboard", "producao", "financeiro", "suprimentos", "planejamento", "mapa", "graficos"];
+const DEFAULT_MENUS = ["mapa", "planejamento", "smart-planning", "producao", "custos", "suprimentos", "financeiro", "entrega", "diretoria", "graficos"];
 const DEFAULT_MANAGEMENT = ["projetos", "quadras", "macros", "escopos", "insumos", "fornecedores", "mao_de_obra", "usuarios"];
 
 export function AuthProvider({ children }: { children: ReactNode }) {

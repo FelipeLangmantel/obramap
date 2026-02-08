@@ -10,11 +10,12 @@ interface CompanyUserGuardProps {
 /**
  * Guard para rotas de usuário de empresa
  * - System Admin é redirecionado para /system/dashboard
+ * - Aguarda profile carregar para evitar flash de "Acesso Negado"
  * - Usuários sem company_id são bloqueados
  * - Usuários de empresa acessam normalmente
  */
 export function CompanyUserGuard({ children }: CompanyUserGuardProps) {
-  const { user, isSystemAdmin, isLoading, mustChangePassword, company } = useAuth();
+  const { user, profile, isSystemAdmin, isLoading, mustChangePassword, company } = useAuth();
 
   // Loading state
   if (isLoading) {
@@ -37,13 +38,22 @@ export function CompanyUserGuard({ children }: CompanyUserGuardProps) {
 
   // System Admin deve ir para área de sistema
   if (isSystemAdmin) {
-    console.log("[CompanyUserGuard] System admin, redirecting to /system/dashboard");
     return <Navigate to="/system/dashboard" replace />;
   }
 
-  // Usuário sem empresa (edge case)
+  // ✅ FIX: Aguardar profile carregar antes de decidir
+  // Evita o flash de "Acesso Negado" durante login quando
+  // fetchUserData ainda não completou
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Usuário sem empresa (edge case real - profile carregado mas sem company)
   if (!company) {
-    console.log("[CompanyUserGuard] User has no company, showing error");
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">

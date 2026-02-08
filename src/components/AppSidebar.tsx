@@ -176,98 +176,23 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     return "Usuário";
   };
 
-  // Menu items mapped to permission IDs
+  // ✅ Menu items com permissionId alinhado aos IDs do painel de permissões (MENU_OPTIONS)
   const mainMenuItems: { title: string; view: MenuViewType; icon: any; permissionId: string }[] = [
-    { 
-      title: "Mapa de Obras", 
-      view: "map", 
-      icon: LayoutDashboard,
-      permissionId: "dashboard"
-    },
-    { 
-      title: "Mapa Interativo", 
-      view: "interactive-map", 
-      icon: Map,
-      permissionId: "mapa"
-    },
-    { 
-      title: "Mapa 3D", 
-      view: "3d-map", 
-      icon: Box,
-      permissionId: "mapa"
-    },
-    { 
-      title: "Gráficos", 
-      view: "charts", 
-      icon: BarChart3,
-      permissionId: "graficos"
-    },
-    { 
-      title: "Produção Semanal", 
-      view: "production", 
-      icon: ClipboardList,
-      permissionId: "producao"
-    },
-    { 
-      title: "Planejamento", 
-      view: "planning", 
-      icon: Target,
-      permissionId: "planejamento"
-    },
-    { 
-      title: "Planej. Medição", 
-      view: "measurement-planning", 
-      icon: Calculator,
-      permissionId: "planejamento"
-    },
-    { 
-      title: "Planej. Longo Prazo", 
-      view: "long-term-planning", 
-      icon: Calendar,
-      permissionId: "planejamento"
-    },
-    { 
-      title: "Contrato da Obra", 
-      view: "project-contract", 
-      icon: FileText,
-      permissionId: "financeiro"
-    },
-    {
-      title: "Custos da Obra", 
-      view: "costs", 
-      icon: DollarSign,
-      permissionId: "financeiro"
-    },
-    { 
-      title: "Suprimentos", 
-      view: "supplies", 
-      icon: Package,
-      permissionId: "suprimentos"
-    },
-    { 
-      title: "Fluxo Financeiro", 
-      view: "financial-flow", 
-      icon: Wallet,
-      permissionId: "financeiro"
-    },
-    { 
-      title: "Painel da Diretoria", 
-      view: "board-decisions", 
-      icon: Crown,
-      permissionId: "financeiro"
-    },
-    { 
-      title: "Entrega & Pós-Obra", 
-      view: "delivery", 
-      icon: ClipboardCheck,
-      permissionId: "producao"
-    },
-    { 
-      title: "Planejamento Inteligente", 
-      view: "smart-planning", 
-      icon: Target,
-      permissionId: "planejamento"
-    },
+    { title: "Mapa de Obras", view: "map", icon: LayoutDashboard, permissionId: "mapa" },
+    { title: "Mapa Interativo", view: "interactive-map", icon: Map, permissionId: "mapa" },
+    { title: "Mapa 3D", view: "3d-map", icon: Box, permissionId: "mapa" },
+    { title: "Gráficos", view: "charts", icon: BarChart3, permissionId: "graficos" },
+    { title: "Produção Semanal", view: "production", icon: ClipboardList, permissionId: "producao" },
+    { title: "Planejamento", view: "planning", icon: Target, permissionId: "planejamento" },
+    { title: "Planej. Medição", view: "measurement-planning", icon: Calculator, permissionId: "planejamento" },
+    { title: "Planej. Longo Prazo", view: "long-term-planning", icon: Calendar, permissionId: "planejamento" },
+    { title: "Contrato da Obra", view: "project-contract", icon: FileText, permissionId: "financeiro" },
+    { title: "Custos da Obra", view: "costs", icon: DollarSign, permissionId: "custos" },
+    { title: "Suprimentos", view: "supplies", icon: Package, permissionId: "suprimentos" },
+    { title: "Fluxo Financeiro", view: "financial-flow", icon: Wallet, permissionId: "financeiro" },
+    { title: "Painel da Diretoria", view: "board-decisions", icon: Crown, permissionId: "diretoria" },
+    { title: "Entrega & Pós-Obra", view: "delivery", icon: ClipboardCheck, permissionId: "entrega" },
+    { title: "Planejamento Inteligente", view: "smart-planning", icon: Target, permissionId: "smart-planning" },
   ];
 
   // Filter menu items based on user permissions, company module status, AND system governance
