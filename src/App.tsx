@@ -3,8 +3,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
-import { AuthProvider } from "./contexts/AuthContext";
+import { BrowserRouter, Routes, Route, Outlet, Navigate, useLocation } from "react-router-dom";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { ConstructionProvider } from "./contexts/ConstructionContext";
 import { SetupFlowGuard } from "./components/guards/SetupFlowGuard";
 import { SystemAdminGuard } from "./components/guards/SystemAdminGuard";
@@ -22,19 +22,12 @@ import ProjectContractPage from "./pages/ProjectContractPage";
 
 const queryClient = new QueryClient();
 
-/**
- * ✅ ARQUITETURA DE NAVEGAÇÃO:
- * 
- * 1. ROTAS DE SISTEMA (/system/*):
- *    - Acesso exclusivo para isSystemAdmin === true
- *    - NÃO exigem company_id ou projeto selecionado
- *    - Gerenciamento global de empresas, usuários e módulos
- * 
- * 2. ROTAS DE EMPRESA (/, /measurement-planning, etc.):
- *    - Acesso para usuários de empresa (company_id definido)
- *    - System Admin é redirecionado para /system/dashboard
- *    - Seguem fluxo de setup da obra
- */
+// ✅ Mapeamento de rotas para permissões de menu
+const ROUTE_PERMISSION_MAP: Record<string, string> = {
+  "/measurement-planning": "planejamento",
+  "/long-term-planning": "planejamento",
+  "/project-contract": "financeiro",
+};
 
 /** Layout para rotas de System Admin */
 function SystemLayout() {
@@ -45,12 +38,30 @@ function SystemLayout() {
   );
 }
 
+/**
+ * ✅ Guard de permissão por rota
+ * Verifica se o usuário tem acesso ao menu correspondente à rota atual.
+ * Redireciona para / se não tiver permissão.
+ */
+function RoutePermissionCheck() {
+  const { canAccessMenu } = useAuth();
+  const location = useLocation();
+
+  const requiredPermission = ROUTE_PERMISSION_MAP[location.pathname];
+
+  if (requiredPermission && !canAccessMenu(requiredPermission)) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <Outlet />;
+}
+
 /** Layout para rotas de usuário de empresa */
 function CompanyLayout() {
   return (
     <CompanyUserGuard>
       <SetupFlowGuard>
-        <Outlet />
+        <RoutePermissionCheck />
       </SetupFlowGuard>
     </CompanyUserGuard>
   );
@@ -74,7 +85,6 @@ const App = () => (
                 <Route path="/system/dashboard" element={<SystemDashboard />} />
                 <Route path="/system/modules" element={<SystemModulesPage />} />
                 <Route path="/system/migration" element={<LegacyDataMigration />} />
-                {/* Fallback de admin antigo para novo sistema */}
                 <Route path="/admin/dashboard" element={<SystemDashboard />} />
                 <Route path="/admin/migration" element={<LegacyDataMigration />} />
               </Route>
