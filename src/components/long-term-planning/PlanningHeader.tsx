@@ -1,7 +1,7 @@
-import { Save, RefreshCw, TrendingUp, TrendingDown, Plus } from "lucide-react";
+import { Save, RefreshCw, TrendingUp, TrendingDown, Plus, Building2, DollarSign, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import type { PlanningVersion } from "@/hooks/useLongTermPlanning";
 
@@ -44,25 +44,29 @@ export function PlanningHeader({
     ? ((overallTotals.projected_result / overallTotals.total_revenue) * 100).toFixed(1)
     : "0";
 
+  const planningProgress = totalHouses > 0
+    ? Math.min(100, (overallTotals.total_houses / totalHouses) * 100)
+    : 0;
+
   const getResultStatus = () => {
     const margin = overallTotals.total_revenue > 0
       ? (overallTotals.projected_result / overallTotals.total_revenue) * 100
       : 0;
 
-    if (margin >= 15) return { label: "Saudável", color: "bg-emerald-500", textColor: "text-emerald-600" };
-    if (margin >= 8) return { label: "Atenção", color: "bg-yellow-500", textColor: "text-yellow-600" };
-    return { label: "Crítico", color: "bg-destructive", textColor: "text-destructive" };
+    if (margin >= 15) return { label: "Saudável", color: "text-emerald-500" };
+    if (margin >= 8) return { label: "Atenção", color: "text-amber-500" };
+    return { label: "Crítico", color: "text-destructive" };
   };
 
   const status = getResultStatus();
 
   return (
     <div className="space-y-4">
-      {/* Controles */}
+      {/* Top bar */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           {activeVersion && (
-            <Badge variant="outline" className="text-sm">
+            <Badge variant="secondary" className="text-sm font-medium px-3 py-1">
               {activeVersion.name}
             </Badge>
           )}
@@ -72,8 +76,9 @@ export function PlanningHeader({
               size="sm"
               onClick={onAddPeriod}
               disabled={saving}
+              className="gap-2"
             >
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className="h-4 w-4" />
               Adicionar Período
             </Button>
           )}
@@ -81,84 +86,100 @@ export function PlanningHeader({
 
         <div className="flex items-center gap-2">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={onRefresh}
             disabled={saving}
+            className="gap-2"
           >
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <RefreshCw className="h-4 w-4" />
             Atualizar
           </Button>
           <Button
             size="sm"
             onClick={onSave}
             disabled={!hasChanges || saving}
-            className={cn(hasChanges && "animate-pulse")}
+            className={cn(
+              "gap-2 transition-all",
+              hasChanges && "shadow-md shadow-primary/25"
+            )}
           >
-            <Save className="h-4 w-4 mr-2" />
-            {saving ? "Salvando..." : "Salvar Planejamento"}
+            <Save className="h-4 w-4" />
+            {saving ? "Salvando..." : "Salvar"}
           </Button>
         </div>
       </div>
 
-      {/* Cards de resumo */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs text-muted-foreground">Total Casas</div>
-            <div className="text-2xl font-bold">{totalHouses}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs text-muted-foreground">Receita Prevista</div>
-            <div className="text-xl font-bold text-primary">
-              {formatCurrency(overallTotals.total_revenue)}
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Progresso de Planejamento */}
+        <div className="rounded-xl border bg-card p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Building2 className="h-4 w-4 text-primary" />
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs text-muted-foreground">Custo Previsto</div>
-            <div className="text-xl font-bold">
-              {formatCurrency(overallTotals.total_cost)}
+            <div>
+              <p className="text-xs text-muted-foreground">Casas Planejadas</p>
+              <p className="text-lg font-bold">{overallTotals.total_houses} <span className="text-sm font-normal text-muted-foreground">/ {totalHouses}</span></p>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+          <Progress value={planningProgress} className="h-1.5" />
+          <p className="text-xs text-muted-foreground">{planningProgress.toFixed(0)}% do empreendimento</p>
+        </div>
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs text-muted-foreground">Resultado Projetado</div>
+        {/* Receita */}
+        <div className="rounded-xl border bg-card p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <DollarSign className="h-4 w-4 text-emerald-500" />
+            </div>
+            <p className="text-xs text-muted-foreground">Receita Prevista</p>
+          </div>
+          <p className="text-lg font-bold text-emerald-600">
+            {formatCurrency(overallTotals.total_revenue)}
+          </p>
+        </div>
+
+        {/* Custo */}
+        <div className="rounded-xl border bg-card p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+              <BarChart3 className="h-4 w-4 text-amber-500" />
+            </div>
+            <p className="text-xs text-muted-foreground">Custo Previsto</p>
+          </div>
+          <p className="text-lg font-bold">
+            {formatCurrency(overallTotals.total_cost)}
+          </p>
+        </div>
+
+        {/* Resultado */}
+        <div className="rounded-xl border bg-card p-4 space-y-2">
+          <div className="flex items-center gap-2">
             <div className={cn(
-              "text-xl font-bold flex items-center gap-1",
-              overallTotals.projected_result >= 0 ? "text-emerald-600" : "text-destructive"
+              "h-8 w-8 rounded-lg flex items-center justify-center",
+              overallTotals.projected_result >= 0 ? "bg-emerald-500/10" : "bg-destructive/10"
             )}>
               {overallTotals.projected_result >= 0 ? (
-                <TrendingUp className="h-4 w-4" />
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
               ) : (
-                <TrendingDown className="h-4 w-4" />
+                <TrendingDown className="h-4 w-4 text-destructive" />
               )}
+            </div>
+            <p className="text-xs text-muted-foreground">Resultado</p>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <p className={cn(
+              "text-lg font-bold",
+              overallTotals.projected_result >= 0 ? "text-emerald-600" : "text-destructive"
+            )}>
               {formatCurrency(overallTotals.projected_result)}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-xs text-muted-foreground">Status</div>
-            <div className="flex items-center gap-2 mt-1">
-              <div className={cn("w-3 h-3 rounded-full", status.color)} />
-              <span className={cn("font-semibold", status.textColor)}>
-                {status.label}
-              </span>
-              <span className="text-sm text-muted-foreground">
-                ({marginPercent}%)
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+            </p>
+            <Badge variant="outline" className={cn("text-xs", status.color)}>
+              {marginPercent}%
+            </Badge>
+          </div>
+        </div>
       </div>
     </div>
   );

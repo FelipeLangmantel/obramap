@@ -41,8 +41,6 @@ export default function LongTermPlanningPage() {
     updatePeriodDates,
   } = useLongTermPlanning(currentProject?.id);
 
-  // ✅ Auto-correção: se o contrato existe mas o setup_step não avançou,
-  // avançar para atualização informativa (mantido para consistência de dados)
   useEffect(() => {
     const run = async () => {
       if (!currentProject?.id) return;
@@ -61,9 +59,7 @@ export default function LongTermPlanningPage() {
     run();
   }, [currentProject?.id, currentStep, advanceToStep]);
 
-  const handleViewChange = () => {
-    // Não faz nada - só para satisfazer o AppSidebar
-  };
+  const handleViewChange = () => {};
 
   return (
     <ModuleAccessGuard moduleKey="long-term-planning">
@@ -71,117 +67,127 @@ export default function LongTermPlanningPage() {
         <div className="min-h-screen flex w-full bg-background">
           <AppSidebar activeView="planning" onViewChange={handleViewChange} />
 
-        <main className="flex-1 overflow-auto">
-          {/* Header */}
-          <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b">
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => navigate("/")}
-                >
-                  <ArrowLeft className="h-5 w-5" />
-                </Button>
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-primary" />
-                  <h1 className="text-lg font-semibold">
-                    Planejamento de Longo Prazo
-                  </h1>
-                </div>
-              </div>
-              <ProjectSelector />
-            </div>
-          </header>
-
-          {/* Conteúdo */}
-          <div className="p-4 space-y-4">
-            {!currentProject ? (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Selecione um projeto para visualizar o planejamento.
-                </AlertDescription>
-              </Alert>
-            ) : initializing ? (
-              <div className="flex flex-col items-center justify-center py-20 space-y-4">
-                <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                <p className="text-muted-foreground">
-                  Inicializando planejamento do projeto...
-                </p>
-              </div>
-            ) : initError ? (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Erro ao inicializar planejamento</AlertTitle>
-                <AlertDescription className="mt-2">
-                  <p>{initError}</p>
+          <main className="flex-1 overflow-auto">
+            {/* Header */}
+            <header className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur-sm">
+              <div className="flex items-center justify-between px-6 py-3">
+                <div className="flex items-center gap-3">
                   <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-3"
-                    onClick={retryInit}
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => navigate("/")}
+                    className="shrink-0"
                   >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Tentar novamente
+                    <ArrowLeft className="h-5 w-5" />
                   </Button>
-                </AlertDescription>
-              </Alert>
-            ) : !activeVersion ? (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Nenhuma versão de planejamento encontrada.
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <>
-                <PlanningHeader
-                  activeVersion={activeVersion}
-                  overallTotals={overallTotals}
-                  totalHouses={totalHouses}
-                  hasChanges={hasChanges}
-                  saving={saving}
-                  onSave={savePlanning}
-                  onRefresh={refresh}
-                  onAddPeriod={addPeriod}
-                />
-
-                {loading ? (
-                  <div className="space-y-3">
-                    <Skeleton className="h-12 w-full" />
-                    <Skeleton className="h-96 w-full" />
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Calendar className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <h1 className="text-lg font-bold leading-tight">
+                        Planejamento de Longo Prazo
+                      </h1>
+                      <p className="text-xs text-muted-foreground">
+                        Cronograma estratégico do empreendimento
+                      </p>
+                    </div>
                   </div>
-                ) : periods.length === 0 ? (
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      Nenhum período encontrado para esta versão.
-                    </AlertDescription>
-                  </Alert>
-                ) : serviceRows.length === 0 ? (
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      Nenhum serviço encontrado no projeto. Configure os serviços no orçamento executivo.
-                    </AlertDescription>
-                  </Alert>
-                ) : (
-                  <LongTermPlanningMatrix
-                    periods={periods}
-                    serviceRows={serviceRows}
-                    periodSummaries={periodSummaries}
+                </div>
+                <ProjectSelector />
+              </div>
+            </header>
+
+            {/* Content */}
+            <div className="p-6 space-y-5">
+              {!currentProject ? (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Selecione um projeto para visualizar o planejamento.
+                  </AlertDescription>
+                </Alert>
+              ) : initializing ? (
+                <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                  <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                  <p className="text-muted-foreground font-medium">
+                    Inicializando planejamento...
+                  </p>
+                </div>
+              ) : initError ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Erro ao inicializar planejamento</AlertTitle>
+                  <AlertDescription className="mt-2">
+                    <p>{initError}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 gap-2"
+                      onClick={retryInit}
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      Tentar novamente
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : !activeVersion ? (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Nenhuma versão de planejamento encontrada.
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <>
+                  <PlanningHeader
+                    activeVersion={activeVersion}
+                    overallTotals={overallTotals}
                     totalHouses={totalHouses}
-                    onCellChange={updateCellValue}
-                    onDeletePeriod={deletePeriod}
-                    onUpdatePeriodDates={updatePeriodDates}
+                    hasChanges={hasChanges}
+                    saving={saving}
+                    onSave={savePlanning}
+                    onRefresh={refresh}
+                    onAddPeriod={addPeriod}
                   />
-                )}
-              </>
-            )}
-          </div>
-        </main>
-      </div>
+
+                  {loading ? (
+                    <div className="space-y-3">
+                      <Skeleton className="h-12 w-full rounded-xl" />
+                      <Skeleton className="h-96 w-full rounded-xl" />
+                    </div>
+                  ) : periods.length === 0 ? (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Nenhum período encontrado para esta versão.
+                      </AlertDescription>
+                    </Alert>
+                  ) : serviceRows.length === 0 ? (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Nenhum serviço encontrado no projeto. Configure os serviços no orçamento executivo.
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <LongTermPlanningMatrix
+                      periods={periods}
+                      serviceRows={serviceRows}
+                      periodSummaries={periodSummaries}
+                      totalHouses={totalHouses}
+                      onCellChange={updateCellValue}
+                      onDeletePeriod={deletePeriod}
+                      onUpdatePeriodDates={updatePeriodDates}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          </main>
+        </div>
       </SidebarProvider>
     </ModuleAccessGuard>
   );

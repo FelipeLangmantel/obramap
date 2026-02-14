@@ -31,13 +31,15 @@ export interface ServiceRow {
   macro_color: string;
   unit_cost_value: number;
   unit_revenue_value: number;
-  initial_bank: number; // Casas acumuladas de períodos anteriores
+  initial_bank: number; // Casas já executadas (banco inicial + produção)
   total_planned: number; // Soma de todas as células
+  remaining_to_plan: number; // Casas restantes para planejar
+  is_completed: boolean; // Se já foi 100% executado
   periodValues: Record<string, CellData>; // period_id -> valor
 }
 
 export interface CellData {
-  id: string | null; // ID do registro em service_planning_by_period
+  id: string | null;
   target_houses: number;
   is_closed: boolean;
 }
@@ -80,21 +82,12 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
   // Buscar ou inicializar planejamento
   const initializePlanning = useCallback(async () => {
-    console.log("=== INIT PLANNING DEBUG ===");
-    console.log("projectId:", projectId);
-    console.log("company.id:", company?.id);
-    console.log("===========================");
-
-    if (!projectId || !company?.id) {
-      console.warn("INIT BLOCKED: projectId ou company.id ausente");
-      return;
-    }
+    if (!projectId || !company?.id) return;
 
     setInitializing(true);
     setInitError(null);
 
     try {
-      // Buscar contrato do projeto e total de casas
       const [contractResult, housesResult] = await Promise.all([
         supabase
           .from("project_contracts")
@@ -108,19 +101,12 @@ export function useLongTermPlanning(projectId: string | undefined) {
           .eq("project_id", projectId),
       ]);
 
-      console.log("CONTRACT RESULT:", contractResult);
-      console.log("HOUSES RESULT:", housesResult);
-
       if (contractResult.data && contractResult.data.length > 0) {
         setContractId(contractResult.data[0].id);
-        console.log("contractId SET:", contractResult.data[0].id);
-      } else {
-        console.log("Nenhum contrato encontrado - planejamento estratégico prossegue sem contrato");
       }
 
       const houseCount = housesResult.count || 0;
       setTotalHouses(houseCount);
-      console.log("totalHouses SET:", houseCount);
 
       // Buscar versão ativa
       const { data: versions, error: versionsError } = await supabase
@@ -134,12 +120,8 @@ export function useLongTermPlanning(projectId: string | undefined) {
       if (versionsError) throw versionsError;
 
       if (versions && versions.length > 0) {
-        // Versão ativa encontrada
         setActiveVersion(versions[0]);
       } else {
-        // Nenhuma versão ativa - inicializar planejamento via RPC
-        console.log("Nenhuma versão encontrada, inicializando planejamento...");
-        
         const { data: rpcResult, error: rpcError } = await supabase
           .rpc("initialize_long_term_planning", {
             p_project_id: projectId,
@@ -147,10 +129,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
             p_number_of_periods: 6,
           });
 
-        if (rpcError) {
-          console.error("Erro na RPC:", rpcError);
-          throw new Error(rpcError.message || "Erro ao inicializar planejamento");
-        }
+        if (rpcError) throw new Error(rpcError.message || "Erro ao inicializar planejamento");
 
         const result = rpcResult as { success: boolean; error?: string; planning_version_id?: string };
 
@@ -161,7 +140,6 @@ export function useLongTermPlanning(projectId: string | undefined) {
           throw new Error(result.error || "Erro desconhecido ao inicializar");
         }
 
-        // Buscar a versão recém-criada
         const { data: newVersion, error: newVersionError } = await supabase
           .from("planning_versions")
           .select("id, name, version_number, is_active")
@@ -169,7 +147,6 @@ export function useLongTermPlanning(projectId: string | undefined) {
           .single();
 
         if (newVersionError) throw newVersionError;
-
         setActiveVersion(newVersion);
         toast.success("Planejamento inicializado com sucesso!");
       }
@@ -203,7 +180,6 @@ export function useLongTermPlanning(projectId: string | undefined) {
       return;
     }
 
-    // Normalize status and ensure all required fields
     const normalizedPeriods: PlanningPeriod[] = (data || []).map(p => ({
       id: p.id,
       period_number: p.period_number,
@@ -217,7 +193,6 @@ export function useLongTermPlanning(projectId: string | undefined) {
     setPeriods(normalizedPeriods);
   }, [projectId, company?.id, activeVersion?.id]);
 
-  // Normalize status helper
   const normalizeStatus = (status: string | null): PeriodStatus => {
     if (!status) return "draft";
     const s = status.toLowerCase();
@@ -226,7 +201,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
     return "draft";
   };
 
-  // Carregar serviços e dados da matriz
+  // Carregar serviços e dados da matriz (com dados de execução)
   const loadMatrixData = useCallback(async () => {
     if (!projectId || !company?.id || !activeVersion?.id || periods.length === 0) {
       setServiceRows([]);
@@ -236,15 +211,54 @@ export function useLongTermPlanning(projectId: string | undefined) {
     setLoading(true);
 
     try {
-      // Buscar serviços do contrato do projeto (NÃO de measurement_services)
-      // Isso mantém o isolamento estratégico - não depende de dados operacionais
-      const { data: services, error: servicesError } = await supabase
-        .from("project_contract_services")
-        .select("macro_id, macro_name, scope_id, scope_name")
-        .eq("project_id", projectId)
-        .eq("company_id", company.id);
+      // Buscar serviços, planejamento E produção executada em paralelo
+      const [servicesResult, planningResult, executionResult] = await Promise.all([
+        supabase
+          .from("project_contract_services")
+          .select("macro_id, macro_name, scope_id, scope_name")
+          .eq("project_id", projectId)
+          .eq("company_id", company.id),
+        supabase
+          .from("service_planning_by_period")
+          .select("id, macro_id, scope_id, planning_period_id, target_houses, unit_cost_value, unit_revenue_value")
+          .eq("project_id", projectId)
+          .eq("company_id", company.id)
+          .in("planning_period_id", periods.map(p => p.id)),
+        // Buscar casas já executadas por serviço (macro_id + scope_id)
+        supabase
+          .from("production_logs")
+          .select("service_id, house_id, is_initial_database, quantity_executed")
+          .eq("project_id", projectId)
+          .eq("company_id", company.id),
+      ]);
 
-      if (servicesError) throw servicesError;
+      if (servicesResult.error) throw servicesResult.error;
+      if (planningResult.error) throw planningResult.error;
+
+      // Buscar mapeamento service_id -> macro_id/scope_id from measurement_services
+      let executedMap = new Map<string, number>(); // "macro_id_scope_id" -> count
+      
+      if (!executionResult.error && executionResult.data && executionResult.data.length > 0) {
+        const serviceIds = [...new Set(executionResult.data.map(pl => pl.service_id))];
+        
+        const { data: msData } = await supabase
+          .from("measurement_services")
+          .select("id, macro_id, scope_id")
+          .in("id", serviceIds);
+        
+        const serviceToMacroScope = new Map<string, { macro_id: string; scope_id: string }>();
+        msData?.forEach(ms => {
+          serviceToMacroScope.set(ms.id, { macro_id: ms.macro_id, scope_id: ms.scope_id });
+        });
+
+        executionResult.data.forEach(pl => {
+          const mapping = serviceToMacroScope.get(pl.service_id);
+          if (mapping) {
+            const key = `${mapping.macro_id}_${mapping.scope_id}`;
+            executedMap.set(key, (executedMap.get(key) || 0) + (pl.quantity_executed || 1));
+          }
+        });
+      }
 
       // Deduzir serviços únicos
       const uniqueServicesMap = new Map<string, {
@@ -255,38 +269,29 @@ export function useLongTermPlanning(projectId: string | undefined) {
         macro_color: string;
       }>();
 
-      services?.forEach(s => {
+      servicesResult.data?.forEach(s => {
         const key = `${s.macro_id}_${s.scope_id}`;
         if (!uniqueServicesMap.has(key)) {
           uniqueServicesMap.set(key, {
             ...s,
-            macro_color: "#6b7280", // Default color for contract services
+            macro_color: "#6b7280",
           });
         }
       });
 
       const uniqueServices = Array.from(uniqueServicesMap.values());
 
-      // Buscar dados de planejamento por período
-      const periodIds = periods.map(p => p.id);
-      const { data: planningData, error: planningError } = await supabase
-        .from("service_planning_by_period")
-        .select("id, macro_id, scope_id, planning_period_id, target_houses, unit_cost_value, unit_revenue_value")
-        .eq("project_id", projectId)
-        .eq("company_id", company.id)
-        .in("planning_period_id", periodIds);
-
-      if (planningError) throw planningError;
-
-      // Montar mapa para acesso rápido
-      const planningMap = new Map<string, typeof planningData[0]>();
-      planningData?.forEach(p => {
+      // Mapa de planejamento
+      const planningMap = new Map<string, typeof planningResult.data[0]>();
+      planningResult.data?.forEach(p => {
         const key = `${p.macro_id}_${p.scope_id}_${p.planning_period_id}`;
         planningMap.set(key, p);
       });
 
       // Construir as linhas de serviço
       const rows: ServiceRow[] = uniqueServices.map(service => {
+        const serviceKey = `${service.macro_id}_${service.scope_id}`;
+        const executedHouses = executedMap.get(serviceKey) || 0;
         const periodValues: Record<string, CellData> = {};
         let totalPlanned = 0;
         let unit_cost_value = 0;
@@ -295,11 +300,9 @@ export function useLongTermPlanning(projectId: string | undefined) {
         periods.forEach(period => {
           const key = `${service.macro_id}_${service.scope_id}_${period.id}`;
           const planningRecord = planningMap.get(key);
-
           const targetHouses = planningRecord?.target_houses || 0;
           totalPlanned += targetHouses;
 
-          // Pegar valores unitários do primeiro registro encontrado
           if (planningRecord && !unit_cost_value) {
             unit_cost_value = planningRecord.unit_cost_value || 0;
             unit_revenue_value = planningRecord.unit_revenue_value || 0;
@@ -312,6 +315,9 @@ export function useLongTermPlanning(projectId: string | undefined) {
           };
         });
 
+        const remainingToPlan = Math.max(0, totalHouses - executedHouses - totalPlanned);
+        const isCompleted = executedHouses >= totalHouses && totalHouses > 0;
+
         return {
           macro_id: service.macro_id,
           macro_name: service.macro_name,
@@ -320,13 +326,14 @@ export function useLongTermPlanning(projectId: string | undefined) {
           macro_color: service.macro_color,
           unit_cost_value,
           unit_revenue_value,
-          initial_bank: 0, // TODO: calcular acumulado de versões anteriores
+          initial_bank: executedHouses,
           total_planned: totalPlanned,
+          remaining_to_plan: remainingToPlan,
+          is_completed: isCompleted,
           periodValues,
         };
       });
 
-      // Ordenar pela sequência original de cadastro (macro_id e scope_id contêm timestamp)
       rows.sort((a, b) => {
         const macroCompare = a.macro_id.localeCompare(b.macro_id);
         if (macroCompare !== 0) return macroCompare;
@@ -340,7 +347,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
     } finally {
       setLoading(false);
     }
-  }, [projectId, company?.id, activeVersion?.id, periods]);
+  }, [projectId, company?.id, activeVersion?.id, periods, totalHouses]);
 
   // Atualizar valor de uma célula
   const updateCellValue = useCallback((
@@ -359,22 +366,24 @@ export function useLongTermPlanning(projectId: string | undefined) {
           },
         };
 
-        // Recalcular total
         const newTotal = Object.values(updatedPeriodValues).reduce(
           (sum, cell) => sum + cell.target_houses,
           0
         );
 
+        const remainingToPlan = Math.max(0, totalHouses - row.initial_bank - newTotal);
+
         return {
           ...row,
           periodValues: updatedPeriodValues,
           total_planned: newTotal,
+          remaining_to_plan: remainingToPlan,
         };
       }
       return row;
     }));
     setHasChanges(true);
-  }, []);
+  }, [totalHouses]);
 
   // Calcular resumos por período
   const periodSummaries = useMemo((): PeriodSummary[] => {
@@ -418,40 +427,22 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
   // Salvar alterações
   const savePlanning = useCallback(async () => {
-    // ✅ DEBUG LOG: Payload completo antes do save
-    console.log("=== SAVE PLANNING DEBUG ===");
-    console.log("projectId:", projectId);
-    console.log("company.id:", company?.id);
-    console.log("contractId (estado):", contractId);
-    console.log("activeVersion:", activeVersion);
-    console.log("totalHouses:", totalHouses);
-    console.log("serviceRows count:", serviceRows.length);
-    console.log("serviceRows:", JSON.stringify(serviceRows.slice(0, 2), null, 2));
-    console.log("periods:", periods);
-    console.log("===========================");
-
     if (!projectId || !company?.id) {
-      console.error("SAVE BLOCKED: projectId ou company.id ausente", { projectId, companyId: company?.id });
       toast.error("Projeto ou empresa não identificados");
       return false;
     }
 
-    // ✅ Validar se algum serviço excede o total de casas do projeto
+    // Validar se algum serviço excede o máximo planejável
     for (const row of serviceRows) {
-      if (row.total_planned > totalHouses && totalHouses > 0) {
-        console.warn("VALIDATION FAIL: casas excedidas", { 
-          service: `${row.macro_name} - ${row.scope_name}`,
-          planned: row.total_planned,
-          max: totalHouses
-        });
+      const maxPlannable = totalHouses - row.initial_bank;
+      if (row.total_planned > maxPlannable && totalHouses > 0) {
         toast.error(
-          `O serviço "${row.macro_name} - ${row.scope_name}" está planejado para ${row.total_planned} casas, mas o projeto tem apenas ${totalHouses} casas.`
+          `"${row.macro_name} - ${row.scope_name}": planejado ${row.total_planned}, mas só restam ${maxPlannable} casas (${row.initial_bank} já executadas).`
         );
         return false;
       }
     }
 
-    // Buscar contract_id (opcional - pode ser NULL)
     let currentContractId = contractId;
     if (!currentContractId) {
       const { data: contractData } = await supabase
@@ -465,10 +456,8 @@ export function useLongTermPlanning(projectId: string | undefined) {
         currentContractId = contractData[0].id;
         setContractId(currentContractId);
       }
-      // Se não encontrar contrato, prossegue com NULL
     }
 
-    console.log("SAVE PROCEEDING com contractId:", currentContractId);
     setSaving(true);
 
     try {
@@ -476,7 +465,6 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
       serviceRows.forEach(row => {
         Object.entries(row.periodValues).forEach(([periodId, cellData]) => {
-          // Só adicionar se tiver algum valor ou se já existir registro
           if (cellData.target_houses > 0 || cellData.id) {
             upsertData.push({
               id: cellData.id || undefined,
@@ -497,11 +485,9 @@ export function useLongTermPlanning(projectId: string | undefined) {
       });
 
       if (upsertData.length > 0) {
-        // Separar inserts de updates
         const toUpdate = upsertData.filter(d => d.id);
         const toInsert = upsertData.filter(d => !d.id);
 
-        // Updates
         for (const record of toUpdate) {
           const { error } = await supabase
             .from("service_planning_by_period")
@@ -515,7 +501,6 @@ export function useLongTermPlanning(projectId: string | undefined) {
           if (error) throw error;
         }
 
-        // Inserts
         if (toInsert.length > 0) {
           const insertData = toInsert.map(({ id, ...rest }) => rest);
           const { error } = await supabase
@@ -526,30 +511,17 @@ export function useLongTermPlanning(projectId: string | undefined) {
         }
       }
 
-      // ✅ Planejamento de longo prazo salvo apenas em service_planning_by_period
-      // NÃO gera dados operacionais (measurement_services, suprimentos, etc.)
-      console.log(`=== PLANEJAMENTO ESTRATÉGICO SALVO ===`);
-      console.log(`Registros salvos em service_planning_by_period: ${upsertData.length}`);
-      
       toast.success("Planejamento estratégico salvo com sucesso!");
       setHasChanges(false);
 
-      // ✅ Avançar setup_step para long_term_planned (libera measurement-planning)
       if (currentStep !== "long_term_planned") {
         await advanceToStep("long_term_planned");
       }
 
-      // Recarregar dados para atualizar IDs
       await loadMatrixData();
       return true;
     } catch (error: any) {
-      console.error("=== SAVE ERROR ===");
-      console.error("Error object:", error);
-      console.error("Error message:", error?.message);
-      console.error("Error details:", error?.details);
-      console.error("Error hint:", error?.hint);
-      console.error("Error code:", error?.code);
-      console.error("==================");
+      console.error("Erro ao salvar:", error);
       toast.error(`Erro ao salvar planejamento: ${error?.message || "Erro desconhecido"}`);
       return false;
     } finally {
@@ -557,13 +529,11 @@ export function useLongTermPlanning(projectId: string | undefined) {
     }
   }, [projectId, company?.id, contractId, activeVersion, serviceRows, periods, totalHouses, loadMatrixData, currentStep, advanceToStep]);
 
-  // Retry initialization
   const retryInit = useCallback(() => {
     setInitError(null);
     initializePlanning();
   }, [initializePlanning]);
 
-  // Adicionar período
   const addPeriod = useCallback(async () => {
     if (!projectId || !company?.id || !activeVersion?.id) return;
 
@@ -590,7 +560,6 @@ export function useLongTermPlanning(projectId: string | undefined) {
     }
   }, [projectId, company?.id, activeVersion?.id, loadPeriods]);
 
-  // Excluir período
   const deletePeriod = useCallback(async (periodId: string) => {
     try {
       const { data, error } = await supabase.rpc("delete_planning_period", {
@@ -617,7 +586,6 @@ export function useLongTermPlanning(projectId: string | undefined) {
     }
   }, [loadPeriods]);
 
-  // Atualizar datas de um período
   const updatePeriodDates = useCallback(async (periodId: string, startDate: string, endDate: string) => {
     try {
       const period = periods.find(p => p.id === periodId);
@@ -647,7 +615,6 @@ export function useLongTermPlanning(projectId: string | undefined) {
     }
   }, [periods, loadPeriods]);
 
-  // ✅ Efeito de inicialização - roda quando projectId ou company mudam
   useEffect(() => {
     if (!projectId || !company?.id) return;
     initializePlanning();
