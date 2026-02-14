@@ -36,6 +36,8 @@ export default function LongTermPlanningPage() {
     savePlanning,
     refresh,
     retryInit,
+    addPeriod,
+    deletePeriod,
   } = useLongTermPlanning(currentProject?.id);
 
   // ✅ Auto-correção: se o contrato existe mas o setup_step não avançou,
@@ -141,6 +143,7 @@ export default function LongTermPlanningPage() {
                   saving={saving}
                   onSave={savePlanning}
                   onRefresh={refresh}
+                  onAddPeriod={addPeriod}
                 />
 
                 {loading ? (
@@ -169,6 +172,7 @@ export default function LongTermPlanningPage() {
                     periodSummaries={periodSummaries}
                     totalHouses={totalHouses}
                     onCellChange={updateCellValue}
+                    onDeletePeriod={deletePeriod}
                   />
                 )}
               </>

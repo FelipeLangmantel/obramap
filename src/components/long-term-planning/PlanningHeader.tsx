@@ -1,4 +1,4 @@
-import { Save, RefreshCw, TrendingUp, TrendingDown } from "lucide-react";
+import { Save, RefreshCw, TrendingUp, TrendingDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,11 +13,12 @@ interface PlanningHeaderProps {
     total_revenue: number;
     projected_result: number;
   };
-  totalHouses: number; // Total de casas do projeto (não planejadas)
+  totalHouses: number;
   hasChanges: boolean;
   saving: boolean;
   onSave: () => void;
   onRefresh: () => void;
+  onAddPeriod?: () => void;
 }
 
 export function PlanningHeader({
@@ -28,6 +29,7 @@ export function PlanningHeader({
   saving,
   onSave,
   onRefresh,
+  onAddPeriod,
 }: PlanningHeaderProps) {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -63,6 +65,17 @@ export function PlanningHeader({
             <Badge variant="outline" className="text-sm">
               {activeVersion.name}
             </Badge>
+          )}
+          {onAddPeriod && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onAddPeriod}
+              disabled={saving}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Adicionar Período
+            </Button>
           )}
         </div>
 
