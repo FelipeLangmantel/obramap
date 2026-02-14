@@ -115,7 +115,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
         setContractId(contractResult.data[0].id);
         console.log("contractId SET:", contractResult.data[0].id);
       } else {
-        console.warn("Nenhum contrato encontrado para projectId:", projectId);
+        console.log("Nenhum contrato encontrado - planejamento estratégico prossegue sem contrato");
       }
 
       const houseCount = housesResult.count || 0;
@@ -155,8 +155,8 @@ export function useLongTermPlanning(projectId: string | undefined) {
         const result = rpcResult as { success: boolean; error?: string; planning_version_id?: string };
 
         if (!result.success) {
-          if (result.error === "contract_not_found") {
-            throw new Error("Contrato do projeto não encontrado. Configure o contrato antes de criar o planejamento.");
+          if (result.error === "no_services_found") {
+            throw new Error("Nenhum serviço encontrado no projeto. Cadastre os serviços do contrato antes de criar o planejamento.");
           }
           throw new Error(result.error || "Erro desconhecido ao inicializar");
         }
@@ -451,28 +451,21 @@ export function useLongTermPlanning(projectId: string | undefined) {
       }
     }
 
-    // Verificar se temos contract_id
+    // Buscar contract_id (opcional - pode ser NULL)
     let currentContractId = contractId;
     if (!currentContractId) {
-      console.log("contractId não encontrado no estado, buscando do banco...");
-      const { data: contractData, error: contractError } = await supabase
+      const { data: contractData } = await supabase
         .from("project_contracts")
         .select("id")
         .eq("project_id", projectId)
         .order("created_at", { ascending: false })
         .limit(1);
 
-      console.log("Busca de contrato:", { contractData, contractError });
-
       if (contractData && contractData.length > 0) {
         currentContractId = contractData[0].id;
         setContractId(currentContractId);
-        console.log("contractId encontrado:", currentContractId);
-      } else {
-        console.error("SAVE BLOCKED: contrato não encontrado para projectId:", projectId);
-        toast.error("Contrato do projeto não encontrado. Configure o contrato primeiro.");
-        return false;
       }
+      // Se não encontrar contrato, prossegue com NULL
     }
 
     console.log("SAVE PROCEEDING com contractId:", currentContractId);
