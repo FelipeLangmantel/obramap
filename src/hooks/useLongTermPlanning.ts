@@ -617,6 +617,36 @@ export function useLongTermPlanning(projectId: string | undefined) {
     }
   }, [loadPeriods]);
 
+  // Atualizar datas de um período
+  const updatePeriodDates = useCallback(async (periodId: string, startDate: string, endDate: string) => {
+    try {
+      const period = periods.find(p => p.id === periodId);
+      if (!period) {
+        toast.error("Período não encontrado");
+        return false;
+      }
+      if (period.status === "executing" || period.status === "closed") {
+        toast.error("Não é possível editar um período em execução ou fechado");
+        return false;
+      }
+
+      const { error } = await supabase
+        .from("planning_periods")
+        .update({ start_date: startDate, end_date: endDate, updated_at: new Date().toISOString() })
+        .eq("id", periodId);
+
+      if (error) throw error;
+
+      toast.success("Período atualizado com sucesso!");
+      await loadPeriods();
+      return true;
+    } catch (error) {
+      console.error("Erro ao atualizar período:", error);
+      toast.error("Erro ao atualizar período");
+      return false;
+    }
+  }, [periods, loadPeriods]);
+
   // ✅ Efeito de inicialização - roda quando projectId ou company mudam
   useEffect(() => {
     if (!projectId || !company?.id) return;
@@ -649,5 +679,6 @@ export function useLongTermPlanning(projectId: string | undefined) {
     retryInit,
     addPeriod,
     deletePeriod,
+    updatePeriodDates,
   };
 }

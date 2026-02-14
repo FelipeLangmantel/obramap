@@ -155,7 +155,8 @@ export function usePeriodPlanning(projectId: string | null) {
         .from("service_planning_by_period")
         .select("id, planning_period_id, macro_id, scope_id, macro_name, scope_name, target_houses, planned_revenue, planned_cost, projected_result, productivity_planned, teams_planned, status, team_count, productivity_per_team, expected_output")
         .eq("planning_period_id", periodId)
-        .order("macro_name", { ascending: true });
+        .gt("target_houses", 0)
+        .order("macro_id", { ascending: true });
 
       if (error) throw error;
 

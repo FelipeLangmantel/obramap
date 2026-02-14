@@ -24,12 +24,20 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { PlanningPeriod } from "@/hooks/usePeriodPlanning";
+
+interface EditablePeriod {
+  id: string;
+  period_number: number;
+  name: string | null;
+  start_date: string;
+  end_date: string;
+  status: string;
+}
 
 interface EditPeriodDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  period: PlanningPeriod | null;
+  period: EditablePeriod | null;
   onSave: (periodId: string, startDate: string, endDate: string) => Promise<boolean>;
 }
 
@@ -90,7 +98,7 @@ export function EditPeriodDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            Editar Período - {period?.name || `Quinzena ${period?.period_number}`}
+            Editar Período - {period?.name || `Medição ${period?.period_number}`}
           </DialogTitle>
         </DialogHeader>
 

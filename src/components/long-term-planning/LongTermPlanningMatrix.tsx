@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Lock, AlertTriangle, ShieldCheck, Trash2 } from "lucide-react";
+import { Lock, AlertTriangle, ShieldCheck, Trash2, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -25,6 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { EditPeriodDialog } from "@/components/planning/EditPeriodDialog";
 import type { PlanningPeriod, ServiceRow, PeriodSummary, PeriodStatus } from "@/hooks/useLongTermPlanning";
 
 interface LongTermPlanningMatrixProps {
@@ -34,6 +35,7 @@ interface LongTermPlanningMatrixProps {
   totalHouses: number;
   onCellChange: (macroId: string, scopeId: string, periodId: string, value: number) => void;
   onDeletePeriod?: (periodId: string) => void;
+  onUpdatePeriodDates?: (periodId: string, startDate: string, endDate: string) => Promise<boolean>;
 }
 
 const isEditable = (status: PeriodStatus): boolean => {
@@ -60,9 +62,11 @@ export function LongTermPlanningMatrix({
   totalHouses,
   onCellChange,
   onDeletePeriod,
+  onUpdatePeriodDates,
 }: LongTermPlanningMatrixProps) {
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [periodToDelete, setPeriodToDelete] = useState<PlanningPeriod | null>(null);
+  const [editingPeriod, setEditingPeriod] = useState<PlanningPeriod | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -213,6 +217,24 @@ export function LongTermPlanningMatrix({
                           </TooltipContent>
                         </Tooltip>
                       )}
+                      {periodEditable && onUpdatePeriodDates && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              className="text-muted-foreground hover:text-primary transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingPeriod(period);
+                              }}
+                            >
+                              <CalendarClock className="h-3 w-3" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">Editar datas do período</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                     </div>
                     <span className="text-xs">{formatPeriodHeader(period)}</span>
                     {statusBadge && (
@@ -245,9 +267,18 @@ export function LongTermPlanningMatrix({
                   )}
                 >
                   <div className="flex flex-col gap-0.5 text-xs">
-                    <span className="font-semibold">{summary?.total_houses || 0}</span>
+                    <span className="font-semibold">{summary?.total_houses || 0} casas</span>
                     <span className="text-muted-foreground">
-                      {formatCurrency(summary?.total_revenue || 0)}
+                      Receita: {formatCurrency(summary?.total_revenue || 0)}
+                    </span>
+                    <span className="text-muted-foreground">
+                      Custo: {formatCurrency(summary?.total_cost || 0)}
+                    </span>
+                    <span className={cn(
+                      "font-medium",
+                      (summary?.projected_result || 0) >= 0 ? "text-emerald-600" : "text-destructive"
+                    )}>
+                      Resultado: {formatCurrency(summary?.projected_result || 0)}
                     </span>
                   </div>
                 </TableCell>
@@ -381,6 +412,16 @@ export function LongTermPlanningMatrix({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog de edição de período */}
+      {onUpdatePeriodDates && (
+        <EditPeriodDialog
+          open={!!editingPeriod}
+          onOpenChange={(open) => !open && setEditingPeriod(null)}
+          period={editingPeriod}
+          onSave={onUpdatePeriodDates}
+        />
+      )}
     </div>
   );
 }

@@ -97,7 +97,7 @@ export function PeriodCard({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <CardTitle className="text-base font-semibold">
-              {period.name || `Quinzena ${period.period_number}`}
+              {period.name || `Medição ${period.period_number}`}
             </CardTitle>
             {isLocked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
           </div>

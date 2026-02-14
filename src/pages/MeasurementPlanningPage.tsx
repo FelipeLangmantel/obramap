@@ -42,7 +42,6 @@ export default function MeasurementPlanningPage() {
     refreshServices,
     deleteService,
     generateSupplies,
-    updatePeriodDates,
   } = usePeriodPlanning(currentProject?.id || null);
 
   const [generatingSuppliesPeriodId, setGeneratingSuppliesPeriodId] = useState<string | null>(null);
@@ -139,7 +138,7 @@ export default function MeasurementPlanningPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
-                      Total de Quinzenas
+                      Total de Medições
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -217,7 +216,7 @@ export default function MeasurementPlanningPage() {
             ) : currentProject ? (
               <Card className="p-12 text-center">
                 <p className="text-muted-foreground">
-                  Nenhuma quinzena planejada encontrada.
+                  Nenhuma medição planejada encontrada.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">
                   Crie o planejamento de longo prazo primeiro em{" "}
@@ -252,7 +251,6 @@ export default function MeasurementPlanningPage() {
         companyId={company?.id || ""}
         onRefresh={refreshServices}
         onDeleteService={deleteService}
-        onUpdatePeriodDates={updatePeriodDates}
       />
       </SidebarProvider>
     </ModuleAccessGuard>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { AlertTriangle, Users, Plus, Pencil, Trash2, Loader2, CalendarClock } from "lucide-react";
+import { AlertTriangle, Users, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +32,6 @@ import {
 import { cn } from "@/lib/utils";
 import { PlanningPeriod, PeriodService } from "@/hooks/usePeriodPlanning";
 import { AddServiceDialog } from "./AddServiceDialog";
-import { EditPeriodDialog } from "./EditPeriodDialog";
 
 interface PeriodServicesDialogProps {
   open: boolean;
@@ -45,7 +44,6 @@ interface PeriodServicesDialogProps {
   companyId: string;
   onRefresh: () => void;
   onDeleteService: (serviceId: string) => Promise<boolean>;
-  onUpdatePeriodDates?: (periodId: string, startDate: string, endDate: string) => Promise<boolean>;
 }
 
 export function PeriodServicesDialog({
@@ -59,10 +57,8 @@ export function PeriodServicesDialog({
   companyId,
   onRefresh,
   onDeleteService,
-  onUpdatePeriodDates,
 }: PeriodServicesDialogProps) {
   const [addServiceOpen, setAddServiceOpen] = useState(false);
-  const [editPeriodOpen, setEditPeriodOpen] = useState(false);
   const [editingService, setEditingService] = useState<PeriodService | null>(null);
   const [deletingServiceId, setDeletingServiceId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -143,7 +139,7 @@ export function PeriodServicesDialog({
               <div className="flex items-center gap-3">
                 <div>
                   <DialogTitle>
-                    {period?.name || `Quinzena ${period?.period_number}`}
+                    {period?.name || `Medição ${period?.period_number}`}
                   </DialogTitle>
                   {period && (
                     <p className="text-sm text-muted-foreground mt-1">
@@ -151,18 +147,6 @@ export function PeriodServicesDialog({
                     </p>
                   )}
                 </div>
-                {/* Edit Period Button - only for draft/approved */}
-                {canEdit && (period?.status === "draft" || period?.status === "approved") && onUpdatePeriodDates && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => setEditPeriodOpen(true)}
-                    title="Editar período"
-                  >
-                    <CalendarClock className="h-4 w-4" />
-                  </Button>
-                )}
               </div>
               {canEdit && periodAllowsEdit && (
                 <Button onClick={handleAddService} size="sm" className="gap-2">
@@ -372,16 +356,6 @@ export function PeriodServicesDialog({
             productivity_per_team: editingService.productivity_per_team,
           } : null}
           onSave={handleServiceSaved}
-        />
-      )}
-
-      {/* Edit Period Dialog */}
-      {period && onUpdatePeriodDates && (
-        <EditPeriodDialog
-          open={editPeriodOpen}
-          onOpenChange={setEditPeriodOpen}
-          period={period}
-          onSave={onUpdatePeriodDates}
         />
       )}
 
