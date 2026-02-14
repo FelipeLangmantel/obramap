@@ -326,11 +326,11 @@ export function useLongTermPlanning(projectId: string | undefined) {
         };
       });
 
-      // Ordenar por macro_name e scope_name
+      // Ordenar pela sequência original de cadastro (macro_id e scope_id contêm timestamp)
       rows.sort((a, b) => {
-        const macroCompare = a.macro_name.localeCompare(b.macro_name);
+        const macroCompare = a.macro_id.localeCompare(b.macro_id);
         if (macroCompare !== 0) return macroCompare;
-        return a.scope_name.localeCompare(b.scope_name);
+        return a.scope_id.localeCompare(b.scope_id);
       });
 
       setServiceRows(rows);
