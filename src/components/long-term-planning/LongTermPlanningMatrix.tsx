@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Lock, AlertTriangle, ShieldCheck } from "lucide-react";
+import { Lock, AlertTriangle, ShieldCheck, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -13,7 +13,18 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { PlanningPeriod, ServiceRow, PeriodSummary, PeriodStatus } from "@/hooks/useLongTermPlanning";
 
 interface LongTermPlanningMatrixProps {
@@ -22,6 +33,7 @@ interface LongTermPlanningMatrixProps {
   periodSummaries: PeriodSummary[];
   totalHouses: number;
   onCellChange: (macroId: string, scopeId: string, periodId: string, value: number) => void;
+  onDeletePeriod?: (periodId: string) => void;
 }
 
 const isEditable = (status: PeriodStatus): boolean => {
@@ -47,8 +59,10 @@ export function LongTermPlanningMatrix({
   periodSummaries,
   totalHouses,
   onCellChange,
+  onDeletePeriod,
 }: LongTermPlanningMatrixProps) {
   const [editingCell, setEditingCell] = useState<string | null>(null);
+  const [periodToDelete, setPeriodToDelete] = useState<PlanningPeriod | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -178,6 +192,24 @@ export function LongTermPlanningMatrix({
                           </TooltipTrigger>
                           <TooltipContent>
                             <p className="text-xs">Período bloqueado - já aprovado</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {periodEditable && onDeletePeriod && periods.length > 1 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              className="text-muted-foreground hover:text-destructive transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPeriodToDelete(period);
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">Excluir período</p>
                           </TooltipContent>
                         </Tooltip>
                       )}
@@ -323,6 +355,32 @@ export function LongTermPlanningMatrix({
           })}
         </TableBody>
       </Table>
+
+      {/* Modal de confirmação de exclusão */}
+      <AlertDialog open={!!periodToDelete} onOpenChange={(open) => !open && setPeriodToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Período P{periodToDelete?.period_number}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza? Isso excluirá todos os serviços planejados deste período. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (periodToDelete && onDeletePeriod) {
+                  onDeletePeriod(periodToDelete.id);
+                }
+                setPeriodToDelete(null);
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

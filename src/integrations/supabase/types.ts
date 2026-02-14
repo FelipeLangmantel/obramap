@@ -4348,6 +4348,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_planning_period: {
+        Args: {
+          p_company_id: string
+          p_planning_version_id: string
+          p_project_id: string
+        }
+        Returns: Json
+      }
       admin_create_company: { Args: { company_name: string }; Returns: Json }
       admin_create_company_admin: {
         Args: {
@@ -4488,6 +4496,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      delete_planning_period: { Args: { p_period_id: string }; Returns: Json }
       estimate_service_duration_days: {
         Args: {
           p_planned_houses: number

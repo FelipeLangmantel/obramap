@@ -563,6 +563,60 @@ export function useLongTermPlanning(projectId: string | undefined) {
     initializePlanning();
   }, [initializePlanning]);
 
+  // Adicionar período
+  const addPeriod = useCallback(async () => {
+    if (!projectId || !company?.id || !activeVersion?.id) return;
+
+    try {
+      const { data, error } = await supabase.rpc("add_planning_period", {
+        p_project_id: projectId,
+        p_company_id: company.id,
+        p_planning_version_id: activeVersion.id,
+      });
+
+      if (error) throw error;
+
+      const result = data as { success: boolean; error?: string; period_number?: number };
+      if (!result.success) {
+        toast.error(result.error || "Erro ao adicionar período");
+        return;
+      }
+
+      toast.success(`Período P${result.period_number} adicionado!`);
+      await loadPeriods();
+    } catch (error: any) {
+      console.error("Erro ao adicionar período:", error);
+      toast.error("Erro ao adicionar período");
+    }
+  }, [projectId, company?.id, activeVersion?.id, loadPeriods]);
+
+  // Excluir período
+  const deletePeriod = useCallback(async (periodId: string) => {
+    try {
+      const { data, error } = await supabase.rpc("delete_planning_period", {
+        p_period_id: periodId,
+      });
+
+      if (error) throw error;
+
+      const result = data as { success: boolean; error?: string };
+      if (!result.success) {
+        if (result.error === "cannot_delete_last_period") {
+          toast.error("Não é possível excluir o único período restante");
+        } else {
+          toast.error(result.error || "Erro ao excluir período");
+        }
+        return;
+      }
+
+      toast.success("Período excluído com sucesso!");
+      await loadPeriods();
+    } catch (error: any) {
+      console.error("Erro ao excluir período:", error);
+      toast.error("Erro ao excluir período");
+    }
+  }, [loadPeriods]);
+
   // ✅ Efeito de inicialização - roda quando projectId ou company mudam
   useEffect(() => {
     if (!projectId || !company?.id) return;
@@ -593,5 +647,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
     savePlanning,
     refresh: loadMatrixData,
     retryInit,
+    addPeriod,
+    deletePeriod,
   };
 }
