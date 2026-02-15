@@ -146,6 +146,7 @@ export default function LongTermPlanningPage() {
                     activeVersion={activeVersion}
                     overallTotals={overallTotals}
                     totalHouses={totalHouses}
+                    serviceRows={serviceRows}
                     hasChanges={hasChanges}
                     saving={saving}
                     onSave={savePlanning}

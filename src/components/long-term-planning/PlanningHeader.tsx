@@ -1,9 +1,9 @@
-import { Save, RefreshCw, TrendingUp, TrendingDown, Plus, Building2, DollarSign, BarChart3 } from "lucide-react";
+import { Save, RefreshCw, TrendingUp, TrendingDown, Plus, Building2, DollarSign, BarChart3, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import type { PlanningVersion } from "@/hooks/useLongTermPlanning";
+import type { PlanningVersion, ServiceRow } from "@/hooks/useLongTermPlanning";
 
 interface PlanningHeaderProps {
   activeVersion: PlanningVersion | null;
@@ -14,6 +14,7 @@ interface PlanningHeaderProps {
     projected_result: number;
   };
   totalHouses: number;
+  serviceRows: ServiceRow[];
   hasChanges: boolean;
   saving: boolean;
   onSave: () => void;
@@ -25,6 +26,7 @@ export function PlanningHeader({
   activeVersion,
   overallTotals,
   totalHouses,
+  serviceRows,
   hasChanges,
   saving,
   onSave,
@@ -59,6 +61,11 @@ export function PlanningHeader({
   };
 
   const status = getResultStatus();
+
+  // Execution bank summary
+  const completedServices = serviceRows.filter(r => r.execution_status === 'completed').length;
+  const inProgressServices = serviceRows.filter(r => r.execution_status === 'in_progress').length;
+  const totalExecutedHouses = serviceRows.reduce((sum, r) => sum + r.initial_bank, 0);
 
   return (
     <div className="space-y-4">
@@ -111,7 +118,26 @@ export function PlanningHeader({
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        {/* Banco Inicial / Execução */}
+        <div className="rounded-xl border bg-card p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Banco Inicial</p>
+              <p className="text-lg font-bold text-emerald-600">
+                {completedServices} <span className="text-sm font-normal text-muted-foreground">/ {serviceRows.length}</span>
+              </p>
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground space-y-0.5">
+            <p>{inProgressServices} em andamento</p>
+            <p>{totalExecutedHouses} casas executadas</p>
+          </div>
+        </div>
+
         {/* Progresso de Planejamento */}
         <div className="rounded-xl border bg-card p-4 space-y-3">
           <div className="flex items-center gap-2">

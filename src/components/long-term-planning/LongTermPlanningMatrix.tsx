@@ -134,14 +134,15 @@ export function LongTermPlanningMatrix({
   };
 
   const getServiceProgress = (row: ServiceRow) => {
+    // Use completion_percent from RPC if available, otherwise calculate
+    if (row.completion_percent > 0) return row.completion_percent;
     const total = row.initial_bank + row.total_planned;
     return totalHouses > 0 ? Math.min(100, (total / totalHouses) * 100) : 0;
   };
 
   const getOverPlanningWarning = (row: ServiceRow) => {
-    const maxPlannable = totalHouses - row.initial_bank;
-    if (row.total_planned > maxPlannable && totalHouses > 0) {
-      return `Planejado ${row.total_planned}, mas restam apenas ${maxPlannable} casas disponíveis`;
+    if (row.total_planned > row.available_houses && totalHouses > 0) {
+      return `Planejado ${row.total_planned}, mas restam apenas ${row.available_houses} casas disponíveis`;
     }
     return null;
   };
@@ -315,13 +316,17 @@ export function LongTermPlanningMatrix({
                         "text-sm font-semibold",
                         row.initial_bank > 0 ? "text-primary" : "text-muted-foreground"
                       )}>
-                        {row.initial_bank}
+                        {row.initial_bank}/{totalHouses}
                       </span>
-                      {row.is_completed && (
+                      {row.is_completed ? (
                         <Badge variant="outline" className="text-[9px] px-1 h-4 mt-0.5 text-emerald-600 border-emerald-300 bg-emerald-50">
                           Concluído
                         </Badge>
-                      )}
+                      ) : row.completion_percent > 0 ? (
+                        <span className="text-[10px] text-muted-foreground mt-0.5">
+                          {row.completion_percent}%
+                        </span>
+                      ) : null}
                     </div>
                   </TableCell>
 

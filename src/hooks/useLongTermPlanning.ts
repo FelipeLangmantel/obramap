@@ -23,6 +23,8 @@ export interface PlanningVersion {
   is_active: boolean;
 }
 
+export type ServiceStatus = "completed" | "in_progress" | "not_started";
+
 export interface ServiceRow {
   macro_id: string;
   macro_name: string;
@@ -32,6 +34,9 @@ export interface ServiceRow {
   unit_cost_value: number;
   unit_revenue_value: number;
   initial_bank: number; // Casas já executadas (banco inicial + produção)
+  available_houses: number; // Casas disponíveis para planejar
+  completion_percent: number; // % de execução
+  execution_status: ServiceStatus; // Status baseado na RPC
   total_planned: number; // Soma de todas as células
   remaining_to_plan: number; // Casas restantes para planejar
   is_completed: boolean; // Se já foi 100% executado
@@ -211,8 +216,9 @@ export function useLongTermPlanning(projectId: string | undefined) {
     setLoading(true);
 
     try {
-      // Buscar serviços, planejamento E produção executada em paralelo
-      const [servicesResult, planningResult, executionResult] = await Promise.all([
+      // Buscar banco de execução via RPC, serviços e planejamento em paralelo
+      const [executionBankResult, servicesResult, planningResult] = await Promise.all([
+        supabase.rpc('get_service_execution_bank', { p_project_id: projectId }),
         supabase
           .from("project_contract_services")
           .select("macro_id, macro_name, scope_id, scope_name")
@@ -224,39 +230,28 @@ export function useLongTermPlanning(projectId: string | undefined) {
           .eq("project_id", projectId)
           .eq("company_id", company.id)
           .in("planning_period_id", periods.map(p => p.id)),
-        // Buscar casas já executadas por serviço (macro_id + scope_id)
-        supabase
-          .from("production_logs")
-          .select("service_id, house_id, is_initial_database, quantity_executed")
-          .eq("project_id", projectId)
-          .eq("company_id", company.id),
       ]);
 
       if (servicesResult.error) throw servicesResult.error;
       if (planningResult.error) throw planningResult.error;
 
-      // Buscar mapeamento service_id -> macro_id/scope_id from measurement_services
-      let executedMap = new Map<string, number>(); // "macro_id_scope_id" -> count
-      
-      if (!executionResult.error && executionResult.data && executionResult.data.length > 0) {
-        const serviceIds = [...new Set(executionResult.data.map(pl => pl.service_id))];
-        
-        const { data: msData } = await supabase
-          .from("measurement_services")
-          .select("id, macro_id, scope_id")
-          .in("id", serviceIds);
-        
-        const serviceToMacroScope = new Map<string, { macro_id: string; scope_id: string }>();
-        msData?.forEach(ms => {
-          serviceToMacroScope.set(ms.id, { macro_id: ms.macro_id, scope_id: ms.scope_id });
-        });
+      // Build execution bank map from RPC
+      const executionMap = new Map<string, {
+        executed_houses: number;
+        available_houses: number;
+        completion_percent: number;
+        status: ServiceStatus;
+      }>();
 
-        executionResult.data.forEach(pl => {
-          const mapping = serviceToMacroScope.get(pl.service_id);
-          if (mapping) {
-            const key = `${mapping.macro_id}_${mapping.scope_id}`;
-            executedMap.set(key, (executedMap.get(key) || 0) + (pl.quantity_executed || 1));
-          }
+      if (!executionBankResult.error && executionBankResult.data) {
+        (executionBankResult.data as any[]).forEach((row: any) => {
+          const key = `${row.macro_id}_${row.scope_id}`;
+          executionMap.set(key, {
+            executed_houses: Number(row.executed_houses) || 0,
+            available_houses: Number(row.available_houses) || 0,
+            completion_percent: Number(row.completion_percent) || 0,
+            status: (row.status as ServiceStatus) || 'not_started',
+          });
         });
       }
 
@@ -291,7 +286,12 @@ export function useLongTermPlanning(projectId: string | undefined) {
       // Construir as linhas de serviço
       const rows: ServiceRow[] = uniqueServices.map(service => {
         const serviceKey = `${service.macro_id}_${service.scope_id}`;
-        const executedHouses = executedMap.get(serviceKey) || 0;
+        const execData = executionMap.get(serviceKey);
+        const executedHouses = execData?.executed_houses || 0;
+        const availableHouses = execData?.available_houses ?? totalHouses;
+        const completionPercent = execData?.completion_percent || 0;
+        const executionStatus = execData?.status || 'not_started';
+
         const periodValues: Record<string, CellData> = {};
         let totalPlanned = 0;
         let unit_cost_value = 0;
@@ -315,8 +315,8 @@ export function useLongTermPlanning(projectId: string | undefined) {
           };
         });
 
-        const remainingToPlan = Math.max(0, totalHouses - executedHouses - totalPlanned);
-        const isCompleted = executedHouses >= totalHouses && totalHouses > 0;
+        const remainingToPlan = Math.max(0, availableHouses - totalPlanned);
+        const isCompleted = executionStatus === 'completed';
 
         return {
           macro_id: service.macro_id,
@@ -327,6 +327,9 @@ export function useLongTermPlanning(projectId: string | undefined) {
           unit_cost_value,
           unit_revenue_value,
           initial_bank: executedHouses,
+          available_houses: availableHouses,
+          completion_percent: completionPercent,
+          execution_status: executionStatus,
           total_planned: totalPlanned,
           remaining_to_plan: remainingToPlan,
           is_completed: isCompleted,
@@ -334,7 +337,11 @@ export function useLongTermPlanning(projectId: string | undefined) {
         };
       });
 
+      // Sort: not_started first, then in_progress, then completed
       rows.sort((a, b) => {
+        const statusOrder = { not_started: 1, in_progress: 2, completed: 3 };
+        const statusDiff = statusOrder[a.execution_status] - statusOrder[b.execution_status];
+        if (statusDiff !== 0) return statusDiff;
         const macroCompare = a.macro_id.localeCompare(b.macro_id);
         if (macroCompare !== 0) return macroCompare;
         return a.scope_id.localeCompare(b.scope_id);
@@ -358,6 +365,9 @@ export function useLongTermPlanning(projectId: string | undefined) {
   ) => {
     setServiceRows(prev => prev.map(row => {
       if (row.macro_id === macroId && row.scope_id === scopeId) {
+        // Block completed services
+        if (row.is_completed) return row;
+
         const updatedPeriodValues = {
           ...row.periodValues,
           [periodId]: {
@@ -371,7 +381,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
           0
         );
 
-        const remainingToPlan = Math.max(0, totalHouses - row.initial_bank - newTotal);
+        const remainingToPlan = Math.max(0, row.available_houses - newTotal);
 
         return {
           ...row,
@@ -383,7 +393,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
       return row;
     }));
     setHasChanges(true);
-  }, [totalHouses]);
+  }, []);
 
   // Calcular resumos por período
   const periodSummaries = useMemo((): PeriodSummary[] => {
@@ -434,10 +444,15 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
     // Validar se algum serviço excede o máximo planejável
     for (const row of serviceRows) {
-      const maxPlannable = totalHouses - row.initial_bank;
-      if (row.total_planned > maxPlannable && totalHouses > 0) {
+      if (row.is_completed && row.total_planned > 0) {
         toast.error(
-          `"${row.macro_name} - ${row.scope_name}": planejado ${row.total_planned}, mas só restam ${maxPlannable} casas (${row.initial_bank} já executadas).`
+          `"${row.macro_name} - ${row.scope_name}": serviço já concluído (${row.initial_bank}/${totalHouses} casas). Remova o planejamento.`
+        );
+        return false;
+      }
+      if (row.total_planned > row.available_houses && totalHouses > 0) {
+        toast.error(
+          `"${row.macro_name} - ${row.scope_name}": planejado ${row.total_planned}, mas só restam ${row.available_houses} casas (${row.initial_bank} já executadas).`
         );
         return false;
       }
