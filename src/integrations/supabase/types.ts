@@ -4738,6 +4738,20 @@ export type Database = {
           service_name: string
         }[]
       }
+      get_service_execution_bank: {
+        Args: { p_project_id: string }
+        Returns: {
+          available_houses: number
+          completion_percent: number
+          executed_houses: number
+          macro_id: string
+          macro_name: string
+          scope_id: string
+          scope_name: string
+          status: string
+          total_houses: number
+        }[]
+      }
       get_supply_kpis: { Args: { p_project_id: string }; Returns: Json }
       get_supply_requests_by_measurement: {
         Args: { p_project_id: string }
