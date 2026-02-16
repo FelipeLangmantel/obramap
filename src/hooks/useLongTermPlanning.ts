@@ -255,6 +255,8 @@ export function useLongTermPlanning(projectId: string | undefined) {
         });
       }
 
+      console.log('[LTP] Execution bank loaded:', executionMap.size, 'services with data');
+
       // Deduzir serviços únicos
       const uniqueServicesMap = new Map<string, {
         macro_id: string;
@@ -503,18 +505,28 @@ export function useLongTermPlanning(projectId: string | undefined) {
         const toUpdate = upsertData.filter(d => d.id);
         const toInsert = upsertData.filter(d => !d.id);
 
-        for (const record of toUpdate) {
-          const { error } = await supabase
-            .from("service_planning_by_period")
-            .update({
-              target_houses: record.target_houses,
-              unit_cost_value: record.unit_cost_value,
-              unit_revenue_value: record.unit_revenue_value,
-            })
-            .eq("id", record.id);
-
-          if (error) throw error;
+        // Batch updates in parallel (chunks of 20)
+        const CHUNK_SIZE = 20;
+        const updatePromises: Promise<void>[] = [];
+        for (let i = 0; i < toUpdate.length; i += CHUNK_SIZE) {
+          const chunk = toUpdate.slice(i, i + CHUNK_SIZE);
+          updatePromises.push(
+            Promise.all(
+              chunk.map(record =>
+                supabase
+                  .from("service_planning_by_period")
+                  .update({
+                    target_houses: record.target_houses,
+                    unit_cost_value: record.unit_cost_value,
+                    unit_revenue_value: record.unit_revenue_value,
+                  })
+                  .eq("id", record.id)
+                  .then(({ error }) => { if (error) throw error; })
+              )
+            ).then(() => {})
+          );
         }
+        await Promise.all(updatePromises);
 
         if (toInsert.length > 0) {
           const insertData = toInsert.map(({ id, ...rest }) => rest);
