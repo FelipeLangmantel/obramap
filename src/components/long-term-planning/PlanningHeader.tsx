@@ -134,7 +134,7 @@ export function PlanningHeader({
           </div>
           <div className="text-xs text-muted-foreground space-y-0.5">
             <p>{inProgressServices} em andamento</p>
-            <p>{totalExecutedHouses} casas executadas</p>
+            <p>{totalExecutedHouses} serviços executados</p>
           </div>
         </div>
 
