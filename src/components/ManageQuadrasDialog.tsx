@@ -77,7 +77,7 @@ function getNextInSequence(names: string[], pattern: NamingPattern): string {
 }
 
 export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogProps) {
-  const { currentProject, addQuadra, updateQuadra, deleteQuadra, reorderQuadras } = useConstruction();
+  const { currentProject, addQuadra, updateQuadra, deleteQuadra, reorderQuadras, renameHouse } = useConstruction();
   const { advanceToStep, currentStep } = useProjectSetupFlow();
   
   const [newQuadraName, setNewQuadraName] = useState("");
@@ -87,6 +87,8 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
   const [editingHouseIds, setEditingHouseIds] = useState<number[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [editingHouseNumber, setEditingHouseNumber] = useState<number | null>(null);
+  const [newHouseNumber, setNewHouseNumber] = useState("");
   
   // Drag selection state for house selection
   const [isDragging, setIsDragging] = useState(false);
@@ -459,7 +461,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                 <>
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
                     <GripVertical className="h-3 w-3" />
-                    Arraste para reordenar ou use as setas
+                    Arraste para reordenar ou use as setas • Duplo clique no número da casa para editar
                   </p>
                   {currentProject.quadras.map((quadra, index) => (
                     <Card 
@@ -546,12 +548,48 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                                 </div>
                                 <div className="flex flex-wrap gap-1">
                                   {quadra.houses.slice(0, 20).map(houseId => (
-                                    <span 
-                                      key={houseId}
-                                      className="inline-flex items-center justify-center h-6 w-6 text-xs bg-muted rounded"
-                                    >
-                                      {houseId}
-                                    </span>
+                                    editingHouseNumber === houseId ? (
+                                      <input
+                                        key={houseId}
+                                        type="number"
+                                        className="h-7 w-12 text-xs rounded border border-primary bg-background text-center focus:outline-none focus:ring-1 focus:ring-primary"
+                                        value={newHouseNumber}
+                                        onChange={(e) => setNewHouseNumber(e.target.value)}
+                                        onBlur={async () => {
+                                          const num = parseInt(newHouseNumber);
+                                          if (num && num !== houseId) {
+                                            const success = await renameHouse(houseId, num);
+                                            if (success) toast.success(`Casa ${houseId} → ${num}`);
+                                          }
+                                          setEditingHouseNumber(null);
+                                        }}
+                                        onKeyDown={async (e) => {
+                                          if (e.key === 'Enter') {
+                                            const num = parseInt(newHouseNumber);
+                                            if (num && num !== houseId) {
+                                              const success = await renameHouse(houseId, num);
+                                              if (success) toast.success(`Casa ${houseId} → ${num}`);
+                                            }
+                                            setEditingHouseNumber(null);
+                                          } else if (e.key === 'Escape') {
+                                            setEditingHouseNumber(null);
+                                          }
+                                        }}
+                                        autoFocus
+                                      />
+                                    ) : (
+                                      <span 
+                                        key={houseId}
+                                        className="inline-flex items-center justify-center h-6 min-w-[1.5rem] px-1 text-xs bg-muted rounded cursor-pointer hover:bg-primary/20 transition-colors"
+                                        onDoubleClick={() => {
+                                          setEditingHouseNumber(houseId);
+                                          setNewHouseNumber(String(houseId));
+                                        }}
+                                        title="Duplo clique para editar número"
+                                      >
+                                        {houseId}
+                                      </span>
+                                    )
                                   ))}
                                   {quadra.houses.length > 20 && (
                                     <span className="text-xs text-muted-foreground ml-1 flex items-center">
