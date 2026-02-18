@@ -289,7 +289,7 @@ export function LongTermPlanningMatrix({
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
-                          <span className="font-medium text-sm truncate">{row.macro_name}</span>
+                          <span className="font-bold text-sm uppercase truncate">{row.scope_name}</span>
                           {row.is_completed && (
                             <Tooltip>
                               <TooltipTrigger>
@@ -301,8 +301,8 @@ export function LongTermPlanningMatrix({
                             </Tooltip>
                           )}
                         </div>
-                        <div className="text-[11px] text-muted-foreground truncate">
-                          {row.scope_name}
+                        <div className="text-[10px] text-muted-foreground truncate">
+                          {row.macro_name}
                         </div>
                         <Progress value={progress} className="h-1 mt-1" />
                       </div>

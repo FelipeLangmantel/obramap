@@ -339,15 +339,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
         };
       });
 
-      // Sort: not_started first, then in_progress, then completed
-      rows.sort((a, b) => {
-        const statusOrder = { not_started: 1, in_progress: 2, completed: 3 };
-        const statusDiff = statusOrder[a.execution_status] - statusOrder[b.execution_status];
-        if (statusDiff !== 0) return statusDiff;
-        const macroCompare = a.macro_id.localeCompare(b.macro_id);
-        if (macroCompare !== 0) return macroCompare;
-        return a.scope_id.localeCompare(b.scope_id);
-      });
+      // Preserve registration order (same as contract services / quadras cadastro)
 
       setServiceRows(rows);
     } catch (error) {
