@@ -76,6 +76,7 @@ interface ConstructionContextType {
   updateScopeProgress: (houseId: number, macroId: string, scopeId: string, progress: number, startDate?: string | null, endDate?: string | null) => void;
   updateBatchScopeProgress: (houseIds: number[], macroId: string, scopeId: string, progress: number, houseProgressMap?: Record<number, number>) => Promise<void>;
   updateHouseInfo: (houseId: number, updates: Partial<Pick<House, "area" | "constructorName" | "type" | "expectedDate">>) => void;
+  renameHouse: (oldNumber: number, newNumber: number) => Promise<boolean>;
   getHouseProgress: (houseId: number) => number;
   moveHouseToQuadra: (houseId: number, newQuadraId: string) => void;
   refreshHousesFromDB: () => Promise<void>;
@@ -1598,6 +1599,52 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     }
   }, [currentProjectId, selectedHouse]);
 
+  const renameHouse = useCallback(async (oldNumber: number, newNumber: number): Promise<boolean> => {
+    if (!currentProjectId) return false;
+    
+    // Check if newNumber already exists
+    const currentProj = projects.find(p => p.id === currentProjectId);
+    if (currentProj?.houses.some(h => h.id === newNumber)) {
+      toast.error(`Já existe uma casa com número ${newNumber}`);
+      return false;
+    }
+
+    // Update in database
+    const { error } = await supabase
+      .from('houses')
+      .update({ house_number: newNumber })
+      .eq('project_id', currentProjectId)
+      .eq('house_number', oldNumber);
+
+    if (error) {
+      console.error('Error renaming house:', error);
+      toast.error('Erro ao renumerar casa');
+      return false;
+    }
+
+    // Update local state
+    setProjects(prev => prev.map(p => {
+      if (p.id !== currentProjectId) return p;
+      
+      const updatedHouses = p.houses.map(house => 
+        house.id === oldNumber ? { ...house, id: newNumber } : house
+      );
+      
+      const updatedQuadras = p.quadras.map(q => ({
+        ...q,
+        houses: q.houses.map(h => h === oldNumber ? newNumber : h)
+      }));
+      
+      return { ...p, houses: updatedHouses, quadras: updatedQuadras };
+    }));
+
+    if (selectedHouse?.id === oldNumber) {
+      setSelectedHouse(prev => prev ? { ...prev, id: newNumber } : null);
+    }
+
+    return true;
+  }, [currentProjectId, projects, selectedHouse]);
+
   const getHouseProgress = useCallback((houseId: number): number => {
     if (!currentProject) return 0;
     const house = currentProject.houses.find(h => h.id === houseId);
@@ -1730,6 +1777,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         updateScopeProgress,
         updateBatchScopeProgress,
         updateHouseInfo,
+        renameHouse,
         getHouseProgress,
         moveHouseToQuadra,
         refreshHousesFromDB,

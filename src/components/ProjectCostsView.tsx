@@ -294,7 +294,7 @@ export function ProjectCostsView() {
     loadPlannedProductions();
   }, [currentProject?.id]);
 
-  // Calculate costs based on progress
+  // Calculate costs based on progress - TOTAL values (unit cost × houses)
   const costCalculations = useMemo(() => {
     let totalMaterial = 0;
     let totalLabor = 0;
@@ -314,16 +314,15 @@ export function ProjectCostsView() {
       const totalHouses = progress?.total || houses.length;
       const completedHouses = progress?.completed || 0;
 
-      // Unit costs are already totals per house
-      const totalScopeMaterial = cost.materialCost;
-      const totalScopeLabor = cost.laborCost;
-      const totalScopeEquipment = cost.equipmentCost;
+      // Multiply unit cost per house × total houses for total obra
+      const totalScopeMaterial = cost.materialCost * totalHouses;
+      const totalScopeLabor = cost.laborCost * totalHouses;
+      const totalScopeEquipment = cost.equipmentCost * totalHouses;
 
-      // For executed, we multiply by completed houses ratio
-      const ratio = totalHouses > 0 ? completedHouses / totalHouses : 0;
-      const execMaterial = cost.materialCost * ratio;
-      const execLabor = cost.laborCost * ratio;
-      const execEquipment = cost.equipmentCost * ratio;
+      // Multiply unit cost per house × completed houses for executed
+      const execMaterial = cost.materialCost * completedHouses;
+      const execLabor = cost.laborCost * completedHouses;
+      const execEquipment = cost.equipmentCost * completedHouses;
 
       totalMaterial += totalScopeMaterial;
       totalLabor += totalScopeLabor;
@@ -681,9 +680,9 @@ export function ProjectCostsView() {
   };
 
   const pieData = [
-    { name: "Material", value: unitCost.material, color: "#3b82f6" },
-    { name: "Mão de Obra", value: unitCost.labor, color: "#f97316" },
-    { name: "Equipamentos", value: unitCost.equipment, color: "#22c55e" }
+    { name: "Material", value: costCalculations.executed.material, color: "#3b82f6" },
+    { name: "Mão de Obra", value: costCalculations.executed.labor, color: "#f97316" },
+    { name: "Equipamentos", value: costCalculations.executed.equipment, color: "#22c55e" }
   ].filter(d => d.value > 0);
 
   if (!currentProject) {
@@ -925,7 +924,7 @@ export function ProjectCostsView() {
         </TabsContent>
 
         <TabsContent value="overview" className="flex-1 overflow-auto mt-4 space-y-4">
-          {/* Summary Cards */}
+          {/* Summary Cards - show executed totals and total obra */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5">
               <CardContent className="pt-4 pb-3">
@@ -933,9 +932,9 @@ export function ProjectCostsView() {
                   <Package className="w-4 h-4 text-blue-500" />
                   <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Material</span>
                 </div>
-                <p className="text-xl font-bold">{formatCurrency(unitCost.material)}</p>
+                <p className="text-xl font-bold">{formatCurrency(costCalculations.executed.material)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Total Obra: {formatCurrency(unitCost.material * houses.length)}
+                  Total Obra: {formatCurrency(costCalculations.total.material)}
                 </p>
               </CardContent>
             </Card>
@@ -946,9 +945,9 @@ export function ProjectCostsView() {
                   <Hammer className="w-4 h-4 text-orange-500" />
                   <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Mão de Obra</span>
                 </div>
-                <p className="text-xl font-bold">{formatCurrency(unitCost.labor)}</p>
+                <p className="text-xl font-bold">{formatCurrency(costCalculations.executed.labor)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Total Obra: {formatCurrency(unitCost.labor * houses.length)}
+                  Total Obra: {formatCurrency(costCalculations.total.labor)}
                 </p>
               </CardContent>
             </Card>
@@ -959,9 +958,9 @@ export function ProjectCostsView() {
                   <Wrench className="w-4 h-4 text-green-500" />
                   <span className="text-xs font-medium text-green-600 dark:text-green-400">Equipamentos</span>
                 </div>
-                <p className="text-xl font-bold">{formatCurrency(unitCost.equipment)}</p>
+                <p className="text-xl font-bold">{formatCurrency(costCalculations.executed.equipment)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Total Obra: {formatCurrency(unitCost.equipment * houses.length)}
+                  Total Obra: {formatCurrency(costCalculations.total.equipment)}
                 </p>
               </CardContent>
             </Card>
@@ -972,9 +971,9 @@ export function ProjectCostsView() {
                   <DollarSign className="w-4 h-4 text-primary" />
                   <span className="text-xs font-medium text-primary">Total</span>
                 </div>
-                <p className="text-xl font-bold">{formatCurrency(unitCost.total)}</p>
+                <p className="text-xl font-bold">{formatCurrency(costCalculations.executed.total)}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Total Obra: {formatCurrency(unitCost.total * houses.length)}
+                  Total Obra: {formatCurrency(costCalculations.total.total)}
                 </p>
               </CardContent>
             </Card>
@@ -1157,7 +1156,7 @@ export function ProjectCostsView() {
                     </ResponsiveContainer>
                     <div className="flex flex-wrap justify-center gap-3">
                       {pieData.map((entry) => {
-                        const percent = unitCost.total > 0 ? ((entry.value / unitCost.total) * 100).toFixed(0) : "0";
+                        const percent = costCalculations.executed.total > 0 ? ((entry.value / costCalculations.executed.total) * 100).toFixed(0) : "0";
                         return (
                           <div key={entry.name} className="flex items-center gap-1.5 text-xs">
                             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
