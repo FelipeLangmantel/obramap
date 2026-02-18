@@ -217,6 +217,61 @@ export function ProjectCostsView() {
     };
   }, [currentProject?.id, loadCostsFromDatabase]);
 
+  // Load execution bank data from RPC for accurate progress
+  const [executionBank, setExecutionBank] = useState<Map<string, { executed_houses: number; total_houses: number; completion_percent: number }>>(new Map());
+
+  const loadExecutionBank = useCallback(async () => {
+    if (!currentProject?.id) return;
+    
+    const { data, error } = await supabase.rpc('get_service_execution_bank', { p_project_id: currentProject.id });
+    
+    if (!error && data) {
+      const map = new Map<string, { executed_houses: number; total_houses: number; completion_percent: number }>();
+      (data as any[]).forEach((row: any) => {
+        // Map by scope_id for matching with scopeCosts
+        const key = row.scope_id;
+        const existing = map.get(key);
+        map.set(key, {
+          executed_houses: (existing?.executed_houses || 0) + (Number(row.executed_houses) || 0),
+          total_houses: Number(row.total_houses) || 0,
+          completion_percent: Number(row.completion_percent) || 0,
+        });
+      });
+      setExecutionBank(map);
+    }
+  }, [currentProject?.id]);
+
+  useEffect(() => {
+    loadExecutionBank();
+  }, [loadExecutionBank]);
+
+  // Subscribe to production changes for auto-update
+  useEffect(() => {
+    if (!currentProject?.id) return;
+
+    const channel = supabase
+      .channel('production-changes-costs')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'productions', filter: `project_id=eq.${currentProject.id}` }, () => loadExecutionBank())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'weekly_productions', filter: `project_id=eq.${currentProject.id}` }, () => loadExecutionBank())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [currentProject?.id, loadExecutionBank]);
+
+  // Calculate progress for each scope from execution bank (real production data)
+  const scopeProgress = useMemo(() => {
+    const progress: { [scopeId: string]: { completed: number; total: number } } = {};
+    
+    executionBank.forEach((value, scopeId) => {
+      progress[scopeId] = {
+        completed: value.executed_houses,
+        total: value.total_houses,
+      };
+    });
+    
+    return progress;
+  }, [executionBank]);
+
   // Load planned productions for projected costs
   useEffect(() => {
     if (!currentProject?.id) return;
@@ -238,27 +293,6 @@ export function ProjectCostsView() {
     
     loadPlannedProductions();
   }, [currentProject?.id]);
-
-  // Calculate progress for each scope from houses
-  const scopeProgress = useMemo(() => {
-    const progress: { [scopeId: string]: { completed: number; total: number } } = {};
-    
-    houses.forEach(house => {
-      house.macros.forEach(macro => {
-        macro.scopes.forEach(scope => {
-          if (!progress[scope.id]) {
-            progress[scope.id] = { completed: 0, total: 0 };
-          }
-          progress[scope.id].total++;
-          if (scope.progress === 100) {
-            progress[scope.id].completed++;
-          }
-        });
-      });
-    });
-    
-    return progress;
-  }, [houses]);
 
   // Calculate costs based on progress
   const costCalculations = useMemo(() => {
@@ -1100,26 +1134,39 @@ export function ProjectCostsView() {
               </CardHeader>
               <CardContent>
                 {pieData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={200}>
-                    <RechartsPieChart>
-                      <Pie
-                        data={pieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={80}
-                        paddingAngle={2}
-                        dataKey="value"
-                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                        labelLine={false}
-                      >
-                        {pieData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                    </RechartsPieChart>
-                  </ResponsiveContainer>
+                  <div className="space-y-3">
+                    <ResponsiveContainer width="100%" height={180}>
+                      <RechartsPieChart>
+                        <Pie
+                          data={pieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={45}
+                          outerRadius={75}
+                          paddingAngle={2}
+                          dataKey="value"
+                          label={false}
+                          labelLine={false}
+                        >
+                          {pieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                      </RechartsPieChart>
+                    </ResponsiveContainer>
+                    <div className="flex flex-wrap justify-center gap-3">
+                      {pieData.map((entry) => {
+                        const percent = unitCost.total > 0 ? ((entry.value / unitCost.total) * 100).toFixed(0) : "0";
+                        return (
+                          <div key={entry.name} className="flex items-center gap-1.5 text-xs">
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                            <span className="font-medium">{entry.name}: {percent}%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 ) : (
                   <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
                     Nenhum custo cadastrado ainda
