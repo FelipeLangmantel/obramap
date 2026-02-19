@@ -21,7 +21,7 @@ export function HouseDetails() {
   // Get fresh house data from currentProject to ensure it's always up to date
   const house = currentProject.houses.find(h => h.id === selectedHouse.id) || selectedHouse;
   
-  const progress = calculateHouseProgress(house);
+  const progress = calculateHouseProgress(house, currentProject.macrosTemplate);
 
   const getProgressBarColor = (progress: number) => {
     for (const item of legendItems) {

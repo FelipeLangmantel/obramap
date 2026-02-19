@@ -70,8 +70,9 @@ export function StatsCards() {
       inProgress = scopeProgresses.filter(p => p > 0 && p < 100).length;
       
     } else {
-      // Default: calculate overall house progress
-      const progresses = houses.map(h => calculateHouseProgress(h));
+      // Default: calculate overall house progress using template weights
+      const template = currentProject.macrosTemplate;
+      const progresses = houses.map(h => calculateHouseProgress(h, template));
       avgProgress = Math.round(progresses.reduce((a, b) => a + b, 0) / total);
       completed = progresses.filter(p => p === 100).length;
       inProgress = progresses.filter(p => p > 0 && p < 100).length;

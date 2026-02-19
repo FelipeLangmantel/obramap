@@ -45,7 +45,7 @@ export function HouseCard({ houseId }: HouseCardProps) {
   const { progress, cardStyle } = useMemo(() => {
     // Default: overall progress
     if (filterMode === "status" || (filterMode === "macro" && filterMacro === "all") || (filterMode === "scope" && filterScope === "all")) {
-      const overallProgress = calculateHouseProgress(house);
+      const overallProgress = calculateHouseProgress(house, currentProject?.macrosTemplate);
       
       if (!followMacros) {
         const legendColor = getLegendColorByProgress(overallProgress, legendItems);
