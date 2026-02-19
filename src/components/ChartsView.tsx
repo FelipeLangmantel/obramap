@@ -44,7 +44,7 @@ export function ChartsView() {
     // Filter by status
     if (filterMode === "status" && filterStatus !== "all") {
       houses = houses.filter(h => {
-        const progress = calculateHouseProgress(h);
+        const progress = calculateHouseProgress(h, currentProject?.macrosTemplate);
         const status = getStatusFromProgress(progress);
         return status === filterStatus;
       });
@@ -86,7 +86,7 @@ export function ChartsView() {
     };
 
     filteredHouses.forEach(house => {
-      const progress = calculateHouseProgress(house);
+      const progress = calculateHouseProgress(house, currentProject?.macrosTemplate);
       const status = getStatusFromProgress(progress);
       counts[status]++;
     });
@@ -103,7 +103,7 @@ export function ChartsView() {
     const barData = quadras.map(quadra => {
       const quadraHouses = filteredHouses.filter(h => h.quadra === quadra.id);
       const avgProgress = quadraHouses.length > 0 
-        ? Math.round(quadraHouses.reduce((sum, h) => sum + calculateHouseProgress(h), 0) / quadraHouses.length)
+        ? Math.round(quadraHouses.reduce((sum, h) => sum + calculateHouseProgress(h, currentProject?.macrosTemplate), 0) / quadraHouses.length)
         : 0;
       return {
         name: quadra.name,
@@ -187,7 +187,7 @@ export function ChartsView() {
 
   const totalHouses = filteredHouses.length;
   const overallProgress = totalHouses > 0 
-    ? Math.round(filteredHouses.reduce((sum, h) => sum + calculateHouseProgress(h), 0) / totalHouses)
+    ? Math.round(filteredHouses.reduce((sum, h) => sum + calculateHouseProgress(h, currentProject?.macrosTemplate), 0) / totalHouses)
     : 0;
 
   return (
@@ -454,7 +454,7 @@ export function ChartsView() {
               />
             </div>
             <p className="text-xs text-muted-foreground text-center">
-              {filteredHouses.filter(h => calculateHouseProgress(h) === 100).length} de {totalHouses} casas concluídas
+              {filteredHouses.filter(h => calculateHouseProgress(h, currentProject?.macrosTemplate) === 100).length} de {totalHouses} casas concluídas
             </p>
           </div>
         </CardContent>

@@ -192,14 +192,26 @@ export function generateInitialHouses(): House[] {
   return houses;
 }
 
-export function calculateHouseProgress(house: House): number {
+export function calculateHouseProgress(house: House, macrosTemplate?: Macro[]): number {
   let totalWeight = 0;
   let weightedProgress = 0;
   
+  // Build a weight lookup from the template if provided (budget-based weights)
+  const templateWeights: Record<string, number> = {};
+  if (macrosTemplate) {
+    macrosTemplate.forEach(macro => {
+      macro.scopes.forEach(scope => {
+        templateWeights[scope.id] = scope.weight;
+      });
+    });
+  }
+  
   house.macros.forEach(macro => {
     macro.scopes.forEach(scope => {
-      totalWeight += scope.weight;
-      weightedProgress += (scope.progress * scope.weight) / 100;
+      // Prefer template weight (from budget) over house-level weight
+      const weight = templateWeights[scope.id] ?? scope.weight;
+      totalWeight += weight;
+      weightedProgress += (scope.progress * weight) / 100;
     });
   });
   

@@ -23,7 +23,8 @@ export function QuadraCard({ quadraId }: QuadraCardProps) {
   
   const { avgProgress, filteredHouses } = useMemo(() => {
     const quadraHouses = houses.filter(h => h.quadra === quadra.id);
-    const progresses = quadraHouses.map(h => calculateHouseProgress(h));
+    const template = currentProject.macrosTemplate;
+    const progresses = quadraHouses.map(h => calculateHouseProgress(h, template));
     const avg = progresses.length > 0 ? Math.round(progresses.reduce((a, b) => a + b, 0) / progresses.length) : 0;
     
     let filtered = quadra.houses;
@@ -31,14 +32,14 @@ export function QuadraCard({ quadraId }: QuadraCardProps) {
       filtered = quadra.houses.filter(houseId => {
         const house = houses.find(h => h.id === houseId);
         if (!house) return false;
-        const progress = calculateHouseProgress(house);
+        const progress = calculateHouseProgress(house, template);
         const status = getStatusFromProgress(progress);
         return status === filterStatus;
       });
     }
     
     return { avgProgress: avg, filteredHouses: filtered };
-  }, [houses, quadra, filterStatus]);
+  }, [houses, quadra, filterStatus, currentProject.macrosTemplate]);
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();

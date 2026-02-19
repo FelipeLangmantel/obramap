@@ -78,11 +78,13 @@ const MAP_LAYOUT_STORAGE_KEY = "obramap_interactive_map_layout";
 function HouseDetailsDialogContent({ 
   house, 
   legendItems, 
-  quadraName 
+  quadraName,
+  macrosTemplate
 }: { 
   house: any; 
   legendItems: LegendItem[];
   quadraName?: string;
+  macrosTemplate?: any[];
 }) {
   const [openMacros, setOpenMacros] = useState<Set<string>>(new Set());
 
@@ -117,7 +119,7 @@ function HouseDetailsDialogContent({
     });
   };
 
-  const overallProgress = calculateHouseProgress(house);
+  const overallProgress = calculateHouseProgress(house, macrosTemplate);
 
   return (
     <div className="space-y-4 overflow-y-auto flex-1">
@@ -1126,7 +1128,7 @@ export function InteractiveMapView() {
     }
     
     // Default behavior - use legend or macro colors
-    const progress = calculateHouseProgress(house);
+    const progress = calculateHouseProgress(house, macrosTemplate);
     
     if (legendFollowMacros && macrosTemplate.length > 0) {
       for (const macro of macrosTemplate) {
@@ -1177,13 +1179,13 @@ export function InteractiveMapView() {
       return 0;
     }
     
-    return calculateHouseProgress(house);
+    return calculateHouseProgress(house, macrosTemplate);
   }, [houses, filterMacro, filterScope]);
 
   const getHouseStatus = useCallback((houseId: number): string => {
     const house = houses.find(h => h.id === houseId);
     if (!house) return "nao_iniciado";
-    const progress = calculateHouseProgress(house);
+    const progress = calculateHouseProgress(house, macrosTemplate);
     for (const item of legendItems) {
       if (progress >= item.minPercent && progress <= item.maxPercent) {
         return item.id;
@@ -1794,6 +1796,7 @@ export function InteractiveMapView() {
               house={selectedHouse} 
               legendItems={legendItems}
               quadraName={currentProject?.quadras.find(q => q.houses?.includes(selectedHouse.id))?.name}
+              macrosTemplate={macrosTemplate}
             />
           )}
         </DialogContent>
