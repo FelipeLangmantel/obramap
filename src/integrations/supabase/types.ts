@@ -4962,6 +4962,14 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: undefined
       }
+      rename_house_number: {
+        Args: {
+          p_new_number: number
+          p_old_number: number
+          p_project_id: string
+        }
+        Returns: boolean
+      }
       reopen_measurement: {
         Args: { p_measurement_id: string; p_reason: string }
         Returns: Json

@@ -1609,12 +1609,12 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       return false;
     }
 
-    // Update in database
-    const { error } = await supabase
-      .from('houses')
-      .update({ house_number: newNumber })
-      .eq('project_id', currentProjectId)
-      .eq('house_number', oldNumber);
+    // Use RPC to cascade rename across ALL tables
+    const { error } = await supabase.rpc('rename_house_number', {
+      p_project_id: currentProjectId,
+      p_old_number: oldNumber,
+      p_new_number: newNumber
+    });
 
     if (error) {
       console.error('Error renaming house:', error);
