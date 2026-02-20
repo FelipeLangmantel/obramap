@@ -389,25 +389,48 @@ export function ImportInputsDialog({
         }
       }
 
-      // Create new units
+      // Create new units - check if already exists first to avoid duplicates
+      const unitAbbreviationMap: Record<string, string> = {};
+      units.forEach(u => { unitAbbreviationMap[u.abbreviation.toLowerCase()] = u.abbreviation; });
+
       for (const unitName of newUnitsToCreate) {
-        await supabase.from('units').insert({ 
-          project_id: projectId, 
-          name: unitName, 
-          abbreviation: unitName 
-        });
+        const normalizedUnit = unitName.trim().toLowerCase();
+        // Check if already exists in DB before inserting
+        const { data: existingUnit } = await supabase
+          .from('units')
+          .select('id, abbreviation')
+          .ilike('abbreviation', unitName)
+          .maybeSingle();
+
+        if (!existingUnit) {
+          const { data: createdUnit } = await supabase.from('units').insert({ 
+            project_id: projectId, 
+            name: unitName,
+            abbreviation: unitName
+          }).select().single();
+          
+          if (createdUnit) {
+            unitAbbreviationMap[normalizedUnit] = createdUnit.abbreviation;
+          }
+        } else {
+          unitAbbreviationMap[normalizedUnit] = existingUnit.abbreviation;
+        }
       }
 
-      // Filter out duplicates that were manually selected (user override)
-      const inputsToInsert = selectedInputs.map(input => ({
-        project_id: projectId,
-        name: input.name,
-        unit: input.unit,
-        category: 'material' as const,
-        material_family_id: input.familyId || familyMap[input.family?.toLowerCase()] || null,
-        unit_value: input.unit_value,
-        stock_quantity: 0
-      }));
+      // Map unit to the correct abbreviation from the units table
+      const inputsToInsert = selectedInputs.map(input => {
+        const normalizedUnit = input.unit?.trim().toLowerCase() || '';
+        const resolvedUnit = unitAbbreviationMap[normalizedUnit] || input.unit;
+        return {
+          project_id: projectId,
+          name: input.name,
+          unit: resolvedUnit,
+          category: 'material' as const,
+          material_family_id: input.familyId || familyMap[input.family?.toLowerCase()] || null,
+          unit_value: input.unit_value,
+          stock_quantity: 0
+        };
+      });
 
       const { error } = await supabase.from('inputs').insert(inputsToInsert);
       if (error) throw error;

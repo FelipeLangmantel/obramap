@@ -314,8 +314,31 @@ export function InputsManagementView() {
     
     try {
       if (editingUnit) {
-        await supabase.from('units').update({ name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim() }).eq('id', editingUnit.id);
-        toast.success('Unidade atualizada!');
+        const oldAbbreviation = editingUnit.abbreviation;
+        const newAbbreviation = newUnit.abbreviation.trim();
+        
+        await supabase.from('units').update({ name: newUnit.name.trim(), abbreviation: newAbbreviation }).eq('id', editingUnit.id);
+        
+        // If abbreviation changed, auto-update all inputs using the old abbreviation
+        if (oldAbbreviation.toLowerCase() !== newAbbreviation.toLowerCase()) {
+          const { data: affectedInputs } = await supabase
+            .from('inputs')
+            .select('id')
+            .ilike('unit', oldAbbreviation);
+          
+          if (affectedInputs && affectedInputs.length > 0) {
+            await supabase
+              .from('inputs')
+              .update({ unit: newAbbreviation })
+              .ilike('unit', oldAbbreviation);
+            
+            toast.success(`Unidade atualizada! ${affectedInputs.length} insumo(s) atualizado(s) automaticamente.`);
+          } else {
+            toast.success('Unidade atualizada!');
+          }
+        } else {
+          toast.success('Unidade atualizada!');
+        }
       } else {
         await supabase.from('units').insert({ name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim(), project_id: defaultProjectId });
         toast.success('Unidade cadastrada!');
