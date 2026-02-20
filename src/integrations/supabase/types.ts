@@ -1225,6 +1225,66 @@ export type Database = {
           },
         ]
       }
+      measurement_stock_entries: {
+        Row: {
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          family_id: string | null
+          family_name: string | null
+          id: string
+          is_confirmed: boolean
+          item_id: string
+          item_name: string
+          item_unit: string | null
+          notes: string | null
+          planning_period_id: string
+          project_id: string
+          quantity_in_stock: number
+          quantity_required: number
+          quantity_to_purchase: number | null
+          updated_at: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          family_id?: string | null
+          family_name?: string | null
+          id?: string
+          is_confirmed?: boolean
+          item_id: string
+          item_name: string
+          item_unit?: string | null
+          notes?: string | null
+          planning_period_id: string
+          project_id: string
+          quantity_in_stock?: number
+          quantity_required?: number
+          quantity_to_purchase?: number | null
+          updated_at?: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          family_id?: string | null
+          family_name?: string | null
+          id?: string
+          is_confirmed?: boolean
+          item_id?: string
+          item_name?: string
+          item_unit?: string | null
+          notes?: string | null
+          planning_period_id?: string
+          project_id?: string
+          quantity_in_stock?: number
+          quantity_required?: number
+          quantity_to_purchase?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       measurements: {
         Row: {
           company_id: string
