@@ -110,7 +110,32 @@ export function InputsManagementView() {
           stock_quantity: i.stock_quantity || 0 
         })));
       }
-      if (unitsRes.data) setUnits(unitsRes.data);
+      let currentUnits = unitsRes.data || [];
+      
+      // Auto-seed units from existing inputs if units table is sparse
+      if (inputsRes.data && defaultProjectId) {
+        const existingAbbreviations = new Set(currentUnits.map(u => u.abbreviation.toLowerCase()));
+        const inputUnits = new Set(
+          inputsRes.data
+            .map((i: any) => i.unit?.trim())
+            .filter((u: string) => u && u.length > 0)
+        );
+        const missingUnits = [...inputUnits].filter(u => !existingAbbreviations.has((u as string).toLowerCase()));
+        
+        if (missingUnits.length > 0) {
+          const toInsert = missingUnits.map(u => ({
+            project_id: defaultProjectId,
+            name: u as string,
+            abbreviation: u as string,
+          }));
+          const { data: inserted } = await supabase.from('units').insert(toInsert).select();
+          if (inserted) {
+            currentUnits = [...currentUnits, ...inserted];
+          }
+        }
+      }
+      
+      setUnits(currentUnits);
       if (familiesRes.data) setFamilies(familiesRes.data.map(f => ({ 
         id: f.id, 
         name: f.name, 
