@@ -130,8 +130,8 @@ function AutoFitCamera({
     camera.position.set(center.x + dist * 0.5, center.y + dist * 0.7, center.z + dist * 0.5);
     if (controls.target) {
       controls.target.copy(center);
-      controls.minDistance = 0; // Allow zooming inside models
-      controls.maxDistance = dist * 5;
+      controls.minDistance = 0.1;
+      controls.maxDistance = dist * 10;
       controls.update();
     }
     
@@ -140,22 +140,12 @@ function AutoFitCamera({
     return true;
   }, [camera, scene, controls, onCameraChange]);
 
-  // Auto-fit when scene becomes ready
+  // Auto-fit when scene becomes ready - ALWAYS fit to model bounds
   useEffect(() => {
     if (!sceneReady || hasAutoFitRef.current || !controls) return;
     hasAutoFitRef.current = true;
     
-    // If saved position exists, use it; otherwise fit
-    if (savedPosition && savedTarget) {
-      camera.position.set(savedPosition[0], savedPosition[1], savedPosition[2]);
-      controls.target?.set(savedTarget[0], savedTarget[1], savedTarget[2]);
-      controls.minDistance = 0;
-      controls.maxDistance = 10000;
-      controls.update();
-      return;
-    }
-    
-    // Retry fit multiple times
+    // Always fit to model - saved positions may be stale/wrong
     let attempts = 0;
     const tryFit = () => {
       if (doFit()) return;
@@ -163,7 +153,7 @@ function AutoFitCamera({
       if (attempts < 30) requestAnimationFrame(tryFit);
     };
     tryFit();
-  }, [sceneReady, controls, savedPosition, savedTarget, camera, doFit]);
+  }, [sceneReady, controls, camera, doFit]);
 
   // Fit trigger
   useEffect(() => {
@@ -218,13 +208,13 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       <OrbitControls
         makeDefault enablePan enableZoom enableRotate
         maxPolarAngle={Math.PI / 2 - 0.02}
-        minDistance={0}
-        maxDistance={10000}
-        zoomSpeed={3.0}
-        panSpeed={2.0}
-        rotateSpeed={1.5}
+        minDistance={0.1}
+        maxDistance={50000}
+        zoomSpeed={5.0}
+        panSpeed={4.0}
+        rotateSpeed={2.0}
         enableDamping
-        dampingFactor={0.08}
+        dampingFactor={0.12}
         touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
         mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
       />
