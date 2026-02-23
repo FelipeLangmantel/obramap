@@ -117,7 +117,7 @@ export default function ProjectContractPage() {
   if (loading) {
     return (
       <ModuleAccessGuard moduleKey="project-contract">
-        <SidebarProvider>
+        <SidebarProvider defaultOpen={true}>
           <div className="flex min-h-screen w-full bg-background">
             <AppSidebar activeView="costs" onViewChange={() => {}} />
             <SidebarInset className="flex-1">
@@ -136,7 +136,7 @@ export default function ProjectContractPage() {
 
   return (
     <ModuleAccessGuard moduleKey="project-contract">
-      <SidebarProvider>
+      <SidebarProvider defaultOpen={true}>
         <div className="flex min-h-screen w-full bg-background">
           <AppSidebar activeView="costs" onViewChange={() => {}} />
         <SidebarInset className="flex-1">

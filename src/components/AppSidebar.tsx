@@ -183,16 +183,16 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     { title: "Mapa 3D", view: "3d-map", icon: Box, permissionId: "mapa" },
     { title: "Gráficos", view: "charts", icon: BarChart3, permissionId: "graficos" },
     { title: "Produção Semanal", view: "production", icon: ClipboardList, permissionId: "producao" },
-    { title: "Planejamento", view: "planning", icon: Target, permissionId: "planejamento" },
-    { title: "Planej. Medição", view: "measurement-planning", icon: Calculator, permissionId: "planejamento" },
-    { title: "Planej. Longo Prazo", view: "long-term-planning", icon: Calendar, permissionId: "planejamento" },
+    { title: "Planej. Semanal", view: "planning", icon: Target, permissionId: "planejamento" },
+    { title: "Planej. Período", view: "measurement-planning", icon: Calculator, permissionId: "planejamento" },
+    { title: "Planej. Estratégico", view: "long-term-planning", icon: Calendar, permissionId: "planejamento" },
     { title: "Contrato da Obra", view: "project-contract", icon: FileText, permissionId: "financeiro" },
     { title: "Custos da Obra", view: "costs", icon: DollarSign, permissionId: "custos" },
     { title: "Suprimentos", view: "supplies", icon: Package, permissionId: "suprimentos" },
     { title: "Fluxo Financeiro", view: "financial-flow", icon: Wallet, permissionId: "financeiro" },
-    { title: "Painel da Diretoria", view: "board-decisions", icon: Crown, permissionId: "diretoria" },
+    { title: "Painel Diretoria", view: "board-decisions", icon: Crown, permissionId: "diretoria" },
     { title: "Entrega & Pós-Obra", view: "delivery", icon: ClipboardCheck, permissionId: "entrega" },
-    { title: "Planejamento Inteligente", view: "smart-planning", icon: Target, permissionId: "smart-planning" },
+    { title: "Planej. Inteligente", view: "smart-planning", icon: Target, permissionId: "smart-planning" },
   ];
 
   // Filter menu items based on user permissions, company module status, AND system governance

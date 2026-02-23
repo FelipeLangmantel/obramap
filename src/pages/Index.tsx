@@ -102,13 +102,13 @@ function Index() {
     "3d-map": "Mapa 3D",
     charts: "Gráficos e Análises",
     production: "Produção Semanal",
-    planning: "Planejamento",
+    planning: "Planejamento Semanal",
     costs: "Custos da Obra",
     supplies: "Suprimentos",
     inputs: "Cadastro de Insumos",
     suppliers: "Cadastro de Fornecedores",
     "financial-flow": "Fluxo Financeiro",
-    "board-decisions": "Painel da Diretoria",
+    "board-decisions": "Painel Diretoria",
     delivery: "Entrega & Pós-Obra",
     "smart-planning": "Planejamento Inteligente"
   };
