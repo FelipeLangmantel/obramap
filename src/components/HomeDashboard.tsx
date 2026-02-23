@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { calculateHouseProgress } from "@/data/constructionData";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -226,37 +227,21 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
     const summaries: ProjectSummary[] = accessibleProjects.map((project: any) => {
       const houses = project.houses || [];
       const totalHouses = project.totalHouses || houses.length;
+      const template = project.macrosTemplate;
       
-      // Calculate average progress across all houses
-      let totalProgress = 0;
-      let completedCount = 0;
-      houses.forEach((h: any) => {
-        const macros = h.macros || {};
-        const macroKeys = Object.keys(macros);
-        if (macroKeys.length === 0) return;
-        
-        let houseTotal = 0;
-        let scopeCount = 0;
-        macroKeys.forEach((mk: string) => {
-          const scopes = macros[mk]?.scopes || {};
-          Object.values(scopes).forEach((s: any) => {
-            houseTotal += (s as any).progress || 0;
-            scopeCount++;
-          });
-        });
-        const avg = scopeCount > 0 ? houseTotal / scopeCount : 0;
-        totalProgress += avg;
-        if (avg >= 100) completedCount++;
-      });
-
-      const avgProgress = houses.length > 0 ? totalProgress / houses.length : 0;
+      // Use the same weighted calculation as the rest of the system
+      const progresses = houses.map((h: any) => calculateHouseProgress(h, template));
+      const avgProgress = progresses.length > 0 
+        ? Math.round(progresses.reduce((a: number, b: number) => a + b, 0) / progresses.length) 
+        : 0;
+      const completedCount = progresses.filter((p: number) => p >= 100).length;
 
       return {
         id: project.id,
         name: project.name,
         location: project.location || "—",
         totalHouses,
-        progress: Math.round(avgProgress),
+        progress: avgProgress,
         completedHouses: completedCount,
       };
     });
