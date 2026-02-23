@@ -232,9 +232,10 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       }
     }
     
-    // ✅ Se estiver em rota diferente de /, primeiro navegar para /
+    // ✅ Se estiver em rota diferente de /, navegar para / com state indicando a view destino
     if (location.pathname !== "/") {
-      navigate("/");
+      navigate("/", { state: { targetView: view } });
+      return;
     }
     
     onViewChange(view as ViewType);
