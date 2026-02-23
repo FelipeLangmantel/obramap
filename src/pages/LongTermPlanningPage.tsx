@@ -4,7 +4,6 @@ import { ArrowLeft, Calendar, AlertCircle, Loader2, RefreshCw } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
-import { ProjectSelector } from "@/components/ProjectSelector";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useLongTermPlanning } from "@/hooks/useLongTermPlanning";
 import { LongTermPlanningMatrix } from "@/components/long-term-planning/LongTermPlanningMatrix";
@@ -63,7 +62,7 @@ export default function LongTermPlanningPage() {
 
   return (
     <ModuleAccessGuard moduleKey="long-term-planning">
-      <SidebarProvider>
+      <SidebarProvider defaultOpen={true}>
         <div className="min-h-screen flex w-full bg-background">
           <AppSidebar activeView="planning" onViewChange={handleViewChange} />
 
@@ -86,7 +85,7 @@ export default function LongTermPlanningPage() {
                     </div>
                     <div>
                       <h1 className="text-lg font-bold leading-tight">
-                        Planejamento de Longo Prazo
+                        Planejamento Estratégico
                       </h1>
                       <p className="text-xs text-muted-foreground">
                         Cronograma estratégico do empreendimento
@@ -94,7 +93,6 @@ export default function LongTermPlanningPage() {
                     </div>
                   </div>
                 </div>
-                <ProjectSelector />
               </div>
             </header>
 

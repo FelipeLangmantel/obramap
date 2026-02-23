@@ -7,13 +7,6 @@ import { ModuleAccessGuard } from "@/components/guards/ModuleAccessGuard";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Calendar, DollarSign, Home, TrendingUp, Menu } from "lucide-react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -23,8 +16,8 @@ import { PeriodServicesDialog } from "@/components/planning/PeriodServicesDialog
 
 export default function MeasurementPlanningPage() {
   const navigate = useNavigate();
-  const { user, isLoading: authLoading, canAccessProject, company } = useAuth();
-  const { projects, currentProject, setCurrentProject, isLoading: constructionLoading } = useConstruction();
+  const { user, isLoading: authLoading, company } = useAuth();
+  const { currentProject, isLoading: constructionLoading } = useConstruction();
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const {
@@ -59,14 +52,6 @@ export default function MeasurementPlanningPage() {
     }
   }, [user, authLoading, navigate]);
 
-  // Filter accessible projects
-  const accessibleProjects = projects.filter((p) => canAccessProject(p.id));
-
-  const handleProjectChange = (projectId: string) => {
-    setCurrentProject(projectId);
-    selectPeriod(null);
-  };
-
   const handlePeriodClick = (periodId: string) => {
     selectPeriod(periodId);
     setDialogOpen(true);
@@ -94,7 +79,7 @@ export default function MeasurementPlanningPage() {
 
   return (
     <ModuleAccessGuard moduleKey="measurement-planning">
-      <SidebarProvider defaultOpen={false}>
+      <SidebarProvider defaultOpen={true}>
         <div className="flex min-h-screen w-full bg-background">
           <AppSidebar activeView="planning" onViewChange={() => navigate("/")} />
 
@@ -112,24 +97,6 @@ export default function MeasurementPlanningPage() {
           </div>
 
           <div className="p-6 space-y-6">
-            {/* Seletor de projeto */}
-            <div className="flex-1 min-w-[200px] max-w-[300px]">
-              <label className="text-sm font-medium text-muted-foreground mb-1.5 block">
-                Projeto
-              </label>
-              <Select value={currentProject?.id || ""} onValueChange={handleProjectChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um projeto" />
-                </SelectTrigger>
-                <SelectContent>
-                  {accessibleProjects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
 
             {/* Cards de resumo geral */}
             {periods.length > 0 && (
