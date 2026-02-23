@@ -1,4 +1,4 @@
-import React, { useEffect, useState, Suspense } from "react";
+import React, { useEffect, useState, Suspense, useRef, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,22 +16,145 @@ import {
   Layers,
   AlertTriangle,
 } from "lucide-react";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { Canvas, useThree, useLoader } from "@react-three/fiber";
+import { OrbitControls, useGLTF, PerspectiveCamera } from "@react-three/drei";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
+import * as THREE from "three";
 
-// Mini 3D scene for visual flair
-function Mini3DScene() {
+// Mini GLTF model
+function MiniGLTFModel({ url, onLoaded }: { url: string; onLoaded: () => void }) {
+  const { scene } = useGLTF(url);
+  const calledRef = useRef(false);
+  useEffect(() => {
+    if (scene && !calledRef.current) {
+      calledRef.current = true;
+      requestAnimationFrame(() => requestAnimationFrame(() => onLoaded()));
+    }
+  }, [scene, onLoaded]);
+  return <primitive object={scene} />;
+}
+
+// Mini OBJ model
+function MiniOBJModel({ url, mtlUrl, onLoaded }: { url: string; mtlUrl?: string; onLoaded: () => void }) {
+  const materials = mtlUrl ? useLoader(MTLLoader, mtlUrl) : null;
+  const obj = useLoader(OBJLoader, url, (loader) => {
+    if (materials) { materials.preload(); loader.setMaterials(materials); }
+  });
+  const calledRef = useRef(false);
+  useEffect(() => {
+    if (obj && !calledRef.current) {
+      calledRef.current = true;
+      requestAnimationFrame(() => requestAnimationFrame(() => onLoaded()));
+    }
+  }, [obj, onLoaded]);
+  return <primitive object={obj} />;
+}
+
+// Auto-fit camera for mini scene
+function MiniAutoFit({ ready }: { ready: boolean }) {
+  const { camera, scene } = useThree();
+  const controls = useThree((s) => s.controls) as any;
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    if (!ready || doneRef.current || !controls) return;
+    doneRef.current = true;
+    const tryFit = () => {
+      const box = new THREE.Box3();
+      let found = false;
+      scene.traverse((child: any) => {
+        if ((child as THREE.Mesh).isMesh || (child as THREE.LineSegments).isLineSegments) {
+          box.expandByObject(child); found = true;
+        }
+      });
+      if (!found || box.isEmpty()) return false;
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+      if (maxDim === 0) return false;
+      const fov = (camera as THREE.PerspectiveCamera).fov * (Math.PI / 180);
+      const dist = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.6;
+      camera.position.set(center.x + dist * 0.5, center.y + dist * 0.7, center.z + dist * 0.5);
+      if (controls.target) { controls.target.copy(center); controls.update(); }
+      return true;
+    };
+    let attempts = 0;
+    const loop = () => { if (!tryFit() && attempts++ < 30) requestAnimationFrame(loop); };
+    loop();
+  }, [ready, controls, camera, scene]);
+
+  return null;
+}
+
+// Real 3D mini preview using project's actual model
+function RealModel3DPreview({ projectId }: { projectId: string }) {
+  const [modelData, setModelData] = useState<{ url: string; type: "gltf" | "obj"; mtlUrl?: string } | null>(null);
+  const [sceneReady, setSceneReady] = useState(false);
+
+  useEffect(() => {
+    const fetchModel = async () => {
+      const { data } = await supabase
+        .from("map_layouts")
+        .select("model_3d_url, model_3d_type, model_mtl_url")
+        .eq("project_id", projectId)
+        .maybeSingle();
+      if (data?.model_3d_url) {
+        setModelData({
+          url: data.model_3d_url,
+          type: (data.model_3d_type as "gltf" | "obj") || "gltf",
+          mtlUrl: data.model_mtl_url || undefined,
+        });
+      }
+    };
+    fetchModel();
+  }, [projectId]);
+
+  const handleModelLoaded = useCallback(() => setSceneReady(true), []);
+
+  if (!modelData) {
+    return <FallbackMini3D />;
+  }
+
+  return (
+    <Canvas camera={{ position: [50, 50, 50], fov: 50 }} style={{ background: "transparent" }} frameloop="always">
+      <PerspectiveCamera makeDefault position={[50, 50, 50]} fov={50} />
+      <MiniAutoFit ready={sceneReady} />
+      <OrbitControls
+        makeDefault
+        enableZoom={false}
+        enablePan={false}
+        autoRotate
+        autoRotateSpeed={1.2}
+        maxPolarAngle={Math.PI / 2 - 0.02}
+        enableDamping={false}
+      />
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[10, 10, 5]} intensity={1} />
+      <directionalLight position={[-10, 10, -5]} intensity={0.5} />
+      <hemisphereLight args={["#87ceeb", "#4a7c59", 0.4]} />
+      <Suspense fallback={null}>
+        {modelData.type === "gltf" ? (
+          <MiniGLTFModel url={modelData.url} onLoaded={handleModelLoaded} />
+        ) : (
+          <MiniOBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={handleModelLoaded} />
+        )}
+      </Suspense>
+    </Canvas>
+  );
+}
+
+// Fallback if no 3D model exists
+function FallbackMini3D() {
   return (
     <Canvas camera={{ position: [3, 2, 3], fov: 45 }} style={{ background: "transparent" }}>
       <ambientLight intensity={0.6} />
       <directionalLight position={[5, 5, 5]} intensity={0.8} />
       <group>
-        {/* Base/ground */}
         <mesh position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <planeGeometry args={[4, 4]} />
           <meshStandardMaterial color="#e2e8f0" transparent opacity={0.5} />
         </mesh>
-        {/* Building 1 */}
         <mesh position={[-0.8, 0.4, 0]}>
           <boxGeometry args={[0.7, 0.8, 0.6]} />
           <meshStandardMaterial color="#0284c7" />
@@ -40,7 +163,6 @@ function Mini3DScene() {
           <boxGeometry args={[0.8, 0.1, 0.7]} />
           <meshStandardMaterial color="#0369a1" />
         </mesh>
-        {/* Building 2 */}
         <mesh position={[0.6, 0.6, -0.3]}>
           <boxGeometry args={[0.6, 1.2, 0.5]} />
           <meshStandardMaterial color="#0ea5e9" />
@@ -49,12 +171,10 @@ function Mini3DScene() {
           <boxGeometry args={[0.7, 0.1, 0.6]} />
           <meshStandardMaterial color="#0284c7" />
         </mesh>
-        {/* Building 3 - small */}
         <mesh position={[0.2, 0.25, 0.7]}>
           <boxGeometry args={[0.5, 0.5, 0.4]} />
           <meshStandardMaterial color="#38bdf8" />
         </mesh>
-        {/* Crane */}
         <mesh position={[-0.8, 1.4, 0.8]}>
           <boxGeometry args={[0.05, 1.8, 0.05]} />
           <meshStandardMaterial color="#f59e0b" />
@@ -64,14 +184,7 @@ function Mini3DScene() {
           <meshStandardMaterial color="#f59e0b" />
         </mesh>
       </group>
-      <OrbitControls
-        enableZoom={false}
-        enablePan={false}
-        autoRotate
-        autoRotateSpeed={1.5}
-        minPolarAngle={Math.PI / 4}
-        maxPolarAngle={Math.PI / 2.5}
-      />
+      <OrbitControls enableZoom={false} enablePan={false} autoRotate autoRotateSpeed={1.5} minPolarAngle={Math.PI / 4} maxPolarAngle={Math.PI / 2.5} />
     </Canvas>
   );
 }
@@ -95,6 +208,10 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
   const [totalProductions, setTotalProductions] = useState(0);
   const [recentAlerts, setRecentAlerts] = useState(0);
 
+  // First accessible project ID for the 3D preview
+  const accessibleProjects = projects.filter((p: any) => authCanAccessProject(p.id));
+  const firstProjectId = accessibleProjects.length > 0 ? accessibleProjects[0].id : null;
+
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return "Bom dia";
@@ -106,8 +223,6 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
 
   // Build project summaries from context
   useEffect(() => {
-    const accessibleProjects = projects.filter((p: any) => authCanAccessProject(p.id));
-    
     const summaries: ProjectSummary[] = accessibleProjects.map((project: any) => {
       const houses = project.houses || [];
       const totalHouses = project.totalHouses || houses.length;
@@ -232,14 +347,18 @@ export function HomeDashboard({ onNavigateToProject }: { onNavigateToProject: (v
             </p>
           </div>
 
-          {/* Mini 3D Preview */}
+          {/* Mini 3D Preview - real model from first project */}
           <div className="w-48 h-36 lg:w-56 lg:h-40 rounded-xl overflow-hidden bg-white/10 backdrop-blur-sm border border-white/20 shrink-0 shadow-lg">
             <Suspense fallback={
               <div className="w-full h-full flex items-center justify-center text-primary-foreground/50">
                 <Building2 className="h-8 w-8 animate-pulse" />
               </div>
             }>
-              <Mini3DScene />
+              {firstProjectId ? (
+                <RealModel3DPreview projectId={firstProjectId} />
+              ) : (
+                <FallbackMini3D />
+              )}
             </Suspense>
           </div>
         </div>
