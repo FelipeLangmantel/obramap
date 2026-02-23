@@ -39,6 +39,7 @@ import { CategoryManagement } from "./financial/CategoryManagement";
 import { FinancialAnalyticsPanel } from "./financial/FinancialAnalyticsPanel";
 import { generatePDFReport } from "./financial/generatePDFReport";
 import { SupplierTypesManagement } from "./financial/SupplierTypesManagement";
+import { InvoiceManagementView } from "./financial/InvoiceManagementView";
 
 interface FinancialEntry {
   id: string;
@@ -642,6 +643,10 @@ export function FinancialFlowView() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="flow">Fluxo de Caixa</TabsTrigger>
+          <TabsTrigger value="invoices">
+            <FileText className="h-4 w-4 mr-2" />
+            Notas Fiscais
+          </TabsTrigger>
           <TabsTrigger value="analytics">
             <BarChart3 className="h-4 w-4 mr-2" />
             Análises
@@ -839,6 +844,10 @@ export function FinancialFlowView() {
 
         <TabsContent value="analytics">
           <FinancialAnalyticsPanel entries={entries} categories={categories} />
+        </TabsContent>
+
+        <TabsContent value="invoices">
+          <InvoiceManagementView />
         </TabsContent>
       </Tabs>
 

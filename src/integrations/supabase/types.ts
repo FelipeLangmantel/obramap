@@ -827,6 +827,171 @@ export type Database = {
           },
         ]
       }
+      invoice_items: {
+        Row: {
+          company_id: string
+          created_at: string
+          description: string
+          id: string
+          invoice_id: string
+          macro_id: string | null
+          macro_name: string | null
+          project_id: string
+          quantity: number
+          scope_id: string | null
+          scope_item_id: string | null
+          scope_name: string | null
+          total_value: number
+          unit: string | null
+          unit_value: number
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          description: string
+          id?: string
+          invoice_id: string
+          macro_id?: string | null
+          macro_name?: string | null
+          project_id: string
+          quantity?: number
+          scope_id?: string | null
+          scope_item_id?: string | null
+          scope_name?: string | null
+          total_value?: number
+          unit?: string | null
+          unit_value?: number
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+          invoice_id?: string
+          macro_id?: string | null
+          macro_name?: string | null
+          project_id?: string
+          quantity?: number
+          scope_id?: string | null
+          scope_item_id?: string | null
+          scope_name?: string | null
+          total_value?: number
+          unit?: string | null
+          unit_value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_items_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_items_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_items_scope_item_id_fkey"
+            columns: ["scope_item_id"]
+            isOneToOne: false
+            referencedRelation: "scope_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          attachment_url: string | null
+          company_id: string
+          created_at: string
+          description: string | null
+          due_date: string | null
+          id: string
+          invoice_date: string
+          invoice_number: string
+          net_amount: number
+          notes: string | null
+          payment_date: string | null
+          project_id: string
+          status: string
+          supplier_id: string | null
+          tax_amount: number
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          attachment_url?: string | null
+          company_id: string
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_date?: string
+          invoice_number: string
+          net_amount?: number
+          notes?: string | null
+          payment_date?: string | null
+          project_id: string
+          status?: string
+          supplier_id?: string | null
+          tax_amount?: number
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          attachment_url?: string | null
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          invoice_date?: string
+          invoice_number?: string
+          net_amount?: number
+          notes?: string | null
+          payment_date?: string | null
+          project_id?: string
+          status?: string
+          supplier_id?: string | null
+          tax_amount?: number
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       labor_contracts: {
         Row: {
           contracted_houses: number
