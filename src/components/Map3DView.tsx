@@ -130,8 +130,8 @@ function AutoFitCamera({
     camera.position.set(center.x + dist * 0.5, center.y + dist * 0.7, center.z + dist * 0.5);
     if (controls.target) {
       controls.target.copy(center);
-      controls.minDistance = 0.1;
-      controls.maxDistance = dist * 10;
+      controls.minDistance = 0;
+      controls.maxDistance = Infinity;
       controls.update();
     }
     
@@ -208,13 +208,12 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       <OrbitControls
         makeDefault enablePan enableZoom enableRotate
         maxPolarAngle={Math.PI / 2 - 0.02}
-        minDistance={0.1}
-        maxDistance={50000}
-        zoomSpeed={5.0}
-        panSpeed={4.0}
-        rotateSpeed={2.0}
-        enableDamping
-        dampingFactor={0.12}
+        minDistance={0}
+        maxDistance={Infinity}
+        zoomSpeed={2.0}
+        panSpeed={1.5}
+        rotateSpeed={1.0}
+        enableDamping={false}
         touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
         mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
       />
@@ -493,7 +492,7 @@ export function Map3DView() {
           </div>
         )}
         <div className="absolute inset-0">
-          <Canvas shadows dpr={[1, 1.5]}
+          <Canvas shadows dpr={[1, 1.5]} frameloop="always"
             gl={{ antialias: true, powerPreference: "high-performance", stencil: false, depth: true }}
             onDoubleClick={centerCamera}
             style={{ width: "100%", height: "100%", background: "#f0f4f8" }}
