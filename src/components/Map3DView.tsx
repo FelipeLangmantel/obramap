@@ -1,6 +1,6 @@
 import { useState, useRef, Suspense, useCallback, useEffect } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
-import { OrbitControls, useGLTF, Grid, Html, PerspectiveCamera } from "@react-three/drei";
+import { Canvas, useThree, useFrame } from "@react-three/fiber";
+import { OrbitControls, useGLTF, Html, PerspectiveCamera } from "@react-three/drei";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader.js";
 import { useLoader } from "@react-three/fiber";
@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Upload, Box, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle } from "lucide-react";
+import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
@@ -110,15 +110,48 @@ function HouseMarker3D({
   );
 }
 
-// Camera reset controller - positions camera for top-down isometric view
+// Helper: fit camera to scene bounding box
+function fitCameraToScene(
+  scene: THREE.Scene,
+  camera: THREE.Camera,
+  controls: any
+) {
+  const box = new THREE.Box3().setFromObject(scene);
+  if (box.isEmpty()) return;
+
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const fov = (camera as THREE.PerspectiveCamera).fov * (Math.PI / 180);
+  let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+  cameraZ *= 1.5; // 50% margin
+
+  camera.position.set(
+    center.x + cameraZ * 0.5,
+    center.y + cameraZ * 0.8,
+    center.z + cameraZ * 0.5
+  );
+  camera.lookAt(center);
+
+  if (controls && controls.target) {
+    controls.target.copy(center);
+    controls.maxDistance = cameraZ * 3;
+    controls.minDistance = maxDim * 0.2;
+    controls.update();
+  }
+}
+
+// Camera controller
 function CameraController({ 
   resetTrigger, 
+  fitTrigger,
   savedPosition, 
   savedTarget,
   onCameraChange,
   modelLoaded
 }: { 
   resetTrigger: number;
+  fitTrigger: number;
   savedPosition?: [number, number, number] | null;
   savedTarget?: [number, number, number] | null;
   onCameraChange?: (position: [number, number, number], target: [number, number, number]) => void;
@@ -127,55 +160,19 @@ function CameraController({
   const { camera, controls, scene } = useThree();
   const hasInitializedRef = useRef(false);
   const hasAutoFitRef = useRef(false);
-  
-  // Auto-fit camera to scene bounds when model is loaded
-  const fitCameraToScene = useCallback(() => {
-    const box = new THREE.Box3().setFromObject(scene);
-    if (box.isEmpty()) return;
-    
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const fov = (camera as THREE.PerspectiveCamera).fov * (Math.PI / 180);
-    let cameraZ = Math.abs(maxDim / Math.sin(fov / 2)) * 0.8;
-    
-    // Position camera at an angle for better view
-    camera.position.set(center.x + cameraZ * 0.5, center.y + cameraZ * 0.7, center.z + cameraZ * 0.5);
-    
-    if (controls && (controls as any).target) {
-      (controls as any).target.set(center.x, center.y, center.z);
-      (controls as any).update();
-    }
-    
-    // Report the new position
-    if (onCameraChange) {
+
+  const doFit = useCallback(() => {
+    fitCameraToScene(scene, camera, controls);
+    if (onCameraChange && controls && (controls as any).target) {
+      const t = (controls as any).target;
       onCameraChange(
         [camera.position.x, camera.position.y, camera.position.z],
-        [center.x, center.y, center.z]
+        [t.x, t.y, t.z]
       );
     }
   }, [camera, controls, scene, onCameraChange]);
-  
-  // Move camera to saved position
-  const moveToSavedPosition = useCallback(() => {
-    if (savedPosition && savedTarget) {
-      camera.position.set(savedPosition[0], savedPosition[1], savedPosition[2]);
-      if (controls && (controls as any).target) {
-        (controls as any).target.set(savedTarget[0], savedTarget[1], savedTarget[2]);
-        (controls as any).update();
-      }
-    } else {
-      // Default position if no saved position
-      camera.position.set(0, 30, 20);
-      camera.lookAt(0, 0, 0);
-      if (controls && (controls as any).target) {
-        (controls as any).target.set(0, 0, 0);
-        (controls as any).update();
-      }
-    }
-  }, [camera, controls, savedPosition, savedTarget]);
-  
-  // Initialize camera from saved position on first load
+
+  // Initialize from saved position
   useEffect(() => {
     if (!hasInitializedRef.current && savedPosition && savedTarget) {
       camera.position.set(savedPosition[0], savedPosition[1], savedPosition[2]);
@@ -186,33 +183,56 @@ function CameraController({
       hasInitializedRef.current = true;
     }
   }, [savedPosition, savedTarget, camera, controls]);
-  
-  // Auto-fit when model is first loaded and no saved position
+
+  // Auto-fit when model first loads (and no saved position)
   useEffect(() => {
     if (modelLoaded && !hasAutoFitRef.current && !savedPosition) {
-      // Small delay to ensure model is in scene
       setTimeout(() => {
-        fitCameraToScene();
+        doFit();
         hasAutoFitRef.current = true;
-      }, 100);
+      }, 200);
     }
-  }, [modelLoaded, savedPosition, fitCameraToScene]);
-  
-  // Handle manual camera reset trigger - return to SAVED position
+  }, [modelLoaded, savedPosition, doFit]);
+
+  // Also auto-fit when there IS a saved position but model just loaded
+  // This ensures the model is always visible on open
+  useEffect(() => {
+    if (modelLoaded && !hasAutoFitRef.current && savedPosition) {
+      // Use saved position
+      camera.position.set(savedPosition[0], savedPosition[1], savedPosition[2]);
+      if (controls && (controls as any).target && savedTarget) {
+        (controls as any).target.set(savedTarget[0], savedTarget[1], savedTarget[2]);
+        (controls as any).update();
+      }
+      hasAutoFitRef.current = true;
+    }
+  }, [modelLoaded, savedPosition, savedTarget, camera, controls]);
+
+  // Reset trigger -> go to saved position or fit
   useEffect(() => {
     if (resetTrigger > 0) {
       if (savedPosition && savedTarget) {
-        moveToSavedPosition();
+        camera.position.set(savedPosition[0], savedPosition[1], savedPosition[2]);
+        if (controls && (controls as any).target) {
+          (controls as any).target.set(savedTarget[0], savedTarget[1], savedTarget[2]);
+          (controls as any).update();
+        }
       } else {
-        fitCameraToScene();
+        doFit();
       }
     }
-  }, [resetTrigger, moveToSavedPosition, fitCameraToScene, savedPosition, savedTarget]);
+  }, [resetTrigger, savedPosition, savedTarget, camera, controls, doFit]);
 
-  // Track camera position changes only on control end - much more efficient
+  // Fit trigger -> always fit to model bounds
+  useEffect(() => {
+    if (fitTrigger > 0) {
+      doFit();
+    }
+  }, [fitTrigger, doFit]);
+
+  // Track camera changes on control end
   useEffect(() => {
     if (!controls) return;
-    
     const handleEnd = () => {
       if (onCameraChange && (controls as any).target) {
         const target = (controls as any).target;
@@ -222,7 +242,6 @@ function CameraController({
         );
       }
     };
-    
     (controls as any).addEventListener?.('end', handleEnd);
     return () => {
       (controls as any).removeEventListener?.('end', handleEnd);
@@ -240,9 +259,11 @@ function Scene({
   onMarkerClick,
   customLegendItems,
   resetTrigger,
+  fitTrigger,
   savedPosition,
   savedTarget,
-  onCameraChange
+  onCameraChange,
+  onDoubleClick
 }: { 
   modelData: ModelData | null;
   markers: HouseMarker[];
@@ -250,15 +271,18 @@ function Scene({
   onMarkerClick: (marker: HouseMarker) => void;
   customLegendItems: any[];
   resetTrigger: number;
+  fitTrigger: number;
   savedPosition?: [number, number, number] | null;
   savedTarget?: [number, number, number] | null;
   onCameraChange?: (position: [number, number, number], target: [number, number, number]) => void;
+  onDoubleClick?: () => void;
 }) {
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 30, 20]} fov={50} />
       <CameraController 
-        resetTrigger={resetTrigger} 
+        resetTrigger={resetTrigger}
+        fitTrigger={fitTrigger}
         savedPosition={savedPosition}
         savedTarget={savedTarget}
         onCameraChange={onCameraChange}
@@ -268,13 +292,14 @@ function Scene({
         enablePan={true}
         enableZoom={true}
         enableRotate={true}
-        maxPolarAngle={Math.PI / 2}
+        maxPolarAngle={Math.PI / 2 - 0.1}
         minDistance={1}
-        maxDistance={200}
-        zoomSpeed={1.2}
-        panSpeed={1.0}
-        rotateSpeed={0.8}
-        enableDamping={false}
+        maxDistance={500}
+        zoomSpeed={2.0}
+        panSpeed={1.5}
+        rotateSpeed={1.2}
+        enableDamping={true}
+        dampingFactor={0.05}
         touches={{
           ONE: THREE.TOUCH.ROTATE,
           TWO: THREE.TOUCH.DOLLY_PAN
@@ -291,18 +316,7 @@ function Scene({
       <directionalLight position={[-10, 10, -5]} intensity={0.5} />
       <hemisphereLight args={["#87ceeb", "#4a7c59", 0.4]} />
       
-      {/* Ground grid */}
-      <Grid
-        infiniteGrid
-        cellSize={1}
-        cellThickness={0.5}
-        sectionSize={5}
-        sectionThickness={1}
-        fadeDistance={50}
-        fadeStrength={1}
-        cellColor="#6b7280"
-        sectionColor="#374151"
-      />
+      {/* No grid - clean view */}
       
       {/* 3D Model */}
       {modelData && (
@@ -477,6 +491,7 @@ export function Map3DView() {
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [cameraResetTrigger, setCameraResetTrigger] = useState(0);
+  const [cameraFitTrigger, setCameraFitTrigger] = useState(0);
   const [savedCameraPosition, setSavedCameraPosition] = useState<[number, number, number] | null>(null);
   const [savedCameraTarget, setSavedCameraTarget] = useState<[number, number, number] | null>(null);
   const [pendingCameraPosition, setPendingCameraPosition] = useState<[number, number, number] | null>(null);
@@ -491,9 +506,16 @@ export function Map3DView() {
     setPendingCameraTarget(target);
   }, []);
 
+  // Centralizar = fit to model bounds
   const centerCamera = () => {
-    // Trigger camera to return to saved position
+    setCameraFitTrigger(prev => prev + 1);
+    toast.success("Mapa centralizado");
+  };
+
+  // Resetar visão = voltar para posição salva
+  const resetCameraView = () => {
     setCameraResetTrigger(prev => prev + 1);
+    toast.success("Visualização resetada");
   };
 
   const customLegendItems = currentProject?.customLegendItems || [
@@ -520,7 +542,6 @@ export function Map3DView() {
       }
 
       if (data) {
-        // Load model if exists
         if (data.model_3d_url && data.model_3d_type) {
           setModelData({
             url: data.model_3d_url,
@@ -529,12 +550,10 @@ export function Map3DView() {
           });
         }
 
-        // Load markers if exists
         if (data.house_markers_3d && Array.isArray(data.house_markers_3d) && data.house_markers_3d.length > 0) {
           setMarkers(data.house_markers_3d as unknown as HouseMarker[]);
         }
         
-        // Load camera position if exists
         if (data.camera_position && Array.isArray(data.camera_position)) {
           setSavedCameraPosition(data.camera_position as [number, number, number]);
         }
@@ -549,12 +568,21 @@ export function Map3DView() {
     }
   }, [projectId]);
 
-  // Load data on mount
   useEffect(() => {
     loadSaved3DMap();
   }, [loadSaved3DMap]);
 
-  // Save 3D map data to database
+  // Keyboard shortcuts for zoom
+  useEffect(() => {
+    const handleKeyboard = (e: KeyboardEvent) => {
+      if (e.key === '+' || e.key === '=') {
+        setCameraFitTrigger(prev => prev + 1);
+      }
+    };
+    window.addEventListener('keydown', handleKeyboard);
+    return () => window.removeEventListener('keydown', handleKeyboard);
+  }, []);
+
   const save3DMap = async () => {
     if (!projectId) {
       toast.error("Selecione um projeto primeiro");
@@ -563,7 +591,6 @@ export function Map3DView() {
 
     setIsSaving(true);
     try {
-      // Check if map_layout exists for this project
       const { data: existingLayout } = await supabase
         .from('map_layouts')
         .select('id')
@@ -580,32 +607,20 @@ export function Map3DView() {
       };
 
       if (existingLayout) {
-        // Update existing layout
         const { error } = await supabase
           .from('map_layouts')
           .update(updateData)
           .eq('project_id', projectId);
-
         if (error) throw error;
       } else {
-        // Create new layout
         const { error } = await supabase
           .from('map_layouts')
-          .insert([{
-            project_id: projectId,
-            ...updateData
-          }]);
-
+          .insert([{ project_id: projectId, ...updateData }]);
         if (error) throw error;
       }
 
-      // Update saved position state so "Centralizar" returns to this position
-      if (pendingCameraPosition) {
-        setSavedCameraPosition(pendingCameraPosition);
-      }
-      if (pendingCameraTarget) {
-        setSavedCameraTarget(pendingCameraTarget);
-      }
+      if (pendingCameraPosition) setSavedCameraPosition(pendingCameraPosition);
+      if (pendingCameraTarget) setSavedCameraTarget(pendingCameraTarget);
       
       setHasChanges(false);
       toast.success("Mapa 3D salvo com sucesso!");
@@ -617,84 +632,25 @@ export function Map3DView() {
     }
   };
 
-  // Upload file to Supabase storage
   const uploadFileToStorage = async (file: File, folder: string): Promise<string | null> => {
     if (!projectId) return null;
-
     const fileExt = file.name.split('.').pop();
     const fileName = `${projectId}/${folder}/${Date.now()}.${fileExt}`;
-
     const { data, error } = await supabase.storage
       .from('3d-models')
-      .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: true
-      });
-
+      .upload(fileName, file, { cacheControl: '3600', upsert: true });
     if (error) {
       console.error('Error uploading file:', error);
       toast.error(`Erro ao fazer upload: ${error.message}`);
       return null;
     }
-
-    const { data: urlData } = supabase.storage
-      .from('3d-models')
-      .getPublicUrl(data.path);
-
+    const { data: urlData } = supabase.storage.from('3d-models').getPublicUrl(data.path);
     return urlData.publicUrl;
   };
-
-  // Generate markers from houses
-  const generateMarkersFromHouses = useCallback(() => {
-    if (!houses || houses.length === 0) return;
-
-    const newMarkers: HouseMarker[] = houses.map((house, index) => {
-      // Calculate general progress
-      const macros = (house.macros as any[]) || [];
-      let totalProgress = 0;
-      let totalWeight = 0;
-
-      macros.forEach((macro) => {
-        const macroWeight = macro.weight || 1;
-        let macroProgress = 0;
-        let scopeCount = 0;
-
-        macro.scopes?.forEach((scope: any) => {
-          macroProgress += scope.percentage || 0;
-          scopeCount++;
-        });
-
-        if (scopeCount > 0) {
-          totalProgress += (macroProgress / scopeCount) * macroWeight;
-          totalWeight += macroWeight;
-        }
-      });
-
-      const progress = totalWeight > 0 ? totalProgress / totalWeight : 0;
-
-      // Generate grid position
-      const gridSize = Math.ceil(Math.sqrt(houses.length));
-      const x = (index % gridSize) * 2 - gridSize;
-      const z = Math.floor(index / gridSize) * 2 - gridSize;
-
-      return {
-        id: house.id,
-        houseNumber: house.id,
-        position: [x, 0.15, z] as [number, number, number],
-        progress,
-        macros
-      };
-    });
-
-    setMarkers(newMarkers);
-    setHasChanges(true);
-    toast.success(`${newMarkers.length} casas carregadas no mapa 3D`);
-  }, [houses]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     const fileName = file.name.toLowerCase();
     
     if (fileName.endsWith(".gltf") || fileName.endsWith(".glb")) {
@@ -715,22 +671,16 @@ export function Map3DView() {
     } else {
       toast.error("Formato não suportado. Use glTF (.gltf, .glb) ou OBJ (.obj)");
     }
-    
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleMtlUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!pendingObjFile) return;
-
     setIsLoading(true);
     try {
       const objUrl = await uploadFileToStorage(pendingObjFile, 'obj');
       const mtlUrl = file ? await uploadFileToStorage(file, 'mtl') : undefined;
-      
       if (objUrl) {
         setModelData({ url: objUrl, type: "obj", mtlUrl: mtlUrl || undefined });
         setHasChanges(true);
@@ -739,15 +689,12 @@ export function Map3DView() {
     } finally {
       setPendingObjFile(null);
       setIsLoading(false);
-      if (mtlInputRef.current) {
-        mtlInputRef.current.value = '';
-      }
+      if (mtlInputRef.current) mtlInputRef.current.value = '';
     }
   };
 
   const loadObjWithoutMtl = async () => {
     if (!pendingObjFile) return;
-    
     setIsLoading(true);
     try {
       const objUrl = await uploadFileToStorage(pendingObjFile, 'obj');
@@ -764,7 +711,6 @@ export function Map3DView() {
 
   const resetView = async () => {
     if (!projectId) return;
-    
     setModelData(null);
     setMarkers([]);
     setSelectedMarker(null);
@@ -815,18 +761,10 @@ export function Map3DView() {
                   onChange={handleMtlUpload}
                   className="hidden"
                 />
-                <Button
-                  variant="outline"
-                  onClick={() => mtlInputRef.current?.click()}
-                  disabled={isLoading}
-                >
+                <Button variant="outline" onClick={() => mtlInputRef.current?.click()} disabled={isLoading}>
                   Selecionar MTL
                 </Button>
-                <Button
-                  variant="secondary"
-                  onClick={loadObjWithoutMtl}
-                  disabled={isLoading}
-                >
+                <Button variant="secondary" onClick={loadObjWithoutMtl} disabled={isLoading}>
                   Carregar sem MTL
                 </Button>
               </div>
@@ -834,31 +772,28 @@ export function Map3DView() {
 
             <Button
               variant="outline"
-              onClick={generateMarkersFromHouses}
-              disabled={!houses || houses.length === 0 || isLoading}
+              onClick={centerCamera}
+              disabled={isLoading}
             >
-              <Box className="h-4 w-4 mr-2" />
-              Carregar Casas ({houses?.length || 0})
+              <Target className="h-4 w-4 mr-2" />
+              Centralizar
             </Button>
 
             <Button
               variant="outline"
-              onClick={centerCamera}
+              onClick={resetCameraView}
               disabled={isLoading}
             >
               <Home className="h-4 w-4 mr-2" />
-              Centralizar
+              Resetar Visão
             </Button>
 
             {isAdmin && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    disabled={isLoading}
-                  >
+                  <Button variant="outline" disabled={isLoading}>
                     <RotateCcw className="h-4 w-4 mr-2" />
-                    Resetar
+                    Resetar Mapa
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
@@ -901,7 +836,11 @@ export function Map3DView() {
             <div className="flex-1" />
 
             <div className="text-sm text-muted-foreground">
-              <span className="font-medium">Controles:</span> Arrastar para rotacionar • Scroll para zoom • Botão direito para mover
+              <span className="font-medium">Controles:</span>{" "}
+              <strong>Arrastar</strong> para rotacionar •{" "}
+              <strong>Scroll</strong> para zoom •{" "}
+              <strong>Botão direito</strong> para mover •{" "}
+              <strong>Duplo clique</strong> para centralizar
             </div>
           </div>
         </CardContent>
@@ -927,6 +866,7 @@ export function Map3DView() {
             stencil: false,
             depth: true
           }}
+          onDoubleClick={centerCamera}
         >
           <Scene
             modelData={modelData}
@@ -935,13 +875,13 @@ export function Map3DView() {
             onMarkerClick={setSelectedMarker}
             customLegendItems={customLegendItems}
             resetTrigger={cameraResetTrigger}
+            fitTrigger={cameraFitTrigger}
             savedPosition={savedCameraPosition}
             savedTarget={savedCameraTarget}
             onCameraChange={handleCameraChange}
           />
         </Canvas>
 
-        {/* House details panel */}
         {selectedMarker && (
           <HouseDetailsPanel
             marker={selectedMarker}
@@ -950,7 +890,6 @@ export function Map3DView() {
           />
         )}
 
-        {/* Empty state */}
         {!modelData && markers.length === 0 && !isLoading && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center space-y-4 p-8 bg-background/80 rounded-xl border border-border">
@@ -958,7 +897,7 @@ export function Map3DView() {
               <div>
                 <h3 className="text-lg font-semibold">Mapa 3D</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Importe um modelo 3D (.glTF, .glb ou .obj) ou carregue as casas para visualizar
+                  Importe um modelo 3D (.glTF, .glb ou .obj) para visualizar
                 </p>
               </div>
             </div>
