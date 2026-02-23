@@ -69,7 +69,7 @@ import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import obraMapLogo from "@/assets/obramap-logo-new.png";
 
-type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning";
+type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning";
 
 // Views com rotas separadas (navegam para página diferente)
 type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract";
@@ -178,7 +178,8 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
 
   // ✅ Menu items com permissionId alinhado aos IDs do painel de permissões (MENU_OPTIONS)
   const mainMenuItems: { title: string; view: MenuViewType; icon: any; permissionId: string }[] = [
-    { title: "Mapa de Obras", view: "map", icon: LayoutDashboard, permissionId: "mapa" },
+    { title: "Painel Inicial", view: "home", icon: LayoutDashboard, permissionId: "mapa" },
+    { title: "Mapa de Obras", view: "map", icon: Map, permissionId: "mapa" },
     { title: "Mapa Interativo", view: "interactive-map", icon: Map, permissionId: "mapa" },
     { title: "Mapa 3D", view: "3d-map", icon: Box, permissionId: "mapa" },
     { title: "Gráficos", view: "charts", icon: BarChart3, permissionId: "graficos" },

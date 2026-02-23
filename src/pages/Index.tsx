@@ -4,6 +4,7 @@ import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { HomeDashboard } from "@/components/HomeDashboard";
 import { StatsCards } from "@/components/StatsCards";
 import { FilterBar } from "@/components/FilterBar";
 import { Legend } from "@/components/Legend";
@@ -33,7 +34,7 @@ function SidebarTriggerButton() {
   );
 }
 
-type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning";
+type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning";
 
 /**
  * ✅ Index agora é puro - sem redirects
@@ -42,7 +43,7 @@ type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "intera
  * - Tem acesso a esta rota
  */
 function Index() {
-  const [activeView, setActiveView] = useState<ViewType>("map");
+  const [activeView, setActiveView] = useState<ViewType>("home");
   const location = useLocation();
   const { selectedHouse, isLoading, projects, currentProject, setCurrentProject } = useConstruction();
   const { canAccessProject } = useAuth();
@@ -97,6 +98,7 @@ function Index() {
   }
 
   const viewTitles: Record<ViewType, string> = {
+    home: "Painel Inicial",
     map: "Mapa de Obras",
     "interactive-map": "Mapa Interativo",
     "3d-map": "Mapa 3D",
@@ -148,6 +150,12 @@ function Index() {
               </div>
             ) : (
               <div className="h-full flex flex-col">
+                {activeView === "home" && (
+                  <div className="flex-1">
+                    <HomeDashboard onNavigateToProject={(view) => setActiveView(view as ViewType)} />
+                  </div>
+                )}
+
                 {(activeView === "map" || activeView === "charts") && <StatsCards />}
                 
                 {activeView === "map" && (
