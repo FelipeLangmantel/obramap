@@ -191,7 +191,7 @@ export function FinancialFlowView() {
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("flow");
+  const [activeTab, setActiveTab] = useState("analytics");
   
   // Dialogs
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -642,14 +642,14 @@ export function FinancialFlowView() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
+          <TabsTrigger value="analytics">
+            <BarChart3 className="h-4 w-4 mr-2" />
+            Análises
+          </TabsTrigger>
           <TabsTrigger value="flow">Fluxo de Caixa</TabsTrigger>
           <TabsTrigger value="invoices">
             <FileText className="h-4 w-4 mr-2" />
             Notas Fiscais
-          </TabsTrigger>
-          <TabsTrigger value="analytics">
-            <BarChart3 className="h-4 w-4 mr-2" />
-            Análises
           </TabsTrigger>
         </TabsList>
 
@@ -847,7 +847,7 @@ export function FinancialFlowView() {
         </TabsContent>
 
         <TabsContent value="invoices">
-          <InvoiceManagementView />
+          <InvoiceManagementView onInvoiceSaved={loadData} />
         </TabsContent>
       </Tabs>
 

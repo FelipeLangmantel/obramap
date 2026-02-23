@@ -92,7 +92,11 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
   cancelled: { label: "Cancelada", color: "bg-destructive", icon: XCircle },
 };
 
-export function InvoiceManagementView() {
+interface InvoiceManagementViewProps {
+  onInvoiceSaved?: () => void;
+}
+
+export function InvoiceManagementView({ onInvoiceSaved }: InvoiceManagementViewProps = {}) {
   const { currentProject } = useConstruction();
   const { canEdit, company } = useAuth();
 
@@ -325,10 +329,31 @@ export function InvoiceManagementView() {
 
       if (itemsError) throw itemsError;
 
-      toast.success("Nota fiscal registrada com sucesso");
+      // Auto-create financial entry in cash flow
+      const supplierName = suppliers.find(s => s.id === newInvoice.supplier_id)?.name;
+      const { error: financialError } = await supabase
+        .from("financial_entries")
+        .insert({
+          project_id: currentProject.id,
+          category: "MATERIAIS",
+          description: `NF ${newInvoice.invoice_number}${supplierName ? ` - ${supplierName}` : ''}`,
+          amount: totalAmount,
+          due_date: newInvoice.due_date || newInvoice.invoice_date,
+          status: "pending",
+          supplier_id: newInvoice.supplier_id || null,
+          notes: `Importado automaticamente da NF ${newInvoice.invoice_number}`,
+        });
+
+      if (financialError) {
+        console.error("Error creating financial entry:", financialError);
+        // Don't block - invoice was saved successfully
+      }
+
+      toast.success("Nota fiscal registrada e lançada no fluxo de caixa");
       setShowAddDialog(false);
       resetForm();
       loadData();
+      onInvoiceSaved?.();
     } catch (error) {
       console.error("Error saving invoice:", error);
       toast.error("Erro ao salvar nota fiscal");
