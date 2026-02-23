@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -42,8 +43,19 @@ type ViewType = "map" | "charts" | "production" | "costs" | "planning" | "intera
  */
 function Index() {
   const [activeView, setActiveView] = useState<ViewType>("map");
+  const location = useLocation();
   const { selectedHouse, isLoading, projects, currentProject, setCurrentProject } = useConstruction();
   const { canAccessProject } = useAuth();
+
+  // ✅ Se navegou de outra rota com targetView no state, aplicar a view
+  useEffect(() => {
+    const state = location.state as { targetView?: ViewType } | null;
+    if (state?.targetView) {
+      setActiveView(state.targetView);
+      // Limpar o state para não re-aplicar em re-renders
+      window.history.replaceState({}, '');
+    }
+  }, [location.state]);
 
   // ✅ Auto-seleciona a primeira obra acessível APENAS se não houver projeto atual
   // Usa ref para evitar múltiplas execuções
@@ -102,7 +114,7 @@ function Index() {
   };
 
   return (
-    <SidebarProvider defaultOpen={false}>
+    <SidebarProvider defaultOpen={true}>
       <div className="h-screen flex w-full overflow-hidden">
         <AppSidebar 
           activeView={activeView} 
