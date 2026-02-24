@@ -640,14 +640,48 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             if (error) console.error('Error updating project:', error);
           });
 
-        // Update houses in database
+        // Update houses in database - NEVER delete existing houses to preserve FK references
         const saveHousesToDb = async () => {
-          // Delete existing houses
-          await supabase.from('houses').delete().eq('project_id', projectId);
+          // Get existing house numbers in DB
+          const { data: existingHouses } = await supabase
+            .from('houses')
+            .select('house_number')
+            .eq('project_id', projectId);
           
-          // Insert updated houses
-          if (updatedProject.houses.length > 0) {
-            const housesInsert = updatedProject.houses.map(h => ({
+          const existingNumbers = new Set((existingHouses || []).map(h => h.house_number));
+          const targetNumbers = new Set(updatedProject.houses.map(h => h.id));
+          
+          // Delete ONLY houses that no longer exist (beyond new total)
+          const toDelete = [...existingNumbers].filter(n => !targetNumbers.has(n));
+          if (toDelete.length > 0) {
+            await supabase
+              .from('houses')
+              .delete()
+              .eq('project_id', projectId)
+              .in('house_number', toDelete);
+          }
+          
+          // Upsert existing houses (preserves macros/progress data)
+          const toUpsert = updatedProject.houses.filter(h => existingNumbers.has(h.id));
+          for (const h of toUpsert) {
+            await supabase
+              .from('houses')
+              .update({
+                quadra_id: h.quadra || null,
+                area: h.area,
+                type: h.type,
+                constructor_name: h.constructorName,
+                expected_date: h.expectedDate || null,
+                // DO NOT update macros here - preserve existing production data
+              })
+              .eq('project_id', projectId)
+              .eq('house_number', h.id);
+          }
+          
+          // Insert ONLY truly new houses
+          const toInsert = updatedProject.houses.filter(h => !existingNumbers.has(h.id));
+          if (toInsert.length > 0) {
+            const housesInsert = toInsert.map(h => ({
               project_id: projectId,
               house_number: h.id,
               quadra_id: h.quadra || null,
@@ -657,8 +691,28 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
               expected_date: h.expectedDate || null,
               macros: macrosToJson(h.macros),
             }));
-            
             await supabase.from('houses').insert(housesInsert);
+          }
+          
+          // Auto-update map_layouts to sync with new house list
+          const { data: mapLayout } = await supabase
+            .from('map_layouts')
+            .select('id, houses, quadras')
+            .eq('project_id', projectId)
+            .maybeSingle();
+          
+          if (mapLayout) {
+            // Update map quadras to remove deleted houses and add new ones
+            const mapQuadras = (mapLayout.quadras as any[]) || [];
+            const updatedMapQuadras = mapQuadras.map((mq: any) => ({
+              ...mq,
+              houses: (mq.houses || []).filter((hId: number) => targetNumbers.has(hId)),
+            }));
+            
+            await supabase
+              .from('map_layouts')
+              .update({ quadras: updatedMapQuadras as unknown as Json })
+              .eq('project_id', projectId);
           }
         };
         saveHousesToDb();
@@ -917,43 +971,88 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   const generateHousesForProject = useCallback(async () => {
     if (!currentProjectId || !currentProject) return;
     
+    // Get existing houses from DB to preserve their data
+    const { data: existingDbHouses } = await supabase
+      .from('houses')
+      .select('*')
+      .eq('project_id', currentProjectId);
+    
+    const existingMap = new Map((existingDbHouses || []).map(h => [h.house_number, h]));
+    
     const houses: House[] = [];
-    const housesInsert = [];
+    const toInsert: any[] = [];
+    
     for (let i = 1; i <= currentProject.totalHouses; i++) {
-      const house: House = {
-        id: i,
-        quadra: "",
-        area: currentProject.unitSize,
-        type: currentProject.projectType,
-        constructorName: currentProject.contractor,
-        expectedDate: currentProject.expectedEndDate,
-        lastUpdate: new Date().toLocaleDateString("pt-BR"),
-        macros: currentProject.macrosTemplate.map(macro => ({
-          ...macro,
-          scopes: macro.scopes.map(scope => ({
-            ...scope,
-            progress: 0,
-            startDate: null,
-            endDate: null,
+      const existing = existingMap.get(i);
+      if (existing) {
+        // Preserve existing house with all its data
+        houses.push({
+          id: existing.house_number,
+          quadra: existing.quadra_id || "",
+          area: currentProject.unitSize,
+          type: currentProject.projectType,
+          constructorName: currentProject.contractor,
+          expectedDate: currentProject.expectedEndDate,
+          lastUpdate: new Date(existing.last_update).toLocaleDateString("pt-BR"),
+          macros: jsonToMacros(existing.macros),
+        });
+        // Only update metadata, preserve macros
+        await supabase
+          .from('houses')
+          .update({
+            area: currentProject.unitSize,
+            type: currentProject.projectType,
+            constructor_name: currentProject.contractor,
+            expected_date: currentProject.expectedEndDate,
+          })
+          .eq('project_id', currentProjectId)
+          .eq('house_number', i);
+      } else {
+        // New house
+        const house: House = {
+          id: i,
+          quadra: "",
+          area: currentProject.unitSize,
+          type: currentProject.projectType,
+          constructorName: currentProject.contractor,
+          expectedDate: currentProject.expectedEndDate,
+          lastUpdate: new Date().toLocaleDateString("pt-BR"),
+          macros: currentProject.macrosTemplate.map(macro => ({
+            ...macro,
+            scopes: macro.scopes.map(scope => ({
+              ...scope,
+              progress: 0,
+              startDate: null,
+              endDate: null,
+            })),
           })),
-        })),
-      };
-      houses.push(house);
-      housesInsert.push({
-        project_id: currentProjectId,
-        house_number: i,
-        area: currentProject.unitSize,
-        type: currentProject.projectType,
-        constructor_name: currentProject.contractor,
-        expected_date: currentProject.expectedEndDate,
-        macros: macrosToJson(house.macros),
-      });
+        };
+        houses.push(house);
+        toInsert.push({
+          project_id: currentProjectId,
+          house_number: i,
+          area: currentProject.unitSize,
+          type: currentProject.projectType,
+          constructor_name: currentProject.contractor,
+          expected_date: currentProject.expectedEndDate,
+          macros: macrosToJson(house.macros),
+        });
+      }
     }
     
-    // Delete existing and insert new houses
-    await supabase.from('houses').delete().eq('project_id', currentProjectId);
-    if (housesInsert.length > 0) {
-      await supabase.from('houses').insert(housesInsert);
+    // Delete only houses beyond the new total
+    const toDeleteNumbers = [...existingMap.keys()].filter(n => n > currentProject.totalHouses);
+    if (toDeleteNumbers.length > 0) {
+      await supabase
+        .from('houses')
+        .delete()
+        .eq('project_id', currentProjectId)
+        .in('house_number', toDeleteNumbers);
+    }
+    
+    // Insert only new houses
+    if (toInsert.length > 0) {
+      await supabase.from('houses').insert(toInsert);
     }
 
     setProjects(prev => prev.map(p => 

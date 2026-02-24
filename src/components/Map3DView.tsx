@@ -94,6 +94,74 @@ function HouseMarker3D({ marker, onClick, isSelected, customLegendItems }: {
   );
 }
 
+// Zoom to mouse position controls
+function ZoomToMouseControls() {
+  const { camera, gl, scene } = useThree();
+  const controlsRef = useRef<any>(null);
+  const raycaster = useRef(new THREE.Raycaster());
+  const mouse = useRef(new THREE.Vector2());
+
+  useEffect(() => {
+    const domElement = gl.domElement;
+    
+    const onWheel = (event: WheelEvent) => {
+      if (!controlsRef.current) return;
+      
+      event.preventDefault();
+      
+      const rect = domElement.getBoundingClientRect();
+      mouse.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      
+      raycaster.current.setFromCamera(mouse.current, camera);
+      
+      const intersects = raycaster.current.intersectObjects(scene.children, true);
+      const target = controlsRef.current.target as THREE.Vector3;
+      
+      let zoomPoint: THREE.Vector3;
+      if (intersects.length > 0) {
+        zoomPoint = intersects[0].point.clone();
+      } else {
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        const intersection = new THREE.Vector3();
+        raycaster.current.ray.intersectPlane(plane, intersection);
+        zoomPoint = intersection || target.clone();
+      }
+      
+      const zoomFactor = event.deltaY > 0 ? 1.12 : 0.89;
+      const direction = new THREE.Vector3().subVectors(camera.position, zoomPoint);
+      
+      camera.position.copy(zoomPoint).add(direction.multiplyScalar(zoomFactor));
+      
+      // Move target toward zoom point for smooth entry into houses
+      const targetShift = new THREE.Vector3().subVectors(zoomPoint, target).multiplyScalar(0.08 * (event.deltaY > 0 ? -1 : 1));
+      target.add(targetShift);
+      
+      controlsRef.current.update();
+    };
+    
+    domElement.addEventListener('wheel', onWheel, { passive: false });
+    return () => domElement.removeEventListener('wheel', onWheel);
+  }, [camera, gl, scene]);
+
+  return (
+    <OrbitControls
+      ref={controlsRef}
+      makeDefault enablePan enableRotate
+      enableZoom={false}
+      maxPolarAngle={Math.PI / 2 - 0.02}
+      minDistance={0}
+      maxDistance={Infinity}
+      panSpeed={1.5}
+      rotateSpeed={1.0}
+      enableDamping
+      dampingFactor={0.08}
+      touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
+      mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }}
+    />
+  );
+}
+
 // Camera auto-fit
 function AutoFitCamera({ 
   fitTrigger, resetTrigger, savedPosition, savedTarget, onCameraChange, sceneReady
@@ -205,18 +273,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       <AutoFitCamera fitTrigger={fitTrigger} resetTrigger={resetTrigger}
         savedPosition={savedPosition} savedTarget={savedTarget}
         onCameraChange={onCameraChange} sceneReady={sceneReady} />
-      <OrbitControls
-        makeDefault enablePan enableZoom enableRotate
-        maxPolarAngle={Math.PI / 2 - 0.02}
-        minDistance={0}
-        maxDistance={Infinity}
-        zoomSpeed={2.0}
-        panSpeed={1.5}
-        rotateSpeed={1.0}
-        enableDamping={false}
-        touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
-        mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
-      />
+      <ZoomToMouseControls />
       <ambientLight intensity={0.6} />
       <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
       <directionalLight position={[-10, 10, -5]} intensity={0.5} />
