@@ -4509,6 +4509,8 @@ export type Database = {
       weekly_productions: {
         Row: {
           created_at: string
+          created_by_name: string | null
+          created_by_user_id: string | null
           house_ids: number[]
           houses_count: number
           id: string
@@ -4526,6 +4528,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          created_by_name?: string | null
+          created_by_user_id?: string | null
           house_ids?: number[]
           houses_count?: number
           id?: string
@@ -4543,6 +4547,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          created_by_name?: string | null
+          created_by_user_id?: string | null
           house_ids?: number[]
           houses_count?: number
           id?: string

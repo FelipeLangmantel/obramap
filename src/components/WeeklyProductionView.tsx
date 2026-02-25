@@ -41,6 +41,8 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { EditProductionDialog } from "./EditProductionDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Maximize2, Clock, User } from "lucide-react";
 import { format, startOfWeek, endOfWeek, subWeeks, parseISO, isWithinInterval, addWeeks, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -69,8 +71,11 @@ interface WeeklyProduction {
   house_ids: number[];
   houses_count: number;
   created_at: string;
+  updated_at: string;
   notes: string | null;
   is_initial_database: boolean;
+  created_by_user_id: string | null;
+  created_by_name: string | null;
 }
 
 interface PlannedPeriod {
@@ -91,9 +96,88 @@ const FILTER_STORAGE_KEY = "obramap_production_filters";
 const TAB_STORAGE_KEY = "obramap_production_tab";
 const INITIAL_DB_STORAGE_KEY = "obramap_initial_database_mode";
 
+function ProductionRecordItem({ prod, canEdit, onEdit, onDelete, showFullDetails = false }: {
+  prod: WeeklyProduction;
+  canEdit: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  showFullDetails?: boolean;
+}) {
+  return (
+    <div 
+      className={`flex items-start gap-3 p-2.5 rounded-lg border hover:bg-accent/30 transition-colors ${canEdit ? 'cursor-pointer' : ''} ${prod.is_initial_database ? 'border-amber-500/30 bg-amber-500/5' : ''}`}
+      onClick={() => { if (canEdit) onEdit(); }}
+    >
+      <div 
+        className="w-3 h-3 rounded-full flex-shrink-0 mt-1" 
+        style={{ backgroundColor: prod.macro_color }}
+      />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{prod.scope_name}</p>
+        <p className="text-xs text-muted-foreground">
+          <span className="uppercase">{prod.macro_name}</span> • {format(parseISO(prod.week_start), "dd/MM", { locale: ptBR })} - {format(parseISO(prod.week_end), "dd/MM", { locale: ptBR })}
+        </p>
+        {showFullDetails && (
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Casas: {prod.house_ids.join(", ")}
+          </p>
+        )}
+        <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {format(parseISO(prod.updated_at || prod.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+          </span>
+          {prod.created_by_name && (
+            <span className="flex items-center gap-1">
+              <User className="h-3 w-3" />
+              {prod.created_by_name}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="text-right flex items-center gap-2 flex-shrink-0">
+        <div>
+          <div className="flex items-center gap-1">
+            <Badge variant="secondary" className="text-xs">{prod.houses_count} casas</Badge>
+            {prod.is_initial_database && (
+              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/50">Inicial</Badge>
+            )}
+          </div>
+          {!showFullDetails && (
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              {prod.house_ids.slice(0, 4).join(", ")}
+              {prod.house_ids.length > 4 && `... +${prod.house_ids.length - 4}`}
+            </p>
+          )}
+        </div>
+        {canEdit && (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-primary hover:text-primary"
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive hover:text-destructive"
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function WeeklyProductionView() {
   const { currentProject, updateBatchScopeProgress } = useConstruction();
-  const { canEdit } = useAuth();
+  const { canEdit, profile } = useAuth();
   
   // Load saved tab from localStorage
   const [activeTab, setActiveTab] = useState<"register" | "analysis">(() => {
@@ -144,7 +228,7 @@ export function WeeklyProductionView() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productionToDelete, setProductionToDelete] = useState<WeeklyProduction | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  
+  const [showAllRecords, setShowAllRecords] = useState(false);
   // Custom percentage mode
   const [customPercentMode, setCustomPercentMode] = useState(false);
   const [massPercentage, setMassPercentage] = useState(100);
@@ -447,6 +531,8 @@ export function WeeklyProductionView() {
           house_ids: selectedHouses,
           houses_count: selectedHouses.length,
           is_initial_database: isInitialDatabase,
+          created_by_user_id: profile?.user_id || null,
+          created_by_name: profile?.display_name || null,
         });
 
       if (error) throw error;
@@ -1626,8 +1712,22 @@ export function WeeklyProductionView() {
             </Card>
 
             <Card className="flex flex-col">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-2 flex flex-row items-center justify-between">
                 <CardTitle className="text-base">Últimos Registros</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    {allFilteredProductions.length} total
+                  </Badge>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-7 text-xs gap-1"
+                    onClick={() => setShowAllRecords(true)}
+                  >
+                    <Maximize2 className="h-3 w-3" />
+                    Ver Todos
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="flex-1">
                 <ScrollArea className="h-[300px]">
@@ -1637,76 +1737,62 @@ export function WeeklyProductionView() {
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {allFilteredProductions.slice(0, 20).map(prod => (
-                        <div 
+                      {allFilteredProductions.slice(0, 10).map(prod => (
+                        <ProductionRecordItem 
                           key={prod.id} 
-                          className={`flex items-center gap-3 p-2.5 rounded-lg border hover:bg-accent/30 transition-colors ${canEdit ? 'cursor-pointer' : ''} ${prod.is_initial_database ? 'border-amber-500/30 bg-amber-500/5' : ''}`}
-                          onClick={() => {
-                            if (!canEdit) return;
-                            setEditingProduction(prod);
-                            setEditDialogOpen(true);
-                          }}
-                        >
-                          <div 
-                            className="w-3 h-3 rounded-full flex-shrink-0" 
-                            style={{ backgroundColor: prod.macro_color }}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{prod.scope_name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              <span className="uppercase">{prod.macro_name}</span> • {format(parseISO(prod.week_start), "dd/MM", { locale: ptBR })} - {format(parseISO(prod.week_end), "dd/MM", { locale: ptBR })}
-                            </p>
-                          </div>
-                          <div className="text-right flex items-center gap-2">
-                            <div>
-                              <div className="flex items-center gap-1">
-                                <Badge variant="secondary" className="text-xs">{prod.houses_count} casas</Badge>
-                                {prod.is_initial_database && (
-                                  <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-500/50">Inicial</Badge>
-                                )}
-                              </div>
-                              <p className="text-[10px] text-muted-foreground mt-0.5">
-                                {prod.house_ids.slice(0, 4).join(", ")}
-                                {prod.house_ids.length > 4 && `... +${prod.house_ids.length - 4}`}
-                              </p>
-                            </div>
-                            {canEdit && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-primary hover:text-primary"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingProduction(prod);
-                                    setEditDialogOpen(true);
-                                  }}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-destructive hover:text-destructive"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setProductionToDelete(prod);
-                                    setDeleteDialogOpen(true);
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        </div>
+                          prod={prod} 
+                          canEdit={canEdit} 
+                          onEdit={() => { setEditingProduction(prod); setEditDialogOpen(true); }}
+                          onDelete={() => { setProductionToDelete(prod); setDeleteDialogOpen(true); }}
+                        />
                       ))}
+                      {allFilteredProductions.length > 10 && (
+                        <Button 
+                          variant="ghost" 
+                          className="w-full text-xs text-muted-foreground"
+                          onClick={() => setShowAllRecords(true)}
+                        >
+                          +{allFilteredProductions.length - 10} registros — Clique para ver todos
+                        </Button>
+                      )}
                     </div>
                   )}
                 </ScrollArea>
               </CardContent>
             </Card>
           </div>
+
+          {/* Full Records Dialog */}
+          <Dialog open={showAllRecords} onOpenChange={setShowAllRecords}>
+            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  Todos os Registros de Produção
+                  <Badge variant="secondary">{allFilteredProductions.length} registros</Badge>
+                </DialogTitle>
+              </DialogHeader>
+              <ScrollArea className="flex-1 max-h-[70vh] pr-2">
+                {allFilteredProductions.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    Nenhuma produção no período
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {allFilteredProductions.map(prod => (
+                      <ProductionRecordItem 
+                        key={prod.id} 
+                        prod={prod} 
+                        canEdit={canEdit} 
+                        onEdit={() => { setEditingProduction(prod); setEditDialogOpen(true); setShowAllRecords(false); }}
+                        onDelete={() => { setProductionToDelete(prod); setDeleteDialogOpen(true); setShowAllRecords(false); }}
+                        showFullDetails
+                      />
+                    ))}
+                  </div>
+                )}
+              </ScrollArea>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
 
