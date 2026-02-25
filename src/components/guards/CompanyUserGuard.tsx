@@ -1,7 +1,8 @@
 import { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2 } from "lucide-react";
+import { Loader2, LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface CompanyUserGuardProps {
   children: ReactNode;
@@ -15,7 +16,7 @@ interface CompanyUserGuardProps {
  * - Usuários de empresa acessam normalmente
  */
 export function CompanyUserGuard({ children }: CompanyUserGuardProps) {
-  const { user, profile, isSystemAdmin, isLoading, mustChangePassword, company } = useAuth();
+  const { user, profile, isSystemAdmin, isLoading, mustChangePassword, company, signOut } = useAuth();
 
   // Loading state
   if (isLoading) {
@@ -59,7 +60,11 @@ export function CompanyUserGuard({ children }: CompanyUserGuardProps) {
         <div className="text-center">
           <h1 className="text-2xl font-bold text-foreground mb-2">Acesso Negado</h1>
           <p className="text-muted-foreground">Você não está vinculado a nenhuma empresa.</p>
-          <p className="text-muted-foreground">Entre em contato com o administrador.</p>
+          <p className="text-muted-foreground mb-6">Entre em contato com o administrador.</p>
+          <Button variant="outline" onClick={() => signOut()}>
+            <LogOut className="h-4 w-4 mr-2" />
+            Sair
+          </Button>
         </div>
       </div>
     );
