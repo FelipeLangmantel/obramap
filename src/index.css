@@ -189,16 +189,12 @@
     margin: 10mm;
   }
 
-  /* Esconder tudo que não é conteúdo */
+  /* Esconder APENAS navegação e botões — NÃO o container */
   .no-print,
-  header,
   footer,
   nav,
   aside,
-  [data-sidebar],
-  [class*="SidebarProvider"],
-  [class*="AppSidebar"],
-  [class*="sidebar"] {
+  [data-sidebar="sidebar"] {
     display: none !important;
   }
 
@@ -211,15 +207,19 @@
     background: hsl(var(--background)) !important;
   }
 
-  body > #root {
+  body > #root,
+  body > #root > * {
     height: auto !important;
     overflow: visible !important;
+    display: block !important;
   }
 
   /* Container principal */
-  .h-screen {
+  .h-screen,
+  [class*="flex w-full overflow-hidden"] {
     height: auto !important;
     overflow: visible !important;
+    display: block !important;
   }
 
   .overflow-hidden {
@@ -231,10 +231,11 @@
   }
 
   main {
-    padding: 0 !important;
+    padding: 5mm !important;
     overflow: visible !important;
     height: auto !important;
     flex: none !important;
+    display: block !important;
   }
 
   /* Print area ocupa tudo */
