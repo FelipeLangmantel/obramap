@@ -139,56 +139,63 @@ function Index() {
       const availH = paper.h - 2 * margin - headerH - footerH;
       const systemBg = '#e8eef4';
 
-      // ── Capture each section individually for maximum sharpness ──
-      const sections = Array.from(printEl.children) as HTMLElement[];
+      // ── Temporarily widen the element to match PDF landscape ratio ──
+      // This makes the content re-flow wider (more columns, larger cards)
+      // so when captured it maps 1:1 to PDF without downscaling blur
+      const targetWidthPx = 1600; // Wide enough for landscape PDF
+      const origWidth = printEl.style.width;
+      const origMaxWidth = printEl.style.maxWidth;
+      const origMinWidth = printEl.style.minWidth;
+      const origPosition = printEl.style.position;
+      const origLeft = printEl.style.left;
 
-      // Helper: force opaque backgrounds on an element tree
-      const forceOpaque = (el: HTMLElement) => {
-        const saved: { el: HTMLElement; bg: string }[] = [];
-        el.querySelectorAll<HTMLElement>("*").forEach((child) => {
-          const bg = getComputedStyle(child).backgroundColor;
-          const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
-          if (m && m[4] && parseFloat(m[4]) < 1) {
-            saved.push({ el: child, bg: child.style.backgroundColor });
-            const a = parseFloat(m[4]);
-            child.style.backgroundColor = `rgb(${Math.round(+m[1]*a+232*(1-a))}, ${Math.round(+m[2]*a+238*(1-a))}, ${Math.round(+m[3]*a+244*(1-a))})`;
-          }
-        });
-        return saved;
-      };
+      // Apply temporary wide layout (off-screen to avoid flicker)
+      printEl.style.width = `${targetWidthPx}px`;
+      printEl.style.maxWidth = `${targetWidthPx}px`;
+      printEl.style.minWidth = `${targetWidthPx}px`;
 
-      const restoreOpaque = (saved: { el: HTMLElement; bg: string }[]) => {
-        saved.forEach(({ el, bg }) => { el.style.backgroundColor = bg; });
-      };
+      // Force layout recalc
+      await new Promise(r => setTimeout(r, 100));
 
-      // Capture all sections
-      const captures: { canvas: HTMLCanvasElement; heightRatio: number }[] = [];
-      for (const section of sections) {
-        const saved = forceOpaque(section);
-        const canvas = await html2canvasLib(section, {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          backgroundColor: systemBg,
-          imageTimeout: 0,
-          removeContainer: true,
-        });
-        restoreOpaque(saved);
-        captures.push({ canvas, heightRatio: canvas.height / canvas.width });
+      // Force opaque backgrounds
+      const saved: { el: HTMLElement; bg: string }[] = [];
+      printEl.querySelectorAll<HTMLElement>("*").forEach((child) => {
+        const bg = getComputedStyle(child).backgroundColor;
+        const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+        if (m && m[4] && parseFloat(m[4]) < 1) {
+          saved.push({ el: child, bg: child.style.backgroundColor });
+          const a = parseFloat(m[4]);
+          child.style.backgroundColor = `rgb(${Math.round(+m[1]*a+232*(1-a))}, ${Math.round(+m[2]*a+238*(1-a))}, ${Math.round(+m[3]*a+244*(1-a))})`;
+        }
+      });
+
+      // Capture at scale 2 — with 1600px width = 3200px canvas → ~8px/mm on A3 = 200+ DPI
+      const canvas = await html2canvasLib(printEl, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: systemBg,
+        imageTimeout: 0,
+        removeContainer: true,
+        width: targetWidthPx,
+      });
+
+      // Restore original layout immediately
+      saved.forEach(({ el, bg }) => { el.style.backgroundColor = bg; });
+      printEl.style.width = origWidth;
+      printEl.style.maxWidth = origMaxWidth;
+      printEl.style.minWidth = origMinWidth;
+      printEl.style.position = origPosition;
+      printEl.style.left = origLeft;
+
+      // Fit on ONE page
+      const imgAspect = canvas.width / canvas.height;
+      let imgW = availW;
+      let imgH = imgW / imgAspect;
+      if (imgH > availH) {
+        imgH = availH;
+        imgW = imgH * imgAspect;
       }
-
-      // Calculate total height when all sections are rendered at availW width
-      const gap = 3; // mm gap between sections
-      const totalContentH = captures.reduce((sum, c) => sum + availW * c.heightRatio, 0) + (captures.length - 1) * gap;
-
-      // If content is taller than available, scale everything down uniformly
-      const scaleFactor = totalContentH > availH ? availH / totalContentH : 1;
-      const finalW = availW * scaleFactor;
-      const sectionGap = gap * scaleFactor;
-
-      // Center vertically
-      const finalTotalH = captures.reduce((sum, c) => sum + finalW * c.heightRatio, 0) + (captures.length - 1) * sectionGap;
-      let cursorY = margin + headerH + (availH - finalTotalH) / 2;
 
       const pdf = new jsPDFLib("l", "mm", [paper.w, paper.h]);
       const now = new Date();
@@ -211,14 +218,11 @@ function Index() {
       pdf.setTextColor(100, 116, 139);
       pdf.text(`${totalHouses} Casas  •  ${quadrasCount} Quadras  •  ${paper.name} Paisagem  •  ${dateStr} ${timeStr}`, margin, margin + 13);
 
-      // ── Render each section as separate image ──
-      const imgX = margin + (availW - finalW) / 2;
-      for (const { canvas, heightRatio } of captures) {
-        const sH = finalW * heightRatio;
-        const imgData = canvas.toDataURL("image/png");
-        pdf.addImage(imgData, "PNG", imgX, cursorY, finalW, sH);
-        cursorY += sH + sectionGap;
-      }
+      // ── Image centered, filling page ──
+      const imgX = margin + (availW - imgW) / 2;
+      const imgY = margin + headerH + (availH - imgH) / 2;
+      const imgData = canvas.toDataURL("image/png");
+      pdf.addImage(imgData, "PNG", imgX, imgY, imgW, imgH);
 
       // ── Footer ──
       const footerY = paper.h - margin - 2;
