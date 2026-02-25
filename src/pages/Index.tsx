@@ -88,27 +88,57 @@ function Index() {
   }, [isLoading, projects.length, currentProject?.id, canAccessProject, setCurrentProject]);
 
   const mapGridRef = useRef<HTMLDivElement>(null);
+  const printAreaRef = useRef<HTMLDivElement>(null);
 
   const handlePrintMap = async () => {
-    if (!mapGridRef.current || !currentProject) return;
+    if (!printAreaRef.current || !currentProject) return;
     
     const { default: html2canvasLib } = await import("html2canvas");
     const { default: jsPDFLib } = await import("jspdf");
     
     try {
-      const canvas = await html2canvasLib(mapGridRef.current, {
+      const canvas = await html2canvasLib(printAreaRef.current, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
       });
 
-      // Landscape A4
-      const pdf = new jsPDFLib("l", "mm", "a4");
-      const pageW = pdf.internal.pageSize.getWidth();
-      const pageH = pdf.internal.pageSize.getHeight();
+      // Paper sizes in mm (landscape)
+      const paperSizes: { name: string; w: number; h: number }[] = [
+        { name: "A4", w: 297, h: 210 },
+        { name: "A3", w: 420, h: 297 },
+        { name: "A2", w: 594, h: 420 },
+        { name: "A1", w: 841, h: 594 },
+        { name: "A0", w: 1189, h: 841 },
+      ];
+
       const margin = 10;
       const headerH = 15;
+      const footerH = 10;
+      const imgAspect = canvas.width / canvas.height;
+
+      // Find the smallest paper size that fits everything on one page
+      let selectedPaper = paperSizes[paperSizes.length - 1]; // default A0
+      for (const paper of paperSizes) {
+        const availW = paper.w - 2 * margin;
+        const availH = paper.h - 2 * margin - headerH - footerH;
+        let fitW = availW;
+        let fitH = fitW / imgAspect;
+        if (fitH > availH) {
+          fitH = availH;
+          fitW = fitH * imgAspect;
+        }
+        // Accept if the scale is reasonable (at least 50% of original quality)
+        if (fitW <= availW && fitH <= availH) {
+          selectedPaper = paper;
+          break;
+        }
+      }
+
+      const pdf = new jsPDFLib("l", "mm", [selectedPaper.w, selectedPaper.h]);
+      const pageW = selectedPaper.w;
+      const pageH = selectedPaper.h;
 
       // Header
       pdf.setFontSize(14);
@@ -120,53 +150,24 @@ function Index() {
 
       const imgData = canvas.toDataURL("image/png");
       const availW = pageW - 2 * margin;
-      const availH = pageH - 2 * margin - headerH;
-      const imgAspect = canvas.width / canvas.height;
+      const availH = pageH - 2 * margin - headerH - footerH;
       
       let imgW = availW;
       let imgH = imgW / imgAspect;
-      
       if (imgH > availH) {
-        // Content is tall - split across pages
-        const totalImgH = imgW / imgAspect;
-        let srcY = 0;
-        const srcPageH = (availH / imgW) * canvas.width;
-        let page = 0;
-        
-        while (srcY < canvas.height) {
-          if (page > 0) pdf.addPage("a4", "l");
-          
-          const sliceH = Math.min(srcPageH, canvas.height - srcY);
-          const sliceCanvas = document.createElement("canvas");
-          sliceCanvas.width = canvas.width;
-          sliceCanvas.height = sliceH;
-          const ctx = sliceCanvas.getContext("2d")!;
-          ctx.drawImage(canvas, 0, srcY, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-          
-          const sliceData = sliceCanvas.toDataURL("image/png");
-          const renderH = (sliceH / canvas.width) * imgW;
-          
-          if (page === 0) {
-            pdf.addImage(sliceData, "PNG", margin, margin + headerH, imgW, renderH);
-          } else {
-            pdf.addImage(sliceData, "PNG", margin, margin, imgW, renderH);
-          }
-          
-          srcY += sliceH;
-          page++;
-        }
-      } else {
-        pdf.addImage(imgData, "PNG", margin, margin + headerH, imgW, imgH);
+        imgH = availH;
+        imgW = imgH * imgAspect;
       }
 
-      // Footer on all pages
-      const totalPages = pdf.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        pdf.setPage(i);
-        pdf.setFontSize(8);
-        pdf.setTextColor(150);
-        pdf.text(`Página ${i} de ${totalPages}`, pageW / 2, pageH - 5, { align: "center" });
-      }
+      const imgX = margin + (availW - imgW) / 2;
+      pdf.addImage(imgData, "PNG", imgX, margin + headerH, imgW, imgH);
+
+      // Footer with paper size
+      pdf.setFontSize(7);
+      pdf.setTextColor(150);
+      pdf.text(`Folha ${selectedPaper.name} (${selectedPaper.w}×${selectedPaper.h}mm) - Paisagem`, margin, pageH - 5);
+      pdf.text(`Página 1 de 1`, pageW / 2, pageH - 5, { align: "center" });
+      pdf.text(`ObraMap`, pageW - margin, pageH - 5, { align: "right" });
 
       pdf.save(`mapa_obras_${currentProject.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf`);
     } catch (error) {
@@ -244,12 +245,14 @@ function Index() {
                   </div>
                 )}
 
-                {(activeView === "map" || activeView === "charts") && <StatsCards />}
-                
                 {activeView === "map" && (
-                  <div className="flex-1 flex flex-col gap-4 mt-4">
-                    <div className="flex items-center justify-between">
+                  <div className="flex-1 flex flex-col gap-4">
+                    <div ref={printAreaRef} className="flex flex-col gap-4">
+                      <StatsCards />
                       <Legend />
+                      <QuadrasGrid ref={mapGridRef} />
+                    </div>
+                    <div className="flex justify-end -mt-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -260,18 +263,15 @@ function Index() {
                         Imprimir PDF
                       </Button>
                     </div>
-                    <div className="flex-1 flex flex-col lg:flex-row gap-4">
-                      <div className={`min-w-0 transition-all duration-300 ${selectedHouse ? 'flex-1' : 'w-full'}`}>
-                        <QuadrasGrid ref={mapGridRef} />
+                    {selectedHouse && (
+                      <div className="lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-12rem)]">
+                        <HouseDetails />
                       </div>
-                      {selectedHouse && (
-                        <div className="lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-12rem)]">
-                          <HouseDetails />
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
                 )}
+
+                {activeView === "charts" && <StatsCards />}
                 
                 {activeView === "charts" && (
                   <div className="mt-4 flex-1">
