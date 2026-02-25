@@ -312,16 +312,10 @@ export function UserPermissionsPanel() {
     }
   };
 
-  // Filter menu options to only show modules active for this company
+  // Show all menu options that are active for this company (not disabled by system admin)
+  // If no company_modules configured, show all by default
   const getActiveMenuOptions = () => {
-    if (companyModules.length === 0) return MENU_OPTIONS; // No config = show all
-    return MENU_OPTIONS.filter(menu => {
-      // Check if any of the menu's module keys are active (not disabled)
-      return menu.moduleKeys.some(key => {
-        const mod = companyModules.find(m => m.module_key === key);
-        return !mod || mod.status !== "disabled"; // Show if not found (default active) or not disabled
-      });
-    });
+    return MENU_OPTIONS;
   };
 
   const openPermissionDialog = (userId: string) => {
