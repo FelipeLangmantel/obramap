@@ -1764,14 +1764,14 @@ export function WeeklyProductionView() {
 
           {/* Full Records Dialog */}
           <Dialog open={showAllRecords} onOpenChange={setShowAllRecords}>
-            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
-              <DialogHeader>
+            <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+              <DialogHeader className="shrink-0">
                 <DialogTitle className="flex items-center gap-2">
                   Todos os Registros de Produção
                   <Badge variant="secondary">{allFilteredProductions.length} registros</Badge>
                 </DialogTitle>
               </DialogHeader>
-              <ScrollArea className="flex-1 max-h-[70vh] pr-2">
+              <div className="flex-1 overflow-y-auto min-h-0 pr-1">
                 {allFilteredProductions.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground text-sm">
                     Nenhuma produção no período
@@ -1790,7 +1790,7 @@ export function WeeklyProductionView() {
                     ))}
                   </div>
                 )}
-              </ScrollArea>
+              </div>
             </DialogContent>
           </Dialog>
         </TabsContent>
