@@ -536,39 +536,31 @@ export function InteractiveMapView() {
     
     const coords = getSvgCoords(e);
     
-    // Se a casa clicada não está selecionada, adiciona à seleção com shift ou seleciona apenas ela
-    if (!selectedHouseIds.has(houseId)) {
-      if (e.shiftKey) {
-        // Shift+click adiciona à seleção
-        setSelectedHouseIds(prev => new Set([...prev, houseId]));
-      } else {
-        // Click normal seleciona apenas esta casa
-        setSelectedHouseIds(new Set([houseId]));
-      }
+    // Determine the effective selection for this drag
+    let effectiveSelection: Set<number>;
+    
+    if (e.shiftKey) {
+      // Shift+click: add to current selection
+      effectiveSelection = new Set([...selectedHouseIds, houseId]);
+    } else if (selectedHouseIds.has(houseId) && selectedHouseIds.size > 1) {
+      // Clicked a house that's part of a multi-selection: drag the group
+      effectiveSelection = selectedHouseIds;
+    } else {
+      // Normal click: select ONLY this house (isolate it)
+      effectiveSelection = new Set([houseId]);
     }
     
-    // Calcula offsets para todas as casas selecionadas (incluindo a atual)
-    const currentSelection = selectedHouseIds.has(houseId) 
-      ? selectedHouseIds 
-      : e.shiftKey 
-        ? new Set([...selectedHouseIds, houseId])
-        : new Set([houseId]);
+    setSelectedHouseIds(effectiveSelection);
     
-    if (currentSelection.size > 0) {
-      const offsets = new Map<number, { x: number; y: number }>();
-      editingHouses.forEach(house => {
-        if (currentSelection.has(house.id)) {
-          offsets.set(house.id, { x: coords.x - house.x, y: coords.y - house.y });
-        }
-      });
-      setMultiDragOffset(offsets);
-      setDraggingItem({ type: 'house', id: 'multi', houseId });
-      
-      // Atualiza seleção se necessário
-      if (!selectedHouseIds.has(houseId)) {
-        setSelectedHouseIds(currentSelection);
+    // Calculate offsets only for the effective selection
+    const offsets = new Map<number, { x: number; y: number }>();
+    editingHouses.forEach(house => {
+      if (effectiveSelection.has(house.id)) {
+        offsets.set(house.id, { x: coords.x - house.x, y: coords.y - house.y });
       }
-    }
+    });
+    setMultiDragOffset(offsets);
+    setDraggingItem({ type: 'house', id: 'multi', houseId });
   };
 
   // Handle mouse down for editing quadras
