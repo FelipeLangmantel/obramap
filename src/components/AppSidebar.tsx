@@ -457,7 +457,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
-                {canEdit && (
+                {canEdit && canAccessManagement("configuracoes") && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => setSettingsOpen(true)}

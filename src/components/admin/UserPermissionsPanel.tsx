@@ -135,7 +135,20 @@ const MANAGEMENT_OPTIONS = [
   { id: "fornecedores", label: "Fornecedores" },
   { id: "mao_de_obra", label: "Mão de Obra" },
   { id: "usuarios", label: "Usuários" },
+  { id: "configuracoes", label: "Configurações" },
 ];
+
+// Mapeamento de permissionId do menu para module_key da company_modules
+const MENU_TO_MODULE_KEY: Record<string, string> = {
+  "diretoria": "board-decisions",
+  "entrega": "delivery",
+  "smart_planning": "smart-planning",
+  "producao": "production",
+  "custos": "costs",
+  "suprimentos": "supplies",
+  "financeiro": "financial-flow",
+  "mapa": "map",
+};
 
 const createUserSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -927,7 +940,15 @@ export function UserPermissionsPanel() {
                   Módulos do Sistema
                 </Label>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
-                  {MENU_OPTIONS.map((menu) => {
+                  {MENU_OPTIONS.filter((menu) => {
+                    // Filtrar módulos desativados pela empresa
+                    const moduleKey = MENU_TO_MODULE_KEY[menu.id];
+                    if (moduleKey) {
+                      const companyModule = companyModules.find(m => m.module_key === moduleKey);
+                      if (companyModule?.status === "disabled") return false;
+                    }
+                    return true;
+                  }).map((menu) => {
                     const isChecked = editingPermission?.visible_menus?.includes(menu.id) || false;
                     return (
                       <button
