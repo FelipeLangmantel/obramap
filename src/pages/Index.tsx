@@ -137,62 +137,69 @@ function Index() {
       const footerH = 8;
       const availW = paper.w - 2 * margin;
       const availH = paper.h - 2 * margin - headerH - footerH;
-
-      // Get computed background color from the system to match exactly
-      const rootStyles = getComputedStyle(document.documentElement);
-      const bgHsl = rootStyles.getPropertyValue('--background').trim();
-      // Convert HSL "209 40% 96%" to a hex — approximate: #e8eef4
       const systemBg = '#e8eef4';
 
-      // Force opaque backgrounds for capture
-      const originalStyles: { el: HTMLElement; bg: string }[] = [];
-      printEl.querySelectorAll<HTMLElement>("*").forEach((el) => {
-        const computed = getComputedStyle(el);
-        const bg = computed.backgroundColor;
-        const rgbaMatch = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
-        if (rgbaMatch && rgbaMatch[4] && parseFloat(rgbaMatch[4]) < 1) {
-          originalStyles.push({ el, bg: el.style.backgroundColor });
-          const alpha = parseFloat(rgbaMatch[4]);
-          const r = Math.round(parseInt(rgbaMatch[1]) * alpha + 232 * (1 - alpha));
-          const g = Math.round(parseInt(rgbaMatch[2]) * alpha + 238 * (1 - alpha));
-          const b = Math.round(parseInt(rgbaMatch[3]) * alpha + 244 * (1 - alpha));
-          el.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
-        }
-      });
+      // ── Capture each section individually for maximum sharpness ──
+      const sections = Array.from(printEl.children) as HTMLElement[];
 
-      // Scale 2 is enough for sharp text — scale 4 causes blurry downscaling
-      const canvas = await html2canvasLib(printEl, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: systemBg,
-        imageTimeout: 0,
-        removeContainer: true,
-      });
+      // Helper: force opaque backgrounds on an element tree
+      const forceOpaque = (el: HTMLElement) => {
+        const saved: { el: HTMLElement; bg: string }[] = [];
+        el.querySelectorAll<HTMLElement>("*").forEach((child) => {
+          const bg = getComputedStyle(child).backgroundColor;
+          const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+          if (m && m[4] && parseFloat(m[4]) < 1) {
+            saved.push({ el: child, bg: child.style.backgroundColor });
+            const a = parseFloat(m[4]);
+            child.style.backgroundColor = `rgb(${Math.round(+m[1]*a+232*(1-a))}, ${Math.round(+m[2]*a+238*(1-a))}, ${Math.round(+m[3]*a+244*(1-a))})`;
+          }
+        });
+        return saved;
+      };
 
-      originalStyles.forEach(({ el, bg }) => {
-        el.style.backgroundColor = bg;
-      });
+      const restoreOpaque = (saved: { el: HTMLElement; bg: string }[]) => {
+        saved.forEach(({ el, bg }) => { el.style.backgroundColor = bg; });
+      };
 
-      // Fit on ONE page — maximize usage of available area
-      const imgAspect = canvas.width / canvas.height;
-      let imgW = availW;
-      let imgH = imgW / imgAspect;
-      if (imgH > availH) {
-        imgH = availH;
-        imgW = imgH * imgAspect;
+      // Capture all sections
+      const captures: { canvas: HTMLCanvasElement; heightRatio: number }[] = [];
+      for (const section of sections) {
+        const saved = forceOpaque(section);
+        const canvas = await html2canvasLib(section, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: systemBg,
+          imageTimeout: 0,
+          removeContainer: true,
+        });
+        restoreOpaque(saved);
+        captures.push({ canvas, heightRatio: canvas.height / canvas.width });
       }
+
+      // Calculate total height when all sections are rendered at availW width
+      const gap = 3; // mm gap between sections
+      const totalContentH = captures.reduce((sum, c) => sum + availW * c.heightRatio, 0) + (captures.length - 1) * gap;
+
+      // If content is taller than available, scale everything down uniformly
+      const scaleFactor = totalContentH > availH ? availH / totalContentH : 1;
+      const finalW = availW * scaleFactor;
+      const sectionGap = gap * scaleFactor;
+
+      // Center vertically
+      const finalTotalH = captures.reduce((sum, c) => sum + finalW * c.heightRatio, 0) + (captures.length - 1) * sectionGap;
+      let cursorY = margin + headerH + (availH - finalTotalH) / 2;
 
       const pdf = new jsPDFLib("l", "mm", [paper.w, paper.h]);
       const now = new Date();
       const dateStr = now.toLocaleDateString("pt-BR");
       const timeStr = now.toLocaleTimeString("pt-BR");
 
-      // ── Page background matching system ──
+      // ── Page background ──
       pdf.setFillColor(232, 238, 244);
       pdf.rect(0, 0, paper.w, paper.h, "F");
 
-      // ── Elegant header ──
+      // ── Header ──
       pdf.setFillColor(59, 130, 246);
       pdf.rect(margin, margin, availW, 2, "F");
       pdf.setFontSize(14);
@@ -204,13 +211,16 @@ function Index() {
       pdf.setTextColor(100, 116, 139);
       pdf.text(`${totalHouses} Casas  •  ${quadrasCount} Quadras  •  ${paper.name} Paisagem  •  ${dateStr} ${timeStr}`, margin, margin + 13);
 
-      // ── Image: fill available space ──
-      const imgX = margin + (availW - imgW) / 2;
-      const imgY = margin + headerH;
-      const imgData = canvas.toDataURL("image/png");
-      pdf.addImage(imgData, "PNG", imgX, imgY, imgW, imgH);
+      // ── Render each section as separate image ──
+      const imgX = margin + (availW - finalW) / 2;
+      for (const { canvas, heightRatio } of captures) {
+        const sH = finalW * heightRatio;
+        const imgData = canvas.toDataURL("image/png");
+        pdf.addImage(imgData, "PNG", imgX, cursorY, finalW, sH);
+        cursorY += sH + sectionGap;
+      }
 
-      // ── Clean footer ──
+      // ── Footer ──
       const footerY = paper.h - margin - 2;
       pdf.setDrawColor(203, 213, 225);
       pdf.line(margin, footerY, paper.w - margin, footerY);
