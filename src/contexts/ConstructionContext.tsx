@@ -1109,49 +1109,31 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     }
   }, [currentProjectId, selectedHouse, projects]);
 
-  // Sync macros to houses helper - now also persists to database
+  // Sync macros to houses helper - reads from DB to avoid overwriting progress with stale local state
   const syncMacrosToHouses = useCallback(async (newTemplate: Macro[]) => {
     if (!currentProjectId) return;
     
-    let updatedHousesForDb: { houseId: number; macros: Macro[] }[] = [];
-    
-    setProjects(prev => prev.map(p => {
-      if (p.id !== currentProjectId) return p;
-      
-      const updatedHouses = p.houses.map(house => {
-        const updatedMacros = newTemplate.map(templateMacro => {
-          const existingMacro = house.macros.find(m => m.id === templateMacro.id);
-          if (existingMacro) {
-            const updatedScopes = templateMacro.scopes.map(templateScope => {
-              const existingScope = existingMacro.scopes.find(s => s.id === templateScope.id);
-              return existingScope 
-                ? { ...templateScope, progress: existingScope.progress, startDate: existingScope.startDate, endDate: existingScope.endDate } 
-                : { ...templateScope };
-            });
-            return { ...templateMacro, scopes: updatedScopes };
-          }
-          return { ...templateMacro, scopes: templateMacro.scopes.map(s => ({ ...s, progress: 0, startDate: null, endDate: null })) };
-        });
-        
-        updatedHousesForDb.push({ houseId: house.id, macros: updatedMacros });
-        return { ...house, macros: updatedMacros, lastUpdate: new Date().toLocaleDateString("pt-BR") };
-      });
-      
-      return { ...p, houses: updatedHouses, macrosTemplate: newTemplate };
-    }));
+    // CRITICAL: Read current macros from DATABASE (not local state) to preserve production data
+    const { data: dbHouses, error: fetchErr } = await supabase
+      .from('houses')
+      .select('house_number, macros')
+      .eq('project_id', currentProjectId);
 
-    // Persist houses macros to database
-    for (const house of updatedHousesForDb) {
-      await supabase
-        .from('houses')
-        .update({ macros: macrosToJson(house.macros), last_update: new Date().toISOString().split('T')[0] })
-        .eq('project_id', currentProjectId)
-        .eq('house_number', house.houseId);
+    if (fetchErr || !dbHouses) {
+      console.error('Error fetching houses for sync:', fetchErr);
+      return;
     }
 
-    if (selectedHouse) {
-      const updatedMacros = newTemplate.map(templateMacro => {
-        const existingMacro = selectedHouse.macros.find(m => m.id === templateMacro.id);
+    const dbHouseMap = new Map<number, Macro[]>();
+    for (const h of dbHouses) {
+      dbHouseMap.set(h.house_number, jsonToMacros(h.macros));
+    }
+
+    const updatedHousesForDb: { houseId: number; macros: Macro[] }[] = [];
+    
+    const buildUpdatedMacros = (existingMacros: Macro[]) => {
+      return newTemplate.map(templateMacro => {
+        const existingMacro = existingMacros.find(m => m.id === templateMacro.id);
         if (existingMacro) {
           const updatedScopes = templateMacro.scopes.map(templateScope => {
             const existingScope = existingMacro.scopes.find(s => s.id === templateScope.id);
@@ -1163,6 +1145,39 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         }
         return { ...templateMacro, scopes: templateMacro.scopes.map(s => ({ ...s, progress: 0, startDate: null, endDate: null })) };
       });
+    };
+
+    setProjects(prev => prev.map(p => {
+      if (p.id !== currentProjectId) return p;
+      
+      const updatedHouses = p.houses.map(house => {
+        // Use DB macros (authoritative) instead of potentially stale local macros
+        const dbMacros = dbHouseMap.get(house.id) || house.macros;
+        const updatedMacros = buildUpdatedMacros(dbMacros);
+        
+        updatedHousesForDb.push({ houseId: house.id, macros: updatedMacros });
+        return { ...house, macros: updatedMacros, lastUpdate: new Date().toLocaleDateString("pt-BR") };
+      });
+      
+      return { ...p, houses: updatedHouses, macrosTemplate: newTemplate };
+    }));
+
+    // Persist houses macros to database
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < updatedHousesForDb.length; i += BATCH_SIZE) {
+      const batch = updatedHousesForDb.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(house =>
+        supabase
+          .from('houses')
+          .update({ macros: macrosToJson(house.macros), last_update: new Date().toISOString().split('T')[0] })
+          .eq('project_id', currentProjectId)
+          .eq('house_number', house.houseId)
+      ));
+    }
+
+    if (selectedHouse) {
+      const dbMacros = dbHouseMap.get(selectedHouse.id) || selectedHouse.macros;
+      const updatedMacros = buildUpdatedMacros(dbMacros);
       setSelectedHouse(prev => prev ? { ...prev, macros: updatedMacros } : null);
     }
   }, [currentProjectId, selectedHouse]);

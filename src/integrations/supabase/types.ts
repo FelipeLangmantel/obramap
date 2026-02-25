@@ -5200,6 +5200,10 @@ export type Database = {
         Returns: Json
       }
       reopen_planning_period: { Args: { p_period_id: string }; Returns: Json }
+      repair_house_macros_from_productions: {
+        Args: { p_project_id: string }
+        Returns: number
+      }
       resolve_risk_alert: {
         Args: { p_alert_id: string; p_resolved_by?: string }
         Returns: undefined
