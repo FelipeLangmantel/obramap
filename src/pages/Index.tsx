@@ -97,11 +97,44 @@ function Index() {
     const { default: jsPDFLib } = await import("jspdf");
     
     try {
-      const canvas = await html2canvasLib(printAreaRef.current, {
-        scale: 2,
+      // Force opaque backgrounds for crisp PDF output
+      const printEl = printAreaRef.current;
+      const originalStyles: { el: HTMLElement; bg: string; opacity: string; boxShadow: string }[] = [];
+      
+      // Make all child elements fully opaque with solid backgrounds
+      printEl.querySelectorAll<HTMLElement>('*').forEach(el => {
+        const computed = getComputedStyle(el);
+        const bg = computed.backgroundColor;
+        const opacity = el.style.opacity;
+        const boxShadow = el.style.boxShadow;
+        
+        // Convert any rgba with alpha < 1 to fully opaque
+        const rgbaMatch = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
+        if (rgbaMatch && rgbaMatch[4] && parseFloat(rgbaMatch[4]) < 1) {
+          originalStyles.push({ el, bg: el.style.backgroundColor, opacity, boxShadow });
+          // Blend with white background for solid color
+          const alpha = parseFloat(rgbaMatch[4]);
+          const r = Math.round(parseInt(rgbaMatch[1]) * alpha + 255 * (1 - alpha));
+          const g = Math.round(parseInt(rgbaMatch[2]) * alpha + 255 * (1 - alpha));
+          const b = Math.round(parseInt(rgbaMatch[3]) * alpha + 255 * (1 - alpha));
+          el.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+        }
+      });
+
+      const canvas = await html2canvasLib(printEl, {
+        scale: 3,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
+        imageTimeout: 0,
+        removeContainer: true,
+      });
+
+      // Restore original styles
+      originalStyles.forEach(({ el, bg, opacity, boxShadow }) => {
+        el.style.backgroundColor = bg;
+        el.style.opacity = opacity;
+        el.style.boxShadow = boxShadow;
       });
 
       // Paper sizes in mm (landscape)
@@ -148,7 +181,7 @@ function Index() {
       pdf.setFont("helvetica", "normal");
       pdf.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}`, pageW - margin, margin + 6, { align: "right" });
 
-      const imgData = canvas.toDataURL("image/png");
+      const imgData = canvas.toDataURL("image/jpeg", 1.0);
       const availW = pageW - 2 * margin;
       const availH = pageH - 2 * margin - headerH - footerH;
       
@@ -160,7 +193,7 @@ function Index() {
       }
 
       const imgX = margin + (availW - imgW) / 2;
-      pdf.addImage(imgData, "PNG", imgX, margin + headerH, imgW, imgH);
+      pdf.addImage(imgData, "JPEG", imgX, margin + headerH, imgW, imgH);
 
       // Footer with paper size
       pdf.setFontSize(7);
