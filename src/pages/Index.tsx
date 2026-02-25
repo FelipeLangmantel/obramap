@@ -128,39 +128,14 @@ function Index() {
       const printEl = printAreaRef.current;
       const totalHouses = currentProject.houses?.length || 0;
       const quadrasCount = currentProject.quadras?.length || 0;
-
       const paper = detectBestPaperSize(totalHouses, quadrasCount);
       const margin = paper.margin;
       const headerH = 14;
       const footerH = 8;
-      const availW = paper.w - 2 * margin;
-      const availH = paper.h - 2 * margin - headerH - footerH;
-
-      // Get the actual computed background color from root
-      const rootEl = document.documentElement;
-      const bgValue = getComputedStyle(rootEl).getPropertyValue('--background').trim();
-      // Parse HSL "209 40% 96%" → approximate RGB
       const systemBgRgb = { r: 232, g: 238, b: 244 };
       const systemBg = `rgb(${systemBgRgb.r}, ${systemBgRgb.g}, ${systemBgRgb.b})`;
 
-      // ── Temporarily widen element to match PDF aspect ratio ──
-      const pdfAspect = availW / availH;
-      // Choose width so the content naturally spreads to match landscape
-      const targetWidthPx = Math.max(1800, Math.round(printEl.scrollHeight * pdfAspect));
-      
-      const origStyles = {
-        width: printEl.style.width,
-        maxWidth: printEl.style.maxWidth,
-        minWidth: printEl.style.minWidth,
-      };
-      printEl.style.width = `${targetWidthPx}px`;
-      printEl.style.maxWidth = `${targetWidthPx}px`;
-      printEl.style.minWidth = `${targetWidthPx}px`;
-
-      // Wait for layout reflow
-      await new Promise(r => setTimeout(r, 150));
-
-      // Force ALL semi-transparent backgrounds to opaque (blend with system bg)
+      // ── Step 1: Force opaque backgrounds ──
       const saved: { el: HTMLElement; bg: string }[] = [];
       printEl.querySelectorAll<HTMLElement>("*").forEach((child) => {
         const bg = getComputedStyle(child).backgroundColor;
@@ -172,53 +147,46 @@ function Index() {
         }
       });
 
-      // Also force card backgrounds to be fully opaque white-ish
-      printEl.querySelectorAll<HTMLElement>(".bg-card, [class*='bg-card']").forEach((el) => {
-        const bg = getComputedStyle(el).backgroundColor;
-        if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
-          saved.push({ el, bg: el.style.backgroundColor });
-          el.style.backgroundColor = '#f5f7fa';
-        }
-      });
-
-      // Calculate optimal scale: we want ~200 DPI in the PDF
-      // 200 DPI = 200/25.4 ≈ 7.87 px/mm. For availW mm we need availW * 7.87 px
-      const targetCanvasPx = availW * 7.87;
-      const optimalScale = Math.max(1, Math.min(3, targetCanvasPx / targetWidthPx));
-
+      // ── Step 2: Capture at NATURAL width, scale 2 ──
       const canvas = await html2canvasLib(printEl, {
-        scale: optimalScale,
+        scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: systemBg,
         imageTimeout: 0,
         removeContainer: true,
-        width: targetWidthPx,
       });
 
-      // Restore everything
+      // Restore
       saved.forEach(({ el, bg }) => { el.style.backgroundColor = bg; });
-      printEl.style.width = origStyles.width;
-      printEl.style.maxWidth = origStyles.maxWidth;
-      printEl.style.minWidth = origStyles.minWidth;
 
-      // Fit on ONE page — no cutting
-      const imgAspect = canvas.width / canvas.height;
+      // ── Step 3: Choose orientation based on content aspect ratio ──
+      const contentAspect = canvas.width / canvas.height;
+      // If content is wider than tall → landscape, otherwise → portrait
+      const useLandscape = contentAspect > 0.9;
+      const pageW = useLandscape ? paper.w : paper.h;
+      const pageH = useLandscape ? paper.h : paper.w;
+      const orientation = useLandscape ? "l" : "p";
+      const availW = pageW - 2 * margin;
+      const availH = pageH - 2 * margin - headerH - footerH;
+
+      // ── Step 4: Scale image to fill page maximally ──
       let imgW = availW;
-      let imgH = imgW / imgAspect;
+      let imgH = imgW / contentAspect;
       if (imgH > availH) {
         imgH = availH;
-        imgW = imgH * imgAspect;
+        imgW = imgH * contentAspect;
       }
 
-      const pdf = new jsPDFLib("l", "mm", [paper.w, paper.h]);
+      const pdf = new jsPDFLib(orientation as "l" | "p", "mm", [paper.w, paper.h]);
       const now = new Date();
       const dateStr = now.toLocaleDateString("pt-BR");
       const timeStr = now.toLocaleTimeString("pt-BR");
+      const orientLabel = useLandscape ? "Paisagem" : "Retrato";
 
       // ── Page background ──
       pdf.setFillColor(systemBgRgb.r, systemBgRgb.g, systemBgRgb.b);
-      pdf.rect(0, 0, paper.w, paper.h, "F");
+      pdf.rect(0, 0, pageW, pageH, "F");
 
       // ── Header ──
       pdf.setFillColor(59, 130, 246);
@@ -230,23 +198,23 @@ function Index() {
       pdf.setFontSize(8);
       pdf.setFont("helvetica", "normal");
       pdf.setTextColor(100, 116, 139);
-      pdf.text(`${totalHouses} Casas  •  ${quadrasCount} Quadras  •  ${paper.name} Paisagem  •  ${dateStr} ${timeStr}`, margin, margin + 13);
+      pdf.text(`${totalHouses} Casas  •  ${quadrasCount} Quadras  •  ${paper.name} ${orientLabel}  •  ${dateStr} ${timeStr}`, margin, margin + 13);
 
-      // ── Image centered, filling page ──
+      // ── Image ──
       const imgX = margin + (availW - imgW) / 2;
       const imgY = margin + headerH + (availH - imgH) / 2;
       const imgData = canvas.toDataURL("image/png");
       pdf.addImage(imgData, "PNG", imgX, imgY, imgW, imgH);
 
       // ── Footer ──
-      const footerY = paper.h - margin - 2;
+      const footerY = pageH - margin - 2;
       pdf.setDrawColor(203, 213, 225);
-      pdf.line(margin, footerY, paper.w - margin, footerY);
+      pdf.line(margin, footerY, pageW - margin, footerY);
       pdf.setFontSize(6.5);
       pdf.setTextColor(148, 163, 184);
       pdf.text(`© ${now.getFullYear()} ObraMap`, margin, footerY + 4);
-      pdf.text(`Desenvolvido por Felipe Langmantel`, paper.w / 2, footerY + 4, { align: "center" });
-      pdf.text(`${paper.name} (${paper.w}×${paper.h}mm)`, paper.w - margin, footerY + 4, { align: "right" });
+      pdf.text(`Desenvolvido por Felipe Langmantel`, pageW / 2, footerY + 4, { align: "center" });
+      pdf.text(`${paper.name} (${pageW}×${pageH}mm)`, pageW - margin, footerY + 4, { align: "right" });
 
       pdf.save(`mapa_obras_${currentProject.name.replace(/\s+/g, "_")}_${now.toISOString().slice(0, 10)}.pdf`);
     } catch (error) {
