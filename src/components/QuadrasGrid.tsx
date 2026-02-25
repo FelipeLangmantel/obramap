@@ -1,7 +1,8 @@
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { QuadraCard } from "./QuadraCard";
+import { forwardRef } from "react";
 
-export function QuadrasGrid() {
+export const QuadrasGrid = forwardRef<HTMLDivElement>(function QuadrasGrid(_, ref) {
   const { currentProject, filterQuadra } = useConstruction();
   
   if (!currentProject) {
@@ -28,10 +29,10 @@ export function QuadrasGrid() {
     : quadras.filter(q => q.id === filterQuadra);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div ref={ref} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {filteredQuadras.map(quadra => (
         <QuadraCard key={quadra.id} quadraId={quadra.id} />
       ))}
     </div>
   );
-}
+});
