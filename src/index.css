@@ -181,30 +181,37 @@
 }
 
 /* ═══════════════════════════════════════════ */
-/* PRINT STYLES — espelho idêntico da tela    */
+/* PRINT STYLES — espelho compacto da tela    */
 /* ═══════════════════════════════════════════ */
 @media print {
   @page {
     size: A3 landscape;
-    margin: 10mm;
+    margin: 8mm;
   }
 
-  /* Esconder APENAS navegação e botões — NÃO o container */
+  /* ── Esconder navegação e UI ── */
   .no-print,
   footer,
   nav,
   aside,
-  [data-sidebar="sidebar"] {
+  [data-sidebar="sidebar"],
+  header {
     display: none !important;
   }
 
-  /* Reset do layout — main ocupa tudo */
+  /* ── Print header visível apenas na impressão ── */
+  .print-header {
+    display: flex !important;
+  }
+
+  /* ── Reset de layout ── */
   html, body {
     height: auto !important;
     overflow: visible !important;
     margin: 0 !important;
     padding: 0 !important;
-    background: hsl(var(--background)) !important;
+    background: white !important;
+    font-size: 11px !important;
   }
 
   body > #root,
@@ -214,58 +221,169 @@
     display: block !important;
   }
 
-  /* Container principal */
-  .h-screen,
-  [class*="flex w-full overflow-hidden"] {
+  .h-screen {
     height: auto !important;
     overflow: visible !important;
     display: block !important;
   }
 
-  .overflow-hidden {
-    overflow: visible !important;
-  }
-
+  .overflow-hidden,
   .overflow-auto {
     overflow: visible !important;
   }
 
   main {
-    padding: 5mm !important;
+    padding: 0 !important;
     overflow: visible !important;
     height: auto !important;
     flex: none !important;
     display: block !important;
   }
 
-  /* Print area ocupa tudo */
+  /* ── Print area ── */
   .print-area {
     width: 100% !important;
     max-width: none !important;
+    gap: 6px !important;
     page-break-inside: auto;
   }
 
-  /* Quadras não quebram */
   .print-area > * {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }
 
-  /* Cores exatas na impressão */
+  /* ── Stats cards compactos ── */
+  .print-area .grid.grid-cols-2.lg\\:grid-cols-5 {
+    grid-template-columns: repeat(5, 1fr) !important;
+    gap: 6px !important;
+  }
+
+  .print-area .grid.grid-cols-2.lg\\:grid-cols-5 > div {
+    padding: 6px 4px !important;
+    border-radius: 6px !important;
+  }
+
+  .print-area .grid.grid-cols-2.lg\\:grid-cols-5 .w-10 {
+    width: 24px !important;
+    height: 24px !important;
+    border-radius: 6px !important;
+  }
+
+  .print-area .grid.grid-cols-2.lg\\:grid-cols-5 .w-10 svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  .print-area .grid.grid-cols-2.lg\\:grid-cols-5 .text-2xl {
+    font-size: 16px !important;
+    line-height: 1.2 !important;
+  }
+
+  .print-area .grid.grid-cols-2.lg\\:grid-cols-5 .text-xs {
+    font-size: 9px !important;
+    line-height: 1.1 !important;
+  }
+
+  /* ── Legenda compacta ── */
+  .print-area > .flex.flex-wrap.items-center {
+    padding: 4px 8px !important;
+    gap: 8px !important;
+    border-radius: 6px !important;
+  }
+
+  .print-area > .flex.flex-wrap.items-center .w-4 {
+    width: 10px !important;
+    height: 10px !important;
+  }
+
+  .print-area > .flex.flex-wrap.items-center .text-sm {
+    font-size: 9px !important;
+  }
+
+  /* Esconder botão settings da legenda na impressão */
+  .print-area > .flex.flex-wrap.items-center button {
+    display: none !important;
+  }
+
+  /* ── Quadras grid — 2 colunas sempre ── */
+  .print-area .grid.grid-cols-1.lg\\:grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 6px !important;
+  }
+
+  /* Quadra cards compactos */
+  .print-area .grid.grid-cols-1.lg\\:grid-cols-2 > div {
+    padding: 6px !important;
+    border-radius: 6px !important;
+    border-width: 1px !important;
+  }
+
+  /* Quadra header */
+  .print-area .grid.grid-cols-1.lg\\:grid-cols-2 > div > .flex.items-center.justify-between {
+    margin-bottom: 4px !important;
+  }
+
+  .print-area .grid.grid-cols-1.lg\\:grid-cols-2 > div > .flex.items-center.justify-between .text-base {
+    font-size: 11px !important;
+    font-weight: 700 !important;
+  }
+
+  .print-area .grid.grid-cols-1.lg\\:grid-cols-2 > div > .flex.items-center.justify-between .text-sm {
+    font-size: 9px !important;
+  }
+
+  /* Progress bar na quadra */
+  .print-area .grid.grid-cols-1.lg\\:grid-cols-2 .w-24 {
+    width: 50px !important;
+    height: 4px !important;
+  }
+
+  /* ── House cards compactos ── */
+  .print-area .flex.flex-wrap.gap-2 {
+    gap: 3px !important;
+    min-height: 30px !important;
+  }
+
+  .print-area .w-14.h-14 {
+    width: 36px !important;
+    height: 36px !important;
+    border-radius: 5px !important;
+    border-width: 1.5px !important;
+  }
+
+  .print-area .w-14.h-14 .text-xs {
+    font-size: 8px !important;
+    line-height: 1 !important;
+    font-weight: 700 !important;
+  }
+
+  .print-area .w-14.h-14 .text-sm {
+    font-size: 9px !important;
+    line-height: 1 !important;
+    font-weight: 800 !important;
+  }
+
+  /* ── Cores exatas ── */
   * {
     print-color-adjust: exact !important;
     -webkit-print-color-adjust: exact !important;
     color-adjust: exact !important;
   }
 
-  /* Texto nítido */
+  /* ── Texto nítido ── */
   * {
     -webkit-font-smoothing: antialiased !important;
     text-rendering: optimizeLegibility !important;
   }
 
-  /* Bordas nítidas */
+  /* ── Bordas nítidas ── */
   .border, .border-2, [class*="border-"] {
     border-style: solid !important;
+  }
+
+  /* ── Cards bg ── */
+  .bg-card {
+    background: white !important;
   }
 }
