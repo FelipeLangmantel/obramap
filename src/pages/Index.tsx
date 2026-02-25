@@ -131,13 +131,14 @@ function Index() {
       const totalHouses = currentProject.houses?.length || 0;
       const quadrasCount = currentProject.quadras?.length || 0;
 
-      // ── Step 1: Detect optimal paper ──
       const paper = detectBestPaperSize(totalHouses, quadrasCount);
       const margin = paper.margin;
       const headerH = 18;
       const footerH = 12;
+      const availW = paper.w - 2 * margin;
+      const availH = paper.h - 2 * margin - headerH - footerH;
 
-      // ── Step 2: Force opaque backgrounds ──
+      // Force opaque backgrounds
       const originalStyles: { el: HTMLElement; bg: string }[] = [];
       printEl.querySelectorAll<HTMLElement>("*").forEach((el) => {
         const computed = getComputedStyle(el);
@@ -153,7 +154,6 @@ function Index() {
         }
       });
 
-      // ── Step 3: Capture at high resolution ──
       const canvas = await html2canvasLib(printEl, {
         scale: 3,
         useCORS: true,
@@ -163,121 +163,51 @@ function Index() {
         removeContainer: true,
       });
 
-      // Restore styles
       originalStyles.forEach(({ el, bg }) => {
         el.style.backgroundColor = bg;
       });
 
-      // ── Step 4: Calculate pages ──
-      const availW = paper.w - 2 * margin;
-      const availH = paper.h - 2 * margin - headerH - footerH;
+      // Always fit on ONE page
       const imgAspect = canvas.width / canvas.height;
-
-      // Full-width image dimensions
       let imgW = availW;
       let imgH = imgW / imgAspect;
-
-      // If it fits in one page height, single page
-      const pagesNeeded = imgH <= availH ? 1 : Math.ceil(imgH / availH);
+      if (imgH > availH) {
+        imgH = availH;
+        imgW = imgH * imgAspect;
+      }
 
       const pdf = new jsPDFLib("l", "mm", [paper.w, paper.h]);
-      const pageW = paper.w;
-      const pageH = paper.h;
       const now = new Date();
       const dateStr = now.toLocaleDateString("pt-BR");
       const timeStr = now.toLocaleTimeString("pt-BR");
 
-      const drawHeader = (pageNum: number, totalPages: number) => {
-        // Header background
-        pdf.setFillColor(26, 26, 26);
-        pdf.rect(margin, margin, availW, headerH, "F");
+      // Header
+      pdf.setFillColor(26, 26, 26);
+      pdf.rect(margin, margin, availW, headerH, "F");
+      pdf.setFontSize(13);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(255, 255, 255);
+      pdf.text(`Mapa de Obras — ${currentProject.name}`, margin + 5, margin + 7);
+      pdf.setFontSize(8);
+      pdf.setFont("helvetica", "normal");
+      pdf.text(`${totalHouses} Casas em ${quadrasCount} Quadras`, margin + 5, margin + 13);
+      pdf.text(`Formato: ${paper.name} Paisagem`, paper.w - margin - 5, margin + 7, { align: "right" });
+      pdf.text(`${dateStr} às ${timeStr}`, paper.w - margin - 5, margin + 13, { align: "right" });
 
-        // Title
-        pdf.setFontSize(13);
-        pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(255, 255, 255);
-        pdf.text(`Mapa de Obras — ${currentProject.name}`, margin + 5, margin + 7);
-
-        // Subtitle
-        pdf.setFontSize(8);
-        pdf.setFont("helvetica", "normal");
-        pdf.text(`${totalHouses} Casas em ${quadrasCount} Quadras`, margin + 5, margin + 13);
-
-        // Right side info
-        pdf.setFontSize(8);
-        pdf.text(`Formato: ${paper.name} Paisagem`, pageW - margin - 5, margin + 7, { align: "right" });
-        pdf.text(`${dateStr} às ${timeStr}`, pageW - margin - 5, margin + 13, { align: "right" });
-
-        // Page indicator
-        if (totalPages > 1) {
-          pdf.setFontSize(7);
-          pdf.text(`Página ${pageNum}/${totalPages}`, pageW / 2, margin + 13, { align: "center" });
-        }
-      };
-
-      const drawFooter = () => {
-        pdf.setDrawColor(200, 200, 200);
-        pdf.line(margin, pageH - margin - footerH, pageW - margin, pageH - margin - footerH);
-
-        pdf.setFontSize(7);
-        pdf.setTextColor(150, 150, 150);
-        pdf.setFont("helvetica", "normal");
-        pdf.text(`© ${now.getFullYear()} ObraMap — Gestão Inteligente de Obras`, margin, pageH - margin - 3);
-        pdf.text(`Desenvolvido por Felipe Langmantel`, pageW / 2, pageH - margin - 3, { align: "center" });
-        pdf.text(`${paper.name} (${paper.w}×${paper.h}mm)`, pageW - margin, pageH - margin - 3, { align: "right" });
-      };
-
+      // Image centered on single page
+      const imgX = margin + (availW - imgW) / 2;
+      const imgY = margin + headerH + (availH - imgH) / 2;
       const imgData = canvas.toDataURL("image/jpeg", 1.0);
+      pdf.addImage(imgData, "JPEG", imgX, imgY, imgW, imgH);
 
-      if (pagesNeeded === 1) {
-        // ── Single page ──
-        drawHeader(1, 1);
-
-        // Center image vertically in available space
-        let finalW = availW;
-        let finalH = finalW / imgAspect;
-        if (finalH > availH) {
-          finalH = availH;
-          finalW = finalH * imgAspect;
-        }
-        const imgX = margin + (availW - finalW) / 2;
-        const imgY = margin + headerH + (availH - finalH) / 2;
-        pdf.addImage(imgData, "JPEG", imgX, imgY, finalW, finalH);
-
-        drawFooter();
-      } else {
-        // ── Multi-page: slice the canvas ──
-        // Each page shows a vertical slice of the full-width image
-        const canvasSliceH = canvas.height / pagesNeeded;
-
-        for (let page = 0; page < pagesNeeded; page++) {
-          if (page > 0) pdf.addPage([paper.w, paper.h], "l");
-
-          drawHeader(page + 1, pagesNeeded);
-
-          // Create a slice canvas
-          const sliceCanvas = document.createElement("canvas");
-          sliceCanvas.width = canvas.width;
-          const thisSliceH = Math.min(canvasSliceH, canvas.height - page * canvasSliceH);
-          sliceCanvas.height = thisSliceH;
-          const ctx = sliceCanvas.getContext("2d")!;
-          ctx.drawImage(canvas, 0, page * canvasSliceH, canvas.width, thisSliceH, 0, 0, canvas.width, thisSliceH);
-
-          const sliceData = sliceCanvas.toDataURL("image/jpeg", 1.0);
-          const sliceAspect = sliceCanvas.width / sliceCanvas.height;
-
-          let sliceW = availW;
-          let sliceH = sliceW / sliceAspect;
-          if (sliceH > availH) {
-            sliceH = availH;
-            sliceW = sliceH * sliceAspect;
-          }
-          const sliceX = margin + (availW - sliceW) / 2;
-          pdf.addImage(sliceData, "JPEG", sliceX, margin + headerH, sliceW, sliceH);
-
-          drawFooter();
-        }
-      }
+      // Footer
+      pdf.setDrawColor(200, 200, 200);
+      pdf.line(margin, paper.h - margin - footerH, paper.w - margin, paper.h - margin - footerH);
+      pdf.setFontSize(7);
+      pdf.setTextColor(150, 150, 150);
+      pdf.text(`© ${now.getFullYear()} ObraMap — Gestão Inteligente de Obras`, margin, paper.h - margin - 3);
+      pdf.text(`Desenvolvido por Felipe Langmantel`, paper.w / 2, paper.h - margin - 3, { align: "center" });
+      pdf.text(`${paper.name} (${paper.w}×${paper.h}mm)`, paper.w - margin, paper.h - margin - 3, { align: "right" });
 
       pdf.save(`mapa_obras_${currentProject.name.replace(/\s+/g, "_")}_${now.toISOString().slice(0, 10)}.pdf`);
     } catch (error) {
