@@ -24,9 +24,9 @@ const queryClient = new QueryClient();
 
 // ✅ Mapeamento de rotas para permissões de menu
 const ROUTE_PERMISSION_MAP: Record<string, string> = {
-  "/measurement-planning": "planejamento",
-  "/long-term-planning": "planejamento",
-  "/project-contract": "financeiro",
+  "/measurement-planning": "planejamento_periodo",
+  "/long-term-planning": "planejamento_estrategico",
+  "/project-contract": "contrato",
 };
 
 /** Layout para rotas de System Admin */

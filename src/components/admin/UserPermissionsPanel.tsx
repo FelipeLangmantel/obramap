@@ -106,18 +106,24 @@ interface UserSession {
   is_active: boolean;
 }
 
-// Módulos do sistema - IDs alinhados com permissionId do AppSidebar
+// Módulos do sistema - IDs alinhados 1:1 com permissionId do AppSidebar
 const MENU_OPTIONS = [
-  { id: "mapa", label: "Mapa de Obras", moduleKeys: ["home", "map", "interactive-map", "3d-map"] },
-  { id: "planejamento", label: "Planejamento", moduleKeys: ["planning", "measurement-planning", "long-term-planning"] },
-  { id: "smart-planning", label: "Planej. Inteligente", moduleKeys: ["smart-planning"] },
-  { id: "producao", label: "Produção", moduleKeys: ["production"] },
-  { id: "custos", label: "Custos da Obra", moduleKeys: ["costs"] },
-  { id: "suprimentos", label: "Suprimentos", moduleKeys: ["supplies"] },
-  { id: "financeiro", label: "Fluxo Financeiro", moduleKeys: ["financial-flow", "project-contract"] },
-  { id: "entrega", label: "Entrega & Pós-Obra", moduleKeys: ["delivery"] },
-  { id: "diretoria", label: "Painel da Diretoria", moduleKeys: ["board-decisions"] },
-  { id: "graficos", label: "Gráficos", moduleKeys: ["charts"] },
+  { id: "painel_inicial", label: "Painel Inicial" },
+  { id: "mapa", label: "Mapa de Obras" },
+  { id: "mapa_interativo", label: "Mapa Interativo" },
+  { id: "mapa_3d", label: "Mapa 3D" },
+  { id: "graficos", label: "Gráficos" },
+  { id: "producao", label: "Produção Semanal" },
+  { id: "planejamento_semanal", label: "Planej. Semanal" },
+  { id: "planejamento_periodo", label: "Planej. Período" },
+  { id: "planejamento_estrategico", label: "Planej. Estratégico" },
+  { id: "contrato", label: "Contrato da Obra" },
+  { id: "custos", label: "Custos da Obra" },
+  { id: "suprimentos", label: "Suprimentos" },
+  { id: "financeiro", label: "Fluxo Financeiro" },
+  { id: "diretoria", label: "Painel Diretoria" },
+  { id: "entrega", label: "Entrega & Pós-Obra" },
+  { id: "smart_planning", label: "Planej. Inteligente" },
 ];
 
 const MANAGEMENT_OPTIONS = [
@@ -312,11 +318,6 @@ export function UserPermissionsPanel() {
     }
   };
 
-  // Show all menu options that are active for this company (not disabled by system admin)
-  // If no company_modules configured, show all by default
-  const getActiveMenuOptions = () => {
-    return MENU_OPTIONS;
-  };
 
   const openPermissionDialog = (userId: string) => {
     setSelectedUserId(userId);
@@ -926,7 +927,7 @@ export function UserPermissionsPanel() {
                   Módulos do Sistema
                 </Label>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
-                  {getActiveMenuOptions().map((menu) => {
+                  {MENU_OPTIONS.map((menu) => {
                     const isChecked = editingPermission?.visible_menus?.includes(menu.id) || false;
                     return (
                       <button
