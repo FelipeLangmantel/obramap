@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -90,29 +90,61 @@ function Index() {
   const mapGridRef = useRef<HTMLDivElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
 
+  // ═══════════════════════════════════════════
+  // SISTEMA INTELIGENTE DE IMPRESSÃO DO MAPA
+  // ═══════════════════════════════════════════
+
+  const PAPER_SIZES = [
+    { name: "A4", w: 297, h: 210, margin: 15 },
+    { name: "A3", w: 420, h: 297, margin: 15 },
+    { name: "A2", w: 594, h: 420, margin: 20 },
+    { name: "A1", w: 841, h: 594, margin: 20 },
+    { name: "A0", w: 1189, h: 841, margin: 25 },
+  ] as const;
+
+  const detectBestPaperSize = (totalHouses: number, quadrasCount: number) => {
+    const housesPerQuadra = quadrasCount > 0 ? totalHouses / quadrasCount : totalHouses;
+    const complexidade = housesPerQuadra * quadrasCount;
+
+    if (complexidade <= 50) return PAPER_SIZES[0];  // A4
+    if (complexidade <= 100) return PAPER_SIZES[1]; // A3
+    if (complexidade <= 200) return PAPER_SIZES[2]; // A2
+    if (complexidade <= 400) return PAPER_SIZES[3]; // A1
+    return PAPER_SIZES[4]; // A0
+  };
+
+  const detectedPaper = useMemo(() => {
+    if (!currentProject) return PAPER_SIZES[0];
+    const totalHouses = currentProject.houses?.length || 0;
+    const quadrasCount = currentProject.quadras?.length || 0;
+    return detectBestPaperSize(totalHouses, quadrasCount);
+  }, [currentProject]);
+
   const handlePrintMap = async () => {
     if (!printAreaRef.current || !currentProject) return;
-    
+
     const { default: html2canvasLib } = await import("html2canvas");
     const { default: jsPDFLib } = await import("jspdf");
-    
+
     try {
-      // Force opaque backgrounds for crisp PDF output
       const printEl = printAreaRef.current;
-      const originalStyles: { el: HTMLElement; bg: string; opacity: string; boxShadow: string }[] = [];
-      
-      // Make all child elements fully opaque with solid backgrounds
-      printEl.querySelectorAll<HTMLElement>('*').forEach(el => {
+      const totalHouses = currentProject.houses?.length || 0;
+      const quadrasCount = currentProject.quadras?.length || 0;
+
+      // ── Step 1: Detect optimal paper ──
+      const paper = detectBestPaperSize(totalHouses, quadrasCount);
+      const margin = paper.margin;
+      const headerH = 18;
+      const footerH = 12;
+
+      // ── Step 2: Force opaque backgrounds ──
+      const originalStyles: { el: HTMLElement; bg: string }[] = [];
+      printEl.querySelectorAll<HTMLElement>("*").forEach((el) => {
         const computed = getComputedStyle(el);
         const bg = computed.backgroundColor;
-        const opacity = el.style.opacity;
-        const boxShadow = el.style.boxShadow;
-        
-        // Convert any rgba with alpha < 1 to fully opaque
         const rgbaMatch = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
         if (rgbaMatch && rgbaMatch[4] && parseFloat(rgbaMatch[4]) < 1) {
-          originalStyles.push({ el, bg: el.style.backgroundColor, opacity, boxShadow });
-          // Blend with white background for solid color
+          originalStyles.push({ el, bg: el.style.backgroundColor });
           const alpha = parseFloat(rgbaMatch[4]);
           const r = Math.round(parseInt(rgbaMatch[1]) * alpha + 255 * (1 - alpha));
           const g = Math.round(parseInt(rgbaMatch[2]) * alpha + 255 * (1 - alpha));
@@ -121,88 +153,133 @@ function Index() {
         }
       });
 
+      // ── Step 3: Capture at high resolution ──
       const canvas = await html2canvasLib(printEl, {
         scale: 3,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff',
+        backgroundColor: "#ffffff",
         imageTimeout: 0,
         removeContainer: true,
       });
 
-      // Restore original styles
-      originalStyles.forEach(({ el, bg, opacity, boxShadow }) => {
+      // Restore styles
+      originalStyles.forEach(({ el, bg }) => {
         el.style.backgroundColor = bg;
-        el.style.opacity = opacity;
-        el.style.boxShadow = boxShadow;
       });
 
-      // Paper sizes in mm (landscape)
-      const paperSizes: { name: string; w: number; h: number }[] = [
-        { name: "A4", w: 297, h: 210 },
-        { name: "A3", w: 420, h: 297 },
-        { name: "A2", w: 594, h: 420 },
-        { name: "A1", w: 841, h: 594 },
-        { name: "A0", w: 1189, h: 841 },
-      ];
-
-      const margin = 10;
-      const headerH = 15;
-      const footerH = 10;
+      // ── Step 4: Calculate pages ──
+      const availW = paper.w - 2 * margin;
+      const availH = paper.h - 2 * margin - headerH - footerH;
       const imgAspect = canvas.width / canvas.height;
 
-      // Find the smallest paper size that fits everything on one page
-      let selectedPaper = paperSizes[paperSizes.length - 1]; // default A0
-      for (const paper of paperSizes) {
-        const availW = paper.w - 2 * margin;
-        const availH = paper.h - 2 * margin - headerH - footerH;
-        let fitW = availW;
-        let fitH = fitW / imgAspect;
-        if (fitH > availH) {
-          fitH = availH;
-          fitW = fitH * imgAspect;
-        }
-        // Accept if the scale is reasonable (at least 50% of original quality)
-        if (fitW <= availW && fitH <= availH) {
-          selectedPaper = paper;
-          break;
-        }
-      }
-
-      const pdf = new jsPDFLib("l", "mm", [selectedPaper.w, selectedPaper.h]);
-      const pageW = selectedPaper.w;
-      const pageH = selectedPaper.h;
-
-      // Header
-      pdf.setFontSize(14);
-      pdf.setFont("helvetica", "bold");
-      pdf.text(`Mapa de Obras - ${currentProject.name}`, margin, margin + 6);
-      pdf.setFontSize(9);
-      pdf.setFont("helvetica", "normal");
-      pdf.text(`Gerado em: ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR")}`, pageW - margin, margin + 6, { align: "right" });
-
-      const imgData = canvas.toDataURL("image/jpeg", 1.0);
-      const availW = pageW - 2 * margin;
-      const availH = pageH - 2 * margin - headerH - footerH;
-      
+      // Full-width image dimensions
       let imgW = availW;
       let imgH = imgW / imgAspect;
-      if (imgH > availH) {
-        imgH = availH;
-        imgW = imgH * imgAspect;
+
+      // If it fits in one page height, single page
+      const pagesNeeded = imgH <= availH ? 1 : Math.ceil(imgH / availH);
+
+      const pdf = new jsPDFLib("l", "mm", [paper.w, paper.h]);
+      const pageW = paper.w;
+      const pageH = paper.h;
+      const now = new Date();
+      const dateStr = now.toLocaleDateString("pt-BR");
+      const timeStr = now.toLocaleTimeString("pt-BR");
+
+      const drawHeader = (pageNum: number, totalPages: number) => {
+        // Header background
+        pdf.setFillColor(26, 26, 26);
+        pdf.rect(margin, margin, availW, headerH, "F");
+
+        // Title
+        pdf.setFontSize(13);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(255, 255, 255);
+        pdf.text(`Mapa de Obras — ${currentProject.name}`, margin + 5, margin + 7);
+
+        // Subtitle
+        pdf.setFontSize(8);
+        pdf.setFont("helvetica", "normal");
+        pdf.text(`${totalHouses} Casas em ${quadrasCount} Quadras`, margin + 5, margin + 13);
+
+        // Right side info
+        pdf.setFontSize(8);
+        pdf.text(`Formato: ${paper.name} Paisagem`, pageW - margin - 5, margin + 7, { align: "right" });
+        pdf.text(`${dateStr} às ${timeStr}`, pageW - margin - 5, margin + 13, { align: "right" });
+
+        // Page indicator
+        if (totalPages > 1) {
+          pdf.setFontSize(7);
+          pdf.text(`Página ${pageNum}/${totalPages}`, pageW / 2, margin + 13, { align: "center" });
+        }
+      };
+
+      const drawFooter = () => {
+        pdf.setDrawColor(200, 200, 200);
+        pdf.line(margin, pageH - margin - footerH, pageW - margin, pageH - margin - footerH);
+
+        pdf.setFontSize(7);
+        pdf.setTextColor(150, 150, 150);
+        pdf.setFont("helvetica", "normal");
+        pdf.text(`© ${now.getFullYear()} ObraMap — Gestão Inteligente de Obras`, margin, pageH - margin - 3);
+        pdf.text(`Desenvolvido por Felipe Langmantel`, pageW / 2, pageH - margin - 3, { align: "center" });
+        pdf.text(`${paper.name} (${paper.w}×${paper.h}mm)`, pageW - margin, pageH - margin - 3, { align: "right" });
+      };
+
+      const imgData = canvas.toDataURL("image/jpeg", 1.0);
+
+      if (pagesNeeded === 1) {
+        // ── Single page ──
+        drawHeader(1, 1);
+
+        // Center image vertically in available space
+        let finalW = availW;
+        let finalH = finalW / imgAspect;
+        if (finalH > availH) {
+          finalH = availH;
+          finalW = finalH * imgAspect;
+        }
+        const imgX = margin + (availW - finalW) / 2;
+        const imgY = margin + headerH + (availH - finalH) / 2;
+        pdf.addImage(imgData, "JPEG", imgX, imgY, finalW, finalH);
+
+        drawFooter();
+      } else {
+        // ── Multi-page: slice the canvas ──
+        // Each page shows a vertical slice of the full-width image
+        const canvasSliceH = canvas.height / pagesNeeded;
+
+        for (let page = 0; page < pagesNeeded; page++) {
+          if (page > 0) pdf.addPage([paper.w, paper.h], "l");
+
+          drawHeader(page + 1, pagesNeeded);
+
+          // Create a slice canvas
+          const sliceCanvas = document.createElement("canvas");
+          sliceCanvas.width = canvas.width;
+          const thisSliceH = Math.min(canvasSliceH, canvas.height - page * canvasSliceH);
+          sliceCanvas.height = thisSliceH;
+          const ctx = sliceCanvas.getContext("2d")!;
+          ctx.drawImage(canvas, 0, page * canvasSliceH, canvas.width, thisSliceH, 0, 0, canvas.width, thisSliceH);
+
+          const sliceData = sliceCanvas.toDataURL("image/jpeg", 1.0);
+          const sliceAspect = sliceCanvas.width / sliceCanvas.height;
+
+          let sliceW = availW;
+          let sliceH = sliceW / sliceAspect;
+          if (sliceH > availH) {
+            sliceH = availH;
+            sliceW = sliceH * sliceAspect;
+          }
+          const sliceX = margin + (availW - sliceW) / 2;
+          pdf.addImage(sliceData, "JPEG", sliceX, margin + headerH, sliceW, sliceH);
+
+          drawFooter();
+        }
       }
 
-      const imgX = margin + (availW - imgW) / 2;
-      pdf.addImage(imgData, "JPEG", imgX, margin + headerH, imgW, imgH);
-
-      // Footer with paper size
-      pdf.setFontSize(7);
-      pdf.setTextColor(150);
-      pdf.text(`Folha ${selectedPaper.name} (${selectedPaper.w}×${selectedPaper.h}mm) - Paisagem`, margin, pageH - 5);
-      pdf.text(`Página 1 de 1`, pageW / 2, pageH - 5, { align: "center" });
-      pdf.text(`ObraMap`, pageW - margin, pageH - 5, { align: "right" });
-
-      pdf.save(`mapa_obras_${currentProject.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.pdf`);
+      pdf.save(`mapa_obras_${currentProject.name.replace(/\s+/g, "_")}_${now.toISOString().slice(0, 10)}.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
     }
@@ -293,7 +370,7 @@ function Index() {
                         onClick={handlePrintMap}
                       >
                         <Printer className="w-4 h-4" />
-                        Imprimir PDF
+                        Imprimir PDF ({detectedPaper.name})
                       </Button>
                     </div>
                     {selectedHouse && (
