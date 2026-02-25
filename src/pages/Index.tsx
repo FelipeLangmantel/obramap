@@ -133,12 +133,12 @@ function Index() {
 
       const paper = detectBestPaperSize(totalHouses, quadrasCount);
       const margin = paper.margin;
-      const headerH = 18;
-      const footerH = 12;
+      const headerH = 14;
+      const footerH = 8;
       const availW = paper.w - 2 * margin;
       const availH = paper.h - 2 * margin - headerH - footerH;
 
-      // Force opaque backgrounds
+      // Force opaque backgrounds for capture
       const originalStyles: { el: HTMLElement; bg: string }[] = [];
       printEl.querySelectorAll<HTMLElement>("*").forEach((el) => {
         const computed = getComputedStyle(el);
@@ -155,7 +155,7 @@ function Index() {
       });
 
       const canvas = await html2canvasLib(printEl, {
-        scale: 3,
+        scale: 4,
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
@@ -167,7 +167,7 @@ function Index() {
         el.style.backgroundColor = bg;
       });
 
-      // Always fit on ONE page
+      // Fit on ONE page — maximize usage of available area
       const imgAspect = canvas.width / canvas.height;
       let imgW = availW;
       let imgH = imgW / imgAspect;
@@ -181,33 +181,33 @@ function Index() {
       const dateStr = now.toLocaleDateString("pt-BR");
       const timeStr = now.toLocaleTimeString("pt-BR");
 
-      // Header
-      pdf.setFillColor(26, 26, 26);
-      pdf.rect(margin, margin, availW, headerH, "F");
-      pdf.setFontSize(13);
+      // ── Elegant header (light blue accent) ──
+      pdf.setFillColor(59, 130, 246); // blue-500
+      pdf.rect(margin, margin, availW, 2, "F"); // thin accent line
+      pdf.setFontSize(14);
       pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(255, 255, 255);
-      pdf.text(`Mapa de Obras — ${currentProject.name}`, margin + 5, margin + 7);
+      pdf.setTextColor(30, 30, 30);
+      pdf.text(`Mapa de Obras — ${currentProject.name}`, margin, margin + 9);
       pdf.setFontSize(8);
       pdf.setFont("helvetica", "normal");
-      pdf.text(`${totalHouses} Casas em ${quadrasCount} Quadras`, margin + 5, margin + 13);
-      pdf.text(`Formato: ${paper.name} Paisagem`, paper.w - margin - 5, margin + 7, { align: "right" });
-      pdf.text(`${dateStr} às ${timeStr}`, paper.w - margin - 5, margin + 13, { align: "right" });
+      pdf.setTextColor(100, 100, 100);
+      pdf.text(`${totalHouses} Casas  •  ${quadrasCount} Quadras  •  ${paper.name} Paisagem  •  ${dateStr} ${timeStr}`, margin, margin + 13);
 
-      // Image centered on single page
+      // ── Image: fill available space ──
       const imgX = margin + (availW - imgW) / 2;
-      const imgY = margin + headerH + (availH - imgH) / 2;
-      const imgData = canvas.toDataURL("image/jpeg", 1.0);
-      pdf.addImage(imgData, "JPEG", imgX, imgY, imgW, imgH);
+      const imgY = margin + headerH;
+      const imgData = canvas.toDataURL("image/png");
+      pdf.addImage(imgData, "PNG", imgX, imgY, imgW, imgH);
 
-      // Footer
-      pdf.setDrawColor(200, 200, 200);
-      pdf.line(margin, paper.h - margin - footerH, paper.w - margin, paper.h - margin - footerH);
-      pdf.setFontSize(7);
-      pdf.setTextColor(150, 150, 150);
-      pdf.text(`© ${now.getFullYear()} ObraMap — Gestão Inteligente de Obras`, margin, paper.h - margin - 3);
-      pdf.text(`Desenvolvido por Felipe Langmantel`, paper.w / 2, paper.h - margin - 3, { align: "center" });
-      pdf.text(`${paper.name} (${paper.w}×${paper.h}mm)`, paper.w - margin, paper.h - margin - 3, { align: "right" });
+      // ── Clean footer (no dark background) ──
+      const footerY = paper.h - margin - 2;
+      pdf.setDrawColor(220, 220, 220);
+      pdf.line(margin, footerY, paper.w - margin, footerY);
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(160, 160, 160);
+      pdf.text(`© ${now.getFullYear()} ObraMap`, margin, footerY + 4);
+      pdf.text(`Desenvolvido por Felipe Langmantel`, paper.w / 2, footerY + 4, { align: "center" });
+      pdf.text(`${paper.name} (${paper.w}×${paper.h}mm)`, paper.w - margin, footerY + 4, { align: "right" });
 
       pdf.save(`mapa_obras_${currentProject.name.replace(/\s+/g, "_")}_${now.toISOString().slice(0, 10)}.pdf`);
     } catch (error) {
