@@ -181,6 +181,15 @@ function Index() {
                       <Legend />
                       <QuadrasGrid ref={mapGridRef} />
                     </div>
+                    {/* Print footer — hidden on screen, shown on print */}
+                    <div className="print-footer hidden items-center justify-between border-t border-border pt-2 mt-2">
+                      <p className="text-[9px] text-muted-foreground">
+                        Desenvolvido por <span className="font-semibold text-foreground">Felipe Langmantel</span> — ObraMap © {new Date().getFullYear()}
+                      </p>
+                      <p className="text-[9px] text-muted-foreground">
+                        Página 1 de 1
+                      </p>
+                    </div>
                     <div className="flex justify-end -mt-2 no-print">
                       <Button
                         variant="outline"
