@@ -103,13 +103,11 @@ function Index() {
   ] as const;
 
   const detectBestPaperSize = (totalHouses: number, quadrasCount: number) => {
-    const housesPerQuadra = quadrasCount > 0 ? totalHouses / quadrasCount : totalHouses;
-    const complexidade = housesPerQuadra * quadrasCount;
-
-    if (complexidade <= 50) return PAPER_SIZES[0];  // A4
-    if (complexidade <= 100) return PAPER_SIZES[1]; // A3
-    if (complexidade <= 200) return PAPER_SIZES[2]; // A2
-    if (complexidade <= 400) return PAPER_SIZES[3]; // A1
+    // Use total houses as primary driver — more houses = bigger paper
+    if (totalHouses <= 20) return PAPER_SIZES[0];  // A4
+    if (totalHouses <= 40) return PAPER_SIZES[1];   // A3
+    if (totalHouses <= 120) return PAPER_SIZES[2];  // A2
+    if (totalHouses <= 300) return PAPER_SIZES[3];  // A1
     return PAPER_SIZES[4]; // A0
   };
 
@@ -137,27 +135,32 @@ function Index() {
       const footerH = 8;
       const availW = paper.w - 2 * margin;
       const availH = paper.h - 2 * margin - headerH - footerH;
-      const systemBg = '#e8eef4';
 
-      // ── Temporarily widen the element to match PDF landscape ratio ──
-      // This makes the content re-flow wider (more columns, larger cards)
-      // so when captured it maps 1:1 to PDF without downscaling blur
-      const targetWidthPx = 1600; // Wide enough for landscape PDF
-      const origWidth = printEl.style.width;
-      const origMaxWidth = printEl.style.maxWidth;
-      const origMinWidth = printEl.style.minWidth;
-      const origPosition = printEl.style.position;
-      const origLeft = printEl.style.left;
+      // Get the actual computed background color from root
+      const rootEl = document.documentElement;
+      const bgValue = getComputedStyle(rootEl).getPropertyValue('--background').trim();
+      // Parse HSL "209 40% 96%" → approximate RGB
+      const systemBgRgb = { r: 232, g: 238, b: 244 };
+      const systemBg = `rgb(${systemBgRgb.r}, ${systemBgRgb.g}, ${systemBgRgb.b})`;
 
-      // Apply temporary wide layout (off-screen to avoid flicker)
+      // ── Temporarily widen element to match PDF aspect ratio ──
+      const pdfAspect = availW / availH;
+      // Choose width so the content naturally spreads to match landscape
+      const targetWidthPx = Math.max(1800, Math.round(printEl.scrollHeight * pdfAspect));
+      
+      const origStyles = {
+        width: printEl.style.width,
+        maxWidth: printEl.style.maxWidth,
+        minWidth: printEl.style.minWidth,
+      };
       printEl.style.width = `${targetWidthPx}px`;
       printEl.style.maxWidth = `${targetWidthPx}px`;
       printEl.style.minWidth = `${targetWidthPx}px`;
 
-      // Force layout recalc
-      await new Promise(r => setTimeout(r, 100));
+      // Wait for layout reflow
+      await new Promise(r => setTimeout(r, 150));
 
-      // Force opaque backgrounds
+      // Force ALL semi-transparent backgrounds to opaque (blend with system bg)
       const saved: { el: HTMLElement; bg: string }[] = [];
       printEl.querySelectorAll<HTMLElement>("*").forEach((child) => {
         const bg = getComputedStyle(child).backgroundColor;
@@ -165,13 +168,26 @@ function Index() {
         if (m && m[4] && parseFloat(m[4]) < 1) {
           saved.push({ el: child, bg: child.style.backgroundColor });
           const a = parseFloat(m[4]);
-          child.style.backgroundColor = `rgb(${Math.round(+m[1]*a+232*(1-a))}, ${Math.round(+m[2]*a+238*(1-a))}, ${Math.round(+m[3]*a+244*(1-a))})`;
+          child.style.backgroundColor = `rgb(${Math.round(+m[1]*a + systemBgRgb.r*(1-a))}, ${Math.round(+m[2]*a + systemBgRgb.g*(1-a))}, ${Math.round(+m[3]*a + systemBgRgb.b*(1-a))})`;
         }
       });
 
-      // Capture at scale 2 — with 1600px width = 3200px canvas → ~8px/mm on A3 = 200+ DPI
+      // Also force card backgrounds to be fully opaque white-ish
+      printEl.querySelectorAll<HTMLElement>(".bg-card, [class*='bg-card']").forEach((el) => {
+        const bg = getComputedStyle(el).backgroundColor;
+        if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') {
+          saved.push({ el, bg: el.style.backgroundColor });
+          el.style.backgroundColor = '#f5f7fa';
+        }
+      });
+
+      // Calculate optimal scale: we want ~200 DPI in the PDF
+      // 200 DPI = 200/25.4 ≈ 7.87 px/mm. For availW mm we need availW * 7.87 px
+      const targetCanvasPx = availW * 7.87;
+      const optimalScale = Math.max(1, Math.min(3, targetCanvasPx / targetWidthPx));
+
       const canvas = await html2canvasLib(printEl, {
-        scale: 2,
+        scale: optimalScale,
         useCORS: true,
         logging: false,
         backgroundColor: systemBg,
@@ -180,15 +196,13 @@ function Index() {
         width: targetWidthPx,
       });
 
-      // Restore original layout immediately
+      // Restore everything
       saved.forEach(({ el, bg }) => { el.style.backgroundColor = bg; });
-      printEl.style.width = origWidth;
-      printEl.style.maxWidth = origMaxWidth;
-      printEl.style.minWidth = origMinWidth;
-      printEl.style.position = origPosition;
-      printEl.style.left = origLeft;
+      printEl.style.width = origStyles.width;
+      printEl.style.maxWidth = origStyles.maxWidth;
+      printEl.style.minWidth = origStyles.minWidth;
 
-      // Fit on ONE page
+      // Fit on ONE page — no cutting
       const imgAspect = canvas.width / canvas.height;
       let imgW = availW;
       let imgH = imgW / imgAspect;
@@ -203,7 +217,7 @@ function Index() {
       const timeStr = now.toLocaleTimeString("pt-BR");
 
       // ── Page background ──
-      pdf.setFillColor(232, 238, 244);
+      pdf.setFillColor(systemBgRgb.r, systemBgRgb.g, systemBgRgb.b);
       pdf.rect(0, 0, paper.w, paper.h, "F");
 
       // ── Header ──
