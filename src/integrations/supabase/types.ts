@@ -1054,6 +1054,54 @@ export type Database = {
           },
         ]
       }
+      map_layer_stage_links: {
+        Row: {
+          created_at: string
+          id: string
+          layer_name: string
+          macro_id: string | null
+          project_id: string
+          scope_id: string | null
+          stage_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          layer_name: string
+          macro_id?: string | null
+          project_id: string
+          scope_id?: string | null
+          stage_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          layer_name?: string
+          macro_id?: string | null
+          project_id?: string
+          scope_id?: string | null
+          stage_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "map_layer_stage_links_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "map_layer_stage_links_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "planning_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       map_layouts: {
         Row: {
           camera_position: Json | null
@@ -1063,6 +1111,7 @@ export type Database = {
           houses: Json
           id: string
           image_url: string | null
+          layer_visibility: Json | null
           map_height: number
           map_width: number
           model_3d_type: string | null
@@ -1080,6 +1129,7 @@ export type Database = {
           houses?: Json
           id?: string
           image_url?: string | null
+          layer_visibility?: Json | null
           map_height?: number
           map_width?: number
           model_3d_type?: string | null
@@ -1097,6 +1147,7 @@ export type Database = {
           houses?: Json
           id?: string
           image_url?: string | null
+          layer_visibility?: Json | null
           map_height?: number
           map_width?: number
           model_3d_type?: string | null

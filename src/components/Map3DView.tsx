@@ -10,11 +10,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target } from "lucide-react";
+import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useModelLayers } from "./map3d/useModelLayers";
+import { LayersPanel } from "./map3d/LayersPanel";
+import { LinkLayersDialog } from "./map3d/LinkLayersDialog";
 
 interface ModelData {
   url: string;
@@ -31,27 +34,27 @@ interface HouseMarker {
 }
 
 // GLTF model - calls onLoaded after it's in the scene
-function GLTFModel({ url, onLoaded }: { url: string; onLoaded: () => void }) {
+function GLTFModel({ url, onLoaded, onSceneReady }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void }) {
   const { scene } = useGLTF(url);
   const calledRef = useRef(false);
   
   useEffect(() => {
     if (scene && !calledRef.current) {
       calledRef.current = true;
-      // Small delay to ensure Three.js has processed the geometry
+      onSceneReady?.(scene);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           onLoaded();
         });
       });
     }
-  }, [scene, onLoaded]);
+  }, [scene, onLoaded, onSceneReady]);
   
   return <primitive object={scene} />;
 }
 
 // OBJ model - calls onLoaded after it's in the scene
-function OBJModel({ url, mtlUrl, onLoaded }: { url: string; mtlUrl?: string; onLoaded: () => void }) {
+function OBJModel({ url, mtlUrl, onLoaded, onSceneReady }: { url: string; mtlUrl?: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void }) {
   const materials = mtlUrl ? useLoader(MTLLoader, mtlUrl) : null;
   const obj = useLoader(OBJLoader, url, (loader) => {
     if (materials) { materials.preload(); loader.setMaterials(materials); }
@@ -61,9 +64,10 @@ function OBJModel({ url, mtlUrl, onLoaded }: { url: string; mtlUrl?: string; onL
   useEffect(() => {
     if (obj && !calledRef.current) {
       calledRef.current = true;
+      onSceneReady?.(obj);
       requestAnimationFrame(() => { requestAnimationFrame(() => { onLoaded(); }); });
     }
-  }, [obj, onLoaded]);
+  }, [obj, onLoaded, onSceneReady]);
 
   return <primitive object={obj} />;
 }
@@ -258,7 +262,7 @@ function AutoFitCamera({
 
 // Scene
 function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLegendItems,
-  resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded
+  resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady
 }: { 
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
@@ -266,6 +270,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   savedPosition?: [number, number, number] | null; savedTarget?: [number, number, number] | null;
   onCameraChange?: (p: [number, number, number], t: [number, number, number]) => void;
   sceneReady: boolean; onModelLoaded: () => void;
+  onSceneReady?: (scene: THREE.Object3D) => void;
 }) {
   return (
     <>
@@ -282,9 +287,9 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       {modelData && (
         <Suspense fallback={<Html center><div className="bg-background/90 px-4 py-2 rounded-lg border border-border">Carregando modelo...</div></Html>}>
           {modelData.type === "gltf" ? (
-            <GLTFModel url={modelData.url} onLoaded={onModelLoaded} />
+            <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} />
           ) : (
-            <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} />
+            <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} />
           )}
         </Suspense>
       )}
@@ -371,6 +376,10 @@ export function Map3DView() {
   const [pendingPos, setPendingPos] = useState<[number, number, number] | null>(null);
   const [pendingTgt, setPendingTgt] = useState<[number, number, number] | null>(null);
   const [sceneReady, setSceneReady] = useState(false);
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [showLayers, setShowLayers] = useState(false);
+  
+  const layerManager = useModelLayers(projectId);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mtlInputRef = useRef<HTMLInputElement>(null);
@@ -385,6 +394,49 @@ export function Map3DView() {
     console.log('[3D] Model geometry loaded in scene');
     setSceneReady(true);
   }, []);
+
+  // Extract layers when 3D scene is ready
+  const handleSceneReady = useCallback((scene: THREE.Object3D) => {
+    const extracted = layerManager.extractLayers(scene);
+    if (extracted.length > 0) {
+      console.log(`[3D] Extracted ${extracted.length} layers from model`);
+      setShowLayers(true);
+    }
+  }, [layerManager.extractLayers]);
+
+  // Load production data to update layers
+  useEffect(() => {
+    if (!projectId || !layerManager.autoMode || layerManager.links.length === 0) return;
+    const loadProduction = async () => {
+      const { data: stages } = await supabase
+        .from("planning_stages")
+        .select("id, name")
+        .eq("project_id", projectId);
+      if (!stages) return;
+      
+      const { data: logs } = await supabase
+        .from("daily_work_logs")
+        .select("stage_id, units_completed")
+        .eq("project_id", projectId);
+      
+      // Get total houses for the project
+      const { count: totalHouses } = await supabase
+        .from("houses")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", projectId);
+      
+      const total = totalHouses || 1;
+      const stageProgress = stages.map(s => {
+        const completed = (logs || [])
+          .filter(l => l.stage_id === s.id)
+          .reduce((sum, l) => sum + (l.units_completed || 0), 0);
+        return { id: s.id, name: s.name, progress: Math.min(100, (completed / total) * 100) };
+      });
+      
+      layerManager.updateFromProduction(stageProgress);
+    };
+    loadProduction();
+  }, [projectId, layerManager.autoMode, layerManager.links]);
 
   // Also mark ready for markers
   useEffect(() => {
@@ -514,6 +566,11 @@ export function Map3DView() {
             </>)}
             <Button variant="outline" size="sm" onClick={centerCamera} disabled={isLoading}><Target className="h-4 w-4 mr-1.5" />Centralizar</Button>
             <Button variant="outline" size="sm" onClick={resetCameraView} disabled={isLoading}><Home className="h-4 w-4 mr-1.5" />Resetar Visão</Button>
+            {layerManager.layers.length > 0 && (
+              <Button variant={showLayers ? "default" : "outline"} size="sm" onClick={() => setShowLayers(p => !p)} disabled={isLoading}>
+                <Layers className="h-4 w-4 mr-1.5" />Camadas ({layerManager.layers.length})
+              </Button>
+            )}
             {isAdmin && (
               <AlertDialog>
                 <AlertDialogTrigger asChild><Button variant="outline" size="sm" disabled={isLoading}><RotateCcw className="h-4 w-4 mr-1.5" />Resetar Mapa</Button></AlertDialogTrigger>
@@ -559,9 +616,20 @@ export function Map3DView() {
               resetTrigger={resetTrigger} fitTrigger={fitTrigger}
               savedPosition={savedPos} savedTarget={savedTgt}
               onCameraChange={handleCameraChange} sceneReady={sceneReady}
-              onModelLoaded={handleModelLoaded} />
+              onModelLoaded={handleModelLoaded} onSceneReady={handleSceneReady} />
           </Canvas>
         </div>
+        {showLayers && layerManager.layers.length > 0 && (
+          <LayersPanel
+            layers={layerManager.layers}
+            links={layerManager.links}
+            autoMode={layerManager.autoMode}
+            onAutoModeChange={layerManager.setAutoMode}
+            onToggleLayer={layerManager.toggleLayer}
+            onOpacityChange={layerManager.setLayerOpacity}
+            onOpenLinkDialog={() => setLinkDialogOpen(true)}
+          />
+        )}
         {selectedMarker && <HouseDetailsPanel marker={selectedMarker} onClose={() => setSelectedMarker(null)} customLegendItems={customLegendItems} />}
         {!modelData && markers.length === 0 && !isLoading && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -573,6 +641,18 @@ export function Map3DView() {
           </div>
         )}
       </Card>
+
+      {projectId && (
+        <LinkLayersDialog
+          open={linkDialogOpen}
+          onOpenChange={setLinkDialogOpen}
+          layers={layerManager.layers}
+          links={layerManager.links}
+          projectId={projectId}
+          onSaveLink={layerManager.saveLink}
+          onRemoveLink={layerManager.removeLink}
+        />
+      )}
     </div>
   );
 }
