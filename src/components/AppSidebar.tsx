@@ -178,22 +178,22 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
 
   // ✅ Menu items com permissionId alinhado aos IDs do painel de permissões (MENU_OPTIONS)
   const mainMenuItems: { title: string; view: MenuViewType; icon: any; permissionId: string }[] = [
-    { title: "Painel Inicial", view: "home", icon: LayoutDashboard, permissionId: "mapa" },
+    { title: "Painel Inicial", view: "home", icon: LayoutDashboard, permissionId: "painel_inicial" },
     { title: "Mapa de Obras", view: "map", icon: Map, permissionId: "mapa" },
-    { title: "Mapa Interativo", view: "interactive-map", icon: Map, permissionId: "mapa" },
-    { title: "Mapa 3D", view: "3d-map", icon: Box, permissionId: "mapa" },
+    { title: "Mapa Interativo", view: "interactive-map", icon: Map, permissionId: "mapa_interativo" },
+    { title: "Mapa 3D", view: "3d-map", icon: Box, permissionId: "mapa_3d" },
     { title: "Gráficos", view: "charts", icon: BarChart3, permissionId: "graficos" },
     { title: "Produção Semanal", view: "production", icon: ClipboardList, permissionId: "producao" },
-    { title: "Planej. Semanal", view: "planning", icon: Target, permissionId: "planejamento" },
-    { title: "Planej. Período", view: "measurement-planning", icon: Calculator, permissionId: "planejamento" },
-    { title: "Planej. Estratégico", view: "long-term-planning", icon: Calendar, permissionId: "planejamento" },
-    { title: "Contrato da Obra", view: "project-contract", icon: FileText, permissionId: "financeiro" },
+    { title: "Planej. Semanal", view: "planning", icon: Target, permissionId: "planejamento_semanal" },
+    { title: "Planej. Período", view: "measurement-planning", icon: Calculator, permissionId: "planejamento_periodo" },
+    { title: "Planej. Estratégico", view: "long-term-planning", icon: Calendar, permissionId: "planejamento_estrategico" },
+    { title: "Contrato da Obra", view: "project-contract", icon: FileText, permissionId: "contrato" },
     { title: "Custos da Obra", view: "costs", icon: DollarSign, permissionId: "custos" },
     { title: "Suprimentos", view: "supplies", icon: Package, permissionId: "suprimentos" },
     { title: "Fluxo Financeiro", view: "financial-flow", icon: Wallet, permissionId: "financeiro" },
     { title: "Painel Diretoria", view: "board-decisions", icon: Crown, permissionId: "diretoria" },
     { title: "Entrega & Pós-Obra", view: "delivery", icon: ClipboardCheck, permissionId: "entrega" },
-    { title: "Planej. Inteligente", view: "smart-planning", icon: Target, permissionId: "smart-planning" },
+    { title: "Planej. Inteligente", view: "smart-planning", icon: Target, permissionId: "smart_planning" },
   ];
 
   // Filter menu items based on user permissions, company module status, AND system governance
