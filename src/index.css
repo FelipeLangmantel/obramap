@@ -186,12 +186,11 @@
 @media print {
   @page {
     size: A3 landscape;
-    margin: 10mm;
+    margin: 6mm;
   }
 
   /* ── Esconder navegação e UI ── */
   .no-print,
-  footer,
   nav,
   aside,
   [data-sidebar="sidebar"],
@@ -204,6 +203,16 @@
     display: flex !important;
   }
 
+  /* ── Print footer visível apenas na impressão ── */
+  .print-footer {
+    display: flex !important;
+  }
+
+  /* ── Footer original escondido ── */
+  footer.no-print {
+    display: none !important;
+  }
+
   /* ── Reset de layout ── */
   html, body {
     height: auto !important;
@@ -211,7 +220,7 @@
     margin: 0 !important;
     padding: 0 !important;
     background: white !important;
-    font-size: 11px !important;
+    font-size: 12px !important;
   }
 
   body > #root,
@@ -233,7 +242,7 @@
   }
 
   main {
-    padding: 6px !important;
+    padding: 4px !important;
     overflow: visible !important;
     height: auto !important;
     flex: none !important;
@@ -244,7 +253,7 @@
   .print-area {
     width: 100% !important;
     max-width: none !important;
-    gap: 8px !important;
+    gap: 6px !important;
     page-break-inside: avoid !important;
   }
 
@@ -253,43 +262,43 @@
     page-break-inside: avoid !important;
   }
 
-  /* ── Stats cards compactos ── */
+  /* ── Stats cards compactos — linha única ── */
   .print-area .grid.grid-cols-2.lg\:grid-cols-5 {
     grid-template-columns: repeat(5, 1fr) !important;
-    gap: 8px !important;
+    gap: 6px !important;
   }
 
   .print-area .grid.grid-cols-2.lg\:grid-cols-5 > div {
-    padding: 8px 6px !important;
+    padding: 6px 4px !important;
     border-radius: 6px !important;
   }
 
   .print-area .grid.grid-cols-2.lg\:grid-cols-5 .w-10 {
-    width: 28px !important;
-    height: 28px !important;
+    width: 26px !important;
+    height: 26px !important;
     border-radius: 6px !important;
   }
 
   .print-area .grid.grid-cols-2.lg\:grid-cols-5 .w-10 svg {
-    width: 16px !important;
-    height: 16px !important;
+    width: 15px !important;
+    height: 15px !important;
   }
 
   .print-area .grid.grid-cols-2.lg\:grid-cols-5 .text-2xl {
-    font-size: 18px !important;
+    font-size: 20px !important;
     line-height: 1.2 !important;
   }
 
   .print-area .grid.grid-cols-2.lg\:grid-cols-5 .text-xs {
-    font-size: 9px !important;
+    font-size: 10px !important;
     line-height: 1.1 !important;
   }
 
   /* ── Legenda compacta ── */
   .print-area > .flex.flex-wrap.items-center {
-    padding: 4px 10px !important;
+    padding: 3px 10px !important;
     gap: 10px !important;
-    border-radius: 6px !important;
+    border-radius: 4px !important;
   }
 
   .print-area > .flex.flex-wrap.items-center .w-4 {
@@ -298,7 +307,7 @@
   }
 
   .print-area > .flex.flex-wrap.items-center .text-sm {
-    font-size: 10px !important;
+    font-size: 11px !important;
   }
 
   /* Esconder botão settings da legenda na impressão */
@@ -312,7 +321,7 @@
     gap: 6px !important;
   }
 
-  /* Quadra cards compactos */
+  /* Quadra cards */
   .print-area .grid.grid-cols-1.lg\:grid-cols-2 > div {
     padding: 6px 8px !important;
     border-radius: 6px !important;
@@ -325,41 +334,41 @@
   }
 
   .print-area .grid.grid-cols-1.lg\:grid-cols-2 > div > .flex.items-center.justify-between .text-base {
-    font-size: 12px !important;
+    font-size: 14px !important;
     font-weight: 700 !important;
   }
 
   .print-area .grid.grid-cols-1.lg\:grid-cols-2 > div > .flex.items-center.justify-between .text-sm {
-    font-size: 10px !important;
+    font-size: 11px !important;
   }
 
   /* Progress bar na quadra */
   .print-area .grid.grid-cols-1.lg\:grid-cols-2 .w-24 {
-    width: 60px !important;
-    height: 5px !important;
+    width: 70px !important;
+    height: 6px !important;
   }
 
-  /* ── House cards compactos ── */
+  /* ── House cards ── */
   .print-area .flex.flex-wrap.gap-2 {
-    gap: 4px !important;
-    min-height: 30px !important;
+    gap: 5px !important;
+    min-height: 36px !important;
   }
 
   .print-area .w-14.h-14 {
-    width: 40px !important;
-    height: 40px !important;
-    border-radius: 5px !important;
-    border-width: 1.5px !important;
+    width: 48px !important;
+    height: 48px !important;
+    border-radius: 6px !important;
+    border-width: 2px !important;
   }
 
   .print-area .w-14.h-14 .text-xs {
-    font-size: 8px !important;
+    font-size: 9px !important;
     line-height: 1 !important;
     font-weight: 700 !important;
   }
 
   .print-area .w-14.h-14 .text-sm {
-    font-size: 10px !important;
+    font-size: 12px !important;
     line-height: 1 !important;
     font-weight: 800 !important;
   }
