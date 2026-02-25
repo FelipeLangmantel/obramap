@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -29,7 +29,7 @@ import { Button } from "@/components/ui/button";
 // Sidebar trigger button - visible on all screen sizes
 function SidebarTriggerButton() {
   return (
-    <SidebarTrigger className="p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors">
+    <SidebarTrigger className="p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors no-print">
       <Menu className="h-6 w-6" />
     </SidebarTrigger>
   );
@@ -90,136 +90,8 @@ function Index() {
   const mapGridRef = useRef<HTMLDivElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
 
-  // ═══════════════════════════════════════════
-  // SISTEMA INTELIGENTE DE IMPRESSÃO DO MAPA
-  // ═══════════════════════════════════════════
-
-  const PAPER_SIZES = [
-    { name: "A4", w: 297, h: 210, margin: 15 },
-    { name: "A3", w: 420, h: 297, margin: 15 },
-    { name: "A2", w: 594, h: 420, margin: 20 },
-    { name: "A1", w: 841, h: 594, margin: 20 },
-    { name: "A0", w: 1189, h: 841, margin: 25 },
-  ] as const;
-
-  const detectBestPaperSize = (totalHouses: number, quadrasCount: number) => {
-    // Use total houses as primary driver — more houses = bigger paper
-    if (totalHouses <= 20) return PAPER_SIZES[0];  // A4
-    if (totalHouses <= 40) return PAPER_SIZES[1];   // A3
-    if (totalHouses <= 120) return PAPER_SIZES[2];  // A2
-    if (totalHouses <= 300) return PAPER_SIZES[3];  // A1
-    return PAPER_SIZES[4]; // A0
-  };
-
-  const detectedPaper = useMemo(() => {
-    if (!currentProject) return PAPER_SIZES[0];
-    const totalHouses = currentProject.houses?.length || 0;
-    const quadrasCount = currentProject.quadras?.length || 0;
-    return detectBestPaperSize(totalHouses, quadrasCount);
-  }, [currentProject]);
-
-  const handlePrintMap = async () => {
-    if (!printAreaRef.current || !currentProject) return;
-
-    const { default: html2canvasLib } = await import("html2canvas");
-    const { default: jsPDFLib } = await import("jspdf");
-
-    try {
-      const printEl = printAreaRef.current;
-      const totalHouses = currentProject.houses?.length || 0;
-      const quadrasCount = currentProject.quadras?.length || 0;
-      const paper = detectBestPaperSize(totalHouses, quadrasCount);
-      const margin = paper.margin;
-      const headerH = 14;
-      const footerH = 8;
-      const systemBgRgb = { r: 232, g: 238, b: 244 };
-      const systemBg = `rgb(${systemBgRgb.r}, ${systemBgRgb.g}, ${systemBgRgb.b})`;
-
-      // ── Step 1: Force opaque backgrounds ──
-      const saved: { el: HTMLElement; bg: string }[] = [];
-      printEl.querySelectorAll<HTMLElement>("*").forEach((child) => {
-        const bg = getComputedStyle(child).backgroundColor;
-        const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
-        if (m && m[4] && parseFloat(m[4]) < 1) {
-          saved.push({ el: child, bg: child.style.backgroundColor });
-          const a = parseFloat(m[4]);
-          child.style.backgroundColor = `rgb(${Math.round(+m[1]*a + systemBgRgb.r*(1-a))}, ${Math.round(+m[2]*a + systemBgRgb.g*(1-a))}, ${Math.round(+m[3]*a + systemBgRgb.b*(1-a))})`;
-        }
-      });
-
-      // ── Step 2: Capture at NATURAL width, scale 2 ──
-      const canvas = await html2canvasLib(printEl, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: systemBg,
-        imageTimeout: 0,
-        removeContainer: true,
-      });
-
-      // Restore
-      saved.forEach(({ el, bg }) => { el.style.backgroundColor = bg; });
-
-      // ── Step 3: Choose orientation based on content aspect ratio ──
-      const contentAspect = canvas.width / canvas.height;
-      // If content is wider than tall → landscape, otherwise → portrait
-      const useLandscape = contentAspect > 0.9;
-      const pageW = useLandscape ? paper.w : paper.h;
-      const pageH = useLandscape ? paper.h : paper.w;
-      const orientation = useLandscape ? "l" : "p";
-      const availW = pageW - 2 * margin;
-      const availH = pageH - 2 * margin - headerH - footerH;
-
-      // ── Step 4: Scale image to fill page maximally ──
-      let imgW = availW;
-      let imgH = imgW / contentAspect;
-      if (imgH > availH) {
-        imgH = availH;
-        imgW = imgH * contentAspect;
-      }
-
-      const pdf = new jsPDFLib(orientation as "l" | "p", "mm", [paper.w, paper.h]);
-      const now = new Date();
-      const dateStr = now.toLocaleDateString("pt-BR");
-      const timeStr = now.toLocaleTimeString("pt-BR");
-      const orientLabel = useLandscape ? "Paisagem" : "Retrato";
-
-      // ── Page background ──
-      pdf.setFillColor(systemBgRgb.r, systemBgRgb.g, systemBgRgb.b);
-      pdf.rect(0, 0, pageW, pageH, "F");
-
-      // ── Header ──
-      pdf.setFillColor(59, 130, 246);
-      pdf.rect(margin, margin, availW, 2, "F");
-      pdf.setFontSize(14);
-      pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(30, 41, 59);
-      pdf.text(`Mapa de Obras — ${currentProject.name}`, margin, margin + 9);
-      pdf.setFontSize(8);
-      pdf.setFont("helvetica", "normal");
-      pdf.setTextColor(100, 116, 139);
-      pdf.text(`${totalHouses} Casas  •  ${quadrasCount} Quadras  •  ${paper.name} ${orientLabel}  •  ${dateStr} ${timeStr}`, margin, margin + 13);
-
-      // ── Image ──
-      const imgX = margin + (availW - imgW) / 2;
-      const imgY = margin + headerH + (availH - imgH) / 2;
-      const imgData = canvas.toDataURL("image/png");
-      pdf.addImage(imgData, "PNG", imgX, imgY, imgW, imgH);
-
-      // ── Footer ──
-      const footerY = pageH - margin - 2;
-      pdf.setDrawColor(203, 213, 225);
-      pdf.line(margin, footerY, pageW - margin, footerY);
-      pdf.setFontSize(6.5);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text(`© ${now.getFullYear()} ObraMap`, margin, footerY + 4);
-      pdf.text(`Desenvolvido por Felipe Langmantel`, pageW / 2, footerY + 4, { align: "center" });
-      pdf.text(`${paper.name} (${pageW}×${pageH}mm)`, pageW - margin, footerY + 4, { align: "right" });
-
-      pdf.save(`mapa_obras_${currentProject.name.replace(/\s+/g, "_")}_${now.toISOString().slice(0, 10)}.pdf`);
-    } catch (error) {
-      console.error("Error generating PDF:", error);
-    }
+  const handlePrintMap = () => {
+    window.print();
   };
 
   if (isLoading) {
@@ -261,7 +133,7 @@ function Index() {
         
         <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
           {/* Top Header */}
-          <header className="min-h-[56px] bg-card border-b border-border px-2 md:px-6 flex items-center gap-2 md:gap-4 shrink-0 flex-wrap py-2">
+          <header className="no-print min-h-[56px] bg-card border-b border-border px-2 md:px-6 flex items-center gap-2 md:gap-4 shrink-0 flex-wrap py-2">
             <SidebarTriggerButton />
             <h2 className="text-sm md:text-xl font-semibold text-foreground whitespace-nowrap shrink-0 truncate max-w-[200px] md:max-w-none">
               {viewTitles[activeView]}
@@ -294,12 +166,12 @@ function Index() {
 
                 {activeView === "map" && (
                   <div className="flex-1 flex flex-col gap-4">
-                    <div ref={printAreaRef} className="flex flex-col gap-4">
+                    <div ref={printAreaRef} className="print-area flex flex-col gap-4">
                       <StatsCards />
                       <Legend />
                       <QuadrasGrid ref={mapGridRef} />
                     </div>
-                    <div className="flex justify-end -mt-2">
+                    <div className="flex justify-end -mt-2 no-print">
                       <Button
                         variant="outline"
                         size="sm"
@@ -307,11 +179,11 @@ function Index() {
                         onClick={handlePrintMap}
                       >
                         <Printer className="w-4 h-4" />
-                        Imprimir PDF ({detectedPaper.name})
+                        Imprimir Mapa
                       </Button>
                     </div>
                     {selectedHouse && (
-                      <div className="lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-12rem)]">
+                      <div className="no-print lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-12rem)]">
                         <HouseDetails />
                       </div>
                     )}
@@ -402,7 +274,7 @@ function Index() {
           </main>
 
           {/* Footer */}
-          <footer className="py-2.5 text-center text-sm text-muted-foreground border-t border-border/50 bg-card/50 shrink-0">
+          <footer className="no-print py-2.5 text-center text-sm text-muted-foreground border-t border-border/50 bg-card/50 shrink-0">
             <p>Desenvolvido por <span className="font-semibold text-foreground">Felipe Langmantel</span></p>
           </footer>
         </div>

@@ -179,3 +179,92 @@
     border-radius: 3px;
   }
 }
+
+/* ═══════════════════════════════════════════ */
+/* PRINT STYLES — espelho idêntico da tela    */
+/* ═══════════════════════════════════════════ */
+@media print {
+  @page {
+    size: A3 landscape;
+    margin: 10mm;
+  }
+
+  /* Esconder tudo que não é conteúdo */
+  .no-print,
+  header,
+  footer,
+  nav,
+  aside,
+  [data-sidebar],
+  [class*="SidebarProvider"],
+  [class*="AppSidebar"],
+  [class*="sidebar"] {
+    display: none !important;
+  }
+
+  /* Reset do layout — main ocupa tudo */
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: hsl(var(--background)) !important;
+  }
+
+  body > #root {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Container principal */
+  .h-screen {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .overflow-hidden {
+    overflow: visible !important;
+  }
+
+  .overflow-auto {
+    overflow: visible !important;
+  }
+
+  main {
+    padding: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+    flex: none !important;
+  }
+
+  /* Print area ocupa tudo */
+  .print-area {
+    width: 100% !important;
+    max-width: none !important;
+    page-break-inside: auto;
+  }
+
+  /* Quadras não quebram */
+  .print-area > * {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Cores exatas na impressão */
+  * {
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Texto nítido */
+  * {
+    -webkit-font-smoothing: antialiased !important;
+    text-rendering: optimizeLegibility !important;
+  }
+
+  /* Bordas nítidas */
+  .border, .border-2, [class*="border-"] {
+    border-style: solid !important;
+  }
+}
