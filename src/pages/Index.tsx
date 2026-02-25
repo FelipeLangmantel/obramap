@@ -138,6 +138,12 @@ function Index() {
       const availW = paper.w - 2 * margin;
       const availH = paper.h - 2 * margin - headerH - footerH;
 
+      // Get computed background color from the system to match exactly
+      const rootStyles = getComputedStyle(document.documentElement);
+      const bgHsl = rootStyles.getPropertyValue('--background').trim();
+      // Convert HSL "209 40% 96%" to a hex — approximate: #e8eef4
+      const systemBg = '#e8eef4';
+
       // Force opaque backgrounds for capture
       const originalStyles: { el: HTMLElement; bg: string }[] = [];
       printEl.querySelectorAll<HTMLElement>("*").forEach((el) => {
@@ -147,18 +153,19 @@ function Index() {
         if (rgbaMatch && rgbaMatch[4] && parseFloat(rgbaMatch[4]) < 1) {
           originalStyles.push({ el, bg: el.style.backgroundColor });
           const alpha = parseFloat(rgbaMatch[4]);
-          const r = Math.round(parseInt(rgbaMatch[1]) * alpha + 255 * (1 - alpha));
-          const g = Math.round(parseInt(rgbaMatch[2]) * alpha + 255 * (1 - alpha));
-          const b = Math.round(parseInt(rgbaMatch[3]) * alpha + 255 * (1 - alpha));
+          const r = Math.round(parseInt(rgbaMatch[1]) * alpha + 232 * (1 - alpha));
+          const g = Math.round(parseInt(rgbaMatch[2]) * alpha + 238 * (1 - alpha));
+          const b = Math.round(parseInt(rgbaMatch[3]) * alpha + 244 * (1 - alpha));
           el.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
         }
       });
 
+      // Scale 2 is enough for sharp text — scale 4 causes blurry downscaling
       const canvas = await html2canvasLib(printEl, {
-        scale: 4,
+        scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: "#ffffff",
+        backgroundColor: systemBg,
         imageTimeout: 0,
         removeContainer: true,
       });
@@ -181,16 +188,20 @@ function Index() {
       const dateStr = now.toLocaleDateString("pt-BR");
       const timeStr = now.toLocaleTimeString("pt-BR");
 
-      // ── Elegant header (light blue accent) ──
-      pdf.setFillColor(59, 130, 246); // blue-500
-      pdf.rect(margin, margin, availW, 2, "F"); // thin accent line
+      // ── Page background matching system ──
+      pdf.setFillColor(232, 238, 244);
+      pdf.rect(0, 0, paper.w, paper.h, "F");
+
+      // ── Elegant header ──
+      pdf.setFillColor(59, 130, 246);
+      pdf.rect(margin, margin, availW, 2, "F");
       pdf.setFontSize(14);
       pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(30, 30, 30);
+      pdf.setTextColor(30, 41, 59);
       pdf.text(`Mapa de Obras — ${currentProject.name}`, margin, margin + 9);
       pdf.setFontSize(8);
       pdf.setFont("helvetica", "normal");
-      pdf.setTextColor(100, 100, 100);
+      pdf.setTextColor(100, 116, 139);
       pdf.text(`${totalHouses} Casas  •  ${quadrasCount} Quadras  •  ${paper.name} Paisagem  •  ${dateStr} ${timeStr}`, margin, margin + 13);
 
       // ── Image: fill available space ──
@@ -199,12 +210,12 @@ function Index() {
       const imgData = canvas.toDataURL("image/png");
       pdf.addImage(imgData, "PNG", imgX, imgY, imgW, imgH);
 
-      // ── Clean footer (no dark background) ──
+      // ── Clean footer ──
       const footerY = paper.h - margin - 2;
-      pdf.setDrawColor(220, 220, 220);
+      pdf.setDrawColor(203, 213, 225);
       pdf.line(margin, footerY, paper.w - margin, footerY);
       pdf.setFontSize(6.5);
-      pdf.setTextColor(160, 160, 160);
+      pdf.setTextColor(148, 163, 184);
       pdf.text(`© ${now.getFullYear()} ObraMap`, margin, footerY + 4);
       pdf.text(`Desenvolvido por Felipe Langmantel`, paper.w / 2, footerY + 4, { align: "center" });
       pdf.text(`${paper.name} (${paper.w}×${paper.h}mm)`, paper.w - margin, footerY + 4, { align: "right" });
