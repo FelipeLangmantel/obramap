@@ -462,10 +462,11 @@ export function InteractiveMapView() {
     return { quadras: layouts, houses: housePositions };
   }, []);
 
-  // Initialize editing when entering edit mode
+  // Initialize editing when entering edit mode - detect new houses not in saved layout
   useEffect(() => {
     if (isEditMode && currentProject) {
       const projectQuadras = currentProject.quadras || [];
+      const allHouseIds = new Set(houses.map(h => h.id));
       
       let initialQuadras: QuadraLayout[];
       let initialHouses: HousePosition[];
@@ -476,7 +477,28 @@ export function InteractiveMapView() {
           id: projectQuadras.find(pq => pq.name === q.name)?.id || q.id,
           visible: q.visible !== false,
         }));
-        initialHouses = customLayout.houses;
+        initialHouses = [...customLayout.houses];
+        
+        // Detect new houses that exist in the project but not in the saved layout
+        const savedHouseIds = new Set(customLayout.houses.map(h => h.id));
+        const newHouseIds = [...allHouseIds].filter(id => !savedHouseIds.has(id));
+        
+        if (newHouseIds.length > 0) {
+          // Place new houses in a staging area (top-left, stacked)
+          const stagingX = 30;
+          const stagingY = 30;
+          newHouseIds.forEach((houseId, idx) => {
+            initialHouses.push({
+              id: houseId,
+              x: stagingX + (idx % 10) * (BASE_HOUSE_RADIUS * 3),
+              y: stagingY + Math.floor(idx / 10) * (BASE_HOUSE_RADIUS * 3),
+            });
+          });
+          toast.info(`${newHouseIds.length} nova(s) casa(s) detectada(s). Posicione-as no mapa.`);
+        }
+        
+        // Also remove houses from layout that no longer exist in the project
+        initialHouses = initialHouses.filter(h => allHouseIds.has(h.id));
       } else {
         const { quadras, houses: defaultHouses } = generateDefaultLayout(projectQuadras, houses);
         initialQuadras = quadras;
@@ -1349,7 +1371,21 @@ export function InteractiveMapView() {
       return { quadras: editingQuadras, houses: editingHouses };
     }
     if (customLayout?.quadras && customLayout.houses) {
-      return { quadras: customLayout.quadras, houses: customLayout.houses };
+      // In view mode, also include new houses not yet positioned (show them so user knows to edit)
+      const allHouseIds = new Set(houses.map(h => h.id));
+      const savedHouseIds = new Set(customLayout.houses.map(h => h.id));
+      const missingHouses: HousePosition[] = [];
+      
+      allHouseIds.forEach(id => {
+        if (!savedHouseIds.has(id)) {
+          missingHouses.push({ id, x: 30 + (missingHouses.length % 10) * (BASE_HOUSE_RADIUS * 3), y: 30 + Math.floor(missingHouses.length / 10) * (BASE_HOUSE_RADIUS * 3) });
+        }
+      });
+      
+      // Also filter out houses that no longer exist
+      const validHouses = customLayout.houses.filter(h => allHouseIds.has(h.id));
+      
+      return { quadras: customLayout.quadras, houses: [...validHouses, ...missingHouses] };
     }
     return generateDefaultLayout(currentProject?.quadras || [], houses);
   }, [isEditMode, editingQuadras, editingHouses, customLayout, currentProject?.quadras, houses, generateDefaultLayout]);
