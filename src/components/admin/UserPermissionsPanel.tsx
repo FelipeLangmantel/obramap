@@ -56,6 +56,7 @@ import {
   Key
 } from "lucide-react";
 import { z } from "zod";
+import { cn } from "@/lib/utils";
 
 type AppRole = "admin" | "editor" | "viewer";
 
@@ -105,29 +106,29 @@ interface UserSession {
   is_active: boolean;
 }
 
-// Módulos do sistema atualizados conforme especificação
+// Módulos do sistema - IDs alinhados com permissionId do AppSidebar
 const MENU_OPTIONS = [
-  { id: "mapa", label: "Mapa de Obras", icon: "🗺️" },
-  { id: "planejamento", label: "Planejamento", icon: "📅" },
-  { id: "smart-planning", label: "Planejamento Inteligente", icon: "🎯" },
-  { id: "producao", label: "Produção", icon: "🏗️" },
-  { id: "custos", label: "Custos da Obra", icon: "💰" },
-  { id: "suprimentos", label: "Suprimentos", icon: "📦" },
-  { id: "financeiro", label: "Fluxo Financeiro", icon: "💳" },
-  { id: "entrega", label: "Entrega & Pós-Obra", icon: "📋" },
-  { id: "diretoria", label: "Painel da Diretoria", icon: "👑" },
-  { id: "graficos", label: "Gráficos", icon: "📈" },
+  { id: "mapa", label: "Mapa de Obras", moduleKeys: ["home", "map", "interactive-map", "3d-map"] },
+  { id: "planejamento", label: "Planejamento", moduleKeys: ["planning", "measurement-planning", "long-term-planning"] },
+  { id: "smart-planning", label: "Planej. Inteligente", moduleKeys: ["smart-planning"] },
+  { id: "producao", label: "Produção", moduleKeys: ["production"] },
+  { id: "custos", label: "Custos da Obra", moduleKeys: ["costs"] },
+  { id: "suprimentos", label: "Suprimentos", moduleKeys: ["supplies"] },
+  { id: "financeiro", label: "Fluxo Financeiro", moduleKeys: ["financial-flow", "project-contract"] },
+  { id: "entrega", label: "Entrega & Pós-Obra", moduleKeys: ["delivery"] },
+  { id: "diretoria", label: "Painel da Diretoria", moduleKeys: ["board-decisions"] },
+  { id: "graficos", label: "Gráficos", moduleKeys: ["charts"] },
 ];
 
 const MANAGEMENT_OPTIONS = [
-  { id: "projetos", label: "Projetos", icon: "🏢" },
-  { id: "quadras", label: "Quadras", icon: "📍" },
-  { id: "macros", label: "Macros", icon: "🔧" },
-  { id: "escopos", label: "Escopos", icon: "📋" },
-  { id: "insumos", label: "Insumos", icon: "🧱" },
-  { id: "fornecedores", label: "Fornecedores", icon: "🚚" },
-  { id: "mao_de_obra", label: "Mão de Obra", icon: "👷" },
-  { id: "usuarios", label: "Usuários", icon: "👥" },
+  { id: "projetos", label: "Projetos" },
+  { id: "quadras", label: "Quadras" },
+  { id: "macros", label: "Macros" },
+  { id: "escopos", label: "Escopos" },
+  { id: "insumos", label: "Insumos" },
+  { id: "fornecedores", label: "Fornecedores" },
+  { id: "mao_de_obra", label: "Mão de Obra" },
+  { id: "usuarios", label: "Usuários" },
 ];
 
 const createUserSchema = z.object({
@@ -138,12 +139,13 @@ const createUserSchema = z.object({
 });
 
 export function UserPermissionsPanel() {
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, company } = useAuth();
   const { projects } = useConstruction();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [permissions, setPermissions] = useState<Record<string, UserPermission>>({});
   const [departments, setDepartments] = useState<Department[]>([]);
   const [sessions, setSessions] = useState<UserSession[]>([]);
+  const [companyModules, setCompanyModules] = useState<{module_key: string; status: string}[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("users");
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
@@ -181,6 +183,15 @@ export function UserPermissionsPanel() {
       if (rolesRes.error) throw rolesRes.error;
       if (departmentsRes.error) throw departmentsRes.error;
 
+      // Fetch company modules separately
+      if (company?.id) {
+        const { data: modulesData } = await supabase
+          .from("company_modules")
+          .select("module_key, status")
+          .eq("company_id", company.id);
+        setCompanyModules(modulesData || []);
+      }
+
       const usersWithRoles: UserWithRole[] = (profilesRes.data || []).map((profile) => {
         const userRole = rolesRes.data?.find((r) => r.user_id === profile.user_id);
         return {
@@ -200,8 +211,8 @@ export function UserPermissionsPanel() {
           user_id: p.user_id,
           department: p.department || "geral",
           allowed_project_ids: p.allowed_project_ids,
-          visible_menus: (p.visible_menus as string[]) || MENU_OPTIONS.map(m => m.id),
-          visible_management_sections: (p.visible_management_sections as string[]) || MANAGEMENT_OPTIONS.map(m => m.id),
+          visible_menus: (p.visible_menus as string[]) || [],
+          visible_management_sections: (p.visible_management_sections as string[]) || [],
         };
       });
 
@@ -301,16 +312,29 @@ export function UserPermissionsPanel() {
     }
   };
 
+  // Filter menu options to only show modules active for this company
+  const getActiveMenuOptions = () => {
+    if (companyModules.length === 0) return MENU_OPTIONS; // No config = show all
+    return MENU_OPTIONS.filter(menu => {
+      // Check if any of the menu's module keys are active (not disabled)
+      return menu.moduleKeys.some(key => {
+        const mod = companyModules.find(m => m.module_key === key);
+        return !mod || mod.status !== "disabled"; // Show if not found (default active) or not disabled
+      });
+    });
+  };
+
   const openPermissionDialog = (userId: string) => {
     setSelectedUserId(userId);
     const existingPermission = permissions[userId];
+    // New users get empty permissions (all deselected)
     setEditingPermission(existingPermission || {
       id: "",
       user_id: userId,
       department: "geral",
       allowed_project_ids: null,
-      visible_menus: MENU_OPTIONS.map(m => m.id),
-      visible_management_sections: MANAGEMENT_OPTIONS.map(m => m.id),
+      visible_menus: [],
+      visible_management_sections: [],
     });
     setIsPermissionDialogOpen(true);
   };
@@ -826,14 +850,17 @@ export function UserPermissionsPanel() {
         </DialogContent>
       </Dialog>
 
-      {/* Permission Dialog */}
+      {/* Permission Dialog - Professional Redesign */}
       <Dialog open={isPermissionDialogOpen} onOpenChange={setIsPermissionDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle>Configurar Permissões</DialogTitle>
-            <DialogDescription>
-              {users.find(u => u.user_id === selectedUserId)?.display_name} - 
-              Defina quais menus, seções e obras este usuário pode acessar
+            <DialogTitle className="text-lg font-semibold">Configurar Permissões</DialogTitle>
+            <DialogDescription className="text-sm">
+              <span className="font-medium text-foreground">
+                {users.find(u => u.user_id === selectedUserId)?.display_name}
+              </span>
+              {" · "}
+              {getRoleBadge(users.find(u => u.user_id === selectedUserId)?.role || "viewer")}
             </DialogDescription>
           </DialogHeader>
           
@@ -841,15 +868,15 @@ export function UserPermissionsPanel() {
             <div className="space-y-6">
               {/* Department */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4" />
+                <Label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Building2 className="h-3.5 w-3.5" />
                   Departamento
                 </Label>
                 <Select
                   value={editingPermission?.department || "geral"}
                   onValueChange={(v) => setEditingPermission(prev => prev ? { ...prev, department: v } : null)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -863,85 +890,112 @@ export function UserPermissionsPanel() {
 
               {/* Allowed Projects */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4" />
+                <Label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Building2 className="h-3.5 w-3.5" />
                   Obras Permitidas
                 </Label>
-                <p className="text-xs text-muted-foreground mb-2">
+                <p className="text-xs text-muted-foreground">
                   Se nenhuma obra for selecionada, o usuário terá acesso a todas.
                 </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {projects.map((project) => (
-                    <div
-                      key={project.id}
-                      className="flex items-center space-x-2 p-2 bg-muted rounded"
-                    >
-                      <Checkbox
-                        id={`project-${project.id}`}
-                        checked={editingPermission?.allowed_project_ids?.includes(project.id) || false}
-                        onCheckedChange={() => toggleProject(project.id)}
-                      />
-                      <label htmlFor={`project-${project.id}`} className="text-sm cursor-pointer flex-1">
-                        {project.name}
-                      </label>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 gap-1.5">
+                  {projects.map((project) => {
+                    const isChecked = editingPermission?.allowed_project_ids?.includes(project.id) || false;
+                    return (
+                      <button
+                        key={project.id}
+                        type="button"
+                        onClick={() => toggleProject(project.id)}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2 rounded-md border text-sm text-left transition-colors",
+                          isChecked
+                            ? "border-primary bg-primary/5 text-foreground"
+                            : "border-border bg-background text-muted-foreground hover:border-muted-foreground/30"
+                        )}
+                      >
+                        <div className={cn(
+                          "h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                          isChecked ? "bg-primary border-primary" : "border-muted-foreground/30"
+                        )}>
+                          {isChecked && <Settings className="h-2.5 w-2.5 text-primary-foreground" />}
+                        </div>
+                        <span className="truncate">{project.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Menu Visibility */}
+              {/* Menu Visibility - Filtered by active company modules */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Menu className="h-4 w-4" />
-                  Menus Visíveis
+                <Label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Menu className="h-3.5 w-3.5" />
+                  Módulos do Sistema
                 </Label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {MENU_OPTIONS.map((menu) => (
-                    <div
-                      key={menu.id}
-                      className="flex items-center space-x-2 p-2 bg-muted rounded"
-                    >
-                      <Checkbox
-                        id={`menu-${menu.id}`}
-                        checked={editingPermission?.visible_menus?.includes(menu.id) || false}
-                        onCheckedChange={() => toggleMenu(menu.id)}
-                      />
-                      <label htmlFor={`menu-${menu.id}`} className="text-sm cursor-pointer flex-1">
-                        {menu.icon} {menu.label}
-                      </label>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
+                  {getActiveMenuOptions().map((menu) => {
+                    const isChecked = editingPermission?.visible_menus?.includes(menu.id) || false;
+                    return (
+                      <button
+                        key={menu.id}
+                        type="button"
+                        onClick={() => toggleMenu(menu.id)}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2.5 rounded-md border text-sm text-left transition-colors",
+                          isChecked
+                            ? "border-primary bg-primary/5 text-foreground font-medium"
+                            : "border-border bg-background text-muted-foreground hover:border-muted-foreground/30"
+                        )}
+                      >
+                        <div className={cn(
+                          "h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                          isChecked ? "bg-primary border-primary" : "border-muted-foreground/30"
+                        )}>
+                          {isChecked && <Settings className="h-2.5 w-2.5 text-primary-foreground" />}
+                        </div>
+                        <span className="truncate">{menu.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Management Sections */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <FolderCog className="h-4 w-4" />
+                <Label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <FolderCog className="h-3.5 w-3.5" />
                   Seções de Gerenciamento
                 </Label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {MANAGEMENT_OPTIONS.map((section) => (
-                    <div
-                      key={section.id}
-                      className="flex items-center space-x-2 p-2 bg-muted rounded"
-                    >
-                      <Checkbox
-                        id={`section-${section.id}`}
-                        checked={editingPermission?.visible_management_sections?.includes(section.id) || false}
-                        onCheckedChange={() => toggleManagement(section.id)}
-                      />
-                      <label htmlFor={`section-${section.id}`} className="text-sm cursor-pointer flex-1">
-                        {section.icon} {section.label}
-                      </label>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
+                  {MANAGEMENT_OPTIONS.map((section) => {
+                    const isChecked = editingPermission?.visible_management_sections?.includes(section.id) || false;
+                    return (
+                      <button
+                        key={section.id}
+                        type="button"
+                        onClick={() => toggleManagement(section.id)}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2.5 rounded-md border text-sm text-left transition-colors",
+                          isChecked
+                            ? "border-primary bg-primary/5 text-foreground font-medium"
+                            : "border-border bg-background text-muted-foreground hover:border-muted-foreground/30"
+                        )}
+                      >
+                        <div className={cn(
+                          "h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                          isChecked ? "bg-primary border-primary" : "border-muted-foreground/30"
+                        )}>
+                          {isChecked && <Settings className="h-2.5 w-2.5 text-primary-foreground" />}
+                        </div>
+                        <span className="truncate">{section.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           </ScrollArea>
 
-          <DialogFooter>
+          <DialogFooter className="border-t pt-4">
             <Button variant="outline" onClick={() => setIsPermissionDialogOpen(false)}>
               Cancelar
             </Button>
