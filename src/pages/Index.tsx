@@ -166,6 +166,16 @@ function Index() {
 
                 {activeView === "map" && (
                   <div className="flex-1 flex flex-col gap-4">
+                    {/* Print header — hidden on screen, shown on print */}
+                    <div className="print-header hidden items-center justify-between bg-secondary text-secondary-foreground rounded-lg px-4 py-2 mb-1">
+                      <div>
+                        <h1 className="text-base font-bold">{currentProject?.name || "Mapa de Obras"}</h1>
+                        <p className="text-[10px] opacity-80">
+                          {currentProject?.houses.length} Casas • {currentProject?.quadras.length} Quadras • Impresso em {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                      <p className="text-[10px] font-medium opacity-70">ObraMap — Sistema de Gestão de Obras</p>
+                    </div>
                     <div ref={printAreaRef} className="print-area flex flex-col gap-4">
                       <StatsCards />
                       <Legend />
