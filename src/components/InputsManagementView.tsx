@@ -368,7 +368,7 @@ export function InputsManagementView() {
           toast.success('Unidade atualizada!');
         }
       } else {
-        await supabase.from('units').insert({ name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim(), project_id: defaultProjectId });
+        await supabase.from('units').insert({ name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim(), project_id: defaultProjectId, company_id: companyId! });
         toast.success('Unidade cadastrada!');
       }
       setNewUnit({ name: '', abbreviation: '' });
