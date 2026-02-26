@@ -383,7 +383,7 @@ export function ImportInputsDialog({
       for (const familyName of newFamiliesToCreate) {
         const { data: newFamily, error } = await supabase
           .from('material_families')
-          .insert({ project_id: projectId, name: familyName })
+          .insert({ project_id: projectId, company_id: companyId!, name: familyName })
           .select()
           .single();
         
