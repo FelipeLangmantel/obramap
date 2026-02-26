@@ -33,7 +33,8 @@ interface Supplier {
 }
 
 export function SuppliersManagementView() {
-  const { canEdit } = useAuth();
+  const { canEdit, company } = useAuth();
+  const companyId = company?.id;
   const { currentProject, projects } = useConstruction();
   
   const defaultProjectId = currentProject?.id || projects[0]?.id;
