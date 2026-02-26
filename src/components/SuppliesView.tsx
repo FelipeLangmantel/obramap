@@ -861,7 +861,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         await supabase.from('suppliers').update(payload).eq('id', editingSupplier.id);
         toast.success('Fornecedor atualizado!');
       } else {
-        await supabase.from('suppliers').insert({ ...payload, project_id: projectId });
+        await supabase.from('suppliers').insert({ ...payload, project_id: projectId, company_id: companyId! });
         toast.success('Fornecedor cadastrado!');
       }
       setSupplierDialogOpen(false);
