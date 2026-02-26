@@ -229,7 +229,7 @@ export function InteractiveMapView() {
   const [searchTerm, setSearchTerm] = useState("");
   const [mapImage, setMapImage] = useState<string | null>(null);
   const [customLayout, setCustomLayout] = useState<MapLayout | null>(null);
-  const [isLayoutLoaded, setIsLayoutLoaded] = useState(false);
+  const [isLayoutLoaded, setIsLayoutLoaded] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   
@@ -277,7 +277,7 @@ export function InteractiveMapView() {
 
   // Load saved map layout from database for current project
   useEffect(() => {
-    setIsLayoutLoaded(false);
+    // Don't block rendering - load layout in background
     
     const loadLayout = async () => {
       if (!currentProject?.id) {
