@@ -219,7 +219,8 @@ interface SuppliesViewProps {
 
 export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   const { currentProject } = useConstruction();
-  const { canEdit } = useAuth();
+  const { canEdit, company } = useAuth();
+  const companyId = company?.id;
   const projectId = currentProject?.id;
 
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
