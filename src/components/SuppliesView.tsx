@@ -677,6 +677,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
     try {
       const payload = {
         project_id: projectId,
+        company_id: companyId!,
         name: newInput.name.trim(),
         unit: newInput.unit,
         category: newInput.category,
