@@ -128,7 +128,7 @@ export function SuppliersManagementView() {
         await supabase.from('suppliers').update({ ...payload, project_id: projectIdToUse, company_id: companyId! }).eq('id', editingSupplier.id);
         toast.success('Fornecedor atualizado!');
       } else {
-        await supabase.from('suppliers').insert({ ...payload, project_id: projectIdToUse });
+        await supabase.from('suppliers').insert({ ...payload, project_id: projectIdToUse, company_id: companyId! });
         toast.success('Fornecedor cadastrado!');
       }
       setSupplierDialogOpen(false);

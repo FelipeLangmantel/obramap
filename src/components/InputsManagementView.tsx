@@ -454,6 +454,7 @@ export function InputsManagementView() {
           name: normalizedName, 
           color: newFamily.color, 
           project_id: defaultProjectId,
+          company_id: companyId!,
           display_order: maxOrder
         });
         if (error) throw error;

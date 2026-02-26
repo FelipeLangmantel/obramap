@@ -427,6 +427,7 @@ export function ImportInputsDialog({
         const resolvedUnit = unitAbbreviationMap[normalizedUnit] || input.unit;
         return {
           project_id: projectId,
+          company_id: companyId!,
           name: input.name,
           unit: resolvedUnit,
           category: 'material' as const,

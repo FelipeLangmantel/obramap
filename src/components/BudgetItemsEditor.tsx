@@ -145,6 +145,7 @@ export function BudgetItemsEditor({
         // Create default families
         const insertData = DEFAULT_FAMILIES.map(f => ({
           project_id: projectId,
+          company_id: companyId!,
           name: f.name,
           icon: f.icon,
           color: f.color,

@@ -315,6 +315,7 @@ export function ImportBudgetItemsDialog({
           .from('inputs')
           .insert({
             project_id: projectId,
+            company_id: companyId!,
             name: item.name,
             unit: item.unit,
             category: item.category,

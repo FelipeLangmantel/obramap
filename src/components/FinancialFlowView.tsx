@@ -332,6 +332,7 @@ export function FinancialFlowView() {
     try {
       const { data, error } = await supabase.from("suppliers").insert({
         project_id: currentProject.id,
+        company_id: companyId!,
         name: newSupplier.name,
         supplier_type: newSupplier.supplier_type,
         supplier_scope: newSupplier.supplier_scope,
