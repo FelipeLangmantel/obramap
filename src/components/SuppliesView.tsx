@@ -803,7 +803,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         setFamilies(prev => prev.map(f => f.id === editingFamily.id ? { ...f, name: newFamily.name.trim(), color: newFamily.color } : f));
         toast.success('Família atualizada!');
       } else {
-        const { data, error } = await supabase.from('material_families').insert({ project_id: projectId, name: newFamily.name.trim(), color: newFamily.color, display_order: families.length }).select().single();
+        const { data, error } = await supabase.from('material_families').insert({ project_id: projectId, company_id: companyId!, name: newFamily.name.trim(), color: newFamily.color, display_order: families.length }).select().single();
         if (error) throw error;
         if (data) {
           setFamilies(prev => [...prev, { id: data.id, name: data.name, color: data.color || '#9ca3af', lead_time_days: data.lead_time_days || 7 }]);
