@@ -277,7 +277,7 @@ export function InteractiveMapView() {
 
   // Load saved map layout from database for current project
   useEffect(() => {
-    setIsLayoutLoaded(false);
+    // Don't block rendering - load layout in background
     
     const loadLayout = async () => {
       if (!currentProject?.id) {
