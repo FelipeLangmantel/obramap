@@ -1792,19 +1792,6 @@ export function InteractiveMapView() {
               />
             )}
             
-            {/* Legend */}
-            {!isEditMode && (
-              <g transform={`translate(20, 20)`}>
-                <rect x="0" y="0" width="120" height={legendItems.length * 18 + 25} fill="hsl(var(--card) / 0.95)" stroke="hsl(var(--border))" rx="4" />
-                <text x="8" y="15" fill="hsl(var(--foreground))" fontSize="10" fontWeight="600">Legenda</text>
-                {legendItems.map((item, idx) => (
-                  <g key={item.id} transform={`translate(8, ${25 + idx * 16})`}>
-                    <circle cx="5" cy="5" r="5" fill={item.color} />
-                    <text x="15" y="8" fill="hsl(var(--muted-foreground))" fontSize="8">{item.name}</text>
-                  </g>
-                ))}
-              </g>
-            )}
           </svg>
         </div>
       </div>
