@@ -124,9 +124,10 @@ export function InputsManagementView() {
         );
         const missingUnits = [...inputUnits].filter(u => !existingAbbreviations.has((u as string).toLowerCase()));
         
-        if (missingUnits.length > 0) {
+        if (missingUnits.length > 0 && companyId) {
           const toInsert = missingUnits.map(u => ({
             project_id: defaultProjectId,
+            company_id: companyId,
             name: u as string,
             abbreviation: u as string,
           }));
