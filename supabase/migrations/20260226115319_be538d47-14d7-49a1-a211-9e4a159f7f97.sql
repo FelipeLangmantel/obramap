@@ -1,0 +1,1 @@
+ALTER TABLE public.map_layer_stage_links ADD COLUMN IF NOT EXISTS display_name TEXT;

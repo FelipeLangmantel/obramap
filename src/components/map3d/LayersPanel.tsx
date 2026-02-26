@@ -1,5 +1,7 @@
-import { Eye, EyeOff, Link2, Unlink } from "lucide-react";
+import { useState } from "react";
+import { Eye, EyeOff, Link2, Unlink, Pencil, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -16,21 +18,42 @@ interface LayersPanelProps {
   onToggleLayer: (name: string) => void;
   onOpacityChange: (name: string, opacity: number) => void;
   onOpenLinkDialog: () => void;
+  onRenameLayer?: (name: string, newDisplayName: string) => void;
 }
 
 export function LayersPanel({
   layers, links, autoMode, onAutoModeChange,
-  onToggleLayer, onOpacityChange, onOpenLinkDialog,
+  onToggleLayer, onOpacityChange, onOpenLinkDialog, onRenameLayer,
 }: LayersPanelProps) {
+  const [editingLayer, setEditingLayer] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+
   if (layers.length === 0) return null;
 
+  const startRename = (layer: ModelLayer) => {
+    setEditingLayer(layer.name);
+    setEditName(layer.displayName);
+  };
+
+  const confirmRename = (layerName: string) => {
+    if (editName.trim() && onRenameLayer) {
+      onRenameLayer(layerName, editName.trim());
+    }
+    setEditingLayer(null);
+  };
+
+  const cancelRename = () => {
+    setEditingLayer(null);
+    setEditName("");
+  };
+
   return (
-    <Card className="absolute top-4 left-4 w-72 max-h-[calc(100%-2rem)] z-10 bg-background/95 backdrop-blur-sm">
-      <CardHeader className="pb-2 px-3 pt-3">
+    <Card className="absolute top-4 left-4 w-80 max-h-[calc(100%-2rem)] z-10 bg-background/95 backdrop-blur-sm flex flex-col">
+      <CardHeader className="pb-2 px-3 pt-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm">Camadas ({layers.length})</CardTitle>
           <Button variant="outline" size="sm" onClick={onOpenLinkDialog} className="h-7 text-xs">
-            <Link2 className="h-3 w-3 mr-1" />Vincular Etapas
+            <Link2 className="h-3 w-3 mr-1" />Vincular Serviços
           </Button>
         </div>
         <div className="flex items-center gap-2 mt-2">
@@ -44,32 +67,63 @@ export function LayersPanel({
           </Label>
         </div>
       </CardHeader>
-      <CardContent className="px-3 pb-3">
-        <ScrollArea className="max-h-[400px]">
-          <div className="space-y-1.5">
+      <CardContent className="px-3 pb-3 flex-1 min-h-0">
+        <ScrollArea className="h-full max-h-[calc(100vh-14rem)]">
+          <div className="space-y-1.5 pr-3">
             {layers.map((layer) => {
               const link = links.find(l => l.layer_name === layer.name);
+              const isEditing = editingLayer === layer.name;
               return (
                 <div key={layer.name} className="p-2 rounded-md border border-border/50 bg-muted/30 space-y-1.5">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => onToggleLayer(layer.name)}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
+                      className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
                     >
                       {layer.visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
                     </button>
-                    <span className="text-xs font-medium flex-1 truncate" title={layer.name}>
-                      {layer.name}
-                    </span>
-                    {link?.stage_id ? (
-                      <Badge variant="secondary" className="text-[10px] h-4 px-1">
+                    {isEditing ? (
+                      <div className="flex items-center gap-1 flex-1 min-w-0">
+                        <Input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="h-6 text-xs px-1.5"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") confirmRename(layer.name);
+                            if (e.key === "Escape") cancelRename();
+                          }}
+                        />
+                        <button onClick={() => confirmRename(layer.name)} className="text-primary hover:text-primary/80 flex-shrink-0">
+                          <Check className="h-3.5 w-3.5" />
+                        </button>
+                        <button onClick={cancelRename} className="text-muted-foreground hover:text-foreground flex-shrink-0">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="text-xs font-medium flex-1 truncate" title={layer.name}>
+                          {layer.displayName}
+                        </span>
+                        <button
+                          onClick={() => startRename(layer)}
+                          className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                          title="Renomear camada"
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </button>
+                      </>
+                    )}
+                    {!isEditing && (link?.stage_id || link?.scope_id ? (
+                      <Badge variant="secondary" className="text-[10px] h-4 px-1 flex-shrink-0">
                         <Link2 className="h-2.5 w-2.5 mr-0.5" />vinculado
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-[10px] h-4 px-1 text-muted-foreground">
+                      <Badge variant="outline" className="text-[10px] h-4 px-1 text-muted-foreground flex-shrink-0">
                         <Unlink className="h-2.5 w-2.5 mr-0.5" />livre
                       </Badge>
-                    )}
+                    ))}
                   </div>
                   {layer.progress !== undefined && autoMode && (
                     <div className="flex items-center gap-2">
