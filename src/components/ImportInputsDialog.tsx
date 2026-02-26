@@ -407,7 +407,8 @@ export function ImportInputsDialog({
 
         if (!existingUnit) {
           const { data: createdUnit } = await supabase.from('units').insert({ 
-            project_id: projectId, 
+            project_id: projectId,
+            company_id: companyId!,
             name: unitName,
             abbreviation: unitName
           }).select().single();
