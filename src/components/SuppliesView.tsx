@@ -769,7 +769,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         
         toast.success('Unidade atualizada! Orçamentos atualizados automaticamente.');
       } else {
-        await supabase.from('units').insert({ project_id: projectId, name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim() });
+        await supabase.from('units').insert({ project_id: projectId, company_id: companyId!, name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim() });
         toast.success('Unidade cadastrada!');
       }
       setUnitDialogOpen(false);
