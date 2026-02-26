@@ -402,7 +402,6 @@ export function Map3DView() {
     const extracted = layerManager.extractLayers(scene);
     if (extracted.length > 0) {
       console.log(`[3D] Extracted ${extracted.length} layers from model`);
-      setShowLayers(true);
     }
   }, [layerManager.extractLayers]);
 
