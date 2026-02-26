@@ -185,7 +185,8 @@ function generateBoletoPayload(barcodeOrLine: string): string {
 
 export function FinancialFlowView() {
   const { currentProject } = useConstruction();
-  const { canEdit } = useAuth();
+  const { canEdit, company } = useAuth();
+  const companyId = company?.id;
   const [entries, setEntries] = useState<FinancialEntry[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
