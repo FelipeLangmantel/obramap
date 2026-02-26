@@ -152,14 +152,16 @@ function ZoomToMouseControls() {
     <OrbitControls
       ref={controlsRef}
       makeDefault enablePan enableRotate
-      enableZoom={false}
+      enableZoom={true}
       maxPolarAngle={Math.PI / 2 - 0.02}
-      minDistance={0}
+      minDistance={0.1}
       maxDistance={Infinity}
       panSpeed={1.5}
       rotateSpeed={1.0}
+      zoomSpeed={1.0}
       enableDamping
       dampingFactor={0.08}
+      zoomToCursor
       touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
       mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }}
     />

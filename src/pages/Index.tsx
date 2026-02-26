@@ -7,7 +7,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { HomeDashboard } from "@/components/HomeDashboard";
 import { StatsCards } from "@/components/StatsCards";
 import { FilterBar } from "@/components/FilterBar";
-import { Legend } from "@/components/Legend";
+
 import { QuadrasGrid } from "@/components/QuadrasGrid";
 import { HouseDetails } from "@/components/HouseDetails";
 import { ChartsView } from "@/components/ChartsView";
@@ -178,7 +178,7 @@ function Index() {
                     </div>
                     <div ref={printAreaRef} className="print-area flex flex-col gap-4">
                       <StatsCards />
-                      <Legend />
+                      
                       <QuadrasGrid ref={mapGridRef} />
                     </div>
                     {/* Print footer — hidden on screen, shown on print */}
