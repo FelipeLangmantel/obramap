@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface MaterialFamily {
   id: string;
@@ -87,6 +88,8 @@ export function ImportBudgetItemsDialog({
   const [searchInputTerm, setSearchInputTerm] = useState("");
   const [activeMatchPopover, setActiveMatchPopover] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { company } = useAuth();
+  const companyId = company?.id;
 
   // Normalize text for comparison
   const normalize = (text: string) => {
@@ -312,6 +315,7 @@ export function ImportBudgetItemsDialog({
           .from('inputs')
           .insert({
             project_id: projectId,
+            company_id: companyId!,
             name: item.name,
             unit: item.unit,
             category: item.category,

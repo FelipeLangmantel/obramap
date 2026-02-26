@@ -33,7 +33,8 @@ interface Supplier {
 }
 
 export function SuppliersManagementView() {
-  const { canEdit } = useAuth();
+  const { canEdit, company } = useAuth();
+  const companyId = company?.id;
   const { currentProject, projects } = useConstruction();
   
   const defaultProjectId = currentProject?.id || projects[0]?.id;
@@ -124,10 +125,10 @@ export function SuppliersManagementView() {
       };
       
       if (editingSupplier) {
-        await supabase.from('suppliers').update({ ...payload, project_id: projectIdToUse }).eq('id', editingSupplier.id);
+        await supabase.from('suppliers').update({ ...payload, project_id: projectIdToUse, company_id: companyId! }).eq('id', editingSupplier.id);
         toast.success('Fornecedor atualizado!');
       } else {
-        await supabase.from('suppliers').insert({ ...payload, project_id: projectIdToUse });
+        await supabase.from('suppliers').insert({ ...payload, project_id: projectIdToUse, company_id: companyId! });
         toast.success('Fornecedor cadastrado!');
       }
       setSupplierDialogOpen(false);

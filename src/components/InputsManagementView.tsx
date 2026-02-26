@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConstruction } from "@/contexts/ConstructionContext";
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ImportInputsDialog } from "./ImportInputsDialog";
@@ -53,7 +54,8 @@ const CATEGORY_LABELS = {
 };
 
 export function InputsManagementView() {
-  const { canEdit } = useAuth();
+  const { canEdit, company } = useAuth();
+  const companyId = company?.id;
   const { currentProject, projects } = useConstruction();
   
   // Use first project as default for creating new items
@@ -122,9 +124,10 @@ export function InputsManagementView() {
         );
         const missingUnits = [...inputUnits].filter(u => !existingAbbreviations.has((u as string).toLowerCase()));
         
-        if (missingUnits.length > 0) {
+        if (missingUnits.length > 0 && companyId) {
           const toInsert = missingUnits.map(u => ({
             project_id: defaultProjectId,
+            company_id: companyId,
             name: u as string,
             abbreviation: u as string,
           }));
@@ -208,7 +211,7 @@ export function InputsManagementView() {
         await supabase.from('inputs').update(payload).eq('id', editingInput.id);
         toast.success('Insumo atualizado!');
       } else {
-        await supabase.from('inputs').insert({ ...payload, project_id: defaultProjectId });
+        await supabase.from('inputs').insert({ ...payload, project_id: defaultProjectId, company_id: companyId! });
         toast.success('Insumo cadastrado!');
       }
       setInputDialogOpen(false);
@@ -365,7 +368,7 @@ export function InputsManagementView() {
           toast.success('Unidade atualizada!');
         }
       } else {
-        await supabase.from('units').insert({ name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim(), project_id: defaultProjectId });
+        await supabase.from('units').insert({ name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim(), project_id: defaultProjectId, company_id: companyId! });
         toast.success('Unidade cadastrada!');
       }
       setNewUnit({ name: '', abbreviation: '' });
@@ -451,6 +454,7 @@ export function InputsManagementView() {
           name: normalizedName, 
           color: newFamily.color, 
           project_id: defaultProjectId,
+          company_id: companyId!,
           display_order: maxOrder
         });
         if (error) throw error;

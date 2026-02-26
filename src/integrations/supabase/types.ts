@@ -773,6 +773,7 @@ export type Database = {
       inputs: {
         Row: {
           category: string
+          company_id: string
           created_at: string
           description: string | null
           id: string
@@ -786,6 +787,7 @@ export type Database = {
         }
         Insert: {
           category?: string
+          company_id: string
           created_at?: string
           description?: string | null
           id?: string
@@ -799,6 +801,7 @@ export type Database = {
         }
         Update: {
           category?: string
+          company_id?: string
           created_at?: string
           description?: string | null
           id?: string
@@ -811,6 +814,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "inputs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inputs_material_family_id_fkey"
             columns: ["material_family_id"]
@@ -1173,7 +1183,7 @@ export type Database = {
       material_families: {
         Row: {
           color: string | null
-          company_id: string | null
+          company_id: string
           created_at: string
           display_order: number
           icon: string | null
@@ -1185,7 +1195,7 @@ export type Database = {
         }
         Insert: {
           color?: string | null
-          company_id?: string | null
+          company_id: string
           created_at?: string
           display_order?: number
           icon?: string | null
@@ -1197,7 +1207,7 @@ export type Database = {
         }
         Update: {
           color?: string | null
-          company_id?: string | null
+          company_id?: string
           created_at?: string
           display_order?: number
           icon?: string | null
@@ -4040,6 +4050,7 @@ export type Database = {
           bank_agency: string | null
           bank_name: string | null
           cnpj_cpf: string | null
+          company_id: string
           created_at: string
           email: string | null
           id: string
@@ -4059,6 +4070,7 @@ export type Database = {
           bank_agency?: string | null
           bank_name?: string | null
           cnpj_cpf?: string | null
+          company_id: string
           created_at?: string
           email?: string | null
           id?: string
@@ -4078,6 +4090,7 @@ export type Database = {
           bank_agency?: string | null
           bank_name?: string | null
           cnpj_cpf?: string | null
+          company_id?: string
           created_at?: string
           email?: string | null
           id?: string
@@ -4092,6 +4105,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "suppliers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "suppliers_project_id_fkey"
             columns: ["project_id"]
@@ -4444,6 +4464,7 @@ export type Database = {
       units: {
         Row: {
           abbreviation: string
+          company_id: string
           created_at: string
           id: string
           name: string
@@ -4451,6 +4472,7 @@ export type Database = {
         }
         Insert: {
           abbreviation: string
+          company_id: string
           created_at?: string
           id?: string
           name: string
@@ -4458,12 +4480,20 @@ export type Database = {
         }
         Update: {
           abbreviation?: string
+          company_id?: string
           created_at?: string
           id?: string
           name?: string
           project_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "units_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "units_project_id_fkey"
             columns: ["project_id"]

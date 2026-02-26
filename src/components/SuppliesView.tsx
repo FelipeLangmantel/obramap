@@ -219,7 +219,8 @@ interface SuppliesViewProps {
 
 export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   const { currentProject } = useConstruction();
-  const { canEdit } = useAuth();
+  const { canEdit, company } = useAuth();
+  const companyId = company?.id;
   const projectId = currentProject?.id;
 
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
@@ -676,6 +677,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
     try {
       const payload = {
         project_id: projectId,
+        company_id: companyId!,
         name: newInput.name.trim(),
         unit: newInput.unit,
         category: newInput.category,
@@ -767,7 +769,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         
         toast.success('Unidade atualizada! Orçamentos atualizados automaticamente.');
       } else {
-        await supabase.from('units').insert({ project_id: projectId, name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim() });
+        await supabase.from('units').insert({ project_id: projectId, company_id: companyId!, name: newUnit.name.trim(), abbreviation: newUnit.abbreviation.trim() });
         toast.success('Unidade cadastrada!');
       }
       setUnitDialogOpen(false);
@@ -801,7 +803,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         setFamilies(prev => prev.map(f => f.id === editingFamily.id ? { ...f, name: newFamily.name.trim(), color: newFamily.color } : f));
         toast.success('Família atualizada!');
       } else {
-        const { data, error } = await supabase.from('material_families').insert({ project_id: projectId, name: newFamily.name.trim(), color: newFamily.color, display_order: families.length }).select().single();
+        const { data, error } = await supabase.from('material_families').insert({ project_id: projectId, company_id: companyId!, name: newFamily.name.trim(), color: newFamily.color, display_order: families.length }).select().single();
         if (error) throw error;
         if (data) {
           setFamilies(prev => [...prev, { id: data.id, name: data.name, color: data.color || '#9ca3af', lead_time_days: data.lead_time_days || 7 }]);
@@ -859,7 +861,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         await supabase.from('suppliers').update(payload).eq('id', editingSupplier.id);
         toast.success('Fornecedor atualizado!');
       } else {
-        await supabase.from('suppliers').insert({ ...payload, project_id: projectId });
+        await supabase.from('suppliers').insert({ ...payload, project_id: projectId, company_id: companyId! });
         toast.success('Fornecedor cadastrado!');
       }
       setSupplierDialogOpen(false);

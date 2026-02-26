@@ -185,7 +185,8 @@ function generateBoletoPayload(barcodeOrLine: string): string {
 
 export function FinancialFlowView() {
   const { currentProject } = useConstruction();
-  const { canEdit } = useAuth();
+  const { canEdit, company } = useAuth();
+  const companyId = company?.id;
   const [entries, setEntries] = useState<FinancialEntry[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
@@ -331,6 +332,7 @@ export function FinancialFlowView() {
     try {
       const { data, error } = await supabase.from("suppliers").insert({
         project_id: currentProject.id,
+        company_id: companyId!,
         name: newSupplier.name,
         supplier_type: newSupplier.supplier_type,
         supplier_scope: newSupplier.supplier_scope,

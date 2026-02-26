@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface MaterialFamily {
   id: string;
@@ -62,6 +63,8 @@ export function ImportInputsDialog({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { company } = useAuth();
+  const companyId = company?.id;
   
   // New families and units to create
   const [newFamiliesToCreate, setNewFamiliesToCreate] = useState<Set<string>>(new Set());
@@ -380,7 +383,7 @@ export function ImportInputsDialog({
       for (const familyName of newFamiliesToCreate) {
         const { data: newFamily, error } = await supabase
           .from('material_families')
-          .insert({ project_id: projectId, name: familyName })
+          .insert({ project_id: projectId, company_id: companyId!, name: familyName })
           .select()
           .single();
         
@@ -404,7 +407,8 @@ export function ImportInputsDialog({
 
         if (!existingUnit) {
           const { data: createdUnit } = await supabase.from('units').insert({ 
-            project_id: projectId, 
+            project_id: projectId,
+            company_id: companyId!,
             name: unitName,
             abbreviation: unitName
           }).select().single();
@@ -423,6 +427,7 @@ export function ImportInputsDialog({
         const resolvedUnit = unitAbbreviationMap[normalizedUnit] || input.unit;
         return {
           project_id: projectId,
+          company_id: companyId!,
           name: input.name,
           unit: resolvedUnit,
           category: 'material' as const,

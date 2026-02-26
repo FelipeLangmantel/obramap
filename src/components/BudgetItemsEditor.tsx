@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ImportBudgetItemsDialog } from "./ImportBudgetItemsDialog";
 import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ScopeItem {
   id?: string;
@@ -98,6 +99,8 @@ export function BudgetItemsEditor({
   scrollPositionKey
 }: BudgetItemsEditorProps) {
   const { currentStep, advanceToStep } = useProjectSetupFlow();
+  const { company } = useAuth();
+  const companyId = company?.id;
 
   const [items, setItems] = useState<ScopeItem[]>([]);
   const [families, setFamilies] = useState<MaterialFamily[]>([]);
@@ -142,6 +145,7 @@ export function BudgetItemsEditor({
         // Create default families
         const insertData = DEFAULT_FAMILIES.map(f => ({
           project_id: projectId,
+          company_id: companyId!,
           name: f.name,
           icon: f.icon,
           color: f.color,
