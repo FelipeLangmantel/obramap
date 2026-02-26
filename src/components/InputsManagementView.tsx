@@ -54,7 +54,8 @@ const CATEGORY_LABELS = {
 };
 
 export function InputsManagementView() {
-  const { canEdit } = useAuth();
+  const { canEdit, company } = useAuth();
+  const companyId = company?.id;
   const { currentProject, projects } = useConstruction();
   
   // Use first project as default for creating new items
