@@ -99,6 +99,8 @@ export function BudgetItemsEditor({
   scrollPositionKey
 }: BudgetItemsEditorProps) {
   const { currentStep, advanceToStep } = useProjectSetupFlow();
+  const { company } = useAuth();
+  const companyId = company?.id;
 
   const [items, setItems] = useState<ScopeItem[]>([]);
   const [families, setFamilies] = useState<MaterialFamily[]>([]);
