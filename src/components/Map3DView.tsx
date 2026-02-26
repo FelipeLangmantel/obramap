@@ -628,6 +628,7 @@ export function Map3DView() {
             onToggleLayer={layerManager.toggleLayer}
             onOpacityChange={layerManager.setLayerOpacity}
             onOpenLinkDialog={() => setLinkDialogOpen(true)}
+            onRenameLayer={layerManager.renameLayer}
           />
         )}
         {selectedMarker && <HouseDetailsPanel marker={selectedMarker} onClose={() => setSelectedMarker(null)} customLegendItems={customLegendItems} />}
