@@ -211,7 +211,7 @@ export function InputsManagementView() {
         await supabase.from('inputs').update(payload).eq('id', editingInput.id);
         toast.success('Insumo atualizado!');
       } else {
-        await supabase.from('inputs').insert({ ...payload, project_id: defaultProjectId });
+        await supabase.from('inputs').insert({ ...payload, project_id: defaultProjectId, company_id: companyId! });
         toast.success('Insumo cadastrado!');
       }
       setInputDialogOpen(false);
