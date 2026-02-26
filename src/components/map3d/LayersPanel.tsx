@@ -6,7 +6,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ModelLayer, LayerStageLink } from "./useModelLayers";
 
@@ -48,7 +48,7 @@ export function LayersPanel({
   };
 
   return (
-    <Card className="absolute top-4 left-4 w-80 max-h-[calc(100%-2rem)] z-10 bg-background/95 backdrop-blur-sm flex flex-col">
+    <Card className="absolute top-4 left-4 w-80 z-10 bg-background/95 backdrop-blur-sm flex flex-col" style={{ maxHeight: 'calc(100% - 2rem)' }}>
       <CardHeader className="pb-2 px-3 pt-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm">Camadas ({layers.length})</CardTitle>
@@ -67,9 +67,9 @@ export function LayersPanel({
           </Label>
         </div>
       </CardHeader>
-      <CardContent className="px-3 pb-3 flex-1 min-h-0">
-        <ScrollArea className="h-full max-h-[calc(100vh-14rem)]">
-          <div className="space-y-1.5 pr-3">
+      <CardContent className="px-3 pb-3 flex-1 min-h-0 overflow-hidden">
+        <div className="h-full overflow-y-auto pr-1" style={{ maxHeight: 'calc(100vh - 16rem)' }}>
+          <div className="space-y-1.5">
             {layers.map((layer) => {
               const link = links.find(l => l.layer_name === layer.name);
               const isEditing = editingLayer === layer.name;
@@ -148,7 +148,7 @@ export function LayersPanel({
               );
             })}
           </div>
-        </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );
