@@ -371,10 +371,21 @@ export function InteractiveMapView() {
   // Fit to container when layout is loaded
   useEffect(() => {
     if (isLayoutLoaded) {
-      // Use requestAnimationFrame to ensure the container is rendered
-      requestAnimationFrame(() => {
-        fitToContainer();
-      });
+      // Use multiple delayed frames to ensure container is fully rendered
+      // Some browsers need extra frames after tab/view switch
+      const tryFit = (attempts = 0) => {
+        if (attempts > 10) return;
+        requestAnimationFrame(() => {
+          const container = containerRef.current;
+          if (container && container.clientWidth > 0 && container.clientHeight > 0) {
+            fitToContainer();
+          } else {
+            // Container not ready yet, retry
+            setTimeout(() => tryFit(attempts + 1), 50);
+          }
+        });
+      };
+      tryFit();
     }
   }, [isLayoutLoaded, fitToContainer, currentProject?.id]);
 
@@ -383,7 +394,6 @@ export function InteractiveMapView() {
     const container = containerRef.current;
     if (!container || !isLayoutLoaded) return;
 
-    // Use ResizeObserver to detect when container becomes visible/resized
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
@@ -393,11 +403,6 @@ export function InteractiveMapView() {
     });
 
     resizeObserver.observe(container);
-
-    // Also fit on initial mount
-    requestAnimationFrame(() => {
-      fitToContainer();
-    });
 
     return () => {
       resizeObserver.disconnect();
