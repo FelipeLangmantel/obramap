@@ -301,9 +301,8 @@ export function SmartPlanningView() {
 
         <TabsContent value="lob" className="flex-1 mt-4">
           <LineOfBalance 
-            data={lineOfBalanceData}
-            totalUnits={currentProject.totalHouses}
-            projectStartDate={currentProject.startDate}
+            ganttServices={strategicGanttServices}
+            projectStartDate={strategicStartDate}
           />
         </TabsContent>
 

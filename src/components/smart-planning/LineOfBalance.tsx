@@ -1,92 +1,77 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { format, parseISO, differenceInDays } from 'date-fns';
+import { differenceInDays, startOfDay, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { LineOfBalancePoint } from './types';
 import { Badge } from '@/components/ui/badge';
+import { GanttService } from './hooks/useStrategicGanttData';
 
 interface LineOfBalanceProps {
-  data: LineOfBalancePoint[];
-  totalUnits: number;
+  ganttServices: GanttService[];
   projectStartDate: string;
 }
 
-export function LineOfBalance({ data, totalUnits, projectStartDate }: LineOfBalanceProps) {
-  if (data.length === 0) {
+const COLORS = [
+  '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
+  '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
+];
+
+export function LineOfBalance({ ganttServices, projectStartDate }: LineOfBalanceProps) {
+  if (ganttServices.length === 0 || !projectStartDate) {
     return (
       <Card>
         <CardContent className="py-12 text-center text-muted-foreground">
-          Configure as etapas para visualizar a Linha de Balanço
+          Configure o planejamento estratégico para visualizar a Linha de Balanço
         </CardContent>
       </Card>
     );
   }
 
-  // Convert data to chart format
-  const startDate = parseISO(projectStartDate);
-  
-  // Create combined dataset
-  const allPoints: { day: number; [key: string]: number }[] = [];
+  const startDate = startOfDay(new Date(projectStartDate));
+  const today = differenceInDays(new Date(), startDate);
+
+  // Find max day across all services
   const maxDay = Math.max(
-    ...data.flatMap(d => [
-      ...d.plannedLine.map(p => differenceInDays(p.x, startDate)),
-      ...d.actualLine.map(p => differenceInDays(p.x, startDate))
-    ])
+    ...ganttServices.map(s => differenceInDays(s.planned_end, startDate))
   );
 
+  // Build chart data: for each day, each service has a Y value (units completed up to that day)
+  const chartData: Record<string, number>[] = [];
   for (let day = 0; day <= maxDay; day++) {
-    const point: { day: number; [key: string]: number } = { day };
-    
-    data.forEach(line => {
-      // Planned line - interpolate
-      const plannedPoint = line.plannedLine.find(
-        p => differenceInDays(p.x, startDate) === day
-      );
-      if (plannedPoint) {
-        point[`${line.teamName}_planned`] = plannedPoint.y;
+    const point: Record<string, number> = { day };
+
+    ganttServices.forEach((svc, idx) => {
+      const svcStartDay = differenceInDays(svc.planned_start, startDate);
+      const svcEndDay = differenceInDays(svc.planned_end, startDate);
+      const key = `svc_${idx}`;
+
+      if (day < svcStartDay) {
+        // Before service starts - show executed houses (already done)
+        point[key] = svc.executed_houses;
+      } else if (day >= svcStartDay && day <= svcEndDay) {
+        // During service - linear interpolation from executed to total
+        const progress = (day - svcStartDay) / Math.max(1, svcEndDay - svcStartDay);
+        point[key] = svc.executed_houses + svc.remaining_houses * progress;
       } else {
-        // Interpolate between points
-        const prevPoint = [...line.plannedLine]
-          .reverse()
-          .find(p => differenceInDays(p.x, startDate) < day);
-        const nextPoint = line.plannedLine
-          .find(p => differenceInDays(p.x, startDate) > day);
-        
-        if (prevPoint && nextPoint) {
-          const ratio = (day - differenceInDays(prevPoint.x, startDate)) / 
-            (differenceInDays(nextPoint.x, startDate) - differenceInDays(prevPoint.x, startDate));
-          point[`${line.teamName}_planned`] = prevPoint.y + (nextPoint.y - prevPoint.y) * ratio;
-        } else if (prevPoint) {
-          point[`${line.teamName}_planned`] = prevPoint.y;
-        }
-      }
-      
-      // Actual line
-      const actualPoint = line.actualLine.find(
-        p => differenceInDays(p.x, startDate) === day
-      );
-      if (actualPoint) {
-        point[`${line.teamName}_actual`] = actualPoint.y;
+        // After service ends
+        point[key] = svc.total_houses;
       }
     });
-    
-    allPoints.push(point);
+
+    chartData.push(point);
   }
 
-  // Get unique colors per stage
-  const stageColors = [...new Set(data.map(d => d.color))];
-  const colorMap = new Map<string, string>();
-  data.forEach(d => colorMap.set(d.stageName, d.color));
-
-  // Group by stage
-  const stageGroups = data.reduce((acc, d) => {
-    if (!acc[d.stageName]) acc[d.stageName] = [];
-    acc[d.stageName].push(d);
-    return acc;
-  }, {} as Record<string, LineOfBalancePoint[]>);
-
-  const today = differenceInDays(new Date(), startDate);
+  // Also add actual progress points (executed_houses as horizontal line until today)
+  ganttServices.forEach((svc, idx) => {
+    const key = `svc_${idx}_actual`;
+    const svcStartDay = differenceInDays(svc.planned_start, startDate);
+    chartData.forEach(point => {
+      const day = point.day as number;
+      if (day <= Math.max(today, svcStartDay)) {
+        point[key] = svc.executed_houses;
+      }
+    });
+  });
 
   return (
     <Card>
@@ -94,13 +79,14 @@ export function LineOfBalance({ data, totalUnits, projectStartDate }: LineOfBala
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Linha de Balanço</CardTitle>
           <div className="flex gap-2 flex-wrap">
-            {Object.entries(stageGroups).map(([stageName, points]) => (
-              <Badge 
-                key={stageName} 
+            {ganttServices.map((svc, idx) => (
+              <Badge
+                key={svc.id}
                 variant="outline"
-                style={{ borderColor: points[0].color, color: points[0].color }}
+                style={{ borderColor: COLORS[idx % COLORS.length], color: COLORS[idx % COLORS.length] }}
+                className="text-xs"
               >
-                {stageName}
+                {svc.name.length > 25 ? svc.name.substring(0, 25) + '…' : svc.name}
               </Badge>
             ))}
           </div>
@@ -109,89 +95,92 @@ export function LineOfBalance({ data, totalUnits, projectStartDate }: LineOfBala
       <CardContent>
         <div className="h-[400px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart 
-              data={allPoints}
+            <LineChart
+              data={chartData}
               margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis 
-                dataKey="day" 
-                tickFormatter={(day) => `Dia ${day}`}
+              <XAxis
+                dataKey="day"
+                tickFormatter={(day) => `D${day}`}
                 className="text-xs"
               />
-              <YAxis 
-                domain={[0, totalUnits]}
-                tickFormatter={(value) => `${value} un`}
+              <YAxis
+                domain={[0, 'auto']}
+                tickFormatter={(value) => `${Math.round(value)}`}
                 className="text-xs"
+                label={{ value: 'Unidades', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }}
               />
-              <Tooltip 
-                formatter={(value: number, name: string) => [
-                  `${value.toFixed(1)} unidades`,
-                  name.includes('_planned') 
-                    ? `${name.replace('_planned', '')} (Planejado)`
-                    : `${name.replace('_actual', '')} (Realizado)`
-                ]}
+              <Tooltip
+                formatter={(value: number, name: string) => {
+                  const idx = parseInt(name.replace('svc_', '').replace('_actual', ''));
+                  const svc = ganttServices[idx];
+                  const isActual = name.includes('_actual');
+                  return [
+                    `${Math.round(value)} un`,
+                    `${svc?.name || name} (${isActual ? 'Realizado' : 'Planejado'})`
+                  ];
+                }}
                 labelFormatter={(day) => `Dia ${day}`}
-                contentStyle={{ 
-                  backgroundColor: 'hsl(var(--background))', 
-                  borderColor: 'hsl(var(--border))' 
+                contentStyle={{
+                  backgroundColor: 'hsl(var(--background))',
+                  borderColor: 'hsl(var(--border))',
+                  fontSize: 12,
                 }}
-              />
-              <Legend 
-                formatter={(value) => {
-                  if (value.includes('_planned')) {
-                    return `${value.replace('_planned', '')} (Planejado)`;
-                  }
-                  return `${value.replace('_actual', '')} (Realizado)`;
-                }}
-              />
-              
-              {/* Today reference line */}
-              <ReferenceLine 
-                x={today} 
-                stroke="hsl(var(--primary))" 
-                strokeDasharray="5 5"
-                label={{ value: 'Hoje', position: 'top' }}
               />
 
-              {/* Target units reference line */}
-              <ReferenceLine 
-                y={totalUnits} 
-                stroke="hsl(var(--muted-foreground))" 
-                strokeDasharray="3 3"
-                label={{ value: `Meta: ${totalUnits}`, position: 'right' }}
+              {/* Today reference line */}
+              <ReferenceLine
+                x={today}
+                stroke="hsl(var(--primary))"
+                strokeDasharray="5 5"
+                label={{ value: 'Hoje', position: 'top', style: { fontSize: 11 } }}
               />
-              
-              {/* Lines for each team */}
-              {data.map((lineData, index) => (
-                <React.Fragment key={`${lineData.teamId}-${index}`}>
-                  {/* Planned line - dashed */}
+
+              {/* Total units reference */}
+              {ganttServices.length > 0 && (
+                <ReferenceLine
+                  y={ganttServices[0].total_houses}
+                  stroke="hsl(var(--muted-foreground))"
+                  strokeDasharray="3 3"
+                  label={{ value: `Meta: ${ganttServices[0].total_houses}`, position: 'right', style: { fontSize: 10 } }}
+                />
+              )}
+
+              {/* Planned lines - dashed */}
+              {ganttServices.map((svc, idx) => (
+                <Line
+                  key={`planned_${idx}`}
+                  type="monotone"
+                  dataKey={`svc_${idx}`}
+                  stroke={COLORS[idx % COLORS.length]}
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                  connectNulls
+                  name={`svc_${idx}`}
+                />
+              ))}
+
+              {/* Actual lines - solid */}
+              {ganttServices.map((svc, idx) => (
+                svc.executed_houses > 0 && (
                   <Line
+                    key={`actual_${idx}`}
                     type="monotone"
-                    dataKey={`${lineData.teamName}_planned`}
-                    stroke={lineData.color}
-                    strokeWidth={2}
-                    strokeDasharray="5 5"
+                    dataKey={`svc_${idx}_actual`}
+                    stroke={COLORS[idx % COLORS.length]}
+                    strokeWidth={3}
                     dot={false}
                     connectNulls
+                    name={`svc_${idx}_actual`}
                   />
-                  {/* Actual line - solid */}
-                  {lineData.actualLine.length > 0 && (
-                    <Line
-                      type="monotone"
-                      dataKey={`${lineData.teamName}_actual`}
-                      stroke={lineData.color}
-                      strokeWidth={3}
-                      dot={{ r: 3 }}
-                      connectNulls
-                    />
-                  )}
-                </React.Fragment>
+                )
               ))}
             </LineChart>
           </ResponsiveContainer>
         </div>
-        
+
         <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
             <div className="w-8 h-0.5 border-t-2 border-dashed border-muted-foreground" />
