@@ -192,7 +192,7 @@ export default function LongTermPlanningPage() {
             </div>
           </main>
         </div>
-
+      </SidebarProvider>
     </ModuleAccessGuard>
   );
 }
