@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Lock, AlertTriangle, ShieldCheck, Trash2, CalendarClock, CheckCircle2, Ban } from "lucide-react";
+import { Lock, AlertTriangle, ShieldCheck, Trash2, CalendarClock, CheckCircle2, Ban, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Table,
