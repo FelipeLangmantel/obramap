@@ -58,7 +58,7 @@ export function LaborHistogramView({ projectId }: LaborHistogramViewProps) {
     });
 
     if (!error && data) {
-      setLaborNeeds(data as LaborNeed[]);
+      setLaborNeeds(data as unknown as LaborNeed[]);
     }
     setLoading(false);
   };
