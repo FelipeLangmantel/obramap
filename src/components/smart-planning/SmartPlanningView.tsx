@@ -171,7 +171,7 @@ export function SmartPlanningView() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <TabsList className="grid grid-cols-4 w-full max-w-2xl">
+        <TabsList className="grid grid-cols-5 w-full max-w-3xl">
           <TabsTrigger value="dashboard" className="gap-2">
             <BarChart3 className="h-4 w-4" />
             Dashboard
@@ -183,6 +183,10 @@ export function SmartPlanningView() {
           <TabsTrigger value="lob" className="gap-2">
             <TrendingUp className="h-4 w-4" />
             Linha de Balanço
+          </TabsTrigger>
+          <TabsTrigger value="histogram" className="gap-2">
+            <Users className="h-4 w-4" />
+            Mão de Obra
           </TabsTrigger>
           <TabsTrigger value="alerts" className="gap-2 relative">
             <AlertTriangle className="h-4 w-4" />
