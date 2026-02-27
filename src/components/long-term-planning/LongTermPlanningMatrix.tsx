@@ -302,6 +302,29 @@ export function LongTermPlanningMatrix({
                               </TooltipContent>
                             </Tooltip>
                           )}
+                          {onConfigureProductivity && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  className="text-muted-foreground hover:text-primary transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onConfigureProductivity({
+                                      macro_id: row.macro_id,
+                                      scope_id: row.scope_id,
+                                      macro_name: row.macro_name,
+                                      scope_name: row.scope_name,
+                                    });
+                                  }}
+                                >
+                                  <Users className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Configurar produtividade e equipe</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
                         </div>
                         <div className="text-[10px] text-muted-foreground truncate">
                           {row.macro_name}
