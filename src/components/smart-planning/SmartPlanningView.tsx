@@ -10,7 +10,8 @@ import { usePlanningCalculations } from './hooks/usePlanningCalculations';
 import { PlanningOnboarding } from './PlanningOnboarding';
 import { GanttChart } from './GanttChart';
 import { LineOfBalance } from './LineOfBalance';
-// DailyWorkLogDialog removido - funcionalidade operacional
+import { LaborHistogramView } from '@/components/labor-histogram/LaborHistogramView';
+import { ProductivityConfigDialog } from '@/components/labor-histogram/ProductivityConfigDialog';
 import { 
   BarChart3, 
   Calendar, 
@@ -21,7 +22,8 @@ import {
   Layers,
   Loader2,
   PlayCircle,
-  BookOpen
+  BookOpen,
+  Users
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -30,8 +32,11 @@ import { toast } from 'sonner';
 
 export function SmartPlanningView() {
   const { currentProject } = useConstruction();
-  const { canEdit } = useAuth();
+  const { canEdit, company } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [productivityService, setProductivityService] = useState<{
+    macro_id: string; scope_id: string; macro_name: string; scope_name: string;
+  } | null>(null);
   
   // Módulo estratégico - removido workLogDialog (operacional)
   const {
@@ -166,7 +171,7 @@ export function SmartPlanningView() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <TabsList className="grid grid-cols-4 w-full max-w-2xl">
+        <TabsList className="grid grid-cols-5 w-full max-w-3xl">
           <TabsTrigger value="dashboard" className="gap-2">
             <BarChart3 className="h-4 w-4" />
             Dashboard
@@ -178,6 +183,10 @@ export function SmartPlanningView() {
           <TabsTrigger value="lob" className="gap-2">
             <TrendingUp className="h-4 w-4" />
             Linha de Balanço
+          </TabsTrigger>
+          <TabsTrigger value="histogram" className="gap-2">
+            <Users className="h-4 w-4" />
+            Mão de Obra
           </TabsTrigger>
           <TabsTrigger value="alerts" className="gap-2 relative">
             <AlertTriangle className="h-4 w-4" />
@@ -329,9 +338,71 @@ export function SmartPlanningView() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="histogram" className="flex-1 mt-4">
+          <div className="space-y-6">
+            {/* Histogram Card */}
+            {currentProject?.id && (
+              <LaborHistogramView projectId={currentProject.id} />
+            )}
+
+            {/* Productivity config per stage */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary" />
+                  Configurar Produtividade por Serviço
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {stages.length === 0 ? (
+                  <p className="text-center py-4 text-muted-foreground text-sm">
+                    Configure as etapas primeiro no onboarding.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {stages.map(stage => (
+                      <Button
+                        key={stage.id}
+                        variant="outline"
+                        className="justify-start gap-2 h-auto py-3"
+                        onClick={() => setProductivityService({
+                          macro_id: stage.macro_id || stage.id,
+                          scope_id: stage.id,
+                          macro_name: stage.name,
+                          scope_name: stage.name,
+                        })}
+                      >
+                        <div
+                          className="w-3 h-3 rounded-full shrink-0"
+                          style={{ backgroundColor: stage.color }}
+                        />
+                        <div className="text-left">
+                          <p className="text-sm font-medium">{stage.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {stage.planned_productivity} un/dia • {stage.planned_teams} equipe(s)
+                          </p>
+                        </div>
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
       </Tabs>
 
-      {/* DailyWorkLogDialog removido - funcionalidade operacional */}
+      {/* Productivity Config Dialog */}
+      {productivityService && company?.id && (
+        <ProductivityConfigDialog
+          open={!!productivityService}
+          onOpenChange={(open) => { if (!open) setProductivityService(null); }}
+          companyId={company.id}
+          service={productivityService}
+          onSaved={loadData}
+        />
+      )}
     </div>
   );
 }
