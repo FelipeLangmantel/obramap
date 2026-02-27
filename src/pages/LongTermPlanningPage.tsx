@@ -204,6 +204,17 @@ export default function LongTermPlanningPage() {
           </main>
         </div>
       </SidebarProvider>
+
+      {/* Productivity Config Dialog */}
+      {productivityService && company?.id && (
+        <ProductivityConfigDialog
+          open={!!productivityService}
+          onOpenChange={(open) => { if (!open) setProductivityService(null); }}
+          companyId={company.id}
+          service={productivityService}
+          onSaved={refresh}
+        />
+      )}
     </ModuleAccessGuard>
   );
 }
