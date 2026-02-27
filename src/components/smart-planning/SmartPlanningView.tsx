@@ -56,6 +56,16 @@ export function SmartPlanningView() {
     loadData
   } = usePlanningData(currentProject?.id);
 
+  // Strategic Gantt data from long-term planning
+  const {
+    ganttServices: strategicGanttServices,
+    projectedEndDate: strategicProjectedEndDate,
+    projectStartDate: strategicStartDate,
+    updateServiceProductivity,
+    updatePredecessor,
+    loadData: reloadGantt,
+  } = useStrategicGanttData(currentProject?.id);
+
   const {
     ganttTasks,
     lineOfBalanceData,
