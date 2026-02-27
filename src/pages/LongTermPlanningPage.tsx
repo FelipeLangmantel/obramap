@@ -9,7 +9,6 @@ import { useLongTermPlanning } from "@/hooks/useLongTermPlanning";
 import { LongTermPlanningMatrix } from "@/components/long-term-planning/LongTermPlanningMatrix";
 import { PlanningHeader } from "@/components/long-term-planning/PlanningHeader";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 import { supabase } from "@/integrations/supabase/client";
