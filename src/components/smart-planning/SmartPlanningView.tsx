@@ -252,8 +252,8 @@ export function SmartPlanningView() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {projectedEndDate 
-                    ? format(projectedEndDate, 'dd/MM/yyyy', { locale: ptBR })
+                  {(strategicProjectedEndDate || projectedEndDate)
+                    ? format(strategicProjectedEndDate || projectedEndDate!, 'dd/MM/yyyy', { locale: ptBR })
                     : '-'
                   }
                 </div>
