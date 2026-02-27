@@ -292,10 +292,12 @@ export function SmartPlanningView() {
         </TabsContent>
 
         <TabsContent value="gantt" className="flex-1 mt-4">
-          <GanttChart 
-            tasks={ganttTasks} 
-            projectStartDate={currentProject.startDate}
-            projectedEndDate={projectedEndDate}
+          <StrategicGanttChart
+            services={strategicGanttServices}
+            projectStartDate={strategicStartDate}
+            projectedEndDate={strategicProjectedEndDate}
+            onUpdateProductivity={updateServiceProductivity}
+            onUpdatePredecessor={updatePredecessor}
           />
         </TabsContent>
 
