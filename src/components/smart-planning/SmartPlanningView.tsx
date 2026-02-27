@@ -67,7 +67,6 @@ export function SmartPlanningView() {
   } = useStrategicGanttData(currentProject?.id);
 
   const {
-    ganttTasks,
     lineOfBalanceData,
     projectedEndDate,
     overallProgress
