@@ -19,6 +19,7 @@ import { ModuleAccessGuard } from "@/components/guards/ModuleAccessGuard";
 export default function LongTermPlanningPage() {
   const navigate = useNavigate();
   const { currentProject } = useConstruction();
+  const { company } = useAuth();
   const { currentStep, advanceToStep } = useProjectSetupFlow();
 
   const {
