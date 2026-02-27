@@ -195,6 +195,7 @@ export default function LongTermPlanningPage() {
                       onCellChange={updateCellValue}
                       onDeletePeriod={deletePeriod}
                       onUpdatePeriodDates={updatePeriodDates}
+                      onConfigureProductivity={setProductivityService}
                     />
                   )}
                 </>
