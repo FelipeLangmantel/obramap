@@ -36,6 +36,7 @@ interface LongTermPlanningMatrixProps {
   onCellChange: (macroId: string, scopeId: string, periodId: string, value: number) => void;
   onDeletePeriod?: (periodId: string) => void;
   onUpdatePeriodDates?: (periodId: string, startDate: string, endDate: string) => Promise<boolean>;
+  onConfigureProductivity?: (service: { macro_id: string; scope_id: string; macro_name: string; scope_name: string }) => void;
 }
 
 const isEditable = (status: PeriodStatus): boolean => {
