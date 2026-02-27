@@ -10,7 +10,8 @@ import { usePlanningCalculations } from './hooks/usePlanningCalculations';
 import { PlanningOnboarding } from './PlanningOnboarding';
 import { GanttChart } from './GanttChart';
 import { LineOfBalance } from './LineOfBalance';
-// DailyWorkLogDialog removido - funcionalidade operacional
+import { LaborHistogramView } from '@/components/labor-histogram/LaborHistogramView';
+import { ProductivityConfigDialog } from '@/components/labor-histogram/ProductivityConfigDialog';
 import { 
   BarChart3, 
   Calendar, 
@@ -21,7 +22,8 @@ import {
   Layers,
   Loader2,
   PlayCircle,
-  BookOpen
+  BookOpen,
+  Users
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
