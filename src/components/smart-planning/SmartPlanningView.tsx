@@ -61,7 +61,7 @@ export function SmartPlanningView() {
     ganttServices: strategicGanttServices,
     projectedEndDate: strategicProjectedEndDate,
     projectStartDate: strategicStartDate,
-    updateServiceProductivity,
+    updatePredecessor,
   } = useStrategicGanttData(currentProject?.id);
 
   const {
