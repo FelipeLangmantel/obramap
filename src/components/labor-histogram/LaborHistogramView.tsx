@@ -81,7 +81,6 @@ export function LaborHistogramView({ projectId }: LaborHistogramViewProps) {
       const key = n.period_id;
       if (!grouped[key]) {
         const start = parseISO(n.period_start);
-        const end = parseISO(n.period_end);
         grouped[key] = {
           period: `P${n.period_number}\n${format(start, "dd/MM", { locale: ptBR })}`,
           periodNumber: n.period_number,
