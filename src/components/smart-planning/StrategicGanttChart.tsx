@@ -41,13 +41,9 @@ import {
 } from '@/components/ui/popover';
 import {
   Clock,
-  Play,
-  CheckCircle2,
-  AlertTriangle,
   Settings2,
   Link2,
   Home,
-  Users,
 } from 'lucide-react';
 import type { GanttService } from './hooks/useStrategicGanttData';
 
