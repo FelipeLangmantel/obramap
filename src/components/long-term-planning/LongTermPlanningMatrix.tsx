@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Lock, AlertTriangle, ShieldCheck, Trash2, CalendarClock, CheckCircle2, Ban } from "lucide-react";
+import { Lock, AlertTriangle, ShieldCheck, Trash2, CalendarClock, CheckCircle2, Ban, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -36,6 +36,7 @@ interface LongTermPlanningMatrixProps {
   onCellChange: (macroId: string, scopeId: string, periodId: string, value: number) => void;
   onDeletePeriod?: (periodId: string) => void;
   onUpdatePeriodDates?: (periodId: string, startDate: string, endDate: string) => Promise<boolean>;
+  onConfigureProductivity?: (service: { macro_id: string; scope_id: string; macro_name: string; scope_name: string }) => void;
 }
 
 const isEditable = (status: PeriodStatus): boolean => {
@@ -72,6 +73,7 @@ export function LongTermPlanningMatrix({
   onCellChange,
   onDeletePeriod,
   onUpdatePeriodDates,
+  onConfigureProductivity,
 }: LongTermPlanningMatrixProps) {
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [periodToDelete, setPeriodToDelete] = useState<PlanningPeriod | null>(null);
@@ -297,6 +299,29 @@ export function LongTermPlanningMatrix({
                               </TooltipTrigger>
                               <TooltipContent>
                                 <p className="text-xs">Serviço 100% executado</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          {onConfigureProductivity && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  className="text-muted-foreground hover:text-primary transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onConfigureProductivity({
+                                      macro_id: row.macro_id,
+                                      scope_id: row.scope_id,
+                                      macro_name: row.macro_name,
+                                      scope_name: row.scope_name,
+                                    });
+                                  }}
+                                >
+                                  <Users className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Configurar produtividade e equipe</p>
                               </TooltipContent>
                             </Tooltip>
                           )}

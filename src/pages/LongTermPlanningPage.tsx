@@ -1,13 +1,16 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Calendar, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useLongTermPlanning } from "@/hooks/useLongTermPlanning";
 import { LongTermPlanningMatrix } from "@/components/long-term-planning/LongTermPlanningMatrix";
 import { PlanningHeader } from "@/components/long-term-planning/PlanningHeader";
+import { LaborHistogramView } from "@/components/labor-histogram/LaborHistogramView";
+import { ProductivityConfigDialog } from "@/components/labor-histogram/ProductivityConfigDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
@@ -17,6 +20,7 @@ import { ModuleAccessGuard } from "@/components/guards/ModuleAccessGuard";
 export default function LongTermPlanningPage() {
   const navigate = useNavigate();
   const { currentProject } = useConstruction();
+  const { company } = useAuth();
   const { currentStep, advanceToStep } = useProjectSetupFlow();
 
   const {
@@ -57,6 +61,10 @@ export default function LongTermPlanningPage() {
 
     run();
   }, [currentProject?.id, currentStep, advanceToStep]);
+
+  const [productivityService, setProductivityService] = useState<{
+    macro_id: string; scope_id: string; macro_name: string; scope_name: string;
+  } | null>(null);
 
   const handleViewChange = () => {};
 
@@ -152,6 +160,13 @@ export default function LongTermPlanningPage() {
                     onAddPeriod={addPeriod}
                   />
 
+                  {/* Labor Histogram Card */}
+                  {currentProject?.id && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <LaborHistogramView projectId={currentProject.id} />
+                    </div>
+                  )}
+
                   {loading ? (
                     <div className="space-y-3">
                       <Skeleton className="h-12 w-full rounded-xl" />
@@ -180,6 +195,7 @@ export default function LongTermPlanningPage() {
                       onCellChange={updateCellValue}
                       onDeletePeriod={deletePeriod}
                       onUpdatePeriodDates={updatePeriodDates}
+                      onConfigureProductivity={setProductivityService}
                     />
                   )}
                 </>
@@ -188,6 +204,17 @@ export default function LongTermPlanningPage() {
           </main>
         </div>
       </SidebarProvider>
+
+      {/* Productivity Config Dialog */}
+      {productivityService && company?.id && (
+        <ProductivityConfigDialog
+          open={!!productivityService}
+          onOpenChange={(open) => { if (!open) setProductivityService(null); }}
+          companyId={company.id}
+          service={productivityService}
+          onSaved={refresh}
+        />
+      )}
     </ModuleAccessGuard>
   );
 }

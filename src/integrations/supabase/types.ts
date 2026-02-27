@@ -1064,6 +1064,99 @@ export type Database = {
           },
         ]
       }
+      labor_histogram: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          duration_days: number
+          estimated_cost: number | null
+          id: string
+          labor_needs: Json
+          macro_id: string
+          macro_name: string
+          notes: string | null
+          period_end: string
+          period_id: string
+          period_number: number
+          period_start: string
+          planned_houses: number
+          productivity: number
+          productivity_type: string
+          project_id: string
+          scope_id: string
+          scope_name: string
+          status: string | null
+          total_helpers: number
+          total_professionals: number
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          duration_days?: number
+          estimated_cost?: number | null
+          id?: string
+          labor_needs?: Json
+          macro_id: string
+          macro_name: string
+          notes?: string | null
+          period_end: string
+          period_id: string
+          period_number: number
+          period_start: string
+          planned_houses?: number
+          productivity?: number
+          productivity_type?: string
+          project_id: string
+          scope_id: string
+          scope_name: string
+          status?: string | null
+          total_helpers?: number
+          total_professionals?: number
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          duration_days?: number
+          estimated_cost?: number | null
+          id?: string
+          labor_needs?: Json
+          macro_id?: string
+          macro_name?: string
+          notes?: string | null
+          period_end?: string
+          period_id?: string
+          period_number?: number
+          period_start?: string
+          planned_houses?: number
+          productivity?: number
+          productivity_type?: string
+          project_id?: string
+          scope_id?: string
+          scope_name?: string
+          status?: string | null
+          total_helpers?: number
+          total_professionals?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "labor_histogram_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "labor_histogram_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       map_layer_stage_links: {
         Row: {
           created_at: string
@@ -3992,6 +4085,59 @@ export type Database = {
           },
         ]
       }
+      service_productivities: {
+        Row: {
+          base_productivity: number
+          company_id: string
+          created_at: string | null
+          id: string
+          macro_id: string
+          macro_name: string
+          notes: string | null
+          productivity_type: string
+          scope_id: string
+          scope_name: string
+          team_composition: Json
+          updated_at: string | null
+        }
+        Insert: {
+          base_productivity?: number
+          company_id: string
+          created_at?: string | null
+          id?: string
+          macro_id: string
+          macro_name: string
+          notes?: string | null
+          productivity_type?: string
+          scope_id: string
+          scope_name: string
+          team_composition?: Json
+          updated_at?: string | null
+        }
+        Update: {
+          base_productivity?: number
+          company_id?: string
+          created_at?: string | null
+          id?: string
+          macro_id?: string
+          macro_name?: string
+          notes?: string | null
+          productivity_type?: string
+          scope_id?: string
+          scope_name?: string
+          team_composition?: Json
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_productivities_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplier_quotes: {
         Row: {
           created_at: string
@@ -4693,6 +4839,7 @@ export type Database = {
         Args: { p_period_id: string; p_user_id?: string }
         Returns: Json
       }
+      calculate_labor_needs: { Args: { p_project_id: string }; Returns: Json }
       calculate_service_planned_cost: {
         Args: {
           p_company_id: string
