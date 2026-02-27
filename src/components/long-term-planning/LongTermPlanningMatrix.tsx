@@ -73,6 +73,7 @@ export function LongTermPlanningMatrix({
   onCellChange,
   onDeletePeriod,
   onUpdatePeriodDates,
+  onConfigureProductivity,
 }: LongTermPlanningMatrixProps) {
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [periodToDelete, setPeriodToDelete] = useState<PlanningPeriod | null>(null);
