@@ -281,11 +281,13 @@ export function SmartPlanningView() {
             </Card>
           </div>
 
-          {/* Mini Gantt */}
-          <GanttChart 
-            tasks={ganttTasks} 
-            projectStartDate={currentProject.startDate}
-            projectedEndDate={projectedEndDate}
+          {/* Mini Gantt from strategic planning */}
+          <StrategicGanttChart
+            services={strategicGanttServices}
+            projectStartDate={strategicStartDate}
+            projectedEndDate={strategicProjectedEndDate}
+            onUpdateProductivity={updateServiceProductivity}
+            onUpdatePredecessor={updatePredecessor}
           />
         </TabsContent>
 
