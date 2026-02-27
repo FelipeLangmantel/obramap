@@ -32,8 +32,11 @@ import { toast } from 'sonner';
 
 export function SmartPlanningView() {
   const { currentProject } = useConstruction();
-  const { canEdit } = useAuth();
+  const { canEdit, company } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [productivityService, setProductivityService] = useState<{
+    macro_id: string; scope_id: string; macro_name: string; scope_name: string;
+  } | null>(null);
   
   // Módulo estratégico - removido workLogDialog (operacional)
   const {
