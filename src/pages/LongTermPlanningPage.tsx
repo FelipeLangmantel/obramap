@@ -58,9 +58,7 @@ export default function LongTermPlanningPage() {
     run();
   }, [currentProject?.id, currentStep, advanceToStep]);
 
-  const [productivityService, setProductivityService] = useState<{
-    macro_id: string; scope_id: string; macro_name: string; scope_name: string;
-  } | null>(null);
+
 
   const handleViewChange = () => {};
 
