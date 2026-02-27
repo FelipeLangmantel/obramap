@@ -154,12 +154,7 @@ export default function LongTermPlanningPage() {
                     onAddPeriod={addPeriod}
                   />
 
-                  {/* Labor Histogram Card */}
-                  {currentProject?.id && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <LaborHistogramView projectId={currentProject.id} />
-                    </div>
-                  )}
+
 
                   {loading ? (
                     <div className="space-y-3">
