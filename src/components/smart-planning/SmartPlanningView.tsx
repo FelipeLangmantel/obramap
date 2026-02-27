@@ -7,8 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { usePlanningData } from './hooks/usePlanningData';
 import { usePlanningCalculations } from './hooks/usePlanningCalculations';
+import { useStrategicGanttData } from './hooks/useStrategicGanttData';
 import { PlanningOnboarding } from './PlanningOnboarding';
-import { GanttChart } from './GanttChart';
+import { StrategicGanttChart } from './StrategicGanttChart';
 import { LineOfBalance } from './LineOfBalance';
 import { LaborHistogramView } from '@/components/labor-histogram/LaborHistogramView';
 import { ProductivityConfigDialog } from '@/components/labor-histogram/ProductivityConfigDialog';
@@ -55,8 +56,16 @@ export function SmartPlanningView() {
     loadData
   } = usePlanningData(currentProject?.id);
 
+  // Strategic Gantt data from long-term planning
   const {
-    ganttTasks,
+    ganttServices: strategicGanttServices,
+    projectedEndDate: strategicProjectedEndDate,
+    projectStartDate: strategicStartDate,
+    updateServiceProductivity,
+    updatePredecessor,
+  } = useStrategicGanttData(currentProject?.id);
+
+  const {
     lineOfBalanceData,
     projectedEndDate,
     overallProgress
@@ -243,8 +252,8 @@ export function SmartPlanningView() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {projectedEndDate 
-                    ? format(projectedEndDate, 'dd/MM/yyyy', { locale: ptBR })
+                  {(strategicProjectedEndDate || projectedEndDate)
+                    ? format(strategicProjectedEndDate || projectedEndDate!, 'dd/MM/yyyy', { locale: ptBR })
                     : '-'
                   }
                 </div>
@@ -270,19 +279,23 @@ export function SmartPlanningView() {
             </Card>
           </div>
 
-          {/* Mini Gantt */}
-          <GanttChart 
-            tasks={ganttTasks} 
-            projectStartDate={currentProject.startDate}
-            projectedEndDate={projectedEndDate}
+          {/* Mini Gantt from strategic planning */}
+          <StrategicGanttChart
+            services={strategicGanttServices}
+            projectStartDate={strategicStartDate}
+            projectedEndDate={strategicProjectedEndDate}
+            onUpdateProductivity={updateServiceProductivity}
+            onUpdatePredecessor={updatePredecessor}
           />
         </TabsContent>
 
         <TabsContent value="gantt" className="flex-1 mt-4">
-          <GanttChart 
-            tasks={ganttTasks} 
-            projectStartDate={currentProject.startDate}
-            projectedEndDate={projectedEndDate}
+          <StrategicGanttChart
+            services={strategicGanttServices}
+            projectStartDate={strategicStartDate}
+            projectedEndDate={strategicProjectedEndDate}
+            onUpdateProductivity={updateServiceProductivity}
+            onUpdatePredecessor={updatePredecessor}
           />
         </TabsContent>
 
