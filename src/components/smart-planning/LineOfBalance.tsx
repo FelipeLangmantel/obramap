@@ -1,8 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { differenceInDays, startOfDay, format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { differenceInDays, startOfDay } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { GanttService } from './hooks/useStrategicGanttData';
 
