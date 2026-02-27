@@ -10,6 +10,7 @@ import { useLongTermPlanning } from "@/hooks/useLongTermPlanning";
 import { LongTermPlanningMatrix } from "@/components/long-term-planning/LongTermPlanningMatrix";
 import { PlanningHeader } from "@/components/long-term-planning/PlanningHeader";
 import { LaborHistogramView } from "@/components/labor-histogram/LaborHistogramView";
+import { ProductivityConfigDialog } from "@/components/labor-histogram/ProductivityConfigDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
