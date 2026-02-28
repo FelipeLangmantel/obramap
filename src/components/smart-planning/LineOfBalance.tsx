@@ -32,7 +32,6 @@ interface WeekColumn {
 
 export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredecessor }: LineOfBalanceProps) {
   const [showSequenceDialog, setShowSequenceDialog] = useState(false);
-  const [serviceOrder, setServiceOrder] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Sorted services by sequence_order
@@ -52,7 +51,7 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
     
     const start = startOfDay(new Date(projectStartDate));
     const maxDay = Math.max(...ganttServices.map(s => differenceInDays(s.planned_end, start)));
-    const totalDays = maxDay + 7; // extra week buffer
+    const totalDays = maxDay + 7;
     
     const result: WeekColumn[] = [];
     let current = startOfWeek(start, { weekStartsOn: 1 });
@@ -80,6 +79,20 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
     if (!projectStartDate) return -1;
     return differenceInDays(new Date(), startOfDay(new Date(projectStartDate)));
   }, [projectStartDate]);
+
+  // Month header groups
+  const monthGroups = useMemo(() => {
+    const groups: { label: string; startIdx: number; count: number }[] = [];
+    weeks.forEach((w, idx) => {
+      const ml = w.monthLabel;
+      if (groups.length > 0 && groups[groups.length - 1].label === ml) {
+        groups[groups.length - 1].count++;
+      } else {
+        groups.push({ label: ml, startIdx: idx, count: 1 });
+      }
+    });
+    return groups;
+  }, [weeks]);
 
   if (ganttServices.length === 0 || !projectStartDate) {
     return (
