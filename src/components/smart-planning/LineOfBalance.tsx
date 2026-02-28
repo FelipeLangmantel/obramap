@@ -287,7 +287,7 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
                 {/* Service bands */}
                 {sortedServices.map((svc, svcIdx) => {
                   const color = COLORS[svcIdx % COLORS.length];
-                  const bars = getServiceBand(svc, svcIdx);
+                  const bars = getServiceBand(svc);
                   
                   return bars.map((bar, barIdx) => {
                     const x = bar.startDay * DAY_WIDTH;
