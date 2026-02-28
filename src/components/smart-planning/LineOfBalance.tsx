@@ -151,20 +151,6 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
     return unitBars;
   };
 
-  // Month header groups
-  const monthGroups = useMemo(() => {
-    const groups: { label: string; startIdx: number; count: number }[] = [];
-    weeks.forEach((w, idx) => {
-      const ml = w.monthLabel;
-      if (groups.length > 0 && groups[groups.length - 1].label === ml) {
-        groups[groups.length - 1].count++;
-      } else {
-        groups.push({ label: ml, startIdx: idx, count: 1 });
-      }
-    });
-    return groups;
-  }, [weeks]);
-
   return (
     <Card className="overflow-hidden">
       <CardHeader className="pb-2">
