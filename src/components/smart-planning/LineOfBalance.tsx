@@ -328,7 +328,7 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
                   if (svc.executed_houses === 0) return null;
                   const color = COLORS[svcIdx % COLORS.length];
                   // Draw a thicker border on executed units
-                  const bars = getServiceBand(svc, svcIdx);
+                  const bars = getServiceBand(svc);
                   return bars
                     .filter(b => b.unit <= svc.executed_houses)
                     .map((bar, i) => {
