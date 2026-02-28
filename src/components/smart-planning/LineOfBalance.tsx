@@ -162,7 +162,6 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
               size="sm"
               className="gap-2"
               onClick={() => {
-                setServiceOrder(sortedServices.map(s => s.id));
                 setShowSequenceDialog(true);
               }}
             >
