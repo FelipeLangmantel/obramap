@@ -467,7 +467,7 @@ function SequenceDialog({ open, onOpenChange, services, allServices, onUpdatePre
                       <SelectItem value="none">Sem predecessora</SelectItem>
                       {allServices
                         .filter(s => s.id !== svc.id)
-                        .map((s, si) => (
+                        .map((s) => (
                           <SelectItem key={s.stage_id || s.id} value={s.stage_id || s.id}>
                             <div className="flex items-center gap-2">
                               <div
