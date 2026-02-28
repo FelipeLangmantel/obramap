@@ -423,9 +423,6 @@ function SequenceDialog({ open, onOpenChange, services, allServices, onUpdatePre
           <div className="space-y-3 pr-2">
             {services.map((svc, idx) => {
               const color = COLORS[idx % COLORS.length];
-              const predecessorName = svc.depends_on
-                ? allServices.find(s => s.stage_id === svc.depends_on)?.name || 'Desconhecido'
-                : null;
 
               return (
                 <div
