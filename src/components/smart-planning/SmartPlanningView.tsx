@@ -302,6 +302,7 @@ export function SmartPlanningView() {
           <LineOfBalance 
             ganttServices={strategicGanttServices}
             projectStartDate={strategicStartDate}
+            onUpdatePredecessor={updatePredecessor}
           />
         </TabsContent>
 
