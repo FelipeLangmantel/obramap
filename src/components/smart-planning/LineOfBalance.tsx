@@ -121,7 +121,7 @@ export function LineOfBalance({ ganttServices, projectStartDate, onUpdatePredece
   // - X position = time (day offset from project start)
   // - Y position = unit number
   // The band starts at (planned_start, first_unit) and goes to (planned_end, last_unit)
-  const getServiceBand = (svc: GanttService, colorIdx: number) => {
+  const getServiceBand = (svc: GanttService) => {
     const svcStartDay = differenceInDays(svc.planned_start, startDate);
     const svcEndDay = differenceInDays(svc.planned_end, startDate);
     const durationDays = svcEndDay - svcStartDay;
