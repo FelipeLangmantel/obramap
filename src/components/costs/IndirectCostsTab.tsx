@@ -43,7 +43,7 @@ const CATEGORIES_STORAGE_KEY = "obramap_indirect_categories";
 
 export function IndirectCostsTab() {
   const { currentProject } = useConstruction();
-  const { profile } = useAuth();
+  const { profile, canEdit } = useAuth();
   const [items, setItems] = useState<IndirectCostItem[]>([]);
   const [editingItem, setEditingItem] = useState<IndirectCostItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
