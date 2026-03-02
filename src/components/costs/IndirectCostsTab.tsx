@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Pencil, Trash2, Building2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Building2, Settings2, X, Check, ChevronDown, ChevronRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,7 +22,7 @@ interface IndirectCostItem {
   unit: string;
 }
 
-const INDIRECT_SUBCATEGORIES = [
+const DEFAULT_CATEGORIES = [
   "Água",
   "Luz / Energia",
   "Telefone / Internet",
@@ -37,15 +39,83 @@ const INDIRECT_SUBCATEGORIES = [
   "Outras Despesas",
 ];
 
+const CATEGORIES_STORAGE_KEY = "obramap_indirect_categories";
+
 export function IndirectCostsTab() {
   const { currentProject } = useConstruction();
   const { profile } = useAuth();
   const [items, setItems] = useState<IndirectCostItem[]>([]);
   const [editingItem, setEditingItem] = useState<IndirectCostItem | null>(null);
-  const [newItem, setNewItem] = useState<{
-    name: string; value: string; quantity: string; unit: string; subcategory: string;
-  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [addingToCategory, setAddingToCategory] = useState<string | null>(null);
+  const [newItemDraft, setNewItemDraft] = useState({ name: "", value: "", quantity: "1", unit: "mês" });
+
+  // Category management
+  const [categories, setCategories] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem(CATEGORIES_STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+    }
+    return DEFAULT_CATEGORIES;
+  });
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [editingCategory, setEditingCategory] = useState<{ old: string; new: string } | null>(null);
+
+  const saveCategories = (cats: string[]) => {
+    setCategories(cats);
+    localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(cats));
+  };
+
+  const handleAddCategory = () => {
+    const name = newCategoryName.trim();
+    if (!name || categories.includes(name)) return;
+    saveCategories([...categories, name]);
+    setNewCategoryName("");
+    toast.success("Categoria adicionada!");
+  };
+
+  const handleRenameCategory = async () => {
+    if (!editingCategory || !editingCategory.new.trim()) return;
+    const oldName = editingCategory.old;
+    const newName = editingCategory.new.trim();
+    if (oldName === newName) { setEditingCategory(null); return; }
+
+    // Update all items with old category name
+    const itemsToUpdate = items.filter(i => i.subcategory === oldName);
+    if (itemsToUpdate.length > 0) {
+      const { error } = await supabase
+        .from("indirect_costs")
+        .update({ subcategory: newName, updated_at: new Date().toISOString() })
+        .eq("project_id", currentProject!.id)
+        .eq("subcategory", oldName);
+      if (error) { toast.error("Erro ao renomear categoria"); return; }
+    }
+
+    const updated = categories.map(c => c === oldName ? newName : c);
+    saveCategories(updated);
+    setEditingCategory(null);
+    toast.success("Categoria renomeada!");
+  };
+
+  const handleDeleteCategory = async (cat: string) => {
+    const hasItems = items.some(i => i.subcategory === cat);
+    if (hasItems) {
+      toast.error("Remova todos os itens desta categoria antes de excluí-la.");
+      return;
+    }
+    saveCategories(categories.filter(c => c !== cat));
+    toast.success("Categoria removida!");
+  };
+
+  const toggleCategory = (cat: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat); else next.add(cat);
+      return next;
+    });
+  };
 
   const loadItems = useCallback(async () => {
     if (!currentProject?.id) return;
@@ -76,41 +146,34 @@ export function IndirectCostsTab() {
     }
   }, [currentProject?.id]);
 
-  useEffect(() => {
-    loadItems();
-  }, [loadItems]);
+  useEffect(() => { loadItems(); }, [loadItems]);
 
-  // Realtime
   useEffect(() => {
     if (!currentProject?.id) return;
     const channel = supabase
       .channel("indirect-costs-changes")
-      .on("postgres_changes", {
-        event: "*",
-        schema: "public",
-        table: "indirect_costs",
-        filter: `project_id=eq.${currentProject.id}`,
-      }, () => loadItems())
+      .on("postgres_changes", { event: "*", schema: "public", table: "indirect_costs", filter: `project_id=eq.${currentProject.id}` }, () => loadItems())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [currentProject?.id, loadItems]);
 
-  const handleAdd = async () => {
-    if (!newItem || !newItem.name.trim() || !newItem.value || !newItem.subcategory) return;
+  const handleAddItem = async (subcategory: string) => {
+    if (!newItemDraft.name.trim() || !newItemDraft.value) return;
     if (!currentProject?.id || !profile?.company_id) return;
 
     try {
       const { error } = await supabase.from("indirect_costs").insert({
         project_id: currentProject.id,
         company_id: profile.company_id,
-        name: newItem.name.trim(),
-        subcategory: newItem.subcategory,
-        value: parseFloat(newItem.value) || 0,
-        quantity: parseFloat(newItem.quantity) || 1,
-        unit: newItem.unit || "mês",
+        name: newItemDraft.name.trim(),
+        subcategory,
+        value: parseFloat(newItemDraft.value) || 0,
+        quantity: parseFloat(newItemDraft.quantity) || 1,
+        unit: newItemDraft.unit || "mês",
       });
       if (error) throw error;
-      setNewItem(null);
+      setNewItemDraft({ name: "", value: "", quantity: "1", unit: "mês" });
+      // Keep the add form open for rapid entry
       toast.success("Item adicionado!");
     } catch (err) {
       console.error(err);
@@ -157,12 +220,14 @@ export function IndirectCostsTab() {
 
   const totalIndirect = items.reduce((sum, i) => sum + i.value * i.quantity, 0);
 
-  // Group by subcategory
   const grouped = items.reduce<Record<string, IndirectCostItem[]>>((acc, item) => {
     if (!acc[item.subcategory]) acc[item.subcategory] = [];
     acc[item.subcategory].push(item);
     return acc;
   }, {});
+
+  // Merge: show all categories (even empty ones) + any used categories not in the list
+  const allCategories = [...new Set([...categories, ...Object.keys(grouped)])];
 
   if (!currentProject) {
     return (
@@ -186,173 +251,287 @@ export function IndirectCostsTab() {
               {formatCurrency(totalIndirect)}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            {items.length} {items.length === 1 ? "item" : "itens"} cadastrados em{" "}
-            {Object.keys(grouped).length} {Object.keys(grouped).length === 1 ? "categoria" : "categorias"}
-          </p>
+          <div className="flex items-center justify-between mt-1">
+            <p className="text-xs text-muted-foreground">
+              {items.length} {items.length === 1 ? "item" : "itens"} em{" "}
+              {Object.keys(grouped).length} {Object.keys(grouped).length === 1 ? "categoria" : "categorias"}
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs gap-1"
+              onClick={() => setShowCategoryManager(true)}
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              Categorias
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Items List */}
+      {/* Categories List */}
       <ScrollArea className="h-[calc(100vh-380px)]">
         <div className="space-y-2">
           {isLoading ? (
             <div className="text-center py-8 text-muted-foreground text-sm">Carregando...</div>
-          ) : items.length === 0 && !newItem ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-              Nenhum custo indireto cadastrado.
-            </div>
           ) : (
-            Object.entries(grouped).map(([subcat, catItems]) => (
-              <Card key={subcat} className="overflow-hidden">
-                <CardContent className="p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="text-xs font-semibold uppercase tracking-wider">
-                      {subcat}
-                    </Badge>
-                    <span className="text-sm font-medium text-muted-foreground">
-                      {formatCurrency(catItems.reduce((s, i) => s + i.value * i.quantity, 0))}
-                    </span>
-                  </div>
-                  {catItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
-                    >
-                      {editingItem?.id === item.id ? (
-                        <div className="flex gap-2 items-center flex-1 flex-wrap">
-                          <Select
-                            value={editingItem.subcategory}
-                            onValueChange={(v) => setEditingItem({ ...editingItem, subcategory: v })}
-                          >
-                            <SelectTrigger className="h-8 w-40">
-                              <SelectValue placeholder="Categoria" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {INDIRECT_SUBCATEGORIES.map((s) => (
-                                <SelectItem key={s} value={s}>{s}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            value={editingItem.name}
-                            onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
-                            className="h-8 flex-1 min-w-[120px]"
-                            placeholder="Nome"
-                          />
-                          <Input
-                            type="number"
-                            value={editingItem.value}
-                            onChange={(e) => setEditingItem({ ...editingItem, value: parseFloat(e.target.value) || 0 })}
-                            className="h-8 w-24"
-                            placeholder="Valor"
-                          />
-                          <Input
-                            type="number"
-                            value={editingItem.quantity}
-                            onChange={(e) => setEditingItem({ ...editingItem, quantity: parseFloat(e.target.value) || 1 })}
-                            className="h-8 w-20"
-                            placeholder="Qtd"
-                          />
-                          <Input
-                            value={editingItem.unit}
-                            onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })}
-                            className="h-8 w-16"
-                            placeholder="Un"
-                          />
-                          <Button size="sm" variant="ghost" onClick={handleUpdate}>Salvar</Button>
-                          <Button size="sm" variant="ghost" onClick={() => setEditingItem(null)}>X</Button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">{item.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatCurrency(item.value)} x {item.quantity} {item.unit} ={" "}
-                              {formatCurrency(item.value * item.quantity)}
-                            </p>
-                          </div>
-                          <div className="flex gap-1">
-                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingItem({ ...item })}>
-                              <Pencil className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => handleDelete(item.id)}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            ))
-          )}
+            allCategories.map((cat) => {
+              const catItems = grouped[cat] || [];
+              const catTotal = catItems.reduce((s, i) => s + i.value * i.quantity, 0);
+              const isExpanded = expandedCategories.has(cat);
+              const isAdding = addingToCategory === cat;
 
-          {/* Add new item form */}
-          {newItem ? (
-            <Card>
-              <CardContent className="p-3">
-                <div className="flex gap-2 items-center flex-wrap">
-                  <Select value={newItem.subcategory} onValueChange={(v) => setNewItem({ ...newItem, subcategory: v })}>
-                    <SelectTrigger className="h-8 w-40">
-                      <SelectValue placeholder="Categoria" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {INDIRECT_SUBCATEGORIES.map((s) => (
-                        <SelectItem key={s} value={s}>{s}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    value={newItem.name}
-                    onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-                    className="h-8 flex-1 min-w-[120px]"
-                    placeholder="Nome do item"
-                  />
-                  <Input
-                    type="number"
-                    value={newItem.value}
-                    onChange={(e) => setNewItem({ ...newItem, value: e.target.value })}
-                    className="h-8 w-24"
-                    placeholder="Valor R$"
-                  />
-                  <Input
-                    type="number"
-                    value={newItem.quantity}
-                    onChange={(e) => setNewItem({ ...newItem, quantity: e.target.value })}
-                    className="h-8 w-20"
-                    placeholder="Qtd"
-                  />
-                  <Input
-                    value={newItem.unit}
-                    onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
-                    className="h-8 w-16"
-                    placeholder="Un"
-                  />
-                  <Button size="sm" onClick={handleAdd}>Adicionar</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setNewItem(null)}>X</Button>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full border-dashed"
-              onClick={() => setNewItem({ name: "", value: "", quantity: "1", unit: "mês", subcategory: "" })}
-            >
-              <Plus className="w-3.5 h-3.5 mr-1" />
-              Adicionar Custo Indireto
-            </Button>
+              return (
+                <Card key={cat} className="overflow-hidden">
+                  <Collapsible open={isExpanded} onOpenChange={() => toggleCategory(cat)}>
+                    <CollapsibleTrigger asChild>
+                      <div className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center gap-2">
+                          {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                          <span className="text-sm font-semibold">{cat}</span>
+                          {catItems.length > 0 && (
+                            <Badge variant="outline" className="text-xs">
+                              {catItems.length} {catItems.length === 1 ? "item" : "itens"}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {catTotal > 0 && (
+                            <span className="text-sm font-medium text-muted-foreground">
+                              {formatCurrency(catTotal)}
+                            </span>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!isExpanded) toggleCategory(cat);
+                              setAddingToCategory(isAdding ? null : cat);
+                              setNewItemDraft({ name: "", value: "", quantity: "1", unit: "mês" });
+                            }}
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <CardContent className="pt-0 pb-3 px-3 space-y-1.5">
+                        {catItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                          >
+                            {editingItem?.id === item.id ? (
+                              <div className="flex gap-2 items-center flex-1 flex-wrap">
+                                <Select
+                                  value={editingItem.subcategory}
+                                  onValueChange={(v) => setEditingItem({ ...editingItem, subcategory: v })}
+                                >
+                                  <SelectTrigger className="h-8 w-40">
+                                    <SelectValue placeholder="Categoria" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {allCategories.map((s) => (
+                                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Input
+                                  value={editingItem.name}
+                                  onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                                  className="h-8 flex-1 min-w-[100px]"
+                                  placeholder="Nome"
+                                />
+                                <Input
+                                  type="number"
+                                  value={editingItem.value}
+                                  onChange={(e) => setEditingItem({ ...editingItem, value: parseFloat(e.target.value) || 0 })}
+                                  className="h-8 w-24"
+                                  placeholder="Valor"
+                                />
+                                <Input
+                                  type="number"
+                                  value={editingItem.quantity}
+                                  onChange={(e) => setEditingItem({ ...editingItem, quantity: parseFloat(e.target.value) || 1 })}
+                                  className="h-8 w-20"
+                                  placeholder="Qtd"
+                                />
+                                <Input
+                                  value={editingItem.unit}
+                                  onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })}
+                                  className="h-8 w-16"
+                                  placeholder="Un"
+                                />
+                                <Button size="sm" variant="ghost" onClick={handleUpdate}>
+                                  <Check className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => setEditingItem(null)}>
+                                  <X className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium">{item.name}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {formatCurrency(item.value)} × {item.quantity} {item.unit} ={" "}
+                                    {formatCurrency(item.value * item.quantity)}
+                                  </p>
+                                </div>
+                                <div className="flex gap-1">
+                                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingItem({ ...item })}>
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-7 w-7 text-destructive hover:text-destructive"
+                                    onClick={() => handleDelete(item.id)}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        ))}
+
+                        {/* Inline add form */}
+                        {isAdding && (
+                          <div className="flex gap-2 items-center p-2 rounded-lg bg-primary/5 border border-dashed border-primary/30 flex-wrap">
+                            <Input
+                              autoFocus
+                              value={newItemDraft.name}
+                              onChange={(e) => setNewItemDraft({ ...newItemDraft, name: e.target.value })}
+                              className="h-8 flex-1 min-w-[120px]"
+                              placeholder="Descrição do custo"
+                              onKeyDown={(e) => e.key === "Enter" && handleAddItem(cat)}
+                            />
+                            <Input
+                              type="number"
+                              value={newItemDraft.value}
+                              onChange={(e) => setNewItemDraft({ ...newItemDraft, value: e.target.value })}
+                              className="h-8 w-24"
+                              placeholder="R$ Valor"
+                              onKeyDown={(e) => e.key === "Enter" && handleAddItem(cat)}
+                            />
+                            <Input
+                              type="number"
+                              value={newItemDraft.quantity}
+                              onChange={(e) => setNewItemDraft({ ...newItemDraft, quantity: e.target.value })}
+                              className="h-8 w-16"
+                              placeholder="Qtd"
+                            />
+                            <Input
+                              value={newItemDraft.unit}
+                              onChange={(e) => setNewItemDraft({ ...newItemDraft, unit: e.target.value })}
+                              className="h-8 w-16"
+                              placeholder="Un"
+                            />
+                            <Button size="sm" onClick={() => handleAddItem(cat)}>
+                              <Plus className="w-3.5 h-3.5 mr-1" />
+                              Salvar
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setAddingToCategory(null)}>
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        )}
+
+                        {catItems.length === 0 && !isAdding && (
+                          <p className="text-xs text-muted-foreground text-center py-2">
+                            Nenhum item. Clique no <Plus className="w-3 h-3 inline" /> para adicionar.
+                          </p>
+                        )}
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </Card>
+              );
+            })
           )}
         </div>
       </ScrollArea>
+
+      {/* Category Manager Dialog */}
+      <Dialog open={showCategoryManager} onOpenChange={setShowCategoryManager}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings2 className="w-5 h-5" />
+              Gerenciar Categorias
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[50vh] overflow-y-auto">
+            {categories.map((cat) => {
+              const hasItems = items.some(i => i.subcategory === cat);
+              const isEditing = editingCategory?.old === cat;
+
+              return (
+                <div key={cat} className="flex items-center gap-2 p-2 rounded-lg bg-muted/30">
+                  {isEditing ? (
+                    <>
+                      <Input
+                        autoFocus
+                        value={editingCategory.new}
+                        onChange={(e) => setEditingCategory({ ...editingCategory, new: e.target.value })}
+                        className="h-8 flex-1"
+                        onKeyDown={(e) => e.key === "Enter" && handleRenameCategory()}
+                      />
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleRenameCategory}>
+                        <Check className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingCategory(null)}>
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="flex-1 text-sm">{cat}</span>
+                      {hasItems && (
+                        <Badge variant="secondary" className="text-xs">
+                          {items.filter(i => i.subcategory === cat).length}
+                        </Badge>
+                      )}
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingCategory({ old: cat, new: cat })}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={() => handleDeleteCategory(cat)}
+                        disabled={hasItems}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-2 pt-2 border-t">
+            <Input
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              className="h-9 flex-1"
+              placeholder="Nova categoria..."
+              onKeyDown={(e) => e.key === "Enter" && handleAddCategory()}
+            />
+            <Button size="sm" onClick={handleAddCategory} disabled={!newCategoryName.trim()}>
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              Adicionar
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCategoryManager(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
