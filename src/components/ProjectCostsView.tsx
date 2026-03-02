@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Target, Cloud, ChevronDown, ChevronRight, Home, Loader2, Minimize2, Maximize2, Printer } from "lucide-react";
+import { DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Target, Cloud, ChevronDown, ChevronRight, Home, Loader2, Minimize2, Maximize2, Printer, Building2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,6 +13,7 @@ import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { BudgetItemsEditor } from "./BudgetItemsEditor";
+import { IndirectCostsTab } from "./costs/IndirectCostsTab";
 import {
   PieChart as RechartsPieChart,
   Pie,
@@ -83,10 +84,10 @@ export function ProjectCostsView() {
   const { currentStep, advanceToStep } = useProjectSetupFlow();
   const [scopeCosts, setScopeCosts] = useState<ScopeCost[]>([]);
   const [plannedProductions, setPlannedProductions] = useState<PlannedProduction[]>([]);
-  const [activeTab, setActiveTab] = useState<"overview" | "details">(() => {
+  const [activeTab, setActiveTab] = useState<"overview" | "details" | "indirect">(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(COSTS_TAB_STORAGE_KEY);
-      if (saved === "overview" || saved === "details") {
+      if (saved === "overview" || saved === "details" || saved === "indirect") {
         return saved;
       }
     }
@@ -709,14 +710,18 @@ export function ProjectCostsView() {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={(v) => { 
-        const tab = v as "overview" | "details";
+        const tab = v as "overview" | "details" | "indirect";
         setActiveTab(tab);
         localStorage.setItem(COSTS_TAB_STORAGE_KEY, tab);
       }} className="flex flex-col h-full">
-        <TabsList className="grid w-full max-w-lg grid-cols-2 h-10">
+        <TabsList className="grid w-full max-w-lg grid-cols-3 h-10">
           <TabsTrigger value="details" className="gap-2 text-sm">
             <Calculator className="w-4 h-4" />
             Orçamento
+          </TabsTrigger>
+          <TabsTrigger value="indirect" className="gap-2 text-sm">
+            <Building2 className="w-4 h-4" />
+            Indiretos
           </TabsTrigger>
           <TabsTrigger value="overview" className="gap-2 text-sm">
             <PieChart className="w-4 h-4" />
@@ -921,6 +926,10 @@ export function ProjectCostsView() {
               </div>
             </ScrollArea>
           )}
+        </TabsContent>
+
+        <TabsContent value="indirect" className="flex-1 overflow-auto mt-4">
+          <IndirectCostsTab />
         </TabsContent>
 
         <TabsContent value="overview" className="flex-1 overflow-auto mt-4 space-y-4">
