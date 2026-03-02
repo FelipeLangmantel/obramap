@@ -149,11 +149,11 @@ export default function LongTermPlanningPage() {
                     overallTotals={overallTotals}
                     totalHouses={totalHouses}
                     serviceRows={serviceRows}
-                    hasChanges={hasChanges}
+                    hasChanges={canEdit ? hasChanges : false}
                     saving={saving}
-                    onSave={savePlanning}
+                    onSave={canEdit ? savePlanning : () => {}}
                     onRefresh={refresh}
-                    onAddPeriod={addPeriod}
+                    onAddPeriod={canEdit ? addPeriod : undefined}
                   />
 
 
