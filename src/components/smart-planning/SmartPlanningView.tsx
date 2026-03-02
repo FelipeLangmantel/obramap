@@ -22,8 +22,6 @@ import {
   Target,
   Layers,
   Loader2,
-  PlayCircle,
-  BookOpen,
   Users
 } from 'lucide-react';
 import { format } from 'date-fns';
