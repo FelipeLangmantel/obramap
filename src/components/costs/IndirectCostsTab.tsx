@@ -406,7 +406,7 @@ export function IndirectCostsTab() {
                         ))}
 
                         {/* Inline add form */}
-                        {isAdding && (
+                        {isAdding && canEdit && (
                           <div className="flex gap-2 items-center p-2 rounded-lg bg-primary/5 border border-dashed border-primary/30 flex-wrap">
                             <Input
                               autoFocus
