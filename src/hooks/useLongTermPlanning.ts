@@ -647,6 +647,19 @@ export function useLongTermPlanning(projectId: string | undefined) {
     loadMatrixData();
   }, [loadMatrixData]);
 
+  // Auto-refresh when production data changes (banco inicial edits, new productions)
+  useEffect(() => {
+    if (!projectId) return;
+
+    const channel = supabase
+      .channel(`ltp-productions-${projectId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'productions', filter: `project_id=eq.${projectId}` }, () => loadMatrixData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'weekly_productions', filter: `project_id=eq.${projectId}` }, () => loadMatrixData())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [projectId, loadMatrixData]);
+
   return {
     activeVersion,
     periods,
