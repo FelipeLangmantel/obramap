@@ -928,6 +928,10 @@ export function ProjectCostsView() {
           )}
         </TabsContent>
 
+        <TabsContent value="indirect" className="flex-1 overflow-auto mt-4">
+          <IndirectCostsTab />
+        </TabsContent>
+
         <TabsContent value="overview" className="flex-1 overflow-auto mt-4 space-y-4">
           {/* Summary Cards - show executed totals and total obra */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
