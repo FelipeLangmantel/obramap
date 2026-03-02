@@ -9,6 +9,7 @@ import { usePlanningData } from './hooks/usePlanningData';
 import { usePlanningCalculations } from './hooks/usePlanningCalculations';
 import { useStrategicGanttData } from './hooks/useStrategicGanttData';
 import { PlanningOnboarding } from './PlanningOnboarding';
+import { PlanningDashboard } from './PlanningDashboard';
 import { StrategicGanttChart } from './StrategicGanttChart';
 import { LineOfBalance } from './LineOfBalance';
 import { LaborHistogramView } from '@/components/labor-histogram/LaborHistogramView';
