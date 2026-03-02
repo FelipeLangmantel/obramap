@@ -475,10 +475,10 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                         ${draggedIndex === index ? "opacity-50 border-dashed" : ""}
                         transition-all
                       `}
-                      draggable={editingQuadraId !== quadra.id}
-                      onDragStart={() => handleDragStart(index)}
-                      onDragOver={(e) => handleDragOver(e, index)}
-                      onDragEnd={handleDragEnd}
+                      draggable={canEdit && editingQuadraId !== quadra.id}
+                      onDragStart={() => canEdit && handleDragStart(index)}
+                      onDragOver={(e) => canEdit && handleDragOver(e, index)}
+                      onDragEnd={() => canEdit && handleDragEnd()}
                     >
                       <CardContent className="p-4">
                         {editingQuadraId === quadra.id ? (
