@@ -3,7 +3,7 @@ import { Plus, Pencil, Trash2, DollarSign, Package, Hammer, Building2 } from "lu
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ interface CostItem {
   value: number;
   quantity: number;
   unit: string;
+  subcategory?: string;
 }
 
 interface ProjectCostsDialogProps {
@@ -23,14 +24,31 @@ interface ProjectCostsDialogProps {
 
 const COSTS_STORAGE_KEY = "obramap_project_costs";
 
+const INDIRECT_SUBCATEGORIES = [
+  "Água",
+  "Luz / Energia",
+  "Telefone / Internet",
+  "Impostos sobre NF",
+  "Rateio Administrativo",
+  "Engenheiro",
+  "Mestre de Obras",
+  "Locação de Veículo",
+  "Locação de Alojamento",
+  "Alimentação",
+  "EPI / Segurança",
+  "Licenças e Alvarás",
+  "Seguros",
+  "Outras Despesas",
+];
+
 export function ProjectCostsDialog({ open, onOpenChange }: ProjectCostsDialogProps) {
   const { currentProject } = useConstruction();
   const [materialCosts, setMaterialCosts] = useState<CostItem[]>([]);
   const [laborCosts, setLaborCosts] = useState<CostItem[]>([]);
-  const [editingItem, setEditingItem] = useState<{ type: "material" | "labor"; item: CostItem } | null>(null);
-  const [newItem, setNewItem] = useState<{ type: "material" | "labor"; name: string; value: string; quantity: string; unit: string } | null>(null);
+  const [indirectCosts, setIndirectCosts] = useState<CostItem[]>([]);
+  const [editingItem, setEditingItem] = useState<{ type: "material" | "labor" | "indirect"; item: CostItem } | null>(null);
+  const [newItem, setNewItem] = useState<{ type: "material" | "labor" | "indirect"; name: string; value: string; quantity: string; unit: string; subcategory: string } | null>(null);
 
-  // Load saved costs
   useEffect(() => {
     if (currentProject?.id) {
       const savedData = localStorage.getItem(`${COSTS_STORAGE_KEY}_${currentProject.id}`);
@@ -38,21 +56,39 @@ export function ProjectCostsDialog({ open, onOpenChange }: ProjectCostsDialogPro
         const parsed = JSON.parse(savedData);
         setMaterialCosts(parsed.materials || []);
         setLaborCosts(parsed.labor || []);
+        setIndirectCosts(parsed.indirect || []);
       } else {
         setMaterialCosts([]);
         setLaborCosts([]);
+        setIndirectCosts([]);
       }
     }
   }, [currentProject?.id]);
 
-  // Save costs
-  const saveCosts = (materials: CostItem[], labor: CostItem[]) => {
+  const saveCosts = (materials: CostItem[], labor: CostItem[], indirect: CostItem[]) => {
     if (currentProject?.id) {
       localStorage.setItem(`${COSTS_STORAGE_KEY}_${currentProject.id}`, JSON.stringify({
         materials,
         labor,
+        indirect,
       }));
     }
+  };
+
+  const getListByType = (type: "material" | "labor" | "indirect") => {
+    if (type === "material") return materialCosts;
+    if (type === "labor") return laborCosts;
+    return indirectCosts;
+  };
+
+  const setListByType = (type: "material" | "labor" | "indirect", items: CostItem[]) => {
+    const m = type === "material" ? items : materialCosts;
+    const l = type === "labor" ? items : laborCosts;
+    const i = type === "indirect" ? items : indirectCosts;
+    if (type === "material") setMaterialCosts(items);
+    else if (type === "labor") setLaborCosts(items);
+    else setIndirectCosts(items);
+    saveCosts(m, l, i);
   };
 
   const handleAddItem = () => {
@@ -64,57 +100,33 @@ export function ProjectCostsDialog({ open, onOpenChange }: ProjectCostsDialogPro
       value: parseFloat(newItem.value) || 0,
       quantity: parseFloat(newItem.quantity) || 1,
       unit: newItem.unit || "un",
+      subcategory: newItem.subcategory || undefined,
     };
 
-    if (newItem.type === "material") {
-      const updated = [...materialCosts, item];
-      setMaterialCosts(updated);
-      saveCosts(updated, laborCosts);
-    } else {
-      const updated = [...laborCosts, item];
-      setLaborCosts(updated);
-      saveCosts(materialCosts, updated);
-    }
-
+    const updated = [...getListByType(newItem.type), item];
+    setListByType(newItem.type, updated);
     setNewItem(null);
     toast.success("Item adicionado!");
   };
 
   const handleUpdateItem = () => {
     if (!editingItem) return;
-
-    if (editingItem.type === "material") {
-      const updated = materialCosts.map(c => c.id === editingItem.item.id ? editingItem.item : c);
-      setMaterialCosts(updated);
-      saveCosts(updated, laborCosts);
-    } else {
-      const updated = laborCosts.map(c => c.id === editingItem.item.id ? editingItem.item : c);
-      setLaborCosts(updated);
-      saveCosts(materialCosts, updated);
-    }
-
+    const list = getListByType(editingItem.type);
+    const updated = list.map(c => c.id === editingItem.item.id ? editingItem.item : c);
+    setListByType(editingItem.type, updated);
     setEditingItem(null);
     toast.success("Item atualizado!");
   };
 
-  const handleDeleteItem = (type: "material" | "labor", id: string) => {
-    if (type === "material") {
-      const updated = materialCosts.filter(c => c.id !== id);
-      setMaterialCosts(updated);
-      saveCosts(updated, laborCosts);
-    } else {
-      const updated = laborCosts.filter(c => c.id !== id);
-      setLaborCosts(updated);
-      saveCosts(materialCosts, updated);
-    }
+  const handleDeleteItem = (type: "material" | "labor" | "indirect", id: string) => {
+    const list = getListByType(type);
+    const updated = list.filter(c => c.id !== id);
+    setListByType(type, updated);
     toast.success("Item removido!");
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(value);
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
   };
 
   const calculateTotal = (items: CostItem[]) => {
@@ -123,7 +135,8 @@ export function ProjectCostsDialog({ open, onOpenChange }: ProjectCostsDialogPro
 
   const totalMaterial = calculateTotal(materialCosts);
   const totalLabor = calculateTotal(laborCosts);
-  const totalGeral = totalMaterial + totalLabor;
+  const totalIndirect = calculateTotal(indirectCosts);
+  const totalGeral = totalMaterial + totalLabor + totalIndirect;
 
   if (!currentProject) {
     return (
@@ -140,7 +153,7 @@ export function ProjectCostsDialog({ open, onOpenChange }: ProjectCostsDialogPro
     );
   }
 
-  const renderCostList = (type: "material" | "labor", items: CostItem[]) => (
+  const renderCostList = (type: "material" | "labor" | "indirect", items: CostItem[]) => (
     <div className="space-y-2">
       {items.length === 0 ? (
         <div className="text-center py-6 text-muted-foreground text-sm">
@@ -153,14 +166,32 @@ export function ProjectCostsDialog({ open, onOpenChange }: ProjectCostsDialogPro
             className="flex items-center justify-between p-3 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
           >
             {editingItem?.item.id === item.id ? (
-              <div className="flex gap-2 items-center flex-1">
+              <div className="flex gap-2 items-center flex-1 flex-wrap">
+                {type === "indirect" && (
+                  <Select
+                    value={editingItem.item.subcategory || ""}
+                    onValueChange={(v) => setEditingItem({
+                      ...editingItem,
+                      item: { ...editingItem.item, subcategory: v }
+                    })}
+                  >
+                    <SelectTrigger className="h-8 w-40">
+                      <SelectValue placeholder="Categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {INDIRECT_SUBCATEGORIES.map(s => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
                 <Input
                   value={editingItem.item.name}
                   onChange={(e) => setEditingItem({
                     ...editingItem,
                     item: { ...editingItem.item, name: e.target.value }
                   })}
-                  className="h-8 flex-1"
+                  className="h-8 flex-1 min-w-[120px]"
                   placeholder="Nome"
                 />
                 <Input
@@ -198,6 +229,9 @@ export function ProjectCostsDialog({ open, onOpenChange }: ProjectCostsDialogPro
             ) : (
               <>
                 <div className="flex-1">
+                  {item.subcategory && (
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{item.subcategory}</span>
+                  )}
                   <p className="text-sm font-medium">{item.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {formatCurrency(item.value)} x {item.quantity} {item.unit} = {formatCurrency(item.value * item.quantity)}
@@ -227,13 +261,27 @@ export function ProjectCostsDialog({ open, onOpenChange }: ProjectCostsDialogPro
         ))
       )}
 
-      {/* Add new item */}
       {newItem?.type === type ? (
-        <div className="flex gap-2 items-center p-3 bg-secondary/50 rounded-lg">
+        <div className="flex gap-2 items-center p-3 bg-secondary/50 rounded-lg flex-wrap">
+          {type === "indirect" && (
+            <Select
+              value={newItem.subcategory}
+              onValueChange={(v) => setNewItem({ ...newItem, subcategory: v })}
+            >
+              <SelectTrigger className="h-8 w-40">
+                <SelectValue placeholder="Categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                {INDIRECT_SUBCATEGORIES.map(s => (
+                  <SelectItem key={s} value={s}>{s}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Input
             value={newItem.name}
             onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
-            className="h-8 flex-1"
+            className="h-8 flex-1 min-w-[120px]"
             placeholder="Nome do item"
           />
           <Input
@@ -264,10 +312,10 @@ export function ProjectCostsDialog({ open, onOpenChange }: ProjectCostsDialogPro
           variant="outline"
           size="sm"
           className="w-full border-dashed"
-          onClick={() => setNewItem({ type, name: "", value: "", quantity: "1", unit: "un" })}
+          onClick={() => setNewItem({ type, name: "", value: "", quantity: "1", unit: type === "indirect" ? "mês" : "un", subcategory: "" })}
         >
           <Plus className="w-3.5 h-3.5 mr-1" />
-          Adicionar {type === "material" ? "Material" : "Mão de Obra"}
+          Adicionar {type === "material" ? "Material" : type === "labor" ? "Mão de Obra" : "Custo Indireto"}
         </Button>
       )}
     </div>
@@ -283,33 +331,39 @@ export function ProjectCostsDialog({ open, onOpenChange }: ProjectCostsDialogPro
           </DialogTitle>
         </DialogHeader>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-3 gap-3 py-2">
-          <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+        <div className="grid grid-cols-4 gap-3 py-2">
+          <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
             <div className="flex items-center gap-2 mb-1">
-              <Package className="w-4 h-4 text-blue-500" />
-              <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Material</span>
+              <Package className="w-4 h-4 text-primary" />
+              <span className="text-xs font-medium text-primary">Material</span>
             </div>
             <p className="text-lg font-bold">{formatCurrency(totalMaterial)}</p>
           </div>
-          <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
+          <div className="p-3 rounded-lg bg-accent/50 border border-accent">
             <div className="flex items-center gap-2 mb-1">
-              <Hammer className="w-4 h-4 text-orange-500" />
-              <span className="text-xs font-medium text-orange-600 dark:text-orange-400">Mão de Obra</span>
+              <Hammer className="w-4 h-4 text-accent-foreground" />
+              <span className="text-xs font-medium text-accent-foreground">Mão de Obra</span>
             </div>
             <p className="text-lg font-bold">{formatCurrency(totalLabor)}</p>
           </div>
-          <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+          <div className="p-3 rounded-lg bg-secondary border border-border">
             <div className="flex items-center gap-2 mb-1">
-              <DollarSign className="w-4 h-4 text-green-500" />
-              <span className="text-xs font-medium text-green-600 dark:text-green-400">Total Geral</span>
+              <Building2 className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">Indiretos</span>
+            </div>
+            <p className="text-lg font-bold">{formatCurrency(totalIndirect)}</p>
+          </div>
+          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+            <div className="flex items-center gap-2 mb-1">
+              <DollarSign className="w-4 h-4 text-destructive" />
+              <span className="text-xs font-medium text-destructive">Total Geral</span>
             </div>
             <p className="text-lg font-bold">{formatCurrency(totalGeral)}</p>
           </div>
         </div>
 
         <Tabs defaultValue="material" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="material" className="flex items-center gap-2">
               <Package className="w-4 h-4" />
               Material
@@ -318,12 +372,19 @@ export function ProjectCostsDialog({ open, onOpenChange }: ProjectCostsDialogPro
               <Hammer className="w-4 h-4" />
               Mão de Obra
             </TabsTrigger>
+            <TabsTrigger value="indirect" className="flex items-center gap-2">
+              <Building2 className="w-4 h-4" />
+              Indiretos
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="material" className="mt-4">
             {renderCostList("material", materialCosts)}
           </TabsContent>
           <TabsContent value="labor" className="mt-4">
             {renderCostList("labor", laborCosts)}
+          </TabsContent>
+          <TabsContent value="indirect" className="mt-4">
+            {renderCostList("indirect", indirectCosts)}
           </TabsContent>
         </Tabs>
 
