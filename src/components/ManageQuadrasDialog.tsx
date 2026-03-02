@@ -586,6 +586,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                                         key={houseId}
                                         className="inline-flex items-center justify-center h-6 min-w-[1.5rem] px-1 text-xs bg-muted rounded cursor-pointer hover:bg-primary/20 transition-colors"
                                         onDoubleClick={() => {
+                                          if (!canEdit) return;
                                           setEditingHouseNumber(houseId);
                                           setNewHouseNumber(String(houseId));
                                         }}
