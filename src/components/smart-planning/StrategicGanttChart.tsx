@@ -88,6 +88,7 @@ export function StrategicGanttChart({
   onUpdateProductivity,
   onUpdatePredecessor,
 }: StrategicGanttChartProps) {
+  const { canEdit } = useAuth();
   const [editingService, setEditingService] = useState<GanttService | null>(null);
   const [editProductivity, setEditProductivity] = useState(1);
   const [editTeams, setEditTeams] = useState(1);
