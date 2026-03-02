@@ -461,10 +461,12 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                 </div>
               ) : (
                 <>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <GripVertical className="h-3 w-3" />
-                    Arraste para reordenar ou use as setas • Duplo clique no número da casa para editar
-                  </p>
+                  {canEdit && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <GripVertical className="h-3 w-3" />
+                      Arraste para reordenar ou use as setas • Duplo clique no número da casa para editar
+                    </p>
+                  )}
                   {currentProject.quadras.map((quadra, index) => (
                     <Card 
                       key={quadra.id} 
