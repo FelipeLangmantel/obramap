@@ -27,7 +27,7 @@ import {
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { PlanningStage, TeamComposition } from './types';
-import { toast } from 'sonner';
+
 
 export function SmartPlanningView() {
   const { currentProject } = useConstruction();
