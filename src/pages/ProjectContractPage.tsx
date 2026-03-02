@@ -28,6 +28,7 @@ import {
 export default function ProjectContractPage() {
   const navigate = useNavigate();
   const { currentProject } = useConstruction();
+  const { canEdit } = useAuth();
   const { advanceToStep, currentStep } = useProjectSetupFlow();
 
   const {
