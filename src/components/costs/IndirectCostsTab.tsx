@@ -303,19 +303,21 @@ export function IndirectCostsTab() {
                               {formatCurrency(catTotal)}
                             </span>
                           )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!isExpanded) toggleCategory(cat);
-                              setAddingToCategory(isAdding ? null : cat);
-                              setNewItemDraft({ name: "", value: "", quantity: "1", unit: "mês" });
-                            }}
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </Button>
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!isExpanded) toggleCategory(cat);
+                                setAddingToCategory(isAdding ? null : cat);
+                                setNewItemDraft({ name: "", value: "", quantity: "1", unit: "mês" });
+                              }}
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </CollapsibleTrigger>
