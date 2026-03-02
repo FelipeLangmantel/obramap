@@ -350,7 +350,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
             </div>
 
             {/* Add New Quadra Button */}
-            {!isAdding && (
+            {!isAdding && canEdit && (
               <Button onClick={() => setIsAdding(true)} className="w-fit gap-2">
                 <Plus className="h-4 w-4" />
                 Nova Quadra
