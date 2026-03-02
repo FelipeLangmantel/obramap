@@ -770,6 +770,63 @@ export type Database = {
           },
         ]
       }
+      indirect_costs: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          project_id: string
+          quantity: number
+          subcategory: string
+          unit: string
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          project_id: string
+          quantity?: number
+          subcategory: string
+          unit?: string
+          updated_at?: string
+          value?: number
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          project_id?: string
+          quantity?: number
+          subcategory?: string
+          unit?: string
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "indirect_costs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "indirect_costs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inputs: {
         Row: {
           category: string
