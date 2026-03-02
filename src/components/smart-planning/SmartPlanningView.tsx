@@ -19,9 +19,7 @@ import {
   Calendar, 
   AlertTriangle, 
   TrendingUp, 
-  Clock, 
   Target,
-  Layers,
   Loader2,
   Users
 } from 'lucide-react';
