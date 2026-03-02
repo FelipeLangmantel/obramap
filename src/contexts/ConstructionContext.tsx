@@ -411,6 +411,47 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     })();
   }, [currentProjectId]); // ✅ Removido 'projects' das deps para evitar loop
 
+  // ✅ 4.5 REALTIME: Auto-refresh houses when production/banco inicial changes
+  useEffect(() => {
+    if (!currentProjectId) return;
+
+    const reloadHouses = async () => {
+      const { data: housesData } = await supabase
+        .from("houses")
+        .select("*")
+        .eq("project_id", currentProjectId)
+        .order("house_number", { ascending: true });
+
+      if (housesData) {
+        const houses: House[] = housesData.map((h: any) => ({
+          id: h.house_number,
+          quadra: h.quadra_id || "",
+          area: h.area,
+          type: h.type,
+          constructorName: h.constructor_name || "",
+          expectedDate: h.expected_date || "",
+          lastUpdate: new Date(h.last_update).toLocaleDateString("pt-BR"),
+          macros: jsonToMacros(h.macros),
+        }));
+
+        setProjects((prev) =>
+          prev.map((p) => (p.id === currentProjectId ? { ...p, houses } : p))
+        );
+      }
+    };
+
+    const channel = supabase
+      .channel(`houses-realtime-${currentProjectId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'houses', filter: `project_id=eq.${currentProjectId}` }, () => {
+        reloadHouses();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentProjectId]);
+
   // ✅ 5. RESETAR ESTADOS AO TROCAR DE PROJETO
   const setCurrentProject = useCallback((projectId: string | null) => {
     console.log("[PROJECT EFFECT] Switching to project:", projectId);
