@@ -126,43 +126,25 @@ export function UserManagement() {
     setIsCreating(true);
 
     try {
-      // Create user via Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            display_name: displayName,
-          },
+      // Create user via edge function (does NOT change current session)
+      const { data, error: fnError } = await supabase.functions.invoke("create-user", {
+        body: {
+          email,
+          password,
+          display_name: displayName,
+          role,
         },
       });
 
-      if (authError) throw authError;
+      if (fnError) throw fnError;
+      if (data?.error) throw new Error(data.error);
 
-      if (authData.user) {
-        // Update user role (the trigger sets default, we need to update if different)
-        if (role !== "viewer") {
-          // Wait a moment for the trigger to complete
-          await new Promise((resolve) => setTimeout(resolve, 500));
-
-          const { error: roleError } = await supabase
-            .from("user_roles")
-            .update({ role })
-            .eq("user_id", authData.user.id);
-
-          if (roleError) {
-            console.error("Error updating role:", roleError);
-          }
-        }
-
-        toast.success("Usuário criado com sucesso!");
-        setIsCreateDialogOpen(false);
-        resetForm();
-        fetchUsers();
-      }
+      toast.success("Usuário criado com sucesso!");
+      setIsCreateDialogOpen(false);
+      resetForm();
+      fetchUsers();
     } catch (error: any) {
-      if (error.message?.includes("already registered")) {
+      if (error.message?.includes("already") || error.message?.includes("already registered")) {
         toast.error("Este email já está cadastrado");
       } else {
         toast.error(error.message || "Erro ao criar usuário");
