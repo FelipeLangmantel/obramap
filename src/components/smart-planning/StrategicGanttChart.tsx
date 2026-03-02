@@ -273,7 +273,7 @@ export function StrategicGanttChart({
                             </div>
                           </PopoverContent>
                         </Popover>
-                      </div>
+                      </div>}
                     </div>
 
                     {/* Bar area */}
