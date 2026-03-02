@@ -80,6 +80,7 @@ function getNextInSequence(names: string[], pattern: NamingPattern): string {
 export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogProps) {
   const { currentProject, addQuadra, updateQuadra, deleteQuadra, reorderQuadras, renameHouse } = useConstruction();
   const { advanceToStep, currentStep } = useProjectSetupFlow();
+  const { canEdit } = useAuth();
   
   const [newQuadraName, setNewQuadraName] = useState("");
   const [selectedHouseIds, setSelectedHouseIds] = useState<number[]>([]);
