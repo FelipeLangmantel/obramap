@@ -30,7 +30,7 @@ import { PlanningStage, TeamComposition } from './types';
 
 export function SmartPlanningView() {
   const { currentProject } = useConstruction();
-  const { company } = useAuth();
+  const { company, canEdit } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [productivityService, setProductivityService] = useState<{
     macro_id: string; scope_id: string; macro_name: string; scope_name: string;
@@ -105,13 +105,20 @@ export function SmartPlanningView() {
   if (!isSetupComplete) {
     return (
       <div className="p-6">
-        <PlanningOnboarding
-          projectId={currentProject.id}
-          totalUnits={currentProject.totalHouses}
-          macrosTemplate={currentProject.macrosTemplate}
-          templates={templates}
-          onComplete={handleOnboardingComplete}
-        />
+        {canEdit ? (
+          <PlanningOnboarding
+            projectId={currentProject.id}
+            totalUnits={currentProject.totalHouses}
+            macrosTemplate={currentProject.macrosTemplate}
+            templates={templates}
+            onComplete={handleOnboardingComplete}
+          />
+        ) : (
+          <div className="text-center py-12 text-muted-foreground">
+            <p className="text-lg font-medium">Planejamento ainda não configurado</p>
+            <p className="text-sm mt-1">Apenas administradores podem configurar o planejamento.</p>
+          </div>
+        )}
       </div>
     );
   }

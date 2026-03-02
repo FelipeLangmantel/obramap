@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useLongTermPlanning } from "@/hooks/useLongTermPlanning";
 import { LongTermPlanningMatrix } from "@/components/long-term-planning/LongTermPlanningMatrix";
 import { PlanningHeader } from "@/components/long-term-planning/PlanningHeader";
@@ -17,6 +18,7 @@ import { ModuleAccessGuard } from "@/components/guards/ModuleAccessGuard";
 export default function LongTermPlanningPage() {
   const navigate = useNavigate();
   const { currentProject } = useConstruction();
+  const { canEdit } = useAuth();
   const { currentStep, advanceToStep } = useProjectSetupFlow();
 
   const {
@@ -147,11 +149,11 @@ export default function LongTermPlanningPage() {
                     overallTotals={overallTotals}
                     totalHouses={totalHouses}
                     serviceRows={serviceRows}
-                    hasChanges={hasChanges}
+                    hasChanges={canEdit ? hasChanges : false}
                     saving={saving}
-                    onSave={savePlanning}
+                    onSave={canEdit ? savePlanning : () => {}}
                     onRefresh={refresh}
-                    onAddPeriod={addPeriod}
+                    onAddPeriod={canEdit ? addPeriod : undefined}
                   />
 
 
@@ -181,10 +183,9 @@ export default function LongTermPlanningPage() {
                       serviceRows={serviceRows}
                       periodSummaries={periodSummaries}
                       totalHouses={totalHouses}
-                      onCellChange={updateCellValue}
-                      onDeletePeriod={deletePeriod}
-                      onUpdatePeriodDates={updatePeriodDates}
-                      
+                      onCellChange={canEdit ? updateCellValue : () => {}}
+                      onDeletePeriod={canEdit ? deletePeriod : undefined}
+                      onUpdatePeriodDates={canEdit ? updatePeriodDates : undefined}
                     />
                   )}
                 </>

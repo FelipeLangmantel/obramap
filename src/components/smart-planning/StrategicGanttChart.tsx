@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   format,
   differenceInDays,
@@ -87,6 +88,7 @@ export function StrategicGanttChart({
   onUpdateProductivity,
   onUpdatePredecessor,
 }: StrategicGanttChartProps) {
+  const { canEdit } = useAuth();
   const [editingService, setEditingService] = useState<GanttService | null>(null);
   const [editProductivity, setEditProductivity] = useState(1);
   const [editTeams, setEditTeams] = useState(1);
@@ -215,7 +217,7 @@ export function StrategicGanttChart({
                           <span>{svc.duration_days}d</span>
                         </div>
                       </div>
-                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {canEdit && <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         {/* Edit productivity */}
                         <TooltipProvider>
                           <Tooltip>
@@ -271,7 +273,7 @@ export function StrategicGanttChart({
                             </div>
                           </PopoverContent>
                         </Popover>
-                      </div>
+                      </div>}
                     </div>
 
                     {/* Bar area */}

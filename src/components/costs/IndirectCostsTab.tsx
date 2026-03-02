@@ -43,7 +43,7 @@ const CATEGORIES_STORAGE_KEY = "obramap_indirect_categories";
 
 export function IndirectCostsTab() {
   const { currentProject } = useConstruction();
-  const { profile } = useAuth();
+  const { profile, canEdit } = useAuth();
   const [items, setItems] = useState<IndirectCostItem[]>([]);
   const [editingItem, setEditingItem] = useState<IndirectCostItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -256,15 +256,17 @@ export function IndirectCostsTab() {
               {items.length} {items.length === 1 ? "item" : "itens"} em{" "}
               {Object.keys(grouped).length} {Object.keys(grouped).length === 1 ? "categoria" : "categorias"}
             </p>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs gap-1"
-              onClick={() => setShowCategoryManager(true)}
-            >
-              <Settings2 className="w-3.5 h-3.5" />
-              Categorias
-            </Button>
+            {canEdit && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => setShowCategoryManager(true)}
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+                Categorias
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -301,19 +303,21 @@ export function IndirectCostsTab() {
                               {formatCurrency(catTotal)}
                             </span>
                           )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!isExpanded) toggleCategory(cat);
-                              setAddingToCategory(isAdding ? null : cat);
-                              setNewItemDraft({ name: "", value: "", quantity: "1", unit: "mês" });
-                            }}
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </Button>
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!isExpanded) toggleCategory(cat);
+                                setAddingToCategory(isAdding ? null : cat);
+                                setNewItemDraft({ name: "", value: "", quantity: "1", unit: "mês" });
+                              }}
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </CollapsibleTrigger>
@@ -381,26 +385,28 @@ export function IndirectCostsTab() {
                                     {formatCurrency(item.value * item.quantity)}
                                   </p>
                                 </div>
-                                <div className="flex gap-1">
-                                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingItem({ ...item })}>
-                                    <Pencil className="w-3.5 h-3.5" />
-                                  </Button>
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-7 w-7 text-destructive hover:text-destructive"
-                                    onClick={() => handleDelete(item.id)}
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </Button>
-                                </div>
+                                {canEdit && (
+                                  <div className="flex gap-1">
+                                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingItem({ ...item })}>
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-destructive hover:text-destructive"
+                                      onClick={() => handleDelete(item.id)}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </div>
+                                )}
                               </>
                             )}
                           </div>
                         ))}
 
                         {/* Inline add form */}
-                        {isAdding && (
+                        {isAdding && canEdit && (
                           <div className="flex gap-2 items-center p-2 rounded-lg bg-primary/5 border border-dashed border-primary/30 flex-wrap">
                             <Input
                               autoFocus

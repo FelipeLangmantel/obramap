@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useProjectContract } from "@/hooks/useProjectContract";
@@ -27,6 +28,7 @@ import {
 export default function ProjectContractPage() {
   const navigate = useNavigate();
   const { currentProject } = useConstruction();
+  const { canEdit } = useAuth();
   const { advanceToStep, currentStep } = useProjectSetupFlow();
 
   const {
@@ -45,16 +47,16 @@ export default function ProjectContractPage() {
   const [showPlanningWarning, setShowPlanningWarning] = useState(false);
   const [pendingNavigate, setPendingNavigate] = useState(false);
   
-  // ✅ isEditing: true se não tem contrato salvo, false se já tem
-  const [isEditing, setIsEditing] = useState(true);
+  // ✅ isEditing: true se não tem contrato salvo e pode editar, false se já tem ou não pode editar
+  const [isEditing, setIsEditing] = useState(canEdit);
   
   // Atualizar estado de edição quando contrato carregar
   useEffect(() => {
     if (!loading && contract) {
       // Se já tem contrato salvo, começa em modo visualização
-      setIsEditing(!contract.id);
+      setIsEditing(!contract.id && canEdit);
     }
-  }, [loading, contract?.id]);
+  }, [loading, contract?.id, canEdit]);
 
   const handleSaveAndContinue = async () => {
     if (hasPlanning) {
@@ -168,7 +170,7 @@ export default function ProjectContractPage() {
 
             {/* Action Buttons */}
             <div className="flex justify-end gap-3 pt-4 border-t">
-              {!isEditing && contract?.id && (
+              {!isEditing && contract?.id && canEdit && (
                 <Button
                   variant="outline"
                   onClick={() => setIsEditing(true)}
@@ -178,7 +180,7 @@ export default function ProjectContractPage() {
                 </Button>
               )}
               
-              {isEditing && (
+              {isEditing && canEdit && (
                 <>
                   {contract?.id && (
                     <Button
