@@ -170,7 +170,7 @@ export default function ProjectContractPage() {
 
             {/* Action Buttons */}
             <div className="flex justify-end gap-3 pt-4 border-t">
-              {!isEditing && contract?.id && (
+              {!isEditing && contract?.id && canEdit && (
                 <Button
                   variant="outline"
                   onClick={() => setIsEditing(true)}
@@ -180,7 +180,7 @@ export default function ProjectContractPage() {
                 </Button>
               )}
               
-              {isEditing && (
+              {isEditing && canEdit && (
                 <>
                   {contract?.id && (
                     <Button
