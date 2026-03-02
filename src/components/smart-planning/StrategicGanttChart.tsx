@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import {
+import { useAuth } from '@/contexts/AuthContext';
   format,
   differenceInDays,
   addDays,
