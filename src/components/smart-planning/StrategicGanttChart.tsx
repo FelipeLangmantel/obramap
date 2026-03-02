@@ -217,7 +217,7 @@ export function StrategicGanttChart({
                           <span>{svc.duration_days}d</span>
                         </div>
                       </div>
-                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {canEdit && <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         {/* Edit productivity */}
                         <TooltipProvider>
                           <Tooltip>
