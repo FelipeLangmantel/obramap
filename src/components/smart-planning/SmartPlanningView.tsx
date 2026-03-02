@@ -172,83 +172,15 @@ export function SmartPlanningView() {
         </TabsList>
 
         <TabsContent value="dashboard" className="flex-1 mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Target className="h-4 w-4" />
-                  Progresso Geral
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{overallProgress.toFixed(1)}%</div>
-                <div className="w-full h-2 bg-muted rounded-full mt-2 overflow-hidden">
-                  <div 
-                    className="h-full bg-primary rounded-full transition-all"
-                    style={{ width: `${overallProgress}%` }}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Layers className="h-4 w-4" />
-                  Etapas
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stages.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  {teams.length} equipes ativas
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  Término Projetado
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {(strategicProjectedEndDate || projectedEndDate)
-                    ? format(strategicProjectedEndDate || projectedEndDate!, 'dd/MM/yyyy', { locale: ptBR })
-                    : '-'
-                  }
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Previsto: {format(new Date(currentProject.expectedEndDate), 'dd/MM/yyyy', { locale: ptBR })}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  Alertas Ativos
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{unresolvedAlerts.length}</div>
-                <p className="text-xs text-muted-foreground">
-                  {unresolvedAlerts.filter(a => a.severity === 'critical').length} críticos
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Mini Gantt from strategic planning */}
-          <StrategicGanttChart
-            services={strategicGanttServices}
-            projectStartDate={strategicStartDate}
-            projectedEndDate={strategicProjectedEndDate}
-            onUpdateProductivity={updateServiceProductivity}
-            onUpdatePredecessor={updatePredecessor}
+          <PlanningDashboard
+            stages={stages}
+            teams={teams}
+            ganttServices={strategicGanttServices}
+            overallProgress={overallProgress}
+            projectedEndDate={strategicProjectedEndDate || projectedEndDate}
+            expectedEndDate={currentProject.expectedEndDate}
+            totalUnits={currentProject.totalHouses}
+            unresolvedAlerts={unresolvedAlerts}
           />
         </TabsContent>
 
