@@ -132,33 +132,7 @@ export function SmartPlanningView() {
 
   return (
     <div className="space-y-4 h-full flex flex-col">
-      {/* Planning Status Banner */}
-      {!hasBaseline && (
-        <Card className="bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
-          <CardContent className="py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-100 dark:bg-amber-900 rounded-full">
-                  <BookOpen className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                </div>
-                <div>
-                  <h3 className="font-medium text-amber-900 dark:text-amber-100">
-                    Planejamento em Rascunho
-                  </h3>
-                  <p className="text-sm text-amber-700 dark:text-amber-300">
-                    Clique em "Iniciar Planejamento" para congelar a versão inicial e ativar o comparativo Planejado × Realizado.
-                  </p>
-                </div>
-              </div>
-              <Button onClick={handleStartPlanning} className="gap-2" disabled={!canEdit}>
-                <PlayCircle className="h-4 w-4" />
-                Iniciar Planejamento
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
+      {/* Planning info banner */}
       {hasBaseline && latestBaseline && (
         <Card className="bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
           <CardContent className="py-3">
@@ -172,7 +146,6 @@ export function SmartPlanningView() {
                   (iniciado em {format(new Date(latestBaseline.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })})
                 </span>
               </div>
-              {/* Botão "Diário de Obra" removido - funcionalidade operacional */}
             </div>
           </CardContent>
         </Card>
