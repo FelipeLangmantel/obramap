@@ -163,6 +163,19 @@ export function useStrategicGanttData(projectId: string | undefined) {
     loadData();
   }, [loadData]);
 
+  // Auto-refresh when production data changes (banco inicial edits, new productions, etc.)
+  useEffect(() => {
+    if (!projectId) return;
+
+    const channel = supabase
+      .channel(`strategic-gantt-productions-${projectId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'productions', filter: `project_id=eq.${projectId}` }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'weekly_productions', filter: `project_id=eq.${projectId}` }, () => loadData())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [projectId, loadData]);
+
   // Build Gantt timeline
   const buildGanttServices = (
     svcs: StrategicService[],
