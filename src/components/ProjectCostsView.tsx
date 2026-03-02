@@ -710,14 +710,18 @@ export function ProjectCostsView() {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={(v) => { 
-        const tab = v as "overview" | "details";
+        const tab = v as "overview" | "details" | "indirect";
         setActiveTab(tab);
         localStorage.setItem(COSTS_TAB_STORAGE_KEY, tab);
       }} className="flex flex-col h-full">
-        <TabsList className="grid w-full max-w-lg grid-cols-2 h-10">
+        <TabsList className="grid w-full max-w-lg grid-cols-3 h-10">
           <TabsTrigger value="details" className="gap-2 text-sm">
             <Calculator className="w-4 h-4" />
             Orçamento
+          </TabsTrigger>
+          <TabsTrigger value="indirect" className="gap-2 text-sm">
+            <Building2 className="w-4 h-4" />
+            Indiretos
           </TabsTrigger>
           <TabsTrigger value="overview" className="gap-2 text-sm">
             <PieChart className="w-4 h-4" />
