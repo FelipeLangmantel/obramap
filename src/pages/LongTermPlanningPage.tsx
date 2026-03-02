@@ -183,10 +183,9 @@ export default function LongTermPlanningPage() {
                       serviceRows={serviceRows}
                       periodSummaries={periodSummaries}
                       totalHouses={totalHouses}
-                      onCellChange={updateCellValue}
-                      onDeletePeriod={deletePeriod}
-                      onUpdatePeriodDates={updatePeriodDates}
-                      
+                      onCellChange={canEdit ? updateCellValue : () => {}}
+                      onDeletePeriod={canEdit ? deletePeriod : undefined}
+                      onUpdatePeriodDates={canEdit ? updatePeriodDates : undefined}
                     />
                   )}
                 </>
