@@ -542,7 +542,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                           // View mode
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex items-center gap-2">
-                              <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
+                              <GripVertical className={`h-5 w-5 text-muted-foreground ${canEdit ? 'cursor-grab' : 'opacity-30'}`} />
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
                                   <h4 className="font-medium">{quadra.name}</h4>
