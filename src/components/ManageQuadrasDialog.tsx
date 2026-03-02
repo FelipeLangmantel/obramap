@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Dialog,
   DialogContent,
