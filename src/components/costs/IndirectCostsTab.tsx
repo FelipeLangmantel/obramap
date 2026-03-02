@@ -256,15 +256,17 @@ export function IndirectCostsTab() {
               {items.length} {items.length === 1 ? "item" : "itens"} em{" "}
               {Object.keys(grouped).length} {Object.keys(grouped).length === 1 ? "categoria" : "categorias"}
             </p>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs gap-1"
-              onClick={() => setShowCategoryManager(true)}
-            >
-              <Settings2 className="w-3.5 h-3.5" />
-              Categorias
-            </Button>
+            {canEdit && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => setShowCategoryManager(true)}
+              >
+                <Settings2 className="w-3.5 h-3.5" />
+                Categorias
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
