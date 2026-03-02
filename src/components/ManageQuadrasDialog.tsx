@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Dialog,
   DialogContent,
@@ -79,6 +80,7 @@ function getNextInSequence(names: string[], pattern: NamingPattern): string {
 export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogProps) {
   const { currentProject, addQuadra, updateQuadra, deleteQuadra, reorderQuadras, renameHouse } = useConstruction();
   const { advanceToStep, currentStep } = useProjectSetupFlow();
+  const { canEdit } = useAuth();
   
   const [newQuadraName, setNewQuadraName] = useState("");
   const [selectedHouseIds, setSelectedHouseIds] = useState<number[]>([]);
@@ -348,7 +350,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
             </div>
 
             {/* Add New Quadra Button */}
-            {!isAdding && (
+            {!isAdding && canEdit && (
               <Button onClick={() => setIsAdding(true)} className="w-fit gap-2">
                 <Plus className="h-4 w-4" />
                 Nova Quadra
@@ -459,10 +461,12 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                 </div>
               ) : (
                 <>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <GripVertical className="h-3 w-3" />
-                    Arraste para reordenar ou use as setas • Duplo clique no número da casa para editar
-                  </p>
+                  {canEdit && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <GripVertical className="h-3 w-3" />
+                      Arraste para reordenar ou use as setas • Duplo clique no número da casa para editar
+                    </p>
+                  )}
                   {currentProject.quadras.map((quadra, index) => (
                     <Card 
                       key={quadra.id} 
@@ -471,10 +475,10 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                         ${draggedIndex === index ? "opacity-50 border-dashed" : ""}
                         transition-all
                       `}
-                      draggable={editingQuadraId !== quadra.id}
-                      onDragStart={() => handleDragStart(index)}
-                      onDragOver={(e) => handleDragOver(e, index)}
-                      onDragEnd={handleDragEnd}
+                      draggable={canEdit && editingQuadraId !== quadra.id}
+                      onDragStart={() => canEdit && handleDragStart(index)}
+                      onDragOver={(e) => canEdit && handleDragOver(e, index)}
+                      onDragEnd={() => canEdit && handleDragEnd()}
                     >
                       <CardContent className="p-4">
                         {editingQuadraId === quadra.id ? (
@@ -538,7 +542,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                           // View mode
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex items-center gap-2">
-                              <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
+                              <GripVertical className={`h-5 w-5 text-muted-foreground ${canEdit ? 'cursor-grab' : 'opacity-30'}`} />
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
                                   <h4 className="font-medium">{quadra.name}</h4>
@@ -582,6 +586,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                                         key={houseId}
                                         className="inline-flex items-center justify-center h-6 min-w-[1.5rem] px-1 text-xs bg-muted rounded cursor-pointer hover:bg-primary/20 transition-colors"
                                         onDoubleClick={() => {
+                                          if (!canEdit) return;
                                           setEditingHouseNumber(houseId);
                                           setNewHouseNumber(String(houseId));
                                         }}
@@ -600,6 +605,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                               </div>
                             </div>
                             
+                            {canEdit && (
                             <div className="flex gap-1 items-center">
                               <div className="flex flex-col">
                                 <Button
@@ -637,6 +643,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
+                            )}
                           </div>
                         )}
                       </CardContent>
