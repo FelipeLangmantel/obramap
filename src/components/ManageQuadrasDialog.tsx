@@ -605,6 +605,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                               </div>
                             </div>
                             
+                            {canEdit && (
                             <div className="flex gap-1 items-center">
                               <div className="flex flex-col">
                                 <Button
@@ -642,6 +643,7 @@ export function ManageQuadrasDialog({ open, onOpenChange }: ManageQuadrasDialogP
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
+                            )}
                           </div>
                         )}
                       </CardContent>
