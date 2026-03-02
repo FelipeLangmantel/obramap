@@ -105,13 +105,20 @@ export function SmartPlanningView() {
   if (!isSetupComplete) {
     return (
       <div className="p-6">
-        <PlanningOnboarding
-          projectId={currentProject.id}
-          totalUnits={currentProject.totalHouses}
-          macrosTemplate={currentProject.macrosTemplate}
-          templates={templates}
-          onComplete={handleOnboardingComplete}
-        />
+        {canEdit ? (
+          <PlanningOnboarding
+            projectId={currentProject.id}
+            totalUnits={currentProject.totalHouses}
+            macrosTemplate={currentProject.macrosTemplate}
+            templates={templates}
+            onComplete={handleOnboardingComplete}
+          />
+        ) : (
+          <div className="text-center py-12 text-muted-foreground">
+            <p className="text-lg font-medium">Planejamento ainda não configurado</p>
+            <p className="text-sm mt-1">Apenas administradores podem configurar o planejamento.</p>
+          </div>
+        )}
       </div>
     );
   }
