@@ -399,10 +399,8 @@ export function Map3DView() {
 
   // Extract layers when 3D scene is ready
   const handleSceneReady = useCallback((scene: THREE.Object3D) => {
-    const extracted = layerManager.extractLayers(scene);
-    if (extracted.length > 0) {
-      console.log(`[3D] Extracted ${extracted.length} layers from model`);
-    }
+    layerManager.extractLayers(scene);
+    console.log('[3D] Layers extracted from model');
   }, [layerManager.extractLayers]);
 
   // Load production data to update layers

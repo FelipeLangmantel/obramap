@@ -40,16 +40,21 @@ export function useModelLayers(projectId: string | undefined) {
       }
     });
 
-    const extracted: ModelLayer[] = Array.from(layerMap.entries()).map(([name, count]) => ({
-      name,
-      displayName: name,
-      visible: true,
-      opacity: 1,
-      meshCount: count,
-    }));
-
-    setLayers(extracted);
-    return extracted;
+    // Preserve existing display names from previously loaded links
+    setLayers(prev => {
+      const prevMap = new Map(prev.map(l => [l.name, l]));
+      return Array.from(layerMap.entries()).map(([name, count]) => {
+        const existing = prevMap.get(name);
+        return {
+          name,
+          displayName: existing?.displayName || name,
+          visible: existing?.visible ?? true,
+          opacity: existing?.opacity ?? 1,
+          meshCount: count,
+          progress: existing?.progress,
+        };
+      });
+    });
   }, []);
 
   const loadLinks = useCallback(async () => {
