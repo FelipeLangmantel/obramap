@@ -54,9 +54,9 @@ export default function ProjectContractPage() {
   useEffect(() => {
     if (!loading && contract) {
       // Se já tem contrato salvo, começa em modo visualização
-      setIsEditing(!contract.id);
+      setIsEditing(!contract.id && canEdit);
     }
-  }, [loading, contract?.id]);
+  }, [loading, contract?.id, canEdit]);
 
   const handleSaveAndContinue = async () => {
     if (hasPlanning) {
