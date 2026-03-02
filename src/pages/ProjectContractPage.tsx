@@ -47,8 +47,8 @@ export default function ProjectContractPage() {
   const [showPlanningWarning, setShowPlanningWarning] = useState(false);
   const [pendingNavigate, setPendingNavigate] = useState(false);
   
-  // ✅ isEditing: true se não tem contrato salvo, false se já tem
-  const [isEditing, setIsEditing] = useState(true);
+  // ✅ isEditing: true se não tem contrato salvo e pode editar, false se já tem ou não pode editar
+  const [isEditing, setIsEditing] = useState(canEdit);
   
   // Atualizar estado de edição quando contrato carregar
   useEffect(() => {
