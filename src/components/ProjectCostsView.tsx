@@ -84,10 +84,10 @@ export function ProjectCostsView() {
   const { currentStep, advanceToStep } = useProjectSetupFlow();
   const [scopeCosts, setScopeCosts] = useState<ScopeCost[]>([]);
   const [plannedProductions, setPlannedProductions] = useState<PlannedProduction[]>([]);
-  const [activeTab, setActiveTab] = useState<"overview" | "details">(() => {
+  const [activeTab, setActiveTab] = useState<"overview" | "details" | "indirect">(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(COSTS_TAB_STORAGE_KEY);
-      if (saved === "overview" || saved === "details") {
+      if (saved === "overview" || saved === "details" || saved === "indirect") {
         return saved;
       }
     }
