@@ -13,6 +13,7 @@ import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { BudgetItemsEditor } from "./BudgetItemsEditor";
+import { IndirectCostsTab } from "./costs/IndirectCostsTab";
 import {
   PieChart as RechartsPieChart,
   Pie,
