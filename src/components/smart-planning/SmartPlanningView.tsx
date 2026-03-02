@@ -86,14 +86,6 @@ export function SmartPlanningView() {
     await loadData();
   };
 
-  const handleStartPlanning = async () => {
-    if (!canEdit) {
-      toast.error('Você não tem permissão para iniciar o planejamento');
-      return;
-    }
-    
-    await createBaseline('Planejamento Inicial');
-  };
 
   if (!currentProject) {
     return (
