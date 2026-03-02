@@ -49,7 +49,7 @@ export function SmartPlanningView() {
     isSetupComplete,
     hasBaseline,
     addStageWithTeams,
-    createBaseline,
+    
     // addWorkLog removido - operacional
     loadData
   } = usePlanningData(currentProject?.id);
