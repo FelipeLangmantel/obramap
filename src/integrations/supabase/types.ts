@@ -4939,6 +4939,10 @@ export type Database = {
         Args: { p_contract_id: string }
         Returns: Json
       }
+      apply_structure_mutation: {
+        Args: { p_new_template: Json; p_project_id: string }
+        Returns: Json
+      }
       approve_planning_period: {
         Args: { p_period_id: string; p_user_id?: string }
         Returns: Json
