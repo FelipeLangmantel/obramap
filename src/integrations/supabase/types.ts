@@ -3702,6 +3702,7 @@ export type Database = {
           category: string
           created_at: string
           id: string
+          input_code: string | null
           input_id: string | null
           macro_id: string
           material_family: string | null
@@ -3719,6 +3720,7 @@ export type Database = {
           category: string
           created_at?: string
           id?: string
+          input_code?: string | null
           input_id?: string | null
           macro_id: string
           material_family?: string | null
@@ -3736,6 +3738,7 @@ export type Database = {
           category?: string
           created_at?: string
           id?: string
+          input_code?: string | null
           input_id?: string | null
           macro_id?: string
           material_family?: string | null
