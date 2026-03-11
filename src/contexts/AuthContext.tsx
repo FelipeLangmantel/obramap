@@ -75,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const authListenerRegistered = useRef(false);
   const isFetchingUserData = useRef(false);
   const hasFetchedUserData = useRef<string | null>(null);
+  const isPageVisibleRef = useRef(typeof document === "undefined" ? true : !document.hidden);
 
   const fetchUserData = useCallback(async (userId: string) => {
     // ✅ Proteção contra execução duplicada
