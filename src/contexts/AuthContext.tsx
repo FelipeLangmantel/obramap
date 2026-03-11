@@ -206,6 +206,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null);
 
         if (session?.user) {
+          // ✅ Se já temos dados carregados para este usuário, não recarregar
+          // Evita flash/reload ao trocar de aba (TOKEN_REFRESHED)
+          if (hasFetchedUserData.current === session.user.id && event === 'TOKEN_REFRESHED') {
+            console.log("[AUTH EFFECT] Skipping refetch - data already loaded for user");
+            return;
+          }
           // ✅ Manter isLoading=true enquanto fetchUserData roda
           // Evita flash de "Acesso Negado" no CompanyUserGuard
           setIsLoading(true);

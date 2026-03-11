@@ -20,7 +20,14 @@ import MeasurementPlanningPage from "./pages/MeasurementPlanningPage";
 import LongTermPlanningPage from "./pages/LongTermPlanningPage";
 import ProjectContractPage from "./pages/ProjectContractPage";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 1000 * 60 * 5, // 5 minutes
+    },
+  },
+});
 
 // ✅ Mapeamento de rotas para permissões de menu
 const ROUTE_PERMISSION_MAP: Record<string, string> = {
