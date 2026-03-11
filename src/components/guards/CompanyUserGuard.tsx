@@ -42,10 +42,10 @@ export function CompanyUserGuard({ children }: CompanyUserGuardProps) {
     return <Navigate to="/system/dashboard" replace />;
   }
 
-  // ✅ FIX: Aguardar profile carregar antes de decidir
-  // Evita o flash de "Acesso Negado" durante login quando
-  // fetchUserData ainda não completou
-  if (!profile) {
+  // ✅ FIX: Aguardar profile E company carregarem antes de decidir
+  // Se profile existe e tem company_id, mas company ainda não carregou,
+  // significa que fetchUserData ainda está em andamento
+  if (!profile || (profile.company_id && !company)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
