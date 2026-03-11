@@ -43,6 +43,11 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
   const { currentProject, projects, isLoading: projectsLoading } = useConstruction();
   const location = useLocation();
 
+  useEffect(() => {
+    console.log("[MOUNT] SetupFlowGuard mounted");
+    return () => console.log("[UNMOUNT] SetupFlowGuard unmounted");
+  }, []);
+
   // ✅ Estado para verificação inicial do sistema
   const [systemCheckComplete, setSystemCheckComplete] = useState(false);
   const [needsInitialSetup, setNeedsInitialSetup] = useState(false);

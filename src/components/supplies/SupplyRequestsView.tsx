@@ -10,6 +10,11 @@ export function SupplyRequestsView() {
   const { currentProject } = useConstruction();
   const projectId = currentProject?.id;
 
+  useEffect(() => {
+    console.log("[MOUNT] SupplyRequestsView mounted");
+    return () => console.log("[UNMOUNT] SupplyRequestsView unmounted");
+  }, []);
+
   const {
      measurements,
      selectedMeasurement,
