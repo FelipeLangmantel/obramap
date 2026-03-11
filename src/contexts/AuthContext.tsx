@@ -202,16 +202,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         console.log("[AUTH EFFECT] Auth state changed:", event);
+        
+        // ✅ Ignorar eventos que não exigem reconstrução da UI
+        // TOKEN_REFRESHED e INITIAL_SESSION com dados já carregados não devem causar flash
+        if (session?.user && hasFetchedUserData.current === session.user.id) {
+          if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+            console.log("[AUTH EFFECT] Skipping refetch - data already loaded, event:", event);
+            // Apenas atualizar session/user sem disparar loading
+            setSession(session);
+            setUser(session.user);
+            return;
+          }
+        }
+        
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          // ✅ Se já temos dados carregados para este usuário, não recarregar
-          // Evita flash/reload ao trocar de aba (TOKEN_REFRESHED)
-          if (hasFetchedUserData.current === session.user.id && event === 'TOKEN_REFRESHED') {
-            console.log("[AUTH EFFECT] Skipping refetch - data already loaded for user");
-            return;
-          }
           // ✅ Manter isLoading=true enquanto fetchUserData roda
           // Evita flash de "Acesso Negado" no CompanyUserGuard
           setIsLoading(true);
