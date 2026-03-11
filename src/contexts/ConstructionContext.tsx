@@ -231,13 +231,8 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (authLoading) return;
 
-    // Debug: detect why reload happens
-    console.log("[PROJECT EFFECT] deps", {
-      userId: user?.id ?? null,
-      isSystemAdmin,
-      companyId: profile?.company_id ?? null,
-      prevKey: lastProjectsLoadKeyRef.current,
-    });
+    // ✅ Não recarregar se a aba ficou oculta e voltou (Page Visibility)
+    // O loadKey garante que só recarrega quando user/company realmente mudam
 
     // Logout -> hard reset
     if (!user) {

@@ -44,10 +44,23 @@ type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" 
  * - Tem acesso a esta rota
  */
 function Index() {
-  const [activeView, setActiveView] = useState<ViewType>("home");
+  // ✅ Restaurar view ativa do sessionStorage para preservar estado ao trocar aba
+  const [activeView, setActiveView] = useState<ViewType>(() => {
+    try {
+      const saved = sessionStorage.getItem("obramap_active_view");
+      return (saved as ViewType) || "home";
+    } catch {
+      return "home";
+    }
+  });
   const location = useLocation();
   const { selectedHouse, isLoading, projects, currentProject, setCurrentProject } = useConstruction();
   const { canAccessProject } = useAuth();
+
+  // ✅ Persistir view ativa no sessionStorage
+  useEffect(() => {
+    sessionStorage.setItem("obramap_active_view", activeView);
+  }, [activeView]);
 
   // ✅ Se navegou de outra rota com targetView no state, aplicar a view
   useEffect(() => {
