@@ -1813,20 +1813,6 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                           />
                         </div>
                       </div>
-                      {newInput.category === 'material' && (
-                        <div>
-                          <Label>Quantidade em Estoque</Label>
-                          <Input 
-                            type="number" 
-                            value={newInput.stock_quantity} 
-                            onChange={(e) => setNewInput({ ...newInput, stock_quantity: parseFloat(e.target.value) || 0 })} 
-                            placeholder="0"
-                            min="0"
-                            step="0.01"
-                          />
-                          <p className="text-xs text-muted-foreground mt-1">Quantidade atual em estoque para desconto nas compras</p>
-                        </div>
-                      )}
                       <div><Label>Descrição</Label><Textarea value={newInput.description} onChange={(e) => setNewInput({ ...newInput, description: e.target.value })} /></div>
                     </div>
                     <DialogFooter>

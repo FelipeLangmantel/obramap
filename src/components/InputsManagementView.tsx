@@ -712,11 +712,6 @@ export function InputsManagementView() {
                           <Input type="number" value={newInput.unit_value} onChange={(e) => setNewInput({ ...newInput, unit_value: parseFloat(e.target.value) || 0 })} placeholder="0,00" min="0" step="0.01" />
                         </div>
                       </div>
-                      {newInput.category === 'material' && (
-                        <div><Label>Quantidade em Estoque</Label>
-                          <Input type="number" value={newInput.stock_quantity} onChange={(e) => setNewInput({ ...newInput, stock_quantity: parseFloat(e.target.value) || 0 })} placeholder="0" min="0" />
-                        </div>
-                      )}
                       <div><Label>Descrição</Label><Textarea value={newInput.description} onChange={(e) => setNewInput({ ...newInput, description: e.target.value })} /></div>
                     </div>
                     <DialogFooter>
