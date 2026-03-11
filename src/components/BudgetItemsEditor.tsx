@@ -951,7 +951,10 @@ export function BudgetItemsEditor({
                             <>
                               <div className="w-5">{getCategoryIcon(item.category)}</div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{item.name}</p>
+                                <div className="flex items-center gap-1.5">
+                                  {item.inputCode && <span className="text-[10px] font-mono text-muted-foreground shrink-0">{item.inputCode}</span>}
+                                  <p className="text-sm font-medium truncate">{item.name}</p>
+                                </div>
                                 <p className="text-xs text-muted-foreground">
                                   {item.quantity} {item.unit} × {formatCurrency(item.unitValue)}
                                 </p>
