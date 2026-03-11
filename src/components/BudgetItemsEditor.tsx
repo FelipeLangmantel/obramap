@@ -791,6 +791,7 @@ export function BudgetItemsEditor({
                           input.category === 'labor' ? <Hammer className="w-4 h-4 text-orange-500 shrink-0" /> : 
                           <Wrench className="w-4 h-4 text-green-500 shrink-0" />
                         )}
+                        {input.code && <span className="text-muted-foreground text-[10px] font-mono shrink-0">{input.code}</span>}
                         <span className="flex-1 truncate font-medium">{input.name}</span>
                         <span className="text-muted-foreground text-xs shrink-0">{input.unit}</span>
                         {input.unit_value && input.unit_value > 0 && (
