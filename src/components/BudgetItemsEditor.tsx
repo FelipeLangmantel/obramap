@@ -201,6 +201,7 @@ export function BudgetItemsEditor({
       if (inputsData) {
         setInputs(inputsData.map((i: any) => ({
           id: i.id,
+          code: i.code || null,
           name: i.name,
           unit: i.unit,
           category: i.category as 'material' | 'labor' | 'equipment',
