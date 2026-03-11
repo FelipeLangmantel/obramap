@@ -250,6 +250,7 @@ export function BudgetItemsEditor({
     updateItem(index, 'unit', input.unit);
     updateItem(index, 'materialFamily', familyName);
     updateItem(index, 'inputId', input.id);
+    updateItem(index, 'inputCode', input.code || undefined);
     setShowSuggestions(null);
     setInputSuggestions([]);
   };
