@@ -191,6 +191,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id, fetchUserData]);
 
+  // ✅ Monitorar visibilidade da aba para evitar reconstrução visual indevida
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      isPageVisibleRef.current = !document.hidden;
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
   // ✅ Listener registrado APENAS UMA VEZ com array vazio
   useEffect(() => {
     if (authListenerRegistered.current) {
