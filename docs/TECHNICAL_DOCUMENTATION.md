@@ -1,8 +1,14 @@
 # AUDITORIA TÉCNICA COMPLETA — ObraMap
 
-**Data:** 2026-03-11  
+**Última atualização:** 11/03/2026 às 23:00  
 **Versão:** 2.0 — Substituição completa da documentação anterior  
-**Escopo:** Diagnóstico estrutural completo de todo o sistema
+**Escopo:** Diagnóstico estrutural completo de todo o sistema  
+**Histórico de revisões:**  
+| Data/Hora | Versão | Descrição |
+|-----------|--------|-----------|
+| 11/03/2026 23:00 | 2.0 | Auditoria técnica completa — 11 blocos |
+| 11/03/2026 22:55 | 1.1 | Mutação atômica + ordenação propagada |
+| 11/03/2026 22:48 | 1.0 | Documentação inicial |
 
 ---
 
