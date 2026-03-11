@@ -1404,28 +1404,19 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Propagate name changes to related tables
+    // Propagate name changes to ALL dependent tables
     if (oldScope && updates.name && oldScope.name !== updates.name) {
-      // Update weekly_productions
-      await supabase
-        .from('weekly_productions')
-        .update({ scope_name: updates.name })
-        .eq('project_id', currentProject.id)
-        .eq('scope_id', scopeId);
-      
-      // Update planned_productions
-      await supabase
-        .from('planned_productions')
-        .update({ scope_name: updates.name })
-        .eq('project_id', currentProject.id)
-        .eq('scope_id', scopeId);
-      
-      // Update production_deviations
-      await supabase
-        .from('production_deviations')
-        .update({ scope_name: updates.name })
-        .eq('project_id', currentProject.id)
-        .eq('scope_id', scopeId);
+      const nameUpdate = { scope_name: updates.name };
+      await Promise.all([
+        supabase.from('weekly_productions').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+        supabase.from('planned_productions').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+        supabase.from('production_deviations').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+        supabase.from('project_contract_services').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+        supabase.from('service_planning_by_period').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+        supabase.from('measurement_services').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+        supabase.from('labor_contracts').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+        supabase.from('labor_histogram').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+      ]);
     }
 
     // Then sync to houses
