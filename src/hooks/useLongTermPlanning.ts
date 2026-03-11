@@ -221,9 +221,11 @@ export function useLongTermPlanning(projectId: string | undefined) {
         supabase.rpc('get_service_execution_bank', { p_project_id: projectId }),
         supabase
           .from("project_contract_services")
-          .select("macro_id, macro_name, scope_id, scope_name")
+          .select("macro_id, macro_name, scope_id, scope_name, macro_order, scope_order")
           .eq("project_id", projectId)
-          .eq("company_id", company.id),
+          .eq("company_id", company.id)
+          .order("macro_order", { ascending: true })
+          .order("scope_order", { ascending: true }),
         supabase
           .from("service_planning_by_period")
           .select("id, macro_id, scope_id, planning_period_id, target_houses, unit_cost_value, unit_revenue_value")

@@ -97,7 +97,8 @@ export function useProjectContract() {
           .from("project_contract_services")
           .select("*")
           .eq("contract_id", contractData.id)
-          .order("macro_name", { ascending: true });
+          .order("macro_order", { ascending: true })
+          .order("scope_order", { ascending: true });
 
         if (servicesError) throw servicesError;
 
