@@ -15,6 +15,8 @@ export interface ContractService {
   max_cost_value: number;
   cost_percent: number;
   status: string;
+  macro_order: number;
+  scope_order: number;
 }
 
 export interface ProjectContract {
