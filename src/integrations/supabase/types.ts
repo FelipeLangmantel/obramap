@@ -2890,10 +2890,12 @@ export type Database = {
           id: string
           macro_id: string
           macro_name: string
+          macro_order: number
           max_cost_value: number
           project_id: string
           scope_id: string
           scope_name: string
+          scope_order: number
           status: string
           unit_revenue_value: number
           updated_at: string
@@ -2906,10 +2908,12 @@ export type Database = {
           id?: string
           macro_id: string
           macro_name: string
+          macro_order?: number
           max_cost_value?: number
           project_id: string
           scope_id: string
           scope_name: string
+          scope_order?: number
           status?: string
           unit_revenue_value?: number
           updated_at?: string
@@ -2922,10 +2926,12 @@ export type Database = {
           id?: string
           macro_id?: string
           macro_name?: string
+          macro_order?: number
           max_cost_value?: number
           project_id?: string
           scope_id?: string
           scope_name?: string
+          scope_order?: number
           status?: string
           unit_revenue_value?: number
           updated_at?: string
@@ -3910,6 +3916,7 @@ export type Database = {
           id: string
           macro_id: string | null
           macro_name: string | null
+          macro_order: number
           performance_percent: number | null
           planned_cost: number | null
           planned_end_date: string | null
@@ -3927,6 +3934,7 @@ export type Database = {
           realized_revenue: number | null
           scope_id: string | null
           scope_name: string | null
+          scope_order: number
           status: string | null
           supply_deadline: string | null
           supply_risk: boolean | null
@@ -3947,6 +3955,7 @@ export type Database = {
           id?: string
           macro_id?: string | null
           macro_name?: string | null
+          macro_order?: number
           performance_percent?: number | null
           planned_cost?: number | null
           planned_end_date?: string | null
@@ -3964,6 +3973,7 @@ export type Database = {
           realized_revenue?: number | null
           scope_id?: string | null
           scope_name?: string | null
+          scope_order?: number
           status?: string | null
           supply_deadline?: string | null
           supply_risk?: boolean | null
@@ -3984,6 +3994,7 @@ export type Database = {
           id?: string
           macro_id?: string | null
           macro_name?: string | null
+          macro_order?: number
           performance_percent?: number | null
           planned_cost?: number | null
           planned_end_date?: string | null
@@ -4001,6 +4012,7 @@ export type Database = {
           realized_revenue?: number | null
           scope_id?: string | null
           scope_name?: string | null
+          scope_order?: number
           status?: string | null
           supply_deadline?: string | null
           supply_risk?: boolean | null
