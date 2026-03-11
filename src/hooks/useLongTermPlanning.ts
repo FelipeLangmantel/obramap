@@ -617,6 +617,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
         return false;
       }
 
+      // Update the edited period
       const { error } = await supabase
         .from("planning_periods")
         .update({ start_date: startDate, end_date: endDate, updated_at: new Date().toISOString() })
@@ -624,7 +625,53 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
       if (error) throw error;
 
-      toast.success("Período atualizado com sucesso!");
+      // Cascade: auto-update all subsequent periods
+      const sortedPeriods = [...periods].sort((a, b) => a.period_number - b.period_number);
+      const editedIndex = sortedPeriods.findIndex(p => p.id === periodId);
+
+      if (editedIndex >= 0 && editedIndex < sortedPeriods.length - 1) {
+        // Calculate the duration of the edited period to use as reference for subsequent ones
+        const editedStart = new Date(startDate);
+        const editedEnd = new Date(endDate);
+        
+        let previousEnd = editedEnd;
+
+        for (let i = editedIndex + 1; i < sortedPeriods.length; i++) {
+          const nextPeriod = sortedPeriods[i];
+
+          // Skip locked periods
+          if (nextPeriod.status === "executing" || nextPeriod.status === "closed") {
+            break;
+          }
+
+          // Calculate this period's own duration (preserve original duration)
+          const origStart = new Date(nextPeriod.start_date);
+          const origEnd = new Date(nextPeriod.end_date);
+          const durationMs = origEnd.getTime() - origStart.getTime();
+
+          // New start = previous end + 1 day
+          const newStart = new Date(previousEnd);
+          newStart.setDate(newStart.getDate() + 1);
+          
+          const newEnd = new Date(newStart.getTime() + durationMs);
+
+          const newStartStr = newStart.toISOString().split("T")[0];
+          const newEndStr = newEnd.toISOString().split("T")[0];
+
+          const { error: cascadeError } = await supabase
+            .from("planning_periods")
+            .update({ start_date: newStartStr, end_date: newEndStr, updated_at: new Date().toISOString() })
+            .eq("id", nextPeriod.id);
+
+          if (cascadeError) {
+            console.error(`Erro ao atualizar período ${nextPeriod.period_number}:`, cascadeError);
+          }
+
+          previousEnd = newEnd;
+        }
+      }
+
+      toast.success("Períodos atualizados com sucesso!");
       await loadPeriods();
       return true;
     } catch (error) {
