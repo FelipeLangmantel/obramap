@@ -256,12 +256,11 @@ export function useMeasurementSupplies(projectId: string | undefined) {
      }>);
    }, [requests]);
  
-   // Load on mount
-   useEffect(() => {
-     if (projectId) {
-       loadMeasurements();
-     }
-   }, [projectId, loadMeasurements]);
+    useEffect(() => {
+      if (projectId && measurements.length === 0) {
+        loadMeasurements();
+      }
+    }, [projectId, measurements.length, loadMeasurements]);
  
    return {
      measurements,
