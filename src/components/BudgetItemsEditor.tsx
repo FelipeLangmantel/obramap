@@ -29,6 +29,7 @@ interface ScopeItem {
   isNew?: boolean;
   isEditing?: boolean;
   inputId?: string;
+  inputCode?: string;
 }
 
 interface MaterialFamily {
