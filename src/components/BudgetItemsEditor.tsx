@@ -231,7 +231,9 @@ export function BudgetItemsEditor({
   const searchInputs = useCallback((query: string, categoryFilter?: string, familyFilter?: string) => {
     const searchQuery = query || '';
     const filtered = inputs.filter(i => {
-      const matchesName = searchQuery.length < 2 || i.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesName = searchQuery.length < 2 || 
+        i.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (i.code && i.code.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesCategory = !categoryFilter || categoryFilter === 'all' || i.category === categoryFilter;
       const matchesFamily = !familyFilter || familyFilter === 'all' || i.material_family_id === familyFilter;
       return matchesName && matchesCategory && matchesFamily;
