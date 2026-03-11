@@ -81,6 +81,17 @@ export function MeasurementSupplyDetail({
     saveStockEntries,
   } = useMeasurementStock(projectId);
 
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify({
+        activeTab,
+        expandedFamilies: Array.from(expandedFamilies),
+      }));
+    } catch {
+      // noop
+    }
+  }, [storageKey, activeTab, expandedFamilies]);
+
   // Load stock entries when measurement or requests change
   useEffect(() => {
     if (measurement.measurement_id && requests.length > 0) {
