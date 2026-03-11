@@ -127,14 +127,14 @@ const MENU_OPTIONS = [
 ];
 
 const MANAGEMENT_OPTIONS = [
-  { id: "projetos", label: "Projetos" },
-  { id: "quadras", label: "Quadras" },
-  { id: "macros", label: "Macros" },
+  { id: "projetos", label: "Cadastro de Obras" },
+  { id: "quadras", label: "Cadastro de Quadras" },
+  { id: "macros", label: "Etapas e Serviços" },
   { id: "escopos", label: "Escopos" },
-  { id: "insumos", label: "Insumos" },
-  { id: "fornecedores", label: "Fornecedores" },
+  { id: "insumos", label: "Cadastro de Insumos" },
+  { id: "fornecedores", label: "Cadastro de Fornecedores" },
   { id: "mao_de_obra", label: "Mão de Obra" },
-  { id: "usuarios", label: "Usuários" },
+  { id: "usuarios", label: "Gerenciar Usuários" },
   { id: "configuracoes", label: "Configurações" },
 ];
 
