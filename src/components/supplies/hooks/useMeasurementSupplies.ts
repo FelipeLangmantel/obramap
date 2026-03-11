@@ -102,6 +102,20 @@ export function useMeasurementSupplies(projectId: string | undefined) {
    });
    const [isLoading, setIsLoading] = useState(false);
    const [isLoadingRequests, setIsLoadingRequests] = useState(false);
+
+   useEffect(() => {
+     if (!storageKey) return;
+     try {
+       sessionStorage.setItem(storageKey, JSON.stringify({
+         measurements,
+         selectedMeasurement,
+         requests,
+         kpis,
+       }));
+     } catch {
+       // noop
+     }
+   }, [storageKey, measurements, selectedMeasurement, requests, kpis]);
  
    // Load measurements summary
    const loadMeasurements = useCallback(async () => {
