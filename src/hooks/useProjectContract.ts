@@ -160,6 +160,17 @@ export function useProjectContract() {
   const loadServicesFromBudget = async () => {
     if (!currentProject?.id) return;
 
+    // Build order map from macrosTemplate
+    const orderMap = new Map<string, { macro_order: number; scope_order: number }>();
+    currentProject.macrosTemplate?.forEach((macro, mi) => {
+      macro.scopes.forEach((scope, si) => {
+        orderMap.set(`${macro.id}-${scope.id}`, { macro_order: mi, scope_order: si });
+      });
+    });
+
+    const getOrder = (macroId: string, scopeId: string) => 
+      orderMap.get(`${macroId}-${scopeId}`) ?? { macro_order: 0, scope_order: 0 };
+
     // First try scope_costs (budget data)
     const { data: scopeCosts, error: scopeCostsError } = await supabase
       .from("scope_costs")
@@ -171,6 +182,7 @@ export function useProjectContract() {
       scopeCosts.forEach(sc => {
         const key = `${sc.macro_id}-${sc.scope_id}`;
         if (!uniqueServices.has(key)) {
+          const ord = getOrder(sc.macro_id, sc.scope_id);
           uniqueServices.set(key, {
             macro_id: sc.macro_id,
             macro_name: sc.macro_name,
@@ -180,10 +192,11 @@ export function useProjectContract() {
             max_cost_value: 0,
             cost_percent: 0,
             status: "pending",
+            ...ord,
           });
         }
       });
-      setServices(Array.from(uniqueServices.values()));
+      setServices(Array.from(uniqueServices.values()).sort((a, b) => a.macro_order - b.macro_order || a.scope_order - b.scope_order));
       return;
     }
 
@@ -198,6 +211,7 @@ export function useProjectContract() {
       measurementServices.forEach(ms => {
         const key = `${ms.macro_id}-${ms.scope_id}`;
         if (!uniqueServices.has(key)) {
+          const ord = getOrder(ms.macro_id, ms.scope_id);
           uniqueServices.set(key, {
             macro_id: ms.macro_id,
             macro_name: ms.macro_name,
@@ -207,18 +221,19 @@ export function useProjectContract() {
             max_cost_value: 0,
             cost_percent: 0,
             status: "pending",
+            ...ord,
           });
         }
       });
-      setServices(Array.from(uniqueServices.values()));
+      setServices(Array.from(uniqueServices.values()).sort((a, b) => a.macro_order - b.macro_order || a.scope_order - b.scope_order));
       return;
     }
 
     // Final fallback: use project's macrosTemplate from context
     if (currentProject?.macrosTemplate && currentProject.macrosTemplate.length > 0) {
       const servicesFromTemplate: ContractService[] = [];
-      currentProject.macrosTemplate.forEach(macro => {
-        macro.scopes.forEach(scope => {
+      currentProject.macrosTemplate.forEach((macro, macroIdx) => {
+        macro.scopes.forEach((scope, scopeIdx) => {
           servicesFromTemplate.push({
             macro_id: macro.id,
             macro_name: macro.name,
@@ -228,6 +243,9 @@ export function useProjectContract() {
             max_cost_value: 0,
             cost_percent: 0,
             status: "pending",
+            macro_order: macroIdx,
+            scope_order: scopeIdx,
+          });
           });
         });
       });
