@@ -110,6 +110,11 @@ function Index() {
     };
   }, [activeView, restoredState]);
 
+  useEffect(() => {
+    console.log("[MOUNT] Index mounted");
+    return () => console.log("[UNMOUNT] Index unmounted");
+  }, []);
+
   // ✅ Se navegou de outra rota com targetView no state, aplicar a view
   useEffect(() => {
     const state = location.state as { targetView?: ViewType } | null;
