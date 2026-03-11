@@ -76,42 +76,49 @@ function CompanyLayout() {
   );
 }
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <ConstructionProvider>
-            <Routes>
-              {/* Auth routes - fora de qualquer guard */}
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/change-password" element={<ChangePassword />} />
+const App = () => {
+  useEffect(() => {
+    console.log("[MOUNT] App mounted");
+    return () => console.log("[UNMOUNT] App unmounted");
+  }, []);
 
-              {/* ========== ROTAS DE SISTEMA (System Admin) ========== */}
-              <Route element={<SystemLayout />}>
-                <Route path="/system/dashboard" element={<SystemDashboard />} />
-                <Route path="/system/modules" element={<SystemModulesPage />} />
-                <Route path="/system/migration" element={<LegacyDataMigration />} />
-                <Route path="/admin/dashboard" element={<SystemDashboard />} />
-                <Route path="/admin/migration" element={<LegacyDataMigration />} />
-              </Route>
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <ConstructionProvider>
+              <Routes>
+                {/* Auth routes - fora de qualquer guard */}
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/change-password" element={<ChangePassword />} />
 
-              {/* ========== ROTAS DE EMPRESA (Usuários comuns) ========== */}
-              <Route element={<CompanyLayout />}>
-                <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
-                <Route path="/long-term-planning" element={<LongTermPlanningPage />} />
-                <Route path="/project-contract" element={<ProjectContractPage />} />
-                <Route path="/" element={<Index />} />
-                <Route path="*" element={<NotFound />} />
-              </Route>
-            </Routes>
-          </ConstructionProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+                {/* ========== ROTAS DE SISTEMA (System Admin) ========== */}
+                <Route element={<SystemLayout />}>
+                  <Route path="/system/dashboard" element={<SystemDashboard />} />
+                  <Route path="/system/modules" element={<SystemModulesPage />} />
+                  <Route path="/system/migration" element={<LegacyDataMigration />} />
+                  <Route path="/admin/dashboard" element={<SystemDashboard />} />
+                  <Route path="/admin/migration" element={<LegacyDataMigration />} />
+                </Route>
+
+                {/* ========== ROTAS DE EMPRESA (Usuários comuns) ========== */}
+                <Route element={<CompanyLayout />}>
+                  <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
+                  <Route path="/long-term-planning" element={<LongTermPlanningPage />} />
+                  <Route path="/project-contract" element={<ProjectContractPage />} />
+                  <Route path="/" element={<Index />} />
+                  <Route path="*" element={<NotFound />} />
+                </Route>
+              </Routes>
+            </ConstructionProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
