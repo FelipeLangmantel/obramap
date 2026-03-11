@@ -41,6 +41,7 @@ interface MaterialFamily {
 
 interface InputItem {
   id: string;
+  code: string | null;
   name: string;
   unit: string;
   category: 'material' | 'labor' | 'equipment';
