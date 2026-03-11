@@ -117,11 +117,11 @@ export default function MeasurementPlanningPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                       <Home className="h-4 w-4" />
-                      Total de Casas
+                      Total de Casas da Obra
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-2xl font-bold">{overallTotals.totalHouses}</p>
+                    <p className="text-2xl font-bold">{currentProject?.totalHouses ?? 0}</p>
                   </CardContent>
                 </Card>
 
