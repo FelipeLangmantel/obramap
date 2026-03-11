@@ -186,7 +186,9 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
   }
 
   // ✅ 6. Carregando projetos (apenas para usuários normais em rotas não-admin)
-  if (projectsLoading) {
+  const hasStableProjectContext = projects.length > 0 || !!currentProject;
+
+  if (projectsLoading && !hasStableProjectContext) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">

@@ -17,9 +17,27 @@ export interface StockEntry {
 }
 
 export function useMeasurementStock(projectId: string | undefined) {
-  const [stockEntries, setStockEntries] = useState<StockEntry[]>([]);
+  const storageKey = useMemo(() => projectId ? `obramap_supply_stock_${projectId}` : null, [projectId]);
+  const [stockEntries, setStockEntries] = useState<StockEntry[]>(() => {
+    if (!storageKey) return [];
+    try {
+      const saved = sessionStorage.getItem(storageKey);
+      return saved ? JSON.parse(saved).stockEntries || [] : [];
+    } catch {
+      return [];
+    }
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify({ stockEntries }));
+    } catch {
+      // noop
+    }
+  }, [storageKey, stockEntries]);
 
   const loadStockEntries = useCallback(async (planningPeriodId: string, requests: MeasurementSupplyRequest[]) => {
     if (!projectId || !planningPeriodId) return;
