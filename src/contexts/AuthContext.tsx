@@ -206,9 +206,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null);
 
         if (session?.user) {
+          // ✅ Manter isLoading=true enquanto fetchUserData roda
+          // Evita flash de "Acesso Negado" no CompanyUserGuard
+          setIsLoading(true);
           // Defer to avoid race conditions
           setTimeout(() => {
-            fetchUserData(session.user.id);
+            fetchUserData(session.user.id).finally(() => {
+              setIsLoading(false);
+            });
           }, 0);
         } else {
           setProfile(null);
