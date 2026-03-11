@@ -1272,32 +1272,23 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Propagate name/color changes to related tables
+    // Propagate name/color changes to ALL dependent tables
     if (oldMacro && (oldMacro.name !== name || (color !== undefined && oldMacro.color !== color))) {
       const updateData: { macro_name?: string; macro_color?: string } = {};
       if (oldMacro.name !== name) updateData.macro_name = name;
       if (color !== undefined && oldMacro.color !== color) updateData.macro_color = color;
       
-      // Update weekly_productions
-      await supabase
-        .from('weekly_productions')
-        .update(updateData)
-        .eq('project_id', currentProject.id)
-        .eq('macro_id', macroId);
-      
-      // Update planned_productions
-      await supabase
-        .from('planned_productions')
-        .update(updateData)
-        .eq('project_id', currentProject.id)
-        .eq('macro_id', macroId);
-      
-      // Update production_deviations
-      await supabase
-        .from('production_deviations')
-        .update({ macro_name: name })
-        .eq('project_id', currentProject.id)
-        .eq('macro_id', macroId);
+      await Promise.all([
+        supabase.from('weekly_productions').update(updateData).eq('project_id', currentProject.id).eq('macro_id', macroId),
+        supabase.from('planned_productions').update(updateData).eq('project_id', currentProject.id).eq('macro_id', macroId),
+        supabase.from('production_deviations').update({ macro_name: name }).eq('project_id', currentProject.id).eq('macro_id', macroId),
+        // ✅ Also propagate to contract, planning and measurement tables
+        supabase.from('project_contract_services').update(updateData).eq('project_id', currentProject.id).eq('macro_id', macroId),
+        supabase.from('service_planning_by_period').update({ macro_name: name }).eq('project_id', currentProject.id).eq('macro_id', macroId),
+        supabase.from('measurement_services').update(updateData).eq('project_id', currentProject.id).eq('macro_id', macroId),
+        supabase.from('labor_contracts').update({ macro_name: name }).eq('project_id', currentProject.id).eq('macro_id', macroId),
+        supabase.from('labor_histogram').update({ macro_name: name }).eq('project_id', currentProject.id).eq('macro_id', macroId),
+      ]);
     }
 
     // Then sync to houses
