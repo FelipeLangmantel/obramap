@@ -212,8 +212,17 @@ export function InputsManagementView() {
       };
       
       if (editingInput) {
+        // The DB trigger propagate_input_changes() auto-updates all scope_items referencing this input
         await supabase.from('inputs').update(payload).eq('id', editingInput.id);
-        toast.success('Insumo atualizado!');
+        
+        // Check how many budget items were affected
+        const { count } = await supabase
+          .from('scope_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('input_id', editingInput.id);
+        
+        const affectedMsg = count && count > 0 ? ` (${count} itens de orçamento atualizados)` : '';
+        toast.success(`Insumo atualizado!${affectedMsg}`);
       } else {
         await supabase.from('inputs').insert({ ...payload, project_id: defaultProjectId, company_id: companyId! });
         toast.success('Insumo cadastrado!');
