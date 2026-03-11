@@ -29,6 +29,7 @@ interface MaterialFamily {
 
 interface InputItem {
   id: string;
+  code: string | null;
   name: string;
   unit: string;
   category: 'material' | 'labor' | 'equipment';
@@ -106,6 +107,7 @@ export function InputsManagementView() {
       if (inputsRes.data) {
         setInputs(inputsRes.data.map((i: any) => ({ 
           ...i, 
+          code: i.code || null,
           material_family: i.material_families, 
           category: i.category as 'material' | 'labor' | 'equipment', 
           unit_value: i.unit_value || 0, 
@@ -160,7 +162,10 @@ export function InputsManagementView() {
 
   const filteredInputs = useMemo(() => {
     return inputs.filter(input => {
-      const matchesSearch = !searchInput || input.name.toLowerCase().includes(searchInput.toLowerCase());
+      const searchLower = searchInput.toLowerCase();
+      const matchesSearch = !searchInput || 
+        input.name.toLowerCase().includes(searchLower) ||
+        (input.code && input.code.toLowerCase().includes(searchLower));
       const matchesCategory = filterCategory === 'all' || input.category === filterCategory;
       return matchesSearch && matchesCategory;
     });
@@ -208,8 +213,17 @@ export function InputsManagementView() {
       };
       
       if (editingInput) {
+        // The DB trigger propagate_input_changes() auto-updates all scope_items referencing this input
         await supabase.from('inputs').update(payload).eq('id', editingInput.id);
-        toast.success('Insumo atualizado!');
+        
+        // Check how many budget items were affected
+        const { count } = await supabase
+          .from('scope_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('input_id', editingInput.id);
+        
+        const affectedMsg = count && count > 0 ? ` (${count} itens de orçamento atualizados)` : '';
+        toast.success(`Insumo atualizado!${affectedMsg}`);
       } else {
         await supabase.from('inputs').insert({ ...payload, project_id: defaultProjectId, company_id: companyId! });
         toast.success('Insumo cadastrado!');
@@ -531,7 +545,7 @@ export function InputsManagementView() {
             <div className="flex gap-2 flex-1">
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-                <Input placeholder="Buscar insumo..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} className="pl-8" />
+                <Input placeholder="Buscar por nome ou código..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} className="pl-8" />
               </div>
               <Select value={filterCategory} onValueChange={setFilterCategory}>
                 <SelectTrigger className="w-40">
@@ -772,6 +786,7 @@ export function InputsManagementView() {
                                 />
                               )}
                               {getCategoryIcon(input.category)}
+                              {input.code && <Badge variant="outline" className="text-xs shrink-0 font-mono">{input.code}</Badge>}
                               <span className="truncate">{input.name}</span>
                               <Badge variant="outline" className="text-xs shrink-0">{input.unit}</Badge>
                               <Badge variant="secondary" className="text-xs shrink-0">{CATEGORY_LABELS[input.category]}</Badge>

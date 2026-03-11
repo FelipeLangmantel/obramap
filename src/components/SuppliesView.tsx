@@ -688,22 +688,8 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
       };
       
       if (editingInput) {
+        // DB trigger propagate_input_changes() auto-updates all scope_items and budget_service_inputs
         await supabase.from('inputs').update(payload).eq('id', editingInput.id);
-        
-        // Auto-update scope_items that use this input
-        const { error: updateError } = await supabase
-          .from('scope_items')
-          .update({ 
-            name: newInput.name.trim(), 
-            unit: newInput.unit,
-            unit_value: newInput.unit_value || 0 
-          })
-          .eq('input_id', editingInput.id);
-        
-        if (updateError) {
-          console.error('Error updating scope_items:', updateError);
-        }
-        
         toast.success('Insumo atualizado! Orçamentos atualizados automaticamente.');
       } else {
         await supabase.from('inputs').insert(payload);

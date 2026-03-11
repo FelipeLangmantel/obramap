@@ -41,6 +41,7 @@ interface MaterialFamily {
 
 interface InputItem {
   id: string;
+  code: string | null;
   name: string;
   unit: string;
   category: 'material' | 'labor' | 'equipment';
@@ -200,6 +201,7 @@ export function BudgetItemsEditor({
       if (inputsData) {
         setInputs(inputsData.map((i: any) => ({
           id: i.id,
+          code: i.code || null,
           name: i.name,
           unit: i.unit,
           category: i.category as 'material' | 'labor' | 'equipment',
@@ -229,7 +231,9 @@ export function BudgetItemsEditor({
   const searchInputs = useCallback((query: string, categoryFilter?: string, familyFilter?: string) => {
     const searchQuery = query || '';
     const filtered = inputs.filter(i => {
-      const matchesName = searchQuery.length < 2 || i.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesName = searchQuery.length < 2 || 
+        i.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (i.code && i.code.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesCategory = !categoryFilter || categoryFilter === 'all' || i.category === categoryFilter;
       const matchesFamily = !familyFilter || familyFilter === 'all' || i.material_family_id === familyFilter;
       return matchesName && matchesCategory && matchesFamily;
@@ -787,6 +791,7 @@ export function BudgetItemsEditor({
                           input.category === 'labor' ? <Hammer className="w-4 h-4 text-orange-500 shrink-0" /> : 
                           <Wrench className="w-4 h-4 text-green-500 shrink-0" />
                         )}
+                        {input.code && <span className="text-muted-foreground text-[10px] font-mono shrink-0">{input.code}</span>}
                         <span className="flex-1 truncate font-medium">{input.name}</span>
                         <span className="text-muted-foreground text-xs shrink-0">{input.unit}</span>
                         {input.unit_value && input.unit_value > 0 && (
