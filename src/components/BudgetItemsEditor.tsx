@@ -483,7 +483,8 @@ export function BudgetItemsEditor({
         unit_value: item.unitValue,
         quantity: item.quantity,
         unit: item.unit,
-        notes: item.notes || null
+        notes: item.notes || null,
+        input_id: item.inputId || null
       };
 
       if (item.id) {
