@@ -44,14 +44,23 @@ type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" 
  * - Tem acesso a esta rota
  */
 function Index() {
+  const routeStateKey = "obramap_route_state_root";
+  const mainScrollRef = useRef<HTMLElement | null>(null);
+
+  const restoredState = useMemo(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(routeStateKey) || "null") as {
+        activeView?: ViewType;
+        scrollTop?: number;
+      } | null;
+    } catch {
+      return null;
+    }
+  }, []);
+
   // ✅ Restaurar view ativa do sessionStorage para preservar estado ao trocar aba
   const [activeView, setActiveView] = useState<ViewType>(() => {
-    try {
-      const saved = sessionStorage.getItem("obramap_active_view");
-      return (saved as ViewType) || "home";
-    } catch {
-      return "home";
-    }
+    return restoredState?.activeView || "home";
   });
   const location = useLocation();
   const { selectedHouse, isLoading, projects, currentProject, setCurrentProject } = useConstruction();
