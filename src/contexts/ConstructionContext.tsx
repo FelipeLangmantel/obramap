@@ -1218,11 +1218,47 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     }
   }, [currentProjectId, selectedHouse]);
 
-  // Macro management - with proper await for database persistence
+  // ============================================================
+  // Central structure mutation helper
+  // All structural changes go through apply_structure_mutation RPC
+  // which atomically: computes delta, cascades deletions, propagates
+  // name/color changes, updates macros_template, and syncs contract.
+  // Then houses are synced client-side (preserving production progress).
+  // ============================================================
+  const applyStructureMutation = useCallback(async (
+    newTemplate: Macro[],
+    successMessage: string
+  ): Promise<boolean> => {
+    if (!currentProject) return false;
+
+    const { data, error } = await supabase.rpc('apply_structure_mutation', {
+      p_project_id: currentProject.id,
+      p_new_template: macrosToJson(newTemplate),
+    });
+
+    if (error) {
+      console.error('Error in structure mutation:', error);
+      toast.error("Erro ao aplicar alteração estrutural");
+      return false;
+    }
+
+    const result = data as { success: boolean; removed_scopes?: string[]; removed_macros?: string[]; total_scopes_removed?: number; total_macros_removed?: number } | null;
+
+    if (result?.total_scopes_removed || result?.total_macros_removed) {
+      console.log(`[StructureMutation] Removed ${result.total_scopes_removed} scopes, ${result.total_macros_removed} macros. Cascaded to all dependent tables.`);
+    }
+
+    // Sync houses (preserves production progress, client-side)
+    await syncMacrosToHouses(newTemplate);
+    
+    if (successMessage) toast.success(successMessage);
+    return true;
+  }, [currentProject, syncMacrosToHouses]);
+
+  // Macro management - all mutations go through central RPC
   const addMacro = useCallback(async (name: string) => {
     if (!currentProject) return;
     
-    // Get next available color
     const usedColors = currentProject.macrosTemplate.map(m => m.color);
     const availableColor = DEFAULT_MACRO_COLORS.find(c => !usedColors.includes(c)) || DEFAULT_MACRO_COLORS[0];
     
@@ -1234,108 +1270,27 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     };
     
     const newTemplate = [...currentProject.macrosTemplate, newMacro];
-    
-    // Update in database first
-    const { error } = await supabase
-      .from('projects')
-      .update({ macros_template: macrosToJson(newTemplate) })
-      .eq('id', currentProject.id);
-
-    if (error) {
-      console.error('Error adding macro:', error);
-      toast.error("Erro ao adicionar etapa");
-      return;
-    }
-
-    // Then sync to houses (which also persists)
-    await syncMacrosToHouses(newTemplate);
-    toast.success("Etapa adicionada!");
-  }, [currentProject, syncMacrosToHouses]);
+    await applyStructureMutation(newTemplate, "Etapa adicionada!");
+  }, [currentProject, applyStructureMutation]);
 
   const updateMacro = useCallback(async (macroId: string, name: string, color?: string) => {
     if (!currentProject) return;
     
-    const oldMacro = currentProject.macrosTemplate.find(m => m.id === macroId);
     const newTemplate = currentProject.macrosTemplate.map(m => 
       m.id === macroId ? { ...m, name, ...(color !== undefined && { color }) } : m
     );
 
-    // Update in database first
-    const { error } = await supabase
-      .from('projects')
-      .update({ macros_template: macrosToJson(newTemplate) })
-      .eq('id', currentProject.id);
-
-    if (error) {
-      console.error('Error updating macro:', error);
-      toast.error("Erro ao atualizar etapa");
-      return;
-    }
-
-    // Propagate name/color changes to ALL dependent tables
-    if (oldMacro && (oldMacro.name !== name || (color !== undefined && oldMacro.color !== color))) {
-      const updateData: { macro_name?: string; macro_color?: string } = {};
-      if (oldMacro.name !== name) updateData.macro_name = name;
-      if (color !== undefined && oldMacro.color !== color) updateData.macro_color = color;
-      
-      await Promise.all([
-        supabase.from('weekly_productions').update(updateData).eq('project_id', currentProject.id).eq('macro_id', macroId),
-        supabase.from('planned_productions').update(updateData).eq('project_id', currentProject.id).eq('macro_id', macroId),
-        supabase.from('production_deviations').update({ macro_name: name }).eq('project_id', currentProject.id).eq('macro_id', macroId),
-        // ✅ Also propagate to contract, planning and measurement tables
-        supabase.from('project_contract_services').update(updateData).eq('project_id', currentProject.id).eq('macro_id', macroId),
-        supabase.from('service_planning_by_period').update({ macro_name: name }).eq('project_id', currentProject.id).eq('macro_id', macroId),
-        supabase.from('measurement_services').update(updateData).eq('project_id', currentProject.id).eq('macro_id', macroId),
-        supabase.from('labor_contracts').update({ macro_name: name }).eq('project_id', currentProject.id).eq('macro_id', macroId),
-        supabase.from('labor_histogram').update({ macro_name: name }).eq('project_id', currentProject.id).eq('macro_id', macroId),
-      ]);
-    }
-
-    // Then sync to houses
-    await syncMacrosToHouses(newTemplate);
-  }, [currentProject, syncMacrosToHouses]);
+    await applyStructureMutation(newTemplate, "");
+  }, [currentProject, applyStructureMutation]);
 
   const deleteMacro = useCallback(async (macroId: string) => {
     if (!currentProject) return;
     
-    const macro = currentProject.macrosTemplate.find(m => m.id === macroId);
-    const scopeIds = macro?.scopes.map(s => s.id) || [];
     const newTemplate = currentProject.macrosTemplate.filter(m => m.id !== macroId);
+    await applyStructureMutation(newTemplate, "Etapa e todos dados relacionados removidos!");
+  }, [currentProject, applyStructureMutation]);
 
-    // Update in database first
-    const { error } = await supabase
-      .from('projects')
-      .update({ macros_template: macrosToJson(newTemplate) })
-      .eq('id', currentProject.id);
-
-    if (error) {
-      console.error('Error deleting macro:', error);
-      toast.error("Erro ao remover etapa");
-      return;
-    }
-
-    // Delete related data - ALL dependent tables (budget, production, contract, planning)
-    for (const scopeId of scopeIds) {
-      await supabase.from('scope_items').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
-      await supabase.from('scope_costs').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
-      await supabase.from('budget_service_inputs').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
-    }
-    await supabase.from('weekly_productions').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
-    await supabase.from('planned_productions').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
-    await supabase.from('production_deviations').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
-    await supabase.from('labor_contracts').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
-    // ✅ Cascade to contract services, planning and measurement
-    await supabase.from('project_contract_services').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
-    await supabase.from('service_planning_by_period').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
-    await supabase.from('measurement_services').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
-    await supabase.from('labor_histogram').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
-
-    // Then sync to houses
-    await syncMacrosToHouses(newTemplate);
-    toast.success("Etapa e todos dados relacionados removidos!");
-  }, [currentProject, syncMacrosToHouses]);
-
-  // Scope management - with proper await for database persistence
+  // Scope management - all mutations go through central RPC
   const addScope = useCallback(async (macroId: string, name: string, weight: number) => {
     if (!currentProject) return;
     
@@ -1354,28 +1309,11 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         : m
     );
 
-    // Update in database first
-    const { error } = await supabase
-      .from('projects')
-      .update({ macros_template: macrosToJson(newTemplate) })
-      .eq('id', currentProject.id);
-
-    if (error) {
-      console.error('Error adding scope:', error);
-      toast.error("Erro ao adicionar serviço");
-      return;
-    }
-
-    // Then sync to houses
-    await syncMacrosToHouses(newTemplate);
-    toast.success("Serviço adicionado!");
-  }, [currentProject, syncMacrosToHouses]);
+    await applyStructureMutation(newTemplate, "Serviço adicionado!");
+  }, [currentProject, applyStructureMutation]);
 
   const updateScope = useCallback(async (macroId: string, scopeId: string, updates: Partial<Pick<Scope, "name" | "weight">>) => {
     if (!currentProject) return;
-    
-    const macro = currentProject.macrosTemplate.find(m => m.id === macroId);
-    const oldScope = macro?.scopes.find(s => s.id === scopeId);
     
     const newTemplate = currentProject.macrosTemplate.map(m => 
       m.id === macroId 
@@ -1383,36 +1321,8 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         : m
     );
 
-    // Update in database first
-    const { error } = await supabase
-      .from('projects')
-      .update({ macros_template: macrosToJson(newTemplate) })
-      .eq('id', currentProject.id);
-
-    if (error) {
-      console.error('Error updating scope:', error);
-      toast.error("Erro ao atualizar serviço");
-      return;
-    }
-
-    // Propagate name changes to ALL dependent tables
-    if (oldScope && updates.name && oldScope.name !== updates.name) {
-      const nameUpdate = { scope_name: updates.name };
-      await Promise.all([
-        supabase.from('weekly_productions').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
-        supabase.from('planned_productions').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
-        supabase.from('production_deviations').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
-        supabase.from('project_contract_services').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
-        supabase.from('service_planning_by_period').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
-        supabase.from('measurement_services').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
-        supabase.from('labor_contracts').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
-        supabase.from('labor_histogram').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
-      ]);
-    }
-
-    // Then sync to houses
-    await syncMacrosToHouses(newTemplate);
-  }, [currentProject, syncMacrosToHouses]);
+    await applyStructureMutation(newTemplate, "");
+  }, [currentProject, applyStructureMutation]);
 
   const deleteScope = useCallback(async (macroId: string, scopeId: string) => {
     if (!currentProject) return;
@@ -1423,38 +1333,10 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         : m
     );
 
-    // Update in database first
-    const { error } = await supabase
-      .from('projects')
-      .update({ macros_template: macrosToJson(newTemplate) })
-      .eq('id', currentProject.id);
+    await applyStructureMutation(newTemplate, "Serviço e todos dados relacionados removidos!");
+  }, [currentProject, applyStructureMutation]);
 
-    if (error) {
-      console.error('Error deleting scope:', error);
-      toast.error("Erro ao remover serviço");
-      return;
-    }
-
-    // Delete related data - ALL dependent tables (budget, production, contract, planning)
-    await supabase.from('scope_items').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
-    await supabase.from('scope_costs').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
-    await supabase.from('budget_service_inputs').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
-    await supabase.from('weekly_productions').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
-    await supabase.from('planned_productions').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
-    await supabase.from('production_deviations').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
-    await supabase.from('labor_contracts').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
-    // ✅ Cascade to contract services, planning and measurement
-    await supabase.from('project_contract_services').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
-    await supabase.from('service_planning_by_period').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
-    await supabase.from('measurement_services').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
-    await supabase.from('labor_histogram').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
-
-    // Then sync to houses
-    await syncMacrosToHouses(newTemplate);
-    toast.success("Serviço e todos dados relacionados removidos!");
-  }, [currentProject, syncMacrosToHouses]);
-
-  // Reorder macros - reorganizes the order of macros/etapas
+  // Reorder macros
   const reorderMacros = useCallback(async (orderedMacroIds: string[]) => {
     if (!currentProject) return;
     
@@ -1462,24 +1344,10 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       .map(id => currentProject.macrosTemplate.find(m => m.id === id))
       .filter((m): m is Macro => m !== undefined);
 
-    // Update in database
-    const { error } = await supabase
-      .from('projects')
-      .update({ macros_template: macrosToJson(newTemplate) })
-      .eq('id', currentProject.id);
+    await applyStructureMutation(newTemplate, "Ordem das etapas atualizada!");
+  }, [currentProject, applyStructureMutation]);
 
-    if (error) {
-      console.error('Error reordering macros:', error);
-      toast.error("Erro ao reordenar etapas");
-      return;
-    }
-
-    // Sync to houses
-    await syncMacrosToHouses(newTemplate);
-    toast.success("Ordem das etapas atualizada!");
-  }, [currentProject, syncMacrosToHouses]);
-
-  // Reorder scopes within a macro - reorganizes the order of scopes/services
+  // Reorder scopes within a macro
   const reorderScopes = useCallback(async (macroId: string, orderedScopeIds: string[]) => {
     if (!currentProject) return;
     
@@ -1493,22 +1361,8 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       return { ...m, scopes: reorderedScopes };
     });
 
-    // Update in database
-    const { error } = await supabase
-      .from('projects')
-      .update({ macros_template: macrosToJson(newTemplate) })
-      .eq('id', currentProject.id);
-
-    if (error) {
-      console.error('Error reordering scopes:', error);
-      toast.error("Erro ao reordenar serviços");
-      return;
-    }
-
-    // Sync to houses
-    await syncMacrosToHouses(newTemplate);
-    toast.success("Ordem dos serviços atualizada!");
-  }, [currentProject, syncMacrosToHouses]);
+    await applyStructureMutation(newTemplate, "Ordem dos serviços atualizada!");
+  }, [currentProject, applyStructureMutation]);
 
   // House updates
   const updateScopeProgress = useCallback(async (houseId: number, macroId: string, scopeId: string, progress: number, startDate?: string | null, endDate?: string | null) => {
