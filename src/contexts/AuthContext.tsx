@@ -75,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const authListenerRegistered = useRef(false);
   const isFetchingUserData = useRef(false);
   const hasFetchedUserData = useRef<string | null>(null);
+  const isPageVisibleRef = useRef(typeof document === "undefined" ? true : !document.hidden);
 
   const fetchUserData = useCallback(async (userId: string) => {
     // ✅ Proteção contra execução duplicada
@@ -190,6 +191,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id, fetchUserData]);
 
+  // ✅ Monitorar visibilidade da aba para evitar reconstrução visual indevida
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      isPageVisibleRef.current = !document.hidden;
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
   // ✅ Listener registrado APENAS UMA VEZ com array vazio
   useEffect(() => {
     if (authListenerRegistered.current) {
@@ -202,27 +213,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         console.log("[AUTH EFFECT] Auth state changed:", event);
-        
-        // ✅ Ignorar eventos que não exigem reconstrução da UI
-        // TOKEN_REFRESHED e INITIAL_SESSION com dados já carregados não devem causar flash
-        if (session?.user && hasFetchedUserData.current === session.user.id) {
-          if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-            console.log("[AUTH EFFECT] Skipping refetch - data already loaded, event:", event);
-            // Apenas atualizar session/user sem disparar loading
-            setSession(session);
-            setUser(session.user);
-            return;
-          }
+
+        const sameLoadedUser = !!session?.user && hasFetchedUserData.current === session.user.id;
+        const shouldSkipUiRebuild = sameLoadedUser && (
+          event === "SIGNED_IN" ||
+          event === "TOKEN_REFRESHED" ||
+          event === "INITIAL_SESSION" ||
+          !isPageVisibleRef.current
+        );
+
+        if (shouldSkipUiRebuild && session?.user) {
+          console.log("[AUTH EFFECT] Skipping UI rebuild for stable session event:", event);
+          setSession(session);
+          setUser(session.user);
+          return;
         }
         
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          // ✅ Manter isLoading=true enquanto fetchUserData roda
-          // Evita flash de "Acesso Negado" no CompanyUserGuard
           setIsLoading(true);
-          // Defer to avoid race conditions
           setTimeout(() => {
             fetchUserData(session.user.id).finally(() => {
               setIsLoading(false);

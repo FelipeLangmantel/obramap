@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import React, { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Loader2, LogOut } from "lucide-react";
@@ -17,6 +17,12 @@ interface CompanyUserGuardProps {
  */
 export function CompanyUserGuard({ children }: CompanyUserGuardProps) {
   const { user, profile, isSystemAdmin, isLoading, mustChangePassword, company, signOut } = useAuth();
+
+  // Debug temporário para detectar remount real
+  React.useEffect(() => {
+    console.log("[MOUNT] CompanyUserGuard mounted");
+    return () => console.log("[UNMOUNT] CompanyUserGuard unmounted");
+  }, []);
 
   // Loading state
   if (isLoading) {

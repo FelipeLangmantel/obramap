@@ -43,6 +43,11 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
   const { currentProject, projects, isLoading: projectsLoading } = useConstruction();
   const location = useLocation();
 
+  useEffect(() => {
+    console.log("[MOUNT] SetupFlowGuard mounted");
+    return () => console.log("[UNMOUNT] SetupFlowGuard unmounted");
+  }, []);
+
   // ✅ Estado para verificação inicial do sistema
   const [systemCheckComplete, setSystemCheckComplete] = useState(false);
   const [needsInitialSetup, setNeedsInitialSetup] = useState(false);
@@ -181,7 +186,9 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
   }
 
   // ✅ 6. Carregando projetos (apenas para usuários normais em rotas não-admin)
-  if (projectsLoading) {
+  const hasStableProjectContext = projects.length > 0 || !!currentProject;
+
+  if (projectsLoading && !hasStableProjectContext) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">

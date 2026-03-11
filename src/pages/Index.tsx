@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -44,23 +44,76 @@ type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" 
  * - Tem acesso a esta rota
  */
 function Index() {
+  const routeStateKey = "obramap_route_state_root";
+  const mainScrollRef = useRef<HTMLElement | null>(null);
+
+  const restoredState = useMemo(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(routeStateKey) || "null") as {
+        activeView?: ViewType;
+        scrollTop?: number;
+      } | null;
+    } catch {
+      return null;
+    }
+  }, []);
+
   // ✅ Restaurar view ativa do sessionStorage para preservar estado ao trocar aba
   const [activeView, setActiveView] = useState<ViewType>(() => {
-    try {
-      const saved = sessionStorage.getItem("obramap_active_view");
-      return (saved as ViewType) || "home";
-    } catch {
-      return "home";
-    }
+    return restoredState?.activeView || "home";
   });
   const location = useLocation();
   const { selectedHouse, isLoading, projects, currentProject, setCurrentProject } = useConstruction();
   const { canAccessProject } = useAuth();
 
-  // ✅ Persistir view ativa no sessionStorage
+  // ✅ Persistir estado real da rota
   useEffect(() => {
-    sessionStorage.setItem("obramap_active_view", activeView);
+    try {
+      sessionStorage.setItem(routeStateKey, JSON.stringify({ activeView }));
+    } catch {
+      // noop
+    }
   }, [activeView]);
+
+  useEffect(() => {
+    const scrollElement = document.querySelector("main") as HTMLElement | null;
+    mainScrollRef.current = scrollElement;
+
+    if (scrollElement && typeof restoredState?.scrollTop === "number") {
+      requestAnimationFrame(() => {
+        scrollElement.scrollTop = restoredState.scrollTop ?? 0;
+      });
+    }
+
+    const persistScroll = () => {
+      if (!mainScrollRef.current) return;
+      try {
+        const current = JSON.parse(sessionStorage.getItem(routeStateKey) || "{}");
+        sessionStorage.setItem(routeStateKey, JSON.stringify({
+          ...current,
+          activeView,
+          scrollTop: mainScrollRef.current.scrollTop,
+        }));
+      } catch {
+        // noop
+      }
+    };
+
+    scrollElement?.addEventListener("scroll", persistScroll, { passive: true });
+    document.addEventListener("visibilitychange", persistScroll);
+    window.addEventListener("beforeunload", persistScroll);
+
+    return () => {
+      scrollElement?.removeEventListener("scroll", persistScroll);
+      document.removeEventListener("visibilitychange", persistScroll);
+      window.removeEventListener("beforeunload", persistScroll);
+    };
+  }, [activeView, restoredState]);
+
+  useEffect(() => {
+    console.log("[MOUNT] Index mounted");
+    return () => console.log("[UNMOUNT] Index unmounted");
+  }, []);
 
   // ✅ Se navegou de outra rota com targetView no state, aplicar a view
   useEffect(() => {
@@ -107,7 +160,9 @@ function Index() {
     window.print();
   };
 
-  if (isLoading) {
+  const hasStableProjectData = projects.length > 0 || !!currentProject;
+
+  if (isLoading && !hasStableProjectData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">

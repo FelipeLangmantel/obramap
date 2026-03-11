@@ -1,4 +1,5 @@
- import { Package, RefreshCw } from 'lucide-react';
+import { Package, RefreshCw } from 'lucide-react';
+import { useEffect } from 'react';
  import { Card, CardContent } from '@/components/ui/card';
  import { Button } from '@/components/ui/button';
 import { useConstruction } from '@/contexts/ConstructionContext';
@@ -9,6 +10,11 @@ import { useConstruction } from '@/contexts/ConstructionContext';
 export function SupplyRequestsView() {
   const { currentProject } = useConstruction();
   const projectId = currentProject?.id;
+
+  useEffect(() => {
+    console.log("[MOUNT] SupplyRequestsView mounted");
+    return () => console.log("[UNMOUNT] SupplyRequestsView unmounted");
+  }, []);
 
   const {
      measurements,

@@ -1,6 +1,6 @@
- import { useState, useEffect, useCallback } from 'react';
- import { supabase } from '@/integrations/supabase/client';
- import { toast } from 'sonner';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
  
  export interface MeasurementSupplySummary {
    measurement_id: string;
@@ -62,13 +62,60 @@
    value_pending: number;
  }
  
- export function useMeasurementSupplies(projectId: string | undefined) {
-   const [measurements, setMeasurements] = useState<MeasurementSupplySummary[]>([]);
-   const [selectedMeasurement, setSelectedMeasurement] = useState<MeasurementSupplySummary | null>(null);
-   const [requests, setRequests] = useState<MeasurementSupplyRequest[]>([]);
-   const [kpis, setKpis] = useState<MeasurementSupplyKPIs | null>(null);
+export function useMeasurementSupplies(projectId: string | undefined) {
+   const storageKey = useMemo(() => projectId ? `obramap_supply_requests_${projectId}` : null, [projectId]);
+   const [measurements, setMeasurements] = useState<MeasurementSupplySummary[]>(() => {
+     if (!storageKey) return [];
+     try {
+       const saved = sessionStorage.getItem(storageKey);
+       return saved ? JSON.parse(saved).measurements || [] : [];
+     } catch {
+       return [];
+     }
+   });
+   const [selectedMeasurement, setSelectedMeasurement] = useState<MeasurementSupplySummary | null>(() => {
+     if (!storageKey) return null;
+     try {
+       const saved = sessionStorage.getItem(storageKey);
+       return saved ? JSON.parse(saved).selectedMeasurement || null : null;
+     } catch {
+       return null;
+     }
+   });
+   const [requests, setRequests] = useState<MeasurementSupplyRequest[]>(() => {
+     if (!storageKey) return [];
+     try {
+       const saved = sessionStorage.getItem(storageKey);
+       return saved ? JSON.parse(saved).requests || [] : [];
+     } catch {
+       return [];
+     }
+   });
+   const [kpis, setKpis] = useState<MeasurementSupplyKPIs | null>(() => {
+     if (!storageKey) return null;
+     try {
+       const saved = sessionStorage.getItem(storageKey);
+       return saved ? JSON.parse(saved).kpis || null : null;
+     } catch {
+       return null;
+     }
+   });
    const [isLoading, setIsLoading] = useState(false);
    const [isLoadingRequests, setIsLoadingRequests] = useState(false);
+
+   useEffect(() => {
+     if (!storageKey) return;
+     try {
+       sessionStorage.setItem(storageKey, JSON.stringify({
+         measurements,
+         selectedMeasurement,
+         requests,
+         kpis,
+       }));
+     } catch {
+       // noop
+     }
+   }, [storageKey, measurements, selectedMeasurement, requests, kpis]);
  
    // Load measurements summary
    const loadMeasurements = useCallback(async () => {
@@ -209,12 +256,11 @@
      }>);
    }, [requests]);
  
-   // Load on mount
-   useEffect(() => {
-     if (projectId) {
-       loadMeasurements();
-     }
-   }, [projectId, loadMeasurements]);
+    useEffect(() => {
+      if (projectId && measurements.length === 0) {
+        loadMeasurements();
+      }
+    }, [projectId, measurements.length, loadMeasurements]);
  
    return {
      measurements,
