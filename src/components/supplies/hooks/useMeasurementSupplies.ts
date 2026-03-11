@@ -62,11 +62,44 @@ import { toast } from 'sonner';
    value_pending: number;
  }
  
- export function useMeasurementSupplies(projectId: string | undefined) {
-   const [measurements, setMeasurements] = useState<MeasurementSupplySummary[]>([]);
-   const [selectedMeasurement, setSelectedMeasurement] = useState<MeasurementSupplySummary | null>(null);
-   const [requests, setRequests] = useState<MeasurementSupplyRequest[]>([]);
-   const [kpis, setKpis] = useState<MeasurementSupplyKPIs | null>(null);
+export function useMeasurementSupplies(projectId: string | undefined) {
+   const storageKey = useMemo(() => projectId ? `obramap_supply_requests_${projectId}` : null, [projectId]);
+   const [measurements, setMeasurements] = useState<MeasurementSupplySummary[]>(() => {
+     if (!storageKey) return [];
+     try {
+       const saved = sessionStorage.getItem(storageKey);
+       return saved ? JSON.parse(saved).measurements || [] : [];
+     } catch {
+       return [];
+     }
+   });
+   const [selectedMeasurement, setSelectedMeasurement] = useState<MeasurementSupplySummary | null>(() => {
+     if (!storageKey) return null;
+     try {
+       const saved = sessionStorage.getItem(storageKey);
+       return saved ? JSON.parse(saved).selectedMeasurement || null : null;
+     } catch {
+       return null;
+     }
+   });
+   const [requests, setRequests] = useState<MeasurementSupplyRequest[]>(() => {
+     if (!storageKey) return [];
+     try {
+       const saved = sessionStorage.getItem(storageKey);
+       return saved ? JSON.parse(saved).requests || [] : [];
+     } catch {
+       return [];
+     }
+   });
+   const [kpis, setKpis] = useState<MeasurementSupplyKPIs | null>(() => {
+     if (!storageKey) return null;
+     try {
+       const saved = sessionStorage.getItem(storageKey);
+       return saved ? JSON.parse(saved).kpis || null : null;
+     } catch {
+       return null;
+     }
+   });
    const [isLoading, setIsLoading] = useState(false);
    const [isLoadingRequests, setIsLoadingRequests] = useState(false);
  
