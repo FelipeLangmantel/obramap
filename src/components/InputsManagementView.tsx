@@ -161,7 +161,10 @@ export function InputsManagementView() {
 
   const filteredInputs = useMemo(() => {
     return inputs.filter(input => {
-      const matchesSearch = !searchInput || input.name.toLowerCase().includes(searchInput.toLowerCase());
+      const searchLower = searchInput.toLowerCase();
+      const matchesSearch = !searchInput || 
+        input.name.toLowerCase().includes(searchLower) ||
+        (input.code && input.code.toLowerCase().includes(searchLower));
       const matchesCategory = filterCategory === 'all' || input.category === filterCategory;
       return matchesSearch && matchesCategory;
     });
