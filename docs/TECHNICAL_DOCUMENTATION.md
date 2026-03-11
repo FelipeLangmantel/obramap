@@ -1,952 +1,565 @@
-# Documentação Técnica - ObraMap
+# AUDITORIA TÉCNICA COMPLETA — ObraMap
 
-**Sistema de Gestão de Obras**  
-**Versão:** Janeiro 2026 (atualizado com Suprimentos JIT v3 - Backend-Driven)  
-**Desenvolvido por:** Felipe Langmantel
-
-> **NOTA JIT (v3):** O módulo de Suprimentos é agora 100% orientado ao backend.
->
-> **Cards Gerenciais (KPIs):** Calculados pelo RPC `get_supply_kpis(p_project_id)`:
-> - Pedidos atrasados (expected_delivery_date < hoje, não entregue)
-> - Entregas no prazo vs atrasadas
-> - Compras críticas (is_critical = true)
-> - Produção parada (alertas delayed com planned_use_date <= hoje)
-> - Itens planejados sem pedido (status = pending)
->
-> **Validações de Backend:**
-> - `validate_measurement_no_overlap()`: Bloqueia medições com período sobreposto
-> - `validate_measurement_service_houses()`: Bloqueia casas já planejadas ou executadas
-> - `update_measurement_status_on_production()`: Marca medição como "executed" ao lançar produção
->
-> **Reprocessamento Automático (Triggers):**
-> - `trigger_regen_alerts_planned_productions`: Regenera alertas ao alterar planejamento
-> - `trigger_regen_alerts_project_lead_times`: Regenera alertas ao alterar lead times
-> - `trigger_update_alert_from_order`: Atualiza status dos alertas ao alterar pedidos
->
-> **Fluxo completo:**
-> - Materiais: Alertas → Cotações → Aprovação → Pedidos → Rastreamento → Entrega
-> - Mão de Obra: Alertas → Contratos → Fechar Medição (`close_labor_measurement`) → Produção
->
-> **Novas colunas em `supply_alerts`:** planned_use_date, actual_delivery_date, delay_days, is_critical
-> **Nova coluna em `measurements`:** status (planned, in_progress, executed, closed)
-> **Funções RPC:** `get_supply_kpis`, `get_available_measurements`, `close_labor_measurement`
+**Data:** 2026-03-11  
+**Versão:** 2.0 — Substituição completa da documentação anterior  
+**Escopo:** Diagnóstico estrutural completo de todo o sistema
 
 ---
 
-## Sumário
+## RESUMO EXECUTIVO
 
-1. [Mapa de Módulos](#1-mapa-de-módulos)
-2. [Modelo de Dados](#2-modelo-de-dados)
-3. [Fluxo de Informação entre Módulos](#3-fluxo-de-informação-entre-módulos)
-4. [Regras de Negócio](#4-regras-de-negócio)
-5. [Pontos de Cálculo e Inteligência](#5-pontos-de-cálculo-e-inteligência)
-6. [Dependências Críticas](#6-dependências-críticas)
+O ObraMap é um sistema multi-tenant de gestão de obras residenciais em série (condomínios horizontais). Construído com React/Vite + Supabase (Lovable Cloud), utiliza uma arquitetura baseada em dois contexts centrais (`AuthContext` e `ConstructionContext`) que concentram ~90% da lógica de estado. O sistema gerencia o ciclo completo: cadastro de obra → definição de etapas/serviços → orçamento → contrato → planejamento estratégico → planejamento por período → produção semanal → medições → entrega.
 
----
+**Pontos fortes:** Isolamento multi-tenant via RLS + `get_my_company_id()`, sincronização atômica de mutações estruturais via RPC `apply_structure_mutation`, realtime para casas.
 
-## 1. MAPA DE MÓDULOS
-
-### 1.1 Mapa de Obras (Dashboard Principal)
-
-**Função:** Visão geral do empreendimento com visualização do progresso por casa/unidade.
-
-**Dados que cria:**
-- Atualização de progresso por escopo em cada casa (tabela `houses`)
-- Histórico de última atualização por casa
-
-**Dados que consome:**
-- Projetos (`projects`)
-- Quadras (`quadras`)
-- Casas com macros e escopos (`houses`)
-- Template de macros do projeto (`projects.macros_template`)
+**Pontos críticos:** `ConstructionContext.tsx` com 1819 linhas concentrando toda a lógica de obras, dados de progresso em JSONB dentro de `houses.macros`, nomes desnormalizados em 8+ tabelas, `WeeklyProductionView.tsx` com 1852 linhas, `ProjectCostsView.tsx` com 1215 linhas.
 
 ---
 
-### 1.2 Planejamento Semanal
-
-**Função:** Criação de medições e planejamento de serviços a serem executados em períodos definidos.
-
-**Dados que cria:**
-- Medições (`measurements`)
-- Serviços planejados por medição (`measurement_services`)
-- Produções planejadas legadas (`planned_productions`)
-
-**Dados que consome:**
-- Template de macros e escopos do projeto
-- Lista de casas disponíveis
-- Progresso atual por escopo
-
----
-
-### 1.3 Produção Semanal
-
-**Função:** Registro da execução real de serviços por casa, vinculados ou não a uma medição.
-
-**Dados que cria:**
-- Registros de produção (`productions`)
-- Registros legados (`weekly_productions`)
-- Atualização de progresso nas casas (`houses.macros`)
-
-**Dados que consome:**
-- Medições e serviços (`measurements`, `measurement_services`)
-- Produções planejadas (`planned_productions`)
-- Casas e seu progresso atual
-
----
-
-### 1.4 Banco Inicial
-
-**Função:** Modo especial de registro para atividades já concluídas antes do início do acompanhamento digital.
-
-**Dados que cria:**
-- Produções marcadas como `is_initial_database = true`
-- Atualização de progresso nas casas (não contabiliza como produção real para análise)
-
-**Dados que consome:**
-- Template de macros e escopos
-- Lista de casas
-
----
-
-### 1.5 Custos da Obra (Project Costs)
-
-**Função:** Orçamento detalhado por escopo, cálculo de custos por medição e análise de curva ABC.
-
-**Dados que cria:**
-- Custos por escopo (`scope_costs`)
-- Histórico local de custos unitários
-
-**Dados que consome:**
-- Template de macros e escopos
-- Produções planejadas (`planned_productions`)
-- Custos de material, mão de obra e equipamento por escopo
-
----
-
-### 1.6 Fluxo Financeiro
-
-**Função:** Controle de contas a pagar com visão semanal, geração de QR Code PIX e relatórios.
-
-**Dados que cria:**
-- Lançamentos financeiros (`financial_entries`)
-
-**Dados que consome:**
-- Fornecedores (`suppliers`)
-- Categorias financeiras do projeto
-- Lançamentos existentes
-
----
-
-### 1.7 Suprimentos
-
-**Função:** Gestão completa de cotações, pedidos de compra, acompanhamento de entregas e contratos de mão de obra.
-
-**Dados que cria:**
-- Solicitações de cotação (`quotation_requests`)
-- Itens de cotação (`quotation_items`)
-- Cotações de fornecedores (`supplier_quotes`)
-- Pedidos de compra (`purchase_orders`)
-- Itens de pedido (`purchase_order_items`)
-- Rastreamento de entrega (`delivery_tracking`)
-- Contratos de mão de obra (`labor_contracts`)
-- Insumos (`inputs`)
-- Famílias de materiais (`material_families`)
-
-**Dados que consome:**
-- Fornecedores (`suppliers`)
-- Insumos cadastrados
-- Produções para cálculo de contratos executados
-
----
-
-### 1.8 Mapa Interativo 2D
-
-**Função:** Posicionamento visual de casas sobre imagem de implantação do projeto.
-
-**Dados que cria:**
-- Layout do mapa (`map_layouts.houses`, `map_layouts.quadras`)
-- URL da imagem de fundo
-
-**Dados que consome:**
-- Casas e seu progresso
-- Quadras do projeto
-- Configuração de legenda
-
----
-
-### 1.9 Mapa 3D
-
-**Função:** Visualização tridimensional do empreendimento com marcadores de progresso.
-
-**Dados que cria:**
-- Marcadores 3D de casas (`map_layouts.house_markers_3d`)
-- Posição e alvo da câmera (`map_layouts.camera_position`, `camera_target`)
-- URL do modelo 3D
-
-**Dados que consome:**
-- Casas e progresso por escopo
-- Configuração de legenda customizada
-- Modelo 3D carregado (GLTF/OBJ)
-
----
-
-### 1.10 Gráficos e Análises
-
-**Função:** Visualização consolidada de progresso por status, quadra, macro e escopo.
-
-**Dados que cria:**
-- Nenhum (apenas leitura)
-
-**Dados que consome:**
-- Casas com progresso por macro/escopo
-- Quadras
-- Template de macros e escopos
-- Filtros ativos (status, macro, escopo, quadra)
-
----
-
-### 1.11 Painel da Diretoria
-
-**Função:** Identificação automática de riscos críticos, simulação de cenários e registro de decisões gerenciais.
-
-**Dados que cria:**
-- Decisões registradas (`board_decisions`)
-
-**Dados que consome:**
-- Produções semanais (`weekly_productions`)
-- Produções planejadas (`planned_productions`)
-- Casas e progresso
-- Histórico de decisões
-
----
-
-### 1.12 Planejamento Inteligente
-
-**Função:** Cronograma baseado em produtividade, Gantt e Linha de Balanço com alertas automáticos.
-
-**Dados que cria:**
-- Etapas de planejamento (`planning_stages`)
-- Equipes (`planning_teams`)
-- Diários de obra (`daily_work_logs`)
-- Alertas (`planning_alerts`)
-- Simulações (`planning_simulations`)
-- Baselines/versões (`planning_baselines`, `planning_versions`)
-
-**Dados que consome:**
-- Template de macros do projeto
-- Total de unidades
-- Data de início e fim do projeto
-- Biblioteca de produtividade (`productivity_library`)
-
----
-
-### 1.13 Entrega e Pós-Obra
-
-**Função:** Controle de inspeções de entrega, checklists e gestão de pendências.
-
-**Dados que cria:**
-- Inspeções de entrega (`delivery_inspections`)
-- Itens de checklist (`delivery_checklist_items`)
-- Pendências/issues (`delivery_issues`)
-- Templates de checklist (`delivery_checklist_templates`)
-
-**Dados que consome:**
-- Casas do projeto
-- Templates de checklist
-- Usuários do sistema
-
----
-
-## 2. MODELO DE DADOS
-
-### 2.1 Entidades Principais
-
-#### projects (Projetos)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID (PK) | Identificador único do projeto |
-| company_id | UUID (FK → companies) | Empresa proprietária |
-| name | texto | Nome do empreendimento |
-| location | texto | Localização |
-| contractor | texto | Construtora responsável |
-| start_date | data | Data de início |
-| expected_end_date | data | Data prevista de término |
-| total_houses | inteiro | Quantidade total de unidades |
-| unit_size | numérico | Área padrão da unidade (m²) |
-| macros_template | JSONB | Template de etapas e serviços |
-| setup_complete | booleano | Configuração inicial concluída |
-| legend_follow_macros | booleano | Legenda segue cores dos macros |
-| custom_legend_items | JSONB | Itens personalizados de legenda |
-| weight_mode | texto | Modo de peso (automatic/manual) |
-
-#### houses (Casas/Unidades)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID (PK) | Identificador único |
-| project_id | UUID (FK → projects) | Projeto pai |
-| house_number | inteiro | Número da unidade |
-| quadra_id | UUID (FK → quadras) | Quadra onde está localizada |
-| area | numérico | Área em m² |
-| type | texto | Tipo de unidade |
-| constructor_name | texto | Nome do empreiteiro |
-| expected_date | data | Data prevista de entrega |
-| last_update | data | Data da última atualização |
-| macros | JSONB | Estado atual de todos os macros/escopos com progresso |
-
-**Estrutura do campo `macros` (JSONB):**
-```
-[
-  {
-    "id": "macro1",
-    "name": "Estrutura",
-    "color": "#ef4444",
-    "scopes": [
-      {
-        "id": "radier",
-        "name": "Radier",
-        "weight": 8,
-        "progress": 100,
-        "startDate": "2024-06-15",
-        "endDate": "2024-06-20"
-      },
-      ...
-    ]
-  },
-  ...
-]
-```
-
-#### quadras (Quadras/Blocos)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID (PK) | Identificador único |
-| project_id | UUID (FK → projects) | Projeto pai |
-| name | texto | Nome da quadra |
-| house_ids | array de inteiros | Números das casas nesta quadra |
-| display_order | inteiro | Ordem de exibição |
-
----
-
-### 2.2 Sistema de Medições
-
-#### measurements (Medições)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID (PK) | Identificador único |
-| project_id | UUID (FK → projects) | Projeto |
-| measurement_number | inteiro | Número sequencial da medição |
-| start_date | data | Data de início do período |
-| end_date | data | Data de fim do período |
-| notes | texto | Observações |
-
-#### measurement_services (Serviços da Medição)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID (PK) | Identificador único |
-| measurement_id | UUID (FK → measurements) | Medição pai |
-| macro_id | texto | ID do macro (do template) |
-| macro_name | texto | Nome do macro |
-| macro_color | texto | Cor do macro |
-| scope_id | texto | ID do escopo |
-| scope_name | texto | Nome do escopo |
-| planned_house_ids | array de inteiros | Casas planejadas |
-| planned_houses | inteiro | Quantidade planejada |
-| notes | texto | Observações |
-
-**Relacionamento:**
-- Uma **Medição** possui vários **Serviços**
-- Cada **Serviço** representa um escopo específico com casas planejadas
-- A combinação (measurement_id, macro_id, scope_id) é única (índice)
-
----
-
-### 2.3 Sistema de Produção
-
-#### productions (Produções)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID (PK) | Identificador único |
-| project_id | UUID (FK → projects) | Projeto |
-| measurement_id | UUID (FK → measurements) | Medição vinculada (opcional) |
-| measurement_service_id | UUID (FK → measurement_services) | Serviço vinculado (opcional) |
-| macro_id | texto | ID do macro |
-| macro_name | texto | Nome do macro |
-| scope_id | texto | ID do escopo |
-| scope_name | texto | Nome do escopo |
-| house_ids | array de inteiros | Casas executadas |
-| houses_count | inteiro | Quantidade de casas |
-| production_date | data | Data do registro |
-| is_initial_database | booleano | Se é cadastro inicial (pré-existente) |
-| is_unplanned | booleano | Se é produção não planejada |
-
-**Relacionamento com Medição:**
-- `measurement_id` é nulo se for produção não planejada
-- `measurement_service_id` vincula diretamente ao serviço planejado
-- Permite rastrear: "Esta produção veio de qual planejamento?"
-
-#### weekly_productions (Produções Legadas)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID (PK) | Identificador único |
-| project_id | UUID | Projeto |
-| week_start | data | Início da semana |
-| week_end | data | Fim da semana |
-| scope_id, scope_name | texto | Escopo executado |
-| macro_id, macro_name, macro_color | texto | Macro executado |
-| house_ids | array | Casas executadas |
-| houses_count | inteiro | Quantidade |
-| is_initial_database | booleano | Cadastro inicial |
-
-*Nota: Tabela mantida para compatibilidade com análises legadas.*
-
-#### planned_productions (Planejamento Legado)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID (PK) | Identificador único |
-| project_id | UUID | Projeto |
-| week_start, week_end | data | Período |
-| scope_id, scope_name | texto | Escopo |
-| macro_id, macro_name, macro_color | texto | Macro |
-| planned_house_ids | array | Casas planejadas |
-| planned_houses | inteiro | Quantidade |
-| measurement_number | inteiro | Número da medição |
-
----
-
-### 2.4 Planejamento Inteligente
-
-#### planning_stages (Etapas do Cronograma)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID (PK) | Identificador |
-| project_id | UUID | Projeto |
-| name | texto | Nome da etapa |
-| macro_id | texto | Macro vinculado (opcional) |
-| scope_id | texto | Escopo vinculado (opcional) |
-| sequence_order | inteiro | Ordem de execução |
-| planned_productivity | numérico | Produtividade planejada (unidades/dia/equipe) |
-| planned_teams | inteiro | Quantidade de equipes |
-| depends_on | UUID (FK → planning_stages) | Dependência (predecessor) |
-| latency_days | inteiro | Dias de latência após predecessor |
-| color | texto | Cor para visualização |
-
-#### planning_teams (Equipes)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID (PK) | Identificador |
-| project_id | UUID | Projeto |
-| stage_id | UUID (FK → planning_stages) | Etapa associada |
-| name | texto | Nome da equipe |
-| professionals_count | inteiro | Qtd de profissionais |
-| helpers_count | inteiro | Qtd de ajudantes |
-| is_active | booleano | Equipe ativa |
-
-#### daily_work_logs (Diário de Obra)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID (PK) | Identificador |
-| project_id | UUID | Projeto |
-| stage_id | UUID (FK → planning_stages) | Etapa |
-| team_id | UUID (FK → planning_teams) | Equipe |
-| log_date | data | Data do registro |
-| units_completed | numérico | Unidades concluídas |
-| house_ids | array | Casas trabalhadas |
-| weather | texto | Condição climática |
-| notes | texto | Observações |
-
-#### planning_baselines (Baselines)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID (PK) | Identificador |
-| project_id | UUID | Projeto |
-| name | texto | Nome do baseline |
-| version_number | inteiro | Número da versão |
-| baseline_data | JSONB | Snapshot completo do planejamento |
-| created_at | timestamp | Data de criação |
-
----
-
-### 2.5 Sistema Financeiro
-
-#### financial_entries (Lançamentos Financeiros)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID (PK) | Identificador |
-| project_id | UUID | Projeto |
-| supplier_id | UUID (FK → suppliers) | Fornecedor |
-| category | texto | Categoria |
-| subcategory | texto | Subcategoria |
-| description | texto | Descrição |
-| amount | numérico | Valor |
-| due_date | data | Data de vencimento |
-| payment_date | data | Data de pagamento |
-| status | texto | pending/paid/overdue |
-| pix_key, pix_key_type | texto | Dados PIX |
-
-#### scope_costs (Custos por Escopo)
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | UUID (PK) | Identificador |
-| project_id | UUID | Projeto |
-| macro_id, macro_name, macro_color | texto | Macro |
-| scope_id, scope_name | texto | Escopo |
-| material_cost | numérico | Custo de material por unidade |
-| labor_cost | numérico | Custo de mão de obra por unidade |
-| equipment_cost | numérico | Custo de equipamento por unidade |
-
----
-
-## 3. FLUXO DE INFORMAÇÃO ENTRE MÓDULOS
-
-### 3.1 Fluxo de Cadastro Inicial (Banco Inicial)
+## BLOCO 1 — VISÃO GERAL DA ARQUITETURA
+
+### 1.1 Stack Tecnológica
+
+| Camada | Tecnologia |
+|--------|-----------|
+| Frontend | React 18 + TypeScript + Vite |
+| UI | Tailwind CSS + shadcn/ui + Radix |
+| Estado | React Context (AuthContext, ConstructionContext) |
+| Cache/Queries | TanStack React Query (usado minimamente) |
+| Backend | Supabase (Lovable Cloud) — PostgreSQL + Auth + RLS |
+| Lógica Backend | RPCs PostgreSQL (PL/pgSQL) |
+| Edge Functions | Deno (parse-budget, create-user, delete-user, etc.) |
+| Realtime | Supabase Realtime (houses updates) |
+| 3D | Three.js + React Three Fiber |
+| Gráficos | Recharts |
+
+### 1.2 Camadas e Responsabilidades
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  1. BANCO INICIAL                                           │
-│     - Usuário seleciona macro + escopo                      │
-│     - Seleciona casas já concluídas                        │
-│     - Marca como "is_initial_database = true"              │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  2. ATUALIZAÇÃO DE CASAS                                    │
-│     - Sistema atualiza houses.macros com progresso         │
-│     - NÃO conta como produção real para métricas           │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  3. VISUALIZAÇÃO                                            │
-│     - Mapa de Obras exibe progresso                        │
-│     - Gráficos mostram status atualizado                   │
-│     - Mapa 3D reflete cores de progresso                   │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│                    FRONTEND                      │
+│  pages/          → Roteamento e layout           │
+│  components/     → UI + lógica de apresentação   │
+│  contexts/       → Estado global + mutações       │
+│  hooks/          → Lógica de domínio por módulo   │
+│  data/           → Tipos e constantes             │
+├─────────────────────────────────────────────────┤
+│                    BACKEND                        │
+│  RPCs            → Lógica atômica (mutations)     │
+│  Triggers        → Cálculos automáticos           │
+│  RLS Policies    → Segurança multi-tenant         │
+│  Edge Functions  → Integração externa / parse     │
+├─────────────────────────────────────────────────┤
+│                   DADOS                           │
+│  Tabelas Mestre  → companies, projects, inputs    │
+│  Tabelas Operat. → measurements, productions      │
+│  JSONB           → houses.macros (progresso)       │
+│  Derivados       → scope_costs, planned_prods     │
+└─────────────────────────────────────────────────┘
 ```
 
-**Origem dos dados:** Usuário informa manualmente  
-**Onde é salvo:** `productions` (is_initial_database=true), `weekly_productions` (is_initial_database=true), `houses.macros`  
-**Quem consome:** Todos os módulos de visualização (exceto análises de produtividade)
+### 1.3 Fonte Primária de Verdade por Domínio
+
+| Domínio | Fonte de Verdade | Tipo |
+|---------|-----------------|------|
+| Estrutura da obra (etapas/serviços) | `projects.macros_template` (JSONB) | Mestre |
+| Progresso por casa | `houses.macros` (JSONB) | Operacional |
+| Orçamento unitário | `scope_costs` + `scope_items` | Mestre |
+| Contrato | `project_contracts` + `project_contract_services` | Derivado do orçamento |
+| Planejamento estratégico | `planning_versions` + `planning_periods` + `service_planning_by_period` | Derivado do contrato |
+| Produção semanal | `weekly_productions` | Operacional |
+| Produção detalhada | `productions` | Operacional |
+| Medições | `measurements` + `measurement_services` | Operacional |
+| Insumos | `inputs` (por empresa) | Mestre |
+| Fornecedores | `suppliers` (por empresa) | Mestre |
+| Suprimentos | `supply_requests` + `supply_alerts` | Operacional |
+
+### 1.4 Pontos Críticos da Arquitetura
+
+| # | Problema | Severidade | Impacto |
+|---|---------|-----------|---------|
+| 1 | `ConstructionContext.tsx` = 1819 linhas — God Object | Alta | Manutenção, bugs, regressão |
+| 2 | Progresso das casas em JSONB (`houses.macros`) — não-relacional | Alta | Impossível fazer queries SQL, agregações, índices |
+| 3 | Nomes desnormalizados (`macro_name`, `scope_name`) em 8+ tabelas | Média | Sincronização manual necessária |
+| 4 | `WeeklyProductionView.tsx` = 1852 linhas | Alta | Impossível manter |
+| 5 | `ProjectCostsView.tsx` = 1215 linhas | Alta | Impossível manter |
+| 6 | React Query subutilizado — estado em contexts | Média | Sem cache automático, sem retry, sem stale-while-revalidate |
+| 7 | House sync client-side após structure mutation | Média | Se falhar, casas ficam dessincronizadas |
 
 ---
 
-### 3.2 Fluxo de Planejamento Semanal → Produção
+## BLOCO 2 — MAPA COMPLETO DE MÓDULOS
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  1. PLANEJAMENTO SEMANAL                                    │
-│     - Usuário cria Medição (ex: 1ª Medição)                │
-│     - Define período (início/fim)                          │
-│     - Adiciona serviços (macro + escopo + casas)           │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  2. BANCO DE DADOS                                          │
-│     - Cria registro em measurements                        │
-│     - Cria registros em measurement_services               │
-│     - Cria registros em planned_productions (legado)       │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  3. PRODUÇÃO SEMANAL                                        │
-│     - Usuário seleciona medição + serviço                  │
-│     - Sistema pré-carrega casas planejadas                 │
-│     - Usuário confirma casas executadas                    │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  4. REGISTRO DE PRODUÇÃO                                    │
-│     - Salva em productions com measurement_id              │
-│     - Salva em weekly_productions (legado)                 │
-│     - Atualiza progresso em houses.macros                  │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  5. ANÁLISES E VISUALIZAÇÕES                                │
-│     - Planejado vs Realizado                               │
-│     - Cálculo de desvios                                   │
-│     - Painel da Diretoria                                  │
-│     - Custos por medição                                   │
-└─────────────────────────────────────────────────────────────┘
-```
+### 2.1 Painel Inicial (home)
+- **Finalidade:** Dashboard resumo da obra
+- **Componentes:** `HomeDashboard.tsx`
+- **Lê:** `projects`, `houses`, `macros_template` (via context)
+- **Escreve:** Nada
+- **Hooks:** `useConstruction`, `useAuth`
+- **Dependências:** Todos os dados do ConstructionContext
 
-**Origem dos dados:** Planejamento Semanal  
-**Onde é salvo:** `measurements`, `measurement_services`, `planned_productions`, `productions`, `houses`  
-**Quem consome:** Produção Semanal, Custos, Painel Diretoria, Gráficos
+### 2.2 Etapas e Serviços (Gerenciamento)
+- **Finalidade:** CRUD de etapas (macros) e serviços (scopes) — fonte mestre
+- **Componentes:** `ManageMacrosDialog.tsx`, `ScopesList.tsx`
+- **Lê:** `projects.macros_template` (JSONB)
+- **Escreve:** `projects.macros_template` + cascata via `apply_structure_mutation` RPC
+- **Hooks:** `useConstruction` (addMacro, updateMacro, deleteMacro, addScope, updateScope, deleteScope, reorderMacros, reorderScopes)
+- **RPCs:** `apply_structure_mutation`
+- **Impacta:** Mapa de Obras, Mapa Interativo, Mapa 3D, Custos, Contrato, Planejamento Estratégico, Planejamento por Período, Produção, Histograma
+- **Cascata (11 tabelas):** scope_items, scope_costs, weekly_productions, planned_productions, production_deviations, labor_contracts, labor_histogram, measurement_services, budget_service_inputs, project_contract_services, service_planning_by_period
+
+### 2.3 Cadastro de Insumos (inputs)
+- **Finalidade:** Catálogo mestre de insumos por empresa
+- **Componentes:** `InputsManagementView.tsx`
+- **Lê:** `inputs`, `material_families`
+- **Escreve:** `inputs`, `material_families`
+- **Hooks:** Inline no componente
+- **Escopo:** `company_id` (compartilhado entre projetos)
+- **Trigger:** `trg_propagate_input_changes` propaga nome/unidade/categoria para `budget_service_inputs` e `supply_requests`
+- **Impacta:** Orçamento (scope_items via input_id), Suprimentos
+
+### 2.4 Custos da Obra (costs)
+- **Finalidade:** Orçamento unitário por serviço (material, mão de obra, equipamento)
+- **Componentes:** `ProjectCostsView.tsx` (1215 linhas), `BudgetItemsEditor.tsx`, `IndirectCostsTab.tsx`
+- **Lê:** `scope_costs`, `scope_items`, `weekly_productions`, `planned_productions`
+- **Escreve:** `scope_costs`, `scope_items`, `indirect_costs`
+- **Hooks:** `useProjectSetupFlow`
+- **Impacta:** Contrato (valores unitários), Planejamento (custos), Suprimentos (quantidades)
+
+### 2.5 Contrato da Obra (project-contract)
+- **Finalidade:** Definir receita unitária e meta de custo por serviço
+- **Componentes:** `ProjectContractPage.tsx`, `ContractConfigCard.tsx`, `ContractServicesTable.tsx`, `ContractSummaryCards.tsx`
+- **Lê:** `project_contracts`, `project_contract_services`, `scope_costs` (fallback)
+- **Escreve:** `project_contracts`, `project_contract_services`
+- **Hooks:** `useProjectContract`
+- **RPCs:** `sync_contract_services`
+- **Impacta:** Planejamento Estratégico (receita/custo), Medições (receita prevista)
+
+### 2.6 Planejamento Estratégico / Longo Prazo (long-term-planning)
+- **Finalidade:** Distribuir casas por período (quinzena/mês) por serviço
+- **Componentes:** `LongTermPlanningPage.tsx`, `LongTermPlanningMatrix.tsx`, `PlanningHeader.tsx`
+- **Lê:** `planning_versions`, `planning_periods`, `service_planning_by_period`, `project_contract_services`
+- **Escreve:** `service_planning_by_period`, `planning_versions`, `planning_periods`
+- **Hooks:** `useLongTermPlanning`
+- **RPCs:** `initialize_long_term_planning`, `get_service_execution_bank`, `add_planning_period`, `clone_planning_version`
+- **Impacta:** Planejamento por Período, Suprimentos, Histograma MO
+
+### 2.7 Planejamento por Período / Medição (measurement-planning)
+- **Finalidade:** Visualizar e gerenciar períodos do planejamento com detalhes financeiros
+- **Componentes:** `MeasurementPlanningPage.tsx`, `PeriodCard.tsx`, `PeriodServicesDialog.tsx`
+- **Lê:** `planning_periods`, `service_planning_by_period`
+- **Escreve:** `planning_periods` (status), `service_planning_by_period`
+- **Hooks:** `usePeriodPlanning`
+- **RPCs:** `update_planning_period_status`, `generate_supplies_from_planning_period`
+- **Impacta:** Suprimentos (geração automática ao aprovar)
+- **Trigger:** `trg_calc_spbp_financials` calcula planned_revenue, planned_cost, projected_result automaticamente
+
+### 2.8 Produção Semanal (production)
+- **Finalidade:** Registrar execução real por serviço/casa/semana
+- **Componentes:** `WeeklyProductionView.tsx` (1852 linhas!)
+- **Lê:** `weekly_productions`, `planned_productions`, `measurement_services`, `houses`
+- **Escreve:** `weekly_productions`, `houses.macros` (via trigger/realtime)
+- **Hooks:** `useMeasurements`
+- **Trigger:** `trg_update_period_from_production` atualiza status do período
+- **Impacta:** Casas (progresso), Planejamento (banco inicial), Mapa de Obras
+
+### 2.9 Medições (measurements)
+- **Finalidade:** Agrupar serviços e produções por período de medição
+- **Componentes:** `MeasurementSelector.tsx`, `MeasurementSelectorNew.tsx`
+- **Lê:** `measurements`, `measurement_services`, `productions`
+- **Escreve:** `measurements`, `measurement_services`, `productions`
+- **Hooks:** `useMeasurements`
+- **RPCs:** `close_measurement`, `reopen_measurement`, `create_measurement_service_with_cost`
+- **Impacta:** Produção, Custos (realizado), Contrato (receita realizada)
+
+### 2.10 Mapa de Obras (map)
+- **Finalidade:** Visualização do progresso por casa com cores
+- **Componentes:** `QuadrasGrid.tsx`, `HouseCard.tsx`, `HouseDetails.tsx`, `Legend.tsx`, `StatsCards.tsx`
+- **Lê:** `houses.macros` (JSONB via context), `projects.macros_template`
+- **Escreve:** `houses.macros` (progresso individual)
+- **Hooks:** `useConstruction`
+
+### 2.11 Mapa Interativo (interactive-map)
+- **Finalidade:** Mapa 2D com posicionamento visual das casas
+- **Componentes:** `InteractiveMapView.tsx`
+- **Lê:** `map_layouts`, `houses`, `macros_template`
+- **Escreve:** `map_layouts` (posições)
+
+### 2.12 Mapa 3D (3d-map)
+- **Finalidade:** Visualização 3D da obra
+- **Componentes:** `Map3DView.tsx`, `LayersPanel.tsx`, `LinkLayersDialog.tsx`
+- **Lê:** `map_layouts`, `houses`, `map_layer_stage_links`
+- **Escreve:** `map_layouts`, `map_layer_stage_links`
+- **Hooks:** `useModelLayers`
+
+### 2.13 Suprimentos (supplies)
+- **Finalidade:** Gestão JIT de materiais e alertas de compra
+- **Componentes:** `SuppliesJITView.tsx`, `SupplyDashboard.tsx`, `SupplyAlertsList.tsx`, `SupplyRequestsView.tsx`
+- **Lê:** `supply_alerts`, `supply_requests`, `material_families`, `category_lead_times`, `period_supply_requirements`
+- **Escreve:** `supply_alerts`, `supply_requests`, `measurement_stock_entries`
+- **Hooks:** `useSupplyAlerts`, `useSupplyRequests`, `useMeasurementStock`, `useMeasurementSupplies`
+- **RPCs:** `generate_supplies_from_planning_period`, `transition_supply_status`
+
+### 2.14 Histograma de MO (labor-histogram)
+- **Finalidade:** Projeção de necessidade de mão de obra por período
+- **Componentes:** `LaborHistogramView.tsx`, `ProductivityConfigDialog.tsx`
+- **Lê:** `labor_histogram`, `service_planning_by_period`
+- **Escreve:** `labor_histogram`
+- **RPCs:** `calculate_labor_needs`
+
+### 2.15 Fluxo Financeiro (financial-flow)
+- **Finalidade:** Controle de contas a pagar e receber
+- **Componentes:** `FinancialFlowView.tsx`, `InvoiceManagementView.tsx`, `CategoryManagement.tsx`
+- **Lê:** `financial_entries`, `invoices`, `invoice_items`, `suppliers`
+- **Escreve:** `financial_entries`, `invoices`, `invoice_items`
+
+### 2.16 Contratos de MO (labor-contracts)
+- **Finalidade:** Gestão de contratos de empreiteiros por serviço
+- **Componentes:** `LaborContractsView.tsx`
+- **Lê/Escreve:** `labor_contracts`
+
+### 2.17 Planejamento Inteligente / Smart Planning
+- **Finalidade:** Gantt automático com produtividade e dependências
+- **Componentes:** `SmartPlanningView.tsx`, `GanttChart.tsx`, `StrategicGanttChart.tsx`, `LineOfBalance.tsx`, `PlanningDashboard.tsx`
+- **Lê:** `planning_stages`, `planning_teams`, `daily_work_logs`, `service_planning_by_period`
+- **Escreve:** `planning_stages`, `planning_teams`, `daily_work_logs`
+- **Hooks:** `usePlanningData`, `usePlanningCalculations`, `useStrategicGanttData`
+
+### 2.18 Entrega & Pós-Obra (delivery)
+- **Finalidade:** Inspeções, checklists, pendências
+- **Componentes:** `DeliveryView.tsx`, `DeliveryDashboard.tsx`, `InspectionChecklistDialog.tsx`, `IssueManagementDialog.tsx`
+- **Lê/Escreve:** `delivery_inspections`, `delivery_checklist_items`, `delivery_issues`, `delivery_checklist_templates`
+
+### 2.19 Painel da Diretoria (board-decisions)
+- **Finalidade:** Decisões de governança e riscos
+- **Componentes:** `BoardDecisionsView.tsx`, `EnhancedDecisionDialog.tsx`, `GovernanceLevelsPanel.tsx`
+- **Lê/Escreve:** `board_decisions`
+
+### 2.20 Gráficos e Análises (charts)
+- **Finalidade:** Dashboards visuais de progresso
+- **Componentes:** `ChartsView.tsx`
+- **Lê:** `houses.macros` (via context)
 
 ---
 
-### 3.3 Fluxo do Planejamento Inteligente
+## BLOCO 3 — MAPA DE DADOS E FONTES DE VERDADE
+
+### 3.1 Tabelas Principais
+
+| Tabela | Tipo | company_id | project_id | Deletável | Finalidade |
+|--------|------|-----------|-----------|-----------|-----------|
+| `companies` | Mestre | PK | — | Não | Organizações |
+| `profiles` | Mestre | FK | — | Via cascade | Usuários |
+| `projects` | Mestre | FK | PK | Sim (cascade) | Obras |
+| `houses` | Operacional | — | FK | Sim | Casas com progresso JSONB |
+| `quadras` | Operacional | — | FK | Sim | Blocos/quadras |
+| `inputs` | Mestre | FK (obrig.) | FK | Sim | Catálogo de insumos |
+| `material_families` | Mestre | FK (obrig.) | FK | Sim | Famílias de material |
+| `suppliers` | Mestre | FK (obrig.) | — | Sim | Fornecedores |
+| `scope_costs` | Derivado | — | FK | Sim | Custo unitário por serviço |
+| `scope_items` | Derivado | — | FK | Sim (cascade) | Itens do orçamento |
+| `project_contracts` | Mestre | FK | FK | Sim | Contrato da obra |
+| `project_contract_services` | Derivado | FK | FK | Sim (cascade) | Serviços do contrato |
+| `planning_versions` | Operacional | FK | FK | Sim | Versão do planejamento |
+| `planning_periods` | Operacional | FK | FK | Sim | Períodos (quinzenas) |
+| `service_planning_by_period` | Derivado | FK | FK | Sim | Metas por período/serviço |
+| `measurements` | Operacional | FK | FK | Imutável (closed) | Medições |
+| `measurement_services` | Operacional | FK | FK | Sim | Serviços da medição |
+| `weekly_productions` | Histórico | — | FK | Sim | Produção semanal |
+| `productions` | Histórico | — | FK | Sim | Produção detalhada |
+| `planned_productions` | Operacional | — | FK | Sim | Planejamento semanal |
+| `production_deviations` | Derivado | — | FK | Sim | Desvios |
+| `labor_contracts` | Operacional | — | FK | Sim | Contratos MO |
+| `labor_histogram` | Derivado | FK | FK | Sim | Histograma MO |
+| `budget_service_inputs` | Derivado | FK | FK | Sim | Vinculação insumo-serviço |
+| `supply_requests` | Operacional | — | FK | Sim | Requisições de compra |
+| `supply_alerts` | Operacional | — | FK | Sim | Alertas JIT |
+| `financial_entries` | Operacional | — | FK | Sim | Lançamentos financeiros |
+| `invoices` + `invoice_items` | Operacional | FK | FK | Sim | Notas fiscais |
+| `delivery_inspections` | Operacional | — | FK | Sim | Inspeções de entrega |
+| `board_decisions` | Operacional | — | FK | Sim | Decisões da diretoria |
+| `planning_stages` | Operacional | — | FK | Sim | Etapas Smart Planning |
+| `planning_teams` | Operacional | — | FK | Sim | Equipes Smart Planning |
+| `daily_work_logs` | Histórico | — | FK | Sim | Diário de obra |
+| `map_layouts` | Operacional | — | FK (1:1) | Sim | Layout do mapa |
+| `indirect_costs` | Operacional | FK | FK | Sim | Custos indiretos |
+| `user_permissions` | Config | — | — | Sim | Permissões granulares |
+| `user_roles` | Config | — | — | Sim | Papéis legados |
+| `company_modules` | Config | FK | — | Sim | Módulos por empresa |
+| `system_modules` | Config Global | — | — | Não | Módulos do sistema |
+
+### 3.2 Diagrama de Dependências
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  1. ONBOARDING DO PLANEJAMENTO                              │
-│     - Sistema carrega macros do projeto                    │
-│     - Usuário define produtividade e equipes por etapa     │
-│     - Sistema calcula duração baseada em total de unidades │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  2. CRIAÇÃO DE BASELINE                                     │
-│     - Usuário clica "Iniciar Planejamento"                 │
-│     - Sistema congela versão inicial                       │
-│     - Cria registro em planning_baselines                  │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  3. DIÁRIO DE OBRA                                          │
-│     - Usuário registra trabalho diário                     │
-│     - Informa etapa, equipe, unidades concluídas           │
-│     - Salva em daily_work_logs                             │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  4. CÁLCULOS AUTOMÁTICOS                                    │
-│     - Sistema calcula produtividade real                   │
-│     - Atualiza inclinação da Linha de Balanço             │
-│     - Projeta nova data de término                         │
-│     - Identifica desvios críticos                          │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  5. ALERTAS E SIMULAÇÕES                                    │
-│     - Gera alertas em planning_alerts                      │
-│     - Permite simulações de cenários                       │
-│     - Apoia decisões do Painel Diretoria                   │
-└─────────────────────────────────────────────────────────────┘
+projects.macros_template (JSONB - FONTE MESTRE)
+  ├── houses.macros (JSONB - cópia sincronizada com progresso)
+  ├── scope_costs (custo unitário)
+  │     └── scope_items (detalhamento do orçamento)
+  │           └── budget_service_inputs (vínculo com inputs)
+  ├── project_contract_services (receita unitária)
+  │     └── service_planning_by_period (metas por período)
+  │           ├── period_supply_requirements (necessidades de suprimento)
+  │           └── supply_requests (geradas automaticamente)
+  ├── measurement_services (serviços da medição)
+  │     └── productions (produção registrada)
+  ├── weekly_productions (produção semanal)
+  ├── planned_productions (planejamento semanal)
+  ├── production_deviations (desvios)
+  ├── labor_contracts (contratos MO)
+  └── labor_histogram (histograma MO)
+
+inputs (FONTE MESTRE - por empresa)
+  ├── scope_items.input_id (vínculo com orçamento)
+  ├── budget_service_inputs.input_id (coeficientes)
+  └── supply_requests.item_id (requisições)
 ```
 
 ---
 
-### 3.4 Fluxo do Painel da Diretoria
+## BLOCO 4 — REGRAS DE NEGÓCIO
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  FONTES DE DADOS                                            │
-│     - weekly_productions (produção real)                   │
-│     - planned_productions (planejamento)                   │
-│     - houses (progresso atual)                             │
-│     - board_decisions (histórico de decisões)              │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  IDENTIFICAÇÃO DE RISCOS                                    │
-│     - Compara planejado vs realizado                       │
-│     - Detecta casas paradas                                │
-│     - Calcula gap de conclusão                             │
-│     - Projeta impacto em custo e prazo                     │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  SIMULAÇÃO DE CENÁRIOS                                      │
-│     - Permite testar ações corretivas                      │
-│     - Calcula economia potencial                           │
-│     - Indica risco residual                                │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  REGISTRO DE DECISÃO                                        │
-│     - Diretoria escolhe ação                               │
-│     - Sistema registra em board_decisions                  │
-│     - Mantém histórico para auditoria                      │
-└─────────────────────────────────────────────────────────────┘
-```
+### 4.1 Multi-empresa
+| Regra | Implementação | Local |
+|-------|-------------|-------|
+| Isolamento por company_id | RLS + `get_my_company_id()` | PostgreSQL |
+| System Admin acessa tudo | `is_system_admin(auth.uid())` nas policies | PostgreSQL |
+| Insumos compartilhados entre obras | `inputs.company_id` sem restrição por project_id | DB |
+| Propagação de alteração de insumo | `trg_propagate_input_changes` | Trigger |
 
----
+### 4.2 Mutação Estrutural
+| Regra | Implementação | Local |
+|-------|-------------|-------|
+| Toda alteração em etapas/serviços é atômica | `apply_structure_mutation` RPC | PostgreSQL |
+| Cascata para 11 tabelas | DELETE + UPDATE dentro da RPC | PostgreSQL |
+| Sync de houses é client-side | `syncMacrosToHouses()` | ConstructionContext.tsx |
+| Ordenação propagada via macro_order/scope_order | RPC + columns em contract/planning | DB + Hooks |
 
-## 4. REGRAS DE NEGÓCIO
+### 4.3 Medições
+| Regra | Implementação | Local |
+|-------|-------------|-------|
+| Medição fechada é imutável | Trigger + RPC `close_measurement` | PostgreSQL |
+| Reabertura só por system_admin | RPC `reopen_measurement` | PostgreSQL |
+| Receita = contrato × % planejado | Trigger `trg_calc_spbp_financials` | PostgreSQL |
 
-### 4.1 Conceito de Medição
+### 4.4 Produção
+| Regra | Implementação | Local |
+|-------|-------------|-------|
+| Atualiza progresso da casa | Trigger no houses via realtime | DB + Realtime |
+| Banco inicial via `is_initial_database` | Flag em weekly_productions/productions | DB |
+| Banco de execução via `get_service_execution_bank` | RPC | PostgreSQL |
 
-**Definição:** Uma medição é um período formal de apuração de produção, geralmente semanal ou quinzenal.
+### 4.5 Planejamento
+| Regra | Implementação | Local |
+|-------|-------------|-------|
+| Geração automática de suprimentos ao aprovar | `generate_supplies_from_planning_period` | RPC (chamada no hook) |
+| Status: draft → approved → released_to_weekly → closed | `update_planning_period_status` | RPC |
+| Financeiro calculado por trigger | `trg_calc_spbp_financials` | PostgreSQL |
 
-**Regras:**
-- Cada medição possui um número sequencial único por projeto
-- Uma medição contém múltiplos serviços (combinação macro + escopo)
-- Não é permitido duplicar o mesmo serviço na mesma medição (índice único)
-- A exclusão de uma medição remove em cascata todos os serviços vinculados
-- Produções vinculadas a uma medição mantêm o `measurement_id` para rastreabilidade
+### 4.6 Exclusão
+| Regra | Status |
+|-------|--------|
+| **Hard Delete** em todas as tabelas | ⚠️ Implementado mas arriscado |
+| Sem soft-delete/arquivamento | ⚠️ Perda permanente de histórico |
+| Sem travamento estrutural após início da obra | ⚠️ Pode quebrar dados em produção |
 
-### 4.2 Quando a Produção Pode Ser Lançada
-
-**Produção Planejada:**
-- Requer seleção de medição existente
-- Requer seleção de serviço dentro da medição
-- Casas planejadas são pré-carregadas
-- Sistema valida se casas já não possuem 100% no escopo
-
-**Produção Não Planejada (Avulsa):**
-- Não requer medição
-- Usuário seleciona macro, escopo e casas livremente
-- Registrada com `is_unplanned = true`
-- Válida para ajustes ou trabalhos emergenciais
-
-### 4.3 Cálculo do Avanço da Casa
-
-**Fórmula:**
-```
-Progresso da Casa = Σ (peso_escopo × progresso_escopo) / Σ peso_escopo
-```
-
-Onde:
-- `peso_escopo` = weight definido no template
-- `progresso_escopo` = 0 a 100% registrado
-
-**Implementação:**
-```typescript
-function calculateHouseProgress(house: House): number {
-  let totalWeight = 0;
-  let weightedProgress = 0;
-  
-  house.macros.forEach(macro => {
-    macro.scopes.forEach(scope => {
-      totalWeight += scope.weight;
-      weightedProgress += (scope.progress * scope.weight) / 100;
-    });
-  });
-  
-  return totalWeight > 0 ? Math.round((weightedProgress / totalWeight) * 100) : 0;
-}
-```
-
-### 4.4 Classificação de Status por Progresso
-
-| Progresso | Status |
-|-----------|--------|
-| 0% | Não Iniciado |
-| 1% - 29% | Fundação |
-| 30% - 59% | Estrutura |
-| 60% - 99% | Acabamento |
-| 100% | Concluído |
-
-*Nota: A legenda pode ser customizada por projeto via `custom_legend_items`.*
-
-### 4.5 Efeitos da Exclusão de Medição
-
-**Cascata de exclusão:**
-1. Remove todos os registros em `measurement_services` com `measurement_id`
-2. Remove registros em `planned_productions` com `measurement_number` correspondente
-3. NÃO remove automaticamente produções (`productions`) - mantém histórico
-4. NÃO reverte progresso nas casas - requer intervenção manual
-
-### 4.6 Distinção entre Planejado e Real
-
-| Aspecto | Planejado | Real |
-|---------|-----------|------|
-| Origem | Planejamento Semanal / Inteligente | Produção Semanal / Diário de Obra |
-| Tabelas | `measurements`, `measurement_services`, `planned_productions`, `planning_stages` | `productions`, `weekly_productions`, `daily_work_logs`, `houses.macros` |
-| Pode ser alterado depois | Sim | Sim (com ressalvas) |
-| Afeta progresso da casa | Não | Sim |
-| Usado para análise de desvio | Baseline (meta) | Valor efetivo |
-
-### 4.7 Resolução de Conflitos
-
-**Duplicidade de serviço em medição:**
-- Sistema impede via índice único no banco
-- Exibe mensagem de erro clara ao usuário
-
-**Progresso superior a 100%:**
-- Sistema limita automaticamente a 100%
-- Produção adicional é registrada mas não altera progresso
-
-**Cadastro inicial vs produção real:**
-- Flag `is_initial_database` diferencia os registros
-- Análises de produtividade ignoram registros iniciais
+### 4.7 Cálculos Principais
+| Cálculo | Fórmula | Onde |
+|---------|---------|------|
+| Progresso da casa | `Σ(scope.progress × scope.weight) / Σ(weight)` | `constructionData.ts` |
+| Custo unitário do serviço | `Σ(scope_items.quantity × unit_value)` | `ProjectCostsView.tsx` |
+| Custo máximo (contrato) | `unit_revenue × (cost_target_percent / 100)` | `useProjectContract.ts` |
+| Receita total contrato | `Σ(unit_revenue_value)` | `useProjectContract.ts` |
+| Margem projetada | `total_revenue - total_max_cost` | `useProjectContract.ts` |
+| Custo do período | `Σ(target_houses × unit_cost_value)` | `useLongTermPlanning.ts` + trigger |
+| Receita do período | `Σ(target_houses × unit_revenue_value)` | `useLongTermPlanning.ts` + trigger |
+| Resultado do período | `revenue - cost` | Vários hooks |
+| Banco de execução | `unnest(weekly_productions.house_ids)` excluindo initial_db | RPC `get_service_execution_bank` |
+| Capacidade produtiva | `team_count × productivity_per_team` | `usePeriodPlanning` |
+| Gap de capacidade | `capacity - target_houses` | `usePeriodPlanning` |
+| Duração Smart Planning | `remaining_houses / (productivity × teams)` | `useStrategicGanttData` |
+| Margem do target | `(revenue - cost) / revenue × 100` | `useMeasurementPlanning` |
+| Suprimentos necessários | `Σ(budget_inputs.qty_per_unit × target_houses)` | RPC `generate_supplies_from_planning_period` |
 
 ---
 
-## 5. PONTOS DE CÁLCULO E INTELIGÊNCIA
+## BLOCO 5 — IDs, CÓDIGOS E RASTREABILIDADE
 
-### 5.1 Cálculo de Produtividade
+### 5.1 Modelo Atual
 
-**Localização:** `usePlanningCalculations.ts`
+| Entidade | Tipo de ID | Código de Negócio | Risco |
+|----------|-----------|-------------------|-------|
+| Projeto | UUID (DB) | Nenhum | Baixo |
+| Etapa (Macro) | `macro_TIMESTAMP` (JSONB) | Nenhum | ⚠️ Frágil — timestamp pode colidir |
+| Serviço (Scope) | `scope_TIMESTAMP` (JSONB) | Nenhum | ⚠️ Frágil |
+| Casa | `house_number` (integer) | Número sequencial | OK |
+| Insumo | UUID (DB) | `code` (opcional) | ⚠️ Código opcional = inconsistência |
+| Medição | UUID + `measurement_number` | Número sequencial | OK |
+| Período | UUID + `period_number` | Número sequencial | OK |
 
-**Dados de entrada:**
-- `daily_work_logs` (registros diários)
-- `planning_stages` (etapas planejadas)
-- `planning_teams` (equipes ativas)
+### 5.2 Onde Usa Nome em Vez de ID (Desnormalizado)
 
-**Lógica:**
-```
-Produtividade Real = Σ units_completed / dias_trabalhados / equipes_ativas
-Produtividade Planejada = planned_productivity (da etapa)
-Variância = (Real - Planejada) / Planejada × 100%
-```
+| Tabela | Campo desnormalizado | ID correspondente (já existe) |
+|--------|-------------------|------|
+| `weekly_productions` | `macro_name`, `scope_name` | `macro_id`, `scope_id` |
+| `planned_productions` | `macro_name`, `scope_name` | `macro_id`, `scope_id` |
+| `measurement_services` | `macro_name`, `scope_name` | `macro_id`, `scope_id` |
+| `labor_contracts` | `macro_name`, `scope_name` | `macro_id`, `scope_id` |
+| `labor_histogram` | `macro_name`, `scope_name` | `macro_id`, `scope_id` |
+| `service_planning_by_period` | `macro_name`, `scope_name` | `macro_id`, `scope_id` |
+| `project_contract_services` | `macro_name`, `scope_name` | `macro_id`, `scope_id` |
+| `scope_costs` | `macro_name`, `scope_name` | `macro_id`, `scope_id` |
 
-**Resultado gerado:**
-- Métrica de produtividade por etapa
-- Percentual de variação (positivo = acima da meta)
-
-### 5.2 Comparativo Planejado vs Realizado
-
-**Localização:** `PlannedProductionTab.tsx`, `PlannedVsActualView.tsx`
-
-**Dados de entrada:**
-- `planned_productions` (metas)
-- `weekly_productions` (execução, excluindo is_initial_database)
-
-**Lógica:**
-- Agrupa por período (semana) e escopo
-- Compara `planned_houses` com `houses_count` real
-- Calcula desvio absoluto e percentual
-
-**Resultado gerado:**
-- Lista de desvios por período/escopo
-- Registro de motivos em `production_deviations`
-
-### 5.3 Projeção de Data de Término
-
-**Localização:** `usePlanningCalculations.ts`
-
-**Dados de entrada:**
-- Cronograma de etapas calculado
-- Produtividade real (se disponível)
-- Variância média das etapas
-
-**Lógica:**
-```
-Data Projetada = max(data_fim_etapas) + ajuste_variancia
-
-Se variância < -15%:
-  ajuste = dias_restantes × (variância / 100)
-```
-
-**Resultado gerado:**
-- `projectedEndDate` exibido no dashboard
-
-### 5.4 Indicadores de Desvio (Painel Diretoria)
-
-**Localização:** `BoardDecisionsView.tsx`
-
-**Dados de entrada:**
-- Produção das últimas 4 semanas
-- Planejamento das últimas 4 semanas
-- Progresso atual das casas
-- Dias restantes até o prazo
-
-**Lógica de detecção de riscos:**
-
-1. **Produção abaixo da meta:**
-   - Se execução < 70% do planejado → alerta de produtividade
-
-2. **Risco de atraso:**
-   - Se progresso_esperado - progresso_real > 10% → alerta de prazo
-
-3. **Casas paradas:**
-   - Se last_update > 14 dias atrás → alerta de unidades paradas
-
-4. **Gap de conclusão:**
-   - Se dias_restantes < 60 e progresso < 80% → alerta crítico
-
-**Resultado gerado:**
-- Lista de decisões críticas priorizadas por severidade
-- Simulações de cenário com impacto calculado
-
-### 5.5 Cálculo de Custos por Medição
-
-**Localização:** `ProjectCostsView.tsx`
-
-**Dados de entrada:**
-- `scope_costs` (custo unitário por escopo)
-- `planned_productions` (casas planejadas por escopo)
-
-**Lógica:**
-```
-Para cada medição:
-  Para cada escopo planejado:
-    custo_escopo = casas × (custo_material + custo_mao_obra + custo_equipamento)
-  total_medicao = Σ custo_escopo
-```
-
-**Resultado gerado:**
-- Custo projetado por medição
-- Curva ABC por categoria (material, mão de obra, equipamento)
-- Custo total do projeto
+**Diagnóstico:** Os IDs existem e são usados para JOINs. Os nomes são desnormalizados para conveniência de exibição. A RPC `apply_structure_mutation` atualiza os nomes nas tabelas derivadas, mas se a RPC falhar parcialmente, os nomes ficam stale.
 
 ---
 
-## 6. DEPENDÊNCIAS CRÍTICAS
+## BLOCO 6 — MULTIEMPRESA
 
-### 6.1 Dependências entre Módulos
+### 6.1 Mapa de Isolamento
 
-| Módulo Dependente | Depende De | Tipo de Dependência |
-|-------------------|------------|---------------------|
-| Produção Semanal | Planejamento Semanal | Opcional (pode lançar avulso) |
-| Custos da Obra | Planejamento Semanal | Necessário para custo por medição |
-| Painel Diretoria | Planejamento + Produção | Necessário para análise de desvio |
-| Planejamento Inteligente | Template de Macros | Necessário (onboarding) |
-| Gráficos | Casas com progresso | Necessário |
-| Mapas 2D/3D | Casas + Quadras | Necessário |
-| Suprimentos | Contratos de Mão de Obra | Opcional (usa produção para executado) |
+| Tabela | Tem company_id | RLS | Isolamento |
+|--------|---------------|-----|-----------|
+| `companies` | PK | ✅ | Total |
+| `profiles` | FK | ✅ | Total |
+| `projects` | FK | ✅ via `get_my_company_id()` | Total |
+| `inputs` | FK obrigatório | ✅ | Total |
+| `suppliers` | FK obrigatório | ✅ | Total |
+| `material_families` | FK obrigatório | ✅ | Total |
+| `houses` | Via project_id | ✅ Indireto | OK |
+| `weekly_productions` | Via project_id | ✅ Indireto | OK |
+| `scope_costs` | Via project_id | ⚠️ Sem company_id direto | Risco baixo |
+| `scope_items` | Via project_id | ⚠️ Sem company_id direto | Risco baixo |
+| `planned_productions` | Via project_id | ⚠️ Sem company_id direto | Risco baixo |
+| `board_decisions` | Via project_id | ⚠️ Sem company_id direto | Risco baixo |
 
-### 6.2 Pontos de Inconsistência Potencial
+### 6.2 Parecer
 
-1. **Exclusão de medição sem limpar produções:**
-   - Produções ficam órfãs (measurement_id não encontrado)
-   - Solução: Queries devem tratar measurement_id nulo ou inexistente
-
-2. **Alteração do template de macros:**
-   - Casas existentes ficam dessincronizadas
-   - Solução: Sistema sincroniza automaticamente no carregamento (preservando progresso)
-
-3. **Duplicidade de dados entre tabelas:**
-   - `productions` vs `weekly_productions`
-   - `measurement_services` vs `planned_productions`
-   - Solução: Manter ambas até migração completa, priorizar tabelas novas
-
-4. **Exclusão de casa sem atualizar quadra:**
-   - house_ids na quadra pode referenciar casa inexistente
-   - Solução: Validar integridade antes de operações
-
-### 6.3 Fontes de Verdade
-
-| Dado | Fonte de Verdade | Tabelas Derivadas |
-|------|------------------|-------------------|
-| Progresso da casa | `houses.macros` | Nenhuma |
-| Produção real | `productions` | `weekly_productions` (legado) |
-| Planejamento de medição | `measurements` + `measurement_services` | `planned_productions` (legado) |
-| Cronograma inteligente | `planning_stages` + `planning_teams` | `planning_baselines` (snapshot) |
-| Diário de obra | `daily_work_logs` | Nenhuma |
-| Decisões gerenciais | `board_decisions` | Nenhuma |
-| Custos unitários | `scope_costs` | Nenhuma |
-| Template de serviços | `projects.macros_template` | `houses.macros` (cópia por casa) |
-
-### 6.4 Operações que Exigem Cascata
-
-| Operação | Cascata Necessária |
-|----------|-------------------|
-| Excluir projeto | quadras, houses, measurements, measurement_services, productions, planned_productions, planning_stages, planning_teams, daily_work_logs, planning_alerts, planning_baselines, scope_costs, financial_entries, board_decisions, map_layouts |
-| Excluir quadra | Atualizar houses.quadra_id para null |
-| Excluir medição | measurement_services |
-| Excluir etapa de planejamento | planning_teams (da etapa), daily_work_logs (da etapa) |
-| Alterar template de macros | Sincronizar houses.macros (automático no load) |
+O multiempresa está **funcionalmente maduro**. O isolamento via `get_my_company_id()` no RLS é sólido. As tabelas sem `company_id` direto são protegidas indiretamente via FK para `projects` + RLS. **Risco residual:** se uma policy em `projects` falhar, tabelas derivadas ficam expostas.
 
 ---
 
-## Glossário
+## BLOCO 7 — PASTAS, ARQUIVOS E RESPONSABILIDADES
 
-| Termo | Definição |
-|-------|-----------|
-| **Macro** | Etapa principal da obra (ex: Estrutura, Cobertura, Instalações) |
-| **Escopo** | Serviço específico dentro de um macro (ex: Radier, Paredes, Telha) |
-| **Medição** | Período de apuração de produção |
-| **Produtividade** | Unidades concluídas por dia por equipe |
-| **Baseline** | Versão congelada do planejamento para comparação |
-| **Linha de Balanço** | Gráfico que mostra ritmo de produção por etapa ao longo do tempo |
-| **Gantt** | Cronograma visual com barras representando duração de etapas |
-| **Cadastro Inicial** | Registro de trabalho já concluído antes do uso do sistema |
+### 7.1 Arquivos Críticos (tamanho e complexidade)
+
+| Arquivo | Linhas | Problema |
+|---------|--------|---------|
+| `ConstructionContext.tsx` | 1819 | **God Object** — CRUD projetos, casas, quadras, macros, scopes, filtros, legends, reorder, progress, batch updates, structure mutation |
+| `WeeklyProductionView.tsx` | 1852 | **Monolito** — UI + lógica + estado em um arquivo |
+| `ProjectCostsView.tsx` | 1215 | **Monolito** — Orçamento completo |
+| `AppSidebar.tsx` | 534 | Aceitável mas com lógica de módulos |
+| `AuthContext.tsx` | 480 | Aceitável — bem delimitado |
+| `useLongTermPlanning.ts` | 732 | Grande mas focado |
+
+### 7.2 Concentração de Risco
+
+`ConstructionContext.tsx` deveria ser dividido em pelo menos 4 hooks/contexts:
+1. `useProjects` (CRUD projetos)
+2. `useHouses` (progresso, filtros)
+3. `useStructure` (macros, scopes, mutation)
+4. `useQuadras` (CRUD quadras)
 
 ---
 
-*Documento gerado automaticamente para fins de documentação técnica.*
+## BLOCO 8 — FÓRMULAS DUPLICADAS
+
+| Fórmula | Lugar 1 | Lugar 2 | Risco |
+|---------|---------|---------|-------|
+| Custo do período | `useLongTermPlanning` (JS) | `trg_calc_spbp_financials` (SQL trigger) | Se divergirem, frontend ≠ backend |
+| Resultado = receita - custo | `useLongTermPlanning`, `usePeriodPlanning`, `useMeasurementPlanning` | — | Baixo (fórmula simples) |
+
+---
+
+## BLOCO 9 — MATRIZ DE IMPACTO ENTRE MÓDULOS
+
+| Se alterar... | Impacta diretamente... |
+|--------------|----------------------|
+| Etapa/Serviço (macros_template) | Mapa, Custos, Contrato, Planej. Estratégico, Planej. Período, Produção, Histograma MO, Mapa 3D, Mapa Interativo, Suprimentos |
+| Insumo (inputs) | Orçamento (scope_items), Suprimentos (supply_requests) |
+| Custo unitário (scope_costs) | Contrato (se recalcular), Planejamento (custos projetados) |
+| Contrato (project_contract_services) | Planej. Estratégico (receita/custo), Medições (receita prevista) |
+| Planejamento (service_planning_by_period) | Suprimentos, Histograma MO, Planej. por Período |
+| Produção (weekly_productions) | Casas (progresso), Banco de execução (Planej. Estratégico), Mapa |
+| Medição (measurements) | Produção, Custos (realizado), Recebimentos (contract_receipts) |
+| Família de material | Suprimentos, Insumos |
+
+---
+
+## BLOCO 10 — RISCOS, DÍVIDAS TÉCNICAS E MELHORIAS
+
+| # | Problema | Severidade | Impacto | Urgência | Recomendação |
+|---|---------|-----------|---------|----------|-------------|
+| 1 | **God Object: ConstructionContext (1819 linhas)** | 🔴 Crítica | Todo o sistema | Alta | Dividir em 4+ hooks especializados |
+| 2 | **Progresso em JSONB (houses.macros)** | 🔴 Crítica | Impossível queries SQL | Média | Migrar para tabela relacional `house_service_progress` |
+| 3 | **Hard Delete sem soft-delete** | 🟡 Alta | Perda irreversível de histórico | Alta | Implementar soft-delete + arquivamento |
+| 4 | **Sem travamento estrutural** | 🟡 Alta | Dados inconsistentes em obras em andamento | Alta | Travar mutação após primeira produção |
+| 5 | **WeeklyProductionView (1852 linhas)** | 🟡 Alta | Impossível manter | Média | Refatorar em sub-componentes |
+| 6 | **Nomes desnormalizados em 8+ tabelas** | 🟡 Alta | Sync manual, risco de stale | Média | Usar JOINs progressivamente |
+| 7 | **House sync client-side** | 🟡 Alta | Se falhar, casas desync | Média | Mover para trigger ou RPC |
+| 8 | **React Query subutilizado** | 🟡 Média | Sem cache, sem retry | Baixa | Migrar hooks para useQuery |
+| 9 | **IDs macro/scope = timestamps** | 🟡 Média | Possível colisão | Baixa | Usar UUID |
+| 10 | **Fórmulas duplicadas (JS + SQL)** | 🟡 Média | Divergência possível | Baixa | Centralizar no backend |
+| 11 | **Sem testes automatizados** | 🟡 Média | Regressão silenciosa | Média | Implementar testes |
+| 12 | **scope_costs sem company_id** | 🟢 Baixa | Protegido indiretamente | Baixa | Adicionar company_id |
+
+---
+
+## BLOCO 11 — PROPOSTA DE ARQUITETURA ALVO
+
+### 11.1 Fonte Única de Verdade
+
+| Domínio | Fonte Atual | Fonte Alvo |
+|---------|------------|-----------|
+| Estrutura (etapas/serviços) | `projects.macros_template` (JSONB) | Tabela relacional `project_macros` + `project_scopes` |
+| Progresso por casa/serviço | `houses.macros` (JSONB) | Tabela `house_service_progress(house_id, scope_id, progress)` |
+
+### 11.2 Políticas Propostas
+
+**Exclusão:** Serviço com produção → soft-delete (`archived`). Serviço sem produção → hard delete permitido. Medição fechada → imutável. Insumo com referências → `inactive`.
+
+**Travamento:** Após primeira produção → bloquear exclusão de serviço. Após contrato salvo → confirmar adição/exclusão. Após medição fechada → serviço congelado.
+
+**Códigos:** macro_code (ETP-01), scope_code (SRV-01-01), input_code obrigatório.
+
+**Sync:** Manter `apply_structure_mutation`. Mover house sync para RPC. Eliminar desnormalização progressivamente.
+
+**Código:** Dividir ConstructionContext em 4 hooks. Dividir WeeklyProductionView em 4 componentes. Dividir ProjectCostsView em 3 componentes.
+
+---
+
+## APÊNDICE — LISTA DE RPCs DO SISTEMA
+
+| RPC | Finalidade |
+|-----|-----------|
+| `get_my_company_id` | Retorna company_id do usuário autenticado |
+| `is_system_admin` | Verifica se é admin global |
+| `get_user_role` | Retorna papel legado |
+| `apply_structure_mutation` | Mutação atômica de etapas/serviços (11 tabelas) |
+| `sync_contract_services` | Sincroniza contrato com orçamento |
+| `initialize_long_term_planning` | Cria versão + períodos + serviços |
+| `get_service_execution_bank` | Banco de execução (casas já feitas) |
+| `add_planning_period` | Adiciona período ao planejamento |
+| `clone_planning_version` | Clona versão do planejamento |
+| `update_planning_period_status` | Muda status do período |
+| `generate_supplies_from_planning_period` | Gera requisições de suprimento |
+| `close_measurement` | Fecha medição (imutável) |
+| `reopen_measurement` | Reabre medição (system_admin) |
+| `create_measurement_service_with_cost` | Cria serviço com custo calculado |
+| `calculate_labor_needs` | Calcula necessidade de MO |
+| `calculate_service_planned_cost` | Calcula custo planejado |
+| `rename_house_number` | Renumera casa com cascade |
+| `approve_planning_period` | Aprova período |
+| `close_planning_period` | Fecha período |
+| `apply_contract_to_planning` | Aplica contrato ao planejamento |
+| `compare_planning_versions` | Compara versões |
+| `transition_supply_status` | Transição de status de suprimento |
+| `get_project_execution_dashboard` | Dashboard de execução |
+| `generate_service_planning_targets` | Gera metas de serviço |
+| `admin_create_company` | Cria empresa (system admin) |
+| `admin_create_company_admin` | Cria admin de empresa |
+| `check_legacy_data_status` | Verifica dados legados |
+| `complete_orphan_data_migration` | Migra dados órfãos |
+
+---
+
+*Documentação gerada por auditoria do código-fonte em 2026-03-11.*
