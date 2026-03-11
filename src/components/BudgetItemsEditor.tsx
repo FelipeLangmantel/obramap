@@ -29,6 +29,7 @@ interface ScopeItem {
   isNew?: boolean;
   isEditing?: boolean;
   inputId?: string;
+  inputCode?: string;
 }
 
 interface MaterialFamily {
@@ -188,7 +189,8 @@ export function BudgetItemsEditor({
           quantity: Number(item.quantity) || 1,
           unit: item.unit || 'un',
           notes: item.notes || undefined,
-          inputId: item.input_id || undefined
+          inputId: item.input_id || undefined,
+          inputCode: (item as any).input_code || undefined
         })));
       }
 
@@ -248,6 +250,7 @@ export function BudgetItemsEditor({
     updateItem(index, 'unit', input.unit);
     updateItem(index, 'materialFamily', familyName);
     updateItem(index, 'inputId', input.id);
+    updateItem(index, 'inputCode', input.code || undefined);
     setShowSuggestions(null);
     setInputSuggestions([]);
   };
@@ -324,7 +327,8 @@ export function BudgetItemsEditor({
         unit: input.unit,
         isNew: true,
         isEditing: true,
-        inputId: input.id
+        inputId: input.id,
+        inputCode: input.code || undefined
       };
     });
 
@@ -473,7 +477,7 @@ export function BudgetItemsEditor({
 
     setIsSaving(true);
     try {
-      const payload = {
+      const payload: any = {
         project_id: projectId,
         scope_id: scopeId,
         macro_id: macroId,
@@ -484,7 +488,8 @@ export function BudgetItemsEditor({
         quantity: item.quantity,
         unit: item.unit,
         notes: item.notes || null,
-        input_id: item.inputId || null
+        input_id: item.inputId || null,
+        input_code: item.inputCode || null
       };
 
       if (item.id) {
@@ -949,7 +954,10 @@ export function BudgetItemsEditor({
                             <>
                               <div className="w-5">{getCategoryIcon(item.category)}</div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{item.name}</p>
+                                <div className="flex items-center gap-1.5">
+                                  {item.inputCode && <span className="text-[10px] font-mono text-muted-foreground shrink-0">{item.inputCode}</span>}
+                                  <p className="text-sm font-medium truncate">{item.name}</p>
+                                </div>
                                 <p className="text-xs text-muted-foreground">
                                   {item.quantity} {item.unit} × {formatCurrency(item.unitValue)}
                                 </p>
