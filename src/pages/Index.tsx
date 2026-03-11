@@ -66,10 +66,49 @@ function Index() {
   const { selectedHouse, isLoading, projects, currentProject, setCurrentProject } = useConstruction();
   const { canAccessProject } = useAuth();
 
-  // ✅ Persistir view ativa no sessionStorage
+  // ✅ Persistir estado real da rota
   useEffect(() => {
-    sessionStorage.setItem("obramap_active_view", activeView);
+    try {
+      sessionStorage.setItem(routeStateKey, JSON.stringify({ activeView }));
+    } catch {
+      // noop
+    }
   }, [activeView]);
+
+  useEffect(() => {
+    const scrollElement = document.querySelector("main") as HTMLElement | null;
+    mainScrollRef.current = scrollElement;
+
+    if (scrollElement && typeof restoredState?.scrollTop === "number") {
+      requestAnimationFrame(() => {
+        scrollElement.scrollTop = restoredState.scrollTop ?? 0;
+      });
+    }
+
+    const persistScroll = () => {
+      if (!mainScrollRef.current) return;
+      try {
+        const current = JSON.parse(sessionStorage.getItem(routeStateKey) || "{}");
+        sessionStorage.setItem(routeStateKey, JSON.stringify({
+          ...current,
+          activeView,
+          scrollTop: mainScrollRef.current.scrollTop,
+        }));
+      } catch {
+        // noop
+      }
+    };
+
+    scrollElement?.addEventListener("scroll", persistScroll, { passive: true });
+    document.addEventListener("visibilitychange", persistScroll);
+    window.addEventListener("beforeunload", persistScroll);
+
+    return () => {
+      scrollElement?.removeEventListener("scroll", persistScroll);
+      document.removeEventListener("visibilitychange", persistScroll);
+      window.removeEventListener("beforeunload", persistScroll);
+    };
+  }, [activeView, restoredState]);
 
   // ✅ Se navegou de outra rota com targetView no state, aplicar a view
   useEffect(() => {
