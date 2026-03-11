@@ -116,6 +116,8 @@ export function useProjectContract() {
               max_cost_value: Number(s.max_cost_value),
               cost_percent: Number(s.cost_percent),
               status: s.status,
+              macro_order: Number((s as any).macro_order ?? 0),
+              scope_order: Number((s as any).scope_order ?? 0),
             }))
           );
         } else {
