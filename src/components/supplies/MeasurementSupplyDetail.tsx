@@ -48,9 +48,25 @@ export function MeasurementSupplyDetail({
   onGenerate,
   getGroupedByFamily,
 }: MeasurementSupplyDetailProps) {
+  const storageKey = useMemo(() => `obramap_supply_detail_${projectId}_${measurement.measurement_id}`, [projectId, measurement.measurement_id]);
   const { canEdit } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>('all');
-  const [expandedFamilies, setExpandedFamilies] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    try {
+      const saved = sessionStorage.getItem(storageKey);
+      return (saved ? JSON.parse(saved).activeTab : 'all') || 'all';
+    } catch {
+      return 'all';
+    }
+  });
+  const [expandedFamilies, setExpandedFamilies] = useState<Set<string>>(() => {
+    try {
+      const saved = sessionStorage.getItem(storageKey);
+      const expanded = saved ? JSON.parse(saved).expandedFamilies || [] : [];
+      return new Set(expanded);
+    } catch {
+      return new Set();
+    }
+  });
 
   const { transitionStatus } = useSupplyRequests(projectId);
   const {
