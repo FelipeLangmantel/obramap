@@ -785,6 +785,7 @@ export function InputsManagementView() {
                                 />
                               )}
                               {getCategoryIcon(input.category)}
+                              {input.code && <Badge variant="outline" className="text-xs shrink-0 font-mono">{input.code}</Badge>}
                               <span className="truncate">{input.name}</span>
                               <Badge variant="outline" className="text-xs shrink-0">{input.unit}</Badge>
                               <Badge variant="secondary" className="text-xs shrink-0">{CATEGORY_LABELS[input.category]}</Badge>
