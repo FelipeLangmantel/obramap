@@ -202,7 +202,7 @@ function Index() {
                       </Button>
                     </div>
                     {selectedHouse && (
-                      <div className="no-print lg:sticky lg:top-0 lg:self-start lg:max-h-[calc(100vh-12rem)]">
+                      <div className="no-print fixed top-20 right-4 z-50 shadow-xl">
                         <HouseDetails />
                       </div>
                     )}
