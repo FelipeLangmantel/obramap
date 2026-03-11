@@ -349,6 +349,8 @@ export function useProjectContract() {
         max_cost_value: s.max_cost_value,
         cost_percent: s.cost_percent,
         status: s.status,
+        macro_order: s.macro_order ?? 0,
+        scope_order: s.scope_order ?? 0,
       }));
 
       const { error: servicesError } = await supabase
