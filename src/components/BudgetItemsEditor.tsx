@@ -189,7 +189,8 @@ export function BudgetItemsEditor({
           quantity: Number(item.quantity) || 1,
           unit: item.unit || 'un',
           notes: item.notes || undefined,
-          inputId: item.input_id || undefined
+          inputId: item.input_id || undefined,
+          inputCode: (item as any).input_code || undefined
         })));
       }
 
