@@ -246,7 +246,6 @@ export function useProjectContract() {
             macro_order: macroIdx,
             scope_order: scopeIdx,
           });
-          });
         });
       });
       setServices(servicesFromTemplate);
