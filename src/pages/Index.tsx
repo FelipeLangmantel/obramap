@@ -155,7 +155,9 @@ function Index() {
     window.print();
   };
 
-  if (isLoading) {
+  const hasStableProjectData = projects.length > 0 || !!currentProject;
+
+  if (isLoading && !hasStableProjectData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
