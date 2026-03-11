@@ -476,7 +476,7 @@ export function BudgetItemsEditor({
 
     setIsSaving(true);
     try {
-      const payload = {
+      const payload: any = {
         project_id: projectId,
         scope_id: scopeId,
         macro_id: macroId,
@@ -487,7 +487,8 @@ export function BudgetItemsEditor({
         quantity: item.quantity,
         unit: item.unit,
         notes: item.notes || null,
-        input_id: item.inputId || null
+        input_id: item.inputId || null,
+        input_code: item.inputCode || null
       };
 
       if (item.id) {
