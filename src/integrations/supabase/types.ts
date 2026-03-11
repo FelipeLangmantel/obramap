@@ -827,9 +827,51 @@ export type Database = {
           },
         ]
       }
+      input_audit_log: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          company_id: string
+          field_name: string
+          id: string
+          input_id: string
+          new_value: string | null
+          old_value: string | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          company_id: string
+          field_name: string
+          id?: string
+          input_id: string
+          new_value?: string | null
+          old_value?: string | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          company_id?: string
+          field_name?: string
+          id?: string
+          input_id?: string
+          new_value?: string | null
+          old_value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "input_audit_log_input_id_fkey"
+            columns: ["input_id"]
+            isOneToOne: false
+            referencedRelation: "inputs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inputs: {
         Row: {
           category: string
+          code: string | null
           company_id: string
           created_at: string
           description: string | null
@@ -844,6 +886,7 @@ export type Database = {
         }
         Insert: {
           category?: string
+          code?: string | null
           company_id: string
           created_at?: string
           description?: string | null
@@ -858,6 +901,7 @@ export type Database = {
         }
         Update: {
           category?: string
+          code?: string | null
           company_id?: string
           created_at?: string
           description?: string | null
