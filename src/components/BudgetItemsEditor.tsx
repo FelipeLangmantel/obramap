@@ -327,7 +327,8 @@ export function BudgetItemsEditor({
         unit: input.unit,
         isNew: true,
         isEditing: true,
-        inputId: input.id
+        inputId: input.id,
+        inputCode: input.code || undefined
       };
     });
 
