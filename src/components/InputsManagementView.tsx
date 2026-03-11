@@ -544,7 +544,7 @@ export function InputsManagementView() {
             <div className="flex gap-2 flex-1">
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
-                <Input placeholder="Buscar insumo..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} className="pl-8" />
+                <Input placeholder="Buscar por nome ou código..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} className="pl-8" />
               </div>
               <Select value={filterCategory} onValueChange={setFilterCategory}>
                 <SelectTrigger className="w-40">
