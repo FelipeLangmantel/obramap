@@ -107,6 +107,7 @@ export function InputsManagementView() {
       if (inputsRes.data) {
         setInputs(inputsRes.data.map((i: any) => ({ 
           ...i, 
+          code: i.code || null,
           material_family: i.material_families, 
           category: i.category as 'material' | 'labor' | 'equipment', 
           unit_value: i.unit_value || 0, 
