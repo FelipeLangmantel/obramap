@@ -1272,32 +1272,23 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Propagate name/color changes to related tables
+    // Propagate name/color changes to ALL dependent tables
     if (oldMacro && (oldMacro.name !== name || (color !== undefined && oldMacro.color !== color))) {
       const updateData: { macro_name?: string; macro_color?: string } = {};
       if (oldMacro.name !== name) updateData.macro_name = name;
       if (color !== undefined && oldMacro.color !== color) updateData.macro_color = color;
       
-      // Update weekly_productions
-      await supabase
-        .from('weekly_productions')
-        .update(updateData)
-        .eq('project_id', currentProject.id)
-        .eq('macro_id', macroId);
-      
-      // Update planned_productions
-      await supabase
-        .from('planned_productions')
-        .update(updateData)
-        .eq('project_id', currentProject.id)
-        .eq('macro_id', macroId);
-      
-      // Update production_deviations
-      await supabase
-        .from('production_deviations')
-        .update({ macro_name: name })
-        .eq('project_id', currentProject.id)
-        .eq('macro_id', macroId);
+      await Promise.all([
+        supabase.from('weekly_productions').update(updateData).eq('project_id', currentProject.id).eq('macro_id', macroId),
+        supabase.from('planned_productions').update(updateData).eq('project_id', currentProject.id).eq('macro_id', macroId),
+        supabase.from('production_deviations').update({ macro_name: name }).eq('project_id', currentProject.id).eq('macro_id', macroId),
+        // ✅ Also propagate to contract, planning and measurement tables
+        supabase.from('project_contract_services').update(updateData).eq('project_id', currentProject.id).eq('macro_id', macroId),
+        supabase.from('service_planning_by_period').update({ macro_name: name }).eq('project_id', currentProject.id).eq('macro_id', macroId),
+        supabase.from('measurement_services').update(updateData).eq('project_id', currentProject.id).eq('macro_id', macroId),
+        supabase.from('labor_contracts').update({ macro_name: name }).eq('project_id', currentProject.id).eq('macro_id', macroId),
+        supabase.from('labor_histogram').update({ macro_name: name }).eq('project_id', currentProject.id).eq('macro_id', macroId),
+      ]);
     }
 
     // Then sync to houses
@@ -1323,15 +1314,21 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Delete related data - budget items, productions, deviations, labor contracts
+    // Delete related data - ALL dependent tables (budget, production, contract, planning)
     for (const scopeId of scopeIds) {
       await supabase.from('scope_items').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
       await supabase.from('scope_costs').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
+      await supabase.from('budget_service_inputs').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
     }
     await supabase.from('weekly_productions').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
     await supabase.from('planned_productions').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
     await supabase.from('production_deviations').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
     await supabase.from('labor_contracts').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
+    // ✅ Cascade to contract services, planning and measurement
+    await supabase.from('project_contract_services').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
+    await supabase.from('service_planning_by_period').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
+    await supabase.from('measurement_services').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
+    await supabase.from('labor_histogram').delete().eq('project_id', currentProject.id).eq('macro_id', macroId);
 
     // Then sync to houses
     await syncMacrosToHouses(newTemplate);
@@ -1398,28 +1395,19 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Propagate name changes to related tables
+    // Propagate name changes to ALL dependent tables
     if (oldScope && updates.name && oldScope.name !== updates.name) {
-      // Update weekly_productions
-      await supabase
-        .from('weekly_productions')
-        .update({ scope_name: updates.name })
-        .eq('project_id', currentProject.id)
-        .eq('scope_id', scopeId);
-      
-      // Update planned_productions
-      await supabase
-        .from('planned_productions')
-        .update({ scope_name: updates.name })
-        .eq('project_id', currentProject.id)
-        .eq('scope_id', scopeId);
-      
-      // Update production_deviations
-      await supabase
-        .from('production_deviations')
-        .update({ scope_name: updates.name })
-        .eq('project_id', currentProject.id)
-        .eq('scope_id', scopeId);
+      const nameUpdate = { scope_name: updates.name };
+      await Promise.all([
+        supabase.from('weekly_productions').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+        supabase.from('planned_productions').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+        supabase.from('production_deviations').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+        supabase.from('project_contract_services').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+        supabase.from('service_planning_by_period').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+        supabase.from('measurement_services').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+        supabase.from('labor_contracts').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+        supabase.from('labor_histogram').update(nameUpdate).eq('project_id', currentProject.id).eq('scope_id', scopeId),
+      ]);
     }
 
     // Then sync to houses
@@ -1447,13 +1435,19 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Delete related data - budget items, productions, deviations, labor contracts
+    // Delete related data - ALL dependent tables (budget, production, contract, planning)
     await supabase.from('scope_items').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
     await supabase.from('scope_costs').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
+    await supabase.from('budget_service_inputs').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
     await supabase.from('weekly_productions').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
     await supabase.from('planned_productions').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
     await supabase.from('production_deviations').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
     await supabase.from('labor_contracts').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
+    // ✅ Cascade to contract services, planning and measurement
+    await supabase.from('project_contract_services').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
+    await supabase.from('service_planning_by_period').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
+    await supabase.from('measurement_services').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
+    await supabase.from('labor_histogram').delete().eq('project_id', currentProject.id).eq('scope_id', scopeId);
 
     // Then sync to houses
     await syncMacrosToHouses(newTemplate);
