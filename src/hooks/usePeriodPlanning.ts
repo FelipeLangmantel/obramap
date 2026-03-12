@@ -431,6 +431,39 @@ export function usePeriodPlanning(projectId: string | null) {
     }
   }, [selectedPeriodId, loadPeriodServices, loadPeriods]);
 
+  // Update target houses for a service (bidirectional sync with long-term planning)
+  const updateServiceHouses = useCallback(async (serviceId: string, newTargetHouses: number) => {
+    try {
+      // Check if the period is editable
+      const service = periodServices.find(s => s.id === serviceId);
+      if (!service) return false;
+
+      const period = periods.find(p => p.id === service.planning_period_id);
+      if (period && (period.status === "approved" || period.status === "released_to_weekly" || period.status === "closed")) {
+        toast.error("Não é possível editar um período aprovado, liberado ou fechado");
+        return false;
+      }
+
+      const { error } = await supabase
+        .from("service_planning_by_period")
+        .update({ target_houses: newTargetHouses })
+        .eq("id", serviceId);
+
+      if (error) throw error;
+
+      // Refresh both services and period totals
+      if (selectedPeriodId) {
+        await loadPeriodServices(selectedPeriodId);
+      }
+      await loadPeriods();
+      return true;
+    } catch (error) {
+      console.error("Erro ao atualizar casas:", error);
+      toast.error("Erro ao atualizar quantidade de casas");
+      return false;
+    }
+  }, [periodServices, periods, selectedPeriodId, loadPeriodServices, loadPeriods]);
+
   // Refresh services for current period
   const refreshServices = useCallback(async () => {
     if (selectedPeriodId) {
