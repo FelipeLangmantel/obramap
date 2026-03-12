@@ -189,7 +189,8 @@ function Index() {
     "financial-flow": "Fluxo Financeiro",
     "board-decisions": "Painel Diretoria",
     delivery: "Entrega & Pós-Obra",
-    "smart-planning": "Planejamento Inteligente"
+    "smart-planning": "Planejamento Inteligente",
+    "productivity": "Produtividade e Equipes"
   };
 
   return (
