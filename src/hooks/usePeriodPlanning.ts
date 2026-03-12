@@ -72,6 +72,12 @@ export function usePeriodPlanning(projectId: string | null) {
 
     setIsLoading(true);
     try {
+      // Sincronizar serviços do período com o planejamento estratégico
+      // Remove órfãos e atualiza nomes/valores
+      await supabase.rpc("sync_period_services_with_strategic", {
+        p_project_id: projectId,
+      });
+
       // Buscar versão ativa de planejamento
       const { data: version, error: versionError } = await supabase
         .from("planning_versions")
