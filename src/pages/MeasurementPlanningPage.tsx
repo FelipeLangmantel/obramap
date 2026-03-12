@@ -219,6 +219,7 @@ export default function MeasurementPlanningPage() {
         companyId={company?.id || ""}
         onRefresh={refreshServices}
         onDeleteService={deleteService}
+        onUpdateHouses={updateServiceHouses}
       />
       </SidebarProvider>
     </ModuleAccessGuard>
