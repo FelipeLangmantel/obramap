@@ -759,7 +759,7 @@ export function ProjectCostsView() {
                         <Package className="w-3 h-3 text-blue-500" />
                         Material
                       </p>
-                      <p className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(unitCost.material)}</p>
+                      <p className="text-xl font-bold text-secondary dark:text-secondary-foreground">{formatCurrency(unitCost.material)}</p>
                     </div>
                     <div className="p-3 bg-background/80 rounded-lg">
                       <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
