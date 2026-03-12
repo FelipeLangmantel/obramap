@@ -780,7 +780,7 @@ export function ProjectCostsView() {
                         <DollarSign className="w-3 h-3" />
                         Total Unitário
                       </p>
-                      <p className="text-2xl font-bold text-purple-800 dark:text-purple-300">{formatCurrency(unitCost.total)}</p>
+                      <p className="text-2xl font-bold text-secondary dark:text-secondary-foreground">{formatCurrency(unitCost.total)}</p>
                     </div>
                   </div>
                 </CardContent>
