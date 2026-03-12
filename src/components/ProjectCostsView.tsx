@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Target, Cloud, ChevronDown, ChevronRight, Home, Loader2, Minimize2, Maximize2, Printer, Building2 } from "lucide-react";
+import { DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Target, ChevronDown, ChevronRight, Home, Loader2, Minimize2, Maximize2, Printer, Building2, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
