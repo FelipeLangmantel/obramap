@@ -73,10 +73,19 @@ export function usePeriodPlanning(projectId: string | null) {
     setIsLoading(true);
     try {
       // Sincronizar serviços do período com o planejamento estratégico
-      // Remove órfãos e atualiza nomes/valores
-      await supabase.rpc("sync_period_services_with_strategic", {
+      // Remove órfãos, atualiza nomes/valores e insere serviços faltantes
+      const syncResult = await supabase.rpc("sync_period_services_with_strategic", {
         p_project_id: projectId,
       });
+      
+      if (syncResult.error) {
+        console.error("Erro ao sincronizar serviços:", syncResult.error);
+      } else {
+        const syncData = syncResult.data as { success: boolean; deleted_count?: number; updated_count?: number; inserted_count?: number } | null;
+        if (syncData && (syncData.deleted_count || syncData.updated_count || syncData.inserted_count)) {
+          console.log("Sincronização:", syncData);
+        }
+      }
 
       // Buscar versão ativa de planejamento
       const { data: version, error: versionError } = await supabase
