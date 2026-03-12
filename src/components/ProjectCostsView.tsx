@@ -773,7 +773,7 @@ export function ProjectCostsView() {
                         <Wrench className="w-3 h-3 text-green-500" />
                         Equipamentos
                       </p>
-                      <p className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(unitCost.equipment)}</p>
+                      <p className="text-xl font-bold text-secondary dark:text-secondary-foreground">{formatCurrency(unitCost.equipment)}</p>
                     </div>
                     <div className="p-3 bg-purple-200/50 dark:bg-purple-700/30 rounded-lg">
                       <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
