@@ -202,7 +202,7 @@ export function usePeriodPlanning(projectId: string | null) {
     } finally {
       setIsLoading(false);
     }
-  }, [projectId, company?.id]);
+  }, [projectId, company?.id, fetchStrategicServicesMap]);
 
   // Carregar serviços de um período específico
   const loadPeriodServices = useCallback(async (periodId: string) => {
@@ -213,42 +213,58 @@ export function usePeriodPlanning(projectId: string | null) {
 
     setIsLoadingServices(true);
     try {
+      const strategicServicesMap = await fetchStrategicServicesMap();
+
       const { data, error } = await supabase
         .from("service_planning_by_period")
-        .select("id, planning_period_id, macro_id, scope_id, macro_name, scope_name, target_houses, planned_revenue, planned_cost, projected_result, productivity_planned, teams_planned, status, team_count, productivity_per_team, expected_output")
+        .select("id, planning_period_id, macro_id, scope_id, macro_name, scope_name, target_houses, productivity_planned, teams_planned, status, team_count, productivity_per_team, expected_output")
         .eq("planning_period_id", periodId)
-        .gt("target_houses", 0)
         .order("macro_id", { ascending: true });
 
       if (error) throw error;
 
-      setPeriodServices(
-        (data || []).map((s) => ({
-          id: s.id,
-          planning_period_id: s.planning_period_id,
-          macro_id: s.macro_id,
-          scope_id: s.scope_id,
-          macro_name: s.macro_name,
-          scope_name: s.scope_name,
-          target_houses: s.target_houses || 0,
-          planned_revenue: s.planned_revenue || 0,
-          planned_cost: s.planned_cost || 0,
-          projected_result: s.projected_result || 0,
-          productivity_planned: s.productivity_planned,
-          teams_planned: s.teams_planned,
-          status: s.status,
-          team_count: s.team_count || 1,
-          productivity_per_team: s.productivity_per_team || 0,
-          expected_output: s.expected_output || 0,
-        }))
-      );
+      const normalizedServices = (data || [])
+        .map((s) => {
+          const strategicService = strategicServicesMap.get(getServiceKey(s.macro_id, s.scope_id));
+          if (!strategicService) return null;
+
+          const targetHouses = s.target_houses || 0;
+          const plannedCost = targetHouses * strategicService.max_cost_value;
+          const plannedRevenue = targetHouses * strategicService.unit_revenue_value;
+
+          return {
+            id: s.id,
+            planning_period_id: s.planning_period_id,
+            macro_id: s.macro_id,
+            scope_id: s.scope_id,
+            macro_name: strategicService.macro_name,
+            scope_name: strategicService.scope_name,
+            target_houses: targetHouses,
+            planned_revenue: plannedRevenue,
+            planned_cost: plannedCost,
+            projected_result: plannedRevenue - plannedCost,
+            productivity_planned: s.productivity_planned,
+            teams_planned: s.teams_planned,
+            status: s.status,
+            team_count: s.team_count || 1,
+            productivity_per_team: s.productivity_per_team || 0,
+            expected_output: s.expected_output || 0,
+          } as PeriodService;
+        })
+        .filter((service): service is PeriodService => service !== null)
+        .sort((a, b) => {
+          if (a.macro_name !== b.macro_name) return a.macro_name.localeCompare(b.macro_name, "pt-BR");
+          return a.scope_name.localeCompare(b.scope_name, "pt-BR");
+        });
+
+      setPeriodServices(normalizedServices);
     } catch (error) {
       console.error("Erro ao carregar serviços do período:", error);
       toast.error("Erro ao carregar detalhes do período");
     } finally {
       setIsLoadingServices(false);
     }
-  }, []);
+  }, [fetchStrategicServicesMap]);
 
   // Aprovar período (legacy - chama changePeriodStatus)
   const approvePeriod = useCallback(async (periodId: string) => {
