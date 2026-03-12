@@ -194,6 +194,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     { title: "Painel Diretoria", view: "board-decisions", icon: Crown, permissionId: "diretoria" },
     { title: "Entrega & Pós-Obra", view: "delivery", icon: ClipboardCheck, permissionId: "entrega" },
     { title: "Planej. Inteligente", view: "smart-planning", icon: Target, permissionId: "smart_planning" },
+    { title: "Produtividade e Equipes", view: "productivity", icon: Users, permissionId: "productivity" },
   ];
 
   // Filter menu items based on user permissions, company module status, AND system governance
