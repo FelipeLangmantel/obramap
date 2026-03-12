@@ -805,7 +805,16 @@ export function ProjectCostsView() {
 
           {/* Print Budget Button */}
           {!editingScope && (
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <Button
+                variant={allExpanded ? "default" : "outline"}
+                size="sm"
+                className="gap-2"
+                onClick={toggleAllMacros}
+              >
+                {allExpanded ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
+                {allExpanded ? 'Recolher Tudo' : 'Expandir Tudo'}
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-2" disabled={isPrinting}>
