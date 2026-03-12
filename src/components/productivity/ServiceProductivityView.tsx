@@ -141,7 +141,7 @@ export function ServiceProductivityView() {
           <CardDescription>Configure produtividade e equipes para cada serviço</CardDescription>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="max-h-[60vh]">
+          <ScrollArea className="h-[calc(100vh-420px)]">
             <div className="space-y-2">
               {allServices.map((service) => {
                 const productivity = productivities.find(p => p.scope_id === service.scopeId);

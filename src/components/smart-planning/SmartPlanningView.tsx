@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+
 import { usePlanningData } from './hooks/usePlanningData';
 import { usePlanningCalculations } from './hooks/usePlanningCalculations';
 import { useStrategicGanttData } from './hooks/useStrategicGanttData';
@@ -253,56 +253,9 @@ export function SmartPlanningView() {
         </TabsContent>
 
         <TabsContent value="histogram" className="flex-1 mt-4">
-          <div className="space-y-6">
-            {/* Histogram Card */}
-            {currentProject?.id && (
-              <LaborHistogramView projectId={currentProject.id} />
-            )}
-
-            {/* Productivity config per stage */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Users className="h-4 w-4 text-primary" />
-                  Configurar Produtividade por Serviço
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {stages.length === 0 ? (
-                  <p className="text-center py-4 text-muted-foreground text-sm">
-                    Configure as etapas primeiro no onboarding.
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {stages.map(stage => (
-                      <Button
-                        key={stage.id}
-                        variant="outline"
-                        className="justify-start gap-2 h-auto py-3"
-                        onClick={() => setProductivityService({
-                          macro_id: stage.macro_id || stage.id,
-                          scope_id: stage.id,
-                          macro_name: stage.name,
-                          scope_name: stage.name,
-                        })}
-                      >
-                        <div
-                          className="w-3 h-3 rounded-full shrink-0"
-                          style={{ backgroundColor: stage.color }}
-                        />
-                        <div className="text-left">
-                          <p className="text-sm font-medium">{stage.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {stage.planned_productivity} un/dia • {stage.planned_teams} equipe(s)
-                          </p>
-                        </div>
-                      </Button>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          {currentProject?.id && (
+            <LaborHistogramView projectId={currentProject.id} />
+          )}
         </TabsContent>
       </Tabs>
 
