@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Target, Cloud, ChevronDown, ChevronRight, Home, Loader2, Minimize2, Maximize2, Printer, Building2 } from "lucide-react";
+import { DollarSign, Package, Hammer, Wrench, TrendingUp, PieChart, BarChart3, Calculator, Target, ChevronDown, ChevronRight, Home, Loader2, Minimize2, Maximize2, Printer, Building2, ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -98,6 +98,7 @@ export function ProjectCostsView() {
   const [expandedMeasurements, setExpandedMeasurements] = useState<Set<number>>(new Set());
   const [editingScope, setEditingScope] = useState<{ scopeId: string; macroId: string; scopeName: string } | null>(null);
   const [isUnitCostCollapsed, setIsUnitCostCollapsed] = useState(false);
+  const [allExpanded, setAllExpanded] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const savedScrollPosition = useRef<number>(0);
@@ -107,8 +108,22 @@ export function ProjectCostsView() {
       const next = new Set(prev);
       if (next.has(macroId)) next.delete(macroId);
       else next.add(macroId);
+      // If user manually collapses one, turn off allExpanded
+      if (!next.has(macroId)) setAllExpanded(false);
+      // If all are now expanded, turn on allExpanded
+      if (next.size === macros.length) setAllExpanded(true);
       return next;
     });
+  };
+
+  const toggleAllMacros = () => {
+    if (allExpanded) {
+      setExpandedMacros(new Set());
+      setAllExpanded(false);
+    } else {
+      setExpandedMacros(new Set(macros.map((m: any) => m.id)));
+      setAllExpanded(true);
+    }
   };
 
   const toggleMeasurement = (measurementNumber: number) => {
@@ -790,7 +805,16 @@ export function ProjectCostsView() {
 
           {/* Print Budget Button */}
           {!editingScope && (
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              <Button
+                variant={allExpanded ? "default" : "outline"}
+                size="sm"
+                className="gap-2"
+                onClick={toggleAllMacros}
+              >
+                {allExpanded ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
+                {allExpanded ? 'Recolher Tudo' : 'Expandir Tudo'}
+              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-2" disabled={isPrinting}>
