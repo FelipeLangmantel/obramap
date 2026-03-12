@@ -77,6 +77,31 @@ export function usePeriodPlanning(projectId: string | null) {
     return "draft";
   };
 
+  const fetchStrategicServicesMap = useCallback(async () => {
+    if (!projectId) return new Map<string, StrategicService>();
+
+    const { data, error } = await supabase
+      .from("project_contract_services")
+      .select("macro_id, scope_id, macro_name, scope_name, max_cost_value, unit_revenue_value")
+      .eq("project_id", projectId);
+
+    if (error) throw error;
+
+    const servicesMap = new Map<string, StrategicService>();
+    (data || []).forEach((service) => {
+      servicesMap.set(getServiceKey(service.macro_id, service.scope_id), {
+        macro_id: service.macro_id,
+        scope_id: service.scope_id,
+        macro_name: service.macro_name,
+        scope_name: service.scope_name,
+        max_cost_value: service.max_cost_value || 0,
+        unit_revenue_value: service.unit_revenue_value || 0,
+      });
+    });
+
+    return servicesMap;
+  }, [projectId]);
+
   // Carregar períodos do projeto (quinzenas do planejamento de longo prazo)
   const loadPeriods = useCallback(async () => {
     if (!projectId || !company?.id) return;
