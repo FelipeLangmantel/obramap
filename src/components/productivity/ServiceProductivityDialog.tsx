@@ -31,11 +31,20 @@ interface Props {
   };
   existingProductivity?: ServiceProductivity;
   onClose: () => void;
+  onSave: (input: {
+    macro_id: string;
+    scope_id: string;
+    productivity_value: number;
+    productivity_unit: string;
+    working_days_per_week?: number;
+    default_team_count?: number;
+    professionals_per_team?: number;
+    helpers_per_team?: number;
+    notes?: string;
+  }) => Promise<any>;
 }
 
-export function ServiceProductivityDialog({ service, existingProductivity, onClose }: Props) {
-  const { currentProject } = useConstruction();
-  const { saveProductivity } = useServiceProductivity(currentProject?.id);
+export function ServiceProductivityDialog({ service, existingProductivity, onClose, onSave }: Props) {
   const [isSaving, setIsSaving] = useState(false);
 
   const [formData, setFormData] = useState({
