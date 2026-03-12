@@ -69,7 +69,7 @@ import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import obraMapLogo from "@/assets/obramap-logo-new.png";
 
-type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning";
+type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity";
 
 // Views com rotas separadas (navegam para página diferente)
 type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract";
@@ -194,6 +194,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     { title: "Painel Diretoria", view: "board-decisions", icon: Crown, permissionId: "diretoria" },
     { title: "Entrega & Pós-Obra", view: "delivery", icon: ClipboardCheck, permissionId: "entrega" },
     { title: "Planej. Inteligente", view: "smart-planning", icon: Target, permissionId: "smart_planning" },
+    { title: "Produtividade e Equipes", view: "productivity", icon: Users, permissionId: "productivity" },
   ];
 
   // Filter menu items based on user permissions, company module status, AND system governance

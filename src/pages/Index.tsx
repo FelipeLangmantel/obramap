@@ -23,6 +23,7 @@ import { FinancialFlowView } from "@/components/FinancialFlowView";
 import { BoardDecisionsView } from "@/components/BoardDecisionsView";
 import DeliveryView from "@/components/DeliveryView";
 import SmartPlanningView from "@/components/smart-planning/SmartPlanningView";
+import { ServiceProductivityView } from "@/components/productivity/ServiceProductivityView";
 import { Loader2, Menu, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -35,7 +36,7 @@ function SidebarTriggerButton() {
   );
 }
 
-type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning";
+type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity";
 
 /**
  * ✅ Index agora é puro - sem redirects
@@ -188,7 +189,8 @@ function Index() {
     "financial-flow": "Fluxo Financeiro",
     "board-decisions": "Painel Diretoria",
     delivery: "Entrega & Pós-Obra",
-    "smart-planning": "Planejamento Inteligente"
+    "smart-planning": "Planejamento Inteligente",
+    "productivity": "Produtividade e Equipes"
   };
 
   return (
@@ -354,6 +356,12 @@ function Index() {
                 {activeView === "smart-planning" && (
                   <div className="flex-1">
                     <SmartPlanningView />
+                  </div>
+                )}
+
+                {activeView === "productivity" && (
+                  <div className="flex-1">
+                    <ServiceProductivityView />
                   </div>
                 )}
               </div>
