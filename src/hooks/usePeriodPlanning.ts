@@ -47,6 +47,17 @@ export interface PeriodService {
   expected_output: number;
 }
 
+interface StrategicService {
+  macro_id: string;
+  scope_id: string;
+  macro_name: string;
+  scope_name: string;
+  max_cost_value: number;
+  unit_revenue_value: number;
+}
+
+const getServiceKey = (macroId: string, scopeId: string) => `${macroId}::${scopeId}`;
+
 export function usePeriodPlanning(projectId: string | null) {
   const { company, isAdmin, isCompanyAdmin } = useAuth();
   const [periods, setPeriods] = useState<PlanningPeriod[]>([]);
