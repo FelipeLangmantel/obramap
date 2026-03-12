@@ -1,6 +1,6 @@
+import { useState, useCallback } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { AlertTriangle, Users } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ interface PeriodServicesDialogProps {
   companyId: string;
   onRefresh: () => void;
   onDeleteService: (serviceId: string) => Promise<boolean>;
+  onUpdateHouses?: (serviceId: string, newHouses: number) => Promise<boolean>;
 }
 
 export function PeriodServicesDialog({
@@ -39,7 +41,12 @@ export function PeriodServicesDialog({
   period,
   services,
   isLoading,
+  canEdit,
+  onUpdateHouses,
 }: PeriodServicesDialogProps) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -70,6 +77,9 @@ export function PeriodServicesDialog({
   // Filter out services with 0 target houses
   const activeServices = services.filter(s => s.target_houses > 0);
 
+  // Period is editable only in draft status
+  const isEditable = canEdit && period?.status === "draft";
+
   // Totais
   const totals = activeServices.reduce(
     (acc, s) => ({
@@ -77,26 +87,58 @@ export function PeriodServicesDialog({
       cost: acc.cost + s.planned_cost,
       revenue: acc.revenue + s.planned_revenue,
       profit: acc.profit + s.projected_result,
-      capacity: acc.capacity + s.expected_output,
     }),
-    { houses: 0, cost: 0, revenue: 0, profit: 0, capacity: 0 }
+    { houses: 0, cost: 0, revenue: 0, profit: 0 }
   );
 
-  const capacityGap = totals.capacity - totals.houses;
+  const handleStartEdit = useCallback((service: PeriodService) => {
+    if (!isEditable) return;
+    setEditingId(service.id);
+    setEditValue(String(service.target_houses));
+  }, [isEditable]);
+
+  const handleSaveEdit = useCallback(async (serviceId: string) => {
+    const newValue = parseInt(editValue, 10);
+    if (isNaN(newValue) || newValue < 0) {
+      setEditingId(null);
+      return;
+    }
+    if (onUpdateHouses) {
+      await onUpdateHouses(serviceId, newValue);
+    }
+    setEditingId(null);
+  }, [editValue, onUpdateHouses]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent, serviceId: string) => {
+    if (e.key === "Enter") {
+      handleSaveEdit(serviceId);
+    } else if (e.key === "Escape") {
+      setEditingId(null);
+    }
+  }, [handleSaveEdit]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-[95vw] w-full max-h-[92vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <div>
-            <DialogTitle>
-              {period?.name || `Medição ${period?.period_number}`}
-            </DialogTitle>
-            {period && (
-              <p className="text-sm text-muted-foreground mt-1">
-                Período: {formatDateRange(period.start_date, period.end_date)}
-              </p>
-            )}
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle className="text-lg">
+                {period?.name || `Medição ${period?.period_number}`}
+              </DialogTitle>
+              {period && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Período: {formatDateRange(period.start_date, period.end_date)}
+                  {period.status !== "draft" && (
+                    <Badge variant="secondary" className="ml-3 text-xs">
+                      {period.status === "approved" ? "Aprovado" : 
+                       period.status === "released_to_weekly" ? "Liberado" : 
+                       period.status === "closed" ? "Fechado" : "Rascunho"}
+                    </Badge>
+                  )}
+                </p>
+              )}
+            </div>
           </div>
         </DialogHeader>
 
@@ -109,140 +151,109 @@ export function PeriodServicesDialog({
           ) : activeServices.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <p>Nenhum serviço planejado para este período.</p>
+              <p className="text-sm mt-2">Defina metas no Planejamento de Longo Prazo.</p>
             </div>
           ) : (
-            <>
-              {/* Resumo de Capacidade */}
-              {totals.capacity > 0 && (
-                <div className={cn(
-                  "mb-4 p-3 rounded-lg flex items-center gap-3",
-                  capacityGap < 0 ? "bg-red-50 border border-red-200" : "bg-green-50 border border-green-200"
-                )}>
-                  <Users className={cn("h-5 w-5", capacityGap < 0 ? "text-red-600" : "text-green-600")} />
-                  <div className="flex-1">
-                    <p className={cn("text-sm font-medium", capacityGap < 0 ? "text-red-700" : "text-green-700")}>
-                      Capacidade do Período: {totals.capacity} casas
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Demanda: {totals.houses} casas • 
-                      {capacityGap >= 0 
-                        ? ` Folga: +${capacityGap} casas` 
-                        : ` Déficit: ${capacityGap} casas`}
-                    </p>
-                  </div>
-                  {capacityGap < 0 && (
-                    <AlertTriangle className="h-5 w-5 text-red-500" />
-                  )}
-                </div>
-              )}
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow>
+                    <TableHead className="min-w-[250px]">Serviço</TableHead>
+                    <TableHead className="text-right w-[120px]">
+                      {isEditable ? "Casas ✎" : "Casas"}
+                    </TableHead>
+                    <TableHead className="text-right">Custo</TableHead>
+                    <TableHead className="text-right">Receita</TableHead>
+                    <TableHead className="text-right">Resultado</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activeServices.map((service, index) => {
+                    const margin = service.planned_revenue > 0
+                      ? (service.projected_result / service.planned_revenue) * 100
+                      : 0;
+                    const isEditingThis = editingId === service.id;
 
-              <div className="rounded-lg border">
-                <Table>
-                  <TableHeader className="bg-muted/50">
-                    <TableRow>
-                      <TableHead className="min-w-[200px]">Serviço</TableHead>
-                      <TableHead className="text-right">Casas</TableHead>
-                      <TableHead className="text-right">Equipes</TableHead>
-                      <TableHead className="text-right">Produtividade</TableHead>
-                      <TableHead className="text-right">Capacidade</TableHead>
-                      <TableHead className="text-right">Custo</TableHead>
-                      <TableHead className="text-right">Receita</TableHead>
-                      <TableHead className="text-right">Resultado</TableHead>
-                      <TableHead className="text-center">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {activeServices.map((service, index) => {
-                      const margin = service.planned_revenue > 0
-                        ? (service.projected_result / service.planned_revenue) * 100
-                        : 0;
-                      const serviceCapacityGap = service.expected_output - service.target_houses;
-
-                      return (
-                        <TableRow
-                          key={service.id}
-                          className={cn(index % 2 === 0 ? "bg-background" : "bg-muted/20")}
-                        >
-                          <TableCell>
-                            <div>
-                              <p className="font-medium text-sm">{service.macro_name}</p>
-                              <p className="text-xs text-muted-foreground">{service.scope_name}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {service.target_houses}
-                          </TableCell>
-                          <TableCell className="text-right text-sm">
-                            {service.team_count}
-                          </TableCell>
-                          <TableCell className="text-right text-sm">
-                            {service.productivity_per_team.toFixed(1)}/qz
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <span className={cn(
-                                "text-sm font-medium",
-                                serviceCapacityGap < 0 ? "text-red-600" : "text-green-600"
-                              )}>
-                                {service.expected_output}
-                              </span>
-                              {serviceCapacityGap < 0 && (
-                                <AlertTriangle className="h-3 w-3 text-red-500" />
+                    return (
+                      <TableRow
+                        key={service.id}
+                        className={cn(index % 2 === 0 ? "bg-background" : "bg-muted/20")}
+                      >
+                        <TableCell>
+                          <div>
+                            <p className="font-medium text-sm">{service.scope_name}</p>
+                            <p className="text-xs text-muted-foreground">{service.macro_name}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {isEditingThis ? (
+                            <Input
+                              type="number"
+                              min={0}
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={() => handleSaveEdit(service.id)}
+                              onKeyDown={(e) => handleKeyDown(e, service.id)}
+                              className="w-20 h-8 text-right ml-auto"
+                              autoFocus
+                            />
+                          ) : (
+                            <span
+                              className={cn(
+                                "font-medium cursor-default",
+                                isEditable && "cursor-pointer hover:bg-muted px-2 py-1 rounded transition-colors"
                               )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right text-sm">
-                            {formatCurrency(service.planned_cost)}
-                          </TableCell>
-                          <TableCell className="text-right text-sm">
-                            {formatCurrency(service.planned_revenue)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div>
-                              <span
-                                className={cn(
-                                  "font-medium text-sm",
-                                  service.projected_result >= 0 ? "text-green-600" : "text-red-600"
-                                )}
-                              >
-                                {formatCurrency(service.projected_result)}
-                              </span>
-                              <span className="text-xs text-muted-foreground ml-1">
-                                ({margin.toFixed(1)}%)
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {getStatusBadge(service.status)}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                              onClick={() => handleStartEdit(service)}
+                            >
+                              {service.target_houses}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-sm">
+                          {formatCurrency(service.planned_cost)}
+                        </TableCell>
+                        <TableCell className="text-right text-sm">
+                          {formatCurrency(service.planned_revenue)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div>
+                            <span
+                              className={cn(
+                                "font-medium text-sm",
+                                service.projected_result >= 0 ? "text-green-600" : "text-red-600"
+                              )}
+                            >
+                              {formatCurrency(service.projected_result)}
+                            </span>
+                            <span className="text-xs text-muted-foreground ml-1">
+                              ({margin.toFixed(1)}%)
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {getStatusBadge(service.status)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
 
-                    {/* Linha de totais */}
-                    <TableRow className="bg-muted/50 font-semibold">
-                      <TableCell>Total</TableCell>
-                      <TableCell className="text-right">{totals.houses}</TableCell>
-                      <TableCell className="text-right">-</TableCell>
-                      <TableCell className="text-right">-</TableCell>
-                      <TableCell className="text-right">
-                        <span className={cn(capacityGap >= 0 ? "text-green-600" : "text-red-600")}>
-                          {totals.capacity}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">{formatCurrency(totals.cost)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(totals.revenue)}</TableCell>
-                      <TableCell className="text-right">
-                        <span className={cn(totals.profit >= 0 ? "text-green-600" : "text-red-600")}>
-                          {formatCurrency(totals.profit)}
-                        </span>
-                      </TableCell>
-                      <TableCell />
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </div>
-            </>
+                  {/* Linha de totais */}
+                  <TableRow className="bg-muted/50 font-semibold">
+                    <TableCell>Total ({activeServices.length} serviços)</TableCell>
+                    <TableCell className="text-right">{totals.houses}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(totals.cost)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(totals.revenue)}</TableCell>
+                    <TableCell className="text-right">
+                      <span className={cn(totals.profit >= 0 ? "text-green-600" : "text-red-600")}>
+                        {formatCurrency(totals.profit)}
+                      </span>
+                    </TableCell>
+                    <TableCell />
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
           )}
         </div>
       </DialogContent>

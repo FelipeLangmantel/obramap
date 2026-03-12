@@ -532,5 +532,6 @@ export function usePeriodPlanning(projectId: string | null) {
     approvingPeriodId,
     generateSupplies,
     updatePeriodDates,
+    updateServiceHouses,
   };
 }
