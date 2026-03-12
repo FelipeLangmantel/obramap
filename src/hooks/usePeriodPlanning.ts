@@ -153,22 +153,33 @@ export function usePeriodPlanning(projectId: string | null) {
         return;
       }
 
-      // Para cada período, calcular totais a partir de service_planning_by_period
+      const strategicServicesMap = await fetchStrategicServicesMap();
+
+      // Para cada período, calcular totais considerando APENAS serviços válidos do planejamento estratégico
       const periodsWithTotals = await Promise.all(
         periodsData.map(async (period) => {
           const { data: services } = await supabase
             .from("service_planning_by_period")
-            .select("target_houses, planned_revenue, planned_cost, projected_result, team_count, productivity_per_team, expected_output")
+            .select("macro_id, scope_id, target_houses, expected_output")
             .eq("planning_period_id", period.id);
 
           const totals = (services || []).reduce(
-            (acc, s) => ({
-              total_planned_houses: acc.total_planned_houses + (s.target_houses || 0),
-              total_planned_cost: acc.total_planned_cost + (s.planned_cost || 0),
-              total_planned_revenue: acc.total_planned_revenue + (s.planned_revenue || 0),
-              total_planned_profit: acc.total_planned_profit + (s.projected_result || 0),
-              total_capacity: acc.total_capacity + (s.expected_output || 0),
-            }),
+            (acc, s) => {
+              const strategicService = strategicServicesMap.get(getServiceKey(s.macro_id, s.scope_id));
+              if (!strategicService) return acc;
+
+              const targetHouses = s.target_houses || 0;
+              const plannedCost = targetHouses * strategicService.max_cost_value;
+              const plannedRevenue = targetHouses * strategicService.unit_revenue_value;
+
+              return {
+                total_planned_houses: acc.total_planned_houses + targetHouses,
+                total_planned_cost: acc.total_planned_cost + plannedCost,
+                total_planned_revenue: acc.total_planned_revenue + plannedRevenue,
+                total_planned_profit: acc.total_planned_profit + (plannedRevenue - plannedCost),
+                total_capacity: acc.total_capacity + (s.expected_output || 0),
+              };
+            },
             { total_planned_houses: 0, total_planned_cost: 0, total_planned_revenue: 0, total_planned_profit: 0, total_capacity: 0 }
           );
 
