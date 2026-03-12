@@ -108,8 +108,22 @@ export function ProjectCostsView() {
       const next = new Set(prev);
       if (next.has(macroId)) next.delete(macroId);
       else next.add(macroId);
+      // If user manually collapses one, turn off allExpanded
+      if (!next.has(macroId)) setAllExpanded(false);
+      // If all are now expanded, turn on allExpanded
+      if (next.size === macros.length) setAllExpanded(true);
       return next;
     });
+  };
+
+  const toggleAllMacros = () => {
+    if (allExpanded) {
+      setExpandedMacros(new Set());
+      setAllExpanded(false);
+    } else {
+      setExpandedMacros(new Set(macros.map((m: any) => m.id)));
+      setAllExpanded(true);
+    }
   };
 
   const toggleMeasurement = (measurementNumber: number) => {
