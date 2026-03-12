@@ -59,7 +59,7 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await saveProductivity({
+      await onSave({
         macro_id: service.macroId,
         scope_id: service.scopeId,
         ...formData,

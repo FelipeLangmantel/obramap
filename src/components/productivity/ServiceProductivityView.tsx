@@ -18,7 +18,7 @@ interface ServiceInfo {
 
 export function ServiceProductivityView() {
   const { currentProject } = useConstruction();
-  const { productivities, isLoading } = useServiceProductivity(currentProject?.id);
+  const { productivities, isLoading, saveProductivity } = useServiceProductivity(currentProject?.id);
   const [selectedService, setSelectedService] = useState<ServiceInfo | null>(null);
 
   const allServices = useMemo(() => {
