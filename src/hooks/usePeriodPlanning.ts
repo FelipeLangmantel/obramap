@@ -47,6 +47,17 @@ export interface PeriodService {
   expected_output: number;
 }
 
+interface StrategicService {
+  macro_id: string;
+  scope_id: string;
+  macro_name: string;
+  scope_name: string;
+  max_cost_value: number;
+  unit_revenue_value: number;
+}
+
+const getServiceKey = (macroId: string, scopeId: string) => `${macroId}::${scopeId}`;
+
 export function usePeriodPlanning(projectId: string | null) {
   const { company, isAdmin, isCompanyAdmin } = useAuth();
   const [periods, setPeriods] = useState<PlanningPeriod[]>([]);
@@ -65,6 +76,31 @@ export function usePeriodPlanning(projectId: string | null) {
     if (s === "approved" || s === "released_to_weekly" || s === "closed") return s as PeriodStatus;
     return "draft";
   };
+
+  const fetchStrategicServicesMap = useCallback(async () => {
+    if (!projectId) return new Map<string, StrategicService>();
+
+    const { data, error } = await supabase
+      .from("project_contract_services")
+      .select("macro_id, scope_id, macro_name, scope_name, max_cost_value, unit_revenue_value")
+      .eq("project_id", projectId);
+
+    if (error) throw error;
+
+    const servicesMap = new Map<string, StrategicService>();
+    (data || []).forEach((service) => {
+      servicesMap.set(getServiceKey(service.macro_id, service.scope_id), {
+        macro_id: service.macro_id,
+        scope_id: service.scope_id,
+        macro_name: service.macro_name,
+        scope_name: service.scope_name,
+        max_cost_value: service.max_cost_value || 0,
+        unit_revenue_value: service.unit_revenue_value || 0,
+      });
+    });
+
+    return servicesMap;
+  }, [projectId]);
 
   // Carregar períodos do projeto (quinzenas do planejamento de longo prazo)
   const loadPeriods = useCallback(async () => {
@@ -117,22 +153,33 @@ export function usePeriodPlanning(projectId: string | null) {
         return;
       }
 
-      // Para cada período, calcular totais a partir de service_planning_by_period
+      const strategicServicesMap = await fetchStrategicServicesMap();
+
+      // Para cada período, calcular totais considerando APENAS serviços válidos do planejamento estratégico
       const periodsWithTotals = await Promise.all(
         periodsData.map(async (period) => {
           const { data: services } = await supabase
             .from("service_planning_by_period")
-            .select("target_houses, planned_revenue, planned_cost, projected_result, team_count, productivity_per_team, expected_output")
+            .select("macro_id, scope_id, target_houses, expected_output")
             .eq("planning_period_id", period.id);
 
           const totals = (services || []).reduce(
-            (acc, s) => ({
-              total_planned_houses: acc.total_planned_houses + (s.target_houses || 0),
-              total_planned_cost: acc.total_planned_cost + (s.planned_cost || 0),
-              total_planned_revenue: acc.total_planned_revenue + (s.planned_revenue || 0),
-              total_planned_profit: acc.total_planned_profit + (s.projected_result || 0),
-              total_capacity: acc.total_capacity + (s.expected_output || 0),
-            }),
+            (acc, s) => {
+              const strategicService = strategicServicesMap.get(getServiceKey(s.macro_id, s.scope_id));
+              if (!strategicService) return acc;
+
+              const targetHouses = s.target_houses || 0;
+              const plannedCost = targetHouses * strategicService.max_cost_value;
+              const plannedRevenue = targetHouses * strategicService.unit_revenue_value;
+
+              return {
+                total_planned_houses: acc.total_planned_houses + targetHouses,
+                total_planned_cost: acc.total_planned_cost + plannedCost,
+                total_planned_revenue: acc.total_planned_revenue + plannedRevenue,
+                total_planned_profit: acc.total_planned_profit + (plannedRevenue - plannedCost),
+                total_capacity: acc.total_capacity + (s.expected_output || 0),
+              };
+            },
             { total_planned_houses: 0, total_planned_cost: 0, total_planned_revenue: 0, total_planned_profit: 0, total_capacity: 0 }
           );
 
@@ -155,7 +202,7 @@ export function usePeriodPlanning(projectId: string | null) {
     } finally {
       setIsLoading(false);
     }
-  }, [projectId, company?.id]);
+  }, [projectId, company?.id, fetchStrategicServicesMap]);
 
   // Carregar serviços de um período específico
   const loadPeriodServices = useCallback(async (periodId: string) => {
@@ -166,42 +213,58 @@ export function usePeriodPlanning(projectId: string | null) {
 
     setIsLoadingServices(true);
     try {
+      const strategicServicesMap = await fetchStrategicServicesMap();
+
       const { data, error } = await supabase
         .from("service_planning_by_period")
-        .select("id, planning_period_id, macro_id, scope_id, macro_name, scope_name, target_houses, planned_revenue, planned_cost, projected_result, productivity_planned, teams_planned, status, team_count, productivity_per_team, expected_output")
+        .select("id, planning_period_id, macro_id, scope_id, macro_name, scope_name, target_houses, productivity_planned, teams_planned, status, team_count, productivity_per_team, expected_output")
         .eq("planning_period_id", periodId)
-        .gt("target_houses", 0)
         .order("macro_id", { ascending: true });
 
       if (error) throw error;
 
-      setPeriodServices(
-        (data || []).map((s) => ({
-          id: s.id,
-          planning_period_id: s.planning_period_id,
-          macro_id: s.macro_id,
-          scope_id: s.scope_id,
-          macro_name: s.macro_name,
-          scope_name: s.scope_name,
-          target_houses: s.target_houses || 0,
-          planned_revenue: s.planned_revenue || 0,
-          planned_cost: s.planned_cost || 0,
-          projected_result: s.projected_result || 0,
-          productivity_planned: s.productivity_planned,
-          teams_planned: s.teams_planned,
-          status: s.status,
-          team_count: s.team_count || 1,
-          productivity_per_team: s.productivity_per_team || 0,
-          expected_output: s.expected_output || 0,
-        }))
-      );
+      const normalizedServices = (data || [])
+        .map((s) => {
+          const strategicService = strategicServicesMap.get(getServiceKey(s.macro_id, s.scope_id));
+          if (!strategicService) return null;
+
+          const targetHouses = s.target_houses || 0;
+          const plannedCost = targetHouses * strategicService.max_cost_value;
+          const plannedRevenue = targetHouses * strategicService.unit_revenue_value;
+
+          return {
+            id: s.id,
+            planning_period_id: s.planning_period_id,
+            macro_id: s.macro_id,
+            scope_id: s.scope_id,
+            macro_name: strategicService.macro_name,
+            scope_name: strategicService.scope_name,
+            target_houses: targetHouses,
+            planned_revenue: plannedRevenue,
+            planned_cost: plannedCost,
+            projected_result: plannedRevenue - plannedCost,
+            productivity_planned: s.productivity_planned,
+            teams_planned: s.teams_planned,
+            status: s.status,
+            team_count: s.team_count || 1,
+            productivity_per_team: s.productivity_per_team || 0,
+            expected_output: s.expected_output || 0,
+          } as PeriodService;
+        })
+        .filter((service): service is PeriodService => service !== null)
+        .sort((a, b) => {
+          if (a.macro_name !== b.macro_name) return a.macro_name.localeCompare(b.macro_name, "pt-BR");
+          return a.scope_name.localeCompare(b.scope_name, "pt-BR");
+        });
+
+      setPeriodServices(normalizedServices);
     } catch (error) {
       console.error("Erro ao carregar serviços do período:", error);
       toast.error("Erro ao carregar detalhes do período");
     } finally {
       setIsLoadingServices(false);
     }
-  }, []);
+  }, [fetchStrategicServicesMap]);
 
   // Aprovar período (legacy - chama changePeriodStatus)
   const approvePeriod = useCallback(async (periodId: string) => {
