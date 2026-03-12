@@ -35,6 +35,7 @@ export default function MeasurementPlanningPage() {
     refreshServices,
     deleteService,
     generateSupplies,
+    updateServiceHouses,
   } = usePeriodPlanning(currentProject?.id || null);
 
   const [generatingSuppliesPeriodId, setGeneratingSuppliesPeriodId] = useState<string | null>(null);
