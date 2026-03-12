@@ -119,27 +119,23 @@ export function PeriodServicesDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] w-full max-h-[92vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle className="text-lg">
-                {period?.name || `Medição ${period?.period_number}`}
-              </DialogTitle>
-              {period && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  Período: {formatDateRange(period.start_date, period.end_date)}
-                  {period.status !== "draft" && (
-                    <Badge variant="secondary" className="ml-3 text-xs">
-                      {period.status === "approved" ? "Aprovado" : 
-                       period.status === "released_to_weekly" ? "Liberado" : 
-                       period.status === "closed" ? "Fechado" : "Rascunho"}
-                    </Badge>
-                  )}
-                </p>
+      <DialogContent className="max-w-[98vw] sm:max-w-[95vw] w-full max-h-[95vh] sm:max-h-[92vh] overflow-hidden flex flex-col p-3 sm:p-6">
+        <DialogHeader className="pb-1">
+          <DialogTitle className="text-base sm:text-lg">
+            {period?.name || `Medição ${period?.period_number}`}
+          </DialogTitle>
+          {period && (
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              {formatDateRange(period.start_date, period.end_date)}
+              {period.status !== "draft" && (
+                <Badge variant="secondary" className="ml-2 text-[10px] sm:text-xs">
+                  {period.status === "approved" ? "Aprovado" : 
+                   period.status === "released_to_weekly" ? "Liberado" : 
+                   period.status === "closed" ? "Fechado" : "Rascunho"}
+                </Badge>
               )}
-            </div>
-          </div>
+            </p>
+          )}
         </DialogHeader>
 
         <div className="flex-1 overflow-auto">
