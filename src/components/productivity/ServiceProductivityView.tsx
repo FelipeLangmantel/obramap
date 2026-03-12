@@ -215,6 +215,7 @@ export function ServiceProductivityView() {
           service={selectedService}
           existingProductivity={productivities.find(p => p.scope_id === selectedService.scopeId)}
           onClose={() => setSelectedService(null)}
+          onSave={saveProductivity}
         />
       )}
     </div>
