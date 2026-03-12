@@ -734,7 +734,7 @@ export function ProjectCostsView() {
           <Collapsible open={!isUnitCostCollapsed} onOpenChange={(open) => setIsUnitCostCollapsed(!open)}>
             <Card className={`border-2 border-secondary/50 bg-gradient-to-br from-secondary/10 to-secondary/5 dark:from-secondary/20 dark:to-secondary/10 transition-all ${isUnitCostCollapsed ? 'py-0' : ''}`}>
               <CollapsibleTrigger asChild>
-                <CardHeader className={`cursor-pointer hover:bg-purple-100/50 dark:hover:bg-purple-800/20 transition-colors ${isUnitCostCollapsed ? 'py-3' : 'pb-3'}`}>
+                <CardHeader className={`cursor-pointer hover:bg-secondary/10 dark:hover:bg-secondary/20 transition-colors ${isUnitCostCollapsed ? 'py-3' : 'pb-3'}`}>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Home className="w-5 h-5 text-purple-600" />
