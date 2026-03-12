@@ -23,6 +23,7 @@ import { FinancialFlowView } from "@/components/FinancialFlowView";
 import { BoardDecisionsView } from "@/components/BoardDecisionsView";
 import DeliveryView from "@/components/DeliveryView";
 import SmartPlanningView from "@/components/smart-planning/SmartPlanningView";
+import { ServiceProductivityView } from "@/components/productivity/ServiceProductivityView";
 import { Loader2, Menu, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
