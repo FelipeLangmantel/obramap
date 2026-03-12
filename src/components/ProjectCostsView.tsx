@@ -732,7 +732,7 @@ export function ProjectCostsView() {
         <TabsContent value="details" className="flex-1 overflow-auto mt-4 space-y-4">
           {/* Collapsible Unit Cost Card */}
           <Collapsible open={!isUnitCostCollapsed} onOpenChange={(open) => setIsUnitCostCollapsed(!open)}>
-            <Card className={`border-2 border-purple-400/50 bg-gradient-to-br from-purple-50/50 to-purple-100/30 dark:from-purple-900/20 dark:to-purple-800/10 transition-all ${isUnitCostCollapsed ? 'py-0' : ''}`}>
+            <Card className={`border-2 border-secondary/50 bg-gradient-to-br from-secondary/10 to-secondary/5 dark:from-secondary/20 dark:to-secondary/10 transition-all ${isUnitCostCollapsed ? 'py-0' : ''}`}>
               <CollapsibleTrigger asChild>
                 <CardHeader className={`cursor-pointer hover:bg-purple-100/50 dark:hover:bg-purple-800/20 transition-colors ${isUnitCostCollapsed ? 'py-3' : 'pb-3'}`}>
                   <div className="flex items-center justify-between">
