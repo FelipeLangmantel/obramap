@@ -5680,6 +5680,10 @@ export type Database = {
         Args: { p_company_id: string; p_project_id: string }
         Returns: Json
       }
+      sync_period_services_with_strategic: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       sync_period_supply_requirements: {
         Args: { p_measurement_id?: string; p_planning_period_id: string }
         Returns: Json
