@@ -732,15 +732,15 @@ export function ProjectCostsView() {
         <TabsContent value="details" className="flex-1 overflow-auto mt-4 space-y-4">
           {/* Collapsible Unit Cost Card */}
           <Collapsible open={!isUnitCostCollapsed} onOpenChange={(open) => setIsUnitCostCollapsed(!open)}>
-            <Card className={`border-2 border-purple-400/50 bg-gradient-to-br from-purple-50/50 to-purple-100/30 dark:from-purple-900/20 dark:to-purple-800/10 transition-all ${isUnitCostCollapsed ? 'py-0' : ''}`}>
+            <Card className={`border-2 border-secondary/50 bg-gradient-to-br from-secondary/10 to-secondary/5 dark:from-secondary/20 dark:to-secondary/10 transition-all ${isUnitCostCollapsed ? 'py-0' : ''}`}>
               <CollapsibleTrigger asChild>
-                <CardHeader className={`cursor-pointer hover:bg-purple-100/50 dark:hover:bg-purple-800/20 transition-colors ${isUnitCostCollapsed ? 'py-3' : 'pb-3'}`}>
+                <CardHeader className={`cursor-pointer hover:bg-secondary/10 dark:hover:bg-secondary/20 transition-colors ${isUnitCostCollapsed ? 'py-3' : 'pb-3'}`}>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <Home className="w-5 h-5 text-purple-600" />
+                      <Home className="w-5 h-5 text-secondary" />
                       Custo por Unidade Habitacional
                       {isUnitCostCollapsed && (
-                        <Badge variant="secondary" className="ml-2 text-purple-700 dark:text-purple-300">
+                        <Badge variant="secondary" className="ml-2 text-secondary-foreground">
                           {formatCurrency(unitCost.total)}
                         </Badge>
                       )}
@@ -759,28 +759,28 @@ export function ProjectCostsView() {
                         <Package className="w-3 h-3 text-blue-500" />
                         Material
                       </p>
-                      <p className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(unitCost.material)}</p>
+                      <p className="text-xl font-bold text-secondary dark:text-secondary-foreground">{formatCurrency(unitCost.material)}</p>
                     </div>
                     <div className="p-3 bg-background/80 rounded-lg">
                       <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
                         <Hammer className="w-3 h-3 text-orange-500" />
                         Mão de Obra
                       </p>
-                      <p className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(unitCost.labor)}</p>
+                      <p className="text-xl font-bold text-secondary dark:text-secondary-foreground">{formatCurrency(unitCost.labor)}</p>
                     </div>
                     <div className="p-3 bg-background/80 rounded-lg">
                       <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
                         <Wrench className="w-3 h-3 text-green-500" />
                         Equipamentos
                       </p>
-                      <p className="text-xl font-bold text-purple-700 dark:text-purple-400">{formatCurrency(unitCost.equipment)}</p>
+                      <p className="text-xl font-bold text-secondary dark:text-secondary-foreground">{formatCurrency(unitCost.equipment)}</p>
                     </div>
-                    <div className="p-3 bg-purple-200/50 dark:bg-purple-700/30 rounded-lg">
+                    <div className="p-3 bg-secondary/20 dark:bg-secondary/30 rounded-lg">
                       <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
                         <DollarSign className="w-3 h-3" />
                         Total Unitário
                       </p>
-                      <p className="text-2xl font-bold text-purple-800 dark:text-purple-300">{formatCurrency(unitCost.total)}</p>
+                      <p className="text-2xl font-bold text-secondary dark:text-secondary-foreground">{formatCurrency(unitCost.total)}</p>
                     </div>
                   </div>
                 </CardContent>
