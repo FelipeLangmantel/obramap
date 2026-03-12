@@ -119,27 +119,23 @@ export function PeriodServicesDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] w-full max-h-[92vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle className="text-lg">
-                {period?.name || `Medição ${period?.period_number}`}
-              </DialogTitle>
-              {period && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  Período: {formatDateRange(period.start_date, period.end_date)}
-                  {period.status !== "draft" && (
-                    <Badge variant="secondary" className="ml-3 text-xs">
-                      {period.status === "approved" ? "Aprovado" : 
-                       period.status === "released_to_weekly" ? "Liberado" : 
-                       period.status === "closed" ? "Fechado" : "Rascunho"}
-                    </Badge>
-                  )}
-                </p>
+      <DialogContent className="max-w-[98vw] sm:max-w-[95vw] w-full max-h-[95vh] sm:max-h-[92vh] overflow-hidden flex flex-col p-3 sm:p-6">
+        <DialogHeader className="pb-1">
+          <DialogTitle className="text-base sm:text-lg">
+            {period?.name || `Medição ${period?.period_number}`}
+          </DialogTitle>
+          {period && (
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              {formatDateRange(period.start_date, period.end_date)}
+              {period.status !== "draft" && (
+                <Badge variant="secondary" className="ml-2 text-[10px] sm:text-xs">
+                  {period.status === "approved" ? "Aprovado" : 
+                   period.status === "released_to_weekly" ? "Liberado" : 
+                   period.status === "closed" ? "Fechado" : "Rascunho"}
+                </Badge>
               )}
-            </div>
-          </div>
+            </p>
+          )}
         </DialogHeader>
 
         <div className="flex-1 overflow-auto">
@@ -154,18 +150,18 @@ export function PeriodServicesDialog({
               <p className="text-sm mt-2">Defina metas no Planejamento de Longo Prazo.</p>
             </div>
           ) : (
-            <div className="rounded-lg border">
-              <Table>
+            <div className="rounded-lg border overflow-x-auto">
+              <Table className="text-xs sm:text-sm">
                 <TableHeader className="bg-muted/50">
                   <TableRow>
-                    <TableHead className="min-w-[250px]">Serviço</TableHead>
-                    <TableHead className="text-right w-[120px]">
+                    <TableHead className="min-w-[140px] sm:min-w-[220px] py-2">Serviço</TableHead>
+                    <TableHead className="text-right w-[60px] sm:w-[90px] py-2">
                       {isEditable ? "Casas ✎" : "Casas"}
                     </TableHead>
-                    <TableHead className="text-right">Custo</TableHead>
-                    <TableHead className="text-right">Receita</TableHead>
-                    <TableHead className="text-right">Resultado</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
+                    <TableHead className="text-right py-2 hidden sm:table-cell">Custo</TableHead>
+                    <TableHead className="text-right py-2 hidden sm:table-cell">Receita</TableHead>
+                    <TableHead className="text-right py-2">Resultado</TableHead>
+                    <TableHead className="text-center w-[50px] sm:w-[70px] py-2">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -180,13 +176,11 @@ export function PeriodServicesDialog({
                         key={service.id}
                         className={cn(index % 2 === 0 ? "bg-background" : "bg-muted/20")}
                       >
-                        <TableCell>
-                          <div>
-                            <p className="font-medium text-sm">{service.scope_name}</p>
-                            <p className="text-xs text-muted-foreground">{service.macro_name}</p>
-                          </div>
+                        <TableCell className="py-1.5 sm:py-2">
+                          <p className="font-medium text-xs sm:text-sm leading-tight">{service.scope_name}</p>
+                          <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">{service.macro_name}</p>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right py-1.5 sm:py-2">
                           {isEditingThis ? (
                             <Input
                               type="number"
@@ -195,14 +189,14 @@ export function PeriodServicesDialog({
                               onChange={(e) => setEditValue(e.target.value)}
                               onBlur={() => handleSaveEdit(service.id)}
                               onKeyDown={(e) => handleKeyDown(e, service.id)}
-                              className="w-20 h-8 text-right ml-auto"
+                              className="w-14 sm:w-20 h-7 text-right ml-auto text-xs"
                               autoFocus
                             />
                           ) : (
                             <span
                               className={cn(
                                 "font-medium cursor-default",
-                                isEditable && "cursor-pointer hover:bg-muted px-2 py-1 rounded transition-colors"
+                                isEditable && "cursor-pointer hover:bg-muted px-1.5 py-0.5 rounded transition-colors"
                               )}
                               onClick={() => handleStartEdit(service)}
                             >
@@ -210,46 +204,43 @@ export function PeriodServicesDialog({
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right text-sm">
+                        <TableCell className="text-right py-1.5 sm:py-2 hidden sm:table-cell">
                           {formatCurrency(service.planned_cost)}
                         </TableCell>
-                        <TableCell className="text-right text-sm">
+                        <TableCell className="text-right py-1.5 sm:py-2 hidden sm:table-cell">
                           {formatCurrency(service.planned_revenue)}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div>
-                            <span
-                              className={cn(
-                                "font-medium text-sm",
-                                service.projected_result >= 0 ? "text-green-600" : "text-red-600"
-                              )}
-                            >
-                              {formatCurrency(service.projected_result)}
-                            </span>
-                            <span className="text-xs text-muted-foreground ml-1">
-                              ({margin.toFixed(1)}%)
-                            </span>
-                          </div>
+                        <TableCell className="text-right py-1.5 sm:py-2">
+                          <span
+                            className={cn(
+                              "font-medium",
+                              service.projected_result >= 0 ? "text-green-600" : "text-red-600"
+                            )}
+                          >
+                            {formatCurrency(service.projected_result)}
+                          </span>
+                          <span className="text-[10px] sm:text-xs text-muted-foreground ml-0.5">
+                            ({margin.toFixed(1)}%)
+                          </span>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-center py-1.5 sm:py-2">
                           {getStatusBadge(service.status)}
                         </TableCell>
                       </TableRow>
                     );
                   })}
 
-                  {/* Linha de totais */}
                   <TableRow className="bg-muted/50 font-semibold">
-                    <TableCell>Total ({activeServices.length} serviços)</TableCell>
-                    <TableCell className="text-right">{totals.houses}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(totals.cost)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(totals.revenue)}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="py-1.5 sm:py-2 text-xs sm:text-sm">Total ({activeServices.length})</TableCell>
+                    <TableCell className="text-right py-1.5 sm:py-2">{totals.houses}</TableCell>
+                    <TableCell className="text-right py-1.5 sm:py-2 hidden sm:table-cell">{formatCurrency(totals.cost)}</TableCell>
+                    <TableCell className="text-right py-1.5 sm:py-2 hidden sm:table-cell">{formatCurrency(totals.revenue)}</TableCell>
+                    <TableCell className="text-right py-1.5 sm:py-2">
                       <span className={cn(totals.profit >= 0 ? "text-green-600" : "text-red-600")}>
                         {formatCurrency(totals.profit)}
                       </span>
                     </TableCell>
-                    <TableCell />
+                    <TableCell className="py-1.5 sm:py-2" />
                   </TableRow>
                 </TableBody>
               </Table>
