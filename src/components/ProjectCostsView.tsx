@@ -98,6 +98,7 @@ export function ProjectCostsView() {
   const [expandedMeasurements, setExpandedMeasurements] = useState<Set<number>>(new Set());
   const [editingScope, setEditingScope] = useState<{ scopeId: string; macroId: string; scopeName: string } | null>(null);
   const [isUnitCostCollapsed, setIsUnitCostCollapsed] = useState(false);
+  const [allExpanded, setAllExpanded] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const savedScrollPosition = useRef<number>(0);
