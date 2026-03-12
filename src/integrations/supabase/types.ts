@@ -3065,6 +3065,109 @@ export type Database = {
           },
         ]
       }
+      project_service_productivity: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          created_by: string | null
+          default_team_count: number | null
+          helpers_per_team: number | null
+          id: string
+          is_active: boolean | null
+          macro_id: string
+          notes: string | null
+          productivity_unit: string
+          productivity_value: number
+          professionals_per_team: number | null
+          project_id: string
+          scope_id: string
+          updated_at: string | null
+          version: number | null
+          working_days_per_week: number | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          created_by?: string | null
+          default_team_count?: number | null
+          helpers_per_team?: number | null
+          id?: string
+          is_active?: boolean | null
+          macro_id: string
+          notes?: string | null
+          productivity_unit?: string
+          productivity_value: number
+          professionals_per_team?: number | null
+          project_id: string
+          scope_id: string
+          updated_at?: string | null
+          version?: number | null
+          working_days_per_week?: number | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          default_team_count?: number | null
+          helpers_per_team?: number | null
+          id?: string
+          is_active?: boolean | null
+          macro_id?: string
+          notes?: string | null
+          productivity_unit?: string
+          productivity_value?: number
+          professionals_per_team?: number | null
+          project_id?: string
+          scope_id?: string
+          updated_at?: string | null
+          version?: number | null
+          working_days_per_week?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_service_productivity_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_service_team_composition: {
+        Row: {
+          created_at: string | null
+          id: string
+          productivity_id: string
+          quantity: number
+          role_name: string
+          role_type: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          productivity_id: string
+          quantity?: number
+          role_name: string
+          role_type?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          productivity_id?: string
+          quantity?: number
+          role_name?: string
+          role_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_service_team_composition_productivity_id_fkey"
+            columns: ["productivity_id"]
+            isOneToOne: false
+            referencedRelation: "project_service_productivity"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           company_id: string | null
