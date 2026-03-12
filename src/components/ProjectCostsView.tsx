@@ -737,7 +737,7 @@ export function ProjectCostsView() {
                 <CardHeader className={`cursor-pointer hover:bg-secondary/10 dark:hover:bg-secondary/20 transition-colors ${isUnitCostCollapsed ? 'py-3' : 'pb-3'}`}>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg flex items-center gap-2">
-                      <Home className="w-5 h-5 text-purple-600" />
+                      <Home className="w-5 h-5 text-secondary" />
                       Custo por Unidade Habitacional
                       {isUnitCostCollapsed && (
                         <Badge variant="secondary" className="ml-2 text-purple-700 dark:text-purple-300">
