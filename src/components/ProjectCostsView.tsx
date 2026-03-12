@@ -740,7 +740,7 @@ export function ProjectCostsView() {
                       <Home className="w-5 h-5 text-secondary" />
                       Custo por Unidade Habitacional
                       {isUnitCostCollapsed && (
-                        <Badge variant="secondary" className="ml-2 text-purple-700 dark:text-purple-300">
+                        <Badge variant="secondary" className="ml-2 text-secondary-foreground">
                           {formatCurrency(unitCost.total)}
                         </Badge>
                       )}
