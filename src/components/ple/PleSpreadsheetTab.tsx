@@ -65,14 +65,16 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
     });
   }, [events, entries, measurements, selectedMeasurement, currentProject]);
 
-  // Build 3-level grouped structure
+  // Build 3-level grouped structure with expand/collapse
   const groupedRows = useMemo(() => {
     const result: { type: "stage" | "substage" | "item"; stage?: typeof stages[0]; substage?: typeof substages[0]; row?: typeof rows[0] }[] = [];
     stages.forEach(stage => {
       result.push({ type: "stage", stage });
+      if (!expandedGroups.has(stage.id)) return;
       const subs = substages.filter(s => s.parent_id === stage.id);
       subs.forEach(sub => {
         result.push({ type: "substage", substage: sub });
+        if (!expandedGroups.has(sub.id)) return;
         const subRows = rows.filter(r => r.event.group_id === sub.id).sort((a, b) => a.event.display_order - b.event.display_order);
         subRows.forEach(row => result.push({ type: "item", row }));
       });
