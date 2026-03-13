@@ -20,6 +20,8 @@ interface Props extends PleDataReturn {
 function SetupContent({ onCreated, ...props }: Props) {
   const { currentProject, groups, events, createProject, createGroup, updateGroup, deleteGroup, createEvent, updateEvent, deleteEvent, updateProject } = props;
 
+  const [showAIImport, setShowAIImport] = useState(false);
+
   const [projectForm, setProjectForm] = useState({
     name: currentProject?.name || "",
     location: currentProject?.location || "",
