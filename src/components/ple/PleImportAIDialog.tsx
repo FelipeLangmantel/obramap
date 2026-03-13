@@ -84,7 +84,7 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
       setSubstages(data.substages || []);
       setItems(data.items.map((it: any) => ({ ...it, selected: true })));
       // Auto-expand all stages
-      const allStageCodes = new Set((data.stages || []).map((s: ExtractedStage) => s.code));
+      const allStageCodes = new Set<string>((data.stages || []).map((s: ExtractedStage) => s.code));
       setExpandedStages(allStageCodes);
       toast.success(data.message || `${data.items.length} itens extraídos pela IA`);
     } catch (err: any) {
