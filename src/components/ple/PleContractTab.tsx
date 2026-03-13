@@ -138,12 +138,27 @@ export function PleContractTab(props: PleDataReturn) {
     const groupIdMap = new Map<string, string>();
     groups.forEach(g => groupIdMap.set(g.code, g.id));
 
-    // Create stages and substages
-    for (const g of newGroups) {
+    // Create stages first (no parent_code), then substages (with parent_code)
+    const stagesFirst = newGroups.filter(g => !g.parent_code);
+    const subsAfter = newGroups.filter(g => g.parent_code);
+
+    for (const g of stagesFirst) {
+      if (!groupIdMap.has(g.code)) {
+        const result = await createGroup({ code: g.code, name: g.name, parent_id: null });
+        if (result) {
+          groupIdMap.set(g.code, result.id);
+          setExpandedStages(prev => new Set(prev).add(result.id));
+        }
+      }
+    }
+    for (const g of subsAfter) {
       if (!groupIdMap.has(g.code)) {
         const parentId = g.parent_code ? groupIdMap.get(g.parent_code) || null : null;
         const result = await createGroup({ code: g.code, name: g.name, parent_id: parentId });
-        if (result) groupIdMap.set(g.code, result.id);
+        if (result) {
+          groupIdMap.set(g.code, result.id);
+          setExpandedStages(prev => new Set(prev).add(result.id));
+        }
       }
     }
 
