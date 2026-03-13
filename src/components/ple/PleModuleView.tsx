@@ -3,11 +3,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, FileText, BarChart3, History, Grid3X3, Settings } from "lucide-react";
+import { Plus, FileText, BarChart3, History, Grid3X3, ClipboardList } from "lucide-react";
 import { PleSpreadsheetTab } from "./PleSpreadsheetTab";
 import { PleGridTab } from "./PleGridTab";
 import { PleChartsTab } from "./PleChartsTab";
 import { PleHistoryTab } from "./PleHistoryTab";
+import { PleContractTab } from "./PleContractTab";
 import { PleProjectSetup } from "./PleProjectSetup";
 import { PleNewMeasurementDialog } from "./PleNewMeasurementDialog";
 import type { usePleData } from "@/hooks/usePleData";
@@ -22,7 +23,7 @@ export function PleModuleView(props: PleDataReturn) {
 
   const [activeTab, setActiveTab] = useState("spreadsheet");
   const [showNewMeasurement, setShowNewMeasurement] = useState(false);
-  const [showSetup, setShowSetup] = useState(false);
+  
   const [selectedMeasurementId, setSelectedMeasurementId] = useState<string | "all">("all");
 
   const selectedMeasurement = selectedMeasurementId !== "all"
@@ -53,9 +54,6 @@ export function PleModuleView(props: PleDataReturn) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowSetup(true)}>
-              <Settings className="h-4 w-4 mr-1" /> Configurar
-            </Button>
             <Button size="sm" onClick={() => setShowNewMeasurement(true)}>
               <Plus className="h-4 w-4 mr-1" /> Nova Medição
             </Button>
@@ -142,6 +140,9 @@ export function PleModuleView(props: PleDataReturn) {
           <TabsTrigger value="history" className="gap-1.5 text-xs">
             <History className="h-3.5 w-3.5" /> Histórico / Auditoria
           </TabsTrigger>
+          <TabsTrigger value="contract" className="gap-1.5 text-xs">
+            <ClipboardList className="h-3.5 w-3.5" /> Lançamento do Contrato
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="spreadsheet" className="flex-1 min-h-0 mt-3">
@@ -156,6 +157,9 @@ export function PleModuleView(props: PleDataReturn) {
         <TabsContent value="history" className="flex-1 min-h-0 mt-3">
           <PleHistoryTab {...props} />
         </TabsContent>
+        <TabsContent value="contract" className="flex-1 min-h-0 mt-3">
+          <PleContractTab {...props} />
+        </TabsContent>
       </Tabs>
 
       {showNewMeasurement && (
@@ -167,9 +171,6 @@ export function PleModuleView(props: PleDataReturn) {
         />
       )}
 
-      {showSetup && (
-        <PleProjectSetup {...props} onCreated={() => {}} isDialog open={showSetup} onClose={() => setShowSetup(false)} />
-      )}
     </div>
   );
 }
