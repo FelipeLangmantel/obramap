@@ -86,8 +86,9 @@ export function PleContractTab(props: PleDataReturn) {
       totalSubstages: groups.filter(g => g.parent_id).length,
       totalEvents: events.length,
       totalContractual,
+      ungroupedCount: ungroupedEvents.length,
     };
-  }, [groups, events, stages]);
+  }, [groups, events, stages, ungroupedEvents]);
 
   const toggleStage = (id: string) => {
     setExpandedStages(prev => {
