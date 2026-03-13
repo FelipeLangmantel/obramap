@@ -1,0 +1,1 @@
+ALTER TABLE public.ple_event_groups ADD COLUMN parent_id UUID REFERENCES public.ple_event_groups(id) ON DELETE CASCADE DEFAULT NULL;

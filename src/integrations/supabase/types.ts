@@ -2580,6 +2580,7 @@ export type Database = {
           display_order: number
           id: string
           name: string
+          parent_id: string | null
           ple_project_id: string
         }
         Insert: {
@@ -2588,6 +2589,7 @@ export type Database = {
           display_order?: number
           id?: string
           name: string
+          parent_id?: string | null
           ple_project_id: string
         }
         Update: {
@@ -2596,9 +2598,17 @@ export type Database = {
           display_order?: number
           id?: string
           name?: string
+          parent_id?: string | null
           ple_project_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "ple_event_groups_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "ple_event_groups"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "ple_event_groups_ple_project_id_fkey"
             columns: ["ple_project_id"]
