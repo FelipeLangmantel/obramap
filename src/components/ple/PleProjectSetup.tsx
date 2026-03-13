@@ -4,8 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Trash2, Edit2, Check, X } from "lucide-react";
+import { Plus, Trash2, Edit2, Check, X, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { PleImportAIDialog } from "./PleImportAIDialog";
 import type { usePleData } from "@/hooks/usePleData";
 
 type PleDataReturn = ReturnType<typeof usePleData>;
