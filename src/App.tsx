@@ -110,6 +110,7 @@ const App = () => {
                   <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
                   <Route path="/long-term-planning" element={<LongTermPlanningPage />} />
                   <Route path="/project-contract" element={<ProjectContractPage />} />
+                  <Route path="/ple-measurements" element={<PleMeasurementsPage />} />
                   <Route path="/" element={<Index />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>

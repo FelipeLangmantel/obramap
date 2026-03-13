@@ -99,7 +99,7 @@ export function PleGridTab({ groups, events, measurements, entries, currentProje
         </div>
       </div>
 
-      <ScrollArea className="flex-1" orientation="both">
+      <div className="flex-1 overflow-auto">
         <div className="min-w-max">
           {/* Header */}
           <div className="flex sticky top-0 z-10 bg-background border-b">
