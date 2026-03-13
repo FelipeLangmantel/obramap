@@ -23,6 +23,7 @@ export interface PleEventGroup {
   code: string;
   name: string;
   display_order: number;
+  parent_id: string | null;
 }
 
 export interface PleEvent {
