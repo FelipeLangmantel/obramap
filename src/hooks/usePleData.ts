@@ -23,6 +23,7 @@ export interface PleEventGroup {
   code: string;
   name: string;
   display_order: number;
+  parent_id: string | null;
 }
 
 export interface PleEvent {
@@ -148,13 +149,13 @@ export function usePleData() {
     toast.success("Medição aprovada!");
   }, []);
 
-  // Create event group
-  const createGroup = useCallback(async (data: { code: string; name: string }) => {
+  // Create event group (etapa or subetapa)
+  const createGroup = useCallback(async (data: { code: string; name: string; parent_id?: string | null }) => {
     if (!currentProjectId) return null;
     const maxOrder = groups.length > 0 ? Math.max(...groups.map(g => g.display_order)) + 1 : 0;
     const { data: result, error } = await supabase
       .from("ple_event_groups")
-      .insert({ ...data, ple_project_id: currentProjectId, display_order: maxOrder } as any)
+      .insert({ ...data, ple_project_id: currentProjectId, display_order: maxOrder, parent_id: data.parent_id || null } as any)
       .select()
       .single();
     if (error) { toast.error("Erro ao criar grupo"); return null; }

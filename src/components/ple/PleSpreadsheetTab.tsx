@@ -14,12 +14,13 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
   const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtCur = (v: number) => `R$ ${fmt(v)}`;
 
+  const stages = useMemo(() => groups.filter(g => !g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
+  const substages = useMemo(() => groups.filter(g => g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
+
   // Build rows with computed values
   const rows = useMemo(() => {
     return events.map(event => {
       const totalValue = event.quantity * event.unit_value;
-
-      // Qty measured for selected measurement (or all)
       let qtdMed = 0;
       if (selectedMeasurement) {
         qtdMed = entries.filter(e => e.event_id === event.id && e.measurement_id === selectedMeasurement.id).length;
@@ -29,7 +30,6 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
       const valorMed = qtdMed * event.unit_value;
       const pctItem = totalValue > 0 ? (valorMed / totalValue) * 100 : 0;
 
-      // Accumulated (all measurements up to selected or all)
       let qtdAcum = entries.filter(e => e.event_id === event.id).length;
       if (selectedMeasurement) {
         const measurementsUpTo = measurements.filter(m => m.measurement_number <= selectedMeasurement.measurement_number);
@@ -40,37 +40,31 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
       const pctAcum = totalValue > 0 ? (valorAcum / totalValue) * 100 : 0;
       const saldo = totalValue - valorAcum;
 
-      const group = groups.find(g => g.id === event.group_id);
-
-      return { event, group, totalValue, qtdMed, valorMed, pctItem, qtdAcum, pctAcum, saldo };
+      return { event, totalValue, qtdMed, valorMed, pctItem, qtdAcum, pctAcum, saldo };
     });
-  }, [events, entries, measurements, selectedMeasurement, groups]);
+  }, [events, entries, measurements, selectedMeasurement]);
 
-  // Group rows
+  // Build 3-level grouped structure
   const groupedRows = useMemo(() => {
-    const result: { type: "group" | "item"; group?: typeof groups[0]; row?: typeof rows[0] }[] = [];
-    const usedGroups = new Set<string>();
+    const result: { type: "stage" | "substage" | "item"; stage?: typeof stages[0]; substage?: typeof substages[0]; row?: typeof rows[0] }[] = [];
 
-    // Sort events by group display_order then event display_order
-    const sortedRows = [...rows].sort((a, b) => {
-      const ga = a.group?.display_order ?? 999;
-      const gb = b.group?.display_order ?? 999;
-      if (ga !== gb) return ga - gb;
-      return a.event.display_order - b.event.display_order;
+    stages.forEach(stage => {
+      result.push({ type: "stage", stage });
+      const subs = substages.filter(s => s.parent_id === stage.id);
+      subs.forEach(sub => {
+        result.push({ type: "substage", substage: sub });
+        const subRows = rows.filter(r => r.event.group_id === sub.id).sort((a, b) => a.event.display_order - b.event.display_order);
+        subRows.forEach(row => result.push({ type: "item", row }));
+      });
     });
 
-    sortedRows.forEach(row => {
-      if (row.group && !usedGroups.has(row.group.id)) {
-        usedGroups.add(row.group.id);
-        result.push({ type: "group", group: row.group });
-      }
-      result.push({ type: "item", row });
-    });
+    // Events without a group
+    const orphanRows = rows.filter(r => !r.event.group_id || !groups.find(g => g.id === r.event.group_id));
+    orphanRows.forEach(row => result.push({ type: "item", row }));
 
     return result;
-  }, [rows, groups]);
+  }, [rows, stages, substages, groups]);
 
-  // Totals
   const totalContrato = rows.reduce((sum, r) => sum + r.totalValue, 0);
   const totalMedido = rows.reduce((sum, r) => sum + r.valorMed, 0);
   const totalAcum = rows.reduce((sum, r) => sum + r.event.unit_value * (entries.filter(e => e.event_id === r.event.id).length), 0);
@@ -78,14 +72,13 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
   if (events.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
-        Nenhum serviço cadastrado. Use "Configurar" para adicionar grupos e serviços.
+        Nenhum serviço cadastrado. Use "Lançamento do Contrato" para adicionar etapas e serviços.
       </div>
     );
   }
 
   return (
     <div className="border rounded-lg overflow-hidden h-full flex flex-col">
-      {/* Project info bar */}
       {currentProject && (
         <div className="bg-accent/30 px-4 py-2 text-xs grid grid-cols-4 gap-4 border-b">
           <div><span className="text-muted-foreground">MUNICÍPIO:</span><br /><span className="font-semibold">{currentProject.location || "—"}</span></div>
@@ -116,11 +109,20 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
           </TableHeader>
           <TableBody>
             {groupedRows.map((item, idx) => {
-              if (item.type === "group" && item.group) {
+              if (item.type === "stage" && item.stage) {
                 return (
-                  <TableRow key={`g-${item.group.id}`} className="bg-primary/10 border-t-2 border-primary/30">
-                    <TableCell colSpan={13} className="font-bold text-xs text-primary py-1.5">
-                      {item.group.code} – {item.group.name.toUpperCase()}
+                  <TableRow key={`s-${item.stage.id}`} className="bg-primary/15 border-t-2 border-primary/30">
+                    <TableCell colSpan={13} className="font-extrabold text-xs text-primary py-2 tracking-wide">
+                      {item.stage.code} – {item.stage.name.toUpperCase()}
+                    </TableCell>
+                  </TableRow>
+                );
+              }
+              if (item.type === "substage" && item.substage) {
+                return (
+                  <TableRow key={`sub-${item.substage.id}`} className="bg-accent/40 border-t border-accent">
+                    <TableCell colSpan={13} className="font-bold text-[11px] text-foreground py-1.5 pl-6">
+                      {item.substage.code} – {item.substage.name}
                     </TableCell>
                   </TableRow>
                 );
@@ -129,7 +131,7 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
                 const r = item.row;
                 return (
                   <TableRow key={r.event.id} className="text-[11px] hover:bg-accent/20">
-                    <TableCell className="font-mono">{r.event.item_code}</TableCell>
+                    <TableCell className="font-mono pl-8">{r.event.item_code}</TableCell>
                     <TableCell className="text-muted-foreground">{r.event.discrimination || "—"}</TableCell>
                     <TableCell className="font-mono">{r.event.sinapi_code || "—"}</TableCell>
                     <TableCell className="max-w-xs truncate">{r.event.description}</TableCell>
@@ -147,7 +149,6 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
               }
               return null;
             })}
-            {/* Totals row */}
             <TableRow className="bg-accent/50 font-bold text-xs border-t-2">
               <TableCell colSpan={7} className="text-right">TOTAIS:</TableCell>
               <TableCell className="text-right font-mono">{fmtCur(totalContrato)}</TableCell>
