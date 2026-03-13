@@ -60,6 +60,35 @@ function SetupContent({ onCreated, ...props }: Props) {
     setNewEvent({ group_id: "", item_code: "", description: "", discrimination: "", sinapi_code: "", unit: "UN", quantity: 0, unit_value: 0 });
   };
 
+  const handleAIImport = async (
+    newGroups: { code: string; name: string }[],
+    importedEvents: { item_code: string; discrimination: string; sinapi_code: string; description: string; unit: string; quantity: number; unit_value: number; group_code: string; group_name: string }[]
+  ) => {
+    // Create new groups first
+    const groupIdMap = new Map<string, string>();
+    groups.forEach(g => groupIdMap.set(g.code, g.id));
+
+    for (const g of newGroups) {
+      const result = await createGroup(g);
+      if (result) groupIdMap.set(g.code, result.id);
+    }
+
+    // Create events
+    for (const ev of importedEvents) {
+      const groupId = groupIdMap.get(ev.group_code) || null;
+      await createEvent({
+        group_id: groupId,
+        item_code: ev.item_code,
+        description: ev.description,
+        discrimination: ev.discrimination,
+        sinapi_code: ev.sinapi_code,
+        unit: ev.unit,
+        quantity: ev.quantity,
+        unit_value: ev.unit_value,
+      } as any);
+    }
+  };
+
   return (
     <div className="space-y-6 max-h-[70vh] overflow-y-auto">
       {/* Project Info */}
