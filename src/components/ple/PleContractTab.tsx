@@ -249,6 +249,8 @@ export function PleContractTab(props: PleDataReturn) {
             </span>
           </div>
         )}
+
+        <ScrollArea className="flex-1 border rounded-lg">
           <div className="min-w-[950px]">
             {/* Table Header */}
             <div className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-muted/50 border-b px-2 py-2 sticky top-0 z-10">
