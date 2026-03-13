@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { ChevronsUpDown, ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronsUpDown } from "lucide-react";
 import type { usePleData } from "@/hooks/usePleData";
 import type { PleMeasurement } from "@/hooks/usePleData";
 
