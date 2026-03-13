@@ -293,7 +293,7 @@ export function PleContractTab(props: PleDataReturn) {
                     <>
                       {/* SUBETAPAS */}
                       {substages.map(sub => {
-                        const subEvents = (eventsBySubstage.get(sub.id) || []).sort((a, b) => a.display_order - b.display_order);
+                        const subEvents = (eventsByGroup.get(sub.id) || []).sort((a, b) => a.display_order - b.display_order);
                         const subTotal = getSubstageTotal(sub.id);
                         const isSubExpanded = expandedStages.has(sub.id);
 
