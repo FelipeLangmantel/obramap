@@ -59,7 +59,7 @@ export function PleContractTab(props: PleDataReturn) {
     return map;
   }, [groups, stages]);
 
-  const eventsBySubstage = useMemo(() => {
+  const eventsByGroup = useMemo(() => {
     const map = new Map<string, typeof events>();
     groups.forEach(g => map.set(g.id, []));
     events.forEach(e => {
@@ -71,6 +71,12 @@ export function PleContractTab(props: PleDataReturn) {
     });
     return map;
   }, [events, groups]);
+
+  // Events without any group (orphaned / ungrouped)
+  const ungroupedEvents = useMemo(() => 
+    events.filter(e => !e.group_id).sort((a, b) => a.display_order - b.display_order),
+    [events]
+  );
 
   // Stats
   const stats = useMemo(() => {
