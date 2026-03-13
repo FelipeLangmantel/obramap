@@ -149,19 +149,21 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
           <TableBody>
             {groupedRows.map((item) => {
               if (item.type === "stage" && item.stage) {
+                const isExp = expandedGroups.has(item.stage.id);
                 return (
-                  <TableRow key={`s-${item.stage.id}`} className="bg-primary/10 border-t-2 border-primary/40">
+                  <TableRow key={`s-${item.stage.id}`} className="bg-primary/10 border-t-2 border-primary/40 cursor-pointer hover:bg-primary/15" onClick={() => toggleGroup(item.stage!.id)}>
                     <TableCell colSpan={13} className="font-black text-xs text-primary py-2 tracking-wide uppercase">
-                      {item.stage.code} – {item.stage.name.toUpperCase()}
+                      {isExp ? "▾" : "▸"} {item.stage.code} – {item.stage.name.toUpperCase()}
                     </TableCell>
                   </TableRow>
                 );
               }
               if (item.type === "substage" && item.substage) {
+                const isExp = expandedGroups.has(item.substage.id);
                 return (
-                  <TableRow key={`sub-${item.substage.id}`} className="bg-muted/40 border-t border-border">
+                  <TableRow key={`sub-${item.substage.id}`} className="bg-muted/40 border-t border-border cursor-pointer hover:bg-muted/60" onClick={() => toggleGroup(item.substage!.id)}>
                     <TableCell colSpan={13} className="font-bold text-[11px] text-foreground/80 py-1.5 pl-6">
-                      {item.substage.code} – {item.substage.name}
+                      {isExp ? "▾" : "▸"} {item.substage.code} – {item.substage.name}
                     </TableCell>
                   </TableRow>
                 );
