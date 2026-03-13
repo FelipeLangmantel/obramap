@@ -2524,6 +2524,259 @@ export type Database = {
           },
         ]
       }
+      ple_entries: {
+        Row: {
+          created_at: string
+          event_id: string
+          house_number: number
+          id: string
+          measurement_id: string
+          ple_project_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          house_number: number
+          id?: string
+          measurement_id: string
+          ple_project_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          house_number?: number
+          id?: string
+          measurement_id?: string
+          ple_project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ple_entries_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "ple_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ple_entries_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "ple_measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ple_entries_ple_project_id_fkey"
+            columns: ["ple_project_id"]
+            isOneToOne: false
+            referencedRelation: "ple_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ple_event_groups: {
+        Row: {
+          code: string
+          created_at: string
+          display_order: number
+          id: string
+          name: string
+          ple_project_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          name: string
+          ple_project_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          name?: string
+          ple_project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ple_event_groups_ple_project_id_fkey"
+            columns: ["ple_project_id"]
+            isOneToOne: false
+            referencedRelation: "ple_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ple_events: {
+        Row: {
+          created_at: string
+          description: string
+          discrimination: string | null
+          display_order: number
+          group_id: string | null
+          id: string
+          item_code: string
+          ple_project_id: string
+          quantity: number
+          sinapi_code: string | null
+          unit: string
+          unit_value: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          discrimination?: string | null
+          display_order?: number
+          group_id?: string | null
+          id?: string
+          item_code: string
+          ple_project_id: string
+          quantity?: number
+          sinapi_code?: string | null
+          unit?: string
+          unit_value?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          discrimination?: string | null
+          display_order?: number
+          group_id?: string | null
+          id?: string
+          item_code?: string
+          ple_project_id?: string
+          quantity?: number
+          sinapi_code?: string | null
+          unit?: string
+          unit_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ple_events_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "ple_event_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ple_events_ple_project_id_fkey"
+            columns: ["ple_project_id"]
+            isOneToOne: false
+            referencedRelation: "ple_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ple_measurements: {
+        Row: {
+          created_at: string
+          end_date: string | null
+          id: string
+          measurement_number: number
+          notes: string | null
+          period_label: string | null
+          ple_project_id: string
+          registered_by: string | null
+          start_date: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          measurement_number: number
+          notes?: string | null
+          period_label?: string | null
+          ple_project_id: string
+          registered_by?: string | null
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          measurement_number?: number
+          notes?: string | null
+          period_label?: string | null
+          ple_project_id?: string
+          registered_by?: string | null
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ple_measurements_ple_project_id_fkey"
+            columns: ["ple_project_id"]
+            isOneToOne: false
+            referencedRelation: "ple_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ple_projects: {
+        Row: {
+          company_id: string
+          contract_number: string | null
+          contract_value: number
+          contractor: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          location: string | null
+          name: string
+          program: string | null
+          start_date: string | null
+          total_houses: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          contract_number?: string | null
+          contract_value?: number
+          contractor?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          location?: string | null
+          name: string
+          program?: string | null
+          start_date?: string | null
+          total_houses?: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          contract_number?: string | null
+          contract_value?: number
+          contractor?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          location?: string | null
+          name?: string
+          program?: string | null
+          start_date?: string | null
+          total_houses?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ple_projects_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       production_deviations: {
         Row: {
           actual_count: number
