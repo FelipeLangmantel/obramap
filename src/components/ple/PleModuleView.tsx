@@ -23,7 +23,7 @@ export function PleModuleView(props: PleDataReturn) {
 
   const [activeTab, setActiveTab] = useState("spreadsheet");
   const [showNewMeasurement, setShowNewMeasurement] = useState(false);
-  const [showSetup] = useState(false);
+  
   const [selectedMeasurementId, setSelectedMeasurementId] = useState<string | "all">("all");
 
   const selectedMeasurement = selectedMeasurementId !== "all"
