@@ -159,7 +159,7 @@ export function PleContractTab(props: PleDataReturn) {
   };
 
   const getSubstageTotal = (substageId: string) => {
-    return (eventsBySubstage.get(substageId) || []).reduce((s, e) => s + e.quantity * e.unit_value, 0);
+    return (eventsByGroup.get(substageId) || []).reduce((s, e) => s + e.quantity * e.unit_value, 0);
   };
 
   const getStageTotal = (stageId: string) => {
