@@ -105,12 +105,11 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const getActiveView = (): MenuViewType => {
     const pathname = location.pathname;
     
-    // Verificar rotas dedicadas primeiro
     if (pathname === "/measurement-planning") return "measurement-planning";
     if (pathname === "/long-term-planning") return "long-term-planning";
     if (pathname === "/project-contract") return "project-contract";
+    if (pathname === "/ple-measurements") return "ple-measurements";
     
-    // Se estiver na rota raiz, usar o activeView prop (estado interno do Index)
     return activeView;
   };
   
