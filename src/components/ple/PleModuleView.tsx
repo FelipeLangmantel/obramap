@@ -157,6 +157,9 @@ export function PleModuleView(props: PleDataReturn) {
         <TabsContent value="history" className="flex-1 min-h-0 mt-3">
           <PleHistoryTab {...props} />
         </TabsContent>
+        <TabsContent value="contract" className="flex-1 min-h-0 mt-3">
+          <PleContractTab {...props} />
+        </TabsContent>
       </Tabs>
 
       {showNewMeasurement && (
