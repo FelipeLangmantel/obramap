@@ -19,6 +19,7 @@ import LegacyDataMigration from "./pages/admin/LegacyDataMigration";
 import MeasurementPlanningPage from "./pages/MeasurementPlanningPage";
 import LongTermPlanningPage from "./pages/LongTermPlanningPage";
 import ProjectContractPage from "./pages/ProjectContractPage";
+import PleMeasurementsPage from "./pages/PleMeasurementsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
