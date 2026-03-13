@@ -17,22 +17,25 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
   const stages = useMemo(() => groups.filter(g => !g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
   const substages = useMemo(() => groups.filter(g => g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
 
-  // Build rows — unit_value is per house, so multiply by number of houses measured
+  // Build rows — totalValue = quantity * unit_value = value for 1 HOUSE
+  // When a house is measured, the full totalValue is received per house
   const rows = useMemo(() => {
     return events.map(event => {
-      // Total contract value for this item = quantity * unit_value (represents 1 unit)
-      const totalValue = event.quantity * event.unit_value;
+      // Total contract value for this item per house = quantity * unit_value
+      const valorPorCasa = event.quantity * event.unit_value;
+      // Total contract = valorPorCasa * total_houses
+      const totalContrato = valorPorCasa * (currentProject?.total_houses || 1);
 
-      // Count houses measured for this event
+      // Count houses measured for this event in selected measurement
       let qtdMed = 0;
       if (selectedMeasurement) {
         qtdMed = entries.filter(e => e.event_id === event.id && e.measurement_id === selectedMeasurement.id).length;
       } else {
         qtdMed = entries.filter(e => e.event_id === event.id).length;
       }
-      // Value measured = unit_value * number of houses measured
-      const valorMed = qtdMed * event.unit_value;
-      const pctItem = totalValue > 0 ? (valorMed / totalValue) * 100 : 0;
+      // Value measured = valorPorCasa * number of houses measured
+      const valorMed = qtdMed * valorPorCasa;
+      const pctItem = totalContrato > 0 ? (valorMed / totalContrato) * 100 : 0;
 
       // Accumulated
       let qtdAcum = entries.filter(e => e.event_id === event.id).length;
@@ -41,13 +44,13 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
         const measurementIds = new Set(measurementsUpTo.map(m => m.id));
         qtdAcum = entries.filter(e => e.event_id === event.id && measurementIds.has(e.measurement_id)).length;
       }
-      const valorAcum = qtdAcum * event.unit_value;
-      const pctAcum = totalValue > 0 ? (valorAcum / totalValue) * 100 : 0;
-      const saldo = totalValue - valorAcum;
+      const valorAcum = qtdAcum * valorPorCasa;
+      const pctAcum = totalContrato > 0 ? (valorAcum / totalContrato) * 100 : 0;
+      const saldo = totalContrato - valorAcum;
 
-      return { event, totalValue, qtdMed, valorMed, pctItem, qtdAcum, valorAcum, pctAcum, saldo };
+      return { event, valorPorCasa, totalContrato, qtdMed, valorMed, pctItem, qtdAcum, valorAcum, pctAcum, saldo };
     });
-  }, [events, entries, measurements, selectedMeasurement]);
+  }, [events, entries, measurements, selectedMeasurement, currentProject]);
 
   // Build 3-level grouped structure
   const groupedRows = useMemo(() => {
@@ -66,7 +69,7 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
     return result;
   }, [rows, stages, substages, groups]);
 
-  const totalContrato = rows.reduce((sum, r) => sum + r.totalValue, 0);
+  const totalContrato = rows.reduce((sum, r) => sum + r.totalContrato, 0);
   const totalMedido = rows.reduce((sum, r) => sum + r.valorMed, 0);
   const totalAcum = rows.reduce((sum, r) => sum + r.valorAcum, 0);
 
@@ -79,41 +82,54 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
   }
 
   return (
-    <div className="border rounded-lg overflow-hidden h-full flex flex-col">
+    <div className="border border-border rounded-lg overflow-hidden h-full flex flex-col bg-card">
+      {/* Project info header */}
       {currentProject && (
-        <div className="bg-accent/30 px-4 py-2 text-xs grid grid-cols-4 gap-4 border-b">
-          <div><span className="text-muted-foreground">MUNICÍPIO:</span><br /><span className="font-semibold">{currentProject.location || "—"}</span></div>
-          <div><span className="text-muted-foreground">OBRA:</span><br /><span className="font-semibold">{currentProject.name}</span></div>
-          <div><span className="text-muted-foreground">NÚMERO DA MEDIÇÃO:</span><br /><span className="font-bold text-primary text-lg">{selectedMeasurement?.measurement_number || "Todas"}</span></div>
-          <div><span className="text-muted-foreground">PERÍODO DA MEDIÇÃO:</span><br /><span className="font-semibold">{selectedMeasurement?.period_label || "—"}</span></div>
+        <div className="bg-muted/50 px-4 py-2.5 grid grid-cols-4 gap-6 border-b border-border text-xs">
+          <div>
+            <span className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">MUNICÍPIO</span>
+            <div className="font-bold text-foreground mt-0.5">{currentProject.location || "—"}</div>
+          </div>
+          <div>
+            <span className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">OBRA</span>
+            <div className="font-bold text-foreground mt-0.5">{currentProject.name}</div>
+          </div>
+          <div>
+            <span className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">NÚMERO DA MEDIÇÃO</span>
+            <div className="font-extrabold text-primary text-lg mt-0.5">{selectedMeasurement?.measurement_number || "Todas"}</div>
+          </div>
+          <div>
+            <span className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">PERÍODO DA MEDIÇÃO</span>
+            <div className="font-bold text-foreground mt-0.5">{selectedMeasurement?.period_label || "—"}</div>
+          </div>
         </div>
       )}
 
       <ScrollArea className="flex-1">
         <Table>
           <TableHeader>
-            <TableRow className="bg-accent/50 text-[11px]">
-              <TableHead className="w-16 font-bold">ITEM</TableHead>
-              <TableHead className="w-24 font-bold">DISCRIMINAÇÃO</TableHead>
-              <TableHead className="w-20 font-bold">CÓD. SINAPI</TableHead>
-              <TableHead className="font-bold">DESCRIÇÃO SINAPI</TableHead>
-              <TableHead className="w-12 font-bold text-center">UNID</TableHead>
-              <TableHead className="w-16 font-bold text-right">QTDE</TableHead>
-              <TableHead className="w-20 font-bold text-right">UNIT. (R$)</TableHead>
-              <TableHead className="w-24 font-bold text-right">TOTAL (R$)</TableHead>
-              <TableHead className="w-16 font-bold text-right text-green-500">QTD MED</TableHead>
-              <TableHead className="w-24 font-bold text-right text-green-500">VALOR MED</TableHead>
-              <TableHead className="w-16 font-bold text-right text-amber-500">% ITEM</TableHead>
-              <TableHead className="w-16 font-bold text-right text-amber-500">% ACUM</TableHead>
-              <TableHead className="w-24 font-bold text-right text-blue-500">SALDO</TableHead>
+            <TableRow className="bg-muted/80 text-[10px] uppercase tracking-wide border-b-2 border-border">
+              <TableHead className="w-14 font-extrabold text-foreground">ITEM</TableHead>
+              <TableHead className="w-24 font-extrabold text-foreground">DISCRIMINAÇÃO</TableHead>
+              <TableHead className="w-20 font-extrabold text-foreground">CÓD. SINAPI</TableHead>
+              <TableHead className="font-extrabold text-foreground">DESCRIÇÃO SINAPI</TableHead>
+              <TableHead className="w-12 font-extrabold text-foreground text-center">UNID</TableHead>
+              <TableHead className="w-14 font-extrabold text-foreground text-right">QTDE</TableHead>
+              <TableHead className="w-20 font-extrabold text-foreground text-right">UNIT. (R$)</TableHead>
+              <TableHead className="w-24 font-extrabold text-foreground text-right">TOTAL (R$)</TableHead>
+              <TableHead className="w-16 font-extrabold text-right text-emerald-600 dark:text-emerald-400">QTD MED</TableHead>
+              <TableHead className="w-24 font-extrabold text-right text-emerald-600 dark:text-emerald-400">VALOR MED</TableHead>
+              <TableHead className="w-14 font-extrabold text-right text-amber-600 dark:text-amber-400">% ITEM</TableHead>
+              <TableHead className="w-14 font-extrabold text-right text-amber-600 dark:text-amber-400">% ACUM</TableHead>
+              <TableHead className="w-24 font-extrabold text-right text-sky-600 dark:text-sky-400">SALDO</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {groupedRows.map((item) => {
               if (item.type === "stage" && item.stage) {
                 return (
-                  <TableRow key={`s-${item.stage.id}`} className="bg-primary/15 border-t-2 border-primary/30">
-                    <TableCell colSpan={13} className="font-extrabold text-xs text-primary py-2 tracking-wide">
+                  <TableRow key={`s-${item.stage.id}`} className="bg-primary/10 border-t-2 border-primary/40">
+                    <TableCell colSpan={13} className="font-black text-xs text-primary py-2 tracking-wide uppercase">
                       {item.stage.code} – {item.stage.name.toUpperCase()}
                     </TableCell>
                   </TableRow>
@@ -121,8 +137,8 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
               }
               if (item.type === "substage" && item.substage) {
                 return (
-                  <TableRow key={`sub-${item.substage.id}`} className="bg-accent/40 border-t border-accent">
-                    <TableCell colSpan={13} className="font-bold text-[11px] text-foreground py-1.5 pl-6">
+                  <TableRow key={`sub-${item.substage.id}`} className="bg-muted/40 border-t border-border">
+                    <TableCell colSpan={13} className="font-bold text-[11px] text-foreground/80 py-1.5 pl-6">
                       {item.substage.code} – {item.substage.name}
                     </TableCell>
                   </TableRow>
@@ -131,33 +147,43 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
               if (item.type === "item" && item.row) {
                 const r = item.row;
                 return (
-                  <TableRow key={r.event.id} className="text-[11px] hover:bg-accent/20">
-                    <TableCell className="font-mono pl-8">{r.event.item_code}</TableCell>
+                  <TableRow key={r.event.id} className="text-[11px] hover:bg-muted/30 border-b border-border/50">
+                    <TableCell className="font-mono font-semibold pl-8 text-foreground">{r.event.item_code}</TableCell>
                     <TableCell className="text-muted-foreground">{r.event.discrimination || "—"}</TableCell>
-                    <TableCell className="font-mono">{r.event.sinapi_code || "—"}</TableCell>
-                    <TableCell className="max-w-xs truncate">{r.event.description}</TableCell>
-                    <TableCell className="text-center">{r.event.unit}</TableCell>
-                    <TableCell className="text-right font-mono">{fmt(r.event.quantity)}</TableCell>
-                    <TableCell className="text-right font-mono">{fmtCur(r.event.unit_value)}</TableCell>
-                    <TableCell className="text-right font-mono">{fmtCur(r.totalValue)}</TableCell>
-                    <TableCell className="text-right font-mono font-bold text-green-500">{r.qtdMed > 0 ? r.qtdMed : "—"}</TableCell>
-                    <TableCell className="text-right font-mono text-green-500">{r.qtdMed > 0 ? fmtCur(r.valorMed) : "—"}</TableCell>
-                    <TableCell className="text-right font-mono text-amber-500">{r.pctItem > 0 ? `${r.pctItem.toFixed(1)}%` : "—"}</TableCell>
-                    <TableCell className="text-right font-mono text-amber-500">{r.pctAcum > 0 ? `${r.pctAcum.toFixed(1)}%` : "—"}</TableCell>
-                    <TableCell className="text-right font-mono text-blue-500">{fmtCur(r.saldo)}</TableCell>
+                    <TableCell className="font-mono text-muted-foreground">{r.event.sinapi_code || "—"}</TableCell>
+                    <TableCell className="max-w-xs truncate text-foreground">{r.event.description}</TableCell>
+                    <TableCell className="text-center text-muted-foreground">{r.event.unit}</TableCell>
+                    <TableCell className="text-right font-mono text-foreground">{fmt(r.event.quantity)}</TableCell>
+                    <TableCell className="text-right font-mono text-foreground">{fmtCur(r.event.unit_value)}</TableCell>
+                    <TableCell className="text-right font-mono font-semibold text-foreground">{fmtCur(r.valorPorCasa)}</TableCell>
+                    <TableCell className="text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                      {r.qtdMed > 0 ? fmt(r.qtdMed) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                      {r.qtdMed > 0 ? fmtCur(r.valorMed) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">
+                      {r.pctItem > 0 ? `${r.pctItem.toFixed(1)}%` : "—"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">
+                      {r.pctAcum > 0 ? `${r.pctAcum.toFixed(1)}%` : "—"}
+                    </TableCell>
+                    <TableCell className="text-right font-mono font-semibold text-sky-600 dark:text-sky-400">
+                      {fmtCur(r.saldo)}
+                    </TableCell>
                   </TableRow>
                 );
               }
               return null;
             })}
-            <TableRow className="bg-accent/50 font-bold text-xs border-t-2">
-              <TableCell colSpan={7} className="text-right">TOTAIS:</TableCell>
-              <TableCell className="text-right font-mono">{fmtCur(totalContrato)}</TableCell>
-              <TableCell className="text-right font-mono text-green-500">—</TableCell>
-              <TableCell className="text-right font-mono text-green-500">{fmtCur(totalMedido)}</TableCell>
-              <TableCell className="text-right font-mono text-amber-500">{totalContrato > 0 ? `${((totalMedido / totalContrato) * 100).toFixed(1)}%` : "—"}</TableCell>
-              <TableCell className="text-right font-mono text-amber-500">{totalContrato > 0 ? `${((totalAcum / totalContrato) * 100).toFixed(1)}%` : "—"}</TableCell>
-              <TableCell className="text-right font-mono text-blue-500">{fmtCur(totalContrato - totalAcum)}</TableCell>
+            <TableRow className="bg-muted/80 font-extrabold text-xs border-t-2 border-border">
+              <TableCell colSpan={7} className="text-right text-foreground uppercase tracking-wide">TOTAIS:</TableCell>
+              <TableCell className="text-right font-mono text-foreground">{fmtCur(totalContrato)}</TableCell>
+              <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400">—</TableCell>
+              <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400">{fmtCur(totalMedido)}</TableCell>
+              <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">{totalContrato > 0 ? `${((totalMedido / totalContrato) * 100).toFixed(1)}%` : "—"}</TableCell>
+              <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">{totalContrato > 0 ? `${((totalAcum / totalContrato) * 100).toFixed(1)}%` : "—"}</TableCell>
+              <TableCell className="text-right font-mono text-sky-600 dark:text-sky-400">{fmtCur(totalContrato - totalAcum)}</TableCell>
             </TableRow>
           </TableBody>
         </Table>

@@ -272,7 +272,8 @@ export function usePleData() {
     let totalMeasured = 0;
     events.forEach(event => {
       const measuredQty = entries.filter(e => e.event_id === event.id).length;
-      totalMeasured += measuredQty * event.unit_value;
+      // FIX: value per house = quantity * unit_value (full item total)
+      totalMeasured += measuredQty * (event.quantity * event.unit_value);
     });
     const balance = contractValue - totalMeasured;
     const progress = contractValue > 0 ? (totalMeasured / contractValue) * 100 : 0;

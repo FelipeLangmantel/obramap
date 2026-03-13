@@ -14,7 +14,6 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
   const contractValue = currentProject?.contract_value || 0;
   const totalHouses = currentProject?.total_houses || 1;
   const fmtCur = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const [detailMeasurement, setDetailMeasurement] = useState<PleMeasurement | null>(null);
 
@@ -23,15 +22,14 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
     return measurements.map(m => {
       let valorMedido = 0;
       const measuredEntries = entries.filter(e => e.measurement_id === m.id);
-      // Group entries by event and count houses per event
       const eventHouseCounts: Record<string, number> = {};
       measuredEntries.forEach(entry => {
         eventHouseCounts[entry.event_id] = (eventHouseCounts[entry.event_id] || 0) + 1;
       });
-      // Value = sum(unit_value * houses_measured) for each event
+      // FIX: value per house = quantity * unit_value (full item value)
       Object.entries(eventHouseCounts).forEach(([eventId, houseCount]) => {
         const event = events.find(ev => ev.id === eventId);
-        if (event) valorMedido += event.unit_value * houseCount;
+        if (event) valorMedido += (event.quantity * event.unit_value) * houseCount;
       });
 
       acumMedido += valorMedido;
@@ -49,19 +47,21 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
     const stages = groups.filter(g => !g.parent_id).sort((a, b) => a.display_order - b.display_order);
     const substages = groups.filter(g => g.parent_id).sort((a, b) => a.display_order - b.display_order);
 
-    // Build event details
     const eventDetails = events.map(ev => {
       const housesMeasured = measEntries.filter(e => e.event_id === ev.id).map(e => e.house_number).sort((a, b) => a - b);
       if (housesMeasured.length === 0) return null;
-      const valorTotal = ev.unit_value * housesMeasured.length;
-      const pctEvento = ev.quantity > 0 ? (housesMeasured.length / ev.quantity) * 100 : 0;
-      return { event: ev, housesMeasured, valorTotal, pctEvento };
-    }).filter(Boolean) as { event: typeof events[0]; housesMeasured: number[]; valorTotal: number; pctEvento: number }[];
+      // FIX: valorPorCasa = quantity * unit_value
+      const valorPorCasa = ev.quantity * ev.unit_value;
+      const valorTotal = valorPorCasa * housesMeasured.length;
+      const totalContratoItem = valorPorCasa * totalHouses;
+      const pctEvento = totalContratoItem > 0 ? (valorTotal / totalContratoItem) * 100 : 0;
+      return { event: ev, housesMeasured, valorTotal, pctEvento, valorPorCasa };
+    }).filter(Boolean) as { event: typeof events[0]; housesMeasured: number[]; valorTotal: number; pctEvento: number; valorPorCasa: number }[];
 
     const totalValor = eventDetails.reduce((s, d) => s + d.valorTotal, 0);
     const totalCasas = new Set(measEntries.map(e => e.house_number)).size;
 
-    // Accumulated up to this measurement
+    // Accumulated
     const measurementsUpTo = measurements.filter(m => m.measurement_number <= detailMeasurement.measurement_number);
     const measIdsUpTo = new Set(measurementsUpTo.map(m => m.id));
     const acumEntries = entries.filter(e => measIdsUpTo.has(e.measurement_id));
@@ -70,12 +70,12 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
     acumEntries.forEach(e => { acumByEvent[e.event_id] = (acumByEvent[e.event_id] || 0) + 1; });
     Object.entries(acumByEvent).forEach(([eventId, count]) => {
       const ev = events.find(e => e.id === eventId);
-      if (ev) acumValor += ev.unit_value * count;
+      if (ev) acumValor += (ev.quantity * ev.unit_value) * count;
     });
     const pctAcum = contractValue > 0 ? (acumValor / contractValue) * 100 : 0;
 
     return { eventDetails, totalValor, totalCasas, acumValor, pctAcum, stages, substages };
-  }, [detailMeasurement, entries, events, groups, measurements, contractValue]);
+  }, [detailMeasurement, entries, events, groups, measurements, contractValue, totalHouses]);
 
   if (measurements.length === 0) {
     return (
@@ -87,10 +87,10 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
 
   return (
     <>
-      <div className="border rounded-lg overflow-hidden">
+      <div className="border border-border rounded-lg overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-accent/50 text-xs">
+            <TableRow className="bg-muted/80 text-xs">
               <TableHead className="w-10 font-bold">#</TableHead>
               <TableHead className="font-bold">MEDIÇÃO</TableHead>
               <TableHead className="font-bold">PERÍODO</TableHead>
@@ -112,15 +112,15 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
                 <TableCell>{new Date(r.measurement.created_at).toLocaleString("pt-BR")}</TableCell>
                 <TableCell className="text-center font-mono">{r.totalCasas}</TableCell>
                 <TableCell className="text-center font-mono">{r.totalServicos}</TableCell>
-                <TableCell className="text-right font-mono text-green-500">{fmtCur(r.valorMedido)}</TableCell>
+                <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400">{fmtCur(r.valorMedido)}</TableCell>
                 <TableCell className="text-center">
-                  <Badge variant="outline" className="text-amber-500 border-amber-500/30 font-mono">
+                  <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-500/30 font-mono">
                     {r.pctAvanco.toFixed(2)}%
                   </Badge>
                 </TableCell>
                 <TableCell className="text-center">
                   <Badge className={r.measurement.status === "approved"
-                    ? "bg-green-600 hover:bg-green-700"
+                    ? "bg-emerald-600 hover:bg-emerald-700"
                     : "bg-amber-600 hover:bg-amber-700"
                   }>
                     {r.measurement.status === "approved" ? "APROVADA" : "PENDENTE"}
@@ -134,7 +134,7 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
                     {r.measurement.status !== "approved" && (
                       <Button
                         size="sm"
-                        className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700"
+                        className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
                         onClick={() => approveMeasurement(r.measurement.id)}
                       >
                         <CheckCircle className="h-3 w-3" /> Aprovar
@@ -148,7 +148,6 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
         </Table>
       </div>
 
-      {/* Detail Dialog */}
       <Dialog open={!!detailMeasurement} onOpenChange={() => setDetailMeasurement(null)}>
         <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
           <DialogHeader>
@@ -157,7 +156,7 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
               {detailMeasurement?.period_label && (
                 <Badge variant="outline" className="font-normal">{detailMeasurement.period_label}</Badge>
               )}
-              <Badge className={detailMeasurement?.status === "approved" ? "bg-green-600" : "bg-amber-600"}>
+              <Badge className={detailMeasurement?.status === "approved" ? "bg-emerald-600" : "bg-amber-600"}>
                 {detailMeasurement?.status === "approved" ? "APROVADA" : "PENDENTE"}
               </Badge>
             </DialogTitle>
@@ -165,35 +164,33 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
 
           {detailData && (
             <div className="flex flex-col gap-4 flex-1 min-h-0">
-              {/* Summary cards */}
               <div className="grid grid-cols-4 gap-3">
-                <div className="bg-accent/30 rounded-lg p-3 text-center">
-                  <div className="text-[10px] text-muted-foreground uppercase">Casas Medidas</div>
+                <div className="bg-muted/50 rounded-lg p-3 text-center border border-border">
+                  <div className="text-[10px] text-muted-foreground uppercase font-medium">Casas Medidas</div>
                   <div className="text-xl font-bold text-foreground">{detailData.totalCasas}</div>
                 </div>
-                <div className="bg-accent/30 rounded-lg p-3 text-center">
-                  <div className="text-[10px] text-muted-foreground uppercase">Valor Medido</div>
-                  <div className="text-lg font-bold text-green-500">{fmtCur(detailData.totalValor)}</div>
+                <div className="bg-muted/50 rounded-lg p-3 text-center border border-border">
+                  <div className="text-[10px] text-muted-foreground uppercase font-medium">Valor Medido</div>
+                  <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{fmtCur(detailData.totalValor)}</div>
                 </div>
-                <div className="bg-accent/30 rounded-lg p-3 text-center">
-                  <div className="text-[10px] text-muted-foreground uppercase">Acumulado</div>
-                  <div className="text-lg font-bold text-blue-500">{fmtCur(detailData.acumValor)}</div>
+                <div className="bg-muted/50 rounded-lg p-3 text-center border border-border">
+                  <div className="text-[10px] text-muted-foreground uppercase font-medium">Acumulado</div>
+                  <div className="text-lg font-bold text-sky-600 dark:text-sky-400">{fmtCur(detailData.acumValor)}</div>
                 </div>
-                <div className="bg-accent/30 rounded-lg p-3 text-center">
-                  <div className="text-[10px] text-muted-foreground uppercase">% Avanço Acumulado</div>
-                  <div className="text-xl font-bold text-amber-500">{detailData.pctAcum.toFixed(2)}%</div>
+                <div className="bg-muted/50 rounded-lg p-3 text-center border border-border">
+                  <div className="text-[10px] text-muted-foreground uppercase font-medium">% Avanço Acumulado</div>
+                  <div className="text-xl font-bold text-amber-600 dark:text-amber-400">{detailData.pctAcum.toFixed(2)}%</div>
                 </div>
               </div>
 
-              {/* Items table */}
-              <ScrollArea className="flex-1 border rounded-lg">
+              <ScrollArea className="flex-1 border border-border rounded-lg">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-accent/50 text-[11px]">
+                    <TableRow className="bg-muted/80 text-[11px]">
                       <TableHead className="font-bold w-16">ITEM</TableHead>
                       <TableHead className="font-bold">DESCRIÇÃO</TableHead>
                       <TableHead className="font-bold text-center w-14">UNID</TableHead>
-                      <TableHead className="font-bold text-right w-20">V. UNIT.</TableHead>
+                      <TableHead className="font-bold text-right w-24">TOTAL/CASA</TableHead>
                       <TableHead className="font-bold text-center w-20">CASAS MED.</TableHead>
                       <TableHead className="font-bold text-right w-24">VALOR MEDIDO</TableHead>
                       <TableHead className="font-bold text-center w-16">% ITEM</TableHead>
@@ -206,19 +203,19 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
                         <TableCell className="font-mono">{d.event.item_code}</TableCell>
                         <TableCell className="max-w-xs truncate">{d.event.description}</TableCell>
                         <TableCell className="text-center">{d.event.unit}</TableCell>
-                        <TableCell className="text-right font-mono">{fmtCur(d.event.unit_value)}</TableCell>
-                        <TableCell className="text-center font-mono font-bold text-green-500">{d.housesMeasured.length}</TableCell>
-                        <TableCell className="text-right font-mono text-green-500">{fmtCur(d.valorTotal)}</TableCell>
-                        <TableCell className="text-center font-mono text-amber-500">{d.pctEvento.toFixed(1)}%</TableCell>
+                        <TableCell className="text-right font-mono">{fmtCur(d.valorPorCasa)}</TableCell>
+                        <TableCell className="text-center font-mono font-bold text-emerald-600 dark:text-emerald-400">{d.housesMeasured.length}</TableCell>
+                        <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400">{fmtCur(d.valorTotal)}</TableCell>
+                        <TableCell className="text-center font-mono text-amber-600 dark:text-amber-400">{d.pctEvento.toFixed(1)}%</TableCell>
                         <TableCell className="font-mono text-[10px] text-muted-foreground truncate" title={d.housesMeasured.join(", ")}>
                           {d.housesMeasured.join(", ")}
                         </TableCell>
                       </TableRow>
                     ))}
-                    <TableRow className="bg-accent/50 font-bold text-[11px] border-t-2">
+                    <TableRow className="bg-muted/80 font-bold text-[11px] border-t-2">
                       <TableCell colSpan={4} className="text-right">TOTAL:</TableCell>
                       <TableCell className="text-center font-mono">{detailData.totalCasas}</TableCell>
-                      <TableCell className="text-right font-mono text-green-500">{fmtCur(detailData.totalValor)}</TableCell>
+                      <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400">{fmtCur(detailData.totalValor)}</TableCell>
                       <TableCell colSpan={2}></TableCell>
                     </TableRow>
                   </TableBody>
