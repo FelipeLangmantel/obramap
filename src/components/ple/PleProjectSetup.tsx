@@ -135,7 +135,14 @@ function SetupContent({ onCreated, ...props }: Props) {
 
           {/* Events */}
           <Card>
-            <CardHeader><CardTitle className="text-sm">Serviços / Eventos</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm">Serviços / Eventos</CardTitle>
+                <Button size="sm" variant="outline" onClick={() => setShowAIImport(true)} className="gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" /> Importar via IA
+                </Button>
+              </div>
+            </CardHeader>
             <CardContent className="space-y-2">
               {events.map(ev => (
                 <div key={ev.id} className="flex items-center gap-2 text-xs bg-accent/20 px-3 py-2 rounded">
@@ -169,6 +176,15 @@ function SetupContent({ onCreated, ...props }: Props) {
               </div>
             </CardContent>
           </Card>
+
+          {showAIImport && (
+            <PleImportAIDialog
+              open={showAIImport}
+              onClose={() => setShowAIImport(false)}
+              existingGroups={groups}
+              onImport={handleAIImport}
+            />
+          )}
         </>
       )}
     </div>
