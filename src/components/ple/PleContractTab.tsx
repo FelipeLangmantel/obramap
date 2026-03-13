@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Trash2, Save, Building2, Sparkles, ChevronDown, ChevronRight, Edit2, Check, X } from "lucide-react";
+import { Plus, Trash2, Save, Building2, Sparkles, ChevronDown, ChevronRight, Edit2, Check, X, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { PleImportAIDialog } from "./PleImportAIDialog";
 import type { usePleData } from "@/hooks/usePleData";
