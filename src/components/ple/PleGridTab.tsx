@@ -1,6 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Input } from "@/components/ui/input";
+import { useMemo, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import type { usePleData } from "@/hooks/usePleData";
 import type { PleMeasurement } from "@/hooks/usePleData";
