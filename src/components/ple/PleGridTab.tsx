@@ -162,7 +162,7 @@ export function PleGridTab({ groups, events, measurements, entries, currentProje
             return null;
           })}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }
