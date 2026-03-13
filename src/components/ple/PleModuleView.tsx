@@ -3,7 +3,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, FileText, BarChart3, History, Grid3X3, ClipboardList } from "lucide-react";
+import { Plus, FileText, BarChart3, History, Grid3X3, ClipboardList, ArrowLeft } from "lucide-react";
 import { PleSpreadsheetTab } from "./PleSpreadsheetTab";
 import { PleGridTab } from "./PleGridTab";
 import { PleChartsTab } from "./PleChartsTab";
@@ -11,6 +11,7 @@ import { PleHistoryTab } from "./PleHistoryTab";
 import { PleContractTab } from "./PleContractTab";
 import { PleProjectSetup } from "./PleProjectSetup";
 import { PleNewMeasurementDialog } from "./PleNewMeasurementDialog";
+import { PleDashboard } from "./PleDashboard";
 import type { usePleData } from "@/hooks/usePleData";
 
 type PleDataReturn = ReturnType<typeof usePleData>;
@@ -23,17 +24,33 @@ export function PleModuleView(props: PleDataReturn) {
 
   const [activeTab, setActiveTab] = useState("spreadsheet");
   const [showNewMeasurement, setShowNewMeasurement] = useState(false);
-  
+  const [showCreateProject, setShowCreateProject] = useState(false);
   const [selectedMeasurementId, setSelectedMeasurementId] = useState<string | "all">("all");
 
   const selectedMeasurement = selectedMeasurementId !== "all"
     ? measurements.find(m => m.id === selectedMeasurementId) : null;
 
+  // Show dashboard when no project is selected and not creating
   if (!currentProjectId || !currentProject) {
+    if (showCreateProject) {
+      return (
+        <div className="h-full flex flex-col">
+          <div className="p-4 border-b border-border">
+            <Button variant="ghost" size="sm" onClick={() => setShowCreateProject(false)} className="gap-1.5">
+              <ArrowLeft className="h-4 w-4" /> Voltar ao Painel
+            </Button>
+          </div>
+          <PleProjectSetup {...props} onCreated={(id) => { setCurrentProjectId(id); setShowCreateProject(false); }} />
+        </div>
+      );
+    }
+
     return (
-      <div className="h-full flex flex-col">
-        <PleProjectSetup {...props} onCreated={(id) => setCurrentProjectId(id)} />
-      </div>
+      <PleDashboard
+        projects={projects}
+        onSelectProject={(id) => setCurrentProjectId(id)}
+        onCreateProject={() => setShowCreateProject(true)}
+      />
     );
   }
 
@@ -45,6 +62,9 @@ export function PleModuleView(props: PleDataReturn) {
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentProjectId(null as any)}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
             <div className="p-2 rounded-lg bg-primary/10">
               <FileText className="h-5 w-5 text-primary" />
             </div>
@@ -170,7 +190,6 @@ export function PleModuleView(props: PleDataReturn) {
           onSave={props.createMeasurement}
         />
       )}
-
     </div>
   );
 }
