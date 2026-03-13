@@ -4,8 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Trash2, Edit2, Check, X } from "lucide-react";
+import { Plus, Trash2, Edit2, Check, X, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { PleImportAIDialog } from "./PleImportAIDialog";
 import type { usePleData } from "@/hooks/usePleData";
 
 type PleDataReturn = ReturnType<typeof usePleData>;
@@ -18,6 +19,8 @@ interface Props extends PleDataReturn {
 
 function SetupContent({ onCreated, ...props }: Props) {
   const { currentProject, groups, events, createProject, createGroup, updateGroup, deleteGroup, createEvent, updateEvent, deleteEvent, updateProject } = props;
+
+  const [showAIImport, setShowAIImport] = useState(false);
 
   const [projectForm, setProjectForm] = useState({
     name: currentProject?.name || "",
@@ -55,6 +58,35 @@ function SetupContent({ onCreated, ...props }: Props) {
     if (!newEvent.item_code || !newEvent.description) return;
     await createEvent({ ...newEvent, group_id: newEvent.group_id || null } as any);
     setNewEvent({ group_id: "", item_code: "", description: "", discrimination: "", sinapi_code: "", unit: "UN", quantity: 0, unit_value: 0 });
+  };
+
+  const handleAIImport = async (
+    newGroups: { code: string; name: string }[],
+    importedEvents: { item_code: string; discrimination: string; sinapi_code: string; description: string; unit: string; quantity: number; unit_value: number; group_code: string; group_name: string }[]
+  ) => {
+    // Create new groups first
+    const groupIdMap = new Map<string, string>();
+    groups.forEach(g => groupIdMap.set(g.code, g.id));
+
+    for (const g of newGroups) {
+      const result = await createGroup(g);
+      if (result) groupIdMap.set(g.code, result.id);
+    }
+
+    // Create events
+    for (const ev of importedEvents) {
+      const groupId = groupIdMap.get(ev.group_code) || null;
+      await createEvent({
+        group_id: groupId,
+        item_code: ev.item_code,
+        description: ev.description,
+        discrimination: ev.discrimination,
+        sinapi_code: ev.sinapi_code,
+        unit: ev.unit,
+        quantity: ev.quantity,
+        unit_value: ev.unit_value,
+      } as any);
+    }
   };
 
   return (
@@ -103,7 +135,14 @@ function SetupContent({ onCreated, ...props }: Props) {
 
           {/* Events */}
           <Card>
-            <CardHeader><CardTitle className="text-sm">Serviços / Eventos</CardTitle></CardHeader>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm">Serviços / Eventos</CardTitle>
+                <Button size="sm" variant="outline" onClick={() => setShowAIImport(true)} className="gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" /> Importar via IA
+                </Button>
+              </div>
+            </CardHeader>
             <CardContent className="space-y-2">
               {events.map(ev => (
                 <div key={ev.id} className="flex items-center gap-2 text-xs bg-accent/20 px-3 py-2 rounded">
@@ -137,6 +176,15 @@ function SetupContent({ onCreated, ...props }: Props) {
               </div>
             </CardContent>
           </Card>
+
+          {showAIImport && (
+            <PleImportAIDialog
+              open={showAIImport}
+              onClose={() => setShowAIImport(false)}
+              existingGroups={groups}
+              onImport={handleAIImport}
+            />
+          )}
         </>
       )}
     </div>
