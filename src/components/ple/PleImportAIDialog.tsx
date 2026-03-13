@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Loader2, Upload, Sparkles, Check } from "lucide-react";
+import { Loader2, Upload, Sparkles, Check, ChevronDown, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -53,6 +53,7 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
   const [substages, setSubstages] = useState<ExtractedSubstage[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,6 +83,9 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
       setStages(data.stages || []);
       setSubstages(data.substages || []);
       setItems(data.items.map((it: any) => ({ ...it, selected: true })));
+      // Auto-expand all stages
+      const allStageCodes = new Set((data.stages || []).map((s: ExtractedStage) => s.code));
+      setExpandedStages(allStageCodes);
       toast.success(data.message || `${data.items.length} itens extraídos pela IA`);
     } catch (err: any) {
       console.error(err);
@@ -93,7 +97,14 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
 
   const toggleItem = (idx: number) => setItems(prev => prev.map((it, i) => i === idx ? { ...it, selected: !it.selected } : it));
   const toggleAll = (val: boolean) => setItems(prev => prev.map(it => ({ ...it, selected: val })));
-  const updateItem = (idx: number, field: keyof ExtractedItem, value: any) => setItems(prev => prev.map((it, i) => i === idx ? { ...it, [field]: value } : it));
+
+  const toggleStageExpand = (code: string) => {
+    setExpandedStages(prev => {
+      const next = new Set(prev);
+      next.has(code) ? next.delete(code) : next.add(code);
+      return next;
+    });
+  };
 
   const handleImport = async () => {
     const selected = items.filter(it => it.selected);
@@ -101,7 +112,6 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
 
     setIsImporting(true);
     try {
-      // Build group list: stages first (no parent), then substages (with parent_code)
       const existingCodes = new Set(existingGroups.map(g => g.code));
       const newGroups: { code: string; name: string; parent_code?: string }[] = [];
 
@@ -130,6 +140,40 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
   };
 
   const selectedCount = items.filter(it => it.selected).length;
+  const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtCur = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  // Group items by stage → substage for hierarchical display
+  const hierarchicalView = () => {
+    const stageMap = new Map<string, { stage: ExtractedStage; substages: Map<string, { substage: ExtractedSubstage; items: (ExtractedItem & { idx: number })[] }> }>();
+
+    stages.forEach(s => stageMap.set(s.code, { stage: s, substages: new Map() }));
+    substages.forEach(sub => {
+      const parent = stageMap.get(sub.stage_code);
+      if (parent) parent.substages.set(sub.code, { substage: sub, items: [] });
+    });
+
+    items.forEach((it, idx) => {
+      const stageEntry = stageMap.get(it.stage_code);
+      if (stageEntry) {
+        const subEntry = stageEntry.substages.get(it.group_code);
+        if (subEntry) {
+          subEntry.items.push({ ...it, idx });
+          return;
+        }
+      }
+      // Orphaned - will show at bottom
+    });
+
+    return stageMap;
+  };
+
+  const orphanedItems = items.map((it, idx) => ({ ...it, idx })).filter(it => {
+    const stageEntry = stages.find(s => s.code === it.stage_code);
+    if (!stageEntry) return true;
+    const subEntry = substages.find(s => s.code === it.group_code && s.stage_code === it.stage_code);
+    return !subEntry;
+  });
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
@@ -174,56 +218,129 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
               <Badge variant="secondary" className="text-xs">{stages.length} etapas</Badge>
               <Badge variant="outline" className="text-xs">{substages.length} subetapas</Badge>
               <Badge variant="outline" className="text-xs">{items.length} serviços</Badge>
+              <Badge className="text-xs bg-primary/10 text-primary border-primary/30">
+                Total: {fmtCur(items.filter(it => it.selected).reduce((s, it) => s + it.total_value, 0))}
+              </Badge>
             </div>
           )}
 
-          {/* Results table */}
+          {/* Hierarchical Results */}
           {items.length > 0 && (
             <div className="border border-border rounded-lg overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-2 bg-muted/50">
+              <div className="flex items-center justify-between px-3 py-2 bg-muted/50 border-b">
                 <div className="flex items-center gap-2">
                   <Checkbox checked={selectedCount === items.length} onCheckedChange={(v) => toggleAll(!!v)} />
                   <span className="text-xs font-medium text-foreground">{selectedCount} de {items.length} selecionados</span>
                 </div>
-                <Badge variant="secondary" className="text-xs">
-                  Total: R$ {items.filter(it => it.selected).reduce((s, it) => s + it.total_value, 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                </Badge>
               </div>
-              <div className="overflow-x-auto max-h-[40vh]">
-                <table className="w-full text-xs">
-                  <thead className="bg-muted/30 sticky top-0">
-                    <tr>
-                      <th className="p-2 w-8"></th>
-                      <th className="p-2 text-left">Item</th>
-                      <th className="p-2 text-left">Discrim.</th>
-                      <th className="p-2 text-left">SINAPI</th>
-                      <th className="p-2 text-left">Descrição</th>
-                      <th className="p-2 text-left">Unid</th>
-                      <th className="p-2 text-right">Qtde</th>
-                      <th className="p-2 text-right">Valor Unit.</th>
-                      <th className="p-2 text-right">Total</th>
-                      <th className="p-2 text-left">Etapa</th>
-                      <th className="p-2 text-left">Subetapa</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((it, idx) => (
-                      <tr key={idx} className={`border-t border-border ${!it.selected ? "opacity-40" : ""}`}>
-                        <td className="p-2"><Checkbox checked={it.selected} onCheckedChange={() => toggleItem(idx)} /></td>
-                        <td className="p-2"><Input value={it.item_code} onChange={e => updateItem(idx, "item_code", e.target.value)} className="h-6 text-xs w-16 px-1" /></td>
-                        <td className="p-2"><Input value={it.discrimination} onChange={e => updateItem(idx, "discrimination", e.target.value)} className="h-6 text-xs w-24 px-1" /></td>
-                        <td className="p-2"><Input value={it.sinapi_code} onChange={e => updateItem(idx, "sinapi_code", e.target.value)} className="h-6 text-xs w-16 px-1" /></td>
-                        <td className="p-2"><Input value={it.description} onChange={e => updateItem(idx, "description", e.target.value)} className="h-6 text-xs min-w-[200px] px-1" /></td>
-                        <td className="p-2"><Input value={it.unit} onChange={e => updateItem(idx, "unit", e.target.value)} className="h-6 text-xs w-12 px-1" /></td>
-                        <td className="p-2 text-right"><Input type="number" step="0.01" value={it.quantity} onChange={e => updateItem(idx, "quantity", parseFloat(e.target.value) || 0)} className="h-6 text-xs w-16 px-1 text-right" /></td>
-                        <td className="p-2 text-right"><Input type="number" step="0.01" value={it.unit_value} onChange={e => updateItem(idx, "unit_value", parseFloat(e.target.value) || 0)} className="h-6 text-xs w-20 px-1 text-right" /></td>
-                        <td className="p-2 text-right font-mono">{(it.quantity * it.unit_value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
-                        <td className="p-2"><span className="text-[10px] text-primary font-bold">{it.stage_code}</span></td>
-                        <td className="p-2"><span className="text-[10px] text-muted-foreground">{it.group_code} {it.group_name}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+              <div className="overflow-x-auto max-h-[45vh]">
+                <div className="min-w-[900px]">
+                  {/* Table Header */}
+                  <div className="grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_85px_100px] gap-0 bg-muted/30 border-b px-2 py-1.5 sticky top-0 z-10">
+                    <span />
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase">ITEM</span>
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase">DISCRIM.</span>
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase">SINAPI</span>
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase">DESCRIÇÃO</span>
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase text-center">UNID</span>
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase text-right">QTDE</span>
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase text-right">UNITÁRIO</span>
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase text-right">TOTAL</span>
+                  </div>
+
+                  {/* Hierarchical content */}
+                  {Array.from(hierarchicalView().entries()).map(([stageCode, { stage, substages: subs }]) => {
+                    const isExpanded = expandedStages.has(stageCode);
+                    const stageItems = Array.from(subs.values()).flatMap(s => s.items);
+                    const stageTotal = stageItems.filter(it => it.selected).reduce((s, it) => s + it.total_value, 0);
+
+                    return (
+                      <div key={stageCode}>
+                        {/* ETAPA ROW */}
+                        <div
+                          className="grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_85px_100px] gap-0 bg-primary/15 border-b border-primary/25 px-2 py-1.5 cursor-pointer hover:bg-primary/20 transition-colors items-center"
+                          onClick={() => toggleStageExpand(stageCode)}
+                        >
+                          <span className="flex items-center justify-center">
+                            {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-primary" /> : <ChevronRight className="h-3.5 w-3.5 text-primary" />}
+                          </span>
+                          <span className="text-[11px] font-extrabold text-primary">{stage.code}</span>
+                          <span className="text-[10px] text-muted-foreground">Etapa</span>
+                          <span />
+                          <span className="text-[11px] font-extrabold text-foreground">{stage.name}</span>
+                          <span />
+                          <span />
+                          <span />
+                          <span className="text-[11px] font-extrabold text-right font-mono text-primary">{fmtCur(stageTotal)}</span>
+                        </div>
+
+                        {isExpanded && Array.from(subs.entries()).map(([subCode, { substage, items: subItems }]) => {
+                          const subTotal = subItems.filter(it => it.selected).reduce((s, it) => s + it.total_value, 0);
+                          return (
+                            <div key={subCode}>
+                              {/* SUBETAPA ROW */}
+                              <div className="grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_85px_100px] gap-0 bg-accent/40 border-b px-2 py-1 items-center">
+                                <span />
+                                <span className="text-[11px] font-bold text-foreground pl-2">{substage.code}</span>
+                                <span className="text-[10px] text-muted-foreground">Subetapa</span>
+                                <span />
+                                <span className="text-[11px] font-bold text-foreground">{substage.name}</span>
+                                <span />
+                                <span className="text-[10px] text-muted-foreground text-right">{subItems.length} itens</span>
+                                <span />
+                                <span className="text-[11px] font-bold text-right font-mono">{fmtCur(subTotal)}</span>
+                              </div>
+
+                              {/* SERVIÇOS */}
+                              {subItems.map(it => (
+                                <div key={it.idx} className={`grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_85px_100px] gap-0 border-b px-2 py-1 items-center ${!it.selected ? "opacity-40" : ""}`}>
+                                  <span className="flex items-center justify-center pl-1">
+                                    <Checkbox checked={it.selected} onCheckedChange={() => toggleItem(it.idx)} />
+                                  </span>
+                                  <span className="text-[10px] font-mono text-muted-foreground pl-4">{it.item_code}</span>
+                                  <span className="text-[10px] text-muted-foreground truncate">{it.discrimination}</span>
+                                  <span className="text-[10px] font-mono text-muted-foreground">{it.sinapi_code}</span>
+                                  <span className="text-[10px] text-foreground truncate pr-2" title={it.description}>{it.description}</span>
+                                  <span className="text-[10px] text-center text-muted-foreground">{it.unit}</span>
+                                  <span className="text-[10px] text-right font-mono">{fmt(it.quantity)}</span>
+                                  <span className="text-[10px] text-right font-mono">{fmtCur(it.unit_value)}</span>
+                                  <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(it.total_value)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+
+                  {/* Orphaned items */}
+                  {orphanedItems.length > 0 && (
+                    <div>
+                      <div className="grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_85px_100px] gap-0 bg-amber-500/10 border-b px-2 py-1.5 items-center">
+                        <span />
+                        <span className="text-[11px] font-bold text-amber-600 col-span-4">ITENS SEM GRUPO ({orphanedItems.length})</span>
+                        <span /><span /><span /><span />
+                      </div>
+                      {orphanedItems.map(it => (
+                        <div key={it.idx} className={`grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_85px_100px] gap-0 border-b px-2 py-1 items-center ${!it.selected ? "opacity-40" : ""}`}>
+                          <span className="flex items-center justify-center">
+                            <Checkbox checked={it.selected} onCheckedChange={() => toggleItem(it.idx)} />
+                          </span>
+                          <span className="text-[10px] font-mono">{it.item_code}</span>
+                          <span className="text-[10px] truncate">{it.discrimination}</span>
+                          <span className="text-[10px] font-mono">{it.sinapi_code}</span>
+                          <span className="text-[10px] truncate">{it.description}</span>
+                          <span className="text-[10px] text-center">{it.unit}</span>
+                          <span className="text-[10px] text-right font-mono">{fmt(it.quantity)}</span>
+                          <span className="text-[10px] text-right font-mono">{fmtCur(it.unit_value)}</span>
+                          <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(it.total_value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

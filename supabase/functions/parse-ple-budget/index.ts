@@ -20,41 +20,61 @@ serve(async (req) => {
 
     const groupNames = existingGroups?.map((g: any) => `${g.code} - ${g.name}`) || [];
 
-    const prompt = `Você é um especialista em análise de planilhas de orçamento de obras de construção civil brasileira (modelo PLS/PLE).
+    const prompt = `Você é um especialista em leitura de planilhas de orçamento de obras de construção civil brasileira (PLS/PLE/SINAPI).
 
-Analise RIGOROSAMENTE esta imagem de planilha de orçamento e extraia TODOS os itens, linha por linha, exatamente como aparecem.
+TAREFA: Extraia TODOS os dados visíveis nesta imagem de planilha, respeitando rigorosamente a hierarquia de 3 NÍVEIS:
 
-A planilha possui uma hierarquia de 3 NÍVEIS:
-- **ETAPA** (nível 1): Códigos como "1.0", "2.0", "3.0" → Ex: "1.0 INSTALAÇÃO E MOBILIZAÇÃO", "2.0 INFRAESTRUTURA"
-- **SUBETAPA** (nível 2): Códigos como "1.1", "1.2", "2.1", "2.2" → Ex: "1.1 Canteiro de obras e Administração", "2.1 Movimentação de terra"
-- **SERVIÇO** (nível 3): Códigos como "1.1.1", "1.1.2", "2.1.1" → São os itens com valores unitários e quantidades
+## HIERARQUIA OBRIGATÓRIA
 
-Colunas típicas da planilha:
-- ITEM (código hierárquico)
-- DISCRIMINAÇÃO (tipo: SINAPI, Composição, etc.)
-- CÓDIGO SINAPI (código numérico)
-- DESCRIÇÃO SINAPI (texto descritivo do serviço)
-- UNID (unidade: UN, M, M2, M3, KG, etc.)
-- QTDE (quantidade)
-- PREÇO UNITÁRIO (valor unitário em reais)
-- PREÇO TOTAL (valor total = qtde x unitário)
+**NÍVEL 1 — ETAPA** (linhas com código tipo "X.0" ou apenas um número inteiro como "1", "2", "3")
+Exemplos: "1.0 INSTALAÇÃO E MOBILIZAÇÃO", "2.0 INFRAESTRUTURA"
+→ São títulos de seções principais, geralmente em NEGRITO ou destaque
+→ NÃO possuem valores unitários, quantidades ou totais
 
-REGRAS CRÍTICAS:
-1. Extraia ABSOLUTAMENTE TODOS os itens visíveis
-2. Identifique corretamente o NÍVEL de cada item pelo padrão do código:
-   - "X.0" = ETAPA (stage)
-   - "X.Y" (sem terceiro nível) = SUBETAPA (substage)  
-   - "X.Y.Z" = SERVIÇO (service)
-3. Para cada SERVIÇO, identifique a ETAPA pai (stage_code/stage_name) e a SUBETAPA pai (group_code/group_name)
-4. Converta valores monetários: "R$ 1.000,00" → 1000.00, "15,50" → 15.50
-5. Mantenha os textos EXATAMENTE como aparecem
-6. Etapas e subetapas não têm valores → quantity=0, unit_value=0
-7. Identifique a discriminação (SINAPI, Composição, etc.)
+**NÍVEL 2 — SUBETAPA** (linhas com código tipo "X.Y" — dois números separados por ponto, SEM terceiro nível)
+Exemplos: "1.1 Canteiro de obras e Administração", "1.2 Serviços Preliminares", "2.1 Movimentação de terra"
+→ São subdivisões dentro de uma etapa
+→ NÃO possuem valores unitários, quantidades ou totais
+→ O campo stage_code deve apontar para a ETAPA pai (ex: subetapa "1.1" → stage_code "1.0")
 
-GRUPOS EXISTENTES NO SISTEMA:
+**NÍVEL 3 — SERVIÇO** (linhas com código tipo "X.Y.Z" — três números separados por ponto)
+Exemplos: "1.1.1", "1.1.2", "1.2.1", "2.1.1", "2.1.2"
+→ São os itens de serviço com dados completos
+→ POSSUEM: discriminação, código SINAPI, descrição, unidade, quantidade, preço unitário, preço total
+
+## COLUNAS DA PLANILHA (da esquerda para a direita)
+
+| Coluna | Campo no JSON | Descrição |
+|--------|--------------|-----------|
+| ITEM | item_code | Código hierárquico (ex: "1.1.1") |
+| DISCRIMINAÇÃO | discrimination | Tipo: "SINAPI", "Composição", etc. |
+| CÓDIGO SINAPI | sinapi_code | Código numérico do SINAPI (ex: "93358", "99059") ou código interno (ex: "1-001") |
+| DESCRIÇÃO | description | Texto descritivo completo do serviço |
+| UNID | unit | Unidade de medida: UN, M, M2, M3, KG, etc. |
+| QTDE | quantity | Quantidade numérica |
+| PREÇO UNITÁRIO | unit_value | Valor unitário em reais (converter "R$ 2.975,86" → 2975.86) |
+| PREÇO TOTAL | total_value | Valor total = qtde × unitário |
+
+## REGRAS DE EXTRAÇÃO
+
+1. Extraia ABSOLUTAMENTE TODOS os itens visíveis na imagem, sem pular nenhum
+2. Para SERVIÇOS: preencha TODOS os campos (item_code, discrimination, sinapi_code, description, unit, quantity, unit_value, total_value)
+3. Para cada SERVIÇO identifique:
+   - group_code = código da SUBETAPA pai (ex: serviço "1.1.1" → group_code "1.1")
+   - group_name = nome da SUBETAPA pai
+   - stage_code = código da ETAPA pai (ex: serviço "1.1.1" → stage_code "1.0")
+   - stage_name = nome da ETAPA pai
+4. Converta valores monetários brasileiros: "R$ 1.000,00" → 1000.00, "2.975,86" → 2975.86
+5. Mantenha os textos EXATAMENTE como aparecem na planilha
+6. Se a coluna DISCRIMINAÇÃO mostrar "Composição", "SINAPI", etc., copie exatamente
+7. Se houver texto longo quebrado em múltiplas linhas na mesma célula, junte tudo em uma string
+
+## GRUPOS EXISTENTES NO SISTEMA
 ${groupNames.length > 0 ? groupNames.join('\n') : 'Nenhum cadastrado'}
 
-Responda APENAS com JSON válido, SEM markdown, SEM \`\`\`json:
+## FORMATO DE RESPOSTA
+
+Responda APENAS com JSON válido (sem markdown, sem \`\`\`):
 {
   "stages": [
     {"code": "1.0", "name": "INSTALAÇÃO E MOBILIZAÇÃO"},
@@ -66,10 +86,23 @@ Responda APENAS com JSON válido, SEM markdown, SEM \`\`\`json:
     {"code": "2.1", "name": "Movimentação de terra", "stage_code": "2.0"}
   ],
   "items": [
-    {"item_code": "1.1.1", "discrimination": "Composição", "sinapi_code": "I-001", "description": "ADMINISTRAÇÃO DE OBRA...", "unit": "UN", "quantity": 4.00, "unit_value": 2975.86, "total_value": 11903.43, "group_code": "1.1", "group_name": "Canteiro de obras e Administração", "stage_code": "1.0", "stage_name": "INSTALAÇÃO E MOBILIZAÇÃO"}
+    {
+      "item_code": "1.1.1",
+      "discrimination": "Composição",
+      "sinapi_code": "1-001",
+      "description": "ADMINISTRAÇÃO DE OBRA – ENGENHEIRO HORISTA E MESTRE DE OBRAS MENSALISTA",
+      "unit": "UN",
+      "quantity": 4.00,
+      "unit_value": 2975.86,
+      "total_value": 11903.43,
+      "group_code": "1.1",
+      "group_name": "Canteiro de obras e Administração",
+      "stage_code": "1.0",
+      "stage_name": "INSTALAÇÃO E MOBILIZAÇÃO"
+    }
   ],
   "success": true,
-  "message": "X itens extraídos"
+  "message": "X serviços extraídos com Y etapas e Z subetapas"
 }`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -98,6 +131,7 @@ Responda APENAS com JSON válido, SEM markdown, SEM \`\`\`json:
     if (!content) throw new Error("Sem resposta da IA");
 
     console.log("AI response length:", content.length);
+    console.log("AI response preview:", content.substring(0, 500));
 
     let parsed: any;
     try {
@@ -142,6 +176,8 @@ Responda APENAS com JSON válido, SEM markdown, SEM \`\`\`json:
     }));
 
     console.log(`Extracted ${stages.length} stages, ${substages.length} substages, ${validItems.length} items`);
+    console.log("Stages:", JSON.stringify(stages));
+    console.log("Substages:", JSON.stringify(substages));
 
     return new Response(JSON.stringify({ 
       stages, substages, items: validItems, success: true, 
