@@ -171,9 +171,6 @@ export function PleModuleView(props: PleDataReturn) {
         />
       )}
 
-      {showSetup && (
-        <PleProjectSetup {...props} onCreated={() => {}} isDialog open={showSetup} onClose={() => setShowSetup(false)} />
-      )}
     </div>
   );
 }
