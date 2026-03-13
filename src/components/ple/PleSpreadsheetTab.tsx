@@ -82,7 +82,7 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
     const orphanRows = rows.filter(r => !r.event.group_id || !groups.find(g => g.id === r.event.group_id));
     orphanRows.forEach(row => result.push({ type: "item", row }));
     return result;
-  }, [rows, stages, substages, groups]);
+  }, [rows, stages, substages, groups, expandedGroups]);
 
   const totalContrato = rows.reduce((sum, r) => sum + r.totalContrato, 0);
   const totalMedido = rows.reduce((sum, r) => sum + r.valorMed, 0);
