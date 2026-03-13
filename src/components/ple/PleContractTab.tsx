@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Trash2, Save, Building2, Sparkles, ChevronDown, ChevronRight, Edit2, Check, X } from "lucide-react";
+import { Plus, Trash2, Save, Building2, Sparkles, ChevronDown, ChevronRight, Edit2, Check, X, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { PleImportAIDialog } from "./PleImportAIDialog";
 import type { usePleData } from "@/hooks/usePleData";
@@ -23,6 +23,14 @@ export function PleContractTab(props: PleDataReturn) {
   const [showAIImport, setShowAIImport] = useState(false);
   const [isEditingProject, setIsEditingProject] = useState(false);
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set(groups.map(g => g.id)));
+  const allExpanded = useMemo(() => groups.length > 0 && groups.every(g => expandedStages.has(g.id)), [groups, expandedStages]);
+  const toggleAll = () => {
+    if (allExpanded) {
+      setExpandedStages(new Set());
+    } else {
+      setExpandedStages(new Set(groups.map(g => g.id)));
+    }
+  };
 
   const [projectForm, setProjectForm] = useState({
     name: currentProject?.name || "",
@@ -252,9 +260,14 @@ export function PleContractTab(props: PleDataReturn) {
             <Badge variant="outline" className="text-[10px]">{stats.totalSubstages} subetapas</Badge>
             <Badge variant="outline" className="text-[10px]">{stats.totalEvents} serviços</Badge>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setShowAIImport(true)} className="gap-1.5 text-xs">
-            <Sparkles className="h-3.5 w-3.5 text-amber-500" /> Importar via IA
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={toggleAll} className="gap-1.5 text-xs">
+              <ChevronsUpDown className="h-3.5 w-3.5" /> {allExpanded ? "Recolher Tudo" : "Expandir Tudo"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowAIImport(true)} className="gap-1.5 text-xs">
+              <Sparkles className="h-3.5 w-3.5 text-amber-500" /> Importar via IA
+            </Button>
+          </div>
         </div>
 
         {stats.ungroupedCount > 0 && (

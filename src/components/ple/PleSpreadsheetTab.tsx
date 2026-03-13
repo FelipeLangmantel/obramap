@@ -1,6 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { ChevronsUpDown } from "lucide-react";
 import type { usePleData } from "@/hooks/usePleData";
 import type { PleMeasurement } from "@/hooks/usePleData";
 
@@ -13,6 +15,17 @@ interface Props extends PleDataReturn {
 export function PleSpreadsheetTab({ groups, events, measurements, entries, currentProject, selectedMeasurement }: Props) {
   const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtCur = (v: number) => `R$ ${fmt(v)}`;
+
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set(groups.map(g => g.id)));
+  const allExpanded = useMemo(() => groups.length > 0 && groups.every(g => expandedGroups.has(g.id)), [groups, expandedGroups]);
+  const toggleAll = () => setExpandedGroups(allExpanded ? new Set() : new Set(groups.map(g => g.id)));
+  const toggleGroup = (id: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const stages = useMemo(() => groups.filter(g => !g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
   const substages = useMemo(() => groups.filter(g => g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
@@ -52,14 +65,16 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
     });
   }, [events, entries, measurements, selectedMeasurement, currentProject]);
 
-  // Build 3-level grouped structure
+  // Build 3-level grouped structure with expand/collapse
   const groupedRows = useMemo(() => {
     const result: { type: "stage" | "substage" | "item"; stage?: typeof stages[0]; substage?: typeof substages[0]; row?: typeof rows[0] }[] = [];
     stages.forEach(stage => {
       result.push({ type: "stage", stage });
+      if (!expandedGroups.has(stage.id)) return;
       const subs = substages.filter(s => s.parent_id === stage.id);
       subs.forEach(sub => {
         result.push({ type: "substage", substage: sub });
+        if (!expandedGroups.has(sub.id)) return;
         const subRows = rows.filter(r => r.event.group_id === sub.id).sort((a, b) => a.event.display_order - b.event.display_order);
         subRows.forEach(row => result.push({ type: "item", row }));
       });
@@ -67,7 +82,7 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
     const orphanRows = rows.filter(r => !r.event.group_id || !groups.find(g => g.id === r.event.group_id));
     orphanRows.forEach(row => result.push({ type: "item", row }));
     return result;
-  }, [rows, stages, substages, groups]);
+  }, [rows, stages, substages, groups, expandedGroups]);
 
   const totalContrato = rows.reduce((sum, r) => sum + r.totalContrato, 0);
   const totalMedido = rows.reduce((sum, r) => sum + r.valorMed, 0);
@@ -105,6 +120,13 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
         </div>
       )}
 
+      {/* Expand/Collapse button bar */}
+      <div className="px-4 py-1.5 border-b border-border flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={toggleAll} className="gap-1.5 text-xs h-7">
+          <ChevronsUpDown className="h-3.5 w-3.5" /> {allExpanded ? "Recolher Tudo" : "Expandir Tudo"}
+        </Button>
+      </div>
+
       <ScrollArea className="flex-1">
         <Table>
           <TableHeader>
@@ -127,19 +149,21 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
           <TableBody>
             {groupedRows.map((item) => {
               if (item.type === "stage" && item.stage) {
+                const isExp = expandedGroups.has(item.stage.id);
                 return (
-                  <TableRow key={`s-${item.stage.id}`} className="bg-primary/10 border-t-2 border-primary/40">
+                  <TableRow key={`s-${item.stage.id}`} className="bg-primary/10 border-t-2 border-primary/40 cursor-pointer hover:bg-primary/15" onClick={() => toggleGroup(item.stage!.id)}>
                     <TableCell colSpan={13} className="font-black text-xs text-primary py-2 tracking-wide uppercase">
-                      {item.stage.code} – {item.stage.name.toUpperCase()}
+                      {isExp ? "▾" : "▸"} {item.stage.code} – {item.stage.name.toUpperCase()}
                     </TableCell>
                   </TableRow>
                 );
               }
               if (item.type === "substage" && item.substage) {
+                const isExp = expandedGroups.has(item.substage.id);
                 return (
-                  <TableRow key={`sub-${item.substage.id}`} className="bg-muted/40 border-t border-border">
+                  <TableRow key={`sub-${item.substage.id}`} className="bg-muted/40 border-t border-border cursor-pointer hover:bg-muted/60" onClick={() => toggleGroup(item.substage!.id)}>
                     <TableCell colSpan={13} className="font-bold text-[11px] text-foreground/80 py-1.5 pl-6">
-                      {item.substage.code} – {item.substage.name}
+                      {isExp ? "▾" : "▸"} {item.substage.code} – {item.substage.name}
                     </TableCell>
                   </TableRow>
                 );
