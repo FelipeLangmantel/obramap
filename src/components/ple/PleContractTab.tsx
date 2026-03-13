@@ -260,9 +260,14 @@ export function PleContractTab(props: PleDataReturn) {
             <Badge variant="outline" className="text-[10px]">{stats.totalSubstages} subetapas</Badge>
             <Badge variant="outline" className="text-[10px]">{stats.totalEvents} serviços</Badge>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setShowAIImport(true)} className="gap-1.5 text-xs">
-            <Sparkles className="h-3.5 w-3.5 text-amber-500" /> Importar via IA
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={toggleAll} className="gap-1.5 text-xs">
+              <ChevronsUpDown className="h-3.5 w-3.5" /> {allExpanded ? "Recolher Tudo" : "Expandir Tudo"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowAIImport(true)} className="gap-1.5 text-xs">
+              <Sparkles className="h-3.5 w-3.5 text-amber-500" /> Importar via IA
+            </Button>
+          </div>
         </div>
 
         {stats.ungroupedCount > 0 && (
