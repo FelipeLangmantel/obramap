@@ -140,6 +140,9 @@ export function PleModuleView(props: PleDataReturn) {
           <TabsTrigger value="history" className="gap-1.5 text-xs">
             <History className="h-3.5 w-3.5" /> Histórico / Auditoria
           </TabsTrigger>
+          <TabsTrigger value="contract" className="gap-1.5 text-xs">
+            <ClipboardList className="h-3.5 w-3.5" /> Lançamento do Contrato
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="spreadsheet" className="flex-1 min-h-0 mt-3">
