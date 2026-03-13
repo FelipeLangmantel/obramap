@@ -120,6 +120,13 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
         </div>
       )}
 
+      {/* Expand/Collapse button bar */}
+      <div className="px-4 py-1.5 border-b border-border flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={toggleAll} className="gap-1.5 text-xs h-7">
+          <ChevronsUpDown className="h-3.5 w-3.5" /> {allExpanded ? "Recolher Tudo" : "Expandir Tudo"}
+        </Button>
+      </div>
+
       <ScrollArea className="flex-1">
         <Table>
           <TableHeader>
