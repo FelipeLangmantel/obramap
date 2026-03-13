@@ -37,6 +37,7 @@ const ROUTE_PERMISSION_MAP: Record<string, string> = {
   "/measurement-planning": "planejamento_periodo",
   "/long-term-planning": "planejamento_estrategico",
   "/project-contract": "contrato",
+  "/ple-measurements": "ple_medicoes",
 };
 
 /** Layout para rotas de System Admin */

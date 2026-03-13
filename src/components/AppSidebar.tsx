@@ -188,6 +188,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     { title: "Planej. Período", view: "measurement-planning", icon: Calculator, permissionId: "planejamento_periodo" },
     { title: "Planej. Estratégico", view: "long-term-planning", icon: Calendar, permissionId: "planejamento_estrategico" },
     { title: "Contrato da Obra", view: "project-contract", icon: FileText, permissionId: "contrato" },
+    { title: "Medições PLE", view: "ple-measurements", icon: ClipboardList, permissionId: "ple_medicoes" },
     { title: "Custos da Obra", view: "costs", icon: DollarSign, permissionId: "custos" },
     { title: "Suprimentos", view: "supplies", icon: Package, permissionId: "suprimentos" },
     { title: "Fluxo Financeiro", view: "financial-flow", icon: Wallet, permissionId: "financeiro" },
