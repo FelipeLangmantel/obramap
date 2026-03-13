@@ -72,7 +72,7 @@ import obraMapLogo from "@/assets/obramap-logo-new.png";
 type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity";
 
 // Views com rotas separadas (navegam para página diferente)
-type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract";
+type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements";
 type MenuViewType = ViewType | RouteViewType;
 
 // Rotas dedicadas (navegam para páginas separadas)
@@ -80,6 +80,7 @@ const DEDICATED_ROUTE_MAP: Record<RouteViewType, string> = {
   "measurement-planning": "/measurement-planning",
   "long-term-planning": "/long-term-planning",
   "project-contract": "/project-contract",
+  "ple-measurements": "/ple-measurements",
 };
 
 interface AppSidebarProps {
@@ -104,12 +105,11 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const getActiveView = (): MenuViewType => {
     const pathname = location.pathname;
     
-    // Verificar rotas dedicadas primeiro
     if (pathname === "/measurement-planning") return "measurement-planning";
     if (pathname === "/long-term-planning") return "long-term-planning";
     if (pathname === "/project-contract") return "project-contract";
+    if (pathname === "/ple-measurements") return "ple-measurements";
     
-    // Se estiver na rota raiz, usar o activeView prop (estado interno do Index)
     return activeView;
   };
   
@@ -188,6 +188,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     { title: "Planej. Período", view: "measurement-planning", icon: Calculator, permissionId: "planejamento_periodo" },
     { title: "Planej. Estratégico", view: "long-term-planning", icon: Calendar, permissionId: "planejamento_estrategico" },
     { title: "Contrato da Obra", view: "project-contract", icon: FileText, permissionId: "contrato" },
+    { title: "Medições PLE", view: "ple-measurements", icon: ClipboardList, permissionId: "ple_medicoes" },
     { title: "Custos da Obra", view: "costs", icon: DollarSign, permissionId: "custos" },
     { title: "Suprimentos", view: "supplies", icon: Package, permissionId: "suprimentos" },
     { title: "Fluxo Financeiro", view: "financial-flow", icon: Wallet, permissionId: "financeiro" },

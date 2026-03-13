@@ -19,6 +19,7 @@ import LegacyDataMigration from "./pages/admin/LegacyDataMigration";
 import MeasurementPlanningPage from "./pages/MeasurementPlanningPage";
 import LongTermPlanningPage from "./pages/LongTermPlanningPage";
 import ProjectContractPage from "./pages/ProjectContractPage";
+import PleMeasurementsPage from "./pages/PleMeasurementsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,6 +37,7 @@ const ROUTE_PERMISSION_MAP: Record<string, string> = {
   "/measurement-planning": "planejamento_periodo",
   "/long-term-planning": "planejamento_estrategico",
   "/project-contract": "contrato",
+  "/ple-measurements": "ple_medicoes",
 };
 
 /** Layout para rotas de System Admin */
@@ -109,6 +111,7 @@ const App = () => {
                   <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
                   <Route path="/long-term-planning" element={<LongTermPlanningPage />} />
                   <Route path="/project-contract" element={<ProjectContractPage />} />
+                  <Route path="/ple-measurements" element={<PleMeasurementsPage />} />
                   <Route path="/" element={<Index />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>
