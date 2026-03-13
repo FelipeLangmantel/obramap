@@ -242,7 +242,13 @@ export function PleContractTab(props: PleDataReturn) {
           </Button>
         </div>
 
-        <ScrollArea className="flex-1 border rounded-lg">
+        {stats.ungroupedCount > 0 && (
+          <div className="mb-2 px-3 py-2 rounded-md bg-amber-500/10 border border-amber-500/30 flex items-center gap-2">
+            <span className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+              ⚠️ {stats.ungroupedCount} itens importados sem grupo atribuído — eles aparecem abaixo para edição/exclusão.
+            </span>
+          </div>
+        )}
           <div className="min-w-[950px]">
             {/* Table Header */}
             <div className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-muted/50 border-b px-2 py-2 sticky top-0 z-10">
