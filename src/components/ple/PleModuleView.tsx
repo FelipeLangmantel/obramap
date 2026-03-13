@@ -54,9 +54,6 @@ export function PleModuleView(props: PleDataReturn) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowSetup(true)}>
-              <Settings className="h-4 w-4 mr-1" /> Configurar
-            </Button>
             <Button size="sm" onClick={() => setShowNewMeasurement(true)}>
               <Plus className="h-4 w-4 mr-1" /> Nova Medição
             </Button>
