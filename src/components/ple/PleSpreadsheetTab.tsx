@@ -17,19 +17,24 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
   const stages = useMemo(() => groups.filter(g => !g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
   const substages = useMemo(() => groups.filter(g => g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
 
-  // Build rows with computed values
+  // Build rows — unit_value is per house, so multiply by number of houses measured
   const rows = useMemo(() => {
     return events.map(event => {
+      // Total contract value for this item = quantity * unit_value (represents 1 unit)
       const totalValue = event.quantity * event.unit_value;
+
+      // Count houses measured for this event
       let qtdMed = 0;
       if (selectedMeasurement) {
         qtdMed = entries.filter(e => e.event_id === event.id && e.measurement_id === selectedMeasurement.id).length;
       } else {
         qtdMed = entries.filter(e => e.event_id === event.id).length;
       }
+      // Value measured = unit_value * number of houses measured
       const valorMed = qtdMed * event.unit_value;
       const pctItem = totalValue > 0 ? (valorMed / totalValue) * 100 : 0;
 
+      // Accumulated
       let qtdAcum = entries.filter(e => e.event_id === event.id).length;
       if (selectedMeasurement) {
         const measurementsUpTo = measurements.filter(m => m.measurement_number <= selectedMeasurement.measurement_number);
@@ -40,14 +45,13 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
       const pctAcum = totalValue > 0 ? (valorAcum / totalValue) * 100 : 0;
       const saldo = totalValue - valorAcum;
 
-      return { event, totalValue, qtdMed, valorMed, pctItem, qtdAcum, pctAcum, saldo };
+      return { event, totalValue, qtdMed, valorMed, pctItem, qtdAcum, valorAcum, pctAcum, saldo };
     });
   }, [events, entries, measurements, selectedMeasurement]);
 
   // Build 3-level grouped structure
   const groupedRows = useMemo(() => {
     const result: { type: "stage" | "substage" | "item"; stage?: typeof stages[0]; substage?: typeof substages[0]; row?: typeof rows[0] }[] = [];
-
     stages.forEach(stage => {
       result.push({ type: "stage", stage });
       const subs = substages.filter(s => s.parent_id === stage.id);
@@ -57,17 +61,14 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
         subRows.forEach(row => result.push({ type: "item", row }));
       });
     });
-
-    // Events without a group
     const orphanRows = rows.filter(r => !r.event.group_id || !groups.find(g => g.id === r.event.group_id));
     orphanRows.forEach(row => result.push({ type: "item", row }));
-
     return result;
   }, [rows, stages, substages, groups]);
 
   const totalContrato = rows.reduce((sum, r) => sum + r.totalValue, 0);
   const totalMedido = rows.reduce((sum, r) => sum + r.valorMed, 0);
-  const totalAcum = rows.reduce((sum, r) => sum + r.event.unit_value * (entries.filter(e => e.event_id === r.event.id).length), 0);
+  const totalAcum = rows.reduce((sum, r) => sum + r.valorAcum, 0);
 
   if (events.length === 0) {
     return (
@@ -108,7 +109,7 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
             </TableRow>
           </TableHeader>
           <TableBody>
-            {groupedRows.map((item, idx) => {
+            {groupedRows.map((item) => {
               if (item.type === "stage" && item.stage) {
                 return (
                   <TableRow key={`s-${item.stage.id}`} className="bg-primary/15 border-t-2 border-primary/30">
@@ -139,7 +140,7 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
                     <TableCell className="text-right font-mono">{fmt(r.event.quantity)}</TableCell>
                     <TableCell className="text-right font-mono">{fmtCur(r.event.unit_value)}</TableCell>
                     <TableCell className="text-right font-mono">{fmtCur(r.totalValue)}</TableCell>
-                    <TableCell className="text-right font-mono font-bold text-green-500">{r.qtdMed > 0 ? fmt(r.qtdMed) : "—"}</TableCell>
+                    <TableCell className="text-right font-mono font-bold text-green-500">{r.qtdMed > 0 ? r.qtdMed : "—"}</TableCell>
                     <TableCell className="text-right font-mono text-green-500">{r.qtdMed > 0 ? fmtCur(r.valorMed) : "—"}</TableCell>
                     <TableCell className="text-right font-mono text-amber-500">{r.pctItem > 0 ? `${r.pctItem.toFixed(1)}%` : "—"}</TableCell>
                     <TableCell className="text-right font-mono text-amber-500">{r.pctAcum > 0 ? `${r.pctAcum.toFixed(1)}%` : "—"}</TableCell>

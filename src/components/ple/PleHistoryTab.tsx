@@ -1,29 +1,81 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Eye, CheckCircle } from "lucide-react";
 import type { usePleData } from "@/hooks/usePleData";
+import type { PleMeasurement } from "@/hooks/usePleData";
 
 type PleDataReturn = ReturnType<typeof usePleData>;
 
-export function PleHistoryTab({ measurements, entries, events, currentProject, approveMeasurement }: PleDataReturn) {
+export function PleHistoryTab({ measurements, entries, events, groups, currentProject, approveMeasurement }: PleDataReturn) {
   const contractValue = currentProject?.contract_value || 0;
+  const totalHouses = currentProject?.total_houses || 1;
   const fmtCur = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const [detailMeasurement, setDetailMeasurement] = useState<PleMeasurement | null>(null);
 
   const rows = useMemo(() => {
+    let acumMedido = 0;
     return measurements.map(m => {
       let valorMedido = 0;
       const measuredEntries = entries.filter(e => e.measurement_id === m.id);
+      // Group entries by event and count houses per event
+      const eventHouseCounts: Record<string, number> = {};
       measuredEntries.forEach(entry => {
-        const event = events.find(ev => ev.id === entry.event_id);
-        if (event) valorMedido += event.unit_value;
+        eventHouseCounts[entry.event_id] = (eventHouseCounts[entry.event_id] || 0) + 1;
       });
-      const pctAvanco = contractValue > 0 ? (valorMedido / contractValue) * 100 : 0;
+      // Value = sum(unit_value * houses_measured) for each event
+      Object.entries(eventHouseCounts).forEach(([eventId, houseCount]) => {
+        const event = events.find(ev => ev.id === eventId);
+        if (event) valorMedido += event.unit_value * houseCount;
+      });
 
-      return { measurement: m, valorMedido, pctAvanco };
+      acumMedido += valorMedido;
+      const totalCasas = new Set(measuredEntries.map(e => e.house_number)).size;
+      const pctAvanco = contractValue > 0 ? (acumMedido / contractValue) * 100 : 0;
+
+      return { measurement: m, valorMedido, pctAvanco, totalCasas, totalServicos: Object.keys(eventHouseCounts).length };
     });
   }, [measurements, entries, events, contractValue]);
+
+  // Detail data for dialog
+  const detailData = useMemo(() => {
+    if (!detailMeasurement) return null;
+    const measEntries = entries.filter(e => e.measurement_id === detailMeasurement.id);
+    const stages = groups.filter(g => !g.parent_id).sort((a, b) => a.display_order - b.display_order);
+    const substages = groups.filter(g => g.parent_id).sort((a, b) => a.display_order - b.display_order);
+
+    // Build event details
+    const eventDetails = events.map(ev => {
+      const housesMeasured = measEntries.filter(e => e.event_id === ev.id).map(e => e.house_number).sort((a, b) => a - b);
+      if (housesMeasured.length === 0) return null;
+      const valorTotal = ev.unit_value * housesMeasured.length;
+      const pctEvento = ev.quantity > 0 ? (housesMeasured.length / ev.quantity) * 100 : 0;
+      return { event: ev, housesMeasured, valorTotal, pctEvento };
+    }).filter(Boolean) as { event: typeof events[0]; housesMeasured: number[]; valorTotal: number; pctEvento: number }[];
+
+    const totalValor = eventDetails.reduce((s, d) => s + d.valorTotal, 0);
+    const totalCasas = new Set(measEntries.map(e => e.house_number)).size;
+
+    // Accumulated up to this measurement
+    const measurementsUpTo = measurements.filter(m => m.measurement_number <= detailMeasurement.measurement_number);
+    const measIdsUpTo = new Set(measurementsUpTo.map(m => m.id));
+    const acumEntries = entries.filter(e => measIdsUpTo.has(e.measurement_id));
+    let acumValor = 0;
+    const acumByEvent: Record<string, number> = {};
+    acumEntries.forEach(e => { acumByEvent[e.event_id] = (acumByEvent[e.event_id] || 0) + 1; });
+    Object.entries(acumByEvent).forEach(([eventId, count]) => {
+      const ev = events.find(e => e.id === eventId);
+      if (ev) acumValor += ev.unit_value * count;
+    });
+    const pctAcum = contractValue > 0 ? (acumValor / contractValue) * 100 : 0;
+
+    return { eventDetails, totalValor, totalCasas, acumValor, pctAcum, stages, substages };
+  }, [detailMeasurement, entries, events, groups, measurements, contractValue]);
 
   if (measurements.length === 0) {
     return (
@@ -34,61 +86,148 @@ export function PleHistoryTab({ measurements, entries, events, currentProject, a
   }
 
   return (
-    <div className="border rounded-lg overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-accent/50 text-xs">
-            <TableHead className="w-10 font-bold">#</TableHead>
-            <TableHead className="font-bold">MEDIÇÃO</TableHead>
-            <TableHead className="font-bold">PERÍODO</TableHead>
-            <TableHead className="font-bold">REGISTRADO EM</TableHead>
-            <TableHead className="font-bold text-right">VALOR MEDIDO</TableHead>
-            <TableHead className="font-bold text-center">% AVANÇO</TableHead>
-            <TableHead className="font-bold text-center">STATUS</TableHead>
-            <TableHead className="font-bold text-center">AÇÕES</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map(r => (
-            <TableRow key={r.measurement.id} className="text-xs">
-              <TableCell className="font-bold">{r.measurement.measurement_number}</TableCell>
-              <TableCell className="font-semibold">Medição {r.measurement.measurement_number}</TableCell>
-              <TableCell>{r.measurement.period_label || "—"}</TableCell>
-              <TableCell>{new Date(r.measurement.created_at).toLocaleString("pt-BR")}</TableCell>
-              <TableCell className="text-right font-mono text-green-500">{fmtCur(r.valorMedido)}</TableCell>
-              <TableCell className="text-center">
-                <Badge variant="outline" className="text-amber-500 border-amber-500/30 font-mono">
-                  {r.pctAvanco.toFixed(2)}%
-                </Badge>
-              </TableCell>
-              <TableCell className="text-center">
-                <Badge className={r.measurement.status === "approved"
-                  ? "bg-green-600 hover:bg-green-700"
-                  : "bg-amber-600 hover:bg-amber-700"
-                }>
-                  {r.measurement.status === "approved" ? "APROVADA" : "PENDENTE"}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-center">
-                <div className="flex items-center justify-center gap-1">
-                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1">
-                    <Eye className="h-3 w-3" /> Ver
-                  </Button>
-                  {r.measurement.status !== "approved" && (
-                    <Button
-                      size="sm"
-                      className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700"
-                      onClick={() => approveMeasurement(r.measurement.id)}
-                    >
-                      <CheckCircle className="h-3 w-3" /> Aprovar
-                    </Button>
-                  )}
-                </div>
-              </TableCell>
+    <>
+      <div className="border rounded-lg overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-accent/50 text-xs">
+              <TableHead className="w-10 font-bold">#</TableHead>
+              <TableHead className="font-bold">MEDIÇÃO</TableHead>
+              <TableHead className="font-bold">PERÍODO</TableHead>
+              <TableHead className="font-bold">REGISTRADO EM</TableHead>
+              <TableHead className="font-bold text-center">CASAS</TableHead>
+              <TableHead className="font-bold text-center">SERVIÇOS</TableHead>
+              <TableHead className="font-bold text-right">VALOR MEDIDO</TableHead>
+              <TableHead className="font-bold text-center">% AVANÇO ACUM.</TableHead>
+              <TableHead className="font-bold text-center">STATUS</TableHead>
+              <TableHead className="font-bold text-center">AÇÕES</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+          </TableHeader>
+          <TableBody>
+            {rows.map(r => (
+              <TableRow key={r.measurement.id} className="text-xs">
+                <TableCell className="font-bold">{r.measurement.measurement_number}</TableCell>
+                <TableCell className="font-semibold">Medição {r.measurement.measurement_number}</TableCell>
+                <TableCell>{r.measurement.period_label || "—"}</TableCell>
+                <TableCell>{new Date(r.measurement.created_at).toLocaleString("pt-BR")}</TableCell>
+                <TableCell className="text-center font-mono">{r.totalCasas}</TableCell>
+                <TableCell className="text-center font-mono">{r.totalServicos}</TableCell>
+                <TableCell className="text-right font-mono text-green-500">{fmtCur(r.valorMedido)}</TableCell>
+                <TableCell className="text-center">
+                  <Badge variant="outline" className="text-amber-500 border-amber-500/30 font-mono">
+                    {r.pctAvanco.toFixed(2)}%
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-center">
+                  <Badge className={r.measurement.status === "approved"
+                    ? "bg-green-600 hover:bg-green-700"
+                    : "bg-amber-600 hover:bg-amber-700"
+                  }>
+                    {r.measurement.status === "approved" ? "APROVADA" : "PENDENTE"}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-center">
+                  <div className="flex items-center justify-center gap-1">
+                    <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => setDetailMeasurement(r.measurement)}>
+                      <Eye className="h-3 w-3" /> Ver
+                    </Button>
+                    {r.measurement.status !== "approved" && (
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700"
+                        onClick={() => approveMeasurement(r.measurement.id)}
+                      >
+                        <CheckCircle className="h-3 w-3" /> Aprovar
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Detail Dialog */}
+      <Dialog open={!!detailMeasurement} onOpenChange={() => setDetailMeasurement(null)}>
+        <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-3">
+              Detalhes – Medição {detailMeasurement?.measurement_number}
+              {detailMeasurement?.period_label && (
+                <Badge variant="outline" className="font-normal">{detailMeasurement.period_label}</Badge>
+              )}
+              <Badge className={detailMeasurement?.status === "approved" ? "bg-green-600" : "bg-amber-600"}>
+                {detailMeasurement?.status === "approved" ? "APROVADA" : "PENDENTE"}
+              </Badge>
+            </DialogTitle>
+          </DialogHeader>
+
+          {detailData && (
+            <div className="flex flex-col gap-4 flex-1 min-h-0">
+              {/* Summary cards */}
+              <div className="grid grid-cols-4 gap-3">
+                <div className="bg-accent/30 rounded-lg p-3 text-center">
+                  <div className="text-[10px] text-muted-foreground uppercase">Casas Medidas</div>
+                  <div className="text-xl font-bold text-foreground">{detailData.totalCasas}</div>
+                </div>
+                <div className="bg-accent/30 rounded-lg p-3 text-center">
+                  <div className="text-[10px] text-muted-foreground uppercase">Valor Medido</div>
+                  <div className="text-lg font-bold text-green-500">{fmtCur(detailData.totalValor)}</div>
+                </div>
+                <div className="bg-accent/30 rounded-lg p-3 text-center">
+                  <div className="text-[10px] text-muted-foreground uppercase">Acumulado</div>
+                  <div className="text-lg font-bold text-blue-500">{fmtCur(detailData.acumValor)}</div>
+                </div>
+                <div className="bg-accent/30 rounded-lg p-3 text-center">
+                  <div className="text-[10px] text-muted-foreground uppercase">% Avanço Acumulado</div>
+                  <div className="text-xl font-bold text-amber-500">{detailData.pctAcum.toFixed(2)}%</div>
+                </div>
+              </div>
+
+              {/* Items table */}
+              <ScrollArea className="flex-1 border rounded-lg">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-accent/50 text-[11px]">
+                      <TableHead className="font-bold w-16">ITEM</TableHead>
+                      <TableHead className="font-bold">DESCRIÇÃO</TableHead>
+                      <TableHead className="font-bold text-center w-14">UNID</TableHead>
+                      <TableHead className="font-bold text-right w-20">V. UNIT.</TableHead>
+                      <TableHead className="font-bold text-center w-20">CASAS MED.</TableHead>
+                      <TableHead className="font-bold text-right w-24">VALOR MEDIDO</TableHead>
+                      <TableHead className="font-bold text-center w-16">% ITEM</TableHead>
+                      <TableHead className="font-bold w-40">CASAS</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {detailData.eventDetails.map(d => (
+                      <TableRow key={d.event.id} className="text-[11px]">
+                        <TableCell className="font-mono">{d.event.item_code}</TableCell>
+                        <TableCell className="max-w-xs truncate">{d.event.description}</TableCell>
+                        <TableCell className="text-center">{d.event.unit}</TableCell>
+                        <TableCell className="text-right font-mono">{fmtCur(d.event.unit_value)}</TableCell>
+                        <TableCell className="text-center font-mono font-bold text-green-500">{d.housesMeasured.length}</TableCell>
+                        <TableCell className="text-right font-mono text-green-500">{fmtCur(d.valorTotal)}</TableCell>
+                        <TableCell className="text-center font-mono text-amber-500">{d.pctEvento.toFixed(1)}%</TableCell>
+                        <TableCell className="font-mono text-[10px] text-muted-foreground truncate" title={d.housesMeasured.join(", ")}>
+                          {d.housesMeasured.join(", ")}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-accent/50 font-bold text-[11px] border-t-2">
+                      <TableCell colSpan={4} className="text-right">TOTAL:</TableCell>
+                      <TableCell className="text-center font-mono">{detailData.totalCasas}</TableCell>
+                      <TableCell className="text-right font-mono text-green-500">{fmtCur(detailData.totalValor)}</TableCell>
+                      <TableCell colSpan={2}></TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
