@@ -403,6 +403,39 @@ export function PleContractTab(props: PleDataReturn) {
               );
             })}
 
+            {/* UNGROUPED EVENTS */}
+            {ungroupedEvents.length > 0 && (
+              <div>
+                <div className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-amber-500/10 border-b border-amber-500/30 px-2 py-2 items-center">
+                  <span />
+                  <span className="text-xs font-extrabold text-amber-600 dark:text-amber-400 col-span-4">ITENS SEM GRUPO ({ungroupedEvents.length})</span>
+                  <span /><span /><span />
+                  <span className="text-xs font-extrabold text-right font-mono text-amber-600 dark:text-amber-400">
+                    {fmtCur(ungroupedEvents.reduce((s, e) => s + e.quantity * e.unit_value, 0))}
+                  </span>
+                  <span />
+                </div>
+                {ungroupedEvents.map(ev => (
+                  <div key={ev.id} className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-2 py-1.5 hover:bg-accent/20 transition-colors items-center group/row">
+                    <span />
+                    <span className="text-[11px] font-mono text-muted-foreground pl-3">{ev.item_code}</span>
+                    <span className="text-[10px] text-muted-foreground truncate">{ev.discrimination || "—"}</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">{ev.sinapi_code || "—"}</span>
+                    <span className="text-[11px] text-foreground truncate pr-2" title={ev.description}>{ev.description}</span>
+                    <span className="text-[11px] text-center text-muted-foreground">{ev.unit}</span>
+                    <span className="text-[11px] text-right font-mono">{fmt(ev.quantity)}</span>
+                    <span className="text-[11px] text-right font-mono">{fmtCur(ev.unit_value)}</span>
+                    <span className="text-[11px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                    <span className="flex justify-center opacity-0 group-hover/row:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deleteEvent(ev.id)}>
+                        <Trash2 className="h-3 w-3 text-destructive/60 hover:text-destructive" />
+                      </Button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Add new stage */}
             <div className="px-2 py-2 border-b bg-muted/20">
               <div className="flex items-center gap-2">
