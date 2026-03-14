@@ -217,11 +217,10 @@ export function usePleData() {
     if (!currentProjectId) return;
     const existing = glosses.find(g => g.measurement_id === measurementId && g.event_id === eventId && g.house_number === houseNumber && !g.resolved);
     if (existing) {
-      // Remove gloss
       await supabase.from("ple_glosses").delete().eq("id", existing.id);
       setGlosses(prev => prev.filter(g => g.id !== existing.id));
+      logAudit("gloss_removed", { event_id: eventId, house_number: houseNumber }, measurementId);
     } else {
-      // Add gloss
       const { data: userData } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from("ple_glosses")
@@ -234,9 +233,12 @@ export function usePleData() {
         } as any)
         .select()
         .single();
-      if (!error && data) setGlosses(prev => [...prev, data as any]);
+      if (!error && data) {
+        setGlosses(prev => [...prev, data as any]);
+        logAudit("gloss_added", { event_id: eventId, house_number: houseNumber }, measurementId);
+      }
     }
-  }, [currentProjectId, glosses]);
+  }, [currentProjectId, glosses, logAudit]);
 
   // Create event group
   const createGroup = useCallback(async (data: { code: string; name: string; parent_id?: string | null }) => {
