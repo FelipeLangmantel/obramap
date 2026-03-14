@@ -33,18 +33,16 @@ interface Props {
 }
 
 export function PleAuditDialog({
-  open, onClose, measurement, entries, events, groups, glosses, totalHouses,
+  open, onClose, measurement, entries, events, groups, glosses,
   onToggleGloss, onApproveMeasurement,
 }: Props) {
   const fmtCur = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-  // Entries for this measurement
   const measEntries = useMemo(() =>
     entries.filter(e => e.measurement_id === measurement.id),
     [entries, measurement.id]
   );
 
-  // Glosses for this measurement
   const measGlosses = useMemo(() =>
     glosses.filter(g => g.measurement_id === measurement.id && !g.resolved),
     [glosses, measurement.id]
@@ -56,15 +54,12 @@ export function PleAuditDialog({
     return s;
   }, [measGlosses]);
 
-  // Build hierarchical view
   const stages = useMemo(() => groups.filter(g => !g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
   const substages = useMemo(() => groups.filter(g => g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
 
-  // Only events that have entries in this measurement
   const measuredEventIds = useMemo(() => new Set(measEntries.map(e => e.event_id)), [measEntries]);
   const measuredEvents = useMemo(() => events.filter(e => measuredEventIds.has(e.id)), [events, measuredEventIds]);
 
-  // Houses measured per event
   const housesPerEvent = useMemo(() => {
     const map: Record<string, number[]> = {};
     measEntries.forEach(e => {
@@ -78,7 +73,6 @@ export function PleAuditDialog({
   const totalGlosses = measGlosses.length;
   const totalEntries = measEntries.length;
 
-  // Values
   const totalValor = useMemo(() => {
     let v = 0;
     measuredEvents.forEach(ev => {
@@ -106,44 +100,43 @@ export function PleAuditDialog({
 
   return (
     <Dialog open={open} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-[95vw] sm:max-w-6xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <ShieldCheck className="h-5 w-5 text-primary" />
-            Aferição – Medição {measurement.measurement_number}
+          <DialogTitle className="flex items-center gap-2 sm:gap-3 flex-wrap text-sm sm:text-base">
+            <ShieldCheck className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            Aferição – Med. {measurement.measurement_number}
             {measurement.period_label && (
-              <Badge variant="outline" className="font-normal">{measurement.period_label}</Badge>
+              <Badge variant="outline" className="font-normal text-[10px] sm:text-xs">{measurement.period_label}</Badge>
             )}
           </DialogTitle>
         </DialogHeader>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-4 gap-3">
-          <div className="rounded-lg p-3 text-center border border-border bg-muted/50">
-            <div className="text-[10px] text-muted-foreground uppercase font-medium">Total Lançado</div>
-            <div className="text-lg font-bold text-foreground">{totalEntries} itens</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+          <div className="rounded-lg p-2 sm:p-3 text-center border border-border bg-muted/50">
+            <div className="text-[9px] sm:text-[10px] text-muted-foreground uppercase font-medium">Lançado</div>
+            <div className="text-sm sm:text-lg font-bold text-foreground">{totalEntries} itens</div>
           </div>
-          <div className="rounded-lg p-3 text-center border border-border bg-muted/50">
-            <div className="text-[10px] text-muted-foreground uppercase font-medium">Valor Medido</div>
-            <div className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{fmtCur(totalValor)}</div>
+          <div className="rounded-lg p-2 sm:p-3 text-center border border-border bg-muted/50">
+            <div className="text-[9px] sm:text-[10px] text-muted-foreground uppercase font-medium">Valor</div>
+            <div className="text-xs sm:text-lg font-bold text-emerald-600 dark:text-emerald-400">{fmtCur(totalValor)}</div>
           </div>
-          <div className="rounded-lg p-3 text-center border border-border bg-muted/50">
-            <div className="text-[10px] text-muted-foreground uppercase font-medium">Glossas</div>
-            <div className={cn("text-lg font-bold", totalGlosses > 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400")}>
+          <div className="rounded-lg p-2 sm:p-3 text-center border border-border bg-muted/50">
+            <div className="text-[9px] sm:text-[10px] text-muted-foreground uppercase font-medium">Glossas</div>
+            <div className={cn("text-sm sm:text-lg font-bold", totalGlosses > 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400")}>
               {totalGlosses}
             </div>
           </div>
-          <div className="rounded-lg p-3 text-center border border-border bg-muted/50">
-            <div className="text-[10px] text-muted-foreground uppercase font-medium">Valor Glossado</div>
-            <div className={cn("text-lg font-bold", glossedValor > 0 ? "text-destructive" : "text-muted-foreground")}>
+          <div className="rounded-lg p-2 sm:p-3 text-center border border-border bg-muted/50">
+            <div className="text-[9px] sm:text-[10px] text-muted-foreground uppercase font-medium">V. Glossado</div>
+            <div className={cn("text-xs sm:text-lg font-bold", glossedValor > 0 ? "text-destructive" : "text-muted-foreground")}>
               {fmtCur(glossedValor)}
             </div>
           </div>
         </div>
 
-        <p className="text-xs text-muted-foreground">
-          Clique nas células com <span className="font-bold text-destructive">número da medição</span> para marcar/desmarcar como <strong>glossa</strong>.
-          Itens glossados serão removidos do lançamento ao aprovar.
+        <p className="text-[10px] sm:text-xs text-muted-foreground">
+          Toque nas casas para marcar/desmarcar <strong className="text-destructive">glossa</strong>.
         </p>
 
         {/* Grid */}
@@ -160,10 +153,10 @@ export function PleAuditDialog({
               return (
                 <div key={stage.id}>
                   <div className="flex bg-primary/15 border-b">
-                    <div className="w-10 h-7 flex items-center justify-center text-[10px] font-extrabold text-primary border-r">
+                    <div className="w-8 sm:w-10 h-7 flex items-center justify-center text-[9px] sm:text-[10px] font-extrabold text-primary border-r">
                       {stage.code}
                     </div>
-                    <div className="w-52 h-7 flex items-center px-2 text-[10px] font-extrabold text-primary tracking-wide">
+                    <div className="w-36 sm:w-52 h-7 flex items-center px-2 text-[9px] sm:text-[10px] font-extrabold text-primary tracking-wide truncate">
                       {stage.name.toUpperCase()}
                     </div>
                   </div>
@@ -175,10 +168,10 @@ export function PleAuditDialog({
                     return (
                       <div key={sub.id}>
                         <div className="flex bg-accent/40 border-b">
-                          <div className="w-10 h-7 flex items-center justify-center text-[10px] font-bold text-foreground border-r">
+                          <div className="w-8 sm:w-10 h-7 flex items-center justify-center text-[9px] sm:text-[10px] font-bold text-foreground border-r">
                             {sub.code}
                           </div>
-                          <div className="w-52 h-7 flex items-center px-2 text-[10px] font-bold text-foreground">
+                          <div className="w-36 sm:w-52 h-7 flex items-center px-2 text-[9px] sm:text-[10px] font-bold text-foreground truncate">
                             {sub.name}
                           </div>
                         </div>
@@ -187,13 +180,13 @@ export function PleAuditDialog({
                           const houses = housesPerEvent[ev.id] || [];
                           return (
                             <div key={ev.id} className="flex border-b hover:bg-accent/10">
-                              <div className="w-10 h-8 flex items-center justify-center text-[9px] font-mono text-muted-foreground border-r shrink-0">
+                              <div className="w-8 sm:w-10 h-8 flex items-center justify-center text-[8px] sm:text-[9px] font-mono text-muted-foreground border-r shrink-0">
                                 {ev.item_code}
                               </div>
-                              <div className="w-52 h-8 flex items-center px-2 text-[9px] truncate shrink-0 border-r" title={ev.description}>
+                              <div className="w-36 sm:w-52 h-8 flex items-center px-1.5 sm:px-2 text-[8px] sm:text-[9px] truncate shrink-0 border-r" title={ev.description}>
                                 {ev.description}
                               </div>
-                              <div className="flex">
+                              <div className="flex flex-wrap">
                                 {houses.map(n => {
                                   const glossed = isGlossed(ev.id, n);
                                   return (
@@ -201,17 +194,17 @@ export function PleAuditDialog({
                                       key={n}
                                       onClick={() => onToggleGloss(ev.id, n, measurement.id)}
                                       className={cn(
-                                        "w-10 h-8 flex items-center justify-center border-r cursor-pointer transition-colors relative",
+                                        "w-9 sm:w-10 h-8 flex items-center justify-center border-r cursor-pointer transition-colors relative",
                                         glossed
                                           ? "bg-destructive/20 border-destructive/30"
-                                          : "bg-emerald-600/15 hover:bg-emerald-600/25"
+                                          : "bg-emerald-600/15 hover:bg-emerald-600/25 active:bg-emerald-600/35"
                                       )}
                                     >
-                                      <span className={cn("text-[10px] font-mono font-bold", glossed ? "text-destructive line-through" : "text-emerald-700 dark:text-emerald-300")}>
+                                      <span className={cn("text-[9px] sm:text-[10px] font-mono font-bold", glossed ? "text-destructive line-through" : "text-emerald-700 dark:text-emerald-300")}>
                                         {n}
                                       </span>
                                       {glossed && (
-                                        <span className="absolute -top-0.5 -right-0.5 text-[8px] font-black text-destructive">G</span>
+                                        <span className="absolute -top-0.5 -right-0.5 text-[7px] sm:text-[8px] font-black text-destructive">G</span>
                                       )}
                                     </div>
                                   );
@@ -229,30 +222,32 @@ export function PleAuditDialog({
           </div>
         </ScrollArea>
 
-        <DialogFooter className="gap-2">
-          <div className="flex items-center gap-2 mr-auto text-xs">
+        <DialogFooter className="gap-2 flex-col sm:flex-row">
+          <div className="flex items-center gap-2 sm:mr-auto text-xs">
             {totalGlosses > 0 && (
-              <Badge variant="destructive" className="gap-1">
-                <AlertTriangle className="h-3 w-3" /> {totalGlosses} glossa(s) – {fmtCur(glossedValor)} descontado
+              <Badge variant="destructive" className="gap-1 text-[10px] sm:text-xs">
+                <AlertTriangle className="h-3 w-3" /> {totalGlosses} glossa(s)
               </Badge>
             )}
           </div>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button
-            onClick={handleApprove}
-            className={cn(
-              "gap-1.5",
-              totalGlosses > 0
-                ? "bg-amber-600 hover:bg-amber-700"
-                : "bg-emerald-600 hover:bg-emerald-700"
-            )}
-          >
-            {totalGlosses > 0 ? (
-              <><AlertTriangle className="h-4 w-4" /> Aprovar com Glossas</>
-            ) : (
-              <><CheckCircle className="h-4 w-4" /> Aprovar Medição</>
-            )}
-          </Button>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button variant="outline" onClick={onClose} className="flex-1 sm:flex-none">Cancelar</Button>
+            <Button
+              onClick={handleApprove}
+              className={cn(
+                "gap-1.5 flex-1 sm:flex-none",
+                totalGlosses > 0
+                  ? "bg-amber-600 hover:bg-amber-700"
+                  : "bg-emerald-600 hover:bg-emerald-700"
+              )}
+            >
+              {totalGlosses > 0 ? (
+                <><AlertTriangle className="h-4 w-4" /> <span className="hidden sm:inline">Aprovar com Glossas</span><span className="sm:hidden">Aprovar c/ Glossas</span></>
+              ) : (
+                <><CheckCircle className="h-4 w-4" /> Aprovar</>
+              )}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

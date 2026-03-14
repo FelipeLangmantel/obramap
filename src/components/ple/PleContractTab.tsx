@@ -193,39 +193,39 @@ export function PleContractTab(props: PleDataReturn) {
   if (!currentProject) return null;
 
   return (
-    <div className="h-full flex flex-col gap-4 overflow-hidden">
+    <div className="h-full flex flex-col gap-3 sm:gap-4 overflow-hidden">
       {/* Project Header Card */}
       <Card className="border-primary/20 shadow-sm">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-primary/10">
-                <Building2 className="h-5 w-5 text-primary" />
+        <CardHeader className="pb-3 px-3 sm:px-6">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="p-2 sm:p-2.5 rounded-xl bg-primary/10 shrink-0">
+                <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
-              <div>
-                <CardTitle className="text-base">Dados do Contrato</CardTitle>
-                <CardDescription className="text-xs">Informações gerais do projeto e contrato</CardDescription>
+              <div className="min-w-0">
+                <CardTitle className="text-sm sm:text-base truncate">Dados do Contrato</CardTitle>
+                <CardDescription className="text-[10px] sm:text-xs hidden sm:block">Informações gerais do projeto e contrato</CardDescription>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {!isEditingProject ? (
-                <Button variant="outline" size="sm" onClick={() => setIsEditingProject(true)} className="gap-1.5 text-xs">
-                  <Edit2 className="h-3.5 w-3.5" /> Editar
+                <Button variant="outline" size="sm" onClick={() => setIsEditingProject(true)} className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs h-7">
+                  <Edit2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Editar
                 </Button>
               ) : (
                 <>
-                  <Button variant="ghost" size="sm" onClick={() => setIsEditingProject(false)} className="gap-1 text-xs">
-                    <X className="h-3.5 w-3.5" /> Cancelar
+                  <Button variant="ghost" size="sm" onClick={() => setIsEditingProject(false)} className="gap-1 text-[10px] sm:text-xs h-7">
+                    <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                   </Button>
-                  <Button size="sm" onClick={handleSaveProject} className="gap-1.5 text-xs">
-                    <Save className="h-3.5 w-3.5" /> Salvar
+                  <Button size="sm" onClick={handleSaveProject} className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs h-7">
+                    <Save className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Salvar
                   </Button>
                 </>
               )}
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 sm:px-6">
           {isEditingProject ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="space-y-1"><Label className="text-[10px] uppercase text-muted-foreground tracking-wide">Nome da Obra</Label><Input value={projectForm.name} onChange={e => setProjectForm(p => ({ ...p, name: e.target.value }))} className="h-8 text-xs" /></div>
@@ -253,19 +253,20 @@ export function PleContractTab(props: PleDataReturn) {
 
       {/* Budget Spreadsheet */}
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-bold text-foreground">Planilha Orçamentária</h2>
-            <Badge variant="secondary" className="text-[10px]">{stats.totalStages} etapas</Badge>
-            <Badge variant="outline" className="text-[10px]">{stats.totalSubstages} subetapas</Badge>
-            <Badge variant="outline" className="text-[10px]">{stats.totalEvents} serviços</Badge>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 sm:mb-3 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <h2 className="text-xs sm:text-sm font-bold text-foreground">Planilha Orçamentária</h2>
+            <div className="flex gap-1.5">
+              <Badge variant="secondary" className="text-[9px] sm:text-[10px]">{stats.totalStages} etapas</Badge>
+              <Badge variant="outline" className="text-[9px] sm:text-[10px]">{stats.totalEvents} serviços</Badge>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={toggleAll} className="gap-1.5 text-xs">
-              <ChevronsUpDown className="h-3.5 w-3.5" /> {allExpanded ? "Recolher Tudo" : "Expandir Tudo"}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <Button variant="outline" size="sm" onClick={toggleAll} className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs h-7">
+              <ChevronsUpDown className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> {allExpanded ? "Recolher" : "Expandir"}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setShowAIImport(true)} className="gap-1.5 text-xs">
-              <Sparkles className="h-3.5 w-3.5 text-amber-500" /> Importar via IA
+            <Button variant="outline" size="sm" onClick={() => setShowAIImport(true)} className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs h-7">
+              <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-500" /> <span className="hidden sm:inline">Importar via IA</span><span className="sm:hidden">IA</span>
             </Button>
           </div>
         </div>
