@@ -29,6 +29,8 @@ export function PleContractTab(props: PleDataReturn) {
     }
   };
 
+
+  const [newStage, setNewStage] = useState({ code: "", name: "" });
   const [newSubstage, setNewSubstage] = useState({ code: "", name: "", parent_id: "" });
   const [addingSubstageTo, setAddingSubstageTo] = useState<string | null>(null);
   const [addingEventTo, setAddingEventTo] = useState<string | null>(null);
