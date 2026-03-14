@@ -211,6 +211,11 @@ export function PleModuleView(props: PleDataReturn) {
           onClose={() => setShowNewMeasurement(false)}
           nextNumber={props.nextMeasurementNumber}
           onSave={props.createMeasurement}
+          previousEndDate={
+            measurements.length > 0
+              ? measurements.sort((a, b) => b.measurement_number - a.measurement_number)[0]?.end_date || null
+              : null
+          }
         />
       )}
     </div>

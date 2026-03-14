@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,14 +8,26 @@ interface Props {
   open: boolean;
   onClose: () => void;
   nextNumber: number;
+  previousEndDate?: string | null;
   onSave: (data: { measurement_number: number; period_label: string; start_date?: string; end_date?: string }) => Promise<any>;
 }
 
-export function PleNewMeasurementDialog({ open, onClose, nextNumber, onSave }: Props) {
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
+export function PleNewMeasurementDialog({ open, onClose, nextNumber, previousEndDate, onSave }: Props) {
+  const defaultStartDate = useMemo(() => {
+    if (previousEndDate) return addDays(previousEndDate, 1);
+    return "";
+  }, [previousEndDate]);
+
   const [form, setForm] = useState({
     measurement_number: nextNumber,
     period_label: "",
-    start_date: "",
+    start_date: defaultStartDate,
     end_date: "",
   });
   const [saving, setSaving] = useState(false);
