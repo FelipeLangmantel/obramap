@@ -4,6 +4,17 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import type { PleGloss } from "@/components/ple/PleAuditDialog";
 
+export interface PleAuditLogEntry {
+  id: string;
+  ple_project_id: string;
+  measurement_id: string | null;
+  action: string;
+  details: any;
+  performed_by: string | null;
+  performed_by_name: string | null;
+  performed_at: string;
+}
+
 export interface PleProject {
   id: string;
   company_id: string;
