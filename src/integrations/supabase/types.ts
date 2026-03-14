@@ -2524,9 +2524,59 @@ export type Database = {
           },
         ]
       }
+      ple_audit_log: {
+        Row: {
+          action: string
+          details: Json | null
+          id: string
+          measurement_id: string | null
+          performed_at: string
+          performed_by: string | null
+          performed_by_name: string | null
+          ple_project_id: string
+        }
+        Insert: {
+          action: string
+          details?: Json | null
+          id?: string
+          measurement_id?: string | null
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_name?: string | null
+          ple_project_id: string
+        }
+        Update: {
+          action?: string
+          details?: Json | null
+          id?: string
+          measurement_id?: string | null
+          performed_at?: string
+          performed_by?: string | null
+          performed_by_name?: string | null
+          ple_project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ple_audit_log_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "ple_measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ple_audit_log_ple_project_id_fkey"
+            columns: ["ple_project_id"]
+            isOneToOne: false
+            referencedRelation: "ple_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ple_entries: {
         Row: {
           created_at: string
+          created_by: string | null
+          created_by_name: string | null
           event_id: string
           house_number: number
           id: string
@@ -2535,6 +2585,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
           event_id: string
           house_number: number
           id?: string
@@ -2543,6 +2595,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
           event_id?: string
           house_number?: number
           id?: string
@@ -2748,6 +2802,9 @@ export type Database = {
       }
       ple_measurements: {
         Row: {
+          approved_at: string | null
+          approved_by: string | null
+          approved_by_name: string | null
           created_at: string
           end_date: string | null
           id: string
@@ -2756,11 +2813,15 @@ export type Database = {
           period_label: string | null
           ple_project_id: string
           registered_by: string | null
+          registered_by_name: string | null
           start_date: string | null
           status: string
           updated_at: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_by_name?: string | null
           created_at?: string
           end_date?: string | null
           id?: string
@@ -2769,11 +2830,15 @@ export type Database = {
           period_label?: string | null
           ple_project_id: string
           registered_by?: string | null
+          registered_by_name?: string | null
           start_date?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_by_name?: string | null
           created_at?: string
           end_date?: string | null
           id?: string
@@ -2782,6 +2847,7 @@ export type Database = {
           period_label?: string | null
           ple_project_id?: string
           registered_by?: string | null
+          registered_by_name?: string | null
           start_date?: string | null
           status?: string
           updated_at?: string
