@@ -205,18 +205,18 @@ export function PleContractTab(props: PleDataReturn) {
         )}
 
         <ScrollArea className="flex-1 border rounded-lg">
-          <div className="min-w-[950px]">
+          <div className="min-w-[650px] lg:min-w-[950px]">
             {/* Table Header */}
-            <div className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-muted/50 border-b px-2 py-2 sticky top-0 z-10">
+            <div className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-muted/50 border-b px-1 sm:px-2 py-1.5 sm:py-2 sticky top-0 z-10">
               <span />
-              <span className="text-[10px] font-bold text-muted-foreground uppercase">ITEM</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase">DISCRIM.</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase">CÓD. SINAPI</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase">DESCRIÇÃO SINAPI</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase text-center">UNID</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase text-right">QTDE</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase text-right">UNITÁRIO</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase text-right">TOTAL</span>
+              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase">ITEM</span>
+              <span className="hidden lg:block text-[10px] font-bold text-muted-foreground uppercase">DISCRIM.</span>
+              <span className="hidden lg:block text-[10px] font-bold text-muted-foreground uppercase">CÓD. SINAPI</span>
+              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase">DESCRIÇÃO</span>
+              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase text-center">UN</span>
+              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase text-right">QTDE</span>
+              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase text-right">UNIT.</span>
+              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase text-right">TOTAL</span>
               <span />
             </div>
 
