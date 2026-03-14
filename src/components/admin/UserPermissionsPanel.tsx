@@ -106,49 +106,12 @@ interface UserSession {
   is_active: boolean;
 }
 
-// Módulos do sistema - IDs alinhados 1:1 com permissionId do AppSidebar
-const MENU_OPTIONS = [
-  { id: "painel_inicial", label: "Painel Inicial" },
-  { id: "mapa", label: "Mapa de Obras" },
-  { id: "mapa_interativo", label: "Mapa Interativo" },
-  { id: "mapa_3d", label: "Mapa 3D" },
-  { id: "graficos", label: "Gráficos" },
-  { id: "producao", label: "Produção Semanal" },
-  { id: "planejamento_semanal", label: "Planej. Semanal" },
-  { id: "planejamento_periodo", label: "Planej. Período" },
-  { id: "planejamento_estrategico", label: "Planej. Estratégico" },
-  { id: "contrato", label: "Contrato da Obra" },
-  { id: "custos", label: "Custos da Obra" },
-  { id: "suprimentos", label: "Suprimentos" },
-  { id: "financeiro", label: "Fluxo Financeiro" },
-  { id: "diretoria", label: "Painel Diretoria" },
-  { id: "entrega", label: "Entrega & Pós-Obra" },
-  { id: "smart_planning", label: "Planej. Inteligente" },
-];
+// ✅ Importado da fonte única de verdade – novos módulos aparecem automaticamente
+import { MENU_MODULES, MANAGEMENT_MODULES, MENU_TO_MODULE_KEY } from "@/constants/modulePermissions";
 
-const MANAGEMENT_OPTIONS = [
-  { id: "projetos", label: "Cadastro de Obras" },
-  { id: "quadras", label: "Cadastro de Quadras" },
-  { id: "macros", label: "Etapas e Serviços" },
-  { id: "escopos", label: "Escopos" },
-  { id: "insumos", label: "Cadastro de Insumos" },
-  { id: "fornecedores", label: "Cadastro de Fornecedores" },
-  { id: "mao_de_obra", label: "Mão de Obra" },
-  { id: "usuarios", label: "Gerenciar Usuários" },
-  { id: "configuracoes", label: "Configurações" },
-];
-
-// Mapeamento de permissionId do menu para module_key da company_modules
-const MENU_TO_MODULE_KEY: Record<string, string> = {
-  "diretoria": "board-decisions",
-  "entrega": "delivery",
-  "smart_planning": "smart-planning",
-  "producao": "production",
-  "custos": "costs",
-  "suprimentos": "supplies",
-  "financeiro": "financial-flow",
-  "mapa": "map",
-};
+// Aliases para compatibilidade interna
+const MENU_OPTIONS = MENU_MODULES;
+const MANAGEMENT_OPTIONS = MANAGEMENT_MODULES;
 
 const createUserSchema = z.object({
   email: z.string().email("Email inválido"),
