@@ -57,10 +57,8 @@ export const MANAGEMENT_MODULES: ManagementModule[] = [
   { id: "projetos", label: "Cadastro de Obras" },
   { id: "quadras", label: "Cadastro de Quadras" },
   { id: "macros", label: "Etapas e Serviços" },
-  { id: "escopos", label: "Escopos" },
   { id: "insumos", label: "Cadastro de Insumos" },
   { id: "fornecedores", label: "Cadastro de Fornecedores" },
-  { id: "mao_de_obra", label: "Mão de Obra" },
   { id: "usuarios", label: "Gerenciar Usuários" },
   { id: "configuracoes", label: "Configurações" },
 ];
