@@ -253,19 +253,20 @@ export function PleContractTab(props: PleDataReturn) {
 
       {/* Budget Spreadsheet */}
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-bold text-foreground">Planilha Orçamentária</h2>
-            <Badge variant="secondary" className="text-[10px]">{stats.totalStages} etapas</Badge>
-            <Badge variant="outline" className="text-[10px]">{stats.totalSubstages} subetapas</Badge>
-            <Badge variant="outline" className="text-[10px]">{stats.totalEvents} serviços</Badge>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 sm:mb-3 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <h2 className="text-xs sm:text-sm font-bold text-foreground">Planilha Orçamentária</h2>
+            <div className="flex gap-1.5">
+              <Badge variant="secondary" className="text-[9px] sm:text-[10px]">{stats.totalStages} etapas</Badge>
+              <Badge variant="outline" className="text-[9px] sm:text-[10px]">{stats.totalEvents} serviços</Badge>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={toggleAll} className="gap-1.5 text-xs">
-              <ChevronsUpDown className="h-3.5 w-3.5" /> {allExpanded ? "Recolher Tudo" : "Expandir Tudo"}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <Button variant="outline" size="sm" onClick={toggleAll} className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs h-7">
+              <ChevronsUpDown className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> {allExpanded ? "Recolher" : "Expandir"}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setShowAIImport(true)} className="gap-1.5 text-xs">
-              <Sparkles className="h-3.5 w-3.5 text-amber-500" /> Importar via IA
+            <Button variant="outline" size="sm" onClick={() => setShowAIImport(true)} className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs h-7">
+              <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-500" /> <span className="hidden sm:inline">Importar via IA</span><span className="sm:hidden">IA</span>
             </Button>
           </div>
         </div>
