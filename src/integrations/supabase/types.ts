@@ -2681,6 +2681,71 @@ export type Database = {
           },
         ]
       }
+      ple_glosses: {
+        Row: {
+          event_id: string
+          glossed_at: string
+          glossed_by: string | null
+          house_number: number
+          id: string
+          measurement_id: string
+          ple_project_id: string
+          resolved: boolean
+          resolved_measurement_id: string | null
+        }
+        Insert: {
+          event_id: string
+          glossed_at?: string
+          glossed_by?: string | null
+          house_number: number
+          id?: string
+          measurement_id: string
+          ple_project_id: string
+          resolved?: boolean
+          resolved_measurement_id?: string | null
+        }
+        Update: {
+          event_id?: string
+          glossed_at?: string
+          glossed_by?: string | null
+          house_number?: number
+          id?: string
+          measurement_id?: string
+          ple_project_id?: string
+          resolved?: boolean
+          resolved_measurement_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ple_glosses_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "ple_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ple_glosses_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "ple_measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ple_glosses_ple_project_id_fkey"
+            columns: ["ple_project_id"]
+            isOneToOne: false
+            referencedRelation: "ple_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ple_glosses_resolved_measurement_id_fkey"
+            columns: ["resolved_measurement_id"]
+            isOneToOne: false
+            referencedRelation: "ple_measurements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ple_measurements: {
         Row: {
           created_at: string
