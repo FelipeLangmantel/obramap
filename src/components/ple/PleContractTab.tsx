@@ -230,7 +230,7 @@ export function PleContractTab(props: PleDataReturn) {
                 <div key={stage.id}>
                   {/* ETAPA ROW (Level 1) */}
                   <div
-                    className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-primary/15 border-b border-primary/25 px-2 py-2 cursor-pointer hover:bg-primary/20 transition-colors items-center"
+                    className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-primary/15 border-b border-primary/25 px-1 sm:px-2 py-1.5 sm:py-2 cursor-pointer hover:bg-primary/20 transition-colors items-center"
                     onClick={() => toggleStage(stage.id)}
                   >
                     <span className="flex items-center justify-center">
