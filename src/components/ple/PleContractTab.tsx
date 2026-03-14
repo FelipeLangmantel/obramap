@@ -18,26 +18,7 @@ export function PleContractTab(props: PleDataReturn) {
   } = props;
 
   const [showAIImport, setShowAIImport] = useState(false);
-  const [isEditingProject, setIsEditingProject] = useState(false);
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set(groups.map(g => g.id)));
-  const allExpanded = useMemo(() => groups.length > 0 && groups.every(g => expandedStages.has(g.id)), [groups, expandedStages]);
-  const toggleAll = () => {
-    if (allExpanded) {
-      setExpandedStages(new Set());
-    } else {
-      setExpandedStages(new Set(groups.map(g => g.id)));
-    }
-  };
-
-  const [projectForm, setProjectForm] = useState({
-    name: currentProject?.name || "",
-    location: currentProject?.location || "",
-    contractor: currentProject?.contractor || "",
-    contract_number: currentProject?.contract_number || "",
-    program: currentProject?.program || "",
-    total_houses: currentProject?.total_houses || 50,
-    contract_value: currentProject?.contract_value || 0,
-  });
 
   const [newStage, setNewStage] = useState({ code: "", name: "" });
   const [newSubstage, setNewSubstage] = useState({ code: "", name: "", parent_id: "" });
