@@ -13,6 +13,7 @@ import { PleHouseMapTab } from "./PleHouseMapTab";
 import { PleProjectSetup } from "./PleProjectSetup";
 import { PleNewMeasurementDialog } from "./PleNewMeasurementDialog";
 import { PleDashboard } from "./PleDashboard";
+import { PleContractInfoTab } from "./PleContractInfoTab";
 import type { usePleData } from "@/hooks/usePleData";
 
 type PleDataReturn = ReturnType<typeof usePleData>;
