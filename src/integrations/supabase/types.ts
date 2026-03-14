@@ -2864,49 +2864,106 @@ export type Database = {
       }
       ple_projects: {
         Row: {
+          address_city: string | null
+          address_neighborhood: string | null
+          address_number: string | null
+          address_state: string | null
+          address_street: string | null
+          address_zip: string | null
+          art_rrt_number: string | null
+          bdi_percentage: number | null
+          cnpj: string | null
           company_id: string
+          contract_end_date: string | null
           contract_number: string | null
+          contract_sign_date: string | null
+          contract_type: string | null
           contract_value: number
           contractor: string | null
           created_at: string
           created_by: string | null
+          executor_company: string | null
+          funding_source: string | null
           id: string
+          inspector_name: string | null
           location: string | null
           name: string
+          notes: string | null
           program: string | null
+          responsible_engineer: string | null
           start_date: string | null
           total_houses: number
+          unit_value: number | null
           updated_at: string
+          updated_by: string | null
         }
         Insert: {
+          address_city?: string | null
+          address_neighborhood?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          address_zip?: string | null
+          art_rrt_number?: string | null
+          bdi_percentage?: number | null
+          cnpj?: string | null
           company_id: string
+          contract_end_date?: string | null
           contract_number?: string | null
+          contract_sign_date?: string | null
+          contract_type?: string | null
           contract_value?: number
           contractor?: string | null
           created_at?: string
           created_by?: string | null
+          executor_company?: string | null
+          funding_source?: string | null
           id?: string
+          inspector_name?: string | null
           location?: string | null
           name: string
+          notes?: string | null
           program?: string | null
+          responsible_engineer?: string | null
           start_date?: string | null
           total_houses?: number
+          unit_value?: number | null
           updated_at?: string
+          updated_by?: string | null
         }
         Update: {
+          address_city?: string | null
+          address_neighborhood?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          address_zip?: string | null
+          art_rrt_number?: string | null
+          bdi_percentage?: number | null
+          cnpj?: string | null
           company_id?: string
+          contract_end_date?: string | null
           contract_number?: string | null
+          contract_sign_date?: string | null
+          contract_type?: string | null
           contract_value?: number
           contractor?: string | null
           created_at?: string
           created_by?: string | null
+          executor_company?: string | null
+          funding_source?: string | null
           id?: string
+          inspector_name?: string | null
           location?: string | null
           name?: string
+          notes?: string | null
           program?: string | null
+          responsible_engineer?: string | null
           start_date?: string | null
           total_houses?: number
+          unit_value?: number | null
           updated_at?: string
+          updated_by?: string | null
         }
         Relationships: [
           {
