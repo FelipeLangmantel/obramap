@@ -103,9 +103,9 @@ export function PleContractInfoTab(props: PleDataReturn) {
   const Field = ({ label, field, type = "text", placeholder = "", icon: Icon }: {
     label: string; field: keyof PleProject; type?: string; placeholder?: string; icon?: any;
   }) => (
-    <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-        {Icon && <Icon className="h-3 w-3" />}
+    <div className="space-y-1">
+      <Label className="text-[10px] sm:text-xs text-muted-foreground flex items-center gap-1">
+        {Icon && <Icon className="h-3 w-3 hidden sm:inline-block" />}
         {label}
       </Label>
       {isEditing ? (
@@ -114,11 +114,11 @@ export function PleContractInfoTab(props: PleDataReturn) {
           value={(form[field] as string | number) ?? ""}
           onChange={e => update(field, type === "number" ? Number(e.target.value) : e.target.value)}
           placeholder={placeholder}
-          className="h-9 text-sm"
+          className="h-8 sm:h-9 text-xs sm:text-sm"
         />
       ) : (
-        <p className="text-sm font-medium min-h-[36px] flex items-center px-3 py-2 rounded-md bg-muted/50">
-          {(currentProject[field] as string | number) || <span className="text-muted-foreground italic">Não informado</span>}
+        <p className="text-xs sm:text-sm font-medium min-h-[32px] sm:min-h-[36px] flex items-center px-2 sm:px-3 py-1.5 sm:py-2 rounded-md bg-muted/50">
+          {(currentProject[field] as string | number) || <span className="text-muted-foreground italic text-[10px] sm:text-sm">Não informado</span>}
         </p>
       )}
     </div>
@@ -127,21 +127,21 @@ export function PleContractInfoTab(props: PleDataReturn) {
   return (
     <>
       <ScrollArea className="h-full">
-        <div className="space-y-4 p-1">
+        <div className="space-y-3 sm:space-y-4 p-0.5 sm:p-1">
           {/* Actions */}
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-1.5 sm:gap-2">
             {isEditing ? (
               <>
-                <Button size="sm" variant="ghost" onClick={() => { setForm({ ...currentProject }); setIsEditing(false); }}>
-                  <X className="h-4 w-4 mr-1" /> Cancelar
+                <Button size="sm" variant="ghost" onClick={() => { setForm({ ...currentProject }); setIsEditing(false); }} className="h-7 sm:h-9 text-xs sm:text-sm">
+                  <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" /> Cancelar
                 </Button>
-                <Button size="sm" onClick={handleSave}>
-                  <Save className="h-4 w-4 mr-1" /> Salvar
+                <Button size="sm" onClick={handleSave} className="h-7 sm:h-9 text-xs sm:text-sm">
+                  <Save className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" /> Salvar
                 </Button>
               </>
             ) : (
-              <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
-                <Edit2 className="h-4 w-4 mr-1" /> Editar Informações
+              <Button size="sm" variant="outline" onClick={() => setIsEditing(true)} className="h-7 sm:h-9 text-xs sm:text-sm">
+                <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" /> Editar
               </Button>
             )}
           </div>

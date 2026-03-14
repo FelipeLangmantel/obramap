@@ -205,18 +205,18 @@ export function PleContractTab(props: PleDataReturn) {
         )}
 
         <ScrollArea className="flex-1 border rounded-lg">
-          <div className="min-w-[950px]">
+          <div className="min-w-[650px] lg:min-w-[950px]">
             {/* Table Header */}
-            <div className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-muted/50 border-b px-2 py-2 sticky top-0 z-10">
+            <div className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-muted/50 border-b px-1 sm:px-2 py-1.5 sm:py-2 sticky top-0 z-10">
               <span />
-              <span className="text-[10px] font-bold text-muted-foreground uppercase">ITEM</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase">DISCRIM.</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase">CÓD. SINAPI</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase">DESCRIÇÃO SINAPI</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase text-center">UNID</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase text-right">QTDE</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase text-right">UNITÁRIO</span>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase text-right">TOTAL</span>
+              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase">ITEM</span>
+              <span className="hidden lg:block text-[10px] font-bold text-muted-foreground uppercase">DISCRIM.</span>
+              <span className="hidden lg:block text-[10px] font-bold text-muted-foreground uppercase">CÓD. SINAPI</span>
+              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase">DESCRIÇÃO</span>
+              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase text-center">UN</span>
+              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase text-right">QTDE</span>
+              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase text-right">UNIT.</span>
+              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase text-right">TOTAL</span>
               <span />
             </div>
 
@@ -230,7 +230,7 @@ export function PleContractTab(props: PleDataReturn) {
                 <div key={stage.id}>
                   {/* ETAPA ROW (Level 1) */}
                   <div
-                    className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-primary/15 border-b border-primary/25 px-2 py-2 cursor-pointer hover:bg-primary/20 transition-colors items-center"
+                    className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-primary/15 border-b border-primary/25 px-1 sm:px-2 py-1.5 sm:py-2 cursor-pointer hover:bg-primary/20 transition-colors items-center"
                     onClick={() => toggleStage(stage.id)}
                   >
                     <span className="flex items-center justify-center">
@@ -262,10 +262,10 @@ export function PleContractTab(props: PleDataReturn) {
                         return (
                           <div key={sub.id}>
                             {/* SUBETAPA ROW (Level 2) */}
-                            <div
-                              className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-accent/40 border-b px-2 py-1.5 cursor-pointer hover:bg-accent/60 transition-colors items-center"
-                              onClick={() => toggleStage(sub.id)}
-                            >
+                             <div
+                               className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-accent/40 border-b px-1 sm:px-2 py-1.5 cursor-pointer hover:bg-accent/60 transition-colors items-center"
+                               onClick={() => toggleStage(sub.id)}
+                             >
                               <span className="flex items-center justify-center pl-3">
                                 {isSubExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
                               </span>
@@ -287,8 +287,8 @@ export function PleContractTab(props: PleDataReturn) {
                             {isSubExpanded && (
                               <>
                                 {/* SERVIÇOS (Level 3) */}
-                                {subEvents.map(ev => (
-                                  <div key={ev.id} className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-2 py-1.5 hover:bg-accent/20 transition-colors items-center group/row">
+                                 {subEvents.map(ev => (
+                                   <div key={ev.id} className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-1 sm:px-2 py-1.5 hover:bg-accent/20 transition-colors items-center group/row">
                                     <span />
                                     <span className="text-[11px] font-mono text-muted-foreground pl-3">{ev.item_code}</span>
                                     <span className="text-[10px] text-muted-foreground truncate">{ev.discrimination || "—"}</span>
@@ -307,8 +307,8 @@ export function PleContractTab(props: PleDataReturn) {
                                 ))}
 
                                 {/* Add service row */}
-                                {addingEventTo === sub.id ? (
-                                  <div className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-2 py-1.5 bg-accent/10 items-center">
+                                 {addingEventTo === sub.id ? (
+                                   <div className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-1 sm:px-2 py-1.5 bg-accent/10 items-center">
                                     <span />
                                     <Input value={newEvent.item_code} onChange={e => setNewEvent(ev => ({ ...ev, item_code: e.target.value }))} placeholder="1.1.1" className="h-7 text-[11px] border-dashed ml-3" />
                                     <Input value={newEvent.discrimination} onChange={e => setNewEvent(ev => ({ ...ev, discrimination: e.target.value }))} placeholder="SINAPI" className="h-7 text-[11px] border-dashed" />
@@ -360,7 +360,7 @@ export function PleContractTab(props: PleDataReturn) {
             {/* UNGROUPED EVENTS */}
             {ungroupedEvents.length > 0 && (
               <div>
-                <div className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-amber-500/10 border-b border-amber-500/30 px-2 py-2 items-center">
+                <div className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-amber-500/10 border-b border-amber-500/30 px-1 sm:px-2 py-2 items-center">
                   <span />
                   <span className="text-xs font-extrabold text-amber-600 dark:text-amber-400 col-span-4">ITENS SEM GRUPO ({ungroupedEvents.length})</span>
                   <span /><span /><span />
@@ -370,7 +370,7 @@ export function PleContractTab(props: PleDataReturn) {
                   <span />
                 </div>
                 {ungroupedEvents.map(ev => (
-                  <div key={ev.id} className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-2 py-1.5 hover:bg-accent/20 transition-colors items-center group/row">
+                  <div key={ev.id} className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-1 sm:px-2 py-1.5 hover:bg-accent/20 transition-colors items-center group/row">
                     <span />
                     <span className="text-[11px] font-mono text-muted-foreground pl-3">{ev.item_code}</span>
                     <span className="text-[10px] text-muted-foreground truncate">{ev.discrimination || "—"}</span>
@@ -402,7 +402,7 @@ export function PleContractTab(props: PleDataReturn) {
             </div>
 
             {/* Grand Total */}
-            <div className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-muted/50 px-2 py-2.5 sticky bottom-0 border-t-2 border-primary/30">
+            <div className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-muted/50 px-1 sm:px-2 py-2 sm:py-2.5 sticky bottom-0 border-t-2 border-primary/30">
               <span /><span /><span /><span />
               <span className="text-xs font-bold text-foreground">TOTAL GERAL DA PLANILHA</span>
               <span /><span /><span />
