@@ -288,6 +288,8 @@ export function usePleData() {
     if (!currentProjectId) return;
     setIsSaving(true);
     try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userName = getUserName();
       if (!measurementId) {
         await supabase.from("ple_entries").delete().eq("event_id", eventId).eq("house_number", houseNumber);
         setEntries(prev => prev.filter(e => !(e.event_id === eventId && e.house_number === houseNumber)));
@@ -299,7 +301,10 @@ export function usePleData() {
         } else {
           const { data, error } = await supabase
             .from("ple_entries")
-            .insert({ ple_project_id: currentProjectId, event_id: eventId, house_number: houseNumber, measurement_id: measurementId } as any)
+            .insert({ 
+              ple_project_id: currentProjectId, event_id: eventId, house_number: houseNumber, 
+              measurement_id: measurementId, created_by: userData?.user?.id, created_by_name: userName 
+            } as any)
             .select()
             .single();
           if (!error && data) setEntries(prev => [...prev, data as any]);
@@ -308,7 +313,7 @@ export function usePleData() {
     } finally {
       setIsSaving(false);
     }
-  }, [currentProjectId, entries]);
+  }, [currentProjectId, entries, getUserName]);
 
   // Delete group
   const deleteGroup = useCallback(async (id: string) => {
