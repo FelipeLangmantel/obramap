@@ -20,7 +20,15 @@ export function PleContractTab(props: PleDataReturn) {
   const [showAIImport, setShowAIImport] = useState(false);
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set(groups.map(g => g.id)));
 
-  const [newStage, setNewStage] = useState({ code: "", name: "" });
+  const allExpanded = useMemo(() => groups.length > 0 && groups.every(g => expandedStages.has(g.id)), [groups, expandedStages]);
+  const toggleAll = () => {
+    if (allExpanded) {
+      setExpandedStages(new Set());
+    } else {
+      setExpandedStages(new Set(groups.map(g => g.id)));
+    }
+  };
+
   const [newSubstage, setNewSubstage] = useState({ code: "", name: "", parent_id: "" });
   const [addingSubstageTo, setAddingSubstageTo] = useState<string | null>(null);
   const [addingEventTo, setAddingEventTo] = useState<string | null>(null);
