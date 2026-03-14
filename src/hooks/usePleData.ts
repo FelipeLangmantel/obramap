@@ -375,7 +375,7 @@ export function usePleData() {
 
   return {
     projects, currentProject, currentProjectId, setCurrentProjectId,
-    groups, events, measurements, entries, glosses,
+    groups, events, measurements, entries, glosses, auditLogs,
     isLoading, isSaving,
     totals, nextMeasurementNumber,
     loadProjects, createProject, updateProject,
