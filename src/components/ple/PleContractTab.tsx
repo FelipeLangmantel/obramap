@@ -370,7 +370,7 @@ export function PleContractTab(props: PleDataReturn) {
                   <span />
                 </div>
                 {ungroupedEvents.map(ev => (
-                  <div key={ev.id} className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-2 py-1.5 hover:bg-accent/20 transition-colors items-center group/row">
+                  <div key={ev.id} className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-1 sm:px-2 py-1.5 hover:bg-accent/20 transition-colors items-center group/row">
                     <span />
                     <span className="text-[11px] font-mono text-muted-foreground pl-3">{ev.item_code}</span>
                     <span className="text-[10px] text-muted-foreground truncate">{ev.discrimination || "—"}</span>
