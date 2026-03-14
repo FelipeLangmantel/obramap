@@ -74,8 +74,6 @@ export function PleContractInfoTab(props: PleDataReturn) {
     </div>
   );
 
-  const formatCurrency = (v: number | null) =>
-    v != null ? v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—";
 
   return (
     <ScrollArea className="h-full">
