@@ -24,7 +24,6 @@ interface HouseData {
 
 export function PleHouseMapTab({ entries, events, measurements, glosses, currentProject }: PleDataReturn) {
   const totalHouses = currentProject?.total_houses || 0;
-  const contractValue = currentProject?.contract_value || 0;
   const [selectedHouse, setSelectedHouse] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<"all" | "measured" | "pending" | "glossed">("all");
   const [search, setSearch] = useState("");
