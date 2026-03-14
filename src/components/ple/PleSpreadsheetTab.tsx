@@ -30,27 +30,20 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
   const stages = useMemo(() => groups.filter(g => !g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
   const substages = useMemo(() => groups.filter(g => g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
 
-  // Build rows — totalValue = quantity * unit_value = value for 1 HOUSE
-  // When a house is measured, the full totalValue is received per house
   const rows = useMemo(() => {
     return events.map(event => {
-      // Total contract value for this item per house = quantity * unit_value
       const valorPorCasa = event.quantity * event.unit_value;
-      // Total contract = valorPorCasa * total_houses
       const totalContrato = valorPorCasa * (currentProject?.total_houses || 1);
 
-      // Count houses measured for this event in selected measurement
       let qtdMed = 0;
       if (selectedMeasurement) {
         qtdMed = entries.filter(e => e.event_id === event.id && e.measurement_id === selectedMeasurement.id).length;
       } else {
         qtdMed = entries.filter(e => e.event_id === event.id).length;
       }
-      // Value measured = valorPorCasa * number of houses measured
       const valorMed = qtdMed * valorPorCasa;
       const pctItem = totalContrato > 0 ? (valorMed / totalContrato) * 100 : 0;
 
-      // Accumulated
       let qtdAcum = entries.filter(e => e.event_id === event.id).length;
       if (selectedMeasurement) {
         const measurementsUpTo = measurements.filter(m => m.measurement_number <= selectedMeasurement.measurement_number);
@@ -65,7 +58,6 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
     });
   }, [events, entries, measurements, selectedMeasurement, currentProject]);
 
-  // Build 3-level grouped structure with expand/collapse
   const groupedRows = useMemo(() => {
     const result: { type: "stage" | "substage" | "item"; stage?: typeof stages[0]; substage?: typeof substages[0]; row?: typeof rows[0] }[] = [];
     stages.forEach(stage => {
@@ -98,119 +90,117 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
 
   return (
     <div className="border border-border rounded-lg overflow-hidden h-full flex flex-col bg-card">
-      {/* Project info header */}
+      {/* Project info header - responsive */}
       {currentProject && (
-        <div className="bg-muted/50 px-4 py-2.5 grid grid-cols-4 gap-6 border-b border-border text-xs">
+        <div className="bg-muted/50 px-3 sm:px-4 py-2 sm:py-2.5 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-6 border-b border-border text-xs">
           <div>
-            <span className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">MUNICÍPIO</span>
-            <div className="font-bold text-foreground mt-0.5">{currentProject.location || "—"}</div>
+            <span className="text-muted-foreground font-medium uppercase tracking-wider text-[9px] sm:text-[10px]">MUNICÍPIO</span>
+            <div className="font-bold text-foreground mt-0.5 text-[11px] sm:text-xs truncate">{currentProject.location || "—"}</div>
           </div>
           <div>
-            <span className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">OBRA</span>
-            <div className="font-bold text-foreground mt-0.5">{currentProject.name}</div>
+            <span className="text-muted-foreground font-medium uppercase tracking-wider text-[9px] sm:text-[10px]">OBRA</span>
+            <div className="font-bold text-foreground mt-0.5 text-[11px] sm:text-xs truncate">{currentProject.name}</div>
           </div>
           <div>
-            <span className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">NÚMERO DA MEDIÇÃO</span>
-            <div className="font-extrabold text-primary text-lg mt-0.5">{selectedMeasurement?.measurement_number || "Todas"}</div>
+            <span className="text-muted-foreground font-medium uppercase tracking-wider text-[9px] sm:text-[10px]">Nº MEDIÇÃO</span>
+            <div className="font-extrabold text-primary text-base sm:text-lg mt-0.5">{selectedMeasurement?.measurement_number || "Todas"}</div>
           </div>
           <div>
-            <span className="text-muted-foreground font-medium uppercase tracking-wider text-[10px]">PERÍODO DA MEDIÇÃO</span>
-            <div className="font-bold text-foreground mt-0.5">{selectedMeasurement?.period_label || "—"}</div>
+            <span className="text-muted-foreground font-medium uppercase tracking-wider text-[9px] sm:text-[10px]">PERÍODO</span>
+            <div className="font-bold text-foreground mt-0.5 text-[11px] sm:text-xs truncate">{selectedMeasurement?.period_label || "—"}</div>
           </div>
         </div>
       )}
 
-      {/* Expand/Collapse button bar */}
-      <div className="px-4 py-1.5 border-b border-border flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={toggleAll} className="gap-1.5 text-xs h-7">
-          <ChevronsUpDown className="h-3.5 w-3.5" /> {allExpanded ? "Recolher Tudo" : "Expandir Tudo"}
+      {/* Expand/Collapse */}
+      <div className="px-3 sm:px-4 py-1.5 border-b border-border flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={toggleAll} className="gap-1.5 text-[10px] sm:text-xs h-7">
+          <ChevronsUpDown className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> {allExpanded ? "Recolher" : "Expandir"}
         </Button>
       </div>
 
       <ScrollArea className="flex-1">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/80 text-[10px] uppercase tracking-wide border-b-2 border-border">
-              <TableHead className="w-14 font-extrabold text-foreground">ITEM</TableHead>
-              <TableHead className="w-24 font-extrabold text-foreground">DISCRIMINAÇÃO</TableHead>
-              <TableHead className="w-20 font-extrabold text-foreground">CÓD. SINAPI</TableHead>
-              <TableHead className="font-extrabold text-foreground">DESCRIÇÃO SINAPI</TableHead>
-              <TableHead className="w-12 font-extrabold text-foreground text-center">UNID</TableHead>
-              <TableHead className="w-14 font-extrabold text-foreground text-right">QTDE</TableHead>
-              <TableHead className="w-20 font-extrabold text-foreground text-right">UNIT. (R$)</TableHead>
-              <TableHead className="w-24 font-extrabold text-foreground text-right">TOTAL (R$)</TableHead>
-              <TableHead className="w-16 font-extrabold text-right text-emerald-600 dark:text-emerald-400">QTD MED</TableHead>
-              <TableHead className="w-24 font-extrabold text-right text-emerald-600 dark:text-emerald-400">VALOR MED</TableHead>
-              <TableHead className="w-14 font-extrabold text-right text-amber-600 dark:text-amber-400">% ITEM</TableHead>
-              <TableHead className="w-14 font-extrabold text-right text-amber-600 dark:text-amber-400">% ACUM</TableHead>
-              <TableHead className="w-24 font-extrabold text-right text-sky-600 dark:text-sky-400">SALDO</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {groupedRows.map((item) => {
-              if (item.type === "stage" && item.stage) {
-                const isExp = expandedGroups.has(item.stage.id);
-                return (
-                  <TableRow key={`s-${item.stage.id}`} className="bg-primary/10 border-t-2 border-primary/40 cursor-pointer hover:bg-primary/15" onClick={() => toggleGroup(item.stage!.id)}>
-                    <TableCell colSpan={13} className="font-black text-xs text-primary py-2 tracking-wide uppercase">
-                      {isExp ? "▾" : "▸"} {item.stage.code} – {item.stage.name.toUpperCase()}
-                    </TableCell>
-                  </TableRow>
-                );
-              }
-              if (item.type === "substage" && item.substage) {
-                const isExp = expandedGroups.has(item.substage.id);
-                return (
-                  <TableRow key={`sub-${item.substage.id}`} className="bg-muted/40 border-t border-border cursor-pointer hover:bg-muted/60" onClick={() => toggleGroup(item.substage!.id)}>
-                    <TableCell colSpan={13} className="font-bold text-[11px] text-foreground/80 py-1.5 pl-6">
-                      {isExp ? "▾" : "▸"} {item.substage.code} – {item.substage.name}
-                    </TableCell>
-                  </TableRow>
-                );
-              }
-              if (item.type === "item" && item.row) {
-                const r = item.row;
-                return (
-                  <TableRow key={r.event.id} className="text-[11px] hover:bg-muted/30 border-b border-border/50">
-                    <TableCell className="font-mono font-semibold pl-8 text-foreground">{r.event.item_code}</TableCell>
-                    <TableCell className="text-muted-foreground">{r.event.discrimination || "—"}</TableCell>
-                    <TableCell className="font-mono text-muted-foreground">{r.event.sinapi_code || "—"}</TableCell>
-                    <TableCell className="max-w-xs truncate text-foreground">{r.event.description}</TableCell>
-                    <TableCell className="text-center text-muted-foreground">{r.event.unit}</TableCell>
-                    <TableCell className="text-right font-mono text-foreground">{fmt(r.event.quantity)}</TableCell>
-                    <TableCell className="text-right font-mono text-foreground">{fmtCur(r.event.unit_value)}</TableCell>
-                    <TableCell className="text-right font-mono font-semibold text-foreground">{fmtCur(r.valorPorCasa)}</TableCell>
-                    <TableCell className="text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                      {r.qtdMed > 0 ? fmt(r.qtdMed) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
-                      {r.qtdMed > 0 ? fmtCur(r.valorMed) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">
-                      {r.pctItem > 0 ? `${r.pctItem.toFixed(1)}%` : "—"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">
-                      {r.pctAcum > 0 ? `${r.pctAcum.toFixed(1)}%` : "—"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono font-semibold text-sky-600 dark:text-sky-400">
-                      {fmtCur(r.saldo)}
-                    </TableCell>
-                  </TableRow>
-                );
-              }
-              return null;
-            })}
-            <TableRow className="bg-muted/80 font-extrabold text-xs border-t-2 border-border">
-              <TableCell colSpan={7} className="text-right text-foreground uppercase tracking-wide">TOTAIS:</TableCell>
-              <TableCell className="text-right font-mono text-foreground">{fmtCur(totalContrato)}</TableCell>
-              <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400">—</TableCell>
-              <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400">{fmtCur(totalMedido)}</TableCell>
-              <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">{totalContrato > 0 ? `${((totalMedido / totalContrato) * 100).toFixed(1)}%` : "—"}</TableCell>
-              <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">{totalContrato > 0 ? `${((totalAcum / totalContrato) * 100).toFixed(1)}%` : "—"}</TableCell>
-              <TableCell className="text-right font-mono text-sky-600 dark:text-sky-400">{fmtCur(totalContrato - totalAcum)}</TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+        <div className="min-w-[700px]">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/80 text-[9px] sm:text-[10px] uppercase tracking-wide border-b-2 border-border">
+                <TableHead className="w-12 sm:w-14 font-extrabold text-foreground">ITEM</TableHead>
+                <TableHead className="font-extrabold text-foreground">DESCRIÇÃO</TableHead>
+                <TableHead className="w-10 sm:w-12 font-extrabold text-foreground text-center">UNID</TableHead>
+                <TableHead className="w-12 sm:w-14 font-extrabold text-foreground text-right">QTDE</TableHead>
+                <TableHead className="w-16 sm:w-20 font-extrabold text-foreground text-right">UNIT.</TableHead>
+                <TableHead className="w-20 sm:w-24 font-extrabold text-foreground text-right">TOTAL</TableHead>
+                <TableHead className="w-12 sm:w-16 font-extrabold text-right text-emerald-600 dark:text-emerald-400">MED</TableHead>
+                <TableHead className="w-20 sm:w-24 font-extrabold text-right text-emerald-600 dark:text-emerald-400">V. MED</TableHead>
+                <TableHead className="w-10 sm:w-14 font-extrabold text-right text-amber-600 dark:text-amber-400">%</TableHead>
+                <TableHead className="w-10 sm:w-14 font-extrabold text-right text-amber-600 dark:text-amber-400">AC%</TableHead>
+                <TableHead className="w-20 sm:w-24 font-extrabold text-right text-sky-600 dark:text-sky-400">SALDO</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {groupedRows.map((item) => {
+                if (item.type === "stage" && item.stage) {
+                  const isExp = expandedGroups.has(item.stage.id);
+                  return (
+                    <TableRow key={`s-${item.stage.id}`} className="bg-primary/10 border-t-2 border-primary/40 cursor-pointer hover:bg-primary/15" onClick={() => toggleGroup(item.stage!.id)}>
+                      <TableCell colSpan={11} className="font-black text-[10px] sm:text-xs text-primary py-1.5 sm:py-2 tracking-wide uppercase">
+                        {isExp ? "▾" : "▸"} {item.stage.code} – {item.stage.name.toUpperCase()}
+                      </TableCell>
+                    </TableRow>
+                  );
+                }
+                if (item.type === "substage" && item.substage) {
+                  const isExp = expandedGroups.has(item.substage.id);
+                  return (
+                    <TableRow key={`sub-${item.substage.id}`} className="bg-muted/40 border-t border-border cursor-pointer hover:bg-muted/60" onClick={() => toggleGroup(item.substage!.id)}>
+                      <TableCell colSpan={11} className="font-bold text-[10px] sm:text-[11px] text-foreground/80 py-1 sm:py-1.5 pl-4 sm:pl-6">
+                        {isExp ? "▾" : "▸"} {item.substage.code} – {item.substage.name}
+                      </TableCell>
+                    </TableRow>
+                  );
+                }
+                if (item.type === "item" && item.row) {
+                  const r = item.row;
+                  return (
+                    <TableRow key={r.event.id} className="text-[10px] sm:text-[11px] hover:bg-muted/30 border-b border-border/50">
+                      <TableCell className="font-mono font-semibold pl-6 sm:pl-8 text-foreground">{r.event.item_code}</TableCell>
+                      <TableCell className="max-w-[80px] sm:max-w-xs truncate text-foreground">{r.event.description}</TableCell>
+                      <TableCell className="text-center text-muted-foreground">{r.event.unit}</TableCell>
+                      <TableCell className="text-right font-mono text-foreground">{fmt(r.event.quantity)}</TableCell>
+                      <TableCell className="text-right font-mono text-foreground">{fmtCur(r.event.unit_value)}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-foreground">{fmtCur(r.valorPorCasa)}</TableCell>
+                      <TableCell className="text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        {r.qtdMed > 0 ? fmt(r.qtdMed) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                        {r.qtdMed > 0 ? fmtCur(r.valorMed) : "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">
+                        {r.pctItem > 0 ? `${r.pctItem.toFixed(0)}%` : "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">
+                        {r.pctAcum > 0 ? `${r.pctAcum.toFixed(0)}%` : "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono font-semibold text-sky-600 dark:text-sky-400">
+                        {fmtCur(r.saldo)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                }
+                return null;
+              })}
+              <TableRow className="bg-muted/80 font-extrabold text-[10px] sm:text-xs border-t-2 border-border">
+                <TableCell colSpan={5} className="text-right text-foreground uppercase tracking-wide">TOTAIS:</TableCell>
+                <TableCell className="text-right font-mono text-foreground">{fmtCur(totalContrato)}</TableCell>
+                <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400">—</TableCell>
+                <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400">{fmtCur(totalMedido)}</TableCell>
+                <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">{totalContrato > 0 ? `${((totalMedido / totalContrato) * 100).toFixed(0)}%` : "—"}</TableCell>
+                <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">{totalContrato > 0 ? `${((totalAcum / totalContrato) * 100).toFixed(0)}%` : "—"}</TableCell>
+                <TableCell className="text-right font-mono text-sky-600 dark:text-sky-400">{fmtCur(totalContrato - totalAcum)}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
       </ScrollArea>
     </div>
   );
