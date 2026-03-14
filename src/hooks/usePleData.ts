@@ -77,7 +77,7 @@ export interface PleEntry {
 }
 
 export function usePleData() {
-  const { company } = useAuth();
+  const { company, profile } = useAuth();
   const [projects, setProjects] = useState<PleProject[]>([]);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [groups, setGroups] = useState<PleEventGroup[]>([]);
@@ -85,8 +85,26 @@ export function usePleData() {
   const [measurements, setMeasurements] = useState<PleMeasurement[]>([]);
   const [entries, setEntries] = useState<PleEntry[]>([]);
   const [glosses, setGlosses] = useState<PleGloss[]>([]);
+  const [auditLogs, setAuditLogs] = useState<PleAuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  const getUserName = useCallback(() => profile?.display_name || "Usuário", [profile]);
+
+  const logAudit = useCallback(async (action: string, details: any = {}, measurementId?: string | null) => {
+    if (!currentProjectId) return;
+    const { data: userData } = await supabase.auth.getUser();
+    const entry = {
+      ple_project_id: currentProjectId,
+      measurement_id: measurementId || null,
+      action,
+      details,
+      performed_by: userData?.user?.id,
+      performed_by_name: getUserName(),
+    };
+    const { data } = await supabase.from("ple_audit_log").insert(entry as any).select().single();
+    if (data) setAuditLogs(prev => [data as any, ...prev]);
+  }, [currentProjectId, getUserName]);
 
   const currentProject = useMemo(() =>
     projects.find(p => p.id === currentProjectId) || null,
