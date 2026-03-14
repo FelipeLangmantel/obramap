@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Eye, CheckCircle, Undo2, ShieldCheck } from "lucide-react";
+import { Eye, Undo2, ShieldCheck } from "lucide-react";
 import { PleAuditDialog } from "./PleAuditDialog";
 import type { usePleData } from "@/hooks/usePleData";
 import type { PleMeasurement } from "@/hooks/usePleData";

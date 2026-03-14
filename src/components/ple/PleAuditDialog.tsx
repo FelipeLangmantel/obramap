@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { CheckCircle, XCircle, AlertTriangle, ShieldCheck } from "lucide-react";
+import { CheckCircle, AlertTriangle, ShieldCheck } from "lucide-react";
 import type { PleEvent, PleEventGroup, PleMeasurement, PleEntry } from "@/hooks/usePleData";
 
 export interface PleGloss {
