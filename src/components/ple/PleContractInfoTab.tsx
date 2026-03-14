@@ -40,7 +40,7 @@ export function PleContractInfoTab(props: PleDataReturn) {
   if (!currentProject) return null;
 
   const handleSave = async () => {
-    const { id, company_id, created_at, ...rest } = form as any;
+    const { id: _id, company_id: _cid, created_at: _ca, ...rest } = form as any;
     await updateProject(currentProject.id, rest);
     setIsEditing(false);
     toast.success("Informações do contrato salvas com sucesso");
