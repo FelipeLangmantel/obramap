@@ -4,6 +4,17 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import type { PleGloss } from "@/components/ple/PleAuditDialog";
 
+export interface PleAuditLogEntry {
+  id: string;
+  ple_project_id: string;
+  measurement_id: string | null;
+  action: string;
+  details: any;
+  performed_by: string | null;
+  performed_by_name: string | null;
+  performed_at: string;
+}
+
 export interface PleProject {
   id: string;
   company_id: string;
@@ -60,10 +71,13 @@ export interface PleEntry {
   event_id: string;
   house_number: number;
   measurement_id: string;
+  created_at?: string;
+  created_by?: string | null;
+  created_by_name?: string | null;
 }
 
 export function usePleData() {
-  const { company } = useAuth();
+  const { company, profile } = useAuth();
   const [projects, setProjects] = useState<PleProject[]>([]);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [groups, setGroups] = useState<PleEventGroup[]>([]);
@@ -71,8 +85,26 @@ export function usePleData() {
   const [measurements, setMeasurements] = useState<PleMeasurement[]>([]);
   const [entries, setEntries] = useState<PleEntry[]>([]);
   const [glosses, setGlosses] = useState<PleGloss[]>([]);
+  const [auditLogs, setAuditLogs] = useState<PleAuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  const getUserName = useCallback(() => profile?.display_name || "Usuário", [profile]);
+
+  const logAudit = useCallback(async (action: string, details: any = {}, measurementId?: string | null) => {
+    if (!currentProjectId) return;
+    const { data: userData } = await supabase.auth.getUser();
+    const entry = {
+      ple_project_id: currentProjectId,
+      measurement_id: measurementId || null,
+      action,
+      details,
+      performed_by: userData?.user?.id,
+      performed_by_name: getUserName(),
+    };
+    const { data } = await supabase.from("ple_audit_log").insert(entry as any).select().single();
+    if (data) setAuditLogs(prev => [data as any, ...prev]);
+  }, [currentProjectId, getUserName]);
 
   const currentProject = useMemo(() =>
     projects.find(p => p.id === currentProjectId) || null,
@@ -92,18 +124,20 @@ export function usePleData() {
   const loadProjectData = useCallback(async (projectId: string) => {
     setIsLoading(true);
     try {
-      const [groupsRes, eventsRes, measurementsRes, entriesRes, glossesRes] = await Promise.all([
+      const [groupsRes, eventsRes, measurementsRes, entriesRes, glossesRes, auditRes] = await Promise.all([
         supabase.from("ple_event_groups").select("*").eq("ple_project_id", projectId).order("display_order"),
         supabase.from("ple_events").select("*").eq("ple_project_id", projectId).order("display_order"),
         supabase.from("ple_measurements").select("*").eq("ple_project_id", projectId).order("measurement_number"),
         supabase.from("ple_entries").select("*").eq("ple_project_id", projectId),
         supabase.from("ple_glosses").select("*").eq("ple_project_id", projectId),
+        supabase.from("ple_audit_log").select("*").eq("ple_project_id", projectId).order("performed_at", { ascending: false }).limit(500),
       ]);
       if (!groupsRes.error) setGroups(groupsRes.data as any);
       if (!eventsRes.error) setEvents(eventsRes.data as any);
       if (!measurementsRes.error) setMeasurements(measurementsRes.data as any);
       if (!entriesRes.error) setEntries(entriesRes.data as any);
       if (!glossesRes.error) setGlosses(glossesRes.data as any);
+      if (!auditRes.error) setAuditLogs(auditRes.data as any);
     } finally {
       setIsLoading(false);
     }
@@ -132,57 +166,61 @@ export function usePleData() {
   const createMeasurement = useCallback(async (data: { measurement_number: number; period_label: string; start_date?: string; end_date?: string }) => {
     if (!currentProjectId) return null;
     const { data: userData } = await supabase.auth.getUser();
+    const userName = getUserName();
     const { data: result, error } = await supabase
       .from("ple_measurements")
-      .insert({ ...data, ple_project_id: currentProjectId, registered_by: userData?.user?.id } as any)
+      .insert({ ...data, ple_project_id: currentProjectId, registered_by: userData?.user?.id, registered_by_name: userName } as any)
       .select()
       .single();
     if (error) { toast.error(error.code === "23505" ? "Medição já existe" : "Erro ao criar medição"); return null; }
     setMeasurements(prev => [...prev, result as any]);
+    logAudit("measurement_created", { measurement_number: data.measurement_number, period_label: data.period_label }, (result as any).id);
     toast.success(`Medição ${data.measurement_number} criada!`);
     return result as any;
-  }, [currentProjectId]);
+  }, [currentProjectId, getUserName, logAudit]);
 
   // Approve measurement (with or without glosses)
   const approveMeasurement = useCallback(async (id: string, hasGlosses?: boolean) => {
     const newStatus = hasGlosses ? "approved_with_glosses" : "approved";
-    const { error } = await supabase.from("ple_measurements").update({ status: newStatus } as any).eq("id", id);
+    const { data: userData } = await supabase.auth.getUser();
+    const userName = getUserName();
+    const { error } = await supabase.from("ple_measurements").update({ 
+      status: newStatus, approved_at: new Date().toISOString(), approved_by: userData?.user?.id, approved_by_name: userName 
+    } as any).eq("id", id);
     if (error) { toast.error("Erro ao aprovar"); return; }
 
-    // If there are glosses, remove glossed entries from the grid
     if (hasGlosses) {
       const measGlosses = glosses.filter(g => g.measurement_id === id && !g.resolved);
       for (const g of measGlosses) {
-        // Delete the entry for the glossed cell
         await supabase.from("ple_entries").delete().eq("event_id", g.event_id).eq("house_number", g.house_number).eq("measurement_id", id);
       }
-      // Update local entries state
       const glossKeys = new Set(measGlosses.map(g => `${g.event_id}:${g.house_number}:${id}`));
       setEntries(prev => prev.filter(e => !glossKeys.has(`${e.event_id}:${e.house_number}:${e.measurement_id}`)));
     }
 
     setMeasurements(prev => prev.map(m => m.id === id ? { ...m, status: newStatus } : m));
+    logAudit("measurement_approved", { status: newStatus, glosses_count: hasGlosses ? glosses.filter(g => g.measurement_id === id && !g.resolved).length : 0 }, id);
     toast.success(hasGlosses ? "Medição aprovada com glossas!" : "Medição aprovada!");
-  }, [glosses]);
+  }, [glosses, getUserName, logAudit]);
 
   // Undo measurement approval (temporary for testing)
   const undoMeasurementApproval = useCallback(async (id: string) => {
-    const { error } = await supabase.from("ple_measurements").update({ status: "draft" } as any).eq("id", id);
+    const { error } = await supabase.from("ple_measurements").update({ status: "draft", approved_at: null, approved_by: null, approved_by_name: null } as any).eq("id", id);
     if (error) { toast.error("Erro ao desfazer aprovação"); return; }
     setMeasurements(prev => prev.map(m => m.id === id ? { ...m, status: "draft" } : m));
+    logAudit("measurement_undo_approval", {}, id);
     toast.success("Aprovação desfeita! Medição voltou ao status rascunho.");
-  }, []);
+  }, [logAudit]);
 
   // Toggle gloss on a cell
   const toggleGloss = useCallback(async (eventId: string, houseNumber: number, measurementId: string) => {
     if (!currentProjectId) return;
     const existing = glosses.find(g => g.measurement_id === measurementId && g.event_id === eventId && g.house_number === houseNumber && !g.resolved);
     if (existing) {
-      // Remove gloss
       await supabase.from("ple_glosses").delete().eq("id", existing.id);
       setGlosses(prev => prev.filter(g => g.id !== existing.id));
+      logAudit("gloss_removed", { event_id: eventId, house_number: houseNumber }, measurementId);
     } else {
-      // Add gloss
       const { data: userData } = await supabase.auth.getUser();
       const { data, error } = await supabase
         .from("ple_glosses")
@@ -195,9 +233,12 @@ export function usePleData() {
         } as any)
         .select()
         .single();
-      if (!error && data) setGlosses(prev => [...prev, data as any]);
+      if (!error && data) {
+        setGlosses(prev => [...prev, data as any]);
+        logAudit("gloss_added", { event_id: eventId, house_number: houseNumber }, measurementId);
+      }
     }
-  }, [currentProjectId, glosses]);
+  }, [currentProjectId, glosses, logAudit]);
 
   // Create event group
   const createGroup = useCallback(async (data: { code: string; name: string; parent_id?: string | null }) => {
@@ -247,6 +288,8 @@ export function usePleData() {
     if (!currentProjectId) return;
     setIsSaving(true);
     try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userName = getUserName();
       if (!measurementId) {
         await supabase.from("ple_entries").delete().eq("event_id", eventId).eq("house_number", houseNumber);
         setEntries(prev => prev.filter(e => !(e.event_id === eventId && e.house_number === houseNumber)));
@@ -258,7 +301,10 @@ export function usePleData() {
         } else {
           const { data, error } = await supabase
             .from("ple_entries")
-            .insert({ ple_project_id: currentProjectId, event_id: eventId, house_number: houseNumber, measurement_id: measurementId } as any)
+            .insert({ 
+              ple_project_id: currentProjectId, event_id: eventId, house_number: houseNumber, 
+              measurement_id: measurementId, created_by: userData?.user?.id, created_by_name: userName 
+            } as any)
             .select()
             .single();
           if (!error && data) setEntries(prev => [...prev, data as any]);
@@ -267,7 +313,7 @@ export function usePleData() {
     } finally {
       setIsSaving(false);
     }
-  }, [currentProjectId, entries]);
+  }, [currentProjectId, entries, getUserName]);
 
   // Delete group
   const deleteGroup = useCallback(async (id: string) => {
@@ -329,7 +375,7 @@ export function usePleData() {
 
   return {
     projects, currentProject, currentProjectId, setCurrentProjectId,
-    groups, events, measurements, entries, glosses,
+    groups, events, measurements, entries, glosses, auditLogs,
     isLoading, isSaving,
     totals, nextMeasurementNumber,
     loadProjects, createProject, updateProject,
