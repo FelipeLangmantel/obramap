@@ -4,18 +4,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Eye, CheckCircle } from "lucide-react";
+import { Eye, CheckCircle, Undo2, ShieldCheck } from "lucide-react";
+import { PleAuditDialog } from "./PleAuditDialog";
 import type { usePleData } from "@/hooks/usePleData";
 import type { PleMeasurement } from "@/hooks/usePleData";
 
 type PleDataReturn = ReturnType<typeof usePleData>;
 
-export function PleHistoryTab({ measurements, entries, events, groups, currentProject, approveMeasurement }: PleDataReturn) {
+export function PleHistoryTab({ measurements, entries, events, groups, currentProject, approveMeasurement, undoMeasurementApproval, glosses, toggleGloss }: PleDataReturn) {
   const contractValue = currentProject?.contract_value || 0;
   const totalHouses = currentProject?.total_houses || 1;
   const fmtCur = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   const [detailMeasurement, setDetailMeasurement] = useState<PleMeasurement | null>(null);
+  const [auditMeasurement, setAuditMeasurement] = useState<PleMeasurement | null>(null);
 
   const rows = useMemo(() => {
     let acumMedido = 0;
@@ -26,7 +28,6 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
       measuredEntries.forEach(entry => {
         eventHouseCounts[entry.event_id] = (eventHouseCounts[entry.event_id] || 0) + 1;
       });
-      // FIX: value per house = quantity * unit_value (full item value)
       Object.entries(eventHouseCounts).forEach(([eventId, houseCount]) => {
         const event = events.find(ev => ev.id === eventId);
         if (event) valorMedido += (event.quantity * event.unit_value) * houseCount;
@@ -35,10 +36,11 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
       acumMedido += valorMedido;
       const totalCasas = new Set(measuredEntries.map(e => e.house_number)).size;
       const pctAvanco = contractValue > 0 ? (acumMedido / contractValue) * 100 : 0;
+      const glossCount = glosses.filter(g => g.measurement_id === m.id && !g.resolved).length;
 
-      return { measurement: m, valorMedido, pctAvanco, totalCasas, totalServicos: Object.keys(eventHouseCounts).length };
+      return { measurement: m, valorMedido, pctAvanco, totalCasas, totalServicos: Object.keys(eventHouseCounts).length, glossCount };
     });
-  }, [measurements, entries, events, contractValue]);
+  }, [measurements, entries, events, contractValue, glosses]);
 
   // Detail data for dialog
   const detailData = useMemo(() => {
@@ -50,7 +52,6 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
     const eventDetails = events.map(ev => {
       const housesMeasured = measEntries.filter(e => e.event_id === ev.id).map(e => e.house_number).sort((a, b) => a - b);
       if (housesMeasured.length === 0) return null;
-      // FIX: valorPorCasa = quantity * unit_value
       const valorPorCasa = ev.quantity * ev.unit_value;
       const valorTotal = valorPorCasa * housesMeasured.length;
       const totalContratoItem = valorPorCasa * totalHouses;
@@ -61,7 +62,6 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
     const totalValor = eventDetails.reduce((s, d) => s + d.valorTotal, 0);
     const totalCasas = new Set(measEntries.map(e => e.house_number)).size;
 
-    // Accumulated
     const measurementsUpTo = measurements.filter(m => m.measurement_number <= detailMeasurement.measurement_number);
     const measIdsUpTo = new Set(measurementsUpTo.map(m => m.id));
     const acumEntries = entries.filter(e => measIdsUpTo.has(e.measurement_id));
@@ -76,6 +76,13 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
 
     return { eventDetails, totalValor, totalCasas, acumValor, pctAcum, stages, substages };
   }, [detailMeasurement, entries, events, groups, measurements, contractValue, totalHouses]);
+
+  const getStatusBadge = (status: string, glossCount: number) => {
+    if (status === "approved") return <Badge className="bg-emerald-600 hover:bg-emerald-700">APROVADA</Badge>;
+    if (status === "approved_with_glosses") return <Badge className="bg-amber-600 hover:bg-amber-700">APROVADA C/ GLOSSAS</Badge>;
+    if (glossCount > 0) return <Badge className="bg-destructive hover:bg-destructive/90">{glossCount} GLOSSA(S)</Badge>;
+    return <Badge className="bg-sky-600 hover:bg-sky-700">PENDENTE</Badge>;
+  };
 
   if (measurements.length === 0) {
     return (
@@ -119,25 +126,33 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
                   </Badge>
                 </TableCell>
                 <TableCell className="text-center">
-                  <Badge className={r.measurement.status === "approved"
-                    ? "bg-emerald-600 hover:bg-emerald-700"
-                    : "bg-amber-600 hover:bg-amber-700"
-                  }>
-                    {r.measurement.status === "approved" ? "APROVADA" : "PENDENTE"}
-                  </Badge>
+                  {getStatusBadge(r.measurement.status, r.glossCount)}
                 </TableCell>
                 <TableCell className="text-center">
-                  <div className="flex items-center justify-center gap-1">
+                  <div className="flex items-center justify-center gap-1 flex-wrap">
                     <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => setDetailMeasurement(r.measurement)}>
                       <Eye className="h-3 w-3" /> Ver
                     </Button>
+                    {/* Aferir button - opens audit dialog */}
                     {r.measurement.status !== "approved" && (
                       <Button
+                        variant="outline"
                         size="sm"
-                        className="h-7 text-xs gap-1 bg-emerald-600 hover:bg-emerald-700"
-                        onClick={() => approveMeasurement(r.measurement.id)}
+                        className="h-7 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
+                        onClick={() => setAuditMeasurement(r.measurement)}
                       >
-                        <CheckCircle className="h-3 w-3" /> Aprovar
+                        <ShieldCheck className="h-3 w-3" /> Aferir
+                      </Button>
+                    )}
+                    {/* Undo button (temporary for testing) */}
+                    {(r.measurement.status === "approved" || r.measurement.status === "approved_with_glosses") && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1 border-amber-500/30 text-amber-600 hover:bg-amber-500/10"
+                        onClick={() => undoMeasurementApproval(r.measurement.id)}
+                      >
+                        <Undo2 className="h-3 w-3" /> Desfazer
                       </Button>
                     )}
                   </div>
@@ -148,6 +163,7 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
         </Table>
       </div>
 
+      {/* Detail Dialog */}
       <Dialog open={!!detailMeasurement} onOpenChange={() => setDetailMeasurement(null)}>
         <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
           <DialogHeader>
@@ -156,9 +172,6 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
               {detailMeasurement?.period_label && (
                 <Badge variant="outline" className="font-normal">{detailMeasurement.period_label}</Badge>
               )}
-              <Badge className={detailMeasurement?.status === "approved" ? "bg-emerald-600" : "bg-amber-600"}>
-                {detailMeasurement?.status === "approved" ? "APROVADA" : "PENDENTE"}
-              </Badge>
             </DialogTitle>
           </DialogHeader>
 
@@ -225,6 +238,22 @@ export function PleHistoryTab({ measurements, entries, events, groups, currentPr
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Audit Dialog */}
+      {auditMeasurement && (
+        <PleAuditDialog
+          open={!!auditMeasurement}
+          onClose={() => setAuditMeasurement(null)}
+          measurement={auditMeasurement}
+          entries={entries}
+          events={events}
+          groups={groups}
+          glosses={glosses}
+          totalHouses={currentProject?.total_houses || 1}
+          onToggleGloss={toggleGloss}
+          onApproveMeasurement={(id, hasGlosses) => approveMeasurement(id, hasGlosses)}
+        />
+      )}
     </>
   );
 }
