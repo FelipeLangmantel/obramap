@@ -166,46 +166,51 @@ export function usePleData() {
   const createMeasurement = useCallback(async (data: { measurement_number: number; period_label: string; start_date?: string; end_date?: string }) => {
     if (!currentProjectId) return null;
     const { data: userData } = await supabase.auth.getUser();
+    const userName = getUserName();
     const { data: result, error } = await supabase
       .from("ple_measurements")
-      .insert({ ...data, ple_project_id: currentProjectId, registered_by: userData?.user?.id } as any)
+      .insert({ ...data, ple_project_id: currentProjectId, registered_by: userData?.user?.id, registered_by_name: userName } as any)
       .select()
       .single();
     if (error) { toast.error(error.code === "23505" ? "Medição já existe" : "Erro ao criar medição"); return null; }
     setMeasurements(prev => [...prev, result as any]);
+    logAudit("measurement_created", { measurement_number: data.measurement_number, period_label: data.period_label }, (result as any).id);
     toast.success(`Medição ${data.measurement_number} criada!`);
     return result as any;
-  }, [currentProjectId]);
+  }, [currentProjectId, getUserName, logAudit]);
 
   // Approve measurement (with or without glosses)
   const approveMeasurement = useCallback(async (id: string, hasGlosses?: boolean) => {
     const newStatus = hasGlosses ? "approved_with_glosses" : "approved";
-    const { error } = await supabase.from("ple_measurements").update({ status: newStatus } as any).eq("id", id);
+    const { data: userData } = await supabase.auth.getUser();
+    const userName = getUserName();
+    const { error } = await supabase.from("ple_measurements").update({ 
+      status: newStatus, approved_at: new Date().toISOString(), approved_by: userData?.user?.id, approved_by_name: userName 
+    } as any).eq("id", id);
     if (error) { toast.error("Erro ao aprovar"); return; }
 
-    // If there are glosses, remove glossed entries from the grid
     if (hasGlosses) {
       const measGlosses = glosses.filter(g => g.measurement_id === id && !g.resolved);
       for (const g of measGlosses) {
-        // Delete the entry for the glossed cell
         await supabase.from("ple_entries").delete().eq("event_id", g.event_id).eq("house_number", g.house_number).eq("measurement_id", id);
       }
-      // Update local entries state
       const glossKeys = new Set(measGlosses.map(g => `${g.event_id}:${g.house_number}:${id}`));
       setEntries(prev => prev.filter(e => !glossKeys.has(`${e.event_id}:${e.house_number}:${e.measurement_id}`)));
     }
 
     setMeasurements(prev => prev.map(m => m.id === id ? { ...m, status: newStatus } : m));
+    logAudit("measurement_approved", { status: newStatus, glosses_count: hasGlosses ? glosses.filter(g => g.measurement_id === id && !g.resolved).length : 0 }, id);
     toast.success(hasGlosses ? "Medição aprovada com glossas!" : "Medição aprovada!");
-  }, [glosses]);
+  }, [glosses, getUserName, logAudit]);
 
   // Undo measurement approval (temporary for testing)
   const undoMeasurementApproval = useCallback(async (id: string) => {
-    const { error } = await supabase.from("ple_measurements").update({ status: "draft" } as any).eq("id", id);
+    const { error } = await supabase.from("ple_measurements").update({ status: "draft", approved_at: null, approved_by: null, approved_by_name: null } as any).eq("id", id);
     if (error) { toast.error("Erro ao desfazer aprovação"); return; }
     setMeasurements(prev => prev.map(m => m.id === id ? { ...m, status: "draft" } : m));
+    logAudit("measurement_undo_approval", {}, id);
     toast.success("Aprovação desfeita! Medição voltou ao status rascunho.");
-  }, []);
+  }, [logAudit]);
 
   // Toggle gloss on a cell
   const toggleGloss = useCallback(async (eventId: string, houseNumber: number, measurementId: string) => {
