@@ -1,0 +1,21 @@
+
+ALTER TABLE public.ple_projects
+  ADD COLUMN IF NOT EXISTS unit_value numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS executor_company text,
+  ADD COLUMN IF NOT EXISTS responsible_engineer text,
+  ADD COLUMN IF NOT EXISTS inspector_name text,
+  ADD COLUMN IF NOT EXISTS bdi_percentage numeric DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS address_street text,
+  ADD COLUMN IF NOT EXISTS address_number text,
+  ADD COLUMN IF NOT EXISTS address_neighborhood text,
+  ADD COLUMN IF NOT EXISTS address_city text,
+  ADD COLUMN IF NOT EXISTS address_state text,
+  ADD COLUMN IF NOT EXISTS address_zip text,
+  ADD COLUMN IF NOT EXISTS cnpj text,
+  ADD COLUMN IF NOT EXISTS contract_type text,
+  ADD COLUMN IF NOT EXISTS funding_source text,
+  ADD COLUMN IF NOT EXISTS contract_sign_date date,
+  ADD COLUMN IF NOT EXISTS contract_end_date date,
+  ADD COLUMN IF NOT EXISTS art_rrt_number text,
+  ADD COLUMN IF NOT EXISTS notes text,
+  ADD COLUMN IF NOT EXISTS updated_by uuid REFERENCES auth.users(id);

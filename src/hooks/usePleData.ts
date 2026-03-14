@@ -27,6 +27,25 @@ export interface PleProject {
   contract_value: number;
   start_date: string | null;
   created_at: string;
+  unit_value: number | null;
+  executor_company: string | null;
+  responsible_engineer: string | null;
+  inspector_name: string | null;
+  bdi_percentage: number | null;
+  address_street: string | null;
+  address_number: string | null;
+  address_neighborhood: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
+  cnpj: string | null;
+  contract_type: string | null;
+  funding_source: string | null;
+  contract_sign_date: string | null;
+  contract_end_date: string | null;
+  art_rrt_number: string | null;
+  notes: string | null;
+  updated_by: string | null;
 }
 
 export interface PleEventGroup {
