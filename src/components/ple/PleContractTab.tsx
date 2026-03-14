@@ -13,9 +13,8 @@ type PleDataReturn = ReturnType<typeof usePleData>;
 export function PleContractTab(props: PleDataReturn) {
   const {
     currentProject, groups, events,
-    createGroup, updateGroup, deleteGroup,
-    createEvent, updateEvent, deleteEvent,
-    updateProject,
+    createGroup, deleteGroup,
+    createEvent, deleteEvent,
   } = props;
 
   const [showAIImport, setShowAIImport] = useState(false);
