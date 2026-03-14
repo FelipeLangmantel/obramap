@@ -156,6 +156,11 @@ export function PleModuleView(props: PleDataReturn) {
               <span className="hidden sm:inline">Lançar Serviços</span>
               <span className="sm:hidden">Lançar</span>
             </TabsTrigger>
+            <TabsTrigger value="housemap" className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs px-2 sm:px-3">
+              <MapPin className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+              <span className="hidden sm:inline">Mapa de Casas</span>
+              <span className="sm:hidden">Mapa</span>
+            </TabsTrigger>
             <TabsTrigger value="charts" className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs px-2 sm:px-3">
               <BarChart3 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               <span className="hidden sm:inline">Gráficos & Avanço</span>
@@ -179,6 +184,9 @@ export function PleModuleView(props: PleDataReturn) {
         </TabsContent>
         <TabsContent value="grid" className="flex-1 min-h-0 mt-2 sm:mt-3">
           <PleGridTab {...props} selectedMeasurement={selectedMeasurement} />
+        </TabsContent>
+        <TabsContent value="housemap" className="flex-1 min-h-0 mt-2 sm:mt-3">
+          <PleHouseMapTab {...props} />
         </TabsContent>
         <TabsContent value="charts" className="flex-1 min-h-0 mt-2 sm:mt-3">
           <PleChartsTab {...props} />
