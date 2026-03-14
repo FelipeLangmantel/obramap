@@ -205,127 +205,128 @@ export function PleContractTab(props: PleDataReturn) {
         )}
 
         <ScrollArea className="flex-1 border rounded-lg">
-          <div className="min-w-[650px] lg:min-w-[950px]">
-            {/* Table Header */}
-            <div className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-muted/50 border-b px-1 sm:px-2 py-1.5 sm:py-2 sticky top-0 z-10">
+          <div className="lg:min-w-[950px]">
+            {/* Table Header - hidden on mobile, shown on desktop */}
+            <div className="hidden sm:grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-muted/50 border-b px-2 py-2 sticky top-0 z-10">
               <span />
-              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase">ITEM</span>
-              <span className="hidden lg:block text-[10px] font-bold text-muted-foreground uppercase">DISCRIM.</span>
-              <span className="hidden lg:block text-[10px] font-bold text-muted-foreground uppercase">CÓD. SINAPI</span>
-              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase">DESCRIÇÃO</span>
-              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase text-center">UN</span>
-              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase text-right">QTDE</span>
-              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase text-right">UNIT.</span>
-              <span className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase text-right">TOTAL</span>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase">ITEM</span>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase">DISCRIM.</span>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase">CÓD. SINAPI</span>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase">DESCRIÇÃO SINAPI</span>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase text-center">UNID</span>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase text-right">QTDE</span>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase text-right">UNITÁRIO</span>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase text-right">TOTAL</span>
               <span />
+            </div>
+
+            {/* Mobile Header */}
+            <div className="sm:hidden grid grid-cols-[60px_1fr_40px_70px] gap-0 bg-muted/50 border-b px-2 py-1.5 sticky top-0 z-10">
+              <span className="text-[9px] font-bold text-muted-foreground uppercase">ITEM</span>
+              <span className="text-[9px] font-bold text-muted-foreground uppercase">DESCRIÇÃO</span>
+              <span className="text-[9px] font-bold text-muted-foreground uppercase text-center">UN</span>
+              <span className="text-[9px] font-bold text-muted-foreground uppercase text-right">TOTAL</span>
             </div>
 
             {/* ETAPAS */}
             {stages.map(stage => {
               const stageTotal = getStageTotal(stage.id);
-              const substages = substagesByStage.get(stage.id) || [];
+              const subs = substagesByStage.get(stage.id) || [];
               const isExpanded = expandedStages.has(stage.id);
 
               return (
                 <div key={stage.id}>
-                  {/* ETAPA ROW (Level 1) */}
+                  {/* ETAPA ROW - responsive */}
                   <div
-                    className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-primary/15 border-b border-primary/25 px-1 sm:px-2 py-1.5 sm:py-2 cursor-pointer hover:bg-primary/20 transition-colors items-center"
+                    className="flex items-center gap-1.5 bg-primary/15 border-b border-primary/25 px-2 py-1.5 sm:py-2 cursor-pointer hover:bg-primary/20 transition-colors"
                     onClick={() => toggleStage(stage.id)}
                   >
-                    <span className="flex items-center justify-center">
-                      {isExpanded ? <ChevronDown className="h-4 w-4 text-primary" /> : <ChevronRight className="h-4 w-4 text-primary" />}
-                    </span>
-                    <span className="text-xs font-extrabold text-primary">{stage.code}</span>
-                    <span />
-                    <span />
-                    <span className="text-xs font-extrabold text-foreground tracking-wide">{stage.name.toUpperCase()}</span>
-                    <span />
-                    <span />
-                    <span />
-                    <span className="text-xs font-extrabold text-right font-mono text-primary">{fmtCur(stageTotal)}</span>
-                    <span className="flex justify-center">
-                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={e => { e.stopPropagation(); deleteGroup(stage.id); }}>
-                        <Trash2 className="h-3 w-3 text-destructive/60 hover:text-destructive" />
-                      </Button>
-                    </span>
+                    {isExpanded ? <ChevronDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary shrink-0" />}
+                    <span className="text-[10px] sm:text-xs font-extrabold text-primary shrink-0">{stage.code}</span>
+                    <span className="text-[10px] sm:text-xs font-extrabold text-foreground tracking-wide truncate flex-1">{stage.name.toUpperCase()}</span>
+                    <span className="text-[10px] sm:text-xs font-extrabold font-mono text-primary shrink-0">{fmtCur(stageTotal)}</span>
+                    <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={e => { e.stopPropagation(); deleteGroup(stage.id); }}>
+                      <Trash2 className="h-3 w-3 text-destructive/60 hover:text-destructive" />
+                    </Button>
                   </div>
 
                   {isExpanded && (
                     <>
-                      {/* SUBETAPAS */}
-                      {substages.map(sub => {
+                      {subs.map(sub => {
                         const subEvents = (eventsByGroup.get(sub.id) || []).sort((a, b) => a.display_order - b.display_order);
                         const subTotal = getSubstageTotal(sub.id);
                         const isSubExpanded = expandedStages.has(sub.id);
 
                         return (
                           <div key={sub.id}>
-                            {/* SUBETAPA ROW (Level 2) */}
-                             <div
-                               className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-accent/40 border-b px-1 sm:px-2 py-1.5 cursor-pointer hover:bg-accent/60 transition-colors items-center"
-                               onClick={() => toggleStage(sub.id)}
-                             >
-                              <span className="flex items-center justify-center pl-3">
-                                {isSubExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-                              </span>
-                              <span className="text-[11px] font-bold text-foreground">{sub.code}</span>
-                              <span />
-                              <span />
-                              <span className="text-[11px] font-bold text-foreground">{sub.name}</span>
-                              <span />
-                              <span className="text-[10px] text-muted-foreground text-right">{subEvents.length} itens</span>
-                              <span />
-                              <span className="text-[11px] font-bold text-right font-mono">{fmtCur(subTotal)}</span>
-                              <span className="flex justify-center">
-                                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={e => { e.stopPropagation(); deleteGroup(sub.id); }}>
-                                  <Trash2 className="h-3 w-3 text-destructive/60 hover:text-destructive" />
-                                </Button>
-                              </span>
+                            {/* SUBETAPA ROW */}
+                            <div
+                              className="flex items-center gap-1.5 bg-accent/40 border-b pl-4 sm:pl-6 pr-2 py-1.5 cursor-pointer hover:bg-accent/60 transition-colors"
+                              onClick={() => toggleStage(sub.id)}
+                            >
+                              {isSubExpanded ? <ChevronDown className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground shrink-0" /> : <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground shrink-0" />}
+                              <span className="text-[10px] sm:text-[11px] font-bold text-foreground shrink-0">{sub.code}</span>
+                              <span className="text-[10px] sm:text-[11px] font-bold text-foreground truncate flex-1">{sub.name}</span>
+                              <span className="text-[9px] sm:text-[10px] text-muted-foreground shrink-0 hidden sm:inline">{subEvents.length} itens</span>
+                              <span className="text-[10px] sm:text-[11px] font-bold font-mono shrink-0">{fmtCur(subTotal)}</span>
+                              <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={e => { e.stopPropagation(); deleteGroup(sub.id); }}>
+                                <Trash2 className="h-3 w-3 text-destructive/60 hover:text-destructive" />
+                              </Button>
                             </div>
 
                             {isSubExpanded && (
                               <>
-                                {/* SERVIÇOS (Level 3) */}
-                                 {subEvents.map(ev => (
-                                   <div key={ev.id} className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-1 sm:px-2 py-1.5 hover:bg-accent/20 transition-colors items-center group/row">
-                                    <span />
-                                    <span className="text-[11px] font-mono text-muted-foreground pl-3">{ev.item_code}</span>
-                                    <span className="text-[10px] text-muted-foreground truncate">{ev.discrimination || "—"}</span>
-                                    <span className="text-[10px] font-mono text-muted-foreground">{ev.sinapi_code || "—"}</span>
-                                    <span className="text-[11px] text-foreground truncate pr-2" title={ev.description}>{ev.description}</span>
-                                    <span className="text-[11px] text-center text-muted-foreground">{ev.unit}</span>
-                                    <span className="text-[11px] text-right font-mono">{fmt(ev.quantity)}</span>
-                                    <span className="text-[11px] text-right font-mono">{fmtCur(ev.unit_value)}</span>
-                                    <span className="text-[11px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
-                                    <span className="flex justify-center opacity-0 group-hover/row:opacity-100 transition-opacity">
-                                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deleteEvent(ev.id)}>
-                                        <Trash2 className="h-3 w-3 text-destructive/60 hover:text-destructive" />
-                                      </Button>
-                                    </span>
+                                {/* SERVIÇOS - Desktop grid */}
+                                {subEvents.map(ev => (
+                                  <div key={ev.id}>
+                                    {/* Desktop row */}
+                                    <div className="hidden sm:grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-2 py-1.5 hover:bg-accent/20 transition-colors items-center group/row">
+                                      <span />
+                                      <span className="text-[11px] font-mono text-muted-foreground pl-3">{ev.item_code}</span>
+                                      <span className="text-[10px] text-muted-foreground truncate">{ev.discrimination || "—"}</span>
+                                      <span className="text-[10px] font-mono text-muted-foreground">{ev.sinapi_code || "—"}</span>
+                                      <span className="text-[11px] text-foreground truncate pr-2" title={ev.description}>{ev.description}</span>
+                                      <span className="text-[11px] text-center text-muted-foreground">{ev.unit}</span>
+                                      <span className="text-[11px] text-right font-mono">{fmt(ev.quantity)}</span>
+                                      <span className="text-[11px] text-right font-mono">{fmtCur(ev.unit_value)}</span>
+                                      <span className="text-[11px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                                      <span className="flex justify-center opacity-0 group-hover/row:opacity-100 transition-opacity">
+                                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deleteEvent(ev.id)}>
+                                          <Trash2 className="h-3 w-3 text-destructive/60 hover:text-destructive" />
+                                        </Button>
+                                      </span>
+                                    </div>
+                                    {/* Mobile row */}
+                                    <div className="sm:hidden grid grid-cols-[60px_1fr_40px_70px] gap-0 border-b px-2 py-1.5 hover:bg-accent/20 items-center">
+                                      <span className="text-[10px] font-mono text-muted-foreground">{ev.item_code}</span>
+                                      <span className="text-[10px] text-foreground truncate pr-1" title={ev.description}>{ev.description}</span>
+                                      <span className="text-[10px] text-center text-muted-foreground">{ev.unit}</span>
+                                      <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                                    </div>
                                   </div>
                                 ))}
 
-                                {/* Add service row */}
-                                 {addingEventTo === sub.id ? (
-                                   <div className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-1 sm:px-2 py-1.5 bg-accent/10 items-center">
-                                    <span />
-                                    <Input value={newEvent.item_code} onChange={e => setNewEvent(ev => ({ ...ev, item_code: e.target.value }))} placeholder="1.1.1" className="h-7 text-[11px] border-dashed ml-3" />
-                                    <Input value={newEvent.discrimination} onChange={e => setNewEvent(ev => ({ ...ev, discrimination: e.target.value }))} placeholder="SINAPI" className="h-7 text-[11px] border-dashed" />
-                                    <Input value={newEvent.sinapi_code} onChange={e => setNewEvent(ev => ({ ...ev, sinapi_code: e.target.value }))} placeholder="Código" className="h-7 text-[11px] border-dashed" />
-                                    <Input value={newEvent.description} onChange={e => setNewEvent(ev => ({ ...ev, description: e.target.value }))} placeholder="Descrição do serviço" className="h-7 text-[11px] border-dashed mx-1" />
-                                    <Input value={newEvent.unit} onChange={e => setNewEvent(ev => ({ ...ev, unit: e.target.value }))} className="h-7 text-[11px] border-dashed text-center" />
-                                    <Input type="number" value={newEvent.quantity || ""} onChange={e => setNewEvent(ev => ({ ...ev, quantity: parseFloat(e.target.value) || 0 }))} placeholder="0" className="h-7 text-[11px] border-dashed text-right" />
-                                    <Input type="number" step="0.01" value={newEvent.unit_value || ""} onChange={e => setNewEvent(ev => ({ ...ev, unit_value: parseFloat(e.target.value) || 0 }))} placeholder="0.00" className="h-7 text-[11px] border-dashed text-right" />
-                                    <span className="text-[11px] text-right font-mono text-muted-foreground">{fmtCur(newEvent.quantity * newEvent.unit_value)}</span>
-                                    <span className="flex gap-0.5 justify-center">
-                                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleAddEvent(sub.id)}><Check className="h-3 w-3 text-green-500" /></Button>
-                                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setAddingEventTo(null)}><X className="h-3 w-3 text-muted-foreground" /></Button>
-                                    </span>
+                                {/* Add service */}
+                                {addingEventTo === sub.id ? (
+                                  <div className="border-b px-2 py-1.5 bg-accent/10 space-y-1.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <Input value={newEvent.item_code} onChange={e => setNewEvent(ev => ({ ...ev, item_code: e.target.value }))} placeholder="Item" className="h-7 text-[11px] border-dashed w-16" />
+                                      <Input value={newEvent.description} onChange={e => setNewEvent(ev => ({ ...ev, description: e.target.value }))} placeholder="Descrição" className="h-7 text-[11px] border-dashed flex-1" />
+                                      <Input value={newEvent.unit} onChange={e => setNewEvent(ev => ({ ...ev, unit: e.target.value }))} className="h-7 text-[11px] border-dashed w-12 text-center" />
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <Input value={newEvent.sinapi_code} onChange={e => setNewEvent(ev => ({ ...ev, sinapi_code: e.target.value }))} placeholder="Cód. SINAPI" className="h-7 text-[11px] border-dashed w-24 hidden sm:block" />
+                                      <Input value={newEvent.discrimination} onChange={e => setNewEvent(ev => ({ ...ev, discrimination: e.target.value }))} placeholder="Discrim." className="h-7 text-[11px] border-dashed w-24 hidden sm:block" />
+                                      <Input type="number" value={newEvent.quantity || ""} onChange={e => setNewEvent(ev => ({ ...ev, quantity: parseFloat(e.target.value) || 0 }))} placeholder="Qtde" className="h-7 text-[11px] border-dashed w-16 text-right" />
+                                      <Input type="number" step="0.01" value={newEvent.unit_value || ""} onChange={e => setNewEvent(ev => ({ ...ev, unit_value: parseFloat(e.target.value) || 0 }))} placeholder="Unit." className="h-7 text-[11px] border-dashed w-20 text-right" />
+                                      <span className="text-[10px] font-mono text-muted-foreground shrink-0">{fmtCur(newEvent.quantity * newEvent.unit_value)}</span>
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleAddEvent(sub.id)}><Check className="h-3 w-3 text-green-500" /></Button>
+                                      <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setAddingEventTo(null)}><X className="h-3 w-3 text-muted-foreground" /></Button>
+                                    </div>
                                   </div>
                                 ) : (
                                   <div className="border-b px-2 py-1">
-                                    <Button variant="ghost" size="sm" className="h-6 text-[10px] text-muted-foreground hover:text-primary gap-1 ml-10" onClick={() => setAddingEventTo(sub.id)}>
+                                    <Button variant="ghost" size="sm" className="h-6 text-[10px] text-muted-foreground hover:text-primary gap-1 ml-4 sm:ml-10" onClick={() => setAddingEventTo(sub.id)}>
                                       <Plus className="h-3 w-3" /> Adicionar serviço
                                     </Button>
                                   </div>
@@ -336,17 +337,17 @@ export function PleContractTab(props: PleDataReturn) {
                         );
                       })}
 
-                      {/* Add substage row */}
+                      {/* Add substage */}
                       {addingSubstageTo === stage.id ? (
-                        <div className="px-2 py-1.5 border-b bg-accent/10 flex items-center gap-2 pl-10">
-                          <Input value={newSubstage.code} onChange={e => setNewSubstage(s => ({ ...s, code: e.target.value }))} placeholder="Ex: 1.1" className="h-7 text-xs w-20 border-dashed" />
+                        <div className="px-2 py-1.5 border-b bg-accent/10 flex items-center gap-1.5 pl-6 sm:pl-10">
+                          <Input value={newSubstage.code} onChange={e => setNewSubstage(s => ({ ...s, code: e.target.value }))} placeholder="Ex: 1.1" className="h-7 text-xs w-16 sm:w-20 border-dashed" />
                           <Input value={newSubstage.name} onChange={e => setNewSubstage(s => ({ ...s, name: e.target.value }))} placeholder="Nome da subetapa" className="h-7 text-xs flex-1 border-dashed" />
                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleAddSubstage(stage.id)}><Check className="h-3 w-3 text-green-500" /></Button>
                           <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setAddingSubstageTo(null)}><X className="h-3 w-3 text-muted-foreground" /></Button>
                         </div>
                       ) : (
                         <div className="border-b px-2 py-1">
-                          <Button variant="ghost" size="sm" className="h-6 text-[10px] text-muted-foreground hover:text-primary gap-1 ml-6" onClick={() => setAddingSubstageTo(stage.id)}>
+                          <Button variant="ghost" size="sm" className="h-6 text-[10px] text-muted-foreground hover:text-primary gap-1 ml-4 sm:ml-6" onClick={() => setAddingSubstageTo(stage.id)}>
                             <Plus className="h-3 w-3" /> Adicionar subetapa
                           </Button>
                         </div>
@@ -360,31 +361,36 @@ export function PleContractTab(props: PleDataReturn) {
             {/* UNGROUPED EVENTS */}
             {ungroupedEvents.length > 0 && (
               <div>
-                <div className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-amber-500/10 border-b border-amber-500/30 px-1 sm:px-2 py-2 items-center">
-                  <span />
-                  <span className="text-xs font-extrabold text-amber-600 dark:text-amber-400 col-span-4">ITENS SEM GRUPO ({ungroupedEvents.length})</span>
-                  <span /><span /><span />
-                  <span className="text-xs font-extrabold text-right font-mono text-amber-600 dark:text-amber-400">
+                <div className="flex items-center gap-2 bg-amber-500/10 border-b border-amber-500/30 px-2 py-2">
+                  <span className="text-[10px] sm:text-xs font-extrabold text-amber-600 dark:text-amber-400">ITENS SEM GRUPO ({ungroupedEvents.length})</span>
+                  <span className="ml-auto text-[10px] sm:text-xs font-extrabold font-mono text-amber-600 dark:text-amber-400">
                     {fmtCur(ungroupedEvents.reduce((s, e) => s + e.quantity * e.unit_value, 0))}
                   </span>
-                  <span />
                 </div>
                 {ungroupedEvents.map(ev => (
-                  <div key={ev.id} className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-1 sm:px-2 py-1.5 hover:bg-accent/20 transition-colors items-center group/row">
-                    <span />
-                    <span className="text-[11px] font-mono text-muted-foreground pl-3">{ev.item_code}</span>
-                    <span className="text-[10px] text-muted-foreground truncate">{ev.discrimination || "—"}</span>
-                    <span className="text-[10px] font-mono text-muted-foreground">{ev.sinapi_code || "—"}</span>
-                    <span className="text-[11px] text-foreground truncate pr-2" title={ev.description}>{ev.description}</span>
-                    <span className="text-[11px] text-center text-muted-foreground">{ev.unit}</span>
-                    <span className="text-[11px] text-right font-mono">{fmt(ev.quantity)}</span>
-                    <span className="text-[11px] text-right font-mono">{fmtCur(ev.unit_value)}</span>
-                    <span className="text-[11px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
-                    <span className="flex justify-center opacity-0 group-hover/row:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deleteEvent(ev.id)}>
-                        <Trash2 className="h-3 w-3 text-destructive/60 hover:text-destructive" />
-                      </Button>
-                    </span>
+                  <div key={ev.id}>
+                    <div className="hidden sm:grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-2 py-1.5 hover:bg-accent/20 transition-colors items-center group/row">
+                      <span />
+                      <span className="text-[11px] font-mono text-muted-foreground pl-3">{ev.item_code}</span>
+                      <span className="text-[10px] text-muted-foreground truncate">{ev.discrimination || "—"}</span>
+                      <span className="text-[10px] font-mono text-muted-foreground">{ev.sinapi_code || "—"}</span>
+                      <span className="text-[11px] text-foreground truncate pr-2" title={ev.description}>{ev.description}</span>
+                      <span className="text-[11px] text-center text-muted-foreground">{ev.unit}</span>
+                      <span className="text-[11px] text-right font-mono">{fmt(ev.quantity)}</span>
+                      <span className="text-[11px] text-right font-mono">{fmtCur(ev.unit_value)}</span>
+                      <span className="text-[11px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                      <span className="flex justify-center opacity-0 group-hover/row:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deleteEvent(ev.id)}>
+                          <Trash2 className="h-3 w-3 text-destructive/60 hover:text-destructive" />
+                        </Button>
+                      </span>
+                    </div>
+                    <div className="sm:hidden grid grid-cols-[60px_1fr_40px_70px] gap-0 border-b px-2 py-1.5 hover:bg-accent/20 items-center">
+                      <span className="text-[10px] font-mono text-muted-foreground">{ev.item_code}</span>
+                      <span className="text-[10px] text-foreground truncate pr-1">{ev.description}</span>
+                      <span className="text-[10px] text-center text-muted-foreground">{ev.unit}</span>
+                      <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -392,8 +398,8 @@ export function PleContractTab(props: PleDataReturn) {
 
             {/* Add new stage */}
             <div className="px-2 py-2 border-b bg-muted/20">
-              <div className="flex items-center gap-2">
-                <Input value={newStage.code} onChange={e => setNewStage(s => ({ ...s, code: e.target.value }))} placeholder="Ex: 3.0" className="h-7 text-xs w-20 border-dashed" />
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <Input value={newStage.code} onChange={e => setNewStage(s => ({ ...s, code: e.target.value }))} placeholder="Ex: 3.0" className="h-7 text-xs w-16 sm:w-20 border-dashed" />
                 <Input value={newStage.name} onChange={e => setNewStage(s => ({ ...s, name: e.target.value }))} placeholder="Nome da nova etapa" className="h-7 text-xs flex-1 border-dashed" />
                 <Button size="sm" variant="outline" onClick={handleAddStage} className="h-7 text-xs gap-1">
                   <Plus className="h-3 w-3" /> Etapa
@@ -402,12 +408,9 @@ export function PleContractTab(props: PleDataReturn) {
             </div>
 
             {/* Grand Total */}
-            <div className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-muted/50 px-1 sm:px-2 py-2 sm:py-2.5 sticky bottom-0 border-t-2 border-primary/30">
-              <span /><span /><span /><span />
-              <span className="text-xs font-bold text-foreground">TOTAL GERAL DA PLANILHA</span>
-              <span /><span /><span />
-              <span className="text-sm font-bold text-right font-mono text-primary">{fmtCur(stats.totalContractual)}</span>
-              <span />
+            <div className="flex items-center justify-between bg-muted/50 px-2 py-2 sm:py-2.5 sticky bottom-0 border-t-2 border-primary/30">
+              <span className="text-[10px] sm:text-xs font-bold text-foreground uppercase">TOTAL GERAL</span>
+              <span className="text-xs sm:text-sm font-bold font-mono text-primary">{fmtCur(stats.totalContractual)}</span>
             </div>
           </div>
         </ScrollArea>
