@@ -424,12 +424,3 @@ export function PleContractTab(props: PleDataReturn) {
     </div>
   );
 }
-
-function InfoField({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div className="space-y-0.5">
-      <span className="text-[10px] uppercase text-muted-foreground tracking-wide font-medium">{label}</span>
-      <p className={`text-xs font-semibold ${highlight ? "text-primary font-bold" : "text-foreground"}`}>{value}</p>
-    </div>
-  );
-}
