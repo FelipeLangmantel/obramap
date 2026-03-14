@@ -402,7 +402,7 @@ export function PleContractTab(props: PleDataReturn) {
             </div>
 
             {/* Grand Total */}
-            <div className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-muted/50 px-2 py-2.5 sticky bottom-0 border-t-2 border-primary/30">
+            <div className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-muted/50 px-1 sm:px-2 py-2 sm:py-2.5 sticky bottom-0 border-t-2 border-primary/30">
               <span /><span /><span /><span />
               <span className="text-xs font-bold text-foreground">TOTAL GERAL DA PLANILHA</span>
               <span /><span /><span />
