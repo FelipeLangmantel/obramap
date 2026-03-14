@@ -12,20 +12,31 @@ interface Props extends PleDataReturn {
   selectedMeasurement: PleMeasurement | null;
 }
 
-// Memoized cell to avoid re-rendering all cells on every state change
+// Memoized cell
 const GridCell = memo(function GridCell({
-  eventId, houseNumber, measNum, colorClass, onMouseDown, onMouseEnter,
+  eventId, houseNumber, measNum, colorClass, wasGlossed, isApproved,
+  onMouseDown, onMouseEnter,
 }: {
   eventId: string; houseNumber: number; measNum: number | null; colorClass: string;
+  wasGlossed: boolean; isApproved: boolean;
   onMouseDown: (e: React.MouseEvent, eventId: string, houseNumber: number) => void;
   onMouseEnter: (eventId: string, houseNumber: number) => void;
 }) {
+  // Gray = measured & approved; Yellow = was glossed (resolved or not yet re-measured)
+  let cellClass = "";
+  if (measNum && isApproved) {
+    cellClass = "bg-muted text-muted-foreground"; // gray - approved
+  } else if (wasGlossed && !measNum) {
+    cellClass = "bg-amber-100/50 dark:bg-amber-900/20"; // light yellow - was glossed in past
+  } else if (measNum) {
+    cellClass = colorClass;
+  } else {
+    cellClass = "hover:bg-accent/30";
+  }
+
   return (
     <div
-      className={cn(
-        "w-10 h-7 flex items-center justify-center border-r cursor-pointer transition-none",
-        measNum ? colorClass : "hover:bg-accent/30"
-      )}
+      className={cn("w-10 h-7 flex items-center justify-center border-r cursor-pointer transition-none", cellClass)}
       onMouseDown={e => onMouseDown(e, eventId, houseNumber)}
       onMouseEnter={() => onMouseEnter(eventId, houseNumber)}
     >
@@ -34,7 +45,7 @@ const GridCell = memo(function GridCell({
   );
 });
 
-export function PleGridTab({ groups, events, measurements, entries, currentProject, setEntry, getMeasurementNumber, isSaving }: Props) {
+export function PleGridTab({ groups, events, measurements, entries, glosses, currentProject, setEntry, getMeasurementNumber, isSaving }: Props) {
   const totalHouses = currentProject?.total_houses || 50;
   const houseNumbers = useMemo(() => Array.from({ length: totalHouses }, (_, i) => i + 1), [totalHouses]);
 
@@ -44,14 +55,12 @@ export function PleGridTab({ groups, events, measurements, entries, currentProje
   const [cursorMode, setCursorMode] = useState<"" | "paint" | "erase">("");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set(groups.map(g => g.id)));
 
-  // Set default active measurement
   useEffect(() => {
     if (activeMeasurementNum === null && measurements.length > 0) {
       setActiveMeasurementNum(measurements[measurements.length - 1].measurement_number);
     }
   }, [measurements, activeMeasurementNum]);
 
-  // Keep expanded in sync with new groups
   useEffect(() => {
     setExpandedGroups(prev => {
       const next = new Set(prev);
@@ -107,7 +116,29 @@ export function PleGridTab({ groups, events, measurements, entries, currentProje
     return map;
   }, [measurements]);
 
-  // Use a queue to avoid blocking the UI thread during rapid painting
+  // Build sets for gloss visual rules
+  const approvedMeasurementIds = useMemo(() => {
+    const s = new Set<string>();
+    measurements.forEach(m => {
+      if (m.status === "approved" || m.status === "approved_with_glosses") s.add(m.id);
+    });
+    return s;
+  }, [measurements]);
+
+  // Resolved glosses (cells that were glossed in past and now resolved)
+  const resolvedGlossKeys = useMemo(() => {
+    const s = new Set<string>();
+    glosses.filter(g => g.resolved).forEach(g => s.add(`${g.event_id}:${g.house_number}`));
+    return s;
+  }, [glosses]);
+
+  // Unresolved glosses - cells that were glossed and entry was removed
+  const unresolvedGlossKeys = useMemo(() => {
+    const s = new Set<string>();
+    glosses.filter(g => !g.resolved).forEach(g => s.add(`${g.event_id}:${g.house_number}`));
+    return s;
+  }, [glosses]);
+
   const queueRef = useRef<Promise<void>>(Promise.resolve());
 
   const handlePaint = useCallback((eventId: string, houseNumber: number) => {
@@ -116,7 +147,6 @@ export function PleGridTab({ groups, events, measurements, entries, currentProje
     if (!measurement) return;
     const currentNum = getMeasurementNumber(eventId, houseNumber);
     if (currentNum === activeMeasurementNum) return;
-    // Queue the operation so we don't await in the mouse handler
     queueRef.current = queueRef.current.then(() => setEntry(eventId, houseNumber, measurement.id));
   }, [activeMeasurementNum, measurements, setEntry, getMeasurementNumber]);
 
@@ -186,19 +216,20 @@ export function PleGridTab({ groups, events, measurements, entries, currentProje
               ))}
             </SelectContent>
           </Select>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {measurements.map(m => (
               <span key={m.id} className={cn("px-2 py-0.5 rounded text-[10px] font-mono font-bold", measurementColors[m.measurement_number])}>
                 Med {m.measurement_number}
               </span>
             ))}
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-muted text-muted-foreground">Aprovado</span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-100/50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Glossado</span>
           </div>
         </div>
       </div>
 
       <div className={cn("flex-1 overflow-auto select-none", cursorMode === "paint" && "cursor-crosshair", cursorMode === "erase" && "cursor-not-allowed")}>
         <div className="min-w-max">
-          {/* Header */}
           <div className="flex sticky top-0 z-10 bg-background border-b">
             <div className="sticky left-0 z-20 bg-background flex border-r">
               <div className="w-10 h-8 flex items-center justify-center text-[10px] font-bold text-muted-foreground border-r">Nº</div>
@@ -209,7 +240,6 @@ export function PleGridTab({ groups, events, measurements, entries, currentProje
             ))}
           </div>
 
-          {/* Rows */}
           {gridRows.map((row) => {
             if (row.type === "stage" && row.stage) {
               return (
@@ -245,6 +275,9 @@ export function PleGridTab({ groups, events, measurements, entries, currentProje
                   </div>
                   {houseNumbers.map(n => {
                     const measNum = getMeasurementNumber(ev.id, n);
+                    const entry = entries.find(e => e.event_id === ev.id && e.house_number === n);
+                    const isApproved = entry ? approvedMeasurementIds.has(entry.measurement_id) : false;
+                    const wasGlossed = unresolvedGlossKeys.has(`${ev.id}:${n}`) || resolvedGlossKeys.has(`${ev.id}:${n}`);
                     return (
                       <GridCell
                         key={n}
@@ -252,6 +285,8 @@ export function PleGridTab({ groups, events, measurements, entries, currentProje
                         houseNumber={n}
                         measNum={measNum}
                         colorClass={measNum ? measurementColors[measNum] : ""}
+                        wasGlossed={wasGlossed && !measNum}
+                        isApproved={isApproved}
                         onMouseDown={handleCellMouseDown}
                         onMouseEnter={handleCellMouseEnter}
                       />
