@@ -2,7 +2,10 @@ import { useMemo, useCallback, useRef, useState, useEffect, memo } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ChevronsUpDown } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { toast } from "sonner";
 import type { usePleData } from "@/hooks/usePleData";
 import type { PleMeasurement } from "@/hooks/usePleData";
 
@@ -12,33 +15,37 @@ interface Props extends PleDataReturn {
   selectedMeasurement: PleMeasurement | null;
 }
 
-// Memoized cell
+// Memoized cell - ultra lightweight
 const GridCell = memo(function GridCell({
-  eventId, houseNumber, measNum, colorClass, wasGlossed, isApproved,
-  onMouseDown, onMouseEnter,
+  measNum, colorClass, wasGlossed, isApproved, isLocked,
+  onMouseDown, onMouseEnter, cellKey,
 }: {
-  eventId: string; houseNumber: number; measNum: number | null; colorClass: string;
-  wasGlossed: boolean; isApproved: boolean;
-  onMouseDown: (e: React.MouseEvent, eventId: string, houseNumber: number) => void;
-  onMouseEnter: (eventId: string, houseNumber: number) => void;
+  measNum: number | null; colorClass: string;
+  wasGlossed: boolean; isApproved: boolean; isLocked: boolean;
+  onMouseDown: (e: React.MouseEvent, key: string) => void;
+  onMouseEnter: (key: string) => void;
+  cellKey: string;
 }) {
-  // Gray = measured & approved; Yellow = was glossed (resolved or not yet re-measured)
   let cellClass = "";
   if (measNum && isApproved) {
-    cellClass = "bg-muted text-muted-foreground"; // gray - approved
+    cellClass = "bg-muted text-muted-foreground";
   } else if (wasGlossed && !measNum) {
-    cellClass = "bg-amber-100/50 dark:bg-amber-900/20"; // light yellow - was glossed in past
+    cellClass = "bg-amber-100/50 dark:bg-amber-900/20";
   } else if (measNum) {
     cellClass = colorClass;
-  } else {
+  } else if (!isLocked) {
     cellClass = "hover:bg-accent/30";
   }
 
   return (
     <div
-      className={cn("w-10 h-7 flex items-center justify-center border-r cursor-pointer transition-none", cellClass)}
-      onMouseDown={e => onMouseDown(e, eventId, houseNumber)}
-      onMouseEnter={() => onMouseEnter(eventId, houseNumber)}
+      className={cn(
+        "w-10 h-7 flex items-center justify-center border-r transition-none",
+        isLocked ? "cursor-default opacity-70" : "cursor-pointer",
+        cellClass
+      )}
+      onMouseDown={e => onMouseDown(e, cellKey)}
+      onMouseEnter={() => onMouseEnter(cellKey)}
     >
       {measNum && <span className="text-[10px] font-mono font-bold">{measNum}</span>}
     </div>
@@ -48,6 +55,7 @@ const GridCell = memo(function GridCell({
 export function PleGridTab({ groups, events, measurements, entries, glosses, currentProject, setEntry, getMeasurementNumber, isSaving }: Props) {
   const totalHouses = currentProject?.total_houses || 50;
   const houseNumbers = useMemo(() => Array.from({ length: totalHouses }, (_, i) => i + 1), [totalHouses]);
+  const isMobile = useIsMobile();
 
   const [activeMeasurementNum, setActiveMeasurementNum] = useState<number | null>(null);
   const paintingRef = useRef(false);
@@ -55,19 +63,32 @@ export function PleGridTab({ groups, events, measurements, entries, glosses, cur
   const [cursorMode, setCursorMode] = useState<"" | "paint" | "erase">("");
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set(groups.map(g => g.id)));
 
+  // Optimistic local entries for instant UI
+  const [localEntries, setLocalEntries] = useState<Map<string, string | null>>(new Map());
+  const pendingOpsRef = useRef<Map<string, { eventId: string; houseNumber: number; measurementId: string | null }>>(new Map());
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     if (activeMeasurementNum === null && measurements.length > 0) {
       setActiveMeasurementNum(measurements[measurements.length - 1].measurement_number);
     }
   }, [measurements, activeMeasurementNum]);
 
+  // Auto-expand all on desktop
   useEffect(() => {
+    if (!isMobile) {
+      setExpandedGroups(new Set(groups.map(g => g.id)));
+    }
+  }, [groups, isMobile]);
+
+  useEffect(() => {
+    if (isMobile) return;
     setExpandedGroups(prev => {
       const next = new Set(prev);
       groups.forEach(g => { if (!prev.has(g.id)) next.add(g.id); });
       return next;
     });
-  }, [groups]);
+  }, [groups, isMobile]);
 
   const stages = useMemo(() => groups.filter(g => !g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
   const substages = useMemo(() => groups.filter(g => g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
@@ -116,7 +137,16 @@ export function PleGridTab({ groups, events, measurements, entries, glosses, cur
     return map;
   }, [measurements]);
 
-  // Build sets for gloss visual rules
+  // Build lookup maps for O(1) access
+  const entryMap = useMemo(() => {
+    const map = new Map<string, { measurement_id: string; measurement_number: number }>();
+    entries.forEach(e => {
+      const m = measurements.find(m => m.id === e.measurement_id);
+      if (m) map.set(`${e.event_id}:${e.house_number}`, { measurement_id: e.measurement_id, measurement_number: m.measurement_number });
+    });
+    return map;
+  }, [entries, measurements]);
+
   const approvedMeasurementIds = useMemo(() => {
     const s = new Set<string>();
     measurements.forEach(m => {
@@ -125,39 +155,122 @@ export function PleGridTab({ groups, events, measurements, entries, glosses, cur
     return s;
   }, [measurements]);
 
-  // Resolved glosses (cells that were glossed in past and now resolved)
+  // Active measurement object
+  const activeMeasurement = useMemo(() => 
+    measurements.find(m => m.measurement_number === activeMeasurementNum) || null,
+    [measurements, activeMeasurementNum]
+  );
+
+  // Is the active measurement approved? If so, block all editing
+  const isActiveMeasurementApproved = useMemo(() => 
+    activeMeasurement ? approvedMeasurementIds.has(activeMeasurement.id) : false,
+    [activeMeasurement, approvedMeasurementIds]
+  );
+
   const resolvedGlossKeys = useMemo(() => {
     const s = new Set<string>();
     glosses.filter(g => g.resolved).forEach(g => s.add(`${g.event_id}:${g.house_number}`));
     return s;
   }, [glosses]);
 
-  // Unresolved glosses - cells that were glossed and entry was removed
   const unresolvedGlossKeys = useMemo(() => {
     const s = new Set<string>();
     glosses.filter(g => !g.resolved).forEach(g => s.add(`${g.event_id}:${g.house_number}`));
     return s;
   }, [glosses]);
 
-  const queueRef = useRef<Promise<void>>(Promise.resolve());
+  // Flush pending DB operations in batch
+  const flushPendingOps = useCallback(() => {
+    const ops = new Map(pendingOpsRef.current);
+    pendingOpsRef.current.clear();
+    ops.forEach(({ eventId, houseNumber, measurementId }) => {
+      setEntry(eventId, houseNumber, measurementId);
+    });
+  }, [setEntry]);
+
+  const scheduledFlush = useCallback(() => {
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = setTimeout(flushPendingOps, 150);
+  }, [flushPendingOps]);
+
+  // Flush on mouse up
+  useEffect(() => {
+    return () => {
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current);
+        flushPendingOps();
+      }
+    };
+  }, [flushPendingOps]);
+
+  // Get effective measurement number (local override or from entries)
+  const getEffectiveMeasNum = useCallback((key: string): number | null => {
+    if (localEntries.has(key)) {
+      const mId = localEntries.get(key);
+      if (!mId) return null;
+      const m = measurements.find(m => m.id === mId);
+      return m?.measurement_number || null;
+    }
+    const entry = entryMap.get(key);
+    return entry?.measurement_number || null;
+  }, [localEntries, entryMap, measurements]);
+
+  const getEffectiveMeasId = useCallback((key: string): string | null => {
+    if (localEntries.has(key)) {
+      return localEntries.get(key) || null;
+    }
+    const entry = entryMap.get(key);
+    return entry?.measurement_id || null;
+  }, [localEntries, entryMap]);
 
   const handlePaint = useCallback((eventId: string, houseNumber: number) => {
-    if (!activeMeasurementNum) return;
-    const measurement = measurements.find(m => m.measurement_number === activeMeasurementNum);
-    if (!measurement) return;
-    const currentNum = getMeasurementNumber(eventId, houseNumber);
-    if (currentNum === activeMeasurementNum) return;
-    queueRef.current = queueRef.current.then(() => setEntry(eventId, houseNumber, measurement.id));
-  }, [activeMeasurementNum, measurements, setEntry, getMeasurementNumber]);
+    if (!activeMeasurementNum || !activeMeasurement) return;
+    if (isActiveMeasurementApproved) {
+      toast.error("Medição aprovada! Não é possível editar.");
+      return;
+    }
+
+    const key = `${eventId}:${houseNumber}`;
+    const currentMeasId = getEffectiveMeasId(key);
+    
+    // If cell already has an entry from an approved measurement, block
+    if (currentMeasId && approvedMeasurementIds.has(currentMeasId)) return;
+    
+    // If cell already has the same measurement, skip
+    if (currentMeasId === activeMeasurement.id) return;
+
+    // Optimistic update
+    setLocalEntries(prev => new Map(prev).set(key, activeMeasurement.id));
+    pendingOpsRef.current.set(key, { eventId, houseNumber, measurementId: activeMeasurement.id });
+    scheduledFlush();
+  }, [activeMeasurementNum, activeMeasurement, isActiveMeasurementApproved, getEffectiveMeasId, approvedMeasurementIds, scheduledFlush]);
 
   const handleErase = useCallback((eventId: string, houseNumber: number) => {
-    const currentNum = getMeasurementNumber(eventId, houseNumber);
-    if (!currentNum) return;
-    queueRef.current = queueRef.current.then(() => setEntry(eventId, houseNumber, null));
-  }, [setEntry, getMeasurementNumber]);
+    const key = `${eventId}:${houseNumber}`;
+    const currentMeasId = getEffectiveMeasId(key);
+    if (!currentMeasId) return;
 
-  const handleCellMouseDown = useCallback((e: React.MouseEvent, eventId: string, houseNumber: number) => {
+    // Block erasing approved measurement entries
+    if (approvedMeasurementIds.has(currentMeasId)) {
+      toast.error("Medição aprovada! Não é possível apagar.");
+      return;
+    }
+
+    // Optimistic update
+    setLocalEntries(prev => new Map(prev).set(key, null));
+    pendingOpsRef.current.set(key, { eventId, houseNumber, measurementId: null });
+    scheduledFlush();
+  }, [getEffectiveMeasId, approvedMeasurementIds, scheduledFlush]);
+
+  // Parse cellKey -> eventId, houseNumber
+  const parseCellKey = useCallback((key: string) => {
+    const parts = key.split(":");
+    return { eventId: parts[0], houseNumber: parseInt(parts[1]) };
+  }, []);
+
+  const handleCellMouseDown = useCallback((e: React.MouseEvent, cellKey: string) => {
     e.preventDefault();
+    const { eventId, houseNumber } = parseCellKey(cellKey);
     if (e.button === 2) {
       erasingRef.current = true;
       setCursorMode("erase");
@@ -167,18 +280,24 @@ export function PleGridTab({ groups, events, measurements, entries, glosses, cur
       setCursorMode("paint");
       handlePaint(eventId, houseNumber);
     }
-  }, [handlePaint, handleErase]);
+  }, [handlePaint, handleErase, parseCellKey]);
 
-  const handleCellMouseEnter = useCallback((eventId: string, houseNumber: number) => {
+  const handleCellMouseEnter = useCallback((cellKey: string) => {
+    const { eventId, houseNumber } = parseCellKey(cellKey);
     if (paintingRef.current) handlePaint(eventId, houseNumber);
     else if (erasingRef.current) handleErase(eventId, houseNumber);
-  }, [handlePaint, handleErase]);
+  }, [handlePaint, handleErase, parseCellKey]);
 
   const handleMouseUp = useCallback(() => {
     paintingRef.current = false;
     erasingRef.current = false;
     setCursorMode("");
-  }, []);
+    // Flush immediately on mouse up
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    flushPendingOps();
+    // Clear local entries after a delay to let real entries propagate
+    setTimeout(() => setLocalEntries(new Map()), 500);
+  }, [flushPendingOps]);
 
   useEffect(() => {
     window.addEventListener("mouseup", handleMouseUp);
@@ -194,111 +313,144 @@ export function PleGridTab({ groups, events, measurements, entries, glosses, cur
   }
 
   return (
-    <div className="border rounded-lg overflow-hidden h-full flex flex-col" onContextMenu={e => e.preventDefault()}>
-      <div className="bg-accent/30 px-4 py-2 text-xs border-b flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={toggleAll} className="gap-1.5 text-xs h-7">
-            <ChevronsUpDown className="h-3.5 w-3.5" /> {allExpanded ? "Recolher Tudo" : "Expandir Tudo"}
-          </Button>
-          <span>
-            <strong>Clique e arraste</strong> para pintar. <strong>Botão direito</strong> para apagar.
-          </span>
-        </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <span className="text-muted-foreground">Medição ativa:</span>
-          <Select value={activeMeasurementNum?.toString() || ""} onValueChange={v => setActiveMeasurementNum(parseInt(v))}>
-            <SelectTrigger className="w-[140px] h-7 text-xs">
-              <SelectValue placeholder="Selecionar" />
-            </SelectTrigger>
-            <SelectContent>
+    <TooltipProvider delayDuration={200}>
+      <div className="border rounded-lg overflow-hidden h-full flex flex-col" onContextMenu={e => e.preventDefault()}>
+        {/* Toolbar */}
+        <div className="bg-accent/30 px-3 py-1.5 text-xs border-b flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={toggleAll} className="gap-1.5 text-xs h-7">
+              <ChevronsUpDown className="h-3.5 w-3.5" /> {allExpanded ? "Recolher Tudo" : "Expandir Tudo"}
+            </Button>
+            <span className="hidden sm:inline text-muted-foreground">
+              <strong>Clique e arraste</strong> para pintar. <strong>Botão direito</strong> para apagar.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-muted-foreground hidden sm:inline">Medição ativa:</span>
+            <Select value={activeMeasurementNum?.toString() || ""} onValueChange={v => setActiveMeasurementNum(parseInt(v))}>
+              <SelectTrigger className="w-[120px] h-7 text-xs">
+                <SelectValue placeholder="Selecionar" />
+              </SelectTrigger>
+              <SelectContent>
+                {measurements.map(m => (
+                  <SelectItem key={m.id} value={m.measurement_number.toString()}>
+                    Med {m.measurement_number} {(m.status === "approved" || m.status === "approved_with_glosses") ? "✓" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {isActiveMeasurementApproved && (
+              <span className="text-[10px] text-destructive font-bold animate-pulse">🔒 Aprovada</span>
+            )}
+            <div className="hidden sm:flex gap-1.5 flex-wrap">
               {measurements.map(m => (
-                <SelectItem key={m.id} value={m.measurement_number.toString()}>Med {m.measurement_number}</SelectItem>
+                <span key={m.id} className={cn("px-1.5 py-0.5 rounded text-[10px] font-mono font-bold", measurementColors[m.measurement_number])}>
+                  Med {m.measurement_number}
+                </span>
               ))}
-            </SelectContent>
-          </Select>
-          <div className="flex gap-2 flex-wrap">
-            {measurements.map(m => (
-              <span key={m.id} className={cn("px-2 py-0.5 rounded text-[10px] font-mono font-bold", measurementColors[m.measurement_number])}>
-                Med {m.measurement_number}
-              </span>
-            ))}
-            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-muted text-muted-foreground">Aprovado</span>
-            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-100/50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Glossado</span>
-          </div>
-        </div>
-      </div>
-
-      <div className={cn("flex-1 overflow-auto select-none", cursorMode === "paint" && "cursor-crosshair", cursorMode === "erase" && "cursor-not-allowed")}>
-        <div className="min-w-max">
-          <div className="flex sticky top-0 z-10 bg-background border-b">
-            <div className="sticky left-0 z-20 bg-background flex border-r">
-              <div className="w-10 h-8 flex items-center justify-center text-[10px] font-bold text-muted-foreground border-r">Nº</div>
-              <div className="w-52 h-8 flex items-center px-2 text-[10px] font-bold text-muted-foreground">Título dos Eventos</div>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-muted text-muted-foreground">Aprovado</span>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-amber-100/50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400">Glossado</span>
             </div>
-            {houseNumbers.map(n => (
-              <div key={n} className="w-10 h-8 flex items-center justify-center text-[9px] font-bold text-muted-foreground border-r">{n}</div>
-            ))}
           </div>
+        </div>
 
-          {gridRows.map((row) => {
-            if (row.type === "stage" && row.stage) {
-              return (
-                <div key={`s-${row.stage.id}`} className="flex bg-primary/15 border-b cursor-pointer" onClick={() => toggleGroup(row.stage!.id)}>
-                  <div className="sticky left-0 z-10 bg-primary/15 flex">
-                    <div className="w-10 h-7 flex items-center justify-center text-[10px] font-extrabold text-primary border-r">{row.stage.code}</div>
-                    <div className="w-52 h-7 flex items-center px-2 text-[10px] font-extrabold text-primary tracking-wide">
-                      {expandedGroups.has(row.stage.id) ? "▾" : "▸"} {row.stage.name.toUpperCase()}
+        {/* Grid */}
+        <div className={cn("flex-1 overflow-auto select-none", cursorMode === "paint" && "cursor-crosshair", cursorMode === "erase" && "cursor-not-allowed")}>
+          <div className="min-w-max">
+            {/* Sticky header */}
+            <div className="flex sticky top-0 z-10 bg-background border-b">
+              <div className="sticky left-0 z-20 bg-background flex border-r">
+                <div className="w-10 h-8 flex items-center justify-center text-[10px] font-bold text-muted-foreground border-r">Nº</div>
+                <div className="w-52 h-8 flex items-center px-2 text-[10px] font-bold text-muted-foreground">Título dos Eventos</div>
+              </div>
+              {houseNumbers.map(n => (
+                <div key={n} className="w-10 h-8 flex items-center justify-center text-[9px] font-bold text-muted-foreground border-r">{n}</div>
+              ))}
+            </div>
+
+            {gridRows.map((row) => {
+              if (row.type === "stage" && row.stage) {
+                return (
+                  <div key={`s-${row.stage.id}`} className="flex bg-primary/15 border-b cursor-pointer" onClick={() => toggleGroup(row.stage!.id)}>
+                    <div className="sticky left-0 z-10 bg-primary/15 flex">
+                      <div className="w-10 h-7 flex items-center justify-center text-[10px] font-extrabold text-primary border-r">{row.stage.code}</div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="w-52 h-7 flex items-center px-2 text-[10px] font-extrabold text-primary tracking-wide truncate">
+                            {expandedGroups.has(row.stage.id) ? "▾" : "▸"} {row.stage.name.toUpperCase()}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-xs">
+                          <p className="font-bold">{row.stage.code} – {row.stage.name}</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
-                </div>
-              );
-            }
-            if (row.type === "substage" && row.substage) {
-              return (
-                <div key={`sub-${row.substage.id}`} className="flex bg-accent/40 border-b cursor-pointer" onClick={() => toggleGroup(row.substage!.id)}>
-                  <div className="sticky left-0 z-10 bg-accent/40 flex">
-                    <div className="w-10 h-7 flex items-center justify-center text-[10px] font-bold text-foreground border-r">{row.substage.code}</div>
-                    <div className="w-52 h-7 flex items-center px-2 text-[10px] font-bold text-foreground">
-                      {expandedGroups.has(row.substage.id) ? "▾" : "▸"} {row.substage.name}
+                );
+              }
+              if (row.type === "substage" && row.substage) {
+                return (
+                  <div key={`sub-${row.substage.id}`} className="flex bg-accent/40 border-b cursor-pointer" onClick={() => toggleGroup(row.substage!.id)}>
+                    <div className="sticky left-0 z-10 bg-accent/40 flex">
+                      <div className="w-10 h-7 flex items-center justify-center text-[10px] font-bold text-foreground border-r">{row.substage.code}</div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="w-52 h-7 flex items-center px-2 text-[10px] font-bold text-foreground truncate">
+                            {expandedGroups.has(row.substage.id) ? "▾" : "▸"} {row.substage.name}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-xs">
+                          <p className="font-semibold">{row.substage.code} – {row.substage.name}</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
-                </div>
-              );
-            }
-            if (row.type === "event" && row.event) {
-              const ev = row.event;
-              return (
-                <div key={ev.id} className="flex border-b hover:bg-accent/10">
-                  <div className="sticky left-0 z-10 bg-background flex border-r">
-                    <div className="w-10 h-7 flex items-center justify-center text-[9px] font-mono text-muted-foreground border-r">{ev.item_code}</div>
-                    <div className="w-52 h-7 flex items-center px-2 text-[9px] truncate pl-4" title={ev.description}>{ev.description}</div>
+                );
+              }
+              if (row.type === "event" && row.event) {
+                const ev = row.event;
+                return (
+                  <div key={ev.id} className="flex border-b hover:bg-accent/10">
+                    <div className="sticky left-0 z-10 bg-background flex border-r">
+                      <div className="w-10 h-7 flex items-center justify-center text-[9px] font-mono text-muted-foreground border-r">{ev.item_code}</div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="w-52 h-7 flex items-center px-2 text-[9px] truncate pl-4">{ev.description}</div>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-sm">
+                          <p><span className="font-mono text-muted-foreground">{ev.item_code}</span> – {ev.description}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    {houseNumbers.map(n => {
+                      const key = `${ev.id}:${n}`;
+                      const measNum = getEffectiveMeasNum(key);
+                      const measId = getEffectiveMeasId(key);
+                      const isApproved = measId ? approvedMeasurementIds.has(measId) : false;
+                      const isLocked = isApproved || isActiveMeasurementApproved;
+                      const wasGlossed = unresolvedGlossKeys.has(key) || resolvedGlossKeys.has(key);
+                      return (
+                        <GridCell
+                          key={n}
+                          cellKey={key}
+                          measNum={measNum}
+                          colorClass={measNum ? measurementColors[measNum] : ""}
+                          wasGlossed={wasGlossed && !measNum}
+                          isApproved={isApproved}
+                          isLocked={isLocked}
+                          onMouseDown={handleCellMouseDown}
+                          onMouseEnter={handleCellMouseEnter}
+                        />
+                      );
+                    })}
                   </div>
-                  {houseNumbers.map(n => {
-                    const measNum = getMeasurementNumber(ev.id, n);
-                    const entry = entries.find(e => e.event_id === ev.id && e.house_number === n);
-                    const isApproved = entry ? approvedMeasurementIds.has(entry.measurement_id) : false;
-                    const wasGlossed = unresolvedGlossKeys.has(`${ev.id}:${n}`) || resolvedGlossKeys.has(`${ev.id}:${n}`);
-                    return (
-                      <GridCell
-                        key={n}
-                        eventId={ev.id}
-                        houseNumber={n}
-                        measNum={measNum}
-                        colorClass={measNum ? measurementColors[measNum] : ""}
-                        wasGlossed={wasGlossed && !measNum}
-                        isApproved={isApproved}
-                        onMouseDown={handleCellMouseDown}
-                        onMouseEnter={handleCellMouseEnter}
-                      />
-                    );
-                  })}
-                </div>
-              );
-            }
-            return null;
-          })}
+                );
+              }
+              return null;
+            })}
+          </div>
         </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }
