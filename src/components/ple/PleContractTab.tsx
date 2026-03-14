@@ -84,12 +84,6 @@ export function PleContractTab(props: PleDataReturn) {
     });
   };
 
-  const handleSaveProject = async () => {
-    if (!currentProject) return;
-    await updateProject(currentProject.id, projectForm as any);
-    setIsEditingProject(false);
-    toast.success("Dados do projeto atualizados!");
-  };
 
   const handleAddStage = async () => {
     if (!newStage.code || !newStage.name) { toast.error("Código e nome obrigatórios"); return; }
