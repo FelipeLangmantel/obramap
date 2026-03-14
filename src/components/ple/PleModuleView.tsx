@@ -185,7 +185,7 @@ export function PleModuleView(props: PleDataReturn) {
         <TabsContent value="spreadsheet" className="flex-1 min-h-0 mt-1.5 sm:mt-3">
           <PleSpreadsheetTab {...props} selectedMeasurement={selectedMeasurement} />
         </TabsContent>
-        <TabsContent value="grid" className="flex-1 min-h-0 mt-1.5 sm:mt-3">
+        <TabsContent value="grid" className="flex-1 min-h-0 mt-1.5 sm:mt-3 overflow-hidden">
           <PleGridTab {...props} selectedMeasurement={selectedMeasurement} />
         </TabsContent>
         <TabsContent value="housemap" className="flex-1 min-h-0 mt-1.5 sm:mt-3">
