@@ -185,7 +185,7 @@ export function PleModuleView(props: PleDataReturn) {
         <TabsContent value="spreadsheet" className="flex-1 min-h-0 mt-1.5 sm:mt-3">
           <PleSpreadsheetTab {...props} selectedMeasurement={selectedMeasurement} />
         </TabsContent>
-        <TabsContent value="grid" className="flex-1 min-h-0 mt-1.5 sm:mt-3">
+        <TabsContent value="grid" className="flex-1 min-h-0 mt-1.5 sm:mt-3 overflow-hidden">
           <PleGridTab {...props} selectedMeasurement={selectedMeasurement} />
         </TabsContent>
         <TabsContent value="housemap" className="flex-1 min-h-0 mt-1.5 sm:mt-3">
@@ -211,6 +211,11 @@ export function PleModuleView(props: PleDataReturn) {
           onClose={() => setShowNewMeasurement(false)}
           nextNumber={props.nextMeasurementNumber}
           onSave={props.createMeasurement}
+          previousEndDate={
+            measurements.length > 0
+              ? measurements.sort((a, b) => b.measurement_number - a.measurement_number)[0]?.end_date || null
+              : null
+          }
         />
       )}
     </div>
