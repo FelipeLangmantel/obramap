@@ -196,29 +196,29 @@ export function PleContractTab(props: PleDataReturn) {
     <div className="h-full flex flex-col gap-3 sm:gap-4 overflow-hidden">
       {/* Project Header Card */}
       <Card className="border-primary/20 shadow-sm">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-primary/10">
-                <Building2 className="h-5 w-5 text-primary" />
+        <CardHeader className="pb-3 px-3 sm:px-6">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="p-2 sm:p-2.5 rounded-xl bg-primary/10 shrink-0">
+                <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
-              <div>
-                <CardTitle className="text-base">Dados do Contrato</CardTitle>
-                <CardDescription className="text-xs">Informações gerais do projeto e contrato</CardDescription>
+              <div className="min-w-0">
+                <CardTitle className="text-sm sm:text-base truncate">Dados do Contrato</CardTitle>
+                <CardDescription className="text-[10px] sm:text-xs hidden sm:block">Informações gerais do projeto e contrato</CardDescription>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
               {!isEditingProject ? (
-                <Button variant="outline" size="sm" onClick={() => setIsEditingProject(true)} className="gap-1.5 text-xs">
-                  <Edit2 className="h-3.5 w-3.5" /> Editar
+                <Button variant="outline" size="sm" onClick={() => setIsEditingProject(true)} className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs h-7">
+                  <Edit2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Editar
                 </Button>
               ) : (
                 <>
-                  <Button variant="ghost" size="sm" onClick={() => setIsEditingProject(false)} className="gap-1 text-xs">
-                    <X className="h-3.5 w-3.5" /> Cancelar
+                  <Button variant="ghost" size="sm" onClick={() => setIsEditingProject(false)} className="gap-1 text-[10px] sm:text-xs h-7">
+                    <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                   </Button>
-                  <Button size="sm" onClick={handleSaveProject} className="gap-1.5 text-xs">
-                    <Save className="h-3.5 w-3.5" /> Salvar
+                  <Button size="sm" onClick={handleSaveProject} className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs h-7">
+                    <Save className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Salvar
                   </Button>
                 </>
               )}
