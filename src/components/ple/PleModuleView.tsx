@@ -3,7 +3,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, FileText, BarChart3, History, Grid3X3, ClipboardList, ArrowLeft, MapPin } from "lucide-react";
+import { Plus, FileText, BarChart3, History, Grid3X3, ClipboardList, ArrowLeft, MapPin, Info } from "lucide-react";
 import { PleSpreadsheetTab } from "./PleSpreadsheetTab";
 import { PleGridTab } from "./PleGridTab";
 import { PleChartsTab } from "./PleChartsTab";
