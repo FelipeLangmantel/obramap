@@ -194,63 +194,6 @@ export function PleContractTab(props: PleDataReturn) {
 
   return (
     <div className="h-full flex flex-col gap-3 sm:gap-4 overflow-hidden">
-      {/* Project Header Card */}
-      <Card className="border-primary/20 shadow-sm">
-        <CardHeader className="pb-3 px-3 sm:px-6">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <div className="p-2 sm:p-2.5 rounded-xl bg-primary/10 shrink-0">
-                <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-              </div>
-              <div className="min-w-0">
-                <CardTitle className="text-sm sm:text-base truncate">Dados do Contrato</CardTitle>
-                <CardDescription className="text-[10px] sm:text-xs hidden sm:block">Informações gerais do projeto e contrato</CardDescription>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {!isEditingProject ? (
-                <Button variant="outline" size="sm" onClick={() => setIsEditingProject(true)} className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs h-7">
-                  <Edit2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Editar
-                </Button>
-              ) : (
-                <>
-                  <Button variant="ghost" size="sm" onClick={() => setIsEditingProject(false)} className="gap-1 text-[10px] sm:text-xs h-7">
-                    <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                  </Button>
-                  <Button size="sm" onClick={handleSaveProject} className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs h-7">
-                    <Save className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Salvar
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="px-3 sm:px-6">
-          {isEditingProject ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="space-y-1"><Label className="text-[10px] uppercase text-muted-foreground tracking-wide">Nome da Obra</Label><Input value={projectForm.name} onChange={e => setProjectForm(p => ({ ...p, name: e.target.value }))} className="h-8 text-xs" /></div>
-              <div className="space-y-1"><Label className="text-[10px] uppercase text-muted-foreground tracking-wide">Localização</Label><Input value={projectForm.location} onChange={e => setProjectForm(p => ({ ...p, location: e.target.value }))} className="h-8 text-xs" /></div>
-              <div className="space-y-1"><Label className="text-[10px] uppercase text-muted-foreground tracking-wide">Empresa Executora</Label><Input value={projectForm.contractor} onChange={e => setProjectForm(p => ({ ...p, contractor: e.target.value }))} className="h-8 text-xs" /></div>
-              <div className="space-y-1"><Label className="text-[10px] uppercase text-muted-foreground tracking-wide">Nº Contrato</Label><Input value={projectForm.contract_number} onChange={e => setProjectForm(p => ({ ...p, contract_number: e.target.value }))} className="h-8 text-xs" /></div>
-              <div className="space-y-1"><Label className="text-[10px] uppercase text-muted-foreground tracking-wide">Programa</Label><Input value={projectForm.program} onChange={e => setProjectForm(p => ({ ...p, program: e.target.value }))} className="h-8 text-xs" /></div>
-              <div className="space-y-1"><Label className="text-[10px] uppercase text-muted-foreground tracking-wide">Total de Casas</Label><Input type="number" value={projectForm.total_houses} onChange={e => setProjectForm(p => ({ ...p, total_houses: parseInt(e.target.value) || 0 }))} className="h-8 text-xs" /></div>
-              <div className="space-y-1"><Label className="text-[10px] uppercase text-muted-foreground tracking-wide">Valor do Contrato (R$)</Label><Input type="number" step="0.01" value={projectForm.contract_value} onChange={e => setProjectForm(p => ({ ...p, contract_value: parseFloat(e.target.value) || 0 }))} className="h-8 text-xs" /></div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2">
-              <InfoField label="OBRA" value={currentProject.name} />
-              <InfoField label="LOCALIZAÇÃO" value={currentProject.location || "—"} />
-              <InfoField label="EXECUTORA" value={currentProject.contractor || "—"} />
-              <InfoField label="Nº CONTRATO" value={currentProject.contract_number || "—"} />
-              <InfoField label="PROGRAMA" value={currentProject.program || "—"} />
-              <InfoField label="TOTAL DE CASAS" value={String(currentProject.total_houses)} />
-              <InfoField label="VALOR CONTRATO" value={fmtCur(currentProject.contract_value)} highlight />
-              <InfoField label="VALOR ORÇADO" value={fmtCur(stats.totalContractual)} highlight />
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Budget Spreadsheet */}
       <div className="flex-1 flex flex-col min-h-0">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 sm:mb-3 gap-2">
