@@ -124,18 +124,20 @@ export function usePleData() {
   const loadProjectData = useCallback(async (projectId: string) => {
     setIsLoading(true);
     try {
-      const [groupsRes, eventsRes, measurementsRes, entriesRes, glossesRes] = await Promise.all([
+      const [groupsRes, eventsRes, measurementsRes, entriesRes, glossesRes, auditRes] = await Promise.all([
         supabase.from("ple_event_groups").select("*").eq("ple_project_id", projectId).order("display_order"),
         supabase.from("ple_events").select("*").eq("ple_project_id", projectId).order("display_order"),
         supabase.from("ple_measurements").select("*").eq("ple_project_id", projectId).order("measurement_number"),
         supabase.from("ple_entries").select("*").eq("ple_project_id", projectId),
         supabase.from("ple_glosses").select("*").eq("ple_project_id", projectId),
+        supabase.from("ple_audit_log").select("*").eq("ple_project_id", projectId).order("performed_at", { ascending: false }).limit(500),
       ]);
       if (!groupsRes.error) setGroups(groupsRes.data as any);
       if (!eventsRes.error) setEvents(eventsRes.data as any);
       if (!measurementsRes.error) setMeasurements(measurementsRes.data as any);
       if (!entriesRes.error) setEntries(entriesRes.data as any);
       if (!glossesRes.error) setGlosses(glossesRes.data as any);
+      if (!auditRes.error) setAuditLogs(auditRes.data as any);
     } finally {
       setIsLoading(false);
     }
