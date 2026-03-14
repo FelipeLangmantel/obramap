@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import type { PleGloss } from "@/components/ple/PleAuditDialog";
 
 export interface PleProject {
   id: string;
@@ -69,15 +70,15 @@ export function usePleData() {
   const [events, setEvents] = useState<PleEvent[]>([]);
   const [measurements, setMeasurements] = useState<PleMeasurement[]>([]);
   const [entries, setEntries] = useState<PleEntry[]>([]);
+  const [glosses, setGlosses] = useState<PleGloss[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const currentProject = useMemo(() => 
+  const currentProject = useMemo(() =>
     projects.find(p => p.id === currentProjectId) || null,
     [projects, currentProjectId]
   );
 
-  // Load projects
   const loadProjects = useCallback(async () => {
     if (!company?.id) return;
     const { data, error } = await supabase
@@ -88,20 +89,21 @@ export function usePleData() {
     if (!error && data) setProjects(data as any);
   }, [company?.id]);
 
-  // Load project data
   const loadProjectData = useCallback(async (projectId: string) => {
     setIsLoading(true);
     try {
-      const [groupsRes, eventsRes, measurementsRes, entriesRes] = await Promise.all([
+      const [groupsRes, eventsRes, measurementsRes, entriesRes, glossesRes] = await Promise.all([
         supabase.from("ple_event_groups").select("*").eq("ple_project_id", projectId).order("display_order"),
         supabase.from("ple_events").select("*").eq("ple_project_id", projectId).order("display_order"),
         supabase.from("ple_measurements").select("*").eq("ple_project_id", projectId).order("measurement_number"),
         supabase.from("ple_entries").select("*").eq("ple_project_id", projectId),
+        supabase.from("ple_glosses").select("*").eq("ple_project_id", projectId),
       ]);
       if (!groupsRes.error) setGroups(groupsRes.data as any);
       if (!eventsRes.error) setEvents(eventsRes.data as any);
       if (!measurementsRes.error) setMeasurements(measurementsRes.data as any);
       if (!entriesRes.error) setEntries(entriesRes.data as any);
+      if (!glossesRes.error) setGlosses(glossesRes.data as any);
     } finally {
       setIsLoading(false);
     }
@@ -141,15 +143,63 @@ export function usePleData() {
     return result as any;
   }, [currentProjectId]);
 
-  // Approve measurement
-  const approveMeasurement = useCallback(async (id: string) => {
-    const { error } = await supabase.from("ple_measurements").update({ status: "approved" } as any).eq("id", id);
+  // Approve measurement (with or without glosses)
+  const approveMeasurement = useCallback(async (id: string, hasGlosses?: boolean) => {
+    const newStatus = hasGlosses ? "approved_with_glosses" : "approved";
+    const { error } = await supabase.from("ple_measurements").update({ status: newStatus } as any).eq("id", id);
     if (error) { toast.error("Erro ao aprovar"); return; }
-    setMeasurements(prev => prev.map(m => m.id === id ? { ...m, status: "approved" } : m));
-    toast.success("Medição aprovada!");
+
+    // If there are glosses, remove glossed entries from the grid
+    if (hasGlosses) {
+      const measGlosses = glosses.filter(g => g.measurement_id === id && !g.resolved);
+      for (const g of measGlosses) {
+        // Delete the entry for the glossed cell
+        await supabase.from("ple_entries").delete().eq("event_id", g.event_id).eq("house_number", g.house_number).eq("measurement_id", id);
+      }
+      // Update local entries state
+      const glossKeys = new Set(measGlosses.map(g => `${g.event_id}:${g.house_number}:${id}`));
+      setEntries(prev => prev.filter(e => !glossKeys.has(`${e.event_id}:${e.house_number}:${e.measurement_id}`)));
+    }
+
+    setMeasurements(prev => prev.map(m => m.id === id ? { ...m, status: newStatus } : m));
+    toast.success(hasGlosses ? "Medição aprovada com glossas!" : "Medição aprovada!");
+  }, [glosses]);
+
+  // Undo measurement approval (temporary for testing)
+  const undoMeasurementApproval = useCallback(async (id: string) => {
+    const { error } = await supabase.from("ple_measurements").update({ status: "draft" } as any).eq("id", id);
+    if (error) { toast.error("Erro ao desfazer aprovação"); return; }
+    setMeasurements(prev => prev.map(m => m.id === id ? { ...m, status: "draft" } : m));
+    toast.success("Aprovação desfeita! Medição voltou ao status rascunho.");
   }, []);
 
-  // Create event group (etapa or subetapa)
+  // Toggle gloss on a cell
+  const toggleGloss = useCallback(async (eventId: string, houseNumber: number, measurementId: string) => {
+    if (!currentProjectId) return;
+    const existing = glosses.find(g => g.measurement_id === measurementId && g.event_id === eventId && g.house_number === houseNumber && !g.resolved);
+    if (existing) {
+      // Remove gloss
+      await supabase.from("ple_glosses").delete().eq("id", existing.id);
+      setGlosses(prev => prev.filter(g => g.id !== existing.id));
+    } else {
+      // Add gloss
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase
+        .from("ple_glosses")
+        .insert({
+          ple_project_id: currentProjectId,
+          measurement_id: measurementId,
+          event_id: eventId,
+          house_number: houseNumber,
+          glossed_by: userData?.user?.id,
+        } as any)
+        .select()
+        .single();
+      if (!error && data) setGlosses(prev => [...prev, data as any]);
+    }
+  }, [currentProjectId, glosses]);
+
+  // Create event group
   const createGroup = useCallback(async (data: { code: string; name: string; parent_id?: string | null }) => {
     if (!currentProjectId) return null;
     const maxOrder = groups.length > 0 ? Math.max(...groups.map(g => g.display_order)) + 1 : 0;
@@ -192,17 +242,15 @@ export function usePleData() {
     setEntries(prev => prev.filter(e => e.event_id !== id));
   }, []);
 
-  // Set PLE entry (upsert: assign house+event to measurement)
+  // Set PLE entry
   const setEntry = useCallback(async (eventId: string, houseNumber: number, measurementId: string | null) => {
     if (!currentProjectId) return;
     setIsSaving(true);
     try {
       if (!measurementId) {
-        // Remove entry
         await supabase.from("ple_entries").delete().eq("event_id", eventId).eq("house_number", houseNumber);
         setEntries(prev => prev.filter(e => !(e.event_id === eventId && e.house_number === houseNumber)));
       } else {
-        // Check if entry exists
         const existing = entries.find(e => e.event_id === eventId && e.house_number === houseNumber);
         if (existing) {
           await supabase.from("ple_entries").update({ measurement_id: measurementId } as any).eq("id", existing.id);
@@ -266,13 +314,12 @@ export function usePleData() {
     return Math.max(...measurements.map(m => m.measurement_number)) + 1;
   }, [measurements]);
 
-  // Computed totals
+  // Computed totals – value per house = quantity * unit_value (total item value)
   const totals = useMemo(() => {
     const contractValue = currentProject?.contract_value || 0;
     let totalMeasured = 0;
     events.forEach(event => {
       const measuredQty = entries.filter(e => e.event_id === event.id).length;
-      // FIX: value per house = quantity * unit_value (full item total)
       totalMeasured += measuredQty * (event.quantity * event.unit_value);
     });
     const balance = contractValue - totalMeasured;
@@ -282,14 +329,15 @@ export function usePleData() {
 
   return {
     projects, currentProject, currentProjectId, setCurrentProjectId,
-    groups, events, measurements, entries,
+    groups, events, measurements, entries, glosses,
     isLoading, isSaving,
     totals, nextMeasurementNumber,
     loadProjects, createProject, updateProject,
     createGroup, updateGroup, deleteGroup,
     createEvent, updateEvent, deleteEvent,
-    createMeasurement, approveMeasurement,
+    createMeasurement, approveMeasurement, undoMeasurementApproval,
     setEntry, getMeasurementNumber, getMeasuredQty,
+    toggleGloss,
     reload: () => currentProjectId && loadProjectData(currentProjectId),
   };
 }
