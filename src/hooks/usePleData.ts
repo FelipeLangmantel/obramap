@@ -71,6 +71,9 @@ export interface PleEntry {
   event_id: string;
   house_number: number;
   measurement_id: string;
+  created_at?: string;
+  created_by?: string | null;
+  created_by_name?: string | null;
 }
 
 export function usePleData() {
