@@ -3,7 +3,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, FileText, BarChart3, History, Grid3X3, ClipboardList, ArrowLeft, MapPin, Info } from "lucide-react";
+import { Plus, FileText, BarChart3, History, Grid3X3, ClipboardList, ArrowLeft, MapPin } from "lucide-react";
 import { PleSpreadsheetTab } from "./PleSpreadsheetTab";
 import { PleGridTab } from "./PleGridTab";
 import { PleChartsTab } from "./PleChartsTab";
@@ -177,10 +177,10 @@ export function PleModuleView(props: PleDataReturn) {
               <span className="hidden sm:inline">Orçamento</span>
               <span className="sm:hidden">Orçamento</span>
             </TabsTrigger>
-            <TabsTrigger value="info" className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs px-2 sm:px-3">
-              <Info className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-              <span className="hidden sm:inline">Informações do Contrato</span>
-              <span className="sm:hidden">Info</span>
+            <TabsTrigger value="contrato" className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs px-2 sm:px-3">
+              <FileText className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+              <span className="hidden sm:inline">Contrato</span>
+              <span className="sm:hidden">Contrato</span>
             </TabsTrigger>
           </TabsList>
         </div>
@@ -203,7 +203,7 @@ export function PleModuleView(props: PleDataReturn) {
         <TabsContent value="contract" className="flex-1 min-h-0 mt-2 sm:mt-3">
           <PleContractTab {...props} />
         </TabsContent>
-        <TabsContent value="info" className="flex-1 min-h-0 mt-2 sm:mt-3">
+        <TabsContent value="contrato" className="flex-1 min-h-0 mt-2 sm:mt-3">
           <PleContractInfoTab {...props} />
         </TabsContent>
       </Tabs>
