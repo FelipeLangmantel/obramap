@@ -262,10 +262,10 @@ export function PleContractTab(props: PleDataReturn) {
                         return (
                           <div key={sub.id}>
                             {/* SUBETAPA ROW (Level 2) */}
-                            <div
-                              className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-accent/40 border-b px-2 py-1.5 cursor-pointer hover:bg-accent/60 transition-colors items-center"
-                              onClick={() => toggleStage(sub.id)}
-                            >
+                             <div
+                               className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 bg-accent/40 border-b px-1 sm:px-2 py-1.5 cursor-pointer hover:bg-accent/60 transition-colors items-center"
+                               onClick={() => toggleStage(sub.id)}
+                             >
                               <span className="flex items-center justify-center pl-3">
                                 {isSubExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
                               </span>
