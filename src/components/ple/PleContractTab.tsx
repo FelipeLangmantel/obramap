@@ -225,7 +225,7 @@ export function PleContractTab(props: PleDataReturn) {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-3 sm:px-6">
           {isEditingProject ? (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="space-y-1"><Label className="text-[10px] uppercase text-muted-foreground tracking-wide">Nome da Obra</Label><Input value={projectForm.name} onChange={e => setProjectForm(p => ({ ...p, name: e.target.value }))} className="h-8 text-xs" /></div>
