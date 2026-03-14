@@ -127,21 +127,21 @@ export function PleContractInfoTab(props: PleDataReturn) {
   return (
     <>
       <ScrollArea className="h-full">
-        <div className="space-y-4 p-1">
+        <div className="space-y-3 sm:space-y-4 p-0.5 sm:p-1">
           {/* Actions */}
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-1.5 sm:gap-2">
             {isEditing ? (
               <>
-                <Button size="sm" variant="ghost" onClick={() => { setForm({ ...currentProject }); setIsEditing(false); }}>
-                  <X className="h-4 w-4 mr-1" /> Cancelar
+                <Button size="sm" variant="ghost" onClick={() => { setForm({ ...currentProject }); setIsEditing(false); }} className="h-7 sm:h-9 text-xs sm:text-sm">
+                  <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" /> Cancelar
                 </Button>
-                <Button size="sm" onClick={handleSave}>
-                  <Save className="h-4 w-4 mr-1" /> Salvar
+                <Button size="sm" onClick={handleSave} className="h-7 sm:h-9 text-xs sm:text-sm">
+                  <Save className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" /> Salvar
                 </Button>
               </>
             ) : (
-              <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
-                <Edit2 className="h-4 w-4 mr-1" /> Editar Informações
+              <Button size="sm" variant="outline" onClick={() => setIsEditing(true)} className="h-7 sm:h-9 text-xs sm:text-sm">
+                <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" /> Editar
               </Button>
             )}
           </div>
