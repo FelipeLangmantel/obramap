@@ -307,8 +307,8 @@ export function PleContractTab(props: PleDataReturn) {
                                 ))}
 
                                 {/* Add service row */}
-                                {addingEventTo === sub.id ? (
-                                  <div className="grid grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-2 py-1.5 bg-accent/10 items-center">
+                                 {addingEventTo === sub.id ? (
+                                   <div className="grid grid-cols-[28px_60px_1fr_40px_55px_70px_80px_28px] lg:grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px] gap-0 border-b px-1 sm:px-2 py-1.5 bg-accent/10 items-center">
                                     <span />
                                     <Input value={newEvent.item_code} onChange={e => setNewEvent(ev => ({ ...ev, item_code: e.target.value }))} placeholder="1.1.1" className="h-7 text-[11px] border-dashed ml-3" />
                                     <Input value={newEvent.discrimination} onChange={e => setNewEvent(ev => ({ ...ev, discrimination: e.target.value }))} placeholder="SINAPI" className="h-7 text-[11px] border-dashed" />
