@@ -177,10 +177,10 @@ export function PleModuleView(props: PleDataReturn) {
               <span className="hidden sm:inline">Orçamento</span>
               <span className="sm:hidden">Orçamento</span>
             </TabsTrigger>
-            <TabsTrigger value="info" className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs px-2 sm:px-3">
-              <Info className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-              <span className="hidden sm:inline">Informações do Contrato</span>
-              <span className="sm:hidden">Info</span>
+            <TabsTrigger value="contrato" className="gap-1 sm:gap-1.5 text-[10px] sm:text-xs px-2 sm:px-3">
+              <FileText className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+              <span className="hidden sm:inline">Contrato</span>
+              <span className="sm:hidden">Contrato</span>
             </TabsTrigger>
           </TabsList>
         </div>
