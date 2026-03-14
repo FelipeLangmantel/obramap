@@ -193,7 +193,7 @@ export function PleContractTab(props: PleDataReturn) {
   if (!currentProject) return null;
 
   return (
-    <div className="h-full flex flex-col gap-4 overflow-hidden">
+    <div className="h-full flex flex-col gap-3 sm:gap-4 overflow-hidden">
       {/* Project Header Card */}
       <Card className="border-primary/20 shadow-sm">
         <CardHeader className="pb-3">
