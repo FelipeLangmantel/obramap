@@ -63,7 +63,7 @@ export function PleModuleView(props: PleDataReturn) {
   };
 
   return (
-    <div className="h-full flex flex-col gap-2 sm:gap-3 p-2 sm:p-4">
+    <div className="h-full flex flex-col gap-2 sm:gap-3 p-2 sm:p-4 overflow-hidden">
       {/* Header - compact on mobile */}
       <div className="flex flex-col gap-1.5 sm:gap-3">
         <div className="flex items-center justify-between">
