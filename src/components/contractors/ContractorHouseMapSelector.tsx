@@ -205,8 +205,18 @@ export function ContractorHouseMapSelector({
   const zoom = (delta: number) => setScale(s => Math.max(0.2, Math.min(3, s + delta)));
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
     const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    zoom(delta);
+    const newScale = Math.max(0.2, Math.min(3, scale + delta));
+    const ratio = newScale / scale;
+    setScale(newScale);
+    setPosition(prev => ({
+      x: mouseX - ratio * (mouseX - prev.x),
+      y: mouseY - ratio * (mouseY - prev.y),
+    }));
   };
 
   const getHouseColor = (houseId: number) => selected.has(houseId) ? "hsl(var(--primary))" : "hsl(var(--muted))";
