@@ -17,7 +17,7 @@ export function PlanningView() {
           </TabsTrigger>
           <TabsTrigger value="legacy-planning" className="gap-1.5">
             <ClipboardList className="h-4 w-4" />
-            Planejamento Manual
+            Histórico / Análise
           </TabsTrigger>
         </TabsList>
 
