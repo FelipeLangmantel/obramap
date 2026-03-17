@@ -200,52 +200,72 @@ export function PlannedProductionTab() {
   }, [loadApprovedPeriods]);
 
   // ── Load weekly plan data for selected period ──
-  useEffect(() => {
+  const loadWeeklyPlan = useCallback(async () => {
     if (!selectedApprovedPeriodId || !company?.id) {
       setWeeklyPlanWeeks([]);
       return;
     }
     
-    const loadWeeklyPlan = async () => {
-      setIsLoadingWeeklyPlan(true);
-      try {
-        const { data: weeks, error: weeksError } = await supabase
-          .from("weekly_plan_weeks")
-          .select("id, planning_period_id, week_number, week_start, week_end, status")
-          .eq("planning_period_id", selectedApprovedPeriodId)
-          .order("week_number", { ascending: true });
-        
-        if (weeksError) throw weeksError;
-        
-        if (!weeks || weeks.length === 0) {
-          setWeeklyPlanWeeks([]);
-          return;
-        }
-        
-        // Load services for all weeks
-        const weekIds = weeks.map(w => w.id);
-        const { data: services, error: servicesError } = await supabase
-          .from("weekly_plan_services")
-          .select("id, weekly_plan_week_id, macro_id, macro_name, macro_color, scope_id, scope_name, planned_house_ids, planned_houses")
-          .in("weekly_plan_week_id", weekIds);
-        
-        if (servicesError) throw servicesError;
-        
-        const weeksWithServices: WeeklyPlanWeek[] = weeks.map(w => ({
-          ...w,
-          services: (services || []).filter(s => s.weekly_plan_week_id === w.id)
-        }));
-        
-        setWeeklyPlanWeeks(weeksWithServices);
-      } catch (err) {
-        console.error("Erro ao carregar plano semanal:", err);
-      } finally {
-        setIsLoadingWeeklyPlan(false);
+    setIsLoadingWeeklyPlan(true);
+    try {
+      const { data: weeks, error: weeksError } = await supabase
+        .from("weekly_plan_weeks")
+        .select("id, planning_period_id, week_number, week_start, week_end, status")
+        .eq("planning_period_id", selectedApprovedPeriodId)
+        .order("week_number", { ascending: true });
+      
+      if (weeksError) throw weeksError;
+      
+      if (!weeks || weeks.length === 0) {
+        setWeeklyPlanWeeks([]);
+        return;
       }
-    };
-    
-    loadWeeklyPlan();
+      
+      // Load services for all weeks
+      const weekIds = weeks.map(w => w.id);
+      const { data: services, error: servicesError } = await supabase
+        .from("weekly_plan_services")
+        .select("id, weekly_plan_week_id, macro_id, macro_name, macro_color, scope_id, scope_name, planned_house_ids, planned_houses")
+        .in("weekly_plan_week_id", weekIds);
+      
+      if (servicesError) throw servicesError;
+      
+      const weeksWithServices: WeeklyPlanWeek[] = weeks.map(w => ({
+        ...w,
+        services: (services || []).filter(s => s.weekly_plan_week_id === w.id)
+      }));
+      
+      setWeeklyPlanWeeks(weeksWithServices);
+    } catch (err) {
+      console.error("Erro ao carregar plano semanal:", err);
+    } finally {
+      setIsLoadingWeeklyPlan(false);
+    }
   }, [selectedApprovedPeriodId, company?.id]);
+
+  useEffect(() => {
+    loadWeeklyPlan();
+  }, [loadWeeklyPlan]);
+
+  // ── Realtime: auto-update when weekly plans or periods change ──
+  useEffect(() => {
+    if (!currentProject?.id) return;
+
+    const channel = supabase
+      .channel('weekly-plan-realtime-history')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'weekly_plan_services', filter: `project_id=eq.${currentProject.id}` },
+        () => { loadWeeklyPlan(); }
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'weekly_plan_weeks', filter: `project_id=eq.${currentProject.id}` },
+        () => { loadWeeklyPlan(); }
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'planning_periods', filter: `project_id=eq.${currentProject.id}` },
+        () => { loadApprovedPeriods(); }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [currentProject?.id, loadWeeklyPlan, loadApprovedPeriods]);
 
   // ── Load analysis data (legacy planned_productions + actual) ──
   useEffect(() => {
