@@ -186,16 +186,44 @@ function WeekSlot({
 
 // ── Summary Column ─────────────────────────────────────────
 function WeekSummaryColumn({
-  week, onRemoveHouse,
+  week, onRemoveHouse, onMoveHouse,
 }: {
   week: WeekPlan;
   onRemoveHouse: (weekNumber: number, serviceKey: string, houseId: number) => void;
+  onMoveHouse: (fromWeek: number, toWeek: number, serviceKey: string, houseId: number) => void;
 }) {
   const totalHouses = week.services.reduce((s, svc) => s + svc.planned_house_ids.length, 0);
   const activeServices = week.services.filter(s => s.planned_house_ids.length > 0);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => setIsDragOver(false);
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    try {
+      const data = JSON.parse(e.dataTransfer.getData("application/json"));
+      if (data.fromWeek !== week.week_number) {
+        onMoveHouse(data.fromWeek, week.week_number, data.serviceKey, data.houseId);
+      }
+    } catch {}
+  };
 
   return (
-    <div className="flex flex-col rounded-xl border bg-card min-w-[200px] max-w-[240px]">
+    <div
+      className={`flex flex-col rounded-xl border bg-card min-w-[200px] max-w-[240px] transition-all ${
+        isDragOver ? "ring-2 ring-primary border-primary shadow-lg scale-[1.02]" : ""
+      }`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="px-3 py-2 border-b bg-muted/50 rounded-t-xl">
         <div className="font-semibold text-sm flex items-center gap-1.5">
           <Calendar className="h-3.5 w-3.5 text-primary" />
@@ -211,38 +239,75 @@ function WeekSummaryColumn({
       </div>
       <ScrollArea className="flex-1 p-2 max-h-[300px]">
         <div className="space-y-2">
-          {activeServices.map(svc => (
-            <div key={svcKey(svc)} className="space-y-1">
-              <div className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: svc.macro_color }} />
-                <span className="text-[11px] font-medium truncate">{svc.scope_name}</span>
+          {activeServices.map(svc => {
+            const sk = svcKey(svc);
+            return (
+              <div key={sk} className="space-y-1">
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: svc.macro_color }} />
+                  <span className="text-[11px] font-medium truncate">{svc.scope_name}</span>
+                </div>
+                <div className="flex flex-wrap gap-0.5">
+                  {svc.planned_house_ids.map(hId => (
+                    <DraggableHouseBadge
+                      key={hId}
+                      houseId={hId}
+                      weekNumber={week.week_number}
+                      serviceKey={sk}
+                      onRemove={() => onRemoveHouse(week.week_number, sk, hId)}
+                    />
+                  ))}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-0.5">
-                {svc.planned_house_ids.map(hId => (
-                  <TooltipProvider key={hId} delayDuration={150}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={() => onRemoveHouse(week.week_number, svcKey(svc), hId)}
-                          className="w-7 h-7 rounded border text-[10px] font-bold bg-primary/10 text-primary border-primary/20 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
-                        >
-                          {hId}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs">
-                        Clique para remover Casa {hId}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ))}
-              </div>
-            </div>
-          ))}
+            );
+          })}
           {activeServices.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-4">Nenhuma casa alocada</p>
+            <p className="text-xs text-muted-foreground text-center py-4">
+              {isDragOver ? "Solte aqui para alocar" : "Nenhuma casa alocada"}
+            </p>
           )}
         </div>
       </ScrollArea>
+    </div>
+  );
+}
+
+// ── Draggable House Badge ──────────────────────────────────
+function DraggableHouseBadge({
+  houseId, weekNumber, serviceKey, onRemove,
+}: {
+  houseId: number;
+  weekNumber: number;
+  serviceKey: string;
+  onRemove: () => void;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData("application/json", JSON.stringify({ houseId, fromWeek: weekNumber, serviceKey }));
+    e.dataTransfer.effectAllowed = "move";
+    setIsDragging(true);
+  };
+
+  const handleDragEnd = () => setIsDragging(false);
+
+  return (
+    <div
+      draggable
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      className={`group relative flex items-center transition-all ${isDragging ? "opacity-40 scale-90" : ""}`}
+    >
+      <div className="w-8 h-7 rounded-l border text-[10px] font-bold bg-primary/10 text-primary border-primary/20 flex items-center justify-center cursor-grab active:cursor-grabbing">
+        {houseId}
+      </div>
+      <button
+        onClick={(e) => { e.stopPropagation(); onRemove(); }}
+        className="w-5 h-7 rounded-r border border-l-0 border-primary/20 bg-primary/5 flex items-center justify-center hover:bg-destructive/20 hover:text-destructive transition-colors"
+        title={`Remover casa ${houseId}`}
+      >
+        <X className="h-2.5 w-2.5" />
+      </button>
     </div>
   );
 }
