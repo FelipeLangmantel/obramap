@@ -297,6 +297,413 @@ export type Database = {
           },
         ]
       }
+      contractor_contract_services: {
+        Row: {
+          budget_unit_value: number
+          company_id: string
+          contract_id: string
+          created_at: string
+          house_ids: number[]
+          id: string
+          macro_id: string
+          macro_name: string
+          measured_houses: number
+          measured_value: number
+          negotiated_unit_value: number
+          project_id: string
+          scope_id: string
+          scope_name: string
+          total_houses: number
+          total_value: number
+          updated_at: string
+        }
+        Insert: {
+          budget_unit_value?: number
+          company_id: string
+          contract_id: string
+          created_at?: string
+          house_ids?: number[]
+          id?: string
+          macro_id: string
+          macro_name: string
+          measured_houses?: number
+          measured_value?: number
+          negotiated_unit_value?: number
+          project_id: string
+          scope_id: string
+          scope_name: string
+          total_houses?: number
+          total_value?: number
+          updated_at?: string
+        }
+        Update: {
+          budget_unit_value?: number
+          company_id?: string
+          contract_id?: string
+          created_at?: string
+          house_ids?: number[]
+          id?: string
+          macro_id?: string
+          macro_name?: string
+          measured_houses?: number
+          measured_value?: number
+          negotiated_unit_value?: number
+          project_id?: string
+          scope_id?: string
+          scope_name?: string
+          total_houses?: number
+          total_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contractor_contract_services_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contractor_contract_services_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contractor_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contractor_contract_services_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contractor_contracts: {
+        Row: {
+          company_id: string
+          contract_number: string | null
+          contractor_id: string
+          created_at: string
+          end_date: string | null
+          id: string
+          notes: string | null
+          project_id: string
+          retention_percent: number
+          start_date: string | null
+          status: string
+          total_measured: number
+          total_paid: number
+          total_retained: number
+          total_value: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          contract_number?: string | null
+          contractor_id: string
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          notes?: string | null
+          project_id: string
+          retention_percent?: number
+          start_date?: string | null
+          status?: string
+          total_measured?: number
+          total_paid?: number
+          total_retained?: number
+          total_value?: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          contract_number?: string | null
+          contractor_id?: string
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          notes?: string | null
+          project_id?: string
+          retention_percent?: number
+          start_date?: string | null
+          status?: string
+          total_measured?: number
+          total_paid?: number
+          total_retained?: number
+          total_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contractor_contracts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contractor_contracts_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contractor_contracts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contractor_measurement_items: {
+        Row: {
+          company_id: string
+          contract_service_id: string
+          created_at: string
+          house_ids: number[]
+          houses_measured: number
+          id: string
+          measurement_id: string
+          notes: string | null
+          project_id: string
+          total_value: number
+          unit_value: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          contract_service_id: string
+          created_at?: string
+          house_ids?: number[]
+          houses_measured?: number
+          id?: string
+          measurement_id: string
+          notes?: string | null
+          project_id: string
+          total_value?: number
+          unit_value?: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          contract_service_id?: string
+          created_at?: string
+          house_ids?: number[]
+          houses_measured?: number
+          id?: string
+          measurement_id?: string
+          notes?: string | null
+          project_id?: string
+          total_value?: number
+          unit_value?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contractor_measurement_items_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contractor_measurement_items_contract_service_id_fkey"
+            columns: ["contract_service_id"]
+            isOneToOne: false
+            referencedRelation: "contractor_contract_services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contractor_measurement_items_measurement_id_fkey"
+            columns: ["measurement_id"]
+            isOneToOne: false
+            referencedRelation: "contractor_measurements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contractor_measurement_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contractor_measurements: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          company_id: string
+          contract_id: string
+          created_at: string
+          gross_value: number
+          id: string
+          measurement_number: number
+          net_value: number
+          notes: string | null
+          payment_date: string | null
+          payment_due_date: string | null
+          period_end: string
+          period_start: string
+          project_id: string
+          retention_percent: number
+          retention_value: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          company_id: string
+          contract_id: string
+          created_at?: string
+          gross_value?: number
+          id?: string
+          measurement_number: number
+          net_value?: number
+          notes?: string | null
+          payment_date?: string | null
+          payment_due_date?: string | null
+          period_end: string
+          period_start: string
+          project_id: string
+          retention_percent?: number
+          retention_value?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          company_id?: string
+          contract_id?: string
+          created_at?: string
+          gross_value?: number
+          id?: string
+          measurement_number?: number
+          net_value?: number
+          notes?: string | null
+          payment_date?: string | null
+          payment_due_date?: string | null
+          period_end?: string
+          period_start?: string
+          project_id?: string
+          retention_percent?: number
+          retention_value?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contractor_measurements_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contractor_measurements_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contractor_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contractor_measurements_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contractors: {
+        Row: {
+          address: string | null
+          bank_account: string | null
+          bank_account_type: string | null
+          bank_agency: string | null
+          bank_name: string | null
+          city: string | null
+          company_id: string
+          cpf_cnpj: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          pix_key: string | null
+          pix_key_type: string | null
+          state: string | null
+          status: string
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          bank_account?: string | null
+          bank_account_type?: string | null
+          bank_agency?: string | null
+          bank_name?: string | null
+          city?: string | null
+          company_id: string
+          cpf_cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
+          state?: string | null
+          status?: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          bank_account?: string | null
+          bank_account_type?: string | null
+          bank_agency?: string | null
+          bank_name?: string | null
+          city?: string | null
+          company_id?: string
+          cpf_cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          pix_key?: string | null
+          pix_key_type?: string | null
+          state?: string | null
+          status?: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contractors_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contractors_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_work_logs: {
         Row: {
           created_at: string
