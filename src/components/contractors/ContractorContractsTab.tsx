@@ -67,6 +67,63 @@ export function ContractorContractsTab({
       .then(({ data }) => { if (data) setBudgetServices(data); });
   }, [currentProject?.id, company?.id]);
 
+  // Determine which services are fully in banco inicial or 100% completed
+  const [unavailableServiceKeys, setUnavailableServiceKeys] = useState<Set<string>>(new Set());
+  const houses = currentProject?.houses || [];
+
+  useEffect(() => {
+    if (!currentProject?.id || !budgetServices.length) return;
+    const totalHouses = houses.length;
+    if (totalHouses === 0) return;
+
+    (async () => {
+      // Get banco inicial house counts per service
+      const { data: initialProds } = await supabase
+        .from("productions")
+        .select("macro_id, scope_id, house_ids")
+        .eq("project_id", currentProject.id)
+        .eq("is_initial_database", true);
+
+      const initialCounts: Record<string, Set<number>> = {};
+      (initialProds || []).forEach(p => {
+        const key = `${p.macro_id}::${p.scope_id}`;
+        if (!initialCounts[key]) initialCounts[key] = new Set();
+        (p.house_ids || []).forEach((id: number) => initialCounts[key].add(id));
+      });
+
+      // Check 100% completed houses per service
+      const completedCounts: Record<string, number> = {};
+      budgetServices.forEach(svc => {
+        const key = `${svc.macro_id}::${svc.scope_id}`;
+        let count = 0;
+        houses.forEach((h: any) => {
+          const macro = h.macros?.find((m: any) => m.id === svc.macro_id);
+          if (!macro) return;
+          const scope = macro.scopes?.find((s: any) => s.id === svc.scope_id);
+          if (scope && scope.progress >= 100) count++;
+        });
+        completedCounts[key] = count;
+      });
+
+      const unavailable = new Set<string>();
+      budgetServices.forEach(svc => {
+        const key = `${svc.macro_id}::${svc.scope_id}`;
+        const initialCount = initialCounts[key]?.size || 0;
+        const completedCount = completedCounts[key] || 0;
+        // If ALL houses are either in banco inicial or 100% completed, service is unavailable
+        if (initialCount + completedCount >= totalHouses) {
+          unavailable.add(key);
+        }
+      });
+      setUnavailableServiceKeys(unavailable);
+    })();
+  }, [currentProject?.id, budgetServices, houses]);
+
+  const filteredBudgetServices = useMemo(() =>
+    budgetServices.filter(svc => !unavailableServiceKeys.has(`${svc.macro_id}::${svc.scope_id}`)),
+    [budgetServices, unavailableServiceKeys]
+  );
+
   // Load all assigned houses across all contracts for this project
   useEffect(() => {
     if (!currentProject?.id || !company?.id) return;
