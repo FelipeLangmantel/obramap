@@ -13,9 +13,9 @@ import { toast } from "sonner";
 import {
   Calendar, Home, Save, RefreshCcw, Zap,
   AlertTriangle, CheckCircle2, Lock, Unlock, Undo2,
-  MousePointerClick, Plus, X, GripVertical,
+  MousePointerClick, Plus, X,
 } from "lucide-react";
-import { format, parseISO, differenceInDays, addDays, eachDayOfInterval, getDay, isSameDay, isWithinInterval } from "date-fns";
+import { format, parseISO, differenceInDays, eachDayOfInterval, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 // ── Types ──────────────────────────────────────────────────
