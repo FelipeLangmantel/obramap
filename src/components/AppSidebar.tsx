@@ -311,7 +311,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         <SidebarHeader className="px-4 py-4 border-b border-border bg-background">
           <div className="flex items-center gap-3 mb-3">
             <div className="h-10 w-10 flex items-center justify-center shrink-0">
-              <img src={obraMapLogo} alt="ObraMap" className="h-10 w-10 object-contain drop-shadow-sm" />
+              <img src={document.documentElement.classList.contains('dark') ? obraMapLogoDark : obraMapLogoLight} alt="ObraMap" className="h-10 w-10 object-contain drop-shadow-sm" />
             </div>
             <h1 className="text-lg font-bold text-foreground tracking-tight">ObraMap</h1>
           </div>
