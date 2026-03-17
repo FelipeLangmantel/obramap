@@ -11,9 +11,9 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
-  Calendar, Home, Settings2, Save, RefreshCcw,
-  AlertTriangle, CheckCircle2, Zap, GripVertical,
-  ArrowRight, Lock, Unlock,
+  Calendar, Home, Settings2, Save, RefreshCcw, Zap,
+  AlertTriangle, CheckCircle2, Lock, Unlock, Undo2,
+  MousePointerClick,
 } from "lucide-react";
 import { format, parseISO, differenceInDays, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -59,187 +59,165 @@ interface WeekServicePlan {
   planned_houses: number;
 }
 
-interface DragPayload {
-  serviceKey: string;
-  sourceWeek: number;
-  houseId: number;
-}
-
 // ── Helpers ────────────────────────────────────────────────
 function getMacroColor(macroId: string, macros: any[]): string {
   return macros?.find((m: any) => m.id === macroId)?.color || "#6b7280";
 }
 
-function buildAvailableHouseIds(
-  targetHouses: number, macroId: string, scopeId: string, houses: any[]
-): number[] {
-  const available = houses
-    .filter((h: any) => {
-      const macro = h.macros?.find((m: any) => m.id === macroId);
-      if (!macro) return true;
-      const scope = macro.scopes?.find((s: any) => s.id === scopeId);
-      return !scope || scope.progress < 100;
-    })
-    .map((h: any) => h.house_number)
-    .sort((a: number, b: number) => a - b);
-  return available.slice(0, targetHouses);
+function svcKey(s: { macro_id: string; scope_id: string }) {
+  return `${s.macro_id}:${s.scope_id}`;
 }
 
-function serviceKey(svc: { macro_id: string; scope_id: string }) {
-  return `${svc.macro_id}:${svc.scope_id}`;
+function getHouseProgress(house: any, macroId: string, scopeId: string): number {
+  const macro = house.macros?.find((m: any) => m.id === macroId);
+  if (!macro) return 0;
+  const scope = macro.scopes?.find((s: any) => s.id === scopeId);
+  return scope?.progress || 0;
 }
 
-// ── Draggable House Chip ───────────────────────────────────
-function HouseChip({
-  houseId, svcKey, weekNumber, onDragStart, isDragging, houseProgress,
+// ── House Cell in the Visual Grid ──────────────────────────
+type HouseStatus = "done" | "in_progress" | "available" | "selected";
+
+function HouseCell({
+  houseId, status, weekAssigned, onClick, quadraName,
 }: {
   houseId: number;
-  svcKey: string;
-  weekNumber: number;
-  onDragStart: (e: React.DragEvent, payload: DragPayload) => void;
-  isDragging: boolean;
-  houseProgress: number;
+  status: HouseStatus;
+  weekAssigned: number | null;
+  onClick: () => void;
+  quadraName?: string;
 }) {
+  const colorMap: Record<HouseStatus, string> = {
+    done: "bg-muted text-muted-foreground border-muted cursor-not-allowed opacity-50",
+    in_progress: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-400/40 cursor-pointer hover:border-amber-500",
+    available: "bg-card text-foreground border-border cursor-pointer hover:border-primary hover:bg-primary/5",
+    selected: "bg-primary text-primary-foreground border-primary cursor-pointer ring-2 ring-primary/40 shadow-md",
+  };
+
   return (
-    <TooltipProvider delayDuration={200}>
+    <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div
-            draggable
-            onDragStart={(e) => onDragStart(e, { serviceKey: svcKey, sourceWeek: weekNumber, houseId })}
+          <button
+            onClick={status !== "done" ? onClick : undefined}
             className={`
-              inline-flex items-center gap-0.5 px-2 py-1 rounded text-xs font-semibold
-              border cursor-grab active:cursor-grabbing select-none transition-all
-              ${isDragging ? "opacity-30 scale-95" : "hover:shadow-md hover:-translate-y-0.5"}
-              ${houseProgress > 0 && houseProgress < 100
-                ? "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400"
-                : "bg-primary/10 border-primary/20 text-primary"
-              }
+              relative w-11 h-11 rounded-lg border-2 text-xs font-bold
+              transition-all duration-150 flex flex-col items-center justify-center
+              ${colorMap[status]}
             `}
           >
-            <GripVertical className="h-3 w-3 opacity-40 shrink-0" />
-            {houseId}
-          </div>
+            <span>{houseId}</span>
+            {weekAssigned && status !== "selected" && (
+              <span className="absolute -top-1.5 -right-1.5 bg-primary text-primary-foreground text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                {weekAssigned}
+              </span>
+            )}
+          </button>
         </TooltipTrigger>
         <TooltipContent side="top" className="text-xs">
-          Casa {houseId} — {houseProgress}% concluído
+          <div>Casa {houseId}{quadraName ? ` • ${quadraName}` : ""}</div>
+          {status === "done" && <div className="text-muted-foreground">✓ Já concluído</div>}
+          {status === "in_progress" && <div className="text-amber-600">Em andamento</div>}
+          {weekAssigned && <div>Alocada → Semana {weekAssigned}</div>}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );
 }
 
-// ── Service Row inside a Week Column ───────────────────────
-function ServiceRow({
-  svc, weekNumber, onDragStart, dragPayload, houseProgressMap,
+// ── Week Slot Button ───────────────────────────────────────
+function WeekSlot({
+  week, count, isTarget, onClick, serviceColor,
 }: {
-  svc: WeekServicePlan;
-  weekNumber: number;
-  onDragStart: (e: React.DragEvent, payload: DragPayload) => void;
-  dragPayload: DragPayload | null;
-  houseProgressMap: Map<string, number>;
+  week: WeekPlan;
+  count: number;
+  isTarget: boolean;
+  onClick: () => void;
+  serviceColor: string;
 }) {
-  if (svc.planned_house_ids.length === 0) return null;
-  const key = serviceKey(svc);
-
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center gap-1.5">
-        <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: svc.macro_color }} />
-        <span className="text-xs font-medium truncate flex-1">{svc.scope_name}</span>
-        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 shrink-0">
-          {svc.planned_house_ids.length}
+    <button
+      onClick={onClick}
+      className={`
+        flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all min-w-[100px]
+        ${isTarget
+          ? "border-primary bg-primary/10 shadow-md scale-105"
+          : "border-border bg-card hover:border-primary/50 hover:bg-primary/5"
+        }
+      `}
+    >
+      <div className="text-xs font-semibold flex items-center gap-1">
+        <Calendar className="h-3 w-3 text-primary" />
+        Sem {week.week_number}
+      </div>
+      <div className="text-[10px] text-muted-foreground">
+        {format(parseISO(week.week_start), "dd/MM", { locale: ptBR })} – {format(parseISO(week.week_end), "dd/MM", { locale: ptBR })}
+      </div>
+      <div className="flex items-center gap-1 mt-0.5">
+        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: serviceColor }} />
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+          {count} casa{count !== 1 ? "s" : ""}
         </Badge>
       </div>
-      <div className="flex flex-wrap gap-1">
-        {svc.planned_house_ids.map(hId => (
-          <HouseChip
-            key={hId}
-            houseId={hId}
-            svcKey={key}
-            weekNumber={weekNumber}
-            onDragStart={onDragStart}
-            isDragging={
-              !!dragPayload &&
-              dragPayload.serviceKey === key &&
-              dragPayload.sourceWeek === weekNumber &&
-              dragPayload.houseId === hId
-            }
-            houseProgress={houseProgressMap.get(`${key}:${hId}`) || 0}
-          />
-        ))}
-      </div>
-    </div>
+    </button>
   );
 }
 
-// ── Week Column ────────────────────────────────────────────
-function WeekColumn({
-  week, onDragStart, onDrop, dragPayload, houseProgressMap, totalWeeks,
+// ── Summary Column ─────────────────────────────────────────
+function WeekSummaryColumn({
+  week, onRemoveHouse,
 }: {
   week: WeekPlan;
-  onDragStart: (e: React.DragEvent, payload: DragPayload) => void;
-  onDrop: (weekNumber: number) => void;
-  dragPayload: DragPayload | null;
-  houseProgressMap: Map<string, number>;
-  totalWeeks: number;
+  onRemoveHouse: (weekNumber: number, serviceKey: string, houseId: number) => void;
 }) {
-  const [isOver, setIsOver] = useState(false);
   const totalHouses = week.services.reduce((s, svc) => s + svc.planned_house_ids.length, 0);
-  const isDropTarget = !!dragPayload && dragPayload.sourceWeek !== week.week_number;
+  const activeServices = week.services.filter(s => s.planned_house_ids.length > 0);
 
   return (
-    <div
-      className={`
-        flex flex-col rounded-xl border-2 transition-all duration-200
-        ${totalWeeks <= 3 ? "min-w-[280px] w-[320px]" : "min-w-[240px] w-[260px]"}
-        ${isOver && isDropTarget
-          ? "border-primary bg-primary/5 shadow-lg scale-[1.01]"
-          : isDropTarget
-            ? "border-primary/30 border-dashed"
-            : "border-border bg-card"
-        }
-      `}
-      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setIsOver(true); }}
-      onDragLeave={() => setIsOver(false)}
-      onDrop={(e) => { e.preventDefault(); setIsOver(false); onDrop(week.week_number); }}
-    >
-      {/* Column Header */}
-      <div className="px-3 py-2.5 border-b bg-muted/50 rounded-t-xl flex items-center justify-between">
-        <div>
-          <div className="font-semibold text-sm flex items-center gap-1.5">
-            <Calendar className="h-3.5 w-3.5 text-primary" />
-            Sem {week.week_number}
-          </div>
-          <div className="text-[11px] text-muted-foreground">
-            {format(parseISO(week.week_start), "dd/MM", { locale: ptBR })} – {format(parseISO(week.week_end), "dd/MM", { locale: ptBR })}
-          </div>
+    <div className="flex flex-col rounded-xl border bg-card min-w-[200px] max-w-[240px]">
+      <div className="px-3 py-2 border-b bg-muted/50 rounded-t-xl">
+        <div className="font-semibold text-sm flex items-center gap-1.5">
+          <Calendar className="h-3.5 w-3.5 text-primary" />
+          Sem {week.week_number}
         </div>
-        <Badge variant="outline" className="text-xs gap-1">
-          <Home className="h-3 w-3" />
-          {totalHouses}
+        <div className="text-[10px] text-muted-foreground">
+          {format(parseISO(week.week_start), "dd/MM", { locale: ptBR })} – {format(parseISO(week.week_end), "dd/MM", { locale: ptBR })}
+        </div>
+        <Badge variant="outline" className="text-[10px] mt-1 gap-1">
+          <Home className="h-2.5 w-2.5" /> {totalHouses} casa{totalHouses !== 1 ? "s" : ""}
         </Badge>
       </div>
-
-      {/* Column Body */}
-      <ScrollArea className="flex-1 p-2.5 max-h-[60vh]">
-        <div className="space-y-3">
-          {week.services.filter(s => s.planned_house_ids.length > 0).map(svc => (
-            <ServiceRow
-              key={serviceKey(svc)}
-              svc={svc}
-              weekNumber={week.week_number}
-              onDragStart={onDragStart}
-              dragPayload={dragPayload}
-              houseProgressMap={houseProgressMap}
-            />
-          ))}
-
-          {totalHouses === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <ArrowRight className="h-5 w-5 mx-auto mb-1 opacity-40" />
-              <p className="text-xs">Arraste casas para cá</p>
+      <ScrollArea className="flex-1 p-2 max-h-[300px]">
+        <div className="space-y-2">
+          {activeServices.map(svc => (
+            <div key={svcKey(svc)} className="space-y-1">
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: svc.macro_color }} />
+                <span className="text-[11px] font-medium truncate">{svc.scope_name}</span>
+              </div>
+              <div className="flex flex-wrap gap-0.5">
+                {svc.planned_house_ids.map(hId => (
+                  <TooltipProvider key={hId} delayDuration={150}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => onRemoveHouse(week.week_number, svcKey(svc), hId)}
+                          className="w-7 h-7 rounded border text-[10px] font-bold bg-primary/10 text-primary border-primary/20 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+                        >
+                          {hId}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs">
+                        Clique para remover Casa {hId}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ))}
+              </div>
             </div>
+          ))}
+          {activeServices.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">Nenhuma casa alocada</p>
           )}
         </div>
       </ScrollArea>
@@ -247,91 +225,9 @@ function WeekColumn({
   );
 }
 
-// ── Unassigned Pool ────────────────────────────────────────
-function UnassignedPool({
-  services, weekPlans, allHouseIds, onDragStart, dragPayload, houseProgressMap,
-}: {
-  services: ServiceForPeriod[];
-  weekPlans: WeekPlan[];
-  allHouseIds: Map<string, number[]>;
-  onDragStart: (e: React.DragEvent, payload: DragPayload) => void;
-  dragPayload: DragPayload | null;
-  houseProgressMap: Map<string, number>;
-}) {
-  const unassigned = useMemo(() => {
-    const result: { key: string; scopeName: string; macroName: string; macroColor: string; houseIds: number[] }[] = [];
-    for (const svc of services) {
-      const key = `${svc.macro_id}:${svc.scope_id}`;
-      const all = allHouseIds.get(key) || [];
-      const assigned = new Set<number>();
-      for (const week of weekPlans) {
-        const ws = week.services.find(s => serviceKey(s) === key);
-        ws?.planned_house_ids.forEach(id => assigned.add(id));
-      }
-      const remaining = all.filter(id => !assigned.has(id));
-      if (remaining.length > 0) {
-        const wSvc = weekPlans[0]?.services.find(s => serviceKey(s) === key);
-        result.push({
-          key,
-          scopeName: svc.scope_name,
-          macroName: svc.macro_name,
-          macroColor: wSvc?.macro_color || "#6b7280",
-          houseIds: remaining,
-        });
-      }
-    }
-    return result;
-  }, [services, weekPlans, allHouseIds]);
-
-  if (unassigned.length === 0) return null;
-
-  const totalUnassigned = unassigned.reduce((s, u) => s + u.houseIds.length, 0);
-
-  return (
-    <Card className="border-destructive/40 bg-destructive/5">
-      <CardHeader className="py-2.5 px-3">
-        <CardTitle className="text-sm flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 text-destructive" />
-          Casas não alocadas
-          <Badge variant="destructive" className="text-xs">{totalUnassigned}</Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="px-3 pb-3 pt-0">
-        <div className="space-y-2">
-          {unassigned.map(u => (
-            <div key={u.key} className="space-y-1">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: u.macroColor }} />
-                <span className="text-xs font-medium">{u.scopeName}</span>
-                <span className="text-[10px] text-muted-foreground">({u.macroName})</span>
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {u.houseIds.map(hId => (
-                  <HouseChip
-                    key={hId}
-                    houseId={hId}
-                    svcKey={u.key}
-                    weekNumber={0}
-                    onDragStart={onDragStart}
-                    isDragging={
-                      !!dragPayload &&
-                      dragPayload.serviceKey === u.key &&
-                      dragPayload.sourceWeek === 0 &&
-                      dragPayload.houseId === hId
-                    }
-                    houseProgress={houseProgressMap.get(`${u.key}:${hId}`) || 0}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-// ── Main Component ─────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// ██ MAIN COMPONENT
+// ══════════════════════════════════════════════════════════════
 export function WeeklyPlanningFromPeriod() {
   const { currentProject } = useConstruction();
   const { company } = useAuth();
@@ -339,6 +235,7 @@ export function WeeklyPlanningFromPeriod() {
   const companyId = company?.id;
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
+  const quadras = currentProject?.quadras || [];
 
   const [periods, setPeriods] = useState<PeriodForWeekly[]>([]);
   const [selectedPeriodId, setSelectedPeriodId] = useState("");
@@ -347,35 +244,105 @@ export function WeeklyPlanningFromPeriod() {
   const [weekPlans, setWeekPlans] = useState<WeekPlan[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
-  const [dragPayload, setDragPayload] = useState<DragPayload | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
 
-  const selectedPeriod = periods.find(p => p.id === selectedPeriodId);
+  // Service-first flow state
+  const [selectedServiceKey, setSelectedServiceKey] = useState<string>("");
+  const [selectedHouseIds, setSelectedHouseIds] = useState<Set<number>>(new Set());
+  const [targetWeek, setTargetWeek] = useState<number | null>(null);
 
-  // House progress map: "macroId:scopeId:houseNumber" → progress%
-  const houseProgressMap = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const h of houses) {
-      for (const m of (h.macros || []) as any[]) {
-        for (const s of (m.scopes || []) as any[]) {
-          map.set(`${m.id}:${s.id}:${(h as any).id ?? (h as any).house_number}`, s.progress || 0);
-        }
+  const selectedPeriod = periods.find(p => p.id === selectedPeriodId);
+  const selectedService = periodServices.find(s => `${s.macro_id}:${s.scope_id}` === selectedServiceKey);
+
+  // Build quadra lookup
+  const quadraMap = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const q of quadras) {
+      for (const hId of q.houses) {
+        map.set(hId, q.name);
       }
     }
     return map;
-  }, [houses]);
+  }, [quadras]);
 
-  // All expected house IDs per service
-  const allHouseIdsMap = useMemo(() => {
-    const map = new Map<string, number[]>();
-    for (const svc of periodServices) {
-      const key = `${svc.macro_id}:${svc.scope_id}`;
-      map.set(key, buildAvailableHouseIds(svc.target_houses, svc.macro_id, svc.scope_id, houses));
+  // For the selected service, determine each house's status
+  const houseStatusMap = useMemo(() => {
+    if (!selectedService) return new Map<number, { status: HouseStatus; weekAssigned: number | null }>();
+
+    const map = new Map<number, { status: HouseStatus; weekAssigned: number | null }>();
+    const key = selectedServiceKey;
+
+    // Get all available houses for this service
+    const availableHouses = houses
+      .filter(h => {
+        const progress = getHouseProgress(h, selectedService.macro_id, selectedService.scope_id);
+        return progress < 100;
+      })
+      .map(h => h.id);
+
+    // Build assignment map from weekPlans
+    const assignmentMap = new Map<number, number>();
+    for (const week of weekPlans) {
+      const ws = week.services.find(s => svcKey(s) === key);
+      if (ws) {
+        for (const hId of ws.planned_house_ids) {
+          assignmentMap.set(hId, week.week_number);
+        }
+      }
+    }
+
+    for (const h of houses) {
+      const progress = getHouseProgress(h, selectedService.macro_id, selectedService.scope_id);
+      if (progress >= 100) {
+        map.set(h.id, { status: "done", weekAssigned: null });
+      } else if (selectedHouseIds.has(h.id)) {
+        map.set(h.id, { status: "selected", weekAssigned: assignmentMap.get(h.id) || null });
+      } else if (assignmentMap.has(h.id)) {
+        map.set(h.id, { status: "in_progress", weekAssigned: assignmentMap.get(h.id)! });
+      } else if (availableHouses.includes(h.id)) {
+        map.set(h.id, { status: "available", weekAssigned: null });
+      } else {
+        map.set(h.id, { status: "done", weekAssigned: null });
+      }
     }
     return map;
-  }, [periodServices, houses]);
+  }, [selectedService, selectedServiceKey, houses, weekPlans, selectedHouseIds]);
 
-  // Load periods
+  // Houses organized by quadra for visual grid
+  const housesGroupedByQuadra = useMemo(() => {
+    const groups: { name: string; houseIds: number[] }[] = [];
+    const assignedToQuadra = new Set<number>();
+
+    for (const q of quadras) {
+      const sorted = [...q.houses].sort((a, b) => a - b);
+      groups.push({ name: q.name, houseIds: sorted });
+      sorted.forEach(id => assignedToQuadra.add(id));
+    }
+
+    const unassigned = houses
+      .map(h => h.id)
+      .filter(id => !assignedToQuadra.has(id))
+      .sort((a, b) => a - b);
+
+    if (unassigned.length > 0) {
+      groups.push({ name: "Sem Quadra", houseIds: unassigned });
+    }
+    return groups;
+  }, [quadras, houses]);
+
+  // Count allocated per service per week
+  const serviceWeekCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const week of weekPlans) {
+      for (const svc of week.services) {
+        const k = `${svcKey(svc)}:${week.week_number}`;
+        map.set(k, svc.planned_house_ids.length);
+      }
+    }
+    return map;
+  }, [weekPlans]);
+
+  // ── Data Loading ────────────────────────────────────────
   useEffect(() => {
     if (!projectId || !companyId) return;
     (async () => {
@@ -390,7 +357,6 @@ export function WeeklyPlanningFromPeriod() {
     })();
   }, [projectId, companyId]);
 
-  // Load config
   useEffect(() => {
     if (!projectId) return;
     (async () => {
@@ -403,7 +369,6 @@ export function WeeklyPlanningFromPeriod() {
     })();
   }, [projectId]);
 
-  // Load period services + existing plan
   useEffect(() => {
     if (!selectedPeriodId || !projectId) return;
     (async () => {
@@ -436,9 +401,12 @@ export function WeeklyPlanningFromPeriod() {
         setIsGenerated(false);
       }
     })();
+    setSelectedServiceKey("");
+    setSelectedHouseIds(new Set());
+    setTargetWeek(null);
   }, [selectedPeriodId, projectId]);
 
-  // Generate weeks
+  // ── Generate Weeks ──────────────────────────────────────
   const generateWeeks = useCallback(() => {
     if (!selectedPeriod || periodServices.length === 0) return;
     const start = parseISO(selectedPeriod.start_date);
@@ -451,26 +419,17 @@ export function WeeklyPlanningFromPeriod() {
       const ws = addDays(start, i * workingDaysPerWeek);
       const we = i === numWeeks - 1 ? end : addDays(ws, workingDaysPerWeek - 1);
 
-      const services: WeekServicePlan[] = periodServices.map(svc => {
-        const key = `${svc.macro_id}:${svc.scope_id}`;
-        const allIds = allHouseIdsMap.get(key) || [];
-        const total = allIds.length;
-        const perWeek = Math.floor(total / numWeeks);
-        const remainder = total % numWeeks;
-        const startIdx = i * perWeek + Math.min(i, remainder);
-        const count = perWeek + (i < remainder ? 1 : 0);
-
-        return {
-          id: null,
-          macro_id: svc.macro_id,
-          macro_name: svc.macro_name,
-          macro_color: getMacroColor(svc.macro_id, macros),
-          scope_id: svc.scope_id,
-          scope_name: svc.scope_name,
-          planned_house_ids: allIds.slice(startIdx, startIdx + count),
-          planned_houses: count,
-        };
-      });
+      // Empty services — user will assign manually
+      const services: WeekServicePlan[] = periodServices.map(svc => ({
+        id: null,
+        macro_id: svc.macro_id,
+        macro_name: svc.macro_name,
+        macro_color: getMacroColor(svc.macro_id, macros),
+        scope_id: svc.scope_id,
+        scope_name: svc.scope_name,
+        planned_house_ids: [],
+        planned_houses: 0,
+      }));
 
       weeks.push({
         id: null, week_number: i + 1,
@@ -482,75 +441,124 @@ export function WeeklyPlanningFromPeriod() {
 
     setWeekPlans(weeks);
     setIsGenerated(true);
-    toast.success(`${numWeeks} semana(s) gerada(s) automaticamente`);
-  }, [selectedPeriod, periodServices, workingDaysPerWeek, allHouseIdsMap, macros]);
+    toast.success(`${numWeeks} semana(s) criada(s). Selecione um serviço e comece a distribuir as casas.`);
+  }, [selectedPeriod, periodServices, workingDaysPerWeek, macros]);
 
-  // Drag handlers
-  const handleDragStart = useCallback((e: React.DragEvent, payload: DragPayload) => {
-    setDragPayload(payload);
-    e.dataTransfer.effectAllowed = "move";
+  // ── Auto-distribute ─────────────────────────────────────
+  const autoDistribute = useCallback(() => {
+    if (!weekPlans.length || !periodServices.length) return;
+    const numWeeks = weekPlans.length;
+
+    setWeekPlans(prev => {
+      const newWeeks = prev.map(w => ({
+        ...w,
+        services: w.services.map(s => ({ ...s, planned_house_ids: [] as number[], planned_houses: 0 })),
+      }));
+
+      for (const svc of periodServices) {
+        const key = `${svc.macro_id}:${svc.scope_id}`;
+        const available = houses
+          .filter(h => getHouseProgress(h, svc.macro_id, svc.scope_id) < 100)
+          .map(h => h.id)
+          .sort((a, b) => a - b)
+          .slice(0, svc.target_houses);
+
+        for (let i = 0; i < available.length; i++) {
+          const weekIdx = i % numWeeks;
+          const ws = newWeeks[weekIdx].services.find(s => svcKey(s) === key);
+          if (ws) {
+            ws.planned_house_ids.push(available[i]);
+            ws.planned_houses = ws.planned_house_ids.length;
+          }
+        }
+      }
+
+      return newWeeks;
+    });
+
+    toast.success("Casas distribuídas automaticamente");
+  }, [weekPlans.length, periodServices, houses]);
+
+  // ── House click handler ─────────────────────────────────
+  const toggleHouseSelection = useCallback((houseId: number) => {
+    setSelectedHouseIds(prev => {
+      const next = new Set(prev);
+      if (next.has(houseId)) {
+        next.delete(houseId);
+      } else {
+        next.add(houseId);
+      }
+      return next;
+    });
   }, []);
 
-  const handleDrop = useCallback((targetWeek: number) => {
-    if (!dragPayload || dragPayload.sourceWeek === targetWeek) {
-      setDragPayload(null);
-      return;
-    }
+  // ── Assign selected houses to week ──────────────────────
+  const assignToWeek = useCallback((weekNumber: number) => {
+    if (!selectedServiceKey || selectedHouseIds.size === 0) return;
 
     setWeekPlans(prev => prev.map(week => {
-      if (week.week_number === dragPayload.sourceWeek) {
+      // Remove from other weeks first
+      const updated = {
+        ...week,
+        services: week.services.map(svc => {
+          if (svcKey(svc) !== selectedServiceKey) return svc;
+          const filtered = svc.planned_house_ids.filter(id => !selectedHouseIds.has(id));
+          return { ...svc, planned_house_ids: filtered, planned_houses: filtered.length };
+        }),
+      };
+
+      // Add to target week
+      if (week.week_number === weekNumber) {
         return {
-          ...week,
-          services: week.services.map(svc =>
-            serviceKey(svc) === dragPayload.serviceKey
-              ? { ...svc, planned_house_ids: svc.planned_house_ids.filter(id => id !== dragPayload.houseId), planned_houses: svc.planned_house_ids.filter(id => id !== dragPayload.houseId).length }
-              : svc
-          ),
-        };
-      }
-      if (week.week_number === targetWeek) {
-        return {
-          ...week,
-          services: week.services.map(svc => {
-            if (serviceKey(svc) === dragPayload.serviceKey) {
-              if (svc.planned_house_ids.includes(dragPayload.houseId)) return svc;
-              const ids = [...svc.planned_house_ids, dragPayload.houseId].sort((a, b) => a - b);
-              return { ...svc, planned_house_ids: ids, planned_houses: ids.length };
-            }
-            return svc;
+          ...updated,
+          services: updated.services.map(svc => {
+            if (svcKey(svc) !== selectedServiceKey) return svc;
+            const ids = [...new Set([...svc.planned_house_ids, ...selectedHouseIds])].sort((a, b) => a - b);
+            return { ...svc, planned_house_ids: ids, planned_houses: ids.length };
           }),
         };
       }
-      return week;
+      return updated;
     }));
-    setDragPayload(null);
-  }, [dragPayload]);
 
-  // End drag on document
-  useEffect(() => {
-    const handler = () => setDragPayload(null);
-    document.addEventListener("dragend", handler);
-    return () => document.removeEventListener("dragend", handler);
+    toast.success(`${selectedHouseIds.size} casa(s) alocada(s) na Semana ${weekNumber}`);
+    setSelectedHouseIds(new Set());
+  }, [selectedServiceKey, selectedHouseIds]);
+
+  // ── Remove house from week ──────────────────────────────
+  const removeHouseFromWeek = useCallback((weekNumber: number, serviceKey: string, houseId: number) => {
+    setWeekPlans(prev => prev.map(week => {
+      if (week.week_number !== weekNumber) return week;
+      return {
+        ...week,
+        services: week.services.map(svc => {
+          if (svcKey(svc) !== serviceKey) return svc;
+          const ids = svc.planned_house_ids.filter(id => id !== houseId);
+          return { ...svc, planned_house_ids: ids, planned_houses: ids.length };
+        }),
+      };
+    }));
   }, []);
 
-  // Validation
+  // ── Validation ──────────────────────────────────────────
   const validationErrors = useMemo(() => {
     const errors: string[] = [];
     for (const svc of periodServices) {
       const key = `${svc.macro_id}:${svc.scope_id}`;
-      const expected = allHouseIdsMap.get(key) || [];
+      const available = houses.filter(h => getHouseProgress(h, svc.macro_id, svc.scope_id) < 100).length;
+      const expected = Math.min(svc.target_houses, available);
       const allocated = weekPlans.reduce((sum, w) => {
-        const ws = w.services.find(s => serviceKey(s) === key);
+        const ws = w.services.find(s => svcKey(s) === key);
         return sum + (ws?.planned_house_ids.length || 0);
       }, 0);
-      if (allocated !== expected.length) {
-        errors.push(`${svc.scope_name}: ${allocated}/${expected.length}`);
+      if (allocated < expected) {
+        errors.push(`${svc.scope_name}: ${allocated}/${expected}`);
       }
     }
     return errors;
-  }, [weekPlans, periodServices, allHouseIdsMap]);
+  }, [weekPlans, periodServices, houses]);
 
-  // Save
+  // ── Save ────────────────────────────────────────────────
   const saveWeeklyPlan = async () => {
     if (!projectId || !companyId || !selectedPeriodId) return;
     setIsSaving(true);
@@ -589,6 +597,7 @@ export function WeeklyPlanningFromPeriod() {
     setConfigOpen(false);
   };
 
+  // ── Render ──────────────────────────────────────────────
   if (!projectId) {
     return (
       <Card className="p-12 text-center">
@@ -596,6 +605,10 @@ export function WeeklyPlanningFromPeriod() {
       </Card>
     );
   }
+
+  const currentServiceColor = selectedService
+    ? getMacroColor(selectedService.macro_id, macros)
+    : "#6b7280";
 
   return (
     <div className="space-y-4">
@@ -606,7 +619,9 @@ export function WeeklyPlanningFromPeriod() {
             <Calendar className="h-5 w-5 text-primary" />
             Planejamento Semanal
           </h2>
-          <p className="text-sm text-muted-foreground">Arraste as casas entre as semanas para distribuir a execução</p>
+          <p className="text-sm text-muted-foreground">
+            Selecione o serviço → clique nas casas → aloque na semana
+          </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => setConfigOpen(!configOpen)}>
           <Settings2 className="h-4 w-4 mr-1" />
@@ -655,18 +670,26 @@ export function WeeklyPlanningFromPeriod() {
               </Select>
             </div>
 
-            {selectedPeriod && !isGenerated && periodServices.length > 0 && (
-              <Button onClick={generateWeeks} className="mt-5">
-                <Zap className="h-4 w-4 mr-1" />
-                Gerar Semanas
-              </Button>
-            )}
-            {isGenerated && (
-              <Button variant="outline" onClick={generateWeeks} className="mt-5" size="sm">
-                <RefreshCcw className="h-4 w-4 mr-1" />
-                Regenerar
-              </Button>
-            )}
+            <div className="flex gap-2 mt-5">
+              {selectedPeriod && !isGenerated && periodServices.length > 0 && (
+                <Button onClick={generateWeeks}>
+                  <Zap className="h-4 w-4 mr-1" />
+                  Criar Semanas
+                </Button>
+              )}
+              {isGenerated && (
+                <>
+                  <Button variant="outline" size="sm" onClick={autoDistribute}>
+                    <Zap className="h-4 w-4 mr-1" />
+                    Auto-distribuir
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={generateWeeks}>
+                    <RefreshCcw className="h-4 w-4 mr-1" />
+                    Resetar
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
 
           {selectedPeriod && (
@@ -686,60 +709,214 @@ export function WeeklyPlanningFromPeriod() {
         </CardContent>
       </Card>
 
-      {/* Unassigned pool */}
+      {/* ── SERVICE-FIRST FLOW ─────────────────────────── */}
       {isGenerated && (
-        <UnassignedPool
-          services={periodServices}
-          weekPlans={weekPlans}
-          allHouseIds={allHouseIdsMap}
-          onDragStart={handleDragStart}
-          dragPayload={dragPayload}
-          houseProgressMap={houseProgressMap}
-        />
-      )}
+        <div className="space-y-4">
+          {/* Step 1: Select Service */}
+          <Card>
+            <CardHeader className="py-3 px-4">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">1</span>
+                Selecione o Serviço
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 px-4 pb-4">
+              <div className="flex flex-wrap gap-2">
+                {periodServices.map(svc => {
+                  const key = `${svc.macro_id}:${svc.scope_id}`;
+                  const color = getMacroColor(svc.macro_id, macros);
+                  const isActive = selectedServiceKey === key;
+                  const allocated = weekPlans.reduce((sum, w) => {
+                    const ws = w.services.find(s => svcKey(s) === key);
+                    return sum + (ws?.planned_house_ids.length || 0);
+                  }, 0);
+                  const available = houses.filter(h => getHouseProgress(h, svc.macro_id, svc.scope_id) < 100).length;
+                  const expected = Math.min(svc.target_houses, available);
+                  const isComplete = allocated >= expected;
 
-      {/* Kanban columns */}
-      {isGenerated && weekPlans.length > 0 && (
-        <div className="relative">
-          <ScrollArea className="w-full">
-            <div className="flex gap-3 pb-4 pr-4">
-              {weekPlans.map(week => (
-                <WeekColumn
-                  key={week.week_number}
-                  week={week}
-                  onDragStart={handleDragStart}
-                  onDrop={handleDrop}
-                  dragPayload={dragPayload}
-                  houseProgressMap={houseProgressMap}
-                  totalWeeks={weekPlans.length}
-                />
-              ))}
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        setSelectedServiceKey(isActive ? "" : key);
+                        setSelectedHouseIds(new Set());
+                      }}
+                      className={`
+                        flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-sm transition-all
+                        ${isActive
+                          ? "border-primary bg-primary/10 shadow-sm"
+                          : "border-border bg-card hover:border-primary/40"
+                        }
+                        ${isComplete && !isActive ? "opacity-60" : ""}
+                      `}
+                    >
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                      <span className="font-medium truncate max-w-[180px]">{svc.scope_name}</span>
+                      <Badge
+                        variant={isComplete ? "default" : "secondary"}
+                        className="text-[10px] px-1.5 h-4 shrink-0"
+                      >
+                        {allocated}/{expected}
+                      </Badge>
+                      {isComplete && <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Step 2: Visual House Grid */}
+          {selectedService && (
+            <Card>
+              <CardHeader className="py-3 px-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">2</span>
+                    Selecione as Casas
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: currentServiceColor }} />
+                    <span className="font-normal text-muted-foreground">{selectedService.scope_name}</span>
+                  </CardTitle>
+                  {selectedHouseIds.size > 0 && (
+                    <div className="flex items-center gap-2">
+                      <Badge variant="default" className="gap-1">
+                        <MousePointerClick className="h-3 w-3" />
+                        {selectedHouseIds.size} selecionada(s)
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedHouseIds(new Set())}
+                        className="h-7 text-xs"
+                      >
+                        <Undo2 className="h-3 w-3 mr-1" />
+                        Limpar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                {/* Legend */}
+                <div className="flex flex-wrap gap-3 mt-2 text-[11px]">
+                  <span className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded border-2 bg-card border-border" /> Disponível
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded border-2 bg-primary border-primary" /> Selecionada
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded border-2 bg-amber-500/15 border-amber-400/40" /> Alocada
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded border-2 bg-muted border-muted opacity-50" /> Concluída
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0 px-4 pb-4">
+                <ScrollArea className="max-h-[280px]">
+                  <div className="space-y-3">
+                    {housesGroupedByQuadra.map(group => {
+                      const relevantHouses = group.houseIds.filter(id => houseStatusMap.has(id));
+                      if (relevantHouses.length === 0) return null;
+
+                      return (
+                        <div key={group.name}>
+                          <div className="text-[11px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">
+                            {group.name}
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {relevantHouses.map(hId => {
+                              const info = houseStatusMap.get(hId)!;
+                              return (
+                                <HouseCell
+                                  key={hId}
+                                  houseId={hId}
+                                  status={info.status}
+                                  weekAssigned={info.weekAssigned}
+                                  onClick={() => toggleHouseSelection(hId)}
+                                  quadraName={quadraMap.get(hId)}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Step 3: Assign to Week */}
+          {selectedService && selectedHouseIds.size > 0 && (
+            <Card className="border-primary/40 bg-primary/5">
+              <CardHeader className="py-3 px-4">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">3</span>
+                  Alocar {selectedHouseIds.size} casa(s) em qual semana?
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0 px-4 pb-4">
+                <div className="flex flex-wrap gap-2">
+                  {weekPlans.map(week => {
+                    const count = serviceWeekCounts.get(`${selectedServiceKey}:${week.week_number}`) || 0;
+                    return (
+                      <WeekSlot
+                        key={week.week_number}
+                        week={week}
+                        count={count}
+                        isTarget={targetWeek === week.week_number}
+                        onClick={() => assignToWeek(week.week_number)}
+                        serviceColor={currentServiceColor}
+                      />
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Summary: Week columns */}
+          <Card>
+            <CardHeader className="py-3 px-4">
+              <CardTitle className="text-sm">Resumo por Semana</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0 px-4 pb-4">
+              <ScrollArea className="w-full">
+                <div className="flex gap-3 pb-2">
+                  {weekPlans.map(week => (
+                    <WeekSummaryColumn
+                      key={week.week_number}
+                      week={week}
+                      onRemoveHouse={removeHouseFromWeek}
+                    />
+                  ))}
+                </div>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
+            </CardContent>
+          </Card>
+
+          {/* Save bar */}
+          <div className="flex items-center justify-between sticky bottom-4 bg-card border rounded-lg p-3 shadow-lg z-10">
+            <div className="flex items-center gap-2 text-sm">
+              {validationErrors.length === 0 ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  <span>Todas as casas distribuídas</span>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  <span>{validationErrors.length} serviço(s) pendente(s)</span>
+                </>
+              )}
             </div>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
-        </div>
-      )}
-
-      {/* Save bar */}
-      {isGenerated && (
-        <div className="flex items-center justify-between sticky bottom-4 bg-card border rounded-lg p-3 shadow-lg z-10">
-          <div className="flex items-center gap-2 text-sm">
-            {validationErrors.length === 0 ? (
-              <>
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                <span>Todas as casas distribuídas</span>
-              </>
-            ) : (
-              <>
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-                <span>{validationErrors.length} serviço(s) pendente(s)</span>
-              </>
-            )}
+            <Button onClick={saveWeeklyPlan} disabled={isSaving || validationErrors.length > 0}>
+              <Save className="h-4 w-4 mr-1" />
+              {isSaving ? "Salvando..." : "Salvar"}
+            </Button>
           </div>
-          <Button onClick={saveWeeklyPlan} disabled={isSaving || validationErrors.length > 0}>
-            <Save className="h-4 w-4 mr-1" />
-            {isSaving ? "Salvando..." : "Salvar"}
-          </Button>
         </div>
       )}
 
