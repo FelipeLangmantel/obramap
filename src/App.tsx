@@ -95,9 +95,11 @@ const App = () => {
             <ConstructionProvider>
               <Routes>
                 {/* Public routes */}
-                <Route path="/landing" element={<LandingPage />} />
+                <Route path="/" element={<LandingPage />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/change-password" element={<ChangePassword />} />
+                {/* Legacy redirect */}
+                <Route path="/landing" element={<LandingPage />} />
 
                 {/* ========== ROTAS DE SISTEMA (System Admin) ========== */}
                 <Route element={<SystemLayout />}>
@@ -114,7 +116,7 @@ const App = () => {
                   <Route path="/long-term-planning" element={<LongTermPlanningPage />} />
                   <Route path="/project-contract" element={<ProjectContractPage />} />
                   <Route path="/ple-measurements" element={<PleMeasurementsPage />} />
-                  <Route path="/" element={<Index />} />
+                  <Route path="/dashboard" element={<Index />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>
               </Routes>
