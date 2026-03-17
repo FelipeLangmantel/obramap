@@ -1009,41 +1009,28 @@ export function WeeklyPlanningFromPeriod() {
     }
   };
 
-  // ── Revert to approved (unlock for re-editing) ─────────
-  const revertToApproved = async () => {
+  // ── Revert to draft (unlock for re-editing) ─────────
+  const revertToDraft = async () => {
     if (!selectedPeriodId) return;
     setIsReverting(true);
     try {
-      // Call RPC to revert status back to approved
-      const { data, error } = await supabase.rpc("update_planning_period_status", {
-        p_period_id: selectedPeriodId,
-        p_new_status: "approved",
-      });
-      if (error) throw error;
-      const result = data as { success: boolean; error?: string; message?: string };
-      if (!result.success) {
-        toast.error(result.message || "Erro ao reverter status");
-        return;
-      }
-
-      // Clear weekly plan data
+      // Clear weekly plan data first
       await supabase.from("weekly_plan_weeks").delete().eq("planning_period_id", selectedPeriodId);
-      await supabase.from("planning_periods").update({ weekly_plan_generated: false, weekly_plan_locked: false }).eq("id", selectedPeriodId);
+      
+      // Revert status to draft directly
+      await supabase.from("planning_periods").update({ 
+        weekly_plan_generated: false, 
+        weekly_plan_locked: false,
+        status: "draft"
+      }).eq("id", selectedPeriodId);
 
       // Refresh periods list
-      const { data: refreshed } = await supabase
-        .from("planning_periods")
-        .select("id, period_number, start_date, end_date, status, name, weekly_plan_generated, weekly_plan_locked")
-        .eq("project_id", projectId!)
-        .eq("company_id", companyId!)
-        .in("status", ["approved", "released_to_weekly", "closed"])
-        .order("period_number");
-      if (refreshed) setPeriods(refreshed as PeriodForWeekly[]);
+      await loadPeriods();
 
       setWeekPlans([]);
       setIsGenerated(false);
       setShowWeekConfig(false);
-      toast.success("Medição revertida para aprovada. Planejamento semanal limpo.");
+      toast.success("Medição revertida para rascunho. Planejamento semanal limpo.");
     } catch (err: any) {
       toast.error("Erro: " + (err?.message || "desconhecido"));
     } finally {
