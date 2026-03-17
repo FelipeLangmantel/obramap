@@ -1,4 +1,3 @@
-import React from "react";
 import { useNavigate } from "react-router-dom";
 import obraMapIcon from "@/assets/obramap-icon-dark.png";
 import {
