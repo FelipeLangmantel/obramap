@@ -13,7 +13,7 @@ export default function PleMeasurementsPage() {
     <ModuleAccessGuard moduleKey="ple-measurements">
       <SidebarProvider defaultOpen={true}>
         <div className="h-screen flex w-full overflow-hidden">
-          <AppSidebar activeView="costs" onViewChange={() => navigate("/")} />
+          <AppSidebar activeView="costs" onViewChange={() => navigate("/dashboard")} />
           <main className="flex-1 min-w-0 h-full overflow-hidden">
             <PleModuleView {...pleData} />
           </main>

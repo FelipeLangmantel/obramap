@@ -155,7 +155,7 @@ export function PleDashboard({ projects, onSelectProject, onCreateProject }: Pro
 
       {/* Back button */}
       <div className="pt-2 border-t border-border">
-        <Button variant="outline" size="sm" onClick={() => navigate("/")} className="gap-1.5 text-xs sm:text-sm">
+        <Button variant="outline" size="sm" onClick={() => navigate("/dashboard")} className="gap-1.5 text-xs sm:text-sm">
           <ArrowLeft className="h-4 w-4" /> Voltar ao Menu
         </Button>
       </div>

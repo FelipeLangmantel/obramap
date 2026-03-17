@@ -82,7 +82,7 @@ export default function MeasurementPlanningPage() {
     <ModuleAccessGuard moduleKey="measurement-planning">
       <SidebarProvider defaultOpen={true}>
         <div className="flex min-h-screen w-full bg-background">
-          <AppSidebar activeView="planning" onViewChange={() => navigate("/")} />
+          <AppSidebar activeView="planning" onViewChange={() => navigate("/dashboard")} />
 
         <main className="flex-1 overflow-auto">
           <div className="sticky top-0 z-10 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b px-4 py-3">
@@ -90,7 +90,7 @@ export default function MeasurementPlanningPage() {
               <SidebarTrigger className="p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors">
                 <Menu className="h-6 w-6" />
               </SidebarTrigger>
-              <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+              <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <h1 className="text-xl font-semibold">Planejamento por Período</h1>

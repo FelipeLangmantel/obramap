@@ -49,7 +49,7 @@ export default function SystemDashboard() {
     }
     if (!isSystemAdmin) {
       console.log("[SystemDashboard] Non-admin user, redirecting to /");
-      navigate("/");
+      navigate("/dashboard");
       return;
     }
     console.log("[SystemDashboard] System admin access granted");

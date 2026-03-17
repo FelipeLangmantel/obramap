@@ -24,7 +24,7 @@ export default function AdminDashboard() {
       navigate("/system/dashboard", { replace: true });
     } else {
       // Não é admin, ir para área de empresa
-      navigate("/", { replace: true });
+      navigate("/dashboard", { replace: true });
     }
   }, [user, isSystemAdmin, isLoading, navigate]);
 
