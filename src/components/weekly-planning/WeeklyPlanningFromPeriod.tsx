@@ -728,19 +728,21 @@ export function WeeklyPlanningFromPeriod() {
   }, [weekPlans]);
 
   // ── Data Loading ────────────────────────────────────────
-  useEffect(() => {
+  const loadPeriods = useCallback(async () => {
     if (!projectId || !companyId) return;
-    (async () => {
-      const { data } = await supabase
-        .from("planning_periods")
-        .select("id, period_number, start_date, end_date, status, name, weekly_plan_generated, weekly_plan_locked")
-        .eq("project_id", projectId)
-        .eq("company_id", companyId)
-        .in("status", ["approved", "released_to_weekly", "closed"])
-        .order("period_number");
-      if (data) setPeriods(data as PeriodForWeekly[]);
-    })();
+    const { data } = await supabase
+      .from("planning_periods")
+      .select("id, period_number, start_date, end_date, status, name, weekly_plan_generated, weekly_plan_locked")
+      .eq("project_id", projectId)
+      .eq("company_id", companyId)
+      .in("status", ["draft", "approved", "released_to_weekly", "closed"])
+      .order("period_number");
+    if (data) setPeriods(data as PeriodForWeekly[]);
   }, [projectId, companyId]);
+
+  useEffect(() => {
+    loadPeriods();
+  }, [loadPeriods]);
 
   useEffect(() => {
     if (!selectedPeriodId || !projectId) return;
@@ -989,8 +991,17 @@ export function WeeklyPlanningFromPeriod() {
           if (error) throw error;
         }
       }
-      await supabase.from("planning_periods").update({ weekly_plan_generated: true, weekly_plan_locked: true }).eq("id", selectedPeriodId);
-      toast.success("Planejamento semanal salvo!");
+      // Update period: mark as generated/locked and set status to released_to_weekly
+      await supabase.from("planning_periods").update({ 
+        weekly_plan_generated: true, 
+        weekly_plan_locked: true,
+        status: "released_to_weekly"
+      }).eq("id", selectedPeriodId);
+      
+      // Refresh periods list to reflect new status
+      await loadPeriods();
+      
+      toast.success("Planejamento semanal salvo e medição liberada!");
     } catch (err: any) {
       toast.error("Erro: " + (err?.message || "desconhecido"));
     } finally {
@@ -998,41 +1009,28 @@ export function WeeklyPlanningFromPeriod() {
     }
   };
 
-  // ── Revert to approved (unlock for re-editing) ─────────
-  const revertToApproved = async () => {
+  // ── Revert to draft (unlock for re-editing) ─────────
+  const revertToDraft = async () => {
     if (!selectedPeriodId) return;
     setIsReverting(true);
     try {
-      // Call RPC to revert status back to approved
-      const { data, error } = await supabase.rpc("update_planning_period_status", {
-        p_period_id: selectedPeriodId,
-        p_new_status: "approved",
-      });
-      if (error) throw error;
-      const result = data as { success: boolean; error?: string; message?: string };
-      if (!result.success) {
-        toast.error(result.message || "Erro ao reverter status");
-        return;
-      }
-
-      // Clear weekly plan data
+      // Clear weekly plan data first
       await supabase.from("weekly_plan_weeks").delete().eq("planning_period_id", selectedPeriodId);
-      await supabase.from("planning_periods").update({ weekly_plan_generated: false, weekly_plan_locked: false }).eq("id", selectedPeriodId);
+      
+      // Revert status to draft directly
+      await supabase.from("planning_periods").update({ 
+        weekly_plan_generated: false, 
+        weekly_plan_locked: false,
+        status: "draft"
+      }).eq("id", selectedPeriodId);
 
       // Refresh periods list
-      const { data: refreshed } = await supabase
-        .from("planning_periods")
-        .select("id, period_number, start_date, end_date, status, name, weekly_plan_generated, weekly_plan_locked")
-        .eq("project_id", projectId!)
-        .eq("company_id", companyId!)
-        .in("status", ["approved", "released_to_weekly", "closed"])
-        .order("period_number");
-      if (refreshed) setPeriods(refreshed as PeriodForWeekly[]);
+      await loadPeriods();
 
       setWeekPlans([]);
       setIsGenerated(false);
       setShowWeekConfig(false);
-      toast.success("Medição revertida para aprovada. Planejamento semanal limpo.");
+      toast.success("Medição revertida para rascunho. Planejamento semanal limpo.");
     } catch (err: any) {
       toast.error("Erro: " + (err?.message || "desconhecido"));
     } finally {
@@ -1078,17 +1076,24 @@ export function WeeklyPlanningFromPeriod() {
                 <SelectTrigger><SelectValue placeholder="Escolha uma medição aprovada..." /></SelectTrigger>
                 <SelectContent>
                   {periods.map(p => {
-                    const statusLabel = p.status === "approved" ? "Aprovada" 
+                    const statusLabel = p.status === "draft" ? "Rascunho"
+                      : p.status === "approved" ? "Aprovada" 
                       : p.status === "released_to_weekly" ? "Liberada" 
                       : p.status === "closed" ? "Fechada" 
                       : "Rascunho";
                     const statusIcon = p.weekly_plan_generated ? " ✓" : "";
+                    const statusColor = p.status === "draft" ? "bg-muted text-muted-foreground"
+                      : p.status === "approved" ? "bg-primary/20 text-primary"
+                      : p.status === "released_to_weekly" ? "bg-emerald-500/20 text-emerald-700"
+                      : p.status === "closed" ? "bg-destructive/20 text-destructive"
+                      : "bg-muted text-muted-foreground";
+                    const isDisabled = p.status === "closed";
                     return (
-                      <SelectItem key={p.id} value={p.id}>
+                      <SelectItem key={p.id} value={p.id} disabled={isDisabled}>
                         <span className="flex items-center gap-2">
                           Medição {p.period_number}{p.name ? ` – ${p.name}` : ""} ({format(parseISO(p.start_date), "dd/MM", { locale: ptBR })} – {format(parseISO(p.end_date), "dd/MM", { locale: ptBR })})
                           {statusIcon}
-                          <Badge variant="outline" className="text-[10px] px-1.5 h-4 ml-1">
+                          <Badge variant="outline" className={`text-[10px] px-1.5 h-4 ml-1 border-0 ${statusColor}`}>
                             {statusLabel}
                           </Badge>
                         </span>
@@ -1125,18 +1130,18 @@ export function WeeklyPlanningFromPeriod() {
               <span className="text-border">|</span>
               <Badge variant={selectedPeriod.weekly_plan_locked ? "secondary" : "default"} className="gap-1">
                 {selectedPeriod.weekly_plan_locked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
-                {selectedPeriod.status === "approved" ? "Aprovada" : selectedPeriod.status === "released_to_weekly" ? "Liberada" : selectedPeriod.status === "closed" ? "Fechada" : selectedPeriod.status}
+                {selectedPeriod.status === "draft" ? "Rascunho" : selectedPeriod.status === "approved" ? "Aprovada" : selectedPeriod.status === "released_to_weekly" ? "Liberada" : selectedPeriod.status === "closed" ? "Fechada" : selectedPeriod.status}
               </Badge>
               {(selectedPeriod.status === "released_to_weekly") && (
                 <Button
                   variant="outline"
                   size="sm"
                   className="h-6 text-xs"
-                  onClick={revertToApproved}
+                  onClick={revertToDraft}
                   disabled={isReverting}
                 >
                   <Undo2 className="h-3 w-3 mr-1" />
-                  {isReverting ? "Revertendo..." : "Reverter p/ Aprovada"}
+                  {isReverting ? "Revertendo..." : "Reverter p/ Rascunho"}
                 </Button>
               )}
             </div>
@@ -1414,15 +1419,48 @@ export function WeeklyPlanningFromPeriod() {
 
       {/* Empty states */}
       {!selectedPeriodId && periods.length > 0 && (
-        <Card className="p-8 text-center">
-          <Calendar className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-50" />
-          <p className="text-muted-foreground">Selecione uma medição aprovada</p>
+        <Card className="p-6">
+          <div className="text-center mb-4">
+            <Calendar className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
+            <p className="text-muted-foreground text-sm">Selecione uma medição para configurar o planejamento semanal</p>
+          </div>
+          <div className="space-y-2 max-w-md mx-auto">
+            {periods.map(p => {
+              const statusLabel = p.status === "draft" ? "Rascunho"
+                : p.status === "approved" ? "Aprovada"
+                : p.status === "released_to_weekly" ? "Liberada"
+                : p.status === "closed" ? "Fechada" : p.status;
+              const statusColor = p.status === "draft" ? "bg-muted text-muted-foreground"
+                : p.status === "approved" ? "bg-primary/20 text-primary"
+                : p.status === "released_to_weekly" ? "bg-emerald-500/20 text-emerald-700"
+                : p.status === "closed" ? "bg-destructive/20 text-destructive"
+                : "bg-muted text-muted-foreground";
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => p.status !== "closed" ? setSelectedPeriodId(p.id) : undefined}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${
+                    p.status === "closed" ? "opacity-50 cursor-not-allowed" : "hover:border-primary hover:bg-primary/5 cursor-pointer"
+                  }`}
+                >
+                  <span className="text-sm font-medium">
+                    Medição {p.period_number} ({format(parseISO(p.start_date), "dd/MM", { locale: ptBR })} – {format(parseISO(p.end_date), "dd/MM", { locale: ptBR })})
+                  </span>
+                  <Badge variant="outline" className={`text-[10px] border-0 ${statusColor}`}>
+                    {statusLabel}
+                    {p.weekly_plan_generated ? " ✓" : ""}
+                  </Badge>
+                </button>
+              );
+            })}
+          </div>
         </Card>
       )}
       {periods.length === 0 && (
         <Card className="p-8 text-center">
           <AlertTriangle className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-50" />
-          <p className="text-muted-foreground">Nenhuma medição aprovada encontrada</p>
+          <p className="text-muted-foreground">Nenhuma medição encontrada</p>
+          <p className="text-xs text-muted-foreground mt-1">Crie medições no módulo de Planejamento por Período</p>
         </Card>
       )}
     </div>
