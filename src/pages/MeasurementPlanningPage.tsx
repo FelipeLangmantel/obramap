@@ -90,7 +90,7 @@ export default function MeasurementPlanningPage() {
               <SidebarTrigger className="p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors">
                 <Menu className="h-6 w-6" />
               </SidebarTrigger>
-              <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
+              <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <h1 className="text-xl font-semibold">Planejamento por Período</h1>

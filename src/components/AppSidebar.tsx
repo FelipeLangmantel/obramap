@@ -235,8 +235,8 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         return;
       }
     }
-    if (location.pathname !== "/") {
-      navigate("/", { state: { targetView: view } });
+    if (location.pathname !== "/dashboard" && location.pathname !== "/") {
+      navigate("/dashboard", { state: { targetView: view } });
       return;
     }
     onViewChange(view as ViewType);

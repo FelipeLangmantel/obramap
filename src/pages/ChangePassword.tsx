@@ -98,7 +98,7 @@ export default function ChangePassword() {
         if (isSystemAdmin) {
           navigate("/admin");
         } else {
-          navigate("/");
+          navigate("/dashboard");
         }
       }
     } catch (error) {

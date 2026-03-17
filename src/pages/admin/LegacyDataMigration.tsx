@@ -109,7 +109,7 @@ export default function LegacyDataMigration() {
         return;
       }
       if (!isSystemAdmin) {
-        navigate("/");
+        navigate("/dashboard");
         return;
       }
     }
