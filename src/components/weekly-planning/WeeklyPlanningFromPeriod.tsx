@@ -636,6 +636,7 @@ export function WeeklyPlanningFromPeriod() {
   const [periodServices, setPeriodServices] = useState<ServiceForPeriod[]>([]);
   const [weekPlans, setWeekPlans] = useState<WeekPlan[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isReverting, setIsReverting] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
   const [showWeekConfig, setShowWeekConfig] = useState(false);
 
