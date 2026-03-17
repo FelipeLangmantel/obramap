@@ -185,6 +185,7 @@ export function PlannedProductionTab() {
         .select("id, period_number, name, start_date, end_date, status")
         .eq("project_id", currentProject.id)
         .eq("weekly_plan_generated", true)
+        .in("status", ["approved", "released_to_weekly", "closed"])
         .order("period_number", { ascending: true });
       
       setApprovedPeriods((periods || []) as PeriodInfo[]);
