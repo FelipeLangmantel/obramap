@@ -919,7 +919,35 @@ export function WeeklyPlanningFromPeriod() {
     }));
   }, []);
 
-  // ── Validation ──────────────────────────────────────────
+  // ── Move house between weeks (drag & drop) ─────────────
+  const moveHouseBetweenWeeks = useCallback((fromWeek: number, toWeek: number, serviceKey: string, houseId: number) => {
+    setWeekPlans(prev => prev.map(week => {
+      if (week.week_number === fromWeek) {
+        return {
+          ...week,
+          services: week.services.map(svc => {
+            if (svcKey(svc) !== serviceKey) return svc;
+            const ids = svc.planned_house_ids.filter(id => id !== houseId);
+            return { ...svc, planned_house_ids: ids, planned_houses: ids.length };
+          }),
+        };
+      }
+      if (week.week_number === toWeek) {
+        return {
+          ...week,
+          services: week.services.map(svc => {
+            if (svcKey(svc) !== serviceKey) return svc;
+            const ids = [...new Set([...svc.planned_house_ids, houseId])].sort((a, b) => a - b);
+            return { ...svc, planned_house_ids: ids, planned_houses: ids.length };
+          }),
+        };
+      }
+      return week;
+    }));
+    toast.success(`Casa ${houseId} movida para Semana ${toWeek}`);
+  }, []);
+
+
   const validationErrors = useMemo(() => {
     const errors: string[] = [];
     for (const svc of periodServices) {
