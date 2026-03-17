@@ -325,7 +325,7 @@ export function ContractorContractsTab({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {budgetServices.map(svc => {
+                {filteredBudgetServices.map(svc => {
                   const key = `${svc.macro_id}::${svc.scope_id}`;
                   const alreadyAssigned = contractServices.some(cs => cs.macro_id === svc.macro_id && cs.scope_id === svc.scope_id);
                   const isSelected = selectedServiceIds.has(key);
