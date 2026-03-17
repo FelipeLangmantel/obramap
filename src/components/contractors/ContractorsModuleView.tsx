@@ -29,6 +29,9 @@ export default function ContractorsModuleView() {
         fetchMeasurementItems={data.fetchMeasurementItems}
         saveMeasurementItem={data.saveMeasurementItem}
         approveMeasurement={data.approveMeasurement}
+        updateContractService={data.updateContractService}
+        deleteContractService={data.deleteContractService}
+        recalcContractTotal={data.recalcContractTotal}
         onBack={() => setSelectedContract(null)}
       />
     );
