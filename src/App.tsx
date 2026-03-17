@@ -62,7 +62,7 @@ function RoutePermissionCheck() {
   const requiredPermission = ROUTE_PERMISSION_MAP[location.pathname];
 
   if (requiredPermission && !canAccessMenu(requiredPermission)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <Outlet />;
