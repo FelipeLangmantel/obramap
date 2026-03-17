@@ -296,6 +296,7 @@ export function usePeriodPlanning(projectId: string | null) {
       }
 
       const statusLabels: Record<string, string> = {
+        draft: "revertido para rascunho",
         approved: "aprovado",
         released_to_weekly: "liberado para planejamento semanal",
         closed: "fechado",

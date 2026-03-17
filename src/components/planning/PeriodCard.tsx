@@ -44,9 +44,6 @@ const getNextAction = (status: PeriodStatus) => {
   }
 };
 
-const canRevert = (status: PeriodStatus) => {
-  return status === "approved" || status === "released_to_weekly";
-};
 
 export function PeriodCard({ 
   period, 
