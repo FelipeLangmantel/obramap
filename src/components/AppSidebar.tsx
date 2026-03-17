@@ -70,7 +70,7 @@ import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import obraMapLogoDark from "@/assets/obramap-logo-new.png";
 import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 
-type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity";
+type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors";
 
 // Views com rotas separadas (navegam para página diferente)
 type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements";
@@ -220,6 +220,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         { title: "Custos da Obra", view: "costs", icon: DollarSign, permissionId: "custos" },
         { title: "Fluxo Financeiro", view: "financial-flow", icon: Wallet, permissionId: "financeiro" },
         { title: "Suprimentos", view: "supplies", icon: Package, permissionId: "suprimentos" },
+        { title: "Empreiteiros", view: "contractors", icon: Truck, permissionId: "empreiteiros" },
       ],
     },
     {

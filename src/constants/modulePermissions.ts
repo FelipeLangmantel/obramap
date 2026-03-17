@@ -48,6 +48,7 @@ export const MENU_MODULES: MenuModule[] = [
   { id: "entrega", label: "Entrega & Pós-Obra", moduleKey: "delivery" },
   { id: "smart_planning", label: "Planej. Inteligente", moduleKey: "smart-planning" },
   { id: "productivity", label: "Produtividade e Equipes" },
+  { id: "empreiteiros", label: "Empreiteiros", moduleKey: "contractors" },
 ];
 
 /**
