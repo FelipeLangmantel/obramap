@@ -220,6 +220,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         { title: "Custos da Obra", view: "costs", icon: DollarSign, permissionId: "custos" },
         { title: "Fluxo Financeiro", view: "financial-flow", icon: Wallet, permissionId: "financeiro" },
         { title: "Suprimentos", view: "supplies", icon: Package, permissionId: "suprimentos" },
+        { title: "Empreiteiros", view: "contractors", icon: Truck, permissionId: "empreiteiros" },
       ],
     },
     {
