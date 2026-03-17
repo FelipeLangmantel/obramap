@@ -43,7 +43,7 @@ export default function Auth() {
       } else if (isSystemAdmin) {
         navigate("/system/dashboard", { replace: true });
       } else {
-        navigate("/", { replace: true });
+        navigate("/dashboard", { replace: true });
       }
     }
   }, [user, authLoading, mustChangePassword, isSystemAdmin, navigate]);
