@@ -1419,15 +1419,48 @@ export function WeeklyPlanningFromPeriod() {
 
       {/* Empty states */}
       {!selectedPeriodId && periods.length > 0 && (
-        <Card className="p-8 text-center">
-          <Calendar className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-50" />
-          <p className="text-muted-foreground">Selecione uma medição aprovada</p>
+        <Card className="p-6">
+          <div className="text-center mb-4">
+            <Calendar className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-50" />
+            <p className="text-muted-foreground text-sm">Selecione uma medição para configurar o planejamento semanal</p>
+          </div>
+          <div className="space-y-2 max-w-md mx-auto">
+            {periods.map(p => {
+              const statusLabel = p.status === "draft" ? "Rascunho"
+                : p.status === "approved" ? "Aprovada"
+                : p.status === "released_to_weekly" ? "Liberada"
+                : p.status === "closed" ? "Fechada" : p.status;
+              const statusColor = p.status === "draft" ? "bg-muted text-muted-foreground"
+                : p.status === "approved" ? "bg-primary/20 text-primary"
+                : p.status === "released_to_weekly" ? "bg-emerald-500/20 text-emerald-700"
+                : p.status === "closed" ? "bg-destructive/20 text-destructive"
+                : "bg-muted text-muted-foreground";
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => p.status !== "closed" ? setSelectedPeriodId(p.id) : undefined}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${
+                    p.status === "closed" ? "opacity-50 cursor-not-allowed" : "hover:border-primary hover:bg-primary/5 cursor-pointer"
+                  }`}
+                >
+                  <span className="text-sm font-medium">
+                    Medição {p.period_number} ({format(parseISO(p.start_date), "dd/MM", { locale: ptBR })} – {format(parseISO(p.end_date), "dd/MM", { locale: ptBR })})
+                  </span>
+                  <Badge variant="outline" className={`text-[10px] border-0 ${statusColor}`}>
+                    {statusLabel}
+                    {p.weekly_plan_generated ? " ✓" : ""}
+                  </Badge>
+                </button>
+              );
+            })}
+          </div>
         </Card>
       )}
       {periods.length === 0 && (
         <Card className="p-8 text-center">
           <AlertTriangle className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-50" />
-          <p className="text-muted-foreground">Nenhuma medição aprovada encontrada</p>
+          <p className="text-muted-foreground">Nenhuma medição encontrada</p>
+          <p className="text-xs text-muted-foreground mt-1">Crie medições no módulo de Planejamento por Período</p>
         </Card>
       )}
     </div>
