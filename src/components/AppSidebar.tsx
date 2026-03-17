@@ -67,7 +67,8 @@ import { NewProjectDialog } from "@/components/NewProjectDialog";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
-import obraMapLogo from "@/assets/obramap-logo-new.png";
+import obraMapLogoDark from "@/assets/obramap-logo-new.png";
+import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 
 type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity";
 
@@ -131,6 +132,15 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const [quadrasDialogOpen, setQuadrasDialogOpen] = useState(false);
   const [companyModules, setCompanyModules] = useState<CompanyModule[]>([]);
   const [devModuleDialog, setDevModuleDialog] = useState<CompanyModule | null>(null);
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   // Buscar módulos da empresa do usuário
   useEffect(() => {
@@ -310,7 +320,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         <SidebarHeader className="px-4 py-4 border-b border-border bg-background">
           <div className="flex items-center gap-3 mb-3">
             <div className="h-10 w-10 flex items-center justify-center shrink-0">
-              <img src={obraMapLogo} alt="ObraMap" className="h-10 w-10 object-contain drop-shadow-sm" />
+              <img src={isDark ? obraMapLogoDark : obraMapLogoLight} alt="ObraMap" className="h-10 w-10 object-contain drop-shadow-sm" />
             </div>
             <h1 className="text-lg font-bold text-foreground tracking-tight">ObraMap</h1>
           </div>
