@@ -168,7 +168,6 @@ function WeekSummaryColumn({
   week, onRemoveHouse,
 }: {
   week: WeekPlan;
-  allServices: ServiceForPeriod[];
   onRemoveHouse: (weekNumber: number, serviceKey: string, houseId: number) => void;
 }) {
   const totalHouses = week.services.reduce((s, svc) => s + svc.planned_house_ids.length, 0);
