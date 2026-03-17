@@ -339,6 +339,8 @@ export function useContractors() {
     createContract,
     fetchContractServices,
     addContractService,
+    updateContractService,
+    deleteContractService,
     recalcContractTotal,
     fetchMeasurements,
     createMeasurement,
