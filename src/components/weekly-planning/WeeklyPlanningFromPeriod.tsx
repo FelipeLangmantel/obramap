@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { toast } from "sonner";
 import {
   Calendar,
   Home,
@@ -67,16 +66,44 @@ interface WeekServicePlan {
 }
 
 interface DragState {
-  serviceKey: string; // macro_id:scope_id
+  serviceKey: string;
   sourceWeekNumber: number;
   houseId: number;
 }
 
+// Get a color for a macro from the project template
+function getMacroColor(macroId: string, macros: any[]): string {
+  const macro = macros?.find((m: any) => m.id === macroId);
+  return macro?.color || "#6b7280";
+}
+
+// Build house IDs from target_houses count (1..N sorted by house_number)
+function buildHouseIdsForService(
+  targetHouses: number,
+  macroId: string,
+  scopeId: string,
+  houses: any[]
+): number[] {
+  // Get houses that haven't completed this scope yet
+  const available = houses
+    .filter((h: any) => {
+      const macro = h.macros?.find((m: any) => m.id === macroId);
+      if (!macro) return true;
+      const scope = macro.scopes?.find((s: any) => s.id === scopeId);
+      return !scope || scope.progress < 100;
+    })
+    .map((h: any) => h.house_number)
+    .sort((a: number, b: number) => a - b);
+  return available.slice(0, targetHouses);
+}
+
 export function WeeklyPlanningFromPeriod() {
   const { currentProject } = useConstruction();
-  const { company, canEdit } = useAuth();
+  const { company } = useAuth();
   const projectId = currentProject?.id;
   const companyId = company?.id;
+  const macros = currentProject?.macrosTemplate || [];
+  const houses = currentProject?.houses || [];
 
   const [periods, setPeriods] = useState<PeriodForWeekly[]>([]);
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>("");
@@ -84,7 +111,6 @@ export function WeeklyPlanningFromPeriod() {
   const [periodServices, setPeriodServices] = useState<ServiceForPeriod[]>([]);
   const [weekPlans, setWeekPlans] = useState<WeekPlan[]>([]);
   const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(new Set());
-  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
   const [dragState, setDragState] = useState<DragState | null>(null);
@@ -95,23 +121,23 @@ export function WeeklyPlanningFromPeriod() {
   // Load approved/released periods
   useEffect(() => {
     if (!projectId || !companyId) return;
-    const fetchPeriods = async () => {
-      const { data, error } = await supabase
+    const fetch = async () => {
+      const { data } = await supabase
         .from("planning_periods")
         .select("id, period_number, start_date, end_date, status, name, weekly_plan_generated, weekly_plan_locked")
         .eq("project_id", projectId)
         .eq("company_id", companyId)
         .in("status", ["approved", "released_to_weekly", "executing", "closed"])
         .order("period_number");
-      if (!error && data) setPeriods(data as PeriodForWeekly[]);
+      if (data) setPeriods(data as PeriodForWeekly[]);
     };
-    fetchPeriods();
+    fetch();
   }, [projectId, companyId]);
 
   // Load working days config
   useEffect(() => {
     if (!projectId) return;
-    const fetchConfig = async () => {
+    const fetch = async () => {
       const { data } = await supabase
         .from("weekly_plan_config")
         .select("working_days_per_week")
@@ -119,22 +145,20 @@ export function WeeklyPlanningFromPeriod() {
         .maybeSingle();
       if (data) setWorkingDaysPerWeek(data.working_days_per_week);
     };
-    fetchConfig();
+    fetch();
   }, [projectId]);
 
   // Load period services when period selected
   useEffect(() => {
     if (!selectedPeriodId || !projectId) return;
-    const fetchServices = async () => {
-      setIsLoading(true);
-      const { data, error } = await supabase
+    const load = async () => {
+      const { data } = await supabase
         .from("service_planning_by_period")
-        .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, target_houses, target_house_ids")
+        .select("id, macro_id, macro_name, scope_id, scope_name, target_houses")
         .eq("planning_period_id", selectedPeriodId)
         .eq("project_id", projectId);
-      if (!error && data) {
-        setPeriodServices(data as ServiceForPeriod[]);
-      }
+      if (data) setPeriodServices(data);
+
       // Check if weekly plan already exists
       const { data: existingWeeks } = await supabase
         .from("weekly_plan_weeks")
@@ -143,7 +167,6 @@ export function WeeklyPlanningFromPeriod() {
         .order("week_number");
 
       if (existingWeeks && existingWeeks.length > 0) {
-        // Load existing plan
         const weeksWithServices: WeekPlan[] = [];
         for (const week of existingWeeks) {
           const { data: services } = await supabase
@@ -162,12 +185,11 @@ export function WeeklyPlanningFromPeriod() {
         setWeekPlans([]);
         setIsGenerated(false);
       }
-      setIsLoading(false);
     };
-    fetchServices();
+    load();
   }, [selectedPeriodId, projectId]);
 
-  // Calculate weeks from period dates
+  // Generate weeks from period dates
   const generateWeeks = useCallback(() => {
     if (!selectedPeriod || periodServices.length === 0) return;
 
@@ -179,24 +201,22 @@ export function WeeklyPlanningFromPeriod() {
     const weeks: WeekPlan[] = [];
     for (let i = 0; i < numWeeks; i++) {
       const weekStart = addDays(start, i * workingDaysPerWeek);
-      const weekEnd = i === numWeeks - 1
-        ? end
-        : addDays(weekStart, workingDaysPerWeek - 1);
+      const weekEnd = i === numWeeks - 1 ? end : addDays(weekStart, workingDaysPerWeek - 1);
 
-      // Distribute houses equally across weeks for each service
       const services: WeekServicePlan[] = periodServices.map(svc => {
-        const totalHouses = svc.target_house_ids.length;
-        const housesPerWeek = Math.floor(totalHouses / numWeeks);
-        const remainder = totalHouses % numWeeks;
-        const startIdx = i * housesPerWeek + Math.min(i, remainder);
-        const count = housesPerWeek + (i < remainder ? 1 : 0);
-        const houseIds = svc.target_house_ids.slice(startIdx, startIdx + count);
+        const allHouseIds = buildHouseIdsForService(svc.target_houses, svc.macro_id, svc.scope_id, houses);
+        const total = allHouseIds.length;
+        const perWeek = Math.floor(total / numWeeks);
+        const remainder = total % numWeeks;
+        const startIdx = i * perWeek + Math.min(i, remainder);
+        const count = perWeek + (i < remainder ? 1 : 0);
+        const houseIds = allHouseIds.slice(startIdx, startIdx + count);
 
         return {
           id: null,
           macro_id: svc.macro_id,
           macro_name: svc.macro_name,
-          macro_color: svc.macro_color,
+          macro_color: getMacroColor(svc.macro_id, macros),
           scope_id: svc.scope_id,
           scope_name: svc.scope_name,
           planned_house_ids: houseIds,
@@ -218,53 +238,47 @@ export function WeeklyPlanningFromPeriod() {
     setIsGenerated(true);
     setExpandedWeeks(new Set([1]));
     toast.success(`${numWeeks} semana(s) gerada(s) com distribuição automática`);
-  }, [selectedPeriod, periodServices, workingDaysPerWeek]);
+  }, [selectedPeriod, periodServices, workingDaysPerWeek, houses, macros]);
 
-  // Move a house from one week to another (drag and drop)
+  // Move house between weeks via drag
   const moveHouse = useCallback((serviceKey: string, fromWeek: number, toWeek: number, houseId: number) => {
-    setWeekPlans(prev => {
-      const updated = prev.map(week => {
-        if (week.week_number === fromWeek) {
-          return {
-            ...week,
-            services: week.services.map(svc => {
-              if (`${svc.macro_id}:${svc.scope_id}` === serviceKey) {
-                const newIds = svc.planned_house_ids.filter(id => id !== houseId);
-                return { ...svc, planned_house_ids: newIds, planned_houses: newIds.length };
-              }
-              return svc;
-            }),
-          };
-        }
-        if (week.week_number === toWeek) {
-          return {
-            ...week,
-            services: week.services.map(svc => {
-              if (`${svc.macro_id}:${svc.scope_id}` === serviceKey) {
-                if (svc.planned_house_ids.includes(houseId)) return svc;
-                const newIds = [...svc.planned_house_ids, houseId].sort((a, b) => a - b);
-                return { ...svc, planned_house_ids: newIds, planned_houses: newIds.length };
-              }
-              return svc;
-            }),
-          };
-        }
-        return week;
-      });
-      return updated;
-    });
+    setWeekPlans(prev => prev.map(week => {
+      const key = (svc: WeekServicePlan) => `${svc.macro_id}:${svc.scope_id}`;
+      if (week.week_number === fromWeek) {
+        return {
+          ...week,
+          services: week.services.map(svc => {
+            if (key(svc) === serviceKey) {
+              const ids = svc.planned_house_ids.filter(id => id !== houseId);
+              return { ...svc, planned_house_ids: ids, planned_houses: ids.length };
+            }
+            return svc;
+          }),
+        };
+      }
+      if (week.week_number === toWeek) {
+        return {
+          ...week,
+          services: week.services.map(svc => {
+            if (key(svc) === serviceKey) {
+              if (svc.planned_house_ids.includes(houseId)) return svc;
+              const ids = [...svc.planned_house_ids, houseId].sort((a, b) => a - b);
+              return { ...svc, planned_house_ids: ids, planned_houses: ids.length };
+            }
+            return svc;
+          }),
+        };
+      }
+      return week;
+    }));
   }, []);
 
-  // Save weekly plan to database
+  // Save to DB
   const saveWeeklyPlan = async () => {
     if (!projectId || !companyId || !selectedPeriodId) return;
     setIsSaving(true);
     try {
-      // Delete existing weeks for this period
-      await supabase
-        .from("weekly_plan_weeks")
-        .delete()
-        .eq("planning_period_id", selectedPeriodId);
+      await supabase.from("weekly_plan_weeks").delete().eq("planning_period_id", selectedPeriodId);
 
       for (const week of weekPlans) {
         const { data: weekData, error: weekError } = await supabase
@@ -283,7 +297,7 @@ export function WeeklyPlanningFromPeriod() {
 
         if (weekError || !weekData) throw weekError;
 
-        const servicesToInsert = week.services
+        const toInsert = week.services
           .filter(svc => svc.planned_house_ids.length > 0)
           .map(svc => ({
             weekly_plan_week_id: weekData.id,
@@ -299,15 +313,12 @@ export function WeeklyPlanningFromPeriod() {
             planned_houses: svc.planned_house_ids.length,
           }));
 
-        if (servicesToInsert.length > 0) {
-          const { error: svcError } = await supabase
-            .from("weekly_plan_services")
-            .insert(servicesToInsert);
-          if (svcError) throw svcError;
+        if (toInsert.length > 0) {
+          const { error } = await supabase.from("weekly_plan_services").insert(toInsert);
+          if (error) throw error;
         }
       }
 
-      // Mark period as having weekly plan
       await supabase
         .from("planning_periods")
         .update({ weekly_plan_generated: true, weekly_plan_locked: true })
@@ -321,48 +332,40 @@ export function WeeklyPlanningFromPeriod() {
     }
   };
 
-  // Save working days config
   const saveConfig = async () => {
     if (!projectId || !companyId) return;
-    const { error } = await supabase
+    await supabase
       .from("weekly_plan_config")
-      .upsert({
-        project_id: projectId,
-        company_id: companyId,
-        working_days_per_week: workingDaysPerWeek,
-      }, { onConflict: "project_id" });
-    if (!error) {
-      toast.success("Configuração salva");
-      setConfigOpen(false);
-    }
+      .upsert({ project_id: projectId, company_id: companyId, working_days_per_week: workingDaysPerWeek }, { onConflict: "project_id" });
+    toast.success("Configuração salva");
+    setConfigOpen(false);
   };
 
-  // Totals validation
+  // Validation: all houses allocated?
   const validationErrors = useMemo(() => {
     const errors: string[] = [];
     for (const svc of periodServices) {
       const key = `${svc.macro_id}:${svc.scope_id}`;
+      const expectedIds = buildHouseIdsForService(svc.target_houses, svc.macro_id, svc.scope_id, houses);
       const allocated = weekPlans.reduce((sum, week) => {
-        const weekSvc = week.services.find(s => `${s.macro_id}:${s.scope_id}` === key);
-        return sum + (weekSvc?.planned_house_ids.length || 0);
+        const ws = week.services.find(s => `${s.macro_id}:${s.scope_id}` === key);
+        return sum + (ws?.planned_house_ids.length || 0);
       }, 0);
-      if (allocated !== svc.target_house_ids.length) {
-        errors.push(`${svc.scope_name}: ${allocated}/${svc.target_house_ids.length} casas alocadas`);
+      if (allocated !== expectedIds.length) {
+        errors.push(`${svc.scope_name}: ${allocated}/${expectedIds.length} casas alocadas`);
       }
     }
     return errors;
-  }, [weekPlans, periodServices]);
+  }, [weekPlans, periodServices, houses]);
 
-  const toggleWeek = (weekNumber: number) => {
+  const toggleWeek = (n: number) => {
     setExpandedWeeks(prev => {
       const next = new Set(prev);
-      if (next.has(weekNumber)) next.delete(weekNumber);
-      else next.add(weekNumber);
+      next.has(n) ? next.delete(n) : next.add(n);
       return next;
     });
   };
 
-  // Drag handlers
   const handleDragStart = (e: React.DragEvent, serviceKey: string, weekNumber: number, houseId: number) => {
     setDragState({ serviceKey, sourceWeekNumber: weekNumber, houseId });
     e.dataTransfer.effectAllowed = "move";
@@ -402,16 +405,13 @@ export function WeeklyPlanningFromPeriod() {
             Distribua as atividades da medição em semanas
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setConfigOpen(!configOpen)}>
-            <Settings2 className="h-4 w-4 mr-1" />
-            Dias úteis: {workingDaysPerWeek}
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={() => setConfigOpen(!configOpen)}>
+          <Settings2 className="h-4 w-4 mr-1" />
+          Dias úteis: {workingDaysPerWeek}
+        </Button>
       </div>
 
-      {/* Config panel */}
+      {/* Config */}
       {configOpen && (
         <Card className="border-primary/30">
           <CardContent className="pt-4">
@@ -419,9 +419,7 @@ export function WeeklyPlanningFromPeriod() {
               <div className="space-y-1">
                 <Label>Dias úteis por semana</Label>
                 <Select value={String(workingDaysPerWeek)} onValueChange={v => setWorkingDaysPerWeek(Number(v))}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="5">5 dias</SelectItem>
                     <SelectItem value="6">6 dias</SelectItem>
@@ -462,7 +460,6 @@ export function WeeklyPlanningFromPeriod() {
                 Gerar Semanas
               </Button>
             )}
-
             {isGenerated && (
               <Button variant="outline" onClick={generateWeeks} className="mt-5" size="sm">
                 <RefreshCcw className="h-4 w-4 mr-1" />
@@ -472,7 +469,7 @@ export function WeeklyPlanningFromPeriod() {
           </div>
 
           {selectedPeriod && (
-            <div className="flex gap-4 mt-3 text-sm text-muted-foreground">
+            <div className="flex flex-wrap gap-3 mt-3 text-sm text-muted-foreground">
               <span>Período: {format(parseISO(selectedPeriod.start_date), "dd/MM/yyyy")} - {format(parseISO(selectedPeriod.end_date), "dd/MM/yyyy")}</span>
               <span>•</span>
               <span>{differenceInDays(parseISO(selectedPeriod.end_date), parseISO(selectedPeriod.start_date)) + 1} dias</span>
@@ -487,15 +484,15 @@ export function WeeklyPlanningFromPeriod() {
         </CardContent>
       </Card>
 
-      {/* Validation errors */}
+      {/* Validation */}
       {isGenerated && validationErrors.length > 0 && (
-        <Card className="border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/20">
+        <Card className="border-destructive/50 bg-destructive/5">
           <CardContent className="pt-4">
             <div className="flex items-start gap-2">
-              <AlertTriangle className="h-5 w-5 text-yellow-600 shrink-0 mt-0.5" />
+              <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium text-yellow-800 dark:text-yellow-200">Distribuição incompleta</p>
-                <ul className="text-sm text-yellow-700 dark:text-yellow-300 mt-1 space-y-0.5">
+                <p className="font-medium text-destructive">Distribuição incompleta</p>
+                <ul className="text-sm text-muted-foreground mt-1 space-y-0.5">
                   {validationErrors.map((e, i) => <li key={i}>• {e}</li>)}
                 </ul>
               </div>
@@ -512,10 +509,7 @@ export function WeeklyPlanningFromPeriod() {
           onDragOver={handleDragOver}
           onDrop={(e) => handleDrop(e, week.week_number)}
         >
-          <CardHeader
-            className="cursor-pointer py-3"
-            onClick={() => toggleWeek(week.week_number)}
-          >
+          <CardHeader className="cursor-pointer py-3" onClick={() => toggleWeek(week.week_number)}>
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
                 <Calendar className="h-4 w-4 text-primary" />
@@ -529,36 +523,25 @@ export function WeeklyPlanningFromPeriod() {
                   <Home className="h-3 w-3 mr-1" />
                   {week.services.reduce((s, svc) => s + svc.planned_houses, 0)} casas
                 </Badge>
-                {expandedWeeks.has(week.week_number) ? (
-                  <ChevronUp className="h-4 w-4" />
-                ) : (
-                  <ChevronDown className="h-4 w-4" />
-                )}
+                {expandedWeeks.has(week.week_number) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </div>
             </div>
           </CardHeader>
 
           {expandedWeeks.has(week.week_number) && (
             <CardContent className="pt-0 space-y-3">
-              {week.services.filter(svc => svc.planned_houses > 0 || periodServices.some(ps => ps.macro_id === svc.macro_id && ps.scope_id === svc.scope_id)).map(svc => {
+              {week.services.filter(svc => svc.planned_houses > 0).map(svc => {
                 const serviceKey = `${svc.macro_id}:${svc.scope_id}`;
                 return (
                   <div key={serviceKey} className="border rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: svc.macro_color }}
-                        />
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: svc.macro_color }} />
                         <span className="font-medium text-sm">{svc.scope_name}</span>
                         <span className="text-xs text-muted-foreground">({svc.macro_name})</span>
                       </div>
-                      <Badge variant="secondary" className="text-xs">
-                        {svc.planned_houses} casa(s)
-                      </Badge>
+                      <Badge variant="secondary" className="text-xs">{svc.planned_houses} casa(s)</Badge>
                     </div>
-
-                    {/* House chips - draggable */}
                     <div className="flex flex-wrap gap-1.5">
                       {svc.planned_house_ids.map(houseId => (
                         <div
@@ -571,17 +554,12 @@ export function WeeklyPlanningFromPeriod() {
                           Casa {houseId}
                         </div>
                       ))}
-                      {svc.planned_houses === 0 && (
-                        <span className="text-xs text-muted-foreground italic">
-                          Arraste casas de outras semanas para cá
-                        </span>
-                      )}
                     </div>
                   </div>
                 );
               })}
 
-              {week.services.filter(svc => svc.planned_houses > 0).length === 0 && (
+              {week.services.every(svc => svc.planned_houses === 0) && (
                 <div className="text-center py-4 text-sm text-muted-foreground">
                   <ArrowLeftRight className="h-5 w-5 mx-auto mb-1 opacity-50" />
                   Arraste casas de outras semanas para esta
@@ -592,14 +570,14 @@ export function WeeklyPlanningFromPeriod() {
         </Card>
       ))}
 
-      {/* Save button */}
+      {/* Save bar */}
       {isGenerated && (
         <div className="flex items-center justify-between sticky bottom-4 bg-background border rounded-lg p-4 shadow-lg">
           <div className="flex items-center gap-2">
             {validationErrors.length === 0 ? (
               <CheckCircle2 className="h-5 w-5 text-green-600" />
             ) : (
-              <AlertTriangle className="h-5 w-5 text-yellow-600" />
+              <AlertTriangle className="h-5 w-5 text-destructive" />
             )}
             <span className="text-sm">
               {validationErrors.length === 0
@@ -607,17 +585,14 @@ export function WeeklyPlanningFromPeriod() {
                 : `${validationErrors.length} serviço(s) com distribuição pendente`}
             </span>
           </div>
-          <Button
-            onClick={saveWeeklyPlan}
-            disabled={isSaving || validationErrors.length > 0}
-          >
+          <Button onClick={saveWeeklyPlan} disabled={isSaving || validationErrors.length > 0}>
             <Save className="h-4 w-4 mr-1" />
             {isSaving ? "Salvando..." : "Salvar Planejamento Semanal"}
           </Button>
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Empty states */}
       {!selectedPeriodId && periods.length > 0 && (
         <Card className="p-8 text-center">
           <Calendar className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-50" />
