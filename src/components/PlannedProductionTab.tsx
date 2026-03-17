@@ -176,28 +176,28 @@ export function PlannedProductionTab() {
   });
 
   // ── Load approved periods that have weekly plans ──
-  useEffect(() => {
+  const loadApprovedPeriods = useCallback(async () => {
     if (!currentProject?.id || !company?.id) return;
     
-    const loadApprovedPeriods = async () => {
-      const { data: periods } = await supabase
-        .from("planning_periods")
-        .select("id, period_number, name, start_date, end_date, status")
-        .eq("project_id", currentProject.id)
-        .eq("weekly_plan_generated", true)
-        .in("status", ["approved", "released_to_weekly", "closed"])
-        .order("period_number", { ascending: true });
-      
-      setApprovedPeriods((periods || []) as PeriodInfo[]);
-      
-      // Auto-select first period
-      if (periods && periods.length > 0 && !selectedApprovedPeriodId) {
-        setSelectedApprovedPeriodId(periods[0].id);
-      }
-    };
+    const { data: periods } = await supabase
+      .from("planning_periods")
+      .select("id, period_number, name, start_date, end_date, status")
+      .eq("project_id", currentProject.id)
+      .eq("weekly_plan_generated", true)
+      .in("status", ["approved", "released_to_weekly", "closed"])
+      .order("period_number", { ascending: true });
     
+    setApprovedPeriods((periods || []) as PeriodInfo[]);
+    
+    // Auto-select first period
+    if (periods && periods.length > 0 && !selectedApprovedPeriodId) {
+      setSelectedApprovedPeriodId(periods[0].id);
+    }
+  }, [currentProject?.id, company?.id, selectedApprovedPeriodId]);
+
+  useEffect(() => {
     loadApprovedPeriods();
-  }, [currentProject?.id, company?.id]);
+  }, [loadApprovedPeriods]);
 
   // ── Load weekly plan data for selected period ──
   useEffect(() => {
