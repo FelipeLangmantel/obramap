@@ -203,6 +203,11 @@ export function ContractorHouseMapSelector({
   };
   const handleMouseUp = () => setIsDragging(false);
   const zoom = (delta: number) => setScale(s => Math.max(0.2, Math.min(3, s + delta)));
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    zoom(delta);
+  };
 
   const getHouseColor = (houseId: number) => selected.has(houseId) ? "hsl(var(--primary))" : "hsl(var(--muted))";
   const mw = mapLayout?.mapWidth || MAP_WIDTH;
