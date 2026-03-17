@@ -358,7 +358,7 @@ export function WeeklyPlanningFromPeriod() {
     for (const h of houses) {
       for (const m of (h.macros || []) as any[]) {
         for (const s of (m.scopes || []) as any[]) {
-          map.set(`${m.id}:${s.id}:${h.house_number}`, s.progress || 0);
+          map.set(`${m.id}:${s.id}:${(h as any).id ?? (h as any).house_number}`, s.progress || 0);
         }
       }
     }
