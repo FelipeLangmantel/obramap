@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import {
   Calendar, Home, Settings2, Save, RefreshCcw,
   AlertTriangle, CheckCircle2, Zap, GripVertical,
-  ArrowRight, Lock, Unlock, Layers,
+  ArrowRight, Lock, Unlock,
 } from "lucide-react";
 import { format, parseISO, differenceInDays, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
