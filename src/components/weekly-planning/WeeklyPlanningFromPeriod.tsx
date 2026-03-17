@@ -11,11 +11,11 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
-  Calendar, Home, Settings2, Save, RefreshCcw, Zap,
+  Calendar, Home, Save, RefreshCcw, Zap,
   AlertTriangle, CheckCircle2, Lock, Unlock, Undo2,
-  MousePointerClick,
+  MousePointerClick, Plus, X, GripVertical,
 } from "lucide-react";
-import { format, parseISO, differenceInDays, addDays } from "date-fns";
+import { format, parseISO, differenceInDays, addDays, eachDayOfInterval, getDay, isSameDay, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 // ── Types ──────────────────────────────────────────────────
@@ -46,6 +46,7 @@ interface WeekPlan {
   week_end: string;
   status: string;
   services: WeekServicePlan[];
+  working_days: string[]; // actual working day dates in this week
 }
 
 interface WeekServicePlan {
@@ -57,6 +58,11 @@ interface WeekServicePlan {
   scope_name: string;
   planned_house_ids: number[];
   planned_houses: number;
+}
+
+interface WeekDefinition {
+  week_number: number;
+  days: Date[];
 }
 
 // ── Helpers ────────────────────────────────────────────────
@@ -75,7 +81,21 @@ function getHouseProgress(house: any, macroId: string, scopeId: string): number 
   return scope?.progress || 0;
 }
 
-// ── House Cell in the Visual Grid ──────────────────────────
+const DAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const WEEK_COLORS = [
+  "bg-blue-500/15 border-blue-400/50 text-blue-700 dark:text-blue-300",
+  "bg-emerald-500/15 border-emerald-400/50 text-emerald-700 dark:text-emerald-300",
+  "bg-amber-500/15 border-amber-400/50 text-amber-700 dark:text-amber-300",
+  "bg-purple-500/15 border-purple-400/50 text-purple-700 dark:text-purple-300",
+  "bg-rose-500/15 border-rose-400/50 text-rose-700 dark:text-rose-300",
+  "bg-cyan-500/15 border-cyan-400/50 text-cyan-700 dark:text-cyan-300",
+];
+const WEEK_DOT_COLORS = [
+  "bg-blue-500", "bg-emerald-500", "bg-amber-500",
+  "bg-purple-500", "bg-rose-500", "bg-cyan-500",
+];
+
+// ── House Cell ─────────────────────────────────────────────
 type HouseStatus = "done" | "in_progress" | "available" | "selected";
 
 function HouseCell({
@@ -153,6 +173,7 @@ function WeekSlot({
       <div className="text-[10px] text-muted-foreground">
         {format(parseISO(week.week_start), "dd/MM", { locale: ptBR })} – {format(parseISO(week.week_end), "dd/MM", { locale: ptBR })}
       </div>
+      <div className="text-[10px] text-muted-foreground">{week.working_days.length} dias úteis</div>
       <div className="flex items-center gap-1 mt-0.5">
         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: serviceColor }} />
         <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
@@ -182,6 +203,7 @@ function WeekSummaryColumn({
         </div>
         <div className="text-[10px] text-muted-foreground">
           {format(parseISO(week.week_start), "dd/MM", { locale: ptBR })} – {format(parseISO(week.week_end), "dd/MM", { locale: ptBR })}
+          <span className="ml-1">• {week.working_days.length} dias úteis</span>
         </div>
         <Badge variant="outline" className="text-[10px] mt-1 gap-1">
           <Home className="h-2.5 w-2.5" /> {totalHouses} casa{totalHouses !== 1 ? "s" : ""}
@@ -225,6 +247,313 @@ function WeekSummaryColumn({
   );
 }
 
+// ── Week Calendar Configurator ─────────────────────────────
+function WeekCalendarConfigurator({
+  startDate,
+  endDate,
+  onConfirm,
+}: {
+  startDate: Date;
+  endDate: Date;
+  onConfirm: (weeks: WeekDefinition[]) => void;
+}) {
+  // Working day toggles — which weekdays are work days (0=Sun...6=Sat)
+  const [workDays, setWorkDays] = useState<boolean[]>([false, true, true, true, true, true, true]); // Mon-Sat default
+  
+  // All calendar days in the period
+  const allDays = useMemo(() => eachDayOfInterval({ start: startDate, end: endDate }), [startDate, endDate]);
+  
+  // Working days only (filtered by selected weekdays)
+  const workingDays = useMemo(
+    () => allDays.filter(d => workDays[getDay(d)]),
+    [allDays, workDays]
+  );
+  
+  // Week definitions — array of arrays of dates
+  const [weekDefs, setWeekDefs] = useState<WeekDefinition[]>([]);
+  
+  // Currently painting week
+  const [paintingWeek, setPaintingWeek] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  
+  // Auto-split working days into equal weeks
+  const autoSplit = useCallback((numWeeks: number) => {
+    if (workingDays.length === 0) return;
+    const perWeek = Math.ceil(workingDays.length / numWeeks);
+    const defs: WeekDefinition[] = [];
+    for (let i = 0; i < numWeeks; i++) {
+      const start = i * perWeek;
+      const end = Math.min(start + perWeek, workingDays.length);
+      if (start < workingDays.length) {
+        defs.push({ week_number: i + 1, days: workingDays.slice(start, end) });
+      }
+    }
+    setWeekDefs(defs);
+  }, [workingDays]);
+  
+  // Initialize with auto-split of 2 weeks
+  useEffect(() => {
+    if (workingDays.length > 0 && weekDefs.length === 0) {
+      const numWeeks = workingDays.length <= 6 ? 1 : Math.ceil(workingDays.length / 5);
+      autoSplit(Math.max(1, Math.min(numWeeks, 4)));
+    }
+  }, [workingDays.length]);
+  
+  // Re-split when working days change
+  useEffect(() => {
+    if (weekDefs.length > 0) {
+      autoSplit(weekDefs.length);
+    }
+  }, [workDays]);
+  
+  // Get which week a day belongs to
+  const dayWeekMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const week of weekDefs) {
+      for (const day of week.days) {
+        map.set(format(day, "yyyy-MM-dd"), week.week_number);
+      }
+    }
+    return map;
+  }, [weekDefs]);
+  
+  // Handle day click/drag — assign to painting week
+  const handleDayMouseDown = (day: Date) => {
+    if (paintingWeek === null) return;
+    setIsDragging(true);
+    assignDayToWeek(day, paintingWeek);
+  };
+  
+  const handleDayMouseEnter = (day: Date) => {
+    if (!isDragging || paintingWeek === null) return;
+    assignDayToWeek(day, paintingWeek);
+  };
+  
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+  
+  const assignDayToWeek = (day: Date, targetWeek: number) => {
+    const dayStr = format(day, "yyyy-MM-dd");
+    if (!workDays[getDay(day)]) return; // not a working day
+    
+    setWeekDefs(prev => {
+      const newDefs = prev.map(w => ({
+        ...w,
+        days: w.days.filter(d => format(d, "yyyy-MM-dd") !== dayStr),
+      }));
+      
+      const target = newDefs.find(w => w.week_number === targetWeek);
+      if (target) {
+        target.days.push(day);
+        target.days.sort((a, b) => a.getTime() - b.getTime());
+      }
+      
+      return newDefs;
+    });
+  };
+  
+  const addWeek = () => {
+    const newNum = weekDefs.length + 1;
+    setWeekDefs(prev => [...prev, { week_number: newNum, days: [] }]);
+    setPaintingWeek(newNum);
+  };
+  
+  const removeWeek = (weekNum: number) => {
+    setWeekDefs(prev => {
+      const filtered = prev.filter(w => w.week_number !== weekNum);
+      return filtered.map((w, i) => ({ ...w, week_number: i + 1 }));
+    });
+    if (paintingWeek === weekNum) setPaintingWeek(null);
+  };
+  
+  // Stats
+  const totalWorkingDays = workingDays.length;
+  const assignedDays = weekDefs.reduce((s, w) => s + w.days.length, 0);
+  const unassignedDays = totalWorkingDays - assignedDays;
+  const isValid = unassignedDays === 0 && weekDefs.length > 0 && weekDefs.every(w => w.days.length > 0);
+  
+  // Toggle working day
+  const toggleWorkDay = (dayIndex: number) => {
+    setWorkDays(prev => {
+      const next = [...prev];
+      next[dayIndex] = !next[dayIndex];
+      return next;
+    });
+  };
+
+  return (
+    <Card className="border-primary/30" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+      <CardHeader className="py-3 px-4">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-primary" />
+          Configurar Semanas de Trabalho
+        </CardTitle>
+        <p className="text-xs text-muted-foreground mt-1">
+          Selecione os dias úteis e defina os intervalos de cada semana
+        </p>
+      </CardHeader>
+      <CardContent className="pt-0 px-4 pb-4 space-y-4">
+        {/* Working days selector */}
+        <div className="space-y-2">
+          <Label className="text-xs">Dias úteis da semana</Label>
+          <div className="flex gap-1.5">
+            {DAY_LABELS.map((label, i) => (
+              <button
+                key={i}
+                onClick={() => toggleWorkDay(i)}
+                className={`
+                  w-10 h-10 rounded-lg border-2 text-xs font-bold transition-all
+                  ${workDays[i]
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-muted/50 text-muted-foreground border-border hover:border-primary/40"
+                  }
+                `}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {totalWorkingDays} dias úteis no período
+          </p>
+        </div>
+        
+        {/* Week selector buttons */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs">Semanas ({weekDefs.length})</Label>
+            <div className="flex gap-1">
+              {[2, 3, 4].map(n => (
+                <Button key={n} variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => autoSplit(n)}>
+                  {n} sem
+                </Button>
+              ))}
+              <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={addWeek}>
+                <Plus className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            {weekDefs.map((w, idx) => (
+              <button
+                key={w.week_number}
+                onClick={() => setPaintingWeek(paintingWeek === w.week_number ? null : w.week_number)}
+                className={`
+                  flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-xs font-semibold transition-all
+                  ${paintingWeek === w.week_number
+                    ? "ring-2 ring-primary shadow-md border-primary bg-primary/10"
+                    : `${WEEK_COLORS[idx % WEEK_COLORS.length]}`
+                  }
+                `}
+              >
+                <div className={`w-3 h-3 rounded-full ${WEEK_DOT_COLORS[idx % WEEK_DOT_COLORS.length]}`} />
+                Sem {w.week_number}
+                <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+                  {w.days.length} dias
+                </Badge>
+                {weekDefs.length > 1 && (
+                  <X
+                    className="h-3 w-3 text-muted-foreground hover:text-destructive cursor-pointer"
+                    onClick={(e) => { e.stopPropagation(); removeWeek(w.week_number); }}
+                  />
+                )}
+              </button>
+            ))}
+          </div>
+          
+          {paintingWeek !== null && (
+            <p className="text-[11px] text-primary font-medium">
+              ✎ Clique ou arraste nos dias do calendário para atribuir à Semana {paintingWeek}
+            </p>
+          )}
+        </div>
+        
+        {/* Calendar Grid */}
+        <div className="space-y-1">
+          <div className="grid grid-cols-7 gap-1">
+            {DAY_LABELS.map(l => (
+              <div key={l} className="text-center text-[10px] font-semibold text-muted-foreground py-1">{l}</div>
+            ))}
+          </div>
+          
+          {/* Pad start */}
+          <div className="grid grid-cols-7 gap-1">
+            {Array.from({ length: getDay(startDate) }).map((_, i) => (
+              <div key={`pad-${i}`} className="w-full aspect-square" />
+            ))}
+            
+            {allDays.map(day => {
+              const dayStr = format(day, "yyyy-MM-dd");
+              const isWorking = workDays[getDay(day)];
+              const assignedWeek = dayWeekMap.get(dayStr);
+              const weekIdx = assignedWeek ? assignedWeek - 1 : -1;
+              
+              return (
+                <button
+                  key={dayStr}
+                  onMouseDown={() => isWorking && handleDayMouseDown(day)}
+                  onMouseEnter={() => isWorking && handleDayMouseEnter(day)}
+                  disabled={!isWorking}
+                  className={`
+                    w-full aspect-square rounded-md border text-[11px] font-medium transition-all select-none
+                    flex flex-col items-center justify-center gap-0.5
+                    ${!isWorking
+                      ? "bg-muted/30 text-muted-foreground/40 border-transparent cursor-not-allowed line-through"
+                      : assignedWeek
+                        ? `${WEEK_COLORS[weekIdx % WEEK_COLORS.length]} cursor-pointer hover:opacity-80`
+                        : "bg-card text-foreground border-border cursor-pointer hover:border-primary hover:bg-primary/5"
+                    }
+                  `}
+                >
+                  <span>{format(day, "d")}</span>
+                  {assignedWeek && (
+                    <span className="text-[8px] font-bold leading-none">S{assignedWeek}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        
+        {/* Summary & Confirm */}
+        <div className="flex items-center justify-between pt-2 border-t">
+          <div className="text-xs space-y-0.5">
+            <div className="text-muted-foreground">
+              {assignedDays}/{totalWorkingDays} dias atribuídos
+              {unassignedDays > 0 && (
+                <span className="text-destructive font-semibold ml-2">
+                  {unassignedDays} dia(s) sem semana
+                </span>
+              )}
+            </div>
+            <div className="flex gap-3">
+              {weekDefs.map((w, idx) => (
+                <span key={w.week_number} className="flex items-center gap-1">
+                  <div className={`w-2 h-2 rounded-full ${WEEK_DOT_COLORS[idx % WEEK_DOT_COLORS.length]}`} />
+                  Sem {w.week_number}: {w.days.length > 0
+                    ? `${format(w.days[0], "dd/MM")} – ${format(w.days[w.days.length - 1], "dd/MM")}`
+                    : "vazia"
+                  }
+                </span>
+              ))}
+            </div>
+          </div>
+          <Button
+            onClick={() => onConfirm(weekDefs)}
+            disabled={!isValid}
+            className="gap-1"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            Confirmar Semanas
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════
 // ██ MAIN COMPONENT
 // ══════════════════════════════════════════════════════════════
@@ -239,12 +568,11 @@ export function WeeklyPlanningFromPeriod() {
 
   const [periods, setPeriods] = useState<PeriodForWeekly[]>([]);
   const [selectedPeriodId, setSelectedPeriodId] = useState("");
-  const [workingDaysPerWeek, setWorkingDaysPerWeek] = useState(6);
   const [periodServices, setPeriodServices] = useState<ServiceForPeriod[]>([]);
   const [weekPlans, setWeekPlans] = useState<WeekPlan[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
-  const [configOpen, setConfigOpen] = useState(false);
+  const [showWeekConfig, setShowWeekConfig] = useState(false);
 
   // Service-first flow state
   const [selectedServiceKey, setSelectedServiceKey] = useState<string>("");
@@ -272,15 +600,10 @@ export function WeeklyPlanningFromPeriod() {
     const map = new Map<number, { status: HouseStatus; weekAssigned: number | null }>();
     const key = selectedServiceKey;
 
-    // Get all available houses for this service
     const availableHouses = houses
-      .filter(h => {
-        const progress = getHouseProgress(h, selectedService.macro_id, selectedService.scope_id);
-        return progress < 100;
-      })
+      .filter(h => getHouseProgress(h, selectedService.macro_id, selectedService.scope_id) < 100)
       .map(h => h.id);
 
-    // Build assignment map from weekPlans
     const assignmentMap = new Map<number, number>();
     for (const week of weekPlans) {
       const ws = week.services.find(s => svcKey(s) === key);
@@ -319,11 +642,7 @@ export function WeeklyPlanningFromPeriod() {
       sorted.forEach(id => assignedToQuadra.add(id));
     }
 
-    const unassigned = houses
-      .map(h => h.id)
-      .filter(id => !assignedToQuadra.has(id))
-      .sort((a, b) => a - b);
-
+    const unassigned = houses.map(h => h.id).filter(id => !assignedToQuadra.has(id)).sort((a, b) => a - b);
     if (unassigned.length > 0) {
       groups.push({ name: "Sem Quadra", houseIds: unassigned });
     }
@@ -358,18 +677,6 @@ export function WeeklyPlanningFromPeriod() {
   }, [projectId, companyId]);
 
   useEffect(() => {
-    if (!projectId) return;
-    (async () => {
-      const { data } = await supabase
-        .from("weekly_plan_config")
-        .select("working_days_per_week")
-        .eq("project_id", projectId)
-        .maybeSingle();
-      if (data) setWorkingDaysPerWeek(data.working_days_per_week);
-    })();
-  }, [projectId]);
-
-  useEffect(() => {
     if (!selectedPeriodId || !projectId) return;
     (async () => {
       const { data: svcs } = await supabase
@@ -392,13 +699,15 @@ export function WeeklyPlanningFromPeriod() {
             .from("weekly_plan_services")
             .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, planned_house_ids, planned_houses")
             .eq("weekly_plan_week_id", w.id);
-          weeksWithSvcs.push({ ...w, services: (ws || []) as WeekServicePlan[] });
+          weeksWithSvcs.push({ ...w, services: (ws || []) as WeekServicePlan[], working_days: [] });
         }
         setWeekPlans(weeksWithSvcs);
         setIsGenerated(true);
+        setShowWeekConfig(false);
       } else {
         setWeekPlans([]);
         setIsGenerated(false);
+        setShowWeekConfig(true);
       }
     })();
     setSelectedServiceKey("");
@@ -406,20 +715,12 @@ export function WeeklyPlanningFromPeriod() {
     setTargetWeek(null);
   }, [selectedPeriodId, projectId]);
 
-  // ── Generate Weeks ──────────────────────────────────────
-  const generateWeeks = useCallback(() => {
-    if (!selectedPeriod || periodServices.length === 0) return;
-    const start = parseISO(selectedPeriod.start_date);
-    const end = parseISO(selectedPeriod.end_date);
-    const totalDays = differenceInDays(end, start) + 1;
-    const numWeeks = Math.max(1, Math.ceil(totalDays / workingDaysPerWeek));
+  // ── Create weeks from calendar config ──────────────────
+  const handleWeekConfigConfirm = useCallback((weekDefs: WeekDefinition[]) => {
+    if (periodServices.length === 0) return;
 
-    const weeks: WeekPlan[] = [];
-    for (let i = 0; i < numWeeks; i++) {
-      const ws = addDays(start, i * workingDaysPerWeek);
-      const we = i === numWeeks - 1 ? end : addDays(ws, workingDaysPerWeek - 1);
-
-      // Empty services — user will assign manually
+    const weeks: WeekPlan[] = weekDefs.map(wd => {
+      const sortedDays = [...wd.days].sort((a, b) => a.getTime() - b.getTime());
       const services: WeekServicePlan[] = periodServices.map(svc => ({
         id: null,
         macro_id: svc.macro_id,
@@ -431,18 +732,22 @@ export function WeeklyPlanningFromPeriod() {
         planned_houses: 0,
       }));
 
-      weeks.push({
-        id: null, week_number: i + 1,
-        week_start: format(ws, "yyyy-MM-dd"),
-        week_end: format(we, "yyyy-MM-dd"),
-        status: "draft", services,
-      });
-    }
+      return {
+        id: null,
+        week_number: wd.week_number,
+        week_start: format(sortedDays[0], "yyyy-MM-dd"),
+        week_end: format(sortedDays[sortedDays.length - 1], "yyyy-MM-dd"),
+        status: "draft",
+        services,
+        working_days: sortedDays.map(d => format(d, "yyyy-MM-dd")),
+      };
+    });
 
     setWeekPlans(weeks);
     setIsGenerated(true);
-    toast.success(`${numWeeks} semana(s) criada(s). Selecione um serviço e comece a distribuir as casas.`);
-  }, [selectedPeriod, periodServices, workingDaysPerWeek, macros]);
+    setShowWeekConfig(false);
+    toast.success(`${weeks.length} semana(s) configurada(s). Distribua os serviços.`);
+  }, [periodServices, macros]);
 
   // ── Auto-distribute ─────────────────────────────────────
   const autoDistribute = useCallback(() => {
@@ -455,6 +760,9 @@ export function WeeklyPlanningFromPeriod() {
         services: w.services.map(s => ({ ...s, planned_house_ids: [] as number[], planned_houses: 0 })),
       }));
 
+      // Calculate proportional distribution based on working days
+      const totalWorkingDays = newWeeks.reduce((s, w) => s + w.working_days.length, 0);
+
       for (const svc of periodServices) {
         const key = `${svc.macro_id}:${svc.scope_id}`;
         const available = houses
@@ -463,12 +771,23 @@ export function WeeklyPlanningFromPeriod() {
           .sort((a, b) => a - b)
           .slice(0, svc.target_houses);
 
-        for (let i = 0; i < available.length; i++) {
-          const weekIdx = i % numWeeks;
-          const ws = newWeeks[weekIdx].services.find(s => svcKey(s) === key);
+        if (available.length === 0) continue;
+
+        // Distribute proportionally to working days
+        let distributed = 0;
+        for (let wi = 0; wi < numWeeks; wi++) {
+          const weekDays = newWeeks[wi].working_days.length;
+          const proportion = totalWorkingDays > 0 ? weekDays / totalWorkingDays : 1 / numWeeks;
+          const count = wi === numWeeks - 1
+            ? available.length - distributed
+            : Math.round(available.length * proportion);
+
+          const ws = newWeeks[wi].services.find(s => svcKey(s) === key);
           if (ws) {
-            ws.planned_house_ids.push(available[i]);
-            ws.planned_houses = ws.planned_house_ids.length;
+            const slice = available.slice(distributed, distributed + count);
+            ws.planned_house_ids = slice;
+            ws.planned_houses = slice.length;
+            distributed += count;
           }
         }
       }
@@ -476,18 +795,15 @@ export function WeeklyPlanningFromPeriod() {
       return newWeeks;
     });
 
-    toast.success("Casas distribuídas automaticamente");
+    toast.success("Casas distribuídas proporcionalmente aos dias úteis");
   }, [weekPlans.length, periodServices, houses]);
 
   // ── House click handler ─────────────────────────────────
   const toggleHouseSelection = useCallback((houseId: number) => {
     setSelectedHouseIds(prev => {
       const next = new Set(prev);
-      if (next.has(houseId)) {
-        next.delete(houseId);
-      } else {
-        next.add(houseId);
-      }
+      if (next.has(houseId)) next.delete(houseId);
+      else next.add(houseId);
       return next;
     });
   }, []);
@@ -497,7 +813,6 @@ export function WeeklyPlanningFromPeriod() {
     if (!selectedServiceKey || selectedHouseIds.size === 0) return;
 
     setWeekPlans(prev => prev.map(week => {
-      // Remove from other weeks first
       const updated = {
         ...week,
         services: week.services.map(svc => {
@@ -507,7 +822,6 @@ export function WeeklyPlanningFromPeriod() {
         }),
       };
 
-      // Add to target week
       if (week.week_number === weekNumber) {
         return {
           ...updated,
@@ -590,13 +904,6 @@ export function WeeklyPlanningFromPeriod() {
     }
   };
 
-  const saveConfig = async () => {
-    if (!projectId || !companyId) return;
-    await supabase.from("weekly_plan_config").upsert({ project_id: projectId, company_id: companyId, working_days_per_week: workingDaysPerWeek }, { onConflict: "project_id" });
-    toast.success("Configuração salva");
-    setConfigOpen(false);
-  };
-
   // ── Render ──────────────────────────────────────────────
   if (!projectId) {
     return (
@@ -620,36 +927,10 @@ export function WeeklyPlanningFromPeriod() {
             Planejamento Semanal
           </h2>
           <p className="text-sm text-muted-foreground">
-            Selecione o serviço → clique nas casas → aloque na semana
+            Configure as semanas → selecione o serviço → distribua as casas
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setConfigOpen(!configOpen)}>
-          <Settings2 className="h-4 w-4 mr-1" />
-          {workingDaysPerWeek} dias/sem
-        </Button>
       </div>
-
-      {/* Config */}
-      {configOpen && (
-        <Card className="border-primary/30">
-          <CardContent className="pt-4">
-            <div className="flex items-end gap-4">
-              <div className="space-y-1">
-                <Label>Dias úteis por semana</Label>
-                <Select value={String(workingDaysPerWeek)} onValueChange={v => setWorkingDaysPerWeek(Number(v))}>
-                  <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5">5 dias</SelectItem>
-                    <SelectItem value="6">6 dias</SelectItem>
-                    <SelectItem value="7">7 dias</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button size="sm" onClick={saveConfig}>Salvar</Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Period selector */}
       <Card>
@@ -671,21 +952,15 @@ export function WeeklyPlanningFromPeriod() {
             </div>
 
             <div className="flex gap-2 mt-5">
-              {selectedPeriod && !isGenerated && periodServices.length > 0 && (
-                <Button onClick={generateWeeks}>
-                  <Zap className="h-4 w-4 mr-1" />
-                  Criar Semanas
-                </Button>
-              )}
               {isGenerated && (
                 <>
                   <Button variant="outline" size="sm" onClick={autoDistribute}>
                     <Zap className="h-4 w-4 mr-1" />
                     Auto-distribuir
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={generateWeeks}>
+                  <Button variant="outline" size="sm" onClick={() => { setShowWeekConfig(true); setIsGenerated(false); setWeekPlans([]); }}>
                     <RefreshCcw className="h-4 w-4 mr-1" />
-                    Resetar
+                    Reconfigurar Semanas
                   </Button>
                 </>
               )}
@@ -698,7 +973,7 @@ export function WeeklyPlanningFromPeriod() {
               <span className="text-border">|</span>
               <span>{differenceInDays(parseISO(selectedPeriod.end_date), parseISO(selectedPeriod.start_date)) + 1} dias</span>
               <span className="text-border">|</span>
-              <span>{periodServices.length} serviço(s)</span>
+              <span>{periodServices.filter(s => s.target_houses > 0).length} serviço(s) com atividades</span>
               <span className="text-border">|</span>
               <Badge variant={selectedPeriod.weekly_plan_locked ? "secondary" : "default"} className="gap-1">
                 {selectedPeriod.weekly_plan_locked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
@@ -709,10 +984,19 @@ export function WeeklyPlanningFromPeriod() {
         </CardContent>
       </Card>
 
+      {/* ── WEEK CALENDAR CONFIGURATOR ────────────────── */}
+      {showWeekConfig && selectedPeriod && periodServices.length > 0 && (
+        <WeekCalendarConfigurator
+          startDate={parseISO(selectedPeriod.start_date)}
+          endDate={parseISO(selectedPeriod.end_date)}
+          onConfirm={handleWeekConfigConfirm}
+        />
+      )}
+
       {/* ── SERVICE-FIRST FLOW ─────────────────────────── */}
       {isGenerated && (
         <div className="space-y-4">
-          {/* Step 1: Select Service — only show services with target_houses > 0 */}
+          {/* Step 1: Select Service */}
           <Card>
             <CardHeader className="py-3 px-4">
               <CardTitle className="text-sm flex items-center gap-2">
