@@ -219,51 +219,27 @@ export function PeriodCard({
         )}
 
         {/* Botões de Ação de Status */}
-        {canEdit && onStatusChange && (
+        {canEdit && onStatusChange && nextAction && (
           <div className="flex gap-2 mt-2">
-            {/* Botão Reverter para Rascunho */}
-            {(period.status === "approved" || period.status === "released_to_weekly") && (
-              <Button
-                className="flex-1"
-                variant="outline"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onStatusChange(period.id, "draft");
-                }}
-                disabled={isChangingStatus || isGeneratingSupplies}
-              >
-                {isChangingStatus ? (
+            <Button
+              className="flex-1"
+              variant={period.status === "released_to_weekly" ? "secondary" : "default"}
+              size="sm"
+              onClick={handleActionClick}
+              disabled={isChangingStatus || isGeneratingSupplies}
+            >
+              {isChangingStatus ? (
+                <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Undo2 className="h-4 w-4 mr-2" />
-                )}
-                Reverter Rascunho
-              </Button>
-            )}
-
-            {/* Botão de Avançar Status */}
-            {nextAction && (
-              <Button
-                className="flex-1"
-                variant={period.status === "released_to_weekly" ? "secondary" : "default"}
-                size="sm"
-                onClick={handleActionClick}
-                disabled={isChangingStatus || isGeneratingSupplies}
-              >
-                {isChangingStatus ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Processando...
-                  </>
-                ) : (
-                  <>
-                    <nextAction.icon className="h-4 w-4 mr-2" />
-                    {nextAction.label}
-                  </>
-                )}
-              </Button>
-            )}
+                  Processando...
+                </>
+              ) : (
+                <>
+                  <nextAction.icon className="h-4 w-4 mr-2" />
+                  {nextAction.label}
+                </>
+              )}
+            </Button>
           </div>
         )}
 
