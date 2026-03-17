@@ -1034,12 +1034,24 @@ export function WeeklyPlanningFromPeriod() {
               <Select value={selectedPeriodId} onValueChange={setSelectedPeriodId}>
                 <SelectTrigger><SelectValue placeholder="Escolha uma medição aprovada..." /></SelectTrigger>
                 <SelectContent>
-                  {periods.map(p => (
-                    <SelectItem key={p.id} value={p.id}>
-                      Medição {p.period_number}{p.name ? ` – ${p.name}` : ""} ({format(parseISO(p.start_date), "dd/MM", { locale: ptBR })} – {format(parseISO(p.end_date), "dd/MM", { locale: ptBR })})
-                      {p.weekly_plan_generated ? " ✓" : ""}
-                    </SelectItem>
-                  ))}
+                  {periods.map(p => {
+                    const statusLabel = p.status === "approved" ? "Aprovada" 
+                      : p.status === "released_to_weekly" ? "Liberada" 
+                      : p.status === "closed" ? "Fechada" 
+                      : "Rascunho";
+                    const statusIcon = p.weekly_plan_generated ? " ✓" : "";
+                    return (
+                      <SelectItem key={p.id} value={p.id}>
+                        <span className="flex items-center gap-2">
+                          Medição {p.period_number}{p.name ? ` – ${p.name}` : ""} ({format(parseISO(p.start_date), "dd/MM", { locale: ptBR })} – {format(parseISO(p.end_date), "dd/MM", { locale: ptBR })})
+                          {statusIcon}
+                          <Badge variant="outline" className="text-[10px] px-1.5 h-4 ml-1">
+                            {statusLabel}
+                          </Badge>
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
