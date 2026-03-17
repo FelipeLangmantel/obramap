@@ -728,19 +728,21 @@ export function WeeklyPlanningFromPeriod() {
   }, [weekPlans]);
 
   // ── Data Loading ────────────────────────────────────────
-  useEffect(() => {
+  const loadPeriods = useCallback(async () => {
     if (!projectId || !companyId) return;
-    (async () => {
-      const { data } = await supabase
-        .from("planning_periods")
-        .select("id, period_number, start_date, end_date, status, name, weekly_plan_generated, weekly_plan_locked")
-        .eq("project_id", projectId)
-        .eq("company_id", companyId)
-        .in("status", ["approved", "released_to_weekly", "closed"])
-        .order("period_number");
-      if (data) setPeriods(data as PeriodForWeekly[]);
-    })();
+    const { data } = await supabase
+      .from("planning_periods")
+      .select("id, period_number, start_date, end_date, status, name, weekly_plan_generated, weekly_plan_locked")
+      .eq("project_id", projectId)
+      .eq("company_id", companyId)
+      .in("status", ["draft", "approved", "released_to_weekly", "closed"])
+      .order("period_number");
+    if (data) setPeriods(data as PeriodForWeekly[]);
   }, [projectId, companyId]);
+
+  useEffect(() => {
+    loadPeriods();
+  }, [loadPeriods]);
 
   useEffect(() => {
     if (!selectedPeriodId || !projectId) return;
