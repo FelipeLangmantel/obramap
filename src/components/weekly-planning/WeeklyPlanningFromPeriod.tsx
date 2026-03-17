@@ -1038,6 +1038,9 @@ export function WeeklyPlanningFromPeriod() {
     } finally {
       setIsReverting(false);
     }
+  };
+
+  // ── Render ──────────────────────────────────────────────
   if (!projectId) {
     return (
       <Card className="p-12 text-center">
