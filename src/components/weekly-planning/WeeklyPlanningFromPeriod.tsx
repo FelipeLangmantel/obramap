@@ -773,10 +773,22 @@ export function WeeklyPlanningFromPeriod() {
           </Card>
 
           {/* Step 2: Visual House Grid */}
-          {selectedService && (
+          {selectedService && (() => {
+            const sKey = `${selectedService.macro_id}:${selectedService.scope_id}`;
+            const totalAvailable = houses.filter(h => getHouseProgress(h, selectedService.macro_id, selectedService.scope_id) < 100).length;
+            const totalTarget = Math.min(selectedService.target_houses, totalAvailable);
+            const totalAllocated = weekPlans.reduce((sum, w) => {
+              const ws = w.services.find(s => svcKey(s) === sKey);
+              return sum + (ws?.planned_house_ids.length || 0);
+            }, 0);
+            const remaining = Math.max(0, totalTarget - totalAllocated);
+            const doneCount = houses.filter(h => getHouseProgress(h, selectedService.macro_id, selectedService.scope_id) >= 100).length;
+            const progressPct = totalTarget > 0 ? Math.round((totalAllocated / totalTarget) * 100) : 0;
+
+            return (
             <Card>
               <CardHeader className="py-3 px-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <CardTitle className="text-sm flex items-center gap-2">
                     <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">2</span>
                     Selecione as Casas
@@ -801,6 +813,34 @@ export function WeeklyPlanningFromPeriod() {
                     </div>
                   )}
                 </div>
+
+                {/* Progress summary */}
+                <div className="mt-3 p-3 rounded-lg bg-muted/50 border space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-4">
+                      <span className="text-muted-foreground">Meta: <strong className="text-foreground">{totalTarget} casas</strong></span>
+                      <span className="text-muted-foreground">Alocadas: <strong className="text-primary">{totalAllocated}</strong></span>
+                      {remaining > 0 ? (
+                        <span className="text-destructive font-semibold">Faltam: {remaining}</span>
+                      ) : (
+                        <span className="text-primary font-semibold flex items-center gap-1">
+                          <CheckCircle2 className="h-3 w-3" /> Completo
+                        </span>
+                      )}
+                      {doneCount > 0 && (
+                        <span className="text-muted-foreground">Concluídas: {doneCount}</span>
+                      )}
+                    </div>
+                    <span className="font-bold text-foreground">{progressPct}%</span>
+                  </div>
+                  <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${remaining === 0 ? "bg-primary" : "bg-primary/70"}`}
+                      style={{ width: `${progressPct}%` }}
+                    />
+                  </div>
+                </div>
+
                 {/* Legend */}
                 <div className="flex flex-wrap gap-3 mt-2 text-[11px]">
                   <span className="flex items-center gap-1">
@@ -851,7 +891,8 @@ export function WeeklyPlanningFromPeriod() {
                 </ScrollArea>
               </CardContent>
             </Card>
-          )}
+            );
+          })()}
 
           {/* Step 3: Assign to Week */}
           {selectedService && selectedHouseIds.size > 0 && (
