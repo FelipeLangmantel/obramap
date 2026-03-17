@@ -203,6 +203,11 @@ export function ContractorHouseMapSelector({
   };
   const handleMouseUp = () => setIsDragging(false);
   const zoom = (delta: number) => setScale(s => Math.max(0.2, Math.min(3, s + delta)));
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    zoom(delta);
+  };
 
   const getHouseColor = (houseId: number) => selected.has(houseId) ? "hsl(var(--primary))" : "hsl(var(--muted))";
   const mw = mapLayout?.mapWidth || MAP_WIDTH;
@@ -238,7 +243,8 @@ export function ContractorHouseMapSelector({
           {/* Map */}
           <div className="flex-1 relative bg-muted/30 overflow-hidden" ref={containerRef}
             onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+            onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
+            onWheel={handleWheel}>
             <div className="absolute top-2 right-2 z-10 flex flex-col gap-1">
               <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => zoom(0.2)}><ZoomIn className="h-3.5 w-3.5" /></Button>
               <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => zoom(-0.2)}><ZoomOut className="h-3.5 w-3.5" /></Button>
