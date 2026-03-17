@@ -712,17 +712,23 @@ export function WeeklyPlanningFromPeriod() {
       {/* ── SERVICE-FIRST FLOW ─────────────────────────── */}
       {isGenerated && (
         <div className="space-y-4">
-          {/* Step 1: Select Service */}
+          {/* Step 1: Select Service — only show services with target_houses > 0 */}
           <Card>
             <CardHeader className="py-3 px-4">
               <CardTitle className="text-sm flex items-center gap-2">
                 <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold">1</span>
                 Selecione o Serviço
+                <span className="text-xs font-normal text-muted-foreground ml-1">
+                  ({periodServices.filter(s => s.target_houses > 0).length} com atividades)
+                </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0 px-4 pb-4">
               <div className="flex flex-wrap gap-2">
-                {periodServices.map(svc => {
+                {periodServices.filter(svc => {
+                  const available = houses.filter(h => getHouseProgress(h, svc.macro_id, svc.scope_id) < 100).length;
+                  return svc.target_houses > 0 && available > 0;
+                }).map(svc => {
                   const key = `${svc.macro_id}:${svc.scope_id}`;
                   const color = getMacroColor(svc.macro_id, macros);
                   const isActive = selectedServiceKey === key;
