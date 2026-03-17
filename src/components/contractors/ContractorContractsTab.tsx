@@ -8,11 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, FileText, ChevronRight, Trash2 } from "lucide-react";
+import { Plus, FileText, ChevronRight, MapPin } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "@/hooks/use-toast";
+import { ContractorHouseMapSelector } from "./ContractorHouseMapSelector";
 import type { Contractor, ContractorContract, ContractorContractService } from "@/hooks/useContractors";
 
 interface Props {
@@ -48,7 +48,14 @@ export function ContractorContractsTab({
   const [negotiatedValues, setNegotiatedValues] = useState<Record<string, number>>({});
   const [selectedHouseIds, setSelectedHouseIds] = useState<Record<string, number[]>>({});
 
-  // Load budget services (project_contract_services)
+  // Map selector state
+  const [mapSelectorOpen, setMapSelectorOpen] = useState(false);
+  const [mapSelectorServiceKey, setMapSelectorServiceKey] = useState("");
+
+  // All contractor service assignments for this project (for cross-checking)
+  const [allAssignedHouses, setAllAssignedHouses] = useState<Record<string, Set<number>>>({});
+
+  // Load budget services (project_contract_services) - use max_cost_value
   useEffect(() => {
     if (!currentProject?.id || !company?.id) return;
     supabase
@@ -59,6 +66,25 @@ export function ContractorContractsTab({
       .order("macro_order, scope_order")
       .then(({ data }) => { if (data) setBudgetServices(data); });
   }, [currentProject?.id, company?.id]);
+
+  // Load all assigned houses across all contracts for this project
+  useEffect(() => {
+    if (!currentProject?.id || !company?.id) return;
+    supabase
+      .from("contractor_contract_services")
+      .select("macro_id, scope_id, house_ids")
+      .eq("project_id", currentProject.id)
+      .eq("company_id", company.id)
+      .then(({ data }) => {
+        const map: Record<string, Set<number>> = {};
+        (data || []).forEach(s => {
+          const key = `${s.macro_id}::${s.scope_id}`;
+          if (!map[key]) map[key] = new Set();
+          (s.house_ids || []).forEach((id: number) => map[key].add(id));
+        });
+        setAllAssignedHouses(map);
+      });
+  }, [currentProject?.id, company?.id, assignOpen]);
 
   const handleCreateContract = async () => {
     if (!selectedContractorId) return;
@@ -77,13 +103,32 @@ export function ContractorContractsTab({
     setAssignContractId(contractId);
     const services = await fetchContractServices(contractId);
     setContractServices(services);
+    setSelectedServiceIds(new Set());
+    setNegotiatedValues({});
+    setSelectedHouseIds({});
     setAssignOpen(true);
   };
 
-  const toggleService = (svcId: string) => {
+  const toggleService = (svcId: string, svc: any) => {
     const next = new Set(selectedServiceIds);
-    if (next.has(svcId)) next.delete(svcId); else next.add(svcId);
+    if (next.has(svcId)) {
+      next.delete(svcId);
+    } else {
+      next.add(svcId);
+      if (!negotiatedValues[svcId]) {
+        setNegotiatedValues(prev => ({ ...prev, [svcId]: svc.max_cost_value || 0 }));
+      }
+    }
     setSelectedServiceIds(next);
+  };
+
+  const openMapForService = (serviceKey: string) => {
+    setMapSelectorServiceKey(serviceKey);
+    setMapSelectorOpen(true);
+  };
+
+  const handleMapConfirm = (houseIds: number[]) => {
+    setSelectedHouseIds(prev => ({ ...prev, [mapSelectorServiceKey]: houseIds }));
   };
 
   const handleAddServices = async () => {
@@ -93,13 +138,13 @@ export function ContractorContractsTab({
       const svc = budgetServices.find(s => `${s.macro_id}::${s.scope_id}` === svcId);
       if (!svc) continue;
       const houseIds = selectedHouseIds[svcId] || [];
-      const negotiated = negotiatedValues[svcId] ?? svc.unit_cost;
+      const negotiated = negotiatedValues[svcId] ?? svc.max_cost_value;
       await addContractService(assignContractId, {
         macro_id: svc.macro_id,
         macro_name: svc.macro_name,
         scope_id: svc.scope_id,
         scope_name: svc.scope_name,
-        budget_unit_value: svc.unit_cost,
+        budget_unit_value: svc.max_cost_value || 0,
         negotiated_unit_value: negotiated,
         house_ids: houseIds,
         total_houses: houseIds.length || svc.total_houses,
@@ -110,11 +155,15 @@ export function ContractorContractsTab({
     setSelectedServiceIds(new Set());
     setNegotiatedValues({});
     setSelectedHouseIds({});
+    if (assignContractId) await recalcContractTotal(assignContractId);
   };
 
   const availableContractors = contractors.filter(
     c => c.status === "active" && !contracts.some(ct => ct.contractor_id === c.id)
   );
+
+  // Get service info for map selector
+  const mapSvc = budgetServices.find(s => `${s.macro_id}::${s.scope_id}` === mapSelectorServiceKey);
 
   return (
     <div className="space-y-4">
@@ -203,9 +252,9 @@ export function ContractorContractsTab({
 
       {/* Assign Services Dialog */}
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Atribuir Serviços ao Empreiteiro</DialogTitle></DialogHeader>
-          <p className="text-xs text-muted-foreground">Selecione os serviços do orçamento executivo e defina o valor negociado.</p>
+          <p className="text-xs text-muted-foreground">Selecione os serviços do orçamento executivo, defina o valor negociado e escolha as casas no mapa.</p>
           <div className="rounded-md border overflow-auto max-h-[50vh]">
             <Table>
               <TableHeader>
@@ -215,7 +264,7 @@ export function ContractorContractsTab({
                   <TableHead>Serviço</TableHead>
                   <TableHead className="text-right">Orçamento</TableHead>
                   <TableHead className="text-right">Negociado</TableHead>
-                  <TableHead className="text-right">Casas</TableHead>
+                  <TableHead className="text-center">Casas</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -223,41 +272,71 @@ export function ContractorContractsTab({
                   const key = `${svc.macro_id}::${svc.scope_id}`;
                   const alreadyAssigned = contractServices.some(cs => cs.macro_id === svc.macro_id && cs.scope_id === svc.scope_id);
                   const isSelected = selectedServiceIds.has(key);
+                  const houseCount = selectedHouseIds[key]?.length || 0;
                   return (
                     <TableRow key={key} className={alreadyAssigned ? "opacity-40" : ""}>
                       <TableCell>
                         <Checkbox
                           checked={isSelected}
                           disabled={alreadyAssigned}
-                          onCheckedChange={() => {
-                            toggleService(key);
-                            if (!negotiatedValues[key]) {
-                              setNegotiatedValues(prev => ({ ...prev, [key]: svc.unit_cost }));
-                            }
-                          }}
+                          onCheckedChange={() => toggleService(key, svc)}
                         />
                       </TableCell>
                       <TableCell className="text-xs">{svc.macro_name}</TableCell>
                       <TableCell className="text-xs">{svc.scope_name}</TableCell>
-                      <TableCell className="text-right text-xs font-mono">{fmt(svc.unit_cost)}</TableCell>
+                      <TableCell className="text-right text-xs font-mono">{fmt(svc.max_cost_value)}</TableCell>
                       <TableCell className="text-right">
                         {isSelected && (
                           <Input
                             type="number"
                             step="0.01"
-                            value={negotiatedValues[key] ?? svc.unit_cost}
+                            value={negotiatedValues[key] ?? svc.max_cost_value}
                             onChange={e => setNegotiatedValues(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))}
                             className="h-7 w-24 text-xs text-right ml-auto"
                           />
                         )}
                       </TableCell>
-                      <TableCell className="text-right text-xs font-mono">{svc.total_houses}</TableCell>
+                      <TableCell className="text-center">
+                        {isSelected ? (
+                          <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1"
+                            onClick={() => openMapForService(key)}>
+                            <MapPin className="h-3 w-3" />
+                            {houseCount > 0 ? (
+                              <Badge variant="default" className="h-4 px-1 text-[10px]">{houseCount}</Badge>
+                            ) : "Selecionar"}
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                     </TableRow>
                   );
                 })}
               </TableBody>
             </Table>
           </div>
+
+          {/* Summary of selected houses */}
+          {Array.from(selectedServiceIds).some(k => (selectedHouseIds[k]?.length || 0) > 0) && (
+            <div className="bg-muted/50 rounded-md p-3 space-y-1">
+              <p className="text-xs font-semibold">Resumo de Casas Selecionadas:</p>
+              {Array.from(selectedServiceIds).map(k => {
+                const svc = budgetServices.find(s => `${s.macro_id}::${s.scope_id}` === k);
+                const ids = selectedHouseIds[k] || [];
+                if (!svc || ids.length === 0) return null;
+                const negVal = negotiatedValues[k] ?? svc.max_cost_value;
+                return (
+                  <div key={k} className="flex items-center justify-between text-xs">
+                    <span>{svc.scope_name}</span>
+                    <span className="font-mono">
+                      {ids.length} casas × {fmt(negVal)} = <strong>{fmt(ids.length * negVal)}</strong>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignOpen(false)}>Cancelar</Button>
             <Button onClick={handleAddServices} disabled={saving || selectedServiceIds.size === 0}>
@@ -266,6 +345,21 @@ export function ContractorContractsTab({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Fullscreen Map House Selector */}
+      {mapSvc && (
+        <ContractorHouseMapSelector
+          open={mapSelectorOpen}
+          onOpenChange={setMapSelectorOpen}
+          macroId={mapSvc.macro_id}
+          scopeId={mapSvc.scope_id}
+          macroName={mapSvc.macro_name}
+          scopeName={mapSvc.scope_name}
+          assignedHouseIds={allAssignedHouses[mapSelectorServiceKey] || new Set()}
+          selectedHouseIds={selectedHouseIds[mapSelectorServiceKey] || []}
+          onConfirm={handleMapConfirm}
+        />
+      )}
     </div>
   );
 }
