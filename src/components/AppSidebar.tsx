@@ -67,7 +67,8 @@ import { NewProjectDialog } from "@/components/NewProjectDialog";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
-import obraMapLogo from "@/assets/obramap-logo-new.png";
+import obraMapLogoDark from "@/assets/obramap-logo-new.png";
+import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 
 type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity";
 
