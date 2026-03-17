@@ -2080,6 +2080,8 @@ export type Database = {
           supplies_generated_at: string | null
           target_revenue_total: number | null
           updated_at: string
+          weekly_plan_generated: boolean | null
+          weekly_plan_locked: boolean | null
         }
         Insert: {
           closed_at?: string | null
@@ -2114,6 +2116,8 @@ export type Database = {
           supplies_generated_at?: string | null
           target_revenue_total?: number | null
           updated_at?: string
+          weekly_plan_generated?: boolean | null
+          weekly_plan_locked?: boolean | null
         }
         Update: {
           closed_at?: string | null
@@ -2148,6 +2152,8 @@ export type Database = {
           supplies_generated_at?: string | null
           target_revenue_total?: number | null
           updated_at?: string
+          weekly_plan_generated?: boolean | null
+          weekly_plan_locked?: boolean | null
         }
         Relationships: [
           {
@@ -5405,6 +5411,192 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      weekly_plan_config: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          project_id: string
+          updated_at: string
+          working_days_per_week: number
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          project_id: string
+          updated_at?: string
+          working_days_per_week?: number
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          project_id?: string
+          updated_at?: string
+          working_days_per_week?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_plan_config_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_plan_config_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      weekly_plan_services: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          macro_color: string
+          macro_id: string
+          macro_name: string
+          notes: string | null
+          planned_house_ids: number[]
+          planned_houses: number
+          planning_period_id: string
+          project_id: string
+          scope_id: string
+          scope_name: string
+          updated_at: string
+          weekly_plan_week_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          macro_color?: string
+          macro_id: string
+          macro_name: string
+          notes?: string | null
+          planned_house_ids?: number[]
+          planned_houses?: number
+          planning_period_id: string
+          project_id: string
+          scope_id: string
+          scope_name: string
+          updated_at?: string
+          weekly_plan_week_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          macro_color?: string
+          macro_id?: string
+          macro_name?: string
+          notes?: string | null
+          planned_house_ids?: number[]
+          planned_houses?: number
+          planning_period_id?: string
+          project_id?: string
+          scope_id?: string
+          scope_name?: string
+          updated_at?: string
+          weekly_plan_week_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_plan_services_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_plan_services_planning_period_id_fkey"
+            columns: ["planning_period_id"]
+            isOneToOne: false
+            referencedRelation: "planning_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_plan_services_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_plan_services_weekly_plan_week_id_fkey"
+            columns: ["weekly_plan_week_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_plan_weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      weekly_plan_weeks: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          planning_period_id: string
+          project_id: string
+          status: string
+          updated_at: string
+          week_end: string
+          week_number: number
+          week_start: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          planning_period_id: string
+          project_id: string
+          status?: string
+          updated_at?: string
+          week_end: string
+          week_number: number
+          week_start: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          planning_period_id?: string
+          project_id?: string
+          status?: string
+          updated_at?: string
+          week_end?: string
+          week_number?: number
+          week_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_plan_weeks_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_plan_weeks_planning_period_id_fkey"
+            columns: ["planning_period_id"]
+            isOneToOne: false
+            referencedRelation: "planning_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_plan_weeks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       weekly_productions: {
         Row: {
