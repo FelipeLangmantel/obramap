@@ -176,57 +176,58 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     return "Usuário";
   };
 
-  // ✅ Menu items com permissionId alinhado aos IDs do painel de permissões (MENU_OPTIONS)
-  const mainMenuItems: { title: string; view: MenuViewType; icon: any; permissionId: string }[] = [
-    { title: "Painel Inicial", view: "home", icon: LayoutDashboard, permissionId: "painel_inicial" },
-    { title: "Mapa de Obras", view: "map", icon: Map, permissionId: "mapa" },
-    { title: "Mapa Interativo", view: "interactive-map", icon: Map, permissionId: "mapa_interativo" },
-    { title: "Mapa 3D", view: "3d-map", icon: Box, permissionId: "mapa_3d" },
-    { title: "Gráficos", view: "charts", icon: BarChart3, permissionId: "graficos" },
-    { title: "Produção Semanal", view: "production", icon: ClipboardList, permissionId: "producao" },
-    { title: "Planej. Semanal", view: "planning", icon: Target, permissionId: "planejamento_semanal" },
-    { title: "Planej. Período", view: "measurement-planning", icon: Calculator, permissionId: "planejamento_periodo" },
-    { title: "Planej. Estratégico", view: "long-term-planning", icon: Calendar, permissionId: "planejamento_estrategico" },
-    { title: "Contrato da Obra", view: "project-contract", icon: FileText, permissionId: "contrato" },
-    { title: "Medições PLE", view: "ple-measurements", icon: ClipboardList, permissionId: "ple_medicoes" },
-    { title: "Custos da Obra", view: "costs", icon: DollarSign, permissionId: "custos" },
-    { title: "Suprimentos", view: "supplies", icon: Package, permissionId: "suprimentos" },
-    { title: "Fluxo Financeiro", view: "financial-flow", icon: Wallet, permissionId: "financeiro" },
-    { title: "Painel Diretoria", view: "board-decisions", icon: Crown, permissionId: "diretoria" },
-    { title: "Entrega & Pós-Obra", view: "delivery", icon: ClipboardCheck, permissionId: "entrega" },
-    { title: "Planej. Inteligente", view: "smart-planning", icon: Target, permissionId: "smart_planning" },
-    { title: "Produtividade e Equipes", view: "productivity", icon: Users, permissionId: "productivity" },
+  // ✅ Menu items organizados por contexto de uso
+  type MenuItem = { title: string; view: MenuViewType; icon: any; permissionId: string };
+  
+  const menuGroups: { label: string; items: MenuItem[]; highlight?: boolean; badge?: string }[] = [
+    {
+      label: "Painel & Mapas",
+      items: [
+        { title: "Painel Inicial", view: "home", icon: LayoutDashboard, permissionId: "painel_inicial" },
+        { title: "Mapa de Obras", view: "map", icon: Map, permissionId: "mapa" },
+        { title: "Mapa Interativo", view: "interactive-map", icon: Map, permissionId: "mapa_interativo" },
+        { title: "Mapa 3D", view: "3d-map", icon: Box, permissionId: "mapa_3d" },
+        { title: "Gráficos", view: "charts", icon: BarChart3, permissionId: "graficos" },
+        { title: "Painel Diretoria", view: "board-decisions", icon: Crown, permissionId: "diretoria" },
+      ],
+    },
+    {
+      label: "Produção & Planejamento",
+      items: [
+        { title: "Produção Semanal", view: "production", icon: ClipboardList, permissionId: "producao" },
+        { title: "Produtividade e Equipes", view: "productivity", icon: Users, permissionId: "productivity" },
+        { title: "Planej. Semanal", view: "planning", icon: Target, permissionId: "planejamento_semanal" },
+        { title: "Planej. Período", view: "measurement-planning", icon: Calculator, permissionId: "planejamento_periodo" },
+        { title: "Planej. Estratégico", view: "long-term-planning", icon: Calendar, permissionId: "planejamento_estrategico" },
+        { title: "Planej. Inteligente", view: "smart-planning", icon: Target, permissionId: "smart_planning" },
+        { title: "Entrega & Pós-Obra", view: "delivery", icon: ClipboardCheck, permissionId: "entrega" },
+      ],
+    },
+    {
+      label: "Financeiro & Contratos",
+      items: [
+        { title: "Contrato da Obra", view: "project-contract", icon: FileText, permissionId: "contrato" },
+        { title: "Custos da Obra", view: "costs", icon: DollarSign, permissionId: "custos" },
+        { title: "Fluxo Financeiro", view: "financial-flow", icon: Wallet, permissionId: "financeiro" },
+        { title: "Suprimentos", view: "supplies", icon: Package, permissionId: "suprimentos" },
+      ],
+    },
+    {
+      label: "Medições PLE",
+      highlight: true,
+      badge: "Módulo à parte",
+      items: [
+        { title: "Medições PLE", view: "ple-measurements", icon: ClipboardList, permissionId: "ple_medicoes" },
+      ],
+    },
   ];
 
-  // Filter menu items based on user permissions, company module status, AND system governance
-  const visibleMenuItems = mainMenuItems.filter(item => {
-    // Primeiro verificar permissões do usuário
-    if (!canAccessMenu(item.permissionId)) return false;
-    
-    // ✅ GOVERNANÇA GLOBAL: Verificar se módulo está habilitado no sistema
-    // System Admin sempre vê todos os módulos
-    if (!isSystemAdmin && !isModuleEnabled(item.view)) {
-      return false;
-    }
-    
-    // Depois verificar status do módulo da empresa
-    const moduleStatus = getModuleStatus(item.view);
-    // Ocultar módulos desativados pela empresa
-    if (moduleStatus === "disabled") return false;
-    
-    return true;
-  });
-
   const handleViewChange = (view: MenuViewType) => {
-    // ✅ Se for uma view com rota dedicada, navegar para a página
     if (view in DEDICATED_ROUTE_MAP) {
       navigate(DEDICATED_ROUTE_MAP[view as RouteViewType]);
       return;
     }
-
     const moduleStatus = getModuleStatus(view);
-    
-    // Se módulo em desenvolvimento, mostrar modal
     if (moduleStatus === "development") {
       const moduleInfo = getModuleInfo(view);
       if (moduleInfo) {
@@ -234,14 +235,69 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         return;
       }
     }
-    
-    // ✅ Se estiver em rota diferente de /, navegar para / com state indicando a view destino
     if (location.pathname !== "/") {
       navigate("/", { state: { targetView: view } });
       return;
     }
-    
     onViewChange(view as ViewType);
+  };
+
+  // Filter menu items based on permissions, company modules, and system governance
+  const getVisibleItems = (items: MenuItem[]) => items.filter(item => {
+    if (!canAccessMenu(item.permissionId)) return false;
+    if (!isSystemAdmin && !isModuleEnabled(item.view)) return false;
+    const moduleStatus = getModuleStatus(item.view);
+    if (moduleStatus === "disabled") return false;
+    return true;
+  });
+
+  // Helper to render a menu item
+  const renderMenuItem = (item: MenuItem) => {
+    const moduleStatus = getModuleStatus(item.view);
+    const isDevelopment = moduleStatus === "development";
+    const isActive = currentActiveView === item.view;
+    const isBeta = isModuleBeta(item.view);
+    const isDisabledGlobally = !isModuleEnabled(item.view);
+
+    return (
+      <SidebarMenuItem key={item.title}>
+        <SidebarMenuButton
+          onClick={() => handleViewChange(item.view)}
+          isActive={isActive}
+          className={cn(
+            "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
+            isActive
+              ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+              : "text-foreground hover:bg-accent hover:text-accent-foreground font-medium",
+            isDevelopment && "opacity-70",
+            isDisabledGlobally && isSystemAdmin && "opacity-50"
+          )}
+        >
+          <item.icon className="h-5 w-5 shrink-0" />
+          <span className="text-sm">{item.title}</span>
+
+          <div className="ml-auto flex items-center gap-1">
+            {isSystemAdmin && isBeta && (
+              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-amber-500/10 text-amber-600 border-amber-500/30">
+                <Beaker className="h-2.5 w-2.5 mr-0.5" />
+                Beta
+              </Badge>
+            )}
+            {isSystemAdmin && isDisabledGlobally && (
+              <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
+                <EyeOff className="h-2.5 w-2.5 mr-0.5" />
+                Off
+              </Badge>
+            )}
+            {isDevelopment && !isSystemAdmin && (
+              <span className="text-xs bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded">
+                Em breve
+              </span>
+            )}
+          </div>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
   };
 
   return (
@@ -302,66 +358,34 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         </SidebarHeader>
 
         <SidebarContent className="px-3 overflow-y-auto bg-background">
-          {/* Menu Principal */}
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-primary text-xs font-bold uppercase tracking-wider px-3 mb-2 mt-3">
-              Menu Principal
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu className="space-y-1">
-                {visibleMenuItems.map((item) => {
-                  const moduleStatus = getModuleStatus(item.view);
-                  const isDevelopment = moduleStatus === "development";
-                  // ✅ CORREÇÃO: Usar currentActiveView derivado da rota
-                  const isActive = currentActiveView === item.view;
-                  // ✅ Status de governança global (apenas para System Admin)
-                  const isBeta = isModuleBeta(item.view);
-                  const isDisabledGlobally = !isModuleEnabled(item.view);
-                  
-                  return (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton
-                        onClick={() => handleViewChange(item.view)}
-                        isActive={isActive}
-                        className={cn(
-                          "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
-                          isActive 
-                            ? "bg-primary text-primary-foreground font-semibold shadow-sm" 
-                            : "text-foreground hover:bg-accent hover:text-accent-foreground font-medium",
-                          isDevelopment && "opacity-70",
-                          isDisabledGlobally && isSystemAdmin && "opacity-50"
-                        )}
-                      >
-                        <item.icon className="h-5 w-5 shrink-0" />
-                        <span className="text-sm">{item.title}</span>
-                        
-                        {/* Badges de status para System Admin */}
-                        <div className="ml-auto flex items-center gap-1">
-                          {isSystemAdmin && isBeta && (
-                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-amber-500/10 text-amber-600 border-amber-500/30">
-                              <Beaker className="h-2.5 w-2.5 mr-0.5" />
-                              Beta
-                            </Badge>
-                          )}
-                          {isSystemAdmin && isDisabledGlobally && (
-                            <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
-                              <EyeOff className="h-2.5 w-2.5 mr-0.5" />
-                              Off
-                            </Badge>
-                          )}
-                          {isDevelopment && !isSystemAdmin && (
-                            <span className="text-xs bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded">
-                              Em breve
-                            </span>
-                          )}
-                        </div>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          {/* Grouped menu sections */}
+          {menuGroups.map((group) => {
+            const visibleItems = getVisibleItems(group.items);
+            if (visibleItems.length === 0) return null;
+
+            return (
+              <SidebarGroup key={group.label} className={cn(
+                group.highlight && "mt-2 mb-2 mx-1 rounded-lg border-2 border-primary/30 bg-primary/5 p-2"
+              )}>
+                <SidebarGroupLabel className={cn(
+                  "text-xs font-bold uppercase tracking-wider px-3 mb-2 mt-3",
+                  group.highlight ? "text-primary" : "text-primary"
+                )}>
+                  <span>{group.label}</span>
+                  {group.badge && (
+                    <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0 h-4 border-primary/40 text-primary">
+                      {group.badge}
+                    </Badge>
+                  )}
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu className="space-y-1">
+                    {visibleItems.map(renderMenuItem)}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            );
+          })}
 
           {/* Gerenciamento - Filtrado por permissões */}
           <SidebarGroup className="mt-4">
