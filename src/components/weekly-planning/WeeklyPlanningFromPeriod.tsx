@@ -735,7 +735,7 @@ export function WeeklyPlanningFromPeriod() {
         .select("id, period_number, start_date, end_date, status, name, weekly_plan_generated, weekly_plan_locked")
         .eq("project_id", projectId)
         .eq("company_id", companyId)
-        .in("status", ["approved", "released_to_weekly", "executing", "closed"])
+        .in("status", ["draft", "approved", "released_to_weekly", "executing", "closed"])
         .order("period_number");
       if (data) setPeriods(data as PeriodForWeekly[]);
     })();
