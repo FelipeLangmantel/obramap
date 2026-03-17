@@ -215,9 +215,36 @@ export function useContractors() {
       toast({ title: "Erro ao adicionar serviço", description: error.message, variant: "destructive" });
       return null;
     }
-    // Recalculate contract total
     await recalcContractTotal(contractId);
     return result;
+  };
+
+  const updateContractService = async (serviceId: string, updates: Partial<ContractorContractService>) => {
+    const totalValue = (updates.negotiated_unit_value || 0) * ((updates.house_ids?.length || updates.total_houses) || 0);
+    const { error } = await supabase
+      .from("contractor_contract_services")
+      .update({ ...updates, total_value: totalValue, updated_at: new Date().toISOString() } as any)
+      .eq("id", serviceId);
+    if (error) {
+      toast({ title: "Erro ao atualizar serviço", description: error.message, variant: "destructive" });
+      return false;
+    }
+    toast({ title: "Serviço atualizado" });
+    return true;
+  };
+
+  const deleteContractService = async (serviceId: string, contractId: string) => {
+    const { error } = await supabase
+      .from("contractor_contract_services")
+      .delete()
+      .eq("id", serviceId);
+    if (error) {
+      toast({ title: "Erro ao remover serviço", description: error.message, variant: "destructive" });
+      return false;
+    }
+    toast({ title: "Serviço removido" });
+    await recalcContractTotal(contractId);
+    return true;
   };
 
   const recalcContractTotal = async (contractId: string) => {
