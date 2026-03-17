@@ -41,11 +41,9 @@ interface ServiceForPeriod {
   id: string;
   macro_id: string;
   macro_name: string;
-  macro_color: string;
   scope_id: string;
   scope_name: string;
   target_houses: number;
-  target_house_ids: number[];
 }
 
 interface WeekPlan {
