@@ -1,0 +1,407 @@
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { X, Search, ZoomIn, ZoomOut, RotateCcw, MapPin, Home, CheckCircle2, XCircle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useConstruction } from "@/contexts/ConstructionContext";
+import { Json } from "@/integrations/supabase/types";
+
+interface HousePosition {
+  id: number;
+  x: number;
+  y: number;
+}
+
+interface QuadraLayout {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  visible: boolean;
+}
+
+interface MapLayout {
+  imageUrl: string | null;
+  quadras: QuadraLayout[];
+  houses: HousePosition[];
+  mapWidth: number;
+  mapHeight: number;
+}
+
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  macroId: string;
+  scopeId: string;
+  macroName: string;
+  scopeName: string;
+  /** House IDs already assigned to any contractor for this service */
+  assignedHouseIds: Set<number>;
+  /** Currently selected house IDs in this session */
+  selectedHouseIds: number[];
+  onConfirm: (houseIds: number[]) => void;
+}
+
+const MAP_WIDTH = 2000;
+const MAP_HEIGHT = 1500;
+const HOUSE_RADIUS = 12;
+
+export function ContractorHouseMapSelector({
+  open, onOpenChange, macroId, scopeId, macroName, scopeName,
+  assignedHouseIds, selectedHouseIds: initialSelected, onConfirm,
+}: Props) {
+  const { currentProject } = useConstruction();
+  const houses = currentProject?.houses || [];
+  const quadras = currentProject?.quadras || [];
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [selected, setSelected] = useState<Set<number>>(new Set(initialSelected));
+  const [search, setSearch] = useState("");
+  const [mapLayout, setMapLayout] = useState<MapLayout | null>(null);
+  const [initialDbHouseIds, setInitialDbHouseIds] = useState<Set<number>>(new Set());
+  const [completedHouseIds, setCompletedHouseIds] = useState<Set<number>>(new Set());
+
+  // Reset selection when opening
+  useEffect(() => {
+    if (open) {
+      setSelected(new Set(initialSelected));
+      setSearch("");
+    }
+  }, [open, initialSelected]);
+
+  // Load map layout
+  useEffect(() => {
+    if (!open || !currentProject?.id) return;
+    (async () => {
+      const { data } = await supabase
+        .from("map_layouts")
+        .select("image_url, quadras, houses, map_width, map_height")
+        .eq("project_id", currentProject.id)
+        .maybeSingle();
+      if (data) {
+        setMapLayout({
+          imageUrl: data.image_url,
+          quadras: data.quadras as unknown as QuadraLayout[],
+          houses: data.houses as unknown as HousePosition[],
+          mapWidth: data.map_width,
+          mapHeight: data.map_height,
+        });
+      }
+    })();
+  }, [open, currentProject?.id]);
+
+  // Load initial database houses (is_initial_database) and completed houses
+  useEffect(() => {
+    if (!open || !currentProject?.id) return;
+    (async () => {
+      // Get banco inicial house IDs for this service
+      const { data: initialProds } = await supabase
+        .from("productions")
+        .select("house_ids")
+        .eq("project_id", currentProject.id)
+        .eq("macro_id", macroId)
+        .eq("scope_id", scopeId)
+        .eq("is_initial_database", true);
+      
+      const initialIds = new Set<number>();
+      (initialProds || []).forEach(p => {
+        (p.house_ids || []).forEach((id: number) => initialIds.add(id));
+      });
+      setInitialDbHouseIds(initialIds);
+
+      // Get houses with 100% progress for this service from house macros data
+      const completed = new Set<number>();
+      houses.forEach(h => {
+        const macro = h.macros?.find((m: any) => m.id === macroId);
+        if (!macro) return;
+        const scope = macro.scopes?.find((s: any) => s.id === scopeId);
+        if (scope && scope.progress >= 100) {
+          completed.add(h.house_number);
+        }
+      });
+      setCompletedHouseIds(completed);
+    })();
+  }, [open, currentProject?.id, macroId, scopeId, houses]);
+
+  // Fit map when layout loads
+  useEffect(() => {
+    if (!mapLayout || !containerRef.current) return;
+    const container = containerRef.current;
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    if (w > 0 && h > 0) {
+      const mw = mapLayout.mapWidth || MAP_WIDTH;
+      const mh = mapLayout.mapHeight || MAP_HEIGHT;
+      const s = Math.min(w / mw, h / mh, 1) * 0.9;
+      setScale(s);
+      setPosition({ x: (w - mw * s) / 2, y: (h - mh * s) / 2 });
+    }
+  }, [mapLayout]);
+
+  // Available houses: not in banco inicial, not 100% completed, not assigned to other contractors
+  const availableHouses = useMemo(() => {
+    return houses.filter(h => {
+      const num = h.house_number;
+      if (initialDbHouseIds.has(num)) return false;
+      if (completedHouseIds.has(num)) return false;
+      if (assignedHouseIds.has(num) && !initialSelected.includes(num)) return false;
+      return true;
+    });
+  }, [houses, initialDbHouseIds, completedHouseIds, assignedHouseIds, initialSelected]);
+
+  // Filtered by search
+  const filteredHouses = useMemo(() => {
+    if (!search.trim()) return availableHouses;
+    const q = search.toLowerCase();
+    return availableHouses.filter(h => 
+      String(h.house_number).includes(q) ||
+      h.type?.toLowerCase().includes(q)
+    );
+  }, [availableHouses, search]);
+
+  // Group by quadra
+  const groupedByQuadra = useMemo(() => {
+    const groups: Record<string, typeof filteredHouses> = {};
+    filteredHouses.forEach(h => {
+      const q = quadras.find((q: any) => q.id === h.quadra_id);
+      const key = q?.name || "Sem Quadra";
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(h);
+    });
+    Object.values(groups).forEach(g => g.sort((a, b) => a.house_number - b.house_number));
+    return groups;
+  }, [filteredHouses, quadras]);
+
+  const housePositions = useMemo(() => {
+    if (!mapLayout?.houses) return new Map<number, HousePosition>();
+    const map = new Map<number, HousePosition>();
+    mapLayout.houses.forEach(h => map.set(h.id, h));
+    return map;
+  }, [mapLayout]);
+
+  const toggleHouse = (houseNumber: number) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(houseNumber)) next.delete(houseNumber); else next.add(houseNumber);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelected(new Set(filteredHouses.map(h => h.house_number)));
+  };
+
+  const clearAll = () => setSelected(new Set());
+
+  // Pan handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+  };
+
+  const handleMouseUp = () => setIsDragging(false);
+
+  const zoom = (delta: number) => {
+    setScale(s => Math.max(0.2, Math.min(3, s + delta)));
+  };
+
+  const getHouseColor = (houseNumber: number) => {
+    if (selected.has(houseNumber)) return "hsl(var(--primary))";
+    return "hsl(var(--muted))";
+  };
+
+  const mw = mapLayout?.mapWidth || MAP_WIDTH;
+  const mh = mapLayout?.mapHeight || MAP_HEIGHT;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[95vw] max-h-[95vh] w-[95vw] h-[90vh] p-0 flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b bg-card shrink-0">
+          <div>
+            <h2 className="font-semibold text-sm flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-primary" />
+              Selecionar Casas — {macroName} / {scopeName}
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Clique nas casas do mapa ou na lista lateral. Disponíveis: {availableHouses.length} | Selecionadas: {selected.size}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="gap-1">
+              <CheckCircle2 className="h-3 w-3 text-primary" />
+              {selected.size} selecionada(s)
+            </Badge>
+            <Button size="sm" onClick={() => { onConfirm(Array.from(selected)); onOpenChange(false); }}>
+              Confirmar
+            </Button>
+          </div>
+        </div>
+
+        {/* Main content */}
+        <div className="flex flex-1 min-h-0">
+          {/* Map area */}
+          <div className="flex-1 relative bg-muted/30 overflow-hidden" ref={containerRef}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+          >
+            {/* Zoom controls */}
+            <div className="absolute top-2 right-2 z-10 flex flex-col gap-1">
+              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => zoom(0.2)}>
+                <ZoomIn className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => zoom(-0.2)}>
+                <ZoomOut className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+
+            {/* Legend */}
+            <div className="absolute bottom-2 left-2 z-10 bg-card/90 rounded-md border p-2 text-[10px] space-y-1">
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-primary inline-block" />
+                Selecionada
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-muted inline-block border" />
+                Disponível
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-muted-foreground/20 inline-block border border-dashed" />
+                Indisponível
+              </div>
+            </div>
+
+            <div style={{ transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`, transformOrigin: "0 0", cursor: isDragging ? "grabbing" : "grab" }}>
+              <svg width={mw} height={mh} className="select-none">
+                {/* Background */}
+                {mapLayout?.imageUrl && (
+                  <image href={mapLayout.imageUrl} width={mw} height={mh} />
+                )}
+                <defs>
+                  <pattern id="contractor-grid" width="50" height="50" patternUnits="userSpaceOnUse">
+                    <path d="M 50 0 L 0 0 0 50" fill="none" stroke="hsl(var(--border))" strokeWidth="0.5" opacity="0.3"/>
+                  </pattern>
+                </defs>
+                {!mapLayout?.imageUrl && <rect width="100%" height="100%" fill="url(#contractor-grid)" />}
+
+                {/* Quadras */}
+                {(mapLayout?.quadras || []).filter(q => q.visible !== false).map(q => (
+                  <g key={q.id}>
+                    <rect x={q.x} y={q.y} width={q.width} height={q.height}
+                      fill="hsl(var(--card) / 0.3)" stroke="hsl(var(--border) / 0.5)" strokeWidth={1} rx="6" />
+                    <text x={q.x + 10} y={q.y + 16} fill="hsl(var(--foreground))" fontSize="12" fontWeight="600" style={{ pointerEvents: "none" }}>
+                      {q.name}
+                    </text>
+                  </g>
+                ))}
+
+                {/* Unavailable houses (dimmed) */}
+                {houses.filter(h => !availableHouses.some(a => a.house_number === h.house_number)).map(h => {
+                  const pos = housePositions.get(h.house_number);
+                  if (!pos) return null;
+                  return (
+                    <g key={`unavail-${h.house_number}`} opacity={0.25}>
+                      <circle cx={pos.x} cy={pos.y} r={HOUSE_RADIUS}
+                        fill="hsl(var(--muted-foreground))" stroke="hsl(var(--border))" strokeWidth={1} strokeDasharray="3,2" />
+                      <text x={pos.x} y={pos.y + 4} textAnchor="middle" fill="hsl(var(--foreground))" fontSize="8" fontWeight="600" style={{ pointerEvents: "none" }}>
+                        {h.house_number}
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {/* Available houses */}
+                {availableHouses.map(h => {
+                  const pos = housePositions.get(h.house_number);
+                  if (!pos) return null;
+                  const isSelected = selected.has(h.house_number);
+                  const color = getHouseColor(h.house_number);
+                  return (
+                    <g key={`house-${h.house_number}`} style={{ cursor: "pointer" }}
+                      onClick={(e) => { e.stopPropagation(); toggleHouse(h.house_number); }}>
+                      {isSelected && (
+                        <circle cx={pos.x} cy={pos.y} r={HOUSE_RADIUS + 5}
+                          fill="none" stroke="hsl(var(--primary))" strokeWidth={2.5} opacity={0.6} />
+                      )}
+                      <circle cx={pos.x} cy={pos.y} r={HOUSE_RADIUS}
+                        fill={color} stroke={isSelected ? "white" : "hsl(var(--border))"} strokeWidth={isSelected ? 2 : 1}
+                        className="transition-all duration-100" />
+                      <text x={pos.x} y={pos.y + 4} textAnchor="middle" fill={isSelected ? "white" : "hsl(var(--foreground))"} fontSize="9" fontWeight="600" style={{ pointerEvents: "none" }}>
+                        {h.house_number}
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+          </div>
+
+          {/* Side panel - house list */}
+          <div className="w-72 border-l bg-card flex flex-col shrink-0">
+            <div className="p-3 border-b space-y-2">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input placeholder="Buscar casa..." value={search} onChange={e => setSearch(e.target.value)} className="h-8 pl-8 text-xs" />
+              </div>
+              <div className="flex gap-1">
+                <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px]" onClick={selectAll}>
+                  Selecionar Todas ({filteredHouses.length})
+                </Button>
+                <Button variant="outline" size="sm" className="flex-1 h-7 text-[10px]" onClick={clearAll}>
+                  Limpar
+                </Button>
+              </div>
+            </div>
+            <ScrollArea className="flex-1">
+              <div className="p-2 space-y-3">
+                {Object.entries(groupedByQuadra).map(([quadraName, qHouses]) => (
+                  <div key={quadraName}>
+                    <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 px-1">
+                      {quadraName} ({qHouses.length})
+                    </div>
+                    <div className="space-y-0.5">
+                      {qHouses.map(h => (
+                        <div key={h.house_number}
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs cursor-pointer hover:bg-accent/50 transition-colors ${selected.has(h.house_number) ? "bg-primary/10 border border-primary/20" : ""}`}
+                          onClick={() => toggleHouse(h.house_number)}>
+                          <Checkbox checked={selected.has(h.house_number)} className="h-3.5 w-3.5" />
+                          <Home className="h-3 w-3 text-muted-foreground" />
+                          <span className="font-medium">Casa {h.house_number}</span>
+                          <span className="text-muted-foreground text-[10px] ml-auto">{h.type}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                {Object.keys(groupedByQuadra).length === 0 && (
+                  <div className="text-center text-muted-foreground text-xs py-8">
+                    <XCircle className="h-6 w-6 mx-auto mb-2 opacity-40" />
+                    Nenhuma casa disponível
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
