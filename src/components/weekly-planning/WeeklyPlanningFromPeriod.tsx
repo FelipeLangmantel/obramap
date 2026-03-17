@@ -1024,7 +1024,7 @@ export function WeeklyPlanningFromPeriod() {
         .from("planning_periods")
         .select("id, period_number, start_date, end_date, status, name, weekly_plan_generated, weekly_plan_locked")
         .eq("project_id", projectId!)
-        .eq("company_id", company?.id!)
+        .eq("company_id", companyId!)
         .in("status", ["approved", "released_to_weekly", "closed"])
         .order("period_number");
       if (refreshed) setPeriods(refreshed as PeriodForWeekly[]);

@@ -3,7 +3,7 @@ import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, Home, DollarSign, TrendingUp, TrendingDown, CheckCircle2, Lock, Loader2, Users, AlertTriangle, Play, Archive, Package, RefreshCw, Undo2 } from "lucide-react";
+import { Calendar, Home, DollarSign, TrendingUp, TrendingDown, CheckCircle2, Lock, Loader2, Users, AlertTriangle, Play, Archive, Package, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PlanningPeriod, PeriodStatus } from "@/hooks/usePeriodPlanning";
 
