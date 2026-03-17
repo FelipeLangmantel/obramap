@@ -165,7 +165,7 @@ function WeekSlot({
 
 // ── Summary Column ─────────────────────────────────────────
 function WeekSummaryColumn({
-  week, allServices, onRemoveHouse,
+  week, onRemoveHouse,
 }: {
   week: WeekPlan;
   allServices: ServiceForPeriod[];
