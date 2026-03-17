@@ -94,7 +94,8 @@ const App = () => {
           <AuthProvider>
             <ConstructionProvider>
               <Routes>
-                {/* Auth routes - fora de qualquer guard */}
+                {/* Public routes */}
+                <Route path="/landing" element={<LandingPage />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/change-password" element={<ChangePassword />} />
 
