@@ -1,0 +1,612 @@
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import {
+  Calendar,
+  Home,
+  Settings2,
+  ChevronDown,
+  ChevronUp,
+  Save,
+  RefreshCcw,
+  GripVertical,
+  AlertTriangle,
+  CheckCircle2,
+  Zap,
+  ArrowLeftRight,
+} from "lucide-react";
+import { format, parseISO, differenceInDays, addDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
+
+interface PeriodForWeekly {
+  id: string;
+  period_number: number;
+  start_date: string;
+  end_date: string;
+  status: string;
+  name: string | null;
+  weekly_plan_generated: boolean;
+  weekly_plan_locked: boolean;
+}
+
+interface ServiceForPeriod {
+  id: string;
+  macro_id: string;
+  macro_name: string;
+  scope_id: string;
+  scope_name: string;
+  target_houses: number;
+}
+
+interface WeekPlan {
+  id: string | null;
+  week_number: number;
+  week_start: string;
+  week_end: string;
+  status: string;
+  services: WeekServicePlan[];
+}
+
+interface WeekServicePlan {
+  id: string | null;
+  macro_id: string;
+  macro_name: string;
+  macro_color: string;
+  scope_id: string;
+  scope_name: string;
+  planned_house_ids: number[];
+  planned_houses: number;
+}
+
+interface DragState {
+  serviceKey: string;
+  sourceWeekNumber: number;
+  houseId: number;
+}
+
+// Get a color for a macro from the project template
+function getMacroColor(macroId: string, macros: any[]): string {
+  const macro = macros?.find((m: any) => m.id === macroId);
+  return macro?.color || "#6b7280";
+}
+
+// Build house IDs from target_houses count (1..N sorted by house_number)
+function buildHouseIdsForService(
+  targetHouses: number,
+  macroId: string,
+  scopeId: string,
+  houses: any[]
+): number[] {
+  // Get houses that haven't completed this scope yet
+  const available = houses
+    .filter((h: any) => {
+      const macro = h.macros?.find((m: any) => m.id === macroId);
+      if (!macro) return true;
+      const scope = macro.scopes?.find((s: any) => s.id === scopeId);
+      return !scope || scope.progress < 100;
+    })
+    .map((h: any) => h.house_number)
+    .sort((a: number, b: number) => a - b);
+  return available.slice(0, targetHouses);
+}
+
+export function WeeklyPlanningFromPeriod() {
+  const { currentProject } = useConstruction();
+  const { company } = useAuth();
+  const projectId = currentProject?.id;
+  const companyId = company?.id;
+  const macros = currentProject?.macrosTemplate || [];
+  const houses = currentProject?.houses || [];
+
+  const [periods, setPeriods] = useState<PeriodForWeekly[]>([]);
+  const [selectedPeriodId, setSelectedPeriodId] = useState<string>("");
+  const [workingDaysPerWeek, setWorkingDaysPerWeek] = useState<number>(6);
+  const [periodServices, setPeriodServices] = useState<ServiceForPeriod[]>([]);
+  const [weekPlans, setWeekPlans] = useState<WeekPlan[]>([]);
+  const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(new Set());
+  const [isSaving, setIsSaving] = useState(false);
+  const [isGenerated, setIsGenerated] = useState(false);
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
+
+  const selectedPeriod = periods.find(p => p.id === selectedPeriodId);
+
+  // Load approved/released periods
+  useEffect(() => {
+    if (!projectId || !companyId) return;
+    const fetch = async () => {
+      const { data } = await supabase
+        .from("planning_periods")
+        .select("id, period_number, start_date, end_date, status, name, weekly_plan_generated, weekly_plan_locked")
+        .eq("project_id", projectId)
+        .eq("company_id", companyId)
+        .in("status", ["approved", "released_to_weekly", "executing", "closed"])
+        .order("period_number");
+      if (data) setPeriods(data as PeriodForWeekly[]);
+    };
+    fetch();
+  }, [projectId, companyId]);
+
+  // Load working days config
+  useEffect(() => {
+    if (!projectId) return;
+    const fetch = async () => {
+      const { data } = await supabase
+        .from("weekly_plan_config")
+        .select("working_days_per_week")
+        .eq("project_id", projectId)
+        .maybeSingle();
+      if (data) setWorkingDaysPerWeek(data.working_days_per_week);
+    };
+    fetch();
+  }, [projectId]);
+
+  // Load period services when period selected
+  useEffect(() => {
+    if (!selectedPeriodId || !projectId) return;
+    const load = async () => {
+      const { data } = await supabase
+        .from("service_planning_by_period")
+        .select("id, macro_id, macro_name, scope_id, scope_name, target_houses")
+        .eq("planning_period_id", selectedPeriodId)
+        .eq("project_id", projectId);
+      if (data) setPeriodServices(data);
+
+      // Check if weekly plan already exists
+      const { data: existingWeeks } = await supabase
+        .from("weekly_plan_weeks")
+        .select("id, week_number, week_start, week_end, status")
+        .eq("planning_period_id", selectedPeriodId)
+        .order("week_number");
+
+      if (existingWeeks && existingWeeks.length > 0) {
+        const weeksWithServices: WeekPlan[] = [];
+        for (const week of existingWeeks) {
+          const { data: services } = await supabase
+            .from("weekly_plan_services")
+            .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, planned_house_ids, planned_houses")
+            .eq("weekly_plan_week_id", week.id);
+          weeksWithServices.push({
+            ...week,
+            services: (services || []) as WeekServicePlan[],
+          });
+        }
+        setWeekPlans(weeksWithServices);
+        setIsGenerated(true);
+        setExpandedWeeks(new Set([1]));
+      } else {
+        setWeekPlans([]);
+        setIsGenerated(false);
+      }
+    };
+    load();
+  }, [selectedPeriodId, projectId]);
+
+  // Generate weeks from period dates
+  const generateWeeks = useCallback(() => {
+    if (!selectedPeriod || periodServices.length === 0) return;
+
+    const start = parseISO(selectedPeriod.start_date);
+    const end = parseISO(selectedPeriod.end_date);
+    const totalDays = differenceInDays(end, start) + 1;
+    const numWeeks = Math.max(1, Math.ceil(totalDays / workingDaysPerWeek));
+
+    const weeks: WeekPlan[] = [];
+    for (let i = 0; i < numWeeks; i++) {
+      const weekStart = addDays(start, i * workingDaysPerWeek);
+      const weekEnd = i === numWeeks - 1 ? end : addDays(weekStart, workingDaysPerWeek - 1);
+
+      const services: WeekServicePlan[] = periodServices.map(svc => {
+        const allHouseIds = buildHouseIdsForService(svc.target_houses, svc.macro_id, svc.scope_id, houses);
+        const total = allHouseIds.length;
+        const perWeek = Math.floor(total / numWeeks);
+        const remainder = total % numWeeks;
+        const startIdx = i * perWeek + Math.min(i, remainder);
+        const count = perWeek + (i < remainder ? 1 : 0);
+        const houseIds = allHouseIds.slice(startIdx, startIdx + count);
+
+        return {
+          id: null,
+          macro_id: svc.macro_id,
+          macro_name: svc.macro_name,
+          macro_color: getMacroColor(svc.macro_id, macros),
+          scope_id: svc.scope_id,
+          scope_name: svc.scope_name,
+          planned_house_ids: houseIds,
+          planned_houses: houseIds.length,
+        };
+      });
+
+      weeks.push({
+        id: null,
+        week_number: i + 1,
+        week_start: format(weekStart, "yyyy-MM-dd"),
+        week_end: format(weekEnd, "yyyy-MM-dd"),
+        status: "draft",
+        services,
+      });
+    }
+
+    setWeekPlans(weeks);
+    setIsGenerated(true);
+    setExpandedWeeks(new Set([1]));
+    toast.success(`${numWeeks} semana(s) gerada(s) com distribuição automática`);
+  }, [selectedPeriod, periodServices, workingDaysPerWeek, houses, macros]);
+
+  // Move house between weeks via drag
+  const moveHouse = useCallback((serviceKey: string, fromWeek: number, toWeek: number, houseId: number) => {
+    setWeekPlans(prev => prev.map(week => {
+      const key = (svc: WeekServicePlan) => `${svc.macro_id}:${svc.scope_id}`;
+      if (week.week_number === fromWeek) {
+        return {
+          ...week,
+          services: week.services.map(svc => {
+            if (key(svc) === serviceKey) {
+              const ids = svc.planned_house_ids.filter(id => id !== houseId);
+              return { ...svc, planned_house_ids: ids, planned_houses: ids.length };
+            }
+            return svc;
+          }),
+        };
+      }
+      if (week.week_number === toWeek) {
+        return {
+          ...week,
+          services: week.services.map(svc => {
+            if (key(svc) === serviceKey) {
+              if (svc.planned_house_ids.includes(houseId)) return svc;
+              const ids = [...svc.planned_house_ids, houseId].sort((a, b) => a - b);
+              return { ...svc, planned_house_ids: ids, planned_houses: ids.length };
+            }
+            return svc;
+          }),
+        };
+      }
+      return week;
+    }));
+  }, []);
+
+  // Save to DB
+  const saveWeeklyPlan = async () => {
+    if (!projectId || !companyId || !selectedPeriodId) return;
+    setIsSaving(true);
+    try {
+      await supabase.from("weekly_plan_weeks").delete().eq("planning_period_id", selectedPeriodId);
+
+      for (const week of weekPlans) {
+        const { data: weekData, error: weekError } = await supabase
+          .from("weekly_plan_weeks")
+          .insert({
+            planning_period_id: selectedPeriodId,
+            project_id: projectId,
+            company_id: companyId,
+            week_number: week.week_number,
+            week_start: week.week_start,
+            week_end: week.week_end,
+            status: week.status,
+          })
+          .select("id")
+          .single();
+
+        if (weekError || !weekData) throw weekError;
+
+        const toInsert = week.services
+          .filter(svc => svc.planned_house_ids.length > 0)
+          .map(svc => ({
+            weekly_plan_week_id: weekData.id,
+            planning_period_id: selectedPeriodId,
+            project_id: projectId,
+            company_id: companyId,
+            macro_id: svc.macro_id,
+            macro_name: svc.macro_name,
+            macro_color: svc.macro_color,
+            scope_id: svc.scope_id,
+            scope_name: svc.scope_name,
+            planned_house_ids: svc.planned_house_ids,
+            planned_houses: svc.planned_house_ids.length,
+          }));
+
+        if (toInsert.length > 0) {
+          const { error } = await supabase.from("weekly_plan_services").insert(toInsert);
+          if (error) throw error;
+        }
+      }
+
+      await supabase
+        .from("planning_periods")
+        .update({ weekly_plan_generated: true, weekly_plan_locked: true })
+        .eq("id", selectedPeriodId);
+
+      toast.success("Planejamento semanal salvo com sucesso!");
+    } catch (err: any) {
+      toast.error("Erro ao salvar: " + (err?.message || "erro desconhecido"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const saveConfig = async () => {
+    if (!projectId || !companyId) return;
+    await supabase
+      .from("weekly_plan_config")
+      .upsert({ project_id: projectId, company_id: companyId, working_days_per_week: workingDaysPerWeek }, { onConflict: "project_id" });
+    toast.success("Configuração salva");
+    setConfigOpen(false);
+  };
+
+  // Validation: all houses allocated?
+  const validationErrors = useMemo(() => {
+    const errors: string[] = [];
+    for (const svc of periodServices) {
+      const key = `${svc.macro_id}:${svc.scope_id}`;
+      const expectedIds = buildHouseIdsForService(svc.target_houses, svc.macro_id, svc.scope_id, houses);
+      const allocated = weekPlans.reduce((sum, week) => {
+        const ws = week.services.find(s => `${s.macro_id}:${s.scope_id}` === key);
+        return sum + (ws?.planned_house_ids.length || 0);
+      }, 0);
+      if (allocated !== expectedIds.length) {
+        errors.push(`${svc.scope_name}: ${allocated}/${expectedIds.length} casas alocadas`);
+      }
+    }
+    return errors;
+  }, [weekPlans, periodServices, houses]);
+
+  const toggleWeek = (n: number) => {
+    setExpandedWeeks(prev => {
+      const next = new Set(prev);
+      next.has(n) ? next.delete(n) : next.add(n);
+      return next;
+    });
+  };
+
+  const handleDragStart = (e: React.DragEvent, serviceKey: string, weekNumber: number, houseId: number) => {
+    setDragState({ serviceKey, sourceWeekNumber: weekNumber, houseId });
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e: React.DragEvent, targetWeekNumber: number) => {
+    e.preventDefault();
+    if (dragState && dragState.sourceWeekNumber !== targetWeekNumber) {
+      moveHouse(dragState.serviceKey, dragState.sourceWeekNumber, targetWeekNumber, dragState.houseId);
+    }
+    setDragState(null);
+  };
+
+  if (!projectId) {
+    return (
+      <Card className="p-12 text-center">
+        <p className="text-muted-foreground">Selecione um projeto para começar.</p>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-primary" />
+            Planejamento Semanal
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Distribua as atividades da medição em semanas
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setConfigOpen(!configOpen)}>
+          <Settings2 className="h-4 w-4 mr-1" />
+          Dias úteis: {workingDaysPerWeek}
+        </Button>
+      </div>
+
+      {/* Config */}
+      {configOpen && (
+        <Card className="border-primary/30">
+          <CardContent className="pt-4">
+            <div className="flex items-end gap-4">
+              <div className="space-y-1">
+                <Label>Dias úteis por semana</Label>
+                <Select value={String(workingDaysPerWeek)} onValueChange={v => setWorkingDaysPerWeek(Number(v))}>
+                  <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5 dias</SelectItem>
+                    <SelectItem value="6">6 dias</SelectItem>
+                    <SelectItem value="7">7 dias</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button size="sm" onClick={saveConfig}>Salvar</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Period selector */}
+      <Card>
+        <CardContent className="pt-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="space-y-1 flex-1">
+              <Label>Selecione a Medição</Label>
+              <Select value={selectedPeriodId} onValueChange={setSelectedPeriodId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Escolha uma medição aprovada..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {periods.map(p => (
+                    <SelectItem key={p.id} value={p.id}>
+                      Medição {p.period_number}{p.name ? ` - ${p.name}` : ""} ({format(parseISO(p.start_date), "dd/MM", { locale: ptBR })} - {format(parseISO(p.end_date), "dd/MM", { locale: ptBR })})
+                      {p.weekly_plan_generated && " ✓"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedPeriod && !isGenerated && periodServices.length > 0 && (
+              <Button onClick={generateWeeks} className="mt-5">
+                <Zap className="h-4 w-4 mr-1" />
+                Gerar Semanas
+              </Button>
+            )}
+            {isGenerated && (
+              <Button variant="outline" onClick={generateWeeks} className="mt-5" size="sm">
+                <RefreshCcw className="h-4 w-4 mr-1" />
+                Regenerar
+              </Button>
+            )}
+          </div>
+
+          {selectedPeriod && (
+            <div className="flex flex-wrap gap-3 mt-3 text-sm text-muted-foreground">
+              <span>Período: {format(parseISO(selectedPeriod.start_date), "dd/MM/yyyy")} - {format(parseISO(selectedPeriod.end_date), "dd/MM/yyyy")}</span>
+              <span>•</span>
+              <span>{differenceInDays(parseISO(selectedPeriod.end_date), parseISO(selectedPeriod.start_date)) + 1} dias</span>
+              <span>•</span>
+              <span>{periodServices.length} serviço(s)</span>
+              <span>•</span>
+              <Badge variant={selectedPeriod.status === "approved" ? "default" : "secondary"}>
+                {selectedPeriod.status === "approved" ? "Aprovada" : selectedPeriod.status === "released_to_weekly" ? "Liberada" : selectedPeriod.status}
+              </Badge>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Validation */}
+      {isGenerated && validationErrors.length > 0 && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="pt-4">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-destructive">Distribuição incompleta</p>
+                <ul className="text-sm text-muted-foreground mt-1 space-y-0.5">
+                  {validationErrors.map((e, i) => <li key={i}>• {e}</li>)}
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Week cards */}
+      {isGenerated && weekPlans.map(week => (
+        <Card
+          key={week.week_number}
+          className={`transition-all ${dragState ? "ring-2 ring-primary/30" : ""}`}
+          onDragOver={handleDragOver}
+          onDrop={(e) => handleDrop(e, week.week_number)}
+        >
+          <CardHeader className="cursor-pointer py-3" onClick={() => toggleWeek(week.week_number)}>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-primary" />
+                Semana {week.week_number}
+                <span className="text-sm font-normal text-muted-foreground">
+                  {format(parseISO(week.week_start), "dd/MM", { locale: ptBR })} - {format(parseISO(week.week_end), "dd/MM", { locale: ptBR })}
+                </span>
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">
+                  <Home className="h-3 w-3 mr-1" />
+                  {week.services.reduce((s, svc) => s + svc.planned_houses, 0)} casas
+                </Badge>
+                {expandedWeeks.has(week.week_number) ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </div>
+            </div>
+          </CardHeader>
+
+          {expandedWeeks.has(week.week_number) && (
+            <CardContent className="pt-0 space-y-3">
+              {week.services.filter(svc => svc.planned_houses > 0).map(svc => {
+                const serviceKey = `${svc.macro_id}:${svc.scope_id}`;
+                return (
+                  <div key={serviceKey} className="border rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: svc.macro_color }} />
+                        <span className="font-medium text-sm">{svc.scope_name}</span>
+                        <span className="text-xs text-muted-foreground">({svc.macro_name})</span>
+                      </div>
+                      <Badge variant="secondary" className="text-xs">{svc.planned_houses} casa(s)</Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {svc.planned_house_ids.map(houseId => (
+                        <div
+                          key={houseId}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, serviceKey, week.week_number, houseId)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-primary/10 text-primary border border-primary/20 cursor-grab active:cursor-grabbing hover:bg-primary/20 transition-colors select-none"
+                        >
+                          <GripVertical className="h-3 w-3 opacity-50" />
+                          Casa {houseId}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {week.services.every(svc => svc.planned_houses === 0) && (
+                <div className="text-center py-4 text-sm text-muted-foreground">
+                  <ArrowLeftRight className="h-5 w-5 mx-auto mb-1 opacity-50" />
+                  Arraste casas de outras semanas para esta
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      ))}
+
+      {/* Save bar */}
+      {isGenerated && (
+        <div className="flex items-center justify-between sticky bottom-4 bg-background border rounded-lg p-4 shadow-lg">
+          <div className="flex items-center gap-2">
+            {validationErrors.length === 0 ? (
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+            ) : (
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+            )}
+            <span className="text-sm">
+              {validationErrors.length === 0
+                ? "Todas as casas distribuídas corretamente"
+                : `${validationErrors.length} serviço(s) com distribuição pendente`}
+            </span>
+          </div>
+          <Button onClick={saveWeeklyPlan} disabled={isSaving || validationErrors.length > 0}>
+            <Save className="h-4 w-4 mr-1" />
+            {isSaving ? "Salvando..." : "Salvar Planejamento Semanal"}
+          </Button>
+        </div>
+      )}
+
+      {/* Empty states */}
+      {!selectedPeriodId && periods.length > 0 && (
+        <Card className="p-8 text-center">
+          <Calendar className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-50" />
+          <p className="text-muted-foreground">Selecione uma medição aprovada para gerar o planejamento semanal</p>
+        </Card>
+      )}
+
+      {periods.length === 0 && (
+        <Card className="p-8 text-center">
+          <AlertTriangle className="h-10 w-10 mx-auto mb-3 text-muted-foreground opacity-50" />
+          <p className="text-muted-foreground">Nenhuma medição aprovada encontrada</p>
+          <p className="text-sm text-muted-foreground mt-1">Aprove uma medição no Planejamento por Período primeiro</p>
+        </Card>
+      )}
+    </div>
+  );
+}
