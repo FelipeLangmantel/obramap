@@ -1076,17 +1076,24 @@ export function WeeklyPlanningFromPeriod() {
                 <SelectTrigger><SelectValue placeholder="Escolha uma medição aprovada..." /></SelectTrigger>
                 <SelectContent>
                   {periods.map(p => {
-                    const statusLabel = p.status === "approved" ? "Aprovada" 
+                    const statusLabel = p.status === "draft" ? "Rascunho"
+                      : p.status === "approved" ? "Aprovada" 
                       : p.status === "released_to_weekly" ? "Liberada" 
                       : p.status === "closed" ? "Fechada" 
                       : "Rascunho";
                     const statusIcon = p.weekly_plan_generated ? " ✓" : "";
+                    const statusColor = p.status === "draft" ? "bg-muted text-muted-foreground"
+                      : p.status === "approved" ? "bg-primary/20 text-primary"
+                      : p.status === "released_to_weekly" ? "bg-emerald-500/20 text-emerald-700"
+                      : p.status === "closed" ? "bg-destructive/20 text-destructive"
+                      : "bg-muted text-muted-foreground";
+                    const isDisabled = p.status === "closed";
                     return (
-                      <SelectItem key={p.id} value={p.id}>
+                      <SelectItem key={p.id} value={p.id} disabled={isDisabled}>
                         <span className="flex items-center gap-2">
                           Medição {p.period_number}{p.name ? ` – ${p.name}` : ""} ({format(parseISO(p.start_date), "dd/MM", { locale: ptBR })} – {format(parseISO(p.end_date), "dd/MM", { locale: ptBR })})
                           {statusIcon}
-                          <Badge variant="outline" className="text-[10px] px-1.5 h-4 ml-1">
+                          <Badge variant="outline" className={`text-[10px] px-1.5 h-4 ml-1 border-0 ${statusColor}`}>
                             {statusLabel}
                           </Badge>
                         </span>
