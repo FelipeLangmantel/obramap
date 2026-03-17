@@ -37,8 +37,8 @@ export function SystemAdminGuard({ children }: SystemAdminGuardProps) {
 
   // Não é System Admin
   if (!isSystemAdmin) {
-    console.log("[SystemAdminGuard] User is not system admin, redirecting to /");
-    return <Navigate to="/" replace />;
+    console.log("[SystemAdminGuard] User is not system admin, redirecting to /dashboard");
+    return <Navigate to="/dashboard" replace />;
   }
 
   // System Admin - acesso liberado
