@@ -11,6 +11,7 @@ import { SystemAdminGuard } from "./components/guards/SystemAdminGuard";
 import { CompanyUserGuard } from "./components/guards/CompanyUserGuard";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import LandingPage from "./pages/LandingPage";
 import ChangePassword from "./pages/ChangePassword";
 import NotFound from "./pages/NotFound";
 import SystemDashboard from "./pages/system/SystemDashboard";
@@ -93,7 +94,8 @@ const App = () => {
           <AuthProvider>
             <ConstructionProvider>
               <Routes>
-                {/* Auth routes - fora de qualquer guard */}
+                {/* Public routes */}
+                <Route path="/landing" element={<LandingPage />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/change-password" element={<ChangePassword />} />
 
