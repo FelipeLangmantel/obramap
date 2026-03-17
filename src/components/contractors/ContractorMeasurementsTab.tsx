@@ -7,7 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, CheckCircle, ArrowLeft, Clock, DollarSign } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Plus, CheckCircle, ArrowLeft, Clock, Pencil, Trash2, Save, X } from "lucide-react";
+import { toast } from "sonner";
 import type {
   ContractorContract, ContractorContractService,
   ContractorMeasurement, ContractorMeasurementItem,
@@ -22,6 +24,9 @@ interface Props {
   fetchMeasurementItems: (measurementId: string) => Promise<ContractorMeasurementItem[]>;
   saveMeasurementItem: (item: any) => Promise<any>;
   approveMeasurement: (measurementId: string) => Promise<boolean>;
+  updateContractService: (serviceId: string, updates: Partial<ContractorContractService>) => Promise<boolean>;
+  deleteContractService: (serviceId: string, contractId: string) => Promise<boolean>;
+  recalcContractTotal: (contractId: string) => Promise<void>;
   onBack: () => void;
 }
 
@@ -30,7 +35,8 @@ const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curren
 export function ContractorMeasurementsTab({
   contract, contractorName, fetchContractServices, fetchMeasurements,
   createMeasurement, fetchMeasurementItems, saveMeasurementItem,
-  approveMeasurement, onBack,
+  approveMeasurement, updateContractService, deleteContractService,
+  recalcContractTotal, onBack,
 }: Props) {
   const [services, setServices] = useState<ContractorContractService[]>([]);
   const [measurements, setMeasurements] = useState<ContractorMeasurement[]>([]);
@@ -38,6 +44,11 @@ export function ContractorMeasurementsTab({
   const [measurementItems, setMeasurementItems] = useState<ContractorMeasurementItem[]>([]);
   const [newMeasOpen, setNewMeasOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState("services");
+
+  // Edit service state
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  const [editNegotiatedValue, setEditNegotiatedValue] = useState(0);
 
   // New measurement form
   const [periodStart, setPeriodStart] = useState("");
@@ -94,7 +105,6 @@ export function ContractorMeasurementsTab({
     const svc = services.find(s => s.id === serviceId);
     if (!svc) return;
 
-    // Generate house_ids as sequential based on count
     const existingItem = measurementItems.find(i => i.contract_service_id === serviceId);
     await saveMeasurementItem({
       id: existingItem?.id,
@@ -116,6 +126,34 @@ export function ContractorMeasurementsTab({
     }
   };
 
+  const handleEditService = (svc: ContractorContractService) => {
+    setEditingServiceId(svc.id);
+    setEditNegotiatedValue(svc.negotiated_unit_value);
+  };
+
+  const handleSaveService = async (svc: ContractorContractService) => {
+    setSaving(true);
+    const ok = await updateContractService(svc.id, {
+      negotiated_unit_value: editNegotiatedValue,
+      total_houses: svc.house_ids?.length || svc.total_houses,
+      house_ids: svc.house_ids,
+    });
+    if (ok) {
+      await recalcContractTotal(contract.id);
+      await load();
+    }
+    setEditingServiceId(null);
+    setSaving(false);
+  };
+
+  const handleDeleteService = async (svc: ContractorContractService) => {
+    if (!confirm(`Remover o serviço "${svc.scope_name}" deste contrato?`)) return;
+    setSaving(true);
+    const ok = await deleteContractService(svc.id, contract.id);
+    if (ok) await load();
+    setSaving(false);
+  };
+
   const totalGross = measurementItems.reduce((s, i) => s + i.total_value, 0);
   const retentionValue = totalGross * (contract.retention_percent / 100);
   const netValue = totalGross - retentionValue;
@@ -131,6 +169,8 @@ export function ContractorMeasurementsTab({
     paid: "default",
   };
 
+  const contractTotalFromServices = services.reduce((s, sv) => s + sv.total_value, 0);
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -143,11 +183,6 @@ export function ContractorMeasurementsTab({
           <p className="text-[10px] text-muted-foreground">
             Contrato {contract.contract_number || "S/N"} • Valor {fmt(contract.total_value)} • Retenção {contract.retention_percent}%
           </p>
-        </div>
-        <div className="ml-auto">
-          <Button size="sm" onClick={() => setNewMeasOpen(true)} className="gap-1.5 text-xs h-7">
-            <Plus className="h-3.5 w-3.5" /> Nova Medição
-          </Button>
         </div>
       </div>
 
@@ -168,129 +203,237 @@ export function ContractorMeasurementsTab({
         ))}
       </div>
 
-      {/* Measurements list or detail */}
-      {selectedMeasurement ? (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSelectedMeasurement(null)}>
-                <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Voltar
-              </Button>
-              <h4 className="text-sm font-semibold">Medição #{selectedMeasurement.measurement_number}</h4>
-              <Badge variant={statusColors[selectedMeasurement.status] as any} className="text-[10px]">
-                {statusLabels[selectedMeasurement.status] || selectedMeasurement.status}
-              </Badge>
-            </div>
-            {selectedMeasurement.status === "draft" && (
-              <Button size="sm" className="gap-1.5 text-xs h-7 bg-green-600 hover:bg-green-700" onClick={handleApprove}>
-                <CheckCircle className="h-3.5 w-3.5" /> Aprovar
-              </Button>
-            )}
-          </div>
+      {/* Tabs: Services / Measurements */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="w-fit h-9">
+          <TabsTrigger value="services" className="text-xs px-3 h-7">
+            Serviços ({services.length})
+          </TabsTrigger>
+          <TabsTrigger value="measurements" className="text-xs px-3 h-7">
+            Medições ({measurements.length})
+          </TabsTrigger>
+        </TabsList>
 
-          <div className="grid grid-cols-3 gap-2 text-xs">
-            <Card><CardContent className="p-2 text-center"><p className="text-[10px] text-muted-foreground">Bruto</p><p className="font-mono font-bold text-green-500">{fmt(totalGross)}</p></CardContent></Card>
-            <Card><CardContent className="p-2 text-center"><p className="text-[10px] text-muted-foreground">Retenção ({contract.retention_percent}%)</p><p className="font-mono font-bold text-orange-500">{fmt(retentionValue)}</p></CardContent></Card>
-            <Card><CardContent className="p-2 text-center"><p className="text-[10px] text-muted-foreground">Líquido</p><p className="font-mono font-bold text-primary">{fmt(netValue)}</p></CardContent></Card>
-          </div>
-
-          {selectedMeasurement.payment_due_date && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="h-3.5 w-3.5" />
-              Previsão de pagamento: {new Date(selectedMeasurement.payment_due_date + "T12:00:00").toLocaleDateString("pt-BR")}
-            </div>
-          )}
-
-          {/* Service items for measurement */}
-          <div className="rounded-md border overflow-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Etapa</TableHead>
-                  <TableHead>Serviço</TableHead>
-                  <TableHead className="text-right">Valor Un.</TableHead>
-                  <TableHead className="text-right">Casas Medidas</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {services.map(svc => {
-                  const item = measurementItems.find(i => i.contract_service_id === svc.id);
-                  const housesMeasured = item?.houses_measured || 0;
-                  const totalVal = housesMeasured * svc.negotiated_unit_value;
-                  const isDraft = selectedMeasurement.status === "draft";
-                  return (
-                    <TableRow key={svc.id}>
-                      <TableCell className="text-xs">{svc.macro_name}</TableCell>
-                      <TableCell className="text-xs">{svc.scope_name}</TableCell>
-                      <TableCell className="text-right text-xs font-mono">{fmt(svc.negotiated_unit_value)}</TableCell>
-                      <TableCell className="text-right">
-                        {isDraft ? (
-                          <Input
-                            type="number"
-                            min={0}
-                            max={svc.total_houses}
-                            value={housesMeasured}
-                            onChange={e => handleUpdateItem(svc.id, parseInt(e.target.value) || 0)}
-                            className="h-7 w-16 text-xs text-right ml-auto"
-                          />
-                        ) : (
-                          <span className="text-xs font-mono">{housesMeasured}</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right text-xs font-mono font-semibold">{fmt(totalVal)}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <h4 className="text-xs font-semibold text-muted-foreground">Histórico de Medições</h4>
-          {measurements.length === 0 ? (
-            <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">Nenhuma medição criada.</CardContent></Card>
+        {/* Services Tab */}
+        <TabsContent value="services" className="mt-3">
+          {services.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground text-sm">
+                Nenhum serviço atribuído a este contrato. Use "Gerenciar Serviços" na lista de contratos.
+              </CardContent>
+            </Card>
           ) : (
-            <div className="rounded-md border overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>#</TableHead>
-                    <TableHead>Período</TableHead>
-                    <TableHead className="text-right">Bruto</TableHead>
-                    <TableHead className="text-right">Líquido</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Pagamento</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {measurements.map(m => (
-                    <TableRow key={m.id} className="cursor-pointer hover:bg-accent/50" onClick={() => selectMeasurement(m)}>
-                      <TableCell className="font-mono text-xs">{m.measurement_number}</TableCell>
-                      <TableCell className="text-xs">
-                        {new Date(m.period_start + "T12:00:00").toLocaleDateString("pt-BR")} – {new Date(m.period_end + "T12:00:00").toLocaleDateString("pt-BR")}
-                      </TableCell>
-                      <TableCell className="text-right text-xs font-mono">{fmt(m.gross_value)}</TableCell>
-                      <TableCell className="text-right text-xs font-mono font-semibold">{fmt(m.net_value)}</TableCell>
-                      <TableCell>
-                        <Badge variant={statusColors[m.status] as any} className="text-[10px]">
-                          {statusLabels[m.status] || m.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {m.payment_due_date
-                          ? new Date(m.payment_due_date + "T12:00:00").toLocaleDateString("pt-BR")
-                          : "—"}
-                      </TableCell>
+            <div className="space-y-3">
+              <div className="rounded-md border overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Etapa</TableHead>
+                      <TableHead>Serviço</TableHead>
+                      <TableHead className="text-right">Orçamento Un.</TableHead>
+                      <TableHead className="text-right">Negociado Un.</TableHead>
+                      <TableHead className="text-center">Casas</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead className="w-20 text-center">Ações</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {services.map(svc => {
+                      const isEditing = editingServiceId === svc.id;
+                      return (
+                        <TableRow key={svc.id}>
+                          <TableCell className="text-xs">{svc.macro_name}</TableCell>
+                          <TableCell className="text-xs">{svc.scope_name}</TableCell>
+                          <TableCell className="text-right text-xs font-mono text-muted-foreground">{fmt(svc.budget_unit_value)}</TableCell>
+                          <TableCell className="text-right">
+                            {isEditing ? (
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={editNegotiatedValue}
+                                onChange={e => setEditNegotiatedValue(parseFloat(e.target.value) || 0)}
+                                className="h-7 w-24 text-xs text-right ml-auto"
+                                autoFocus
+                              />
+                            ) : (
+                              <span className="text-xs font-mono">{fmt(svc.negotiated_unit_value)}</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center text-xs font-mono">
+                            {svc.house_ids?.length || svc.total_houses}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-mono font-semibold">
+                            {isEditing
+                              ? fmt(editNegotiatedValue * (svc.house_ids?.length || svc.total_houses))
+                              : fmt(svc.total_value)
+                            }
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {isEditing ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleSaveService(svc)} disabled={saving}>
+                                  <Save className="h-3.5 w-3.5 text-green-600" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingServiceId(null)}>
+                                  <X className="h-3.5 w-3.5 text-muted-foreground" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditService(svc)}>
+                                  <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDeleteService(svc)}>
+                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                </Button>
+                              </div>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="flex justify-end">
+                <Badge variant="outline" className="font-mono text-xs px-3 py-1">
+                  Total: {fmt(contractTotalFromServices)}
+                </Badge>
+              </div>
             </div>
           )}
-        </div>
-      )}
+        </TabsContent>
+
+        {/* Measurements Tab */}
+        <TabsContent value="measurements" className="mt-3">
+          <div className="flex justify-end mb-3">
+            <Button size="sm" onClick={() => setNewMeasOpen(true)} className="gap-1.5 text-xs h-7">
+              <Plus className="h-3.5 w-3.5" /> Nova Medição
+            </Button>
+          </div>
+
+          {selectedMeasurement ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setSelectedMeasurement(null)}>
+                    <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Voltar
+                  </Button>
+                  <h4 className="text-sm font-semibold">Medição #{selectedMeasurement.measurement_number}</h4>
+                  <Badge variant={statusColors[selectedMeasurement.status] as any} className="text-[10px]">
+                    {statusLabels[selectedMeasurement.status] || selectedMeasurement.status}
+                  </Badge>
+                </div>
+                {selectedMeasurement.status === "draft" && (
+                  <Button size="sm" className="gap-1.5 text-xs h-7 bg-green-600 hover:bg-green-700" onClick={handleApprove}>
+                    <CheckCircle className="h-3.5 w-3.5" /> Aprovar
+                  </Button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <Card><CardContent className="p-2 text-center"><p className="text-[10px] text-muted-foreground">Bruto</p><p className="font-mono font-bold text-green-500">{fmt(totalGross)}</p></CardContent></Card>
+                <Card><CardContent className="p-2 text-center"><p className="text-[10px] text-muted-foreground">Retenção ({contract.retention_percent}%)</p><p className="font-mono font-bold text-orange-500">{fmt(retentionValue)}</p></CardContent></Card>
+                <Card><CardContent className="p-2 text-center"><p className="text-[10px] text-muted-foreground">Líquido</p><p className="font-mono font-bold text-primary">{fmt(netValue)}</p></CardContent></Card>
+              </div>
+
+              {selectedMeasurement.payment_due_date && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5" />
+                  Previsão de pagamento: {new Date(selectedMeasurement.payment_due_date + "T12:00:00").toLocaleDateString("pt-BR")}
+                </div>
+              )}
+
+              <div className="rounded-md border overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Etapa</TableHead>
+                      <TableHead>Serviço</TableHead>
+                      <TableHead className="text-right">Valor Un.</TableHead>
+                      <TableHead className="text-right">Casas Medidas</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {services.map(svc => {
+                      const item = measurementItems.find(i => i.contract_service_id === svc.id);
+                      const housesMeasured = item?.houses_measured || 0;
+                      const totalVal = housesMeasured * svc.negotiated_unit_value;
+                      const isDraft = selectedMeasurement.status === "draft";
+                      return (
+                        <TableRow key={svc.id}>
+                          <TableCell className="text-xs">{svc.macro_name}</TableCell>
+                          <TableCell className="text-xs">{svc.scope_name}</TableCell>
+                          <TableCell className="text-right text-xs font-mono">{fmt(svc.negotiated_unit_value)}</TableCell>
+                          <TableCell className="text-right">
+                            {isDraft ? (
+                              <Input
+                                type="number"
+                                min={0}
+                                max={svc.total_houses}
+                                value={housesMeasured}
+                                onChange={e => handleUpdateItem(svc.id, parseInt(e.target.value) || 0)}
+                                className="h-7 w-16 text-xs text-right ml-auto"
+                              />
+                            ) : (
+                              <span className="text-xs font-mono">{housesMeasured}</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-mono font-semibold">{fmt(totalVal)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {measurements.length === 0 ? (
+                <Card><CardContent className="py-8 text-center text-muted-foreground text-sm">Nenhuma medição criada.</CardContent></Card>
+              ) : (
+                <div className="rounded-md border overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>#</TableHead>
+                        <TableHead>Período</TableHead>
+                        <TableHead className="text-right">Bruto</TableHead>
+                        <TableHead className="text-right">Líquido</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Pagamento</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {measurements.map(m => (
+                        <TableRow key={m.id} className="cursor-pointer hover:bg-accent/50" onClick={() => selectMeasurement(m)}>
+                          <TableCell className="font-mono text-xs">{m.measurement_number}</TableCell>
+                          <TableCell className="text-xs">
+                            {new Date(m.period_start + "T12:00:00").toLocaleDateString("pt-BR")} – {new Date(m.period_end + "T12:00:00").toLocaleDateString("pt-BR")}
+                          </TableCell>
+                          <TableCell className="text-right text-xs font-mono">{fmt(m.gross_value)}</TableCell>
+                          <TableCell className="text-right text-xs font-mono font-semibold">{fmt(m.net_value)}</TableCell>
+                          <TableCell>
+                            <Badge variant={statusColors[m.status] as any} className="text-[10px]">
+                              {statusLabels[m.status] || m.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {m.payment_due_date
+                              ? new Date(m.payment_due_date + "T12:00:00").toLocaleDateString("pt-BR")
+                              : "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* New Measurement Dialog */}
       <Dialog open={newMeasOpen} onOpenChange={setNewMeasOpen}>
