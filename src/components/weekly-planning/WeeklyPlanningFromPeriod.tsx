@@ -636,6 +636,7 @@ export function WeeklyPlanningFromPeriod() {
   const [periodServices, setPeriodServices] = useState<ServiceForPeriod[]>([]);
   const [weekPlans, setWeekPlans] = useState<WeekPlan[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [isReverting, setIsReverting] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
   const [showWeekConfig, setShowWeekConfig] = useState(false);
 
@@ -735,7 +736,7 @@ export function WeeklyPlanningFromPeriod() {
         .select("id, period_number, start_date, end_date, status, name, weekly_plan_generated, weekly_plan_locked")
         .eq("project_id", projectId)
         .eq("company_id", companyId)
-        .in("status", ["draft", "approved", "released_to_weekly", "executing", "closed"])
+        .in("status", ["approved", "released_to_weekly", "closed"])
         .order("period_number");
       if (data) setPeriods(data as PeriodForWeekly[]);
     })();
@@ -997,6 +998,48 @@ export function WeeklyPlanningFromPeriod() {
     }
   };
 
+  // ── Revert to approved (unlock for re-editing) ─────────
+  const revertToApproved = async () => {
+    if (!selectedPeriodId) return;
+    setIsReverting(true);
+    try {
+      // Call RPC to revert status back to approved
+      const { data, error } = await supabase.rpc("update_planning_period_status", {
+        p_period_id: selectedPeriodId,
+        p_new_status: "approved",
+      });
+      if (error) throw error;
+      const result = data as { success: boolean; error?: string; message?: string };
+      if (!result.success) {
+        toast.error(result.message || "Erro ao reverter status");
+        return;
+      }
+
+      // Clear weekly plan data
+      await supabase.from("weekly_plan_weeks").delete().eq("planning_period_id", selectedPeriodId);
+      await supabase.from("planning_periods").update({ weekly_plan_generated: false, weekly_plan_locked: false }).eq("id", selectedPeriodId);
+
+      // Refresh periods list
+      const { data: refreshed } = await supabase
+        .from("planning_periods")
+        .select("id, period_number, start_date, end_date, status, name, weekly_plan_generated, weekly_plan_locked")
+        .eq("project_id", projectId!)
+        .eq("company_id", companyId!)
+        .in("status", ["approved", "released_to_weekly", "closed"])
+        .order("period_number");
+      if (refreshed) setPeriods(refreshed as PeriodForWeekly[]);
+
+      setWeekPlans([]);
+      setIsGenerated(false);
+      setShowWeekConfig(false);
+      toast.success("Medição revertida para aprovada. Planejamento semanal limpo.");
+    } catch (err: any) {
+      toast.error("Erro: " + (err?.message || "desconhecido"));
+    } finally {
+      setIsReverting(false);
+    }
+  };
+
   // ── Render ──────────────────────────────────────────────
   if (!projectId) {
     return (
@@ -1082,8 +1125,20 @@ export function WeeklyPlanningFromPeriod() {
               <span className="text-border">|</span>
               <Badge variant={selectedPeriod.weekly_plan_locked ? "secondary" : "default"} className="gap-1">
                 {selectedPeriod.weekly_plan_locked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
-                {selectedPeriod.status === "approved" ? "Aprovada" : selectedPeriod.status === "released_to_weekly" ? "Liberada" : selectedPeriod.status}
+                {selectedPeriod.status === "approved" ? "Aprovada" : selectedPeriod.status === "released_to_weekly" ? "Liberada" : selectedPeriod.status === "closed" ? "Fechada" : selectedPeriod.status}
               </Badge>
+              {(selectedPeriod.status === "released_to_weekly") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 text-xs"
+                  onClick={revertToApproved}
+                  disabled={isReverting}
+                >
+                  <Undo2 className="h-3 w-3 mr-1" />
+                  {isReverting ? "Revertendo..." : "Reverter p/ Aprovada"}
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
