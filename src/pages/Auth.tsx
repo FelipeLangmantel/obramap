@@ -4,9 +4,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Loader2, Eye, EyeOff, CheckCircle2, ArrowRight } from "lucide-react";
+import { Loader2, Eye, EyeOff, CheckCircle2, ArrowRight, Shield } from "lucide-react";
 import { z } from "zod";
-import obraMapLogo from "@/assets/obramap-logo-new.png";
+import obraMapIcon from "@/assets/obramap-icon-dark.png";
 
 const loginSchema = z.object({
   email: z.string().email("Email inválido"),
@@ -16,15 +16,12 @@ const loginSchema = z.object({
 export default function Auth() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, signIn, isLoading: authLoading } = useAuth();
+  const { user, signIn, isLoading: authLoading, mustChangePassword, isSystemAdmin } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const { mustChangePassword, isSystemAdmin } = useAuth();
 
   useEffect(() => {
     const hashParams = new URLSearchParams(location.hash.substring(1));
@@ -77,7 +74,7 @@ export default function Auth() {
       } else {
         toast.success("Login realizado com sucesso!");
       }
-    } catch (error) {
+    } catch {
       toast.error("Erro inesperado. Tente novamente.");
     }
 
@@ -93,30 +90,35 @@ export default function Auth() {
   }
 
   const features = [
-    "Cronograma inteligente com ajuste automático",
-    "Medições por unidade automatizadas",
-    "Controle de produtividade de equipes",
-    "Gestão financeira integrada",
+    "Planejamento que se ajusta automaticamente",
+    "Controle visual com mapa e 3D por unidade",
+    "Dimensionamento automático de equipes",
+    "Integração total: planejamento, execução e custos",
   ];
 
   return (
-    <div className="min-h-screen bg-[#1a1a2e] flex flex-col">
-      <div className="flex-1 flex items-center justify-center p-4 md:p-8">
-        <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-0 lg:gap-16 items-center">
-          {/* ══════ LEFT SIDE ══════ */}
+    <div className="min-h-screen bg-[#1a1a2e] relative overflow-hidden">
+      {/* Subtle background glow */}
+      <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-[#e67e22]/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-[#0f3460]/30 rounded-full blur-[100px] pointer-events-none" />
+
+      <div className="relative z-10 flex-1 flex items-center justify-center min-h-screen p-4 md:p-8">
+        <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 items-center">
+
+          {/* ══════ LEFT SIDE — BRANDING ══════ */}
           <div className="hidden lg:flex flex-col gap-8">
             {/* Brand header */}
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0">
+              <div className="w-16 h-16 flex-shrink-0">
                 <img
-                  src={obraMapLogo}
-                  alt="ObraMap Logo"
-                  className="w-full h-full object-contain"
+                  src={obraMapIcon}
+                  alt="ObraMap"
+                  className="w-full h-full object-contain drop-shadow-lg"
                 />
               </div>
               <div>
-                <h2 className="text-white text-xl font-bold leading-tight">ObraMap</h2>
-                <p className="text-[#8a8a9a] text-xs font-semibold tracking-widest uppercase">
+                <h2 className="text-white text-2xl font-bold leading-tight tracking-tight">ObraMap</h2>
+                <p className="text-[#e67e22]/80 text-xs font-semibold tracking-[0.2em] uppercase">
                   Plataforma de Gestão de Obras
                 </p>
               </div>
@@ -124,13 +126,14 @@ export default function Auth() {
 
             {/* Headline */}
             <div>
-              <h1 className="text-white text-4xl xl:text-5xl font-bold leading-tight">
-                Gestão <span className="text-[#e67e22]">inteligente</span>
+              <h1 className="text-white text-4xl xl:text-5xl font-bold leading-[1.1] tracking-tight">
+                Controle total da{" "}
+                <span className="text-[#e67e22]">produção</span>
                 <br />
                 de obras habitacionais
               </h1>
-              <p className="mt-4 text-[#8a8a9a] text-base leading-relaxed max-w-md">
-                Controle planejamento, medições e custos em uma única plataforma.
+              <p className="mt-5 text-[#8a8a9a] text-base leading-relaxed max-w-md">
+                Planeje, execute e controle sua obra com visão real da produção, equipes e custos — tudo integrado.
               </p>
             </div>
 
@@ -143,93 +146,101 @@ export default function Auth() {
                 </div>
               ))}
             </div>
-
           </div>
 
-          {/* ══════ RIGHT SIDE — LOGIN FORM ══════ */}
+          {/* ══════ RIGHT SIDE — LOGIN CARD ══════ */}
           <div className="w-full max-w-md mx-auto lg:mx-0">
-            {/* Mobile logo */}
-            <div className="flex lg:hidden items-center justify-center gap-3 mb-8">
-              <div className="w-12 h-12 rounded-xl overflow-hidden">
-                <img src={obraMapLogo} alt="ObraMap" className="w-full h-full object-contain" />
-              </div>
-              <span className="text-white text-lg font-bold">ObraMap</span>
-            </div>
-
-            <div className="mb-8">
-              <h2 className="text-white text-3xl font-bold">Bem-vindo de volta</h2>
-              <p className="text-[#8a8a9a] mt-1 text-base italic">Acesse sua conta para continuar</p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-2">
-                <label className="text-[#8a8a9a] text-xs font-semibold tracking-widest uppercase">
-                  E-mail
-                </label>
-                <Input
-                  type="email"
-                  placeholder="seu@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={isLoading}
-                  className={`h-12 bg-[#2a2a45]/50 border-[#3a3a55] text-white placeholder:text-[#5a5a70] rounded-lg text-base focus-visible:ring-[#e67e22] ${errors.email ? "border-red-500" : ""}`}
-                />
-                {errors.email && <p className="text-sm text-red-400">{errors.email}</p>}
+            {/* Glass card */}
+            <div className="rounded-2xl border border-[#2a2a45]/80 bg-[#16213e]/40 backdrop-blur-xl p-8 shadow-2xl shadow-black/20">
+              {/* Mobile logo */}
+              <div className="flex lg:hidden items-center justify-center gap-3 mb-8">
+                <img src={obraMapIcon} alt="ObraMap" className="w-12 h-12 object-contain" />
+                <span className="text-white text-xl font-bold">ObraMap</span>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[#8a8a9a] text-xs font-semibold tracking-widest uppercase">
-                  Senha
-                </label>
-                <div className="relative">
+              <div className="mb-8">
+                <h2 className="text-white text-2xl font-bold tracking-tight">Bem-vindo de volta</h2>
+                <p className="text-[#8a8a9a] mt-1.5 text-sm">Acesse sua conta para continuar</p>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="space-y-2">
+                  <label className="text-[#8a8a9a] text-[11px] font-semibold tracking-[0.15em] uppercase">
+                    E-mail
+                  </label>
                   <Input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    type="email"
+                    placeholder="seu@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     disabled={isLoading}
-                    className={`h-12 bg-[#2a2a45]/50 border-[#3a3a55] text-white placeholder:text-[#5a5a70] rounded-lg text-base pr-12 focus-visible:ring-[#e67e22] ${errors.password ? "border-red-500" : ""}`}
+                    className={`h-12 bg-[#1a1a2e]/80 border-[#3a3a55] text-white placeholder:text-[#5a5a70] rounded-lg text-sm
+                      focus-visible:ring-2 focus-visible:ring-[#e67e22] focus-visible:border-[#e67e22]
+                      hover:border-[#4a4a65] transition-colors
+                      ${errors.email ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5a5a70] hover:text-white transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                  </button>
+                  {errors.email && <p className="text-xs text-red-400">{errors.email}</p>}
                 </div>
-                {errors.password && <p className="text-sm text-red-400">{errors.password}</p>}
-              </div>
 
-              <Button
-                type="submit"
-                className="w-full h-12 bg-[#e67e22] hover:bg-[#d35400] text-white font-semibold text-base rounded-lg transition-colors"
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                ) : (
-                  <>
-                    Entrar na plataforma
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </>
-                )}
-              </Button>
-            </form>
+                <div className="space-y-2">
+                  <label className="text-[#8a8a9a] text-[11px] font-semibold tracking-[0.15em] uppercase">
+                    Senha
+                  </label>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={isLoading}
+                      className={`h-12 bg-[#1a1a2e]/80 border-[#3a3a55] text-white placeholder:text-[#5a5a70] rounded-lg text-sm pr-12
+                        focus-visible:ring-2 focus-visible:ring-[#e67e22] focus-visible:border-[#e67e22]
+                        hover:border-[#4a4a65] transition-colors
+                        ${errors.password ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5a5a70] hover:text-white transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                  {errors.password && <p className="text-xs text-red-400">{errors.password}</p>}
+                </div>
 
-            <button className="w-full mt-4 text-center text-[#8a8a9a] hover:text-[#e67e22] text-sm transition-colors">
-              Esqueci minha senha
-            </button>
+                <Button
+                  type="submit"
+                  className="w-full h-12 bg-[#e67e22] hover:bg-[#d35400] text-white font-semibold text-base rounded-lg transition-all shadow-lg shadow-[#e67e22]/20 hover:shadow-[#e67e22]/30"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  ) : (
+                    <>
+                      Entrar na plataforma
+                      <ArrowRight className="ml-2 h-5 w-5" />
+                    </>
+                  )}
+                </Button>
+              </form>
 
-            <div className="mt-6 rounded-xl border border-[#2a2a45] bg-[#16213e]/40 px-5 py-4 text-center">
-              <p className="text-[#8a8a9a] text-sm">
+              <button className="w-full mt-4 text-center text-[#6a6a7a] hover:text-[#e67e22] text-sm transition-colors">
+                Esqueci minha senha
+              </button>
+            </div>
+
+            {/* Info card outside glass */}
+            <div className="mt-5 rounded-xl border border-[#2a2a45]/50 bg-[#16213e]/20 backdrop-blur-sm px-5 py-4 flex items-center gap-3">
+              <Shield className="w-5 h-5 text-[#e67e22]/60 flex-shrink-0" />
+              <p className="text-[#6a6a7a] text-xs leading-relaxed">
                 Para obter acesso, entre em contato com o{" "}
                 <span className="text-[#e67e22] font-medium">administrador do sistema</span>.
               </p>
             </div>
 
-            <p className="mt-6 text-center text-[#5a5a70] text-xs">
-              © ObraMap — Plataforma de gestão de obras
+            <p className="mt-5 text-center text-[#3a3a55] text-xs">
+              © {new Date().getFullYear()} ObraMap — Plataforma de gestão de obras
             </p>
           </div>
         </div>
