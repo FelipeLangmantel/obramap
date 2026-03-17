@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { z } from "zod";
@@ -101,22 +101,19 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted flex flex-col">
+    <div className="min-h-screen bg-[#1a1a2e] flex flex-col">
       <div className="flex-1 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-xl border-border/50">
+        <Card className="w-full max-w-md shadow-2xl bg-[#16213e] border-[#0f3460]/50">
           <CardHeader className="text-center space-y-4">
-            <div className="mx-auto w-24 h-24 flex items-center justify-center">
+            <div className="mx-auto w-32 h-32 flex items-center justify-center">
               <img 
                 src={obraMapLogo} 
                 alt="ObraMap Logo" 
-                className="w-full h-full object-contain drop-shadow-md"
+                className="w-full h-full object-contain"
               />
             </div>
             <div>
-              <CardTitle className="text-2xl font-bold">
-                ObraMap
-              </CardTitle>
-              <CardDescription className="mt-2">
+              <CardDescription className="mt-1 text-gray-400">
                 Sistema de Gestão de Obras
               </CardDescription>
             </div>
@@ -124,7 +121,7 @@ export default function Auth() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="text-gray-300">Email</Label>
                 <Input
                   id="email"
                   type="email"
@@ -132,7 +129,7 @@ export default function Auth() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={isLoading}
-                  className={errors.email ? "border-destructive" : ""}
+                  className={`bg-[#1a1a2e] border-[#0f3460] text-white placeholder:text-gray-500 ${errors.email ? "border-destructive" : ""}`}
                 />
                 {errors.email && (
                   <p className="text-sm text-destructive">{errors.email}</p>
@@ -140,7 +137,7 @@ export default function Auth() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Senha</Label>
+                <Label htmlFor="password" className="text-gray-300">Senha</Label>
                 <div className="relative">
                   <Input
                     id="password"
@@ -149,12 +146,12 @@ export default function Auth() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isLoading}
-                    className={errors.password ? "border-destructive pr-10" : "pr-10"}
+                    className={`bg-[#1a1a2e] border-[#0f3460] text-white placeholder:text-gray-500 ${errors.password ? "border-destructive pr-10" : "pr-10"}`}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -164,21 +161,21 @@ export default function Auth() {
                 )}
               </div>
 
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full bg-[#e67e22] hover:bg-[#d35400] text-white font-semibold" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Entrar
               </Button>
             </form>
 
-            <p className="mt-6 text-xs text-muted-foreground text-center">
+            <p className="mt-6 text-xs text-gray-500 text-center">
               Para obter acesso, entre em contato com o administrador do sistema.
             </p>
           </CardContent>
         </Card>
       </div>
 
-      <footer className="py-4 text-center text-sm text-muted-foreground border-t border-border/50">
-        <p>Desenvolvido e produzido por <span className="font-semibold text-foreground">Felipe Langmantel</span></p>
+      <footer className="py-4 text-center text-sm text-gray-500 border-t border-[#0f3460]/30">
+        <p>Desenvolvido e produzido por <span className="font-semibold text-gray-300">Felipe Langmantel</span></p>
       </footer>
     </div>
   );
