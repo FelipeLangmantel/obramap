@@ -1313,6 +1313,7 @@ export function WeeklyPlanningFromPeriod() {
                       key={week.week_number}
                       week={week}
                       onRemoveHouse={removeHouseFromWeek}
+                      onMoveHouse={moveHouseBetweenWeeks}
                     />
                   ))}
                 </div>
