@@ -991,8 +991,17 @@ export function WeeklyPlanningFromPeriod() {
           if (error) throw error;
         }
       }
-      await supabase.from("planning_periods").update({ weekly_plan_generated: true, weekly_plan_locked: true }).eq("id", selectedPeriodId);
-      toast.success("Planejamento semanal salvo!");
+      // Update period: mark as generated/locked and set status to released_to_weekly
+      await supabase.from("planning_periods").update({ 
+        weekly_plan_generated: true, 
+        weekly_plan_locked: true,
+        status: "released_to_weekly"
+      }).eq("id", selectedPeriodId);
+      
+      // Refresh periods list to reflect new status
+      await loadPeriods();
+      
+      toast.success("Planejamento semanal salvo e medição liberada!");
     } catch (err: any) {
       toast.error("Erro: " + (err?.message || "desconhecido"));
     } finally {
