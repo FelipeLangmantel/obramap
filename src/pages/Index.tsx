@@ -191,7 +191,8 @@ function Index() {
     "board-decisions": "Painel Diretoria",
     delivery: "Entrega & Pós-Obra",
     "smart-planning": "Planejamento Inteligente",
-    "productivity": "Produtividade e Equipes"
+    "productivity": "Produtividade e Equipes",
+    "contractors": "Empreiteiros",
   };
 
   return (
