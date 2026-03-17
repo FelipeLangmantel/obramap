@@ -1123,18 +1123,18 @@ export function WeeklyPlanningFromPeriod() {
               <span className="text-border">|</span>
               <Badge variant={selectedPeriod.weekly_plan_locked ? "secondary" : "default"} className="gap-1">
                 {selectedPeriod.weekly_plan_locked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
-                {selectedPeriod.status === "approved" ? "Aprovada" : selectedPeriod.status === "released_to_weekly" ? "Liberada" : selectedPeriod.status === "closed" ? "Fechada" : selectedPeriod.status}
+                {selectedPeriod.status === "draft" ? "Rascunho" : selectedPeriod.status === "approved" ? "Aprovada" : selectedPeriod.status === "released_to_weekly" ? "Liberada" : selectedPeriod.status === "closed" ? "Fechada" : selectedPeriod.status}
               </Badge>
               {(selectedPeriod.status === "released_to_weekly") && (
                 <Button
                   variant="outline"
                   size="sm"
                   className="h-6 text-xs"
-                  onClick={revertToApproved}
+                  onClick={revertToDraft}
                   disabled={isReverting}
                 >
                   <Undo2 className="h-3 w-3 mr-1" />
-                  {isReverting ? "Revertendo..." : "Reverter p/ Aprovada"}
+                  {isReverting ? "Revertendo..." : "Reverter p/ Rascunho"}
                 </Button>
               )}
             </div>
