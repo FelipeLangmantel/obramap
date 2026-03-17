@@ -222,6 +222,26 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     },
   ];
 
+  const handleViewChange = (view: MenuViewType) => {
+    if (view in DEDICATED_ROUTE_MAP) {
+      navigate(DEDICATED_ROUTE_MAP[view as RouteViewType]);
+      return;
+    }
+    const moduleStatus = getModuleStatus(view);
+    if (moduleStatus === "development") {
+      const moduleInfo = getModuleInfo(view);
+      if (moduleInfo) {
+        setDevModuleDialog(moduleInfo);
+        return;
+      }
+    }
+    if (location.pathname !== "/") {
+      navigate("/", { state: { targetView: view } });
+      return;
+    }
+    onViewChange(view as ViewType);
+  };
+
   // Filter menu items based on permissions, company modules, and system governance
   const getVisibleItems = (items: MenuItem[]) => items.filter(item => {
     if (!canAccessMenu(item.permissionId)) return false;
