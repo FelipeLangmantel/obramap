@@ -888,7 +888,6 @@ export function WeeklyPlanningFromPeriod() {
                     <WeekSummaryColumn
                       key={week.week_number}
                       week={week}
-                      allServices={periodServices}
                       onRemoveHouse={removeHouseFromWeek}
                     />
                   ))}
