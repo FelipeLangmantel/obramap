@@ -144,17 +144,6 @@ export default function Auth() {
               ))}
             </div>
 
-            {/* Stats */}
-            <div className="flex gap-4 mt-2">
-              <div className="flex-1 rounded-xl border border-[#2a2a45] bg-[#16213e]/60 px-5 py-4">
-                <span className="text-[#e67e22] text-3xl font-bold">+650</span>
-                <p className="text-[#8a8a9a] text-sm mt-1">casas em execução</p>
-              </div>
-              <div className="flex-1 rounded-xl border border-[#2a2a45] bg-[#16213e]/60 px-5 py-4">
-                <span className="text-[#e67e22] text-3xl font-bold">4</span>
-                <p className="text-[#8a8a9a] text-sm mt-1">obras ativas</p>
-              </div>
-            </div>
           </div>
 
           {/* ══════ RIGHT SIDE — LOGIN FORM ══════ */}
