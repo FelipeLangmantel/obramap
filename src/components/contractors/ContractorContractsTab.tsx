@@ -25,7 +25,7 @@ interface Props {
   onSelectContract: (contract: ContractorContract) => void;
 }
 
-const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const fmt = (v: number | undefined | null) => (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export function ContractorContractsTab({
   contractors, contracts, onCreateContract, fetchContractServices,
