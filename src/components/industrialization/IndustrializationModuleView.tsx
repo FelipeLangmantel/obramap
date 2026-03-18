@@ -24,8 +24,9 @@ interface OperationContext {
 }
 
 export default function IndustrializationModuleView() {
-  const { selectedProject } = useConstruction();
-  const { companyId } = useAuth();
+  const { currentProject } = useConstruction();
+  const { profile } = useAuth();
+  const companyId = profile?.company_id;
   const [contexts, setContexts] = useState<OperationContext[]>([]);
   const [activeContext, setActiveContext] = useState<OperationContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
