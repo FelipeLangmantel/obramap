@@ -25,6 +25,7 @@ import DeliveryView from "@/components/DeliveryView";
 import SmartPlanningView from "@/components/smart-planning/SmartPlanningView";
 import { ServiceProductivityView } from "@/components/productivity/ServiceProductivityView";
 import ContractorsModuleView from "@/components/contractors/ContractorsModuleView";
+import IndustrializationModuleView from "@/components/industrialization/IndustrializationModuleView";
 import { Loader2, Menu, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -37,7 +38,7 @@ function SidebarTriggerButton() {
   );
 }
 
-type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors";
+type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization";
 
 /**
  * ✅ Index agora é puro - sem redirects
@@ -193,6 +194,7 @@ function Index() {
     "smart-planning": "Planejamento Inteligente",
     "productivity": "Produtividade e Equipes",
     "contractors": "Empreiteiros",
+    "industrialization": "Industrialização & Logística",
   };
 
   return (
@@ -370,6 +372,12 @@ function Index() {
                 {activeView === "contractors" && (
                   <div className="flex-1">
                     <ContractorsModuleView />
+                  </div>
+                )}
+
+                {activeView === "industrialization" && (
+                  <div className="flex-1">
+                    <IndustrializationModuleView />
                   </div>
                 )}
               </div>

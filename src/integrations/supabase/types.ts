@@ -1177,6 +1177,1580 @@ export type Database = {
           },
         ]
       }
+      ind_batch_units: {
+        Row: {
+          batch_id: string
+          context_id: string
+          house_number: number | null
+          id: string
+          status: string
+          unit_id: string | null
+        }
+        Insert: {
+          batch_id: string
+          context_id: string
+          house_number?: number | null
+          id?: string
+          status?: string
+          unit_id?: string | null
+        }
+        Update: {
+          batch_id?: string
+          context_id?: string
+          house_number?: number | null
+          id?: string
+          status?: string
+          unit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_batch_units_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "ind_production_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_batch_units_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_batch_units_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "ind_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_demand_entries: {
+        Row: {
+          auto_generated: boolean
+          company_id: string
+          context_id: string
+          created_at: string
+          id: string
+          ind_period_id: string | null
+          ind_service_id: string | null
+          macro_id: string | null
+          notes: string | null
+          obramap_period_id: string | null
+          scope_id: string | null
+          target_quantity: number
+          updated_at: string
+        }
+        Insert: {
+          auto_generated?: boolean
+          company_id: string
+          context_id: string
+          created_at?: string
+          id?: string
+          ind_period_id?: string | null
+          ind_service_id?: string | null
+          macro_id?: string | null
+          notes?: string | null
+          obramap_period_id?: string | null
+          scope_id?: string | null
+          target_quantity?: number
+          updated_at?: string
+        }
+        Update: {
+          auto_generated?: boolean
+          company_id?: string
+          context_id?: string
+          created_at?: string
+          id?: string
+          ind_period_id?: string | null
+          ind_service_id?: string | null
+          macro_id?: string | null
+          notes?: string | null
+          obramap_period_id?: string | null
+          scope_id?: string | null
+          target_quantity?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_demand_entries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_demand_entries_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_demand_entries_ind_period_id_fkey"
+            columns: ["ind_period_id"]
+            isOneToOne: false
+            referencedRelation: "ind_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_demand_entries_ind_service_id_fkey"
+            columns: ["ind_service_id"]
+            isOneToOne: false
+            referencedRelation: "ind_services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_demand_entries_obramap_period_id_fkey"
+            columns: ["obramap_period_id"]
+            isOneToOne: false
+            referencedRelation: "planning_periods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_demand_units: {
+        Row: {
+          context_id: string
+          demand_entry_id: string
+          house_number: number | null
+          id: string
+          unit_id: string | null
+        }
+        Insert: {
+          context_id: string
+          demand_entry_id: string
+          house_number?: number | null
+          id?: string
+          unit_id?: string | null
+        }
+        Update: {
+          context_id?: string
+          demand_entry_id?: string
+          house_number?: number | null
+          id?: string
+          unit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_demand_units_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_demand_units_demand_entry_id_fkey"
+            columns: ["demand_entry_id"]
+            isOneToOne: false
+            referencedRelation: "ind_demand_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_demand_units_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "ind_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_factories: {
+        Row: {
+          avg_lead_time_days: number
+          city: string | null
+          cnpj: string | null
+          company_id: string
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          radius_km: number | null
+          state: string | null
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          avg_lead_time_days?: number
+          city?: string | null
+          cnpj?: string | null
+          company_id: string
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          radius_km?: number | null
+          state?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avg_lead_time_days?: number
+          city?: string | null
+          cnpj?: string | null
+          company_id?: string
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          radius_km?: number | null
+          state?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_factories_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_factories_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_factory_capacities: {
+        Row: {
+          capacity_day: number
+          capacity_month: number
+          capacity_week: number
+          factory_id: string
+          id: string
+          ind_service_id: string | null
+          is_active: boolean
+          lead_time_days: number
+          macro_id: string | null
+          scope_id: string | null
+        }
+        Insert: {
+          capacity_day?: number
+          capacity_month?: number
+          capacity_week?: number
+          factory_id: string
+          id?: string
+          ind_service_id?: string | null
+          is_active?: boolean
+          lead_time_days?: number
+          macro_id?: string | null
+          scope_id?: string | null
+        }
+        Update: {
+          capacity_day?: number
+          capacity_month?: number
+          capacity_week?: number
+          factory_id?: string
+          id?: string
+          ind_service_id?: string | null
+          is_active?: boolean
+          lead_time_days?: number
+          macro_id?: string | null
+          scope_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_factory_capacities_factory_id_fkey"
+            columns: ["factory_id"]
+            isOneToOne: false
+            referencedRelation: "ind_factories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_factory_capacities_ind_service_id_fkey"
+            columns: ["ind_service_id"]
+            isOneToOne: false
+            referencedRelation: "ind_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_factory_context_rules: {
+        Row: {
+          company_id: string
+          context_id: string
+          factory_id: string
+          id: string
+          ind_service_id: string | null
+          is_active: boolean
+          macro_id: string | null
+          max_share_percent: number | null
+          priority: number
+          reserved_capacity_month: number
+          scope_id: string | null
+        }
+        Insert: {
+          company_id: string
+          context_id: string
+          factory_id: string
+          id?: string
+          ind_service_id?: string | null
+          is_active?: boolean
+          macro_id?: string | null
+          max_share_percent?: number | null
+          priority?: number
+          reserved_capacity_month?: number
+          scope_id?: string | null
+        }
+        Update: {
+          company_id?: string
+          context_id?: string
+          factory_id?: string
+          id?: string
+          ind_service_id?: string | null
+          is_active?: boolean
+          macro_id?: string | null
+          max_share_percent?: number | null
+          priority?: number
+          reserved_capacity_month?: number
+          scope_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_factory_context_rules_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_factory_context_rules_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_factory_context_rules_factory_id_fkey"
+            columns: ["factory_id"]
+            isOneToOne: false
+            referencedRelation: "ind_factories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_factory_context_rules_ind_service_id_fkey"
+            columns: ["ind_service_id"]
+            isOneToOne: false
+            referencedRelation: "ind_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_factory_models: {
+        Row: {
+          company_id: string
+          created_at: string
+          description: string | null
+          factory_id: string
+          id: string
+          ind_service_id: string | null
+          is_active: boolean
+          macro_id: string | null
+          name: string
+          scope_id: string | null
+          total_positions: number
+          units_per_week: number
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          description?: string | null
+          factory_id: string
+          id?: string
+          ind_service_id?: string | null
+          is_active?: boolean
+          macro_id?: string | null
+          name: string
+          scope_id?: string | null
+          total_positions?: number
+          units_per_week?: number
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          factory_id?: string
+          id?: string
+          ind_service_id?: string | null
+          is_active?: boolean
+          macro_id?: string | null
+          name?: string
+          scope_id?: string | null
+          total_positions?: number
+          units_per_week?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_factory_models_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_factory_models_factory_id_fkey"
+            columns: ["factory_id"]
+            isOneToOne: false
+            referencedRelation: "ind_factories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_factory_models_ind_service_id_fkey"
+            columns: ["ind_service_id"]
+            isOneToOne: false
+            referencedRelation: "ind_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_installation_schedule: {
+        Row: {
+          batch_id: string | null
+          company_id: string
+          context_id: string
+          contractor_id: string | null
+          contractor_name: string | null
+          created_at: string
+          end_time: string | null
+          id: string
+          lifting_schedule_id: string | null
+          notes: string | null
+          scheduled_date: string
+          start_time: string | null
+          status: string
+          team_size: number
+          updated_at: string
+        }
+        Insert: {
+          batch_id?: string | null
+          company_id: string
+          context_id: string
+          contractor_id?: string | null
+          contractor_name?: string | null
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          lifting_schedule_id?: string | null
+          notes?: string | null
+          scheduled_date: string
+          start_time?: string | null
+          status?: string
+          team_size?: number
+          updated_at?: string
+        }
+        Update: {
+          batch_id?: string | null
+          company_id?: string
+          context_id?: string
+          contractor_id?: string | null
+          contractor_name?: string | null
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          lifting_schedule_id?: string | null
+          notes?: string | null
+          scheduled_date?: string
+          start_time?: string | null
+          status?: string
+          team_size?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_installation_schedule_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "ind_production_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_installation_schedule_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_installation_schedule_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_installation_schedule_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_installation_schedule_lifting_schedule_id_fkey"
+            columns: ["lifting_schedule_id"]
+            isOneToOne: false
+            referencedRelation: "ind_lifting_schedule"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_installation_units: {
+        Row: {
+          context_id: string
+          house_number: number | null
+          id: string
+          installation_id: string
+          status: string
+          unit_id: string | null
+        }
+        Insert: {
+          context_id: string
+          house_number?: number | null
+          id?: string
+          installation_id: string
+          status?: string
+          unit_id?: string | null
+        }
+        Update: {
+          context_id?: string
+          house_number?: number | null
+          id?: string
+          installation_id?: string
+          status?: string
+          unit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_installation_units_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_installation_units_installation_id_fkey"
+            columns: ["installation_id"]
+            isOneToOne: false
+            referencedRelation: "ind_installation_schedule"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_installation_units_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "ind_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_lifting_equipment: {
+        Row: {
+          capacity_tons: number | null
+          company_id: string
+          created_at: string
+          daily_cost: number
+          equipment_type: string
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          supplier_name: string | null
+        }
+        Insert: {
+          capacity_tons?: number | null
+          company_id: string
+          created_at?: string
+          daily_cost?: number
+          equipment_type: string
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          supplier_name?: string | null
+        }
+        Update: {
+          capacity_tons?: number | null
+          company_id?: string
+          created_at?: string
+          daily_cost?: number
+          equipment_type?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          supplier_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_lifting_equipment_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_lifting_schedule: {
+        Row: {
+          batch_id: string | null
+          booking_date: string
+          company_id: string
+          context_id: string
+          created_at: string
+          daily_cost: number
+          end_time: string | null
+          equipment_id: string | null
+          id: string
+          linked_shipment_id: string | null
+          notes: string | null
+          start_time: string | null
+          status: string
+          supplier_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          batch_id?: string | null
+          booking_date: string
+          company_id: string
+          context_id: string
+          created_at?: string
+          daily_cost?: number
+          end_time?: string | null
+          equipment_id?: string | null
+          id?: string
+          linked_shipment_id?: string | null
+          notes?: string | null
+          start_time?: string | null
+          status?: string
+          supplier_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          batch_id?: string | null
+          booking_date?: string
+          company_id?: string
+          context_id?: string
+          created_at?: string
+          daily_cost?: number
+          end_time?: string | null
+          equipment_id?: string | null
+          id?: string
+          linked_shipment_id?: string | null
+          notes?: string | null
+          start_time?: string | null
+          status?: string
+          supplier_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_lifting_schedule_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "ind_production_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_lifting_schedule_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_lifting_schedule_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_lifting_schedule_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "ind_lifting_equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_lifting_schedule_linked_shipment_id_fkey"
+            columns: ["linked_shipment_id"]
+            isOneToOne: false
+            referencedRelation: "ind_shipments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_lifting_units: {
+        Row: {
+          context_id: string
+          house_number: number | null
+          id: string
+          lifting_schedule_id: string
+          unit_id: string | null
+        }
+        Insert: {
+          context_id: string
+          house_number?: number | null
+          id?: string
+          lifting_schedule_id: string
+          unit_id?: string | null
+        }
+        Update: {
+          context_id?: string
+          house_number?: number | null
+          id?: string
+          lifting_schedule_id?: string
+          unit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_lifting_units_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_lifting_units_lifting_schedule_id_fkey"
+            columns: ["lifting_schedule_id"]
+            isOneToOne: false
+            referencedRelation: "ind_lifting_schedule"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_lifting_units_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "ind_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_model_positions: {
+        Row: {
+          created_at: string
+          description: string | null
+          height_cm: number | null
+          id: string
+          model_id: string
+          position_code: string
+          position_order: number
+          thickness_cm: number | null
+          weight_kg: number | null
+          width_cm: number | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          height_cm?: number | null
+          id?: string
+          model_id: string
+          position_code: string
+          position_order?: number
+          thickness_cm?: number | null
+          weight_kg?: number | null
+          width_cm?: number | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          height_cm?: number | null
+          id?: string
+          model_id?: string
+          position_code?: string
+          position_order?: number
+          thickness_cm?: number | null
+          weight_kg?: number | null
+          width_cm?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_model_positions_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "ind_factory_models"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_operation_contexts: {
+        Row: {
+          client_name: string | null
+          company_id: string
+          context_type: string
+          created_at: string
+          description: string | null
+          id: string
+          location: string | null
+          name: string
+          obramap_project_id: string | null
+          status: string
+          total_units: number
+          updated_at: string
+        }
+        Insert: {
+          client_name?: string | null
+          company_id: string
+          context_type: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          location?: string | null
+          name: string
+          obramap_project_id?: string | null
+          status?: string
+          total_units?: number
+          updated_at?: string
+        }
+        Update: {
+          client_name?: string | null
+          company_id?: string
+          context_type?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          location?: string | null
+          name?: string
+          obramap_project_id?: string | null
+          status?: string
+          total_units?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_operation_contexts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_operation_contexts_obramap_project_id_fkey"
+            columns: ["obramap_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_periods: {
+        Row: {
+          company_id: string
+          context_id: string
+          created_at: string
+          end_date: string
+          id: string
+          name: string
+          start_date: string
+          status: string
+          target_units: number
+        }
+        Insert: {
+          company_id: string
+          context_id: string
+          created_at?: string
+          end_date: string
+          id?: string
+          name: string
+          start_date: string
+          status?: string
+          target_units?: number
+        }
+        Update: {
+          company_id?: string
+          context_id?: string
+          created_at?: string
+          end_date?: string
+          id?: string
+          name?: string
+          start_date?: string
+          status?: string
+          target_units?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_periods_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_periods_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_production_batches: {
+        Row: {
+          actual_finish: string | null
+          actual_start: string | null
+          batch_code: string
+          company_id: string
+          context_id: string
+          created_at: string
+          demand_entry_id: string | null
+          factory_id: string
+          id: string
+          ind_service_id: string | null
+          macro_id: string | null
+          model_id: string | null
+          notes: string | null
+          planned_finish: string | null
+          planned_quantity: number
+          planned_start: string | null
+          scope_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          actual_finish?: string | null
+          actual_start?: string | null
+          batch_code: string
+          company_id: string
+          context_id: string
+          created_at?: string
+          demand_entry_id?: string | null
+          factory_id: string
+          id?: string
+          ind_service_id?: string | null
+          macro_id?: string | null
+          model_id?: string | null
+          notes?: string | null
+          planned_finish?: string | null
+          planned_quantity?: number
+          planned_start?: string | null
+          scope_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          actual_finish?: string | null
+          actual_start?: string | null
+          batch_code?: string
+          company_id?: string
+          context_id?: string
+          created_at?: string
+          demand_entry_id?: string | null
+          factory_id?: string
+          id?: string
+          ind_service_id?: string | null
+          macro_id?: string | null
+          model_id?: string | null
+          notes?: string | null
+          planned_finish?: string | null
+          planned_quantity?: number
+          planned_start?: string | null
+          scope_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_production_batches_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_production_batches_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_production_batches_demand_entry_id_fkey"
+            columns: ["demand_entry_id"]
+            isOneToOne: false
+            referencedRelation: "ind_demand_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_production_batches_factory_id_fkey"
+            columns: ["factory_id"]
+            isOneToOne: false
+            referencedRelation: "ind_factories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_production_batches_ind_service_id_fkey"
+            columns: ["ind_service_id"]
+            isOneToOne: false
+            referencedRelation: "ind_services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_production_batches_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "ind_factory_models"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_service_configs: {
+        Row: {
+          company_id: string
+          context_id: string
+          created_at: string
+          default_lead_time_days: number
+          id: string
+          ind_service_id: string | null
+          installation_time_per_unit: number | null
+          loading_time_hours: number | null
+          logistic_unit_type: string
+          macro_id: string | null
+          requires_installation_team: boolean
+          requires_lifting: boolean
+          requires_transport: boolean
+          scope_id: string | null
+          unloading_time_hours: number | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          context_id: string
+          created_at?: string
+          default_lead_time_days?: number
+          id?: string
+          ind_service_id?: string | null
+          installation_time_per_unit?: number | null
+          loading_time_hours?: number | null
+          logistic_unit_type?: string
+          macro_id?: string | null
+          requires_installation_team?: boolean
+          requires_lifting?: boolean
+          requires_transport?: boolean
+          scope_id?: string | null
+          unloading_time_hours?: number | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          context_id?: string
+          created_at?: string
+          default_lead_time_days?: number
+          id?: string
+          ind_service_id?: string | null
+          installation_time_per_unit?: number | null
+          loading_time_hours?: number | null
+          logistic_unit_type?: string
+          macro_id?: string | null
+          requires_installation_team?: boolean
+          requires_lifting?: boolean
+          requires_transport?: boolean
+          scope_id?: string | null
+          unloading_time_hours?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_service_configs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_service_configs_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_service_configs_ind_service_id_fkey"
+            columns: ["ind_service_id"]
+            isOneToOne: false
+            referencedRelation: "ind_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_services: {
+        Row: {
+          category: string
+          company_id: string
+          context_id: string
+          created_at: string
+          display_order: number | null
+          id: string
+          is_industrialized: boolean
+          name: string
+        }
+        Insert: {
+          category?: string
+          company_id: string
+          context_id: string
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          is_industrialized?: boolean
+          name: string
+        }
+        Update: {
+          category?: string
+          company_id?: string
+          context_id?: string
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          is_industrialized?: boolean
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_services_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_services_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_shipment_units: {
+        Row: {
+          context_id: string
+          house_number: number | null
+          id: string
+          notes: string | null
+          shipment_id: string
+          status: string
+          unit_id: string | null
+        }
+        Insert: {
+          context_id: string
+          house_number?: number | null
+          id?: string
+          notes?: string | null
+          shipment_id: string
+          status?: string
+          unit_id?: string | null
+        }
+        Update: {
+          context_id?: string
+          house_number?: number | null
+          id?: string
+          notes?: string | null
+          shipment_id?: string
+          status?: string
+          unit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_shipment_units_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_shipment_units_shipment_id_fkey"
+            columns: ["shipment_id"]
+            isOneToOne: false
+            referencedRelation: "ind_shipments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_shipment_units_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "ind_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_shipments: {
+        Row: {
+          actual_date: string | null
+          batch_id: string
+          company_id: string
+          context_id: string
+          created_at: string
+          driver_name: string | null
+          freight_value: number
+          id: string
+          notes: string | null
+          planned_date: string
+          received_at: string | null
+          received_by: string | null
+          shipment_number: string
+          status: string
+          total_weight_kg: number
+          truck_capacity_kg: number | null
+          truck_id: string | null
+          truck_plate: string | null
+          updated_at: string
+        }
+        Insert: {
+          actual_date?: string | null
+          batch_id: string
+          company_id: string
+          context_id: string
+          created_at?: string
+          driver_name?: string | null
+          freight_value?: number
+          id?: string
+          notes?: string | null
+          planned_date: string
+          received_at?: string | null
+          received_by?: string | null
+          shipment_number: string
+          status?: string
+          total_weight_kg?: number
+          truck_capacity_kg?: number | null
+          truck_id?: string | null
+          truck_plate?: string | null
+          updated_at?: string
+        }
+        Update: {
+          actual_date?: string | null
+          batch_id?: string
+          company_id?: string
+          context_id?: string
+          created_at?: string
+          driver_name?: string | null
+          freight_value?: number
+          id?: string
+          notes?: string | null
+          planned_date?: string
+          received_at?: string | null
+          received_by?: string | null
+          shipment_number?: string
+          status?: string
+          total_weight_kg?: number
+          truck_capacity_kg?: number | null
+          truck_id?: string | null
+          truck_plate?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_shipments_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "ind_production_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_shipments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_shipments_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_shipments_truck_id_fkey"
+            columns: ["truck_id"]
+            isOneToOne: false
+            referencedRelation: "ind_trucks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_trucks: {
+        Row: {
+          capacity_kg: number
+          carrier_name: string | null
+          company_id: string
+          created_at: string
+          driver_name: string | null
+          driver_phone: string | null
+          id: string
+          is_active: boolean
+          notes: string | null
+          plate: string
+          truck_type: string
+        }
+        Insert: {
+          capacity_kg?: number
+          carrier_name?: string | null
+          company_id: string
+          created_at?: string
+          driver_name?: string | null
+          driver_phone?: string | null
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          plate: string
+          truck_type?: string
+        }
+        Update: {
+          capacity_kg?: number
+          carrier_name?: string | null
+          company_id?: string
+          created_at?: string
+          driver_name?: string | null
+          driver_phone?: string | null
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          plate?: string
+          truck_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_trucks_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_unit_kits: {
+        Row: {
+          batch_id: string | null
+          company_id: string
+          components_delivered: number
+          components_total: number
+          context_id: string
+          created_at: string
+          factory_id: string
+          house_number: number | null
+          id: string
+          kit_status: string
+          model_id: string | null
+          needed_by_date: string | null
+          notes: string | null
+          unit_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          batch_id?: string | null
+          company_id: string
+          components_delivered?: number
+          components_total?: number
+          context_id: string
+          created_at?: string
+          factory_id: string
+          house_number?: number | null
+          id?: string
+          kit_status?: string
+          model_id?: string | null
+          needed_by_date?: string | null
+          notes?: string | null
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          batch_id?: string | null
+          company_id?: string
+          components_delivered?: number
+          components_total?: number
+          context_id?: string
+          created_at?: string
+          factory_id?: string
+          house_number?: number | null
+          id?: string
+          kit_status?: string
+          model_id?: string | null
+          needed_by_date?: string | null
+          notes?: string | null
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_unit_kits_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "ind_production_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_unit_kits_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_unit_kits_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_unit_kits_factory_id_fkey"
+            columns: ["factory_id"]
+            isOneToOne: false
+            referencedRelation: "ind_factories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_unit_kits_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "ind_factory_models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_unit_kits_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "ind_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_units: {
+        Row: {
+          code: string
+          company_id: string
+          context_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          position_x: number | null
+          position_y: number | null
+          status: string
+          unit_number: number
+          unit_type: string | null
+          updated_at: string
+          zone_id: string | null
+        }
+        Insert: {
+          code: string
+          company_id: string
+          context_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          position_x?: number | null
+          position_y?: number | null
+          status?: string
+          unit_number: number
+          unit_type?: string | null
+          updated_at?: string
+          zone_id?: string | null
+        }
+        Update: {
+          code?: string
+          company_id?: string
+          context_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          position_x?: number | null
+          position_y?: number | null
+          status?: string
+          unit_number?: number
+          unit_type?: string | null
+          updated_at?: string
+          zone_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_units_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_units_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_units_zone_id_fkey"
+            columns: ["zone_id"]
+            isOneToOne: false
+            referencedRelation: "ind_zones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_zones: {
+        Row: {
+          code: string | null
+          color: string | null
+          company_id: string
+          context_id: string
+          created_at: string
+          display_order: number | null
+          id: string
+          name: string
+        }
+        Insert: {
+          code?: string | null
+          color?: string | null
+          company_id: string
+          context_id: string
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          name: string
+        }
+        Update: {
+          code?: string | null
+          color?: string | null
+          company_id?: string
+          context_id?: string
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_zones_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_zones_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       indirect_costs: {
         Row: {
           company_id: string
