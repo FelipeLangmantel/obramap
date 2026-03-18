@@ -373,6 +373,12 @@ function Index() {
                     <ContractorsModuleView />
                   </div>
                 )}
+
+                {activeView === "industrialization" && (
+                  <div className="flex-1">
+                    <IndustrializationModuleView />
+                  </div>
+                )}
               </div>
             )}
           </main>
