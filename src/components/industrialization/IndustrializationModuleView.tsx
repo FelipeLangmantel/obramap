@@ -34,7 +34,7 @@ export default function IndustrializationModuleView() {
   useEffect(() => {
     if (!companyId) return;
     fetchContexts();
-  }, [companyId, selectedProject]);
+  }, [companyId, currentProject]);
 
   const fetchContexts = async () => {
     setIsLoading(true);
