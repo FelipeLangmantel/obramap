@@ -44,8 +44,8 @@ export default function IndustrializationModuleView() {
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (selectedProject?.id) {
-        query = query.or(`obramap_project_id.eq.${selectedProject.id},context_type.eq.standalone`);
+      if (currentProject?.id) {
+        query = query.or(`obramap_project_id.eq.${currentProject.id},context_type.eq.standalone`);
       }
 
       const { data, error } = await query;
