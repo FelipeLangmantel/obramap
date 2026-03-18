@@ -62,7 +62,7 @@ export default function IndustrializationModuleView() {
   };
 
   const createIntegratedContext = async () => {
-    if (!selectedProject?.id || !companyId) {
+    if (!currentProject?.id || !companyId) {
       toast.error("Selecione uma obra primeiro.");
       return;
     }
@@ -72,9 +72,9 @@ export default function IndustrializationModuleView() {
         .insert({
           company_id: companyId,
           context_type: "integrated",
-          obramap_project_id: selectedProject.id,
-          name: `Industrial - ${selectedProject.name}`,
-          total_units: selectedProject.total_houses || 0,
+          obramap_project_id: currentProject.id,
+          name: `Industrial - ${currentProject.name}`,
+          total_units: currentProject.totalHouses || 0,
         })
         .select()
         .single();
