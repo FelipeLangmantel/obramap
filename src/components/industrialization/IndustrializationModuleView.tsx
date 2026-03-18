@@ -117,12 +117,12 @@ export default function IndustrializationModuleView() {
             Gerencie o fluxo completo de componentes industrializados: fábrica → lote → transporte → içamento → montagem.
           </p>
           <div className="flex gap-3 justify-center pt-4">
-            <Button onClick={createIntegratedContext} disabled={!selectedProject}>
+            <Button onClick={createIntegratedContext} disabled={!currentProject}>
               <Plus className="h-4 w-4 mr-2" />
               Vincular à Obra Atual
             </Button>
           </div>
-          {!selectedProject && (
+          {!currentProject && (
             <p className="text-xs text-muted-foreground">Selecione uma obra para criar um contexto integrado.</p>
           )}
         </div>
