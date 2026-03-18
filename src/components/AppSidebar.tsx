@@ -225,6 +225,14 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       ],
     },
     {
+      label: "Industrialização",
+      highlight: true,
+      badge: "Beta",
+      items: [
+        { title: "Industrialização & Logística", view: "industrialization", icon: Factory, permissionId: "industrializacao" },
+      ],
+    },
+    {
       label: "Medições PLE",
       highlight: true,
       badge: "Módulo à parte",
