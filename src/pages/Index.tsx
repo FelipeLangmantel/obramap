@@ -193,6 +193,7 @@ function Index() {
     "smart-planning": "Planejamento Inteligente",
     "productivity": "Produtividade e Equipes",
     "contractors": "Empreiteiros",
+    "industrialization": "Industrialização & Logística",
   };
 
   return (
