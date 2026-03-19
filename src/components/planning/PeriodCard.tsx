@@ -309,7 +309,51 @@ export function PeriodCard({
             )}
           </Button>
         )}
+
+        {/* Botão Reabrir — apenas system_admin em períodos fechados */}
+        {isSystemAdmin && period.status === "closed" && (
+          <Button
+            className="w-full mt-2"
+            variant="destructive"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setReopenDialogOpen(true);
+            }}
+            disabled={isReopening}
+          >
+            {isReopening ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Reabrindo...
+              </>
+            ) : (
+              <>
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Reabrir Período
+              </>
+            )}
+          </Button>
+        )}
       </CardContent>
+
+      {/* Dialog de confirmação de reabertura */}
+      <AlertDialog open={reopenDialogOpen} onOpenChange={setReopenDialogOpen}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reabrir Período?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza? O período voltará para "Liberado" e poderá ser editado novamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isReopening}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReopenPeriod} disabled={isReopening}>
+              {isReopening ? "Reabrindo..." : "Confirmar Reabertura"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
