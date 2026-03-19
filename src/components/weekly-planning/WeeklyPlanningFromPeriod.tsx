@@ -659,8 +659,7 @@ export function WeeklyPlanningFromPeriod() {
   const [isGenerated, setIsGenerated] = useState(false);
   const [showWeekConfig, setShowWeekConfig] = useState(false);
 
-  // Contractor allocation state per service per week: key = `${svcKey}:${weekNumber}`
-  const [contractorAllocations, setContractorAllocations] = useState<Record<string, ContractorAllocation>>({});
+  // Contractor services for this project
   const [contractorServices, setContractorServices] = useState<ContractorServiceOption[]>([]);
 
   // Service-first flow state
