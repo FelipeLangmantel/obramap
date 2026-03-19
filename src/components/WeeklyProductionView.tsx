@@ -244,7 +244,7 @@ export function WeeklyProductionView() {
 
   // C3: Deviation alerts state
   const [deviationAlerts, setDeviationAlerts] = useState<any[]>([]);
-  const [analysisSubTab, setAnalysisSubTab] = useState<string>("evolution");
+  
   const [reasonDialogOpen, setReasonDialogOpen] = useState(false);
   const [selectedAlert, setSelectedAlert] = useState<any | null>(null);
   const [deviationReason, setDeviationReason] = useState("");
