@@ -47,6 +47,26 @@ export default function MeasurementPlanningPage() {
     setGeneratingSuppliesPeriodId(null);
   };
 
+  const validateBeforeClose = useCallback(async (periodId: string): Promise<{ canClose: boolean; warnings: string[] }> => {
+    const warnings: string[] = [];
+
+    const { data: servicesWithoutContractor } = await supabase
+      .from('weekly_plan_services')
+      .select('scope_name, macro_name, planned_houses')
+      .eq('planning_period_id', periodId)
+      .is('contractor_id', null)
+      .gt('planned_houses', 0);
+
+    if (servicesWithoutContractor && servicesWithoutContractor.length > 0) {
+      const names = servicesWithoutContractor.map(s => `• ${s.scope_name} (${s.planned_houses} casas)`).join('\n');
+      warnings.push(
+        `⚠ ${servicesWithoutContractor.length} serviço(s) sem empreiteiro alocado:\n${names}\n\nFechar sem empreiteiro deixa estes serviços sem rastreabilidade de quem executou.`
+      );
+    }
+
+    return { canClose: true, warnings };
+  }, []);
+
   // Redirect if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
