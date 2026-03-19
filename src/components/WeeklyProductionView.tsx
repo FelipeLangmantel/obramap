@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea";
 import { 
   ClipboardList, 
   Save, 
@@ -36,7 +37,10 @@ import {
   Zap,
   RotateCcw,
   Users,
-  Plus
+  Plus,
+  Bell,
+  X as XIcon,
+  HardHat
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
