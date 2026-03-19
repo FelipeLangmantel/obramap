@@ -69,6 +69,33 @@ export function PeriodCard({
   isGeneratingSupplies,
   canEdit = true 
 }: PeriodCardProps) {
+  const { isSystemAdmin } = useAuth();
+  const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
+  const [isReopening, setIsReopening] = useState(false);
+
+  const handleReopenPeriod = async () => {
+    setIsReopening(true);
+    const { error } = await supabase
+      .from('planning_periods')
+      .update({
+        status: 'released_to_weekly',
+        is_closed: false,
+        closed_at: null,
+        closed_by: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', period.id);
+
+    if (!error) {
+      toast.success('Período reaberto com sucesso.');
+      onStatusChange?.(period.id, 'released_to_weekly');
+    } else {
+      toast.error('Erro ao reabrir período.');
+    }
+    setIsReopening(false);
+    setReopenDialogOpen(false);
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
