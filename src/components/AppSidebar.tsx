@@ -119,6 +119,8 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const currentActiveView = getActiveView();
   const { profile, company, signOut, isAdmin, canEdit, canAccessMenu, canAccessManagement, systemRole, isCompanyAdmin, isSystemAdmin, canAccessProject } = useAuth();
   const { projects, currentProject, setCurrentProject } = useConstruction();
+  const supplyOverdueCount = useSupplyOverdueCount(currentProject?.id);
+  const { projects, currentProject, setCurrentProject } = useConstruction();
   
   // ✅ Hook para governança global de módulos
   const { isModuleEnabled, isModuleBeta } = useSystemModules();
