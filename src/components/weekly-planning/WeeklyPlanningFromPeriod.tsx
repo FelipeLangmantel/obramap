@@ -809,6 +809,7 @@ export function WeeklyPlanningFromPeriod() {
         scope_name: svc.scope_name,
         planned_house_ids: [],
         planned_houses: 0,
+        contractor_contract_service_id: null,
       }));
 
       return {
