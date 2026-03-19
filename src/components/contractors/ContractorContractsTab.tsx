@@ -55,16 +55,33 @@ export function ContractorContractsTab({
   // All contractor service assignments for this project (for cross-checking)
   const [allAssignedHouses, setAllAssignedHouses] = useState<Record<string, Set<number>>>({});
 
-  // Load budget services (project_contract_services) - use max_cost_value
+  // Load budget services with labor cost from scope_costs
   useEffect(() => {
     if (!currentProject?.id || !company?.id) return;
-    supabase
-      .from("project_contract_services")
-      .select("*")
-      .eq("project_id", currentProject.id)
-      .eq("company_id", company.id)
-      .order("macro_order, scope_order")
-      .then(({ data }) => { if (data) setBudgetServices(data); });
+    Promise.all([
+      supabase
+        .from("project_contract_services")
+        .select("*")
+        .eq("project_id", currentProject.id)
+        .eq("company_id", company.id)
+        .order("macro_order, scope_order"),
+      supabase
+        .from("scope_costs")
+        .select("scope_id, macro_id, labor_cost, material_cost")
+        .eq("project_id", currentProject.id),
+    ]).then(([servicesRes, costsRes]) => {
+      if (servicesRes.data) {
+        const laborCostMap: Record<string, number> = {};
+        (costsRes.data || []).forEach((c: any) => {
+          laborCostMap[`${c.macro_id}::${c.scope_id}`] = c.labor_cost || 0;
+        });
+        const merged = servicesRes.data.map((svc: any) => {
+          const labor = laborCostMap[`${svc.macro_id}::${svc.scope_id}`];
+          return { ...svc, mo_unit_value: labor && labor > 0 ? labor : svc.max_cost_value };
+        });
+        setBudgetServices(merged);
+      }
+    });
   }, [currentProject?.id, company?.id]);
 
   // Determine which services are fully in banco inicial or 100% completed
@@ -173,7 +190,7 @@ export function ContractorContractsTab({
     } else {
       next.add(svcId);
       if (!negotiatedValues[svcId]) {
-        setNegotiatedValues(prev => ({ ...prev, [svcId]: svc.max_cost_value || 0 }));
+        setNegotiatedValues(prev => ({ ...prev, [svcId]: svc.mo_unit_value ?? svc.max_cost_value ?? 0 }));
       }
     }
     setSelectedServiceIds(next);
@@ -195,13 +212,13 @@ export function ContractorContractsTab({
       const svc = budgetServices.find(s => `${s.macro_id}::${s.scope_id}` === svcId);
       if (!svc) continue;
       const houseIds = selectedHouseIds[svcId] || [];
-      const negotiated = negotiatedValues[svcId] ?? svc.max_cost_value;
+      const negotiated = negotiatedValues[svcId] ?? svc.mo_unit_value ?? svc.max_cost_value;
       await addContractService(assignContractId, {
         macro_id: svc.macro_id,
         macro_name: svc.macro_name,
         scope_id: svc.scope_id,
         scope_name: svc.scope_name,
-        budget_unit_value: svc.max_cost_value || 0,
+        budget_unit_value: svc.mo_unit_value ?? svc.max_cost_value ?? 0,
         negotiated_unit_value: negotiated,
         house_ids: houseIds,
         total_houses: houseIds.length || svc.total_houses,
@@ -319,8 +336,9 @@ export function ContractorContractsTab({
                   <TableHead className="w-8" />
                   <TableHead>Etapa</TableHead>
                   <TableHead>Serviço</TableHead>
-                  <TableHead className="text-right">Orçamento</TableHead>
-                  <TableHead className="text-right">Negociado</TableHead>
+                   <TableHead className="text-right">MO Unit.</TableHead>
+                   <TableHead className="text-right text-muted-foreground">Custo Total</TableHead>
+                   <TableHead className="text-right">Negociado</TableHead>
                   <TableHead className="text-center">Casas</TableHead>
                 </TableRow>
               </TableHeader>
@@ -341,13 +359,14 @@ export function ContractorContractsTab({
                       </TableCell>
                       <TableCell className="text-xs">{svc.macro_name}</TableCell>
                       <TableCell className="text-xs">{svc.scope_name}</TableCell>
-                      <TableCell className="text-right text-xs font-mono">{fmt(svc.max_cost_value)}</TableCell>
+                      <TableCell className="text-right text-xs font-mono text-amber-700 font-semibold">{fmt(svc.mo_unit_value ?? svc.max_cost_value)}</TableCell>
+                      <TableCell className="text-right text-xs font-mono text-muted-foreground">{fmt(svc.max_cost_value)}</TableCell>
                       <TableCell className="text-right">
                         {isSelected && (
                           <Input
                             type="number"
                             step="0.01"
-                            value={negotiatedValues[key] ?? svc.max_cost_value}
+                            value={negotiatedValues[key] ?? svc.mo_unit_value ?? svc.max_cost_value}
                             onChange={e => setNegotiatedValues(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))}
                             className="h-7 w-24 text-xs text-right ml-auto"
                           />
@@ -381,7 +400,7 @@ export function ContractorContractsTab({
                 const svc = budgetServices.find(s => `${s.macro_id}::${s.scope_id}` === k);
                 const ids = selectedHouseIds[k] || [];
                 if (!svc || ids.length === 0) return null;
-                const negVal = negotiatedValues[k] ?? svc.max_cost_value;
+                const negVal = negotiatedValues[k] ?? svc.mo_unit_value ?? svc.max_cost_value;
                 return (
                   <div key={k} className="flex items-center justify-between text-xs">
                     <span>{svc.scope_name}</span>
