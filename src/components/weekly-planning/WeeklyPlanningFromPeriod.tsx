@@ -1037,6 +1037,7 @@ export function WeeklyPlanningFromPeriod() {
           macro_id: s.macro_id, macro_name: s.macro_name, macro_color: s.macro_color,
           scope_id: s.scope_id, scope_name: s.scope_name,
           planned_house_ids: s.planned_house_ids, planned_houses: s.planned_house_ids.length,
+          contractor_contract_service_id: serviceContractorMap[`${s.macro_id}:${s.scope_id}`] || null,
         }));
         if (rows.length > 0) {
           const { error } = await supabase.from("weekly_plan_services").insert(rows);
