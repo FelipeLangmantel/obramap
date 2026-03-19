@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, RefreshCw, Package, AlertTriangle, FileText, ShoppingCart, CheckCircle, XCircle, Warehouse, Save } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { ArrowLeft, RefreshCw, Package, AlertTriangle, FileText, ShoppingCart, CheckCircle, XCircle, Warehouse, Save, ArrowRightLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,8 +13,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSupplyRequests } from './hooks/useSupplyRequests';
 import { useMeasurementStock } from './hooks/useMeasurementStock';
 import { MeasurementSupplySummary, MeasurementSupplyRequest, MeasurementSupplyKPIs } from './hooks/useMeasurementSupplies';
+import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'sonner';
 
 interface MeasurementSupplyDetailProps {
   projectId: string;
