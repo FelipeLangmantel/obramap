@@ -8676,6 +8676,7 @@ export type Database = {
         Args: { p_new_status: string; p_period_id: string }
         Returns: Json
       }
+      update_supply_impacts: { Args: { p_project_id: string }; Returns: Json }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
