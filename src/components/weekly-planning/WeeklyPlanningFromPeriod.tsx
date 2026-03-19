@@ -13,10 +13,11 @@ import { toast } from "sonner";
 import {
   Calendar, Home, Save, RefreshCcw, Zap,
   AlertTriangle, CheckCircle2, Lock, Unlock, Undo2,
-  MousePointerClick, Plus, X,
+  MousePointerClick, Plus, X, HardHat,
 } from "lucide-react";
 import { format, parseISO, differenceInDays, eachDayOfInterval, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { ContractorAllocationPanel, type ContractorAllocation } from "./ContractorAllocationPanel";
 
 // ── Types ──────────────────────────────────────────────────
 interface PeriodForWeekly {
@@ -59,11 +60,18 @@ interface WeekServicePlan {
   planned_house_ids: number[];
   planned_houses: number;
   contractor_contract_service_id: string | null;
+  contractor_id: string | null;
+  contractor_name: string | null;
+  contractor_house_ids: number[];
+  contractor_houses: number;
+  has_out_of_contract_houses: boolean;
+  out_of_contract_house_ids: number[];
 }
 
 interface ContractorServiceOption {
   id: string;
   contract_id: string;
+  contractor_id: string;
   contractor_name: string;
   macro_id: string;
   scope_id: string;
@@ -651,9 +659,8 @@ export function WeeklyPlanningFromPeriod() {
   const [isGenerated, setIsGenerated] = useState(false);
   const [showWeekConfig, setShowWeekConfig] = useState(false);
 
-  // Contractor allocation state
+  // Contractor services for this project
   const [contractorServices, setContractorServices] = useState<ContractorServiceOption[]>([]);
-  const [serviceContractorMap, setServiceContractorMap] = useState<Record<string, string>>({}); // svcKey -> contractor_contract_service_id
 
   // Service-first flow state
   const [selectedServiceKey, setSelectedServiceKey] = useState<string>("");
@@ -768,6 +775,7 @@ export function WeeklyPlanningFromPeriod() {
         const options: ContractorServiceOption[] = data.map((s: any) => ({
           id: s.id,
           contract_id: s.contract_id,
+          contractor_id: s.contractor_contracts?.contractor_id || "",
           contractor_name: s.contractor_contracts?.contractors?.name || "Empreiteiro",
           macro_id: s.macro_id,
           scope_id: s.scope_id,
@@ -801,26 +809,24 @@ export function WeeklyPlanningFromPeriod() {
 
       if (existingWeeks && existingWeeks.length > 0) {
         const weeksWithSvcs: WeekPlan[] = [];
-        const contractorMap: Record<string, string> = {};
         for (const w of existingWeeks) {
           const { data: ws } = await supabase
             .from("weekly_plan_services")
-            .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, planned_house_ids, planned_houses, contractor_contract_service_id")
+            .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, planned_house_ids, planned_houses, contractor_contract_service_id, contractor_id, contractor_name, contractor_house_ids, contractor_houses, has_out_of_contract_houses, out_of_contract_house_ids")
             .eq("weekly_plan_week_id", w.id);
           const services = (ws || []).map((s: any) => ({
             ...s,
             contractor_contract_service_id: s.contractor_contract_service_id || null,
+            contractor_id: s.contractor_id || null,
+            contractor_name: s.contractor_name || null,
+            contractor_house_ids: s.contractor_house_ids || [],
+            contractor_houses: s.contractor_houses || 0,
+            has_out_of_contract_houses: s.has_out_of_contract_houses || false,
+            out_of_contract_house_ids: s.out_of_contract_house_ids || [],
           })) as WeekServicePlan[];
-          // Build contractor map from saved data
-          for (const s of services) {
-            if (s.contractor_contract_service_id) {
-              contractorMap[`${s.macro_id}:${s.scope_id}`] = s.contractor_contract_service_id;
-            }
-          }
           weeksWithSvcs.push({ ...w, services, working_days: [] });
         }
         setWeekPlans(weeksWithSvcs);
-        setServiceContractorMap(contractorMap);
         setIsGenerated(true);
         setShowWeekConfig(false);
       } else {
@@ -850,6 +856,12 @@ export function WeeklyPlanningFromPeriod() {
         planned_house_ids: [],
         planned_houses: 0,
         contractor_contract_service_id: null,
+        contractor_id: null,
+        contractor_name: null,
+        contractor_house_ids: [],
+        contractor_houses: 0,
+        has_out_of_contract_houses: false,
+        out_of_contract_house_ids: [],
       }));
 
       return {
@@ -1037,7 +1049,13 @@ export function WeeklyPlanningFromPeriod() {
           macro_id: s.macro_id, macro_name: s.macro_name, macro_color: s.macro_color,
           scope_id: s.scope_id, scope_name: s.scope_name,
           planned_house_ids: s.planned_house_ids, planned_houses: s.planned_house_ids.length,
-          contractor_contract_service_id: serviceContractorMap[`${s.macro_id}:${s.scope_id}`] || null,
+          contractor_contract_service_id: s.contractor_contract_service_id || null,
+          contractor_id: s.contractor_id || null,
+          contractor_name: s.contractor_name || null,
+          contractor_house_ids: s.contractor_house_ids || [],
+          contractor_houses: s.contractor_houses || 0,
+          has_out_of_contract_houses: s.has_out_of_contract_houses || false,
+          out_of_contract_house_ids: s.out_of_contract_house_ids || [],
         }));
         if (rows.length > 0) {
           const { error } = await supabase.from("weekly_plan_services").insert(rows);
@@ -1242,6 +1260,11 @@ export function WeeklyPlanningFromPeriod() {
                   const expected = Math.min(svc.target_houses, available);
                   const isComplete = allocated >= expected;
 
+                  // Contractor info from first week service instance
+                  const firstSvc = weekPlans.flatMap(w => w.services).find(s => svcKey(s) === key && s.contractor_id);
+                  const hasContractor = !!firstSvc?.contractor_id;
+                  const hasOutOfContract = !!firstSvc?.has_out_of_contract_houses;
+
                   return (
                     <button
                       key={key}
@@ -1267,42 +1290,97 @@ export function WeeklyPlanningFromPeriod() {
                         {allocated}/{expected}
                       </Badge>
                       {isComplete && <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />}
+                      {/* Contractor badge */}
+                      {hasContractor ? (
+                        <Badge variant="outline" className="text-[10px] px-1.5 h-4 shrink-0 gap-0.5 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800">
+                          <HardHat className="h-2.5 w-2.5" />
+                          {firstSvc!.contractor_name} · {firstSvc!.contractor_houses}
+                        </Badge>
+                      ) : allocated > 0 ? (
+                        <Badge variant="outline" className="text-[10px] px-1.5 h-4 shrink-0 gap-0.5 text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
+                          <AlertTriangle className="h-2.5 w-2.5" />
+                          Sem empreiteiro
+                        </Badge>
+                      ) : null}
+                      {hasOutOfContract && (
+                        <Home className="h-3.5 w-3.5 text-destructive shrink-0" />
+                      )}
                     </button>
                   );
                 })}
               </div>
 
-              {/* Contractor selector per service */}
+              {/* Contractor allocation panel per service */}
               {selectedService && (() => {
+                // Find current allocation from the first week that has this service
                 const sKey = selectedServiceKey;
-                const options = contractorServices.filter(
-                  cs => cs.macro_id === selectedService.macro_id && cs.scope_id === selectedService.scope_id
+                const allSvcInstances = weekPlans.flatMap(w =>
+                  w.services.filter(s => svcKey(s) === sKey && s.planned_house_ids.length > 0)
                 );
-                if (options.length === 0) return null;
-                const currentVal = serviceContractorMap[sKey] || "";
+                const firstInstance = allSvcInstances[0];
+                const currentAlloc: ContractorAllocation | null = firstInstance?.contractor_id ? {
+                  contractorContractServiceId: firstInstance.contractor_contract_service_id,
+                  contractorId: firstInstance.contractor_id,
+                  contractorName: firstInstance.contractor_name,
+                  contractorHouseIds: firstInstance.contractor_house_ids || [],
+                  contractorHouses: firstInstance.contractor_houses || 0,
+                  hasOutOfContractHouses: firstInstance.has_out_of_contract_houses || false,
+                  outOfContractHouseIds: firstInstance.out_of_contract_house_ids || [],
+                } : null;
+
+                // Get all planned house ids for this service across all weeks
+                const allPlannedIds = weekPlans.flatMap(w => {
+                  const ws = w.services.find(s => svcKey(s) === sKey);
+                  return ws?.planned_house_ids || [];
+                });
+
+                // Other allocations this week for conflict detection
+                const otherAllocations = weekPlans.flatMap(w =>
+                  w.services.filter(s => svcKey(s) !== sKey && s.contractor_id)
+                    .map(s => ({ contractorName: s.contractor_name || "", houseIds: s.contractor_house_ids || [] }))
+                );
+
+                // Assigned house ids from contracts
+                const assignedSet = new Set<number>();
+                contractorServices
+                  .filter(cs => cs.macro_id === selectedService.macro_id && cs.scope_id === selectedService.scope_id)
+                  .forEach(cs => cs.house_ids.forEach(id => assignedSet.add(id)));
+
                 return (
-                  <div className="mt-3 flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
-                    <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Empreiteiro:</span>
-                    <Select
-                      value={currentVal}
-                      onValueChange={(val) => setServiceContractorMap(prev => ({ ...prev, [sKey]: val }))}
-                    >
-                      <SelectTrigger className="h-8 text-xs max-w-xs">
-                        <SelectValue placeholder="Selecionar empreiteiro..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {options.map(opt => (
-                          <SelectItem key={opt.id} value={opt.id}>
-                            {opt.contractor_name} — {opt.house_ids.length} casas • {opt.negotiated_unit_value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}/un
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {currentVal && (
-                      <Badge variant="outline" className="text-[10px] shrink-0 gap-1">
-                        <CheckCircle2 className="h-3 w-3 text-primary" /> Alocado
-                      </Badge>
-                    )}
+                  <div className="mt-3">
+                    <ContractorAllocationPanel
+                      projectId={projectId!}
+                      companyId={companyId!}
+                      macroId={selectedService.macro_id}
+                      scopeId={selectedService.scope_id}
+                      macroName={selectedService.macro_name}
+                      scopeName={selectedService.scope_name}
+                      weekPlanServiceId={firstInstance?.id || null}
+                      weekStart={weekPlans[0]?.week_start || ""}
+                      plannedHouseIds={allPlannedIds}
+                      currentAllocation={currentAlloc}
+                      otherAllocationsThisWeek={otherAllocations}
+                      assignedHouseIds={assignedSet}
+                      onAllocationChange={(alloc) => {
+                        // Update all week services for this svcKey
+                        setWeekPlans(prev => prev.map(w => ({
+                          ...w,
+                          services: w.services.map(s => {
+                            if (svcKey(s) !== sKey) return s;
+                            return {
+                              ...s,
+                              contractor_contract_service_id: alloc.contractorContractServiceId,
+                              contractor_id: alloc.contractorId,
+                              contractor_name: alloc.contractorName,
+                              contractor_house_ids: alloc.contractorHouseIds,
+                              contractor_houses: alloc.contractorHouses,
+                              has_out_of_contract_houses: alloc.hasOutOfContractHouses,
+                              out_of_contract_house_ids: alloc.outOfContractHouseIds,
+                            };
+                          }),
+                        })));
+                      }}
+                    />
                   </div>
                 );
               })()}
@@ -1481,6 +1559,26 @@ export function WeeklyPlanningFromPeriod() {
               </ScrollArea>
             </CardContent>
           </Card>
+
+          {/* Contractor warning alert */}
+          {(() => {
+            const servicesWithoutContractor = weekPlans.flatMap(w => w.services)
+              .filter((s, i, arr) => {
+                // Unique by svcKey, has planned houses, no contractor
+                const k = svcKey(s);
+                return s.planned_houses > 0 && !s.contractor_id && arr.findIndex(x => svcKey(x) === k) === i;
+              });
+            if (servicesWithoutContractor.length === 0) return null;
+            return (
+              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-sm">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                <span>
+                  {servicesWithoutContractor.length} serviço(s) sem empreiteiro alocado:{" "}
+                  {servicesWithoutContractor.map(s => s.scope_name).join(", ")}
+                </span>
+              </div>
+            );
+          })()}
 
           {/* Save bar */}
           <div className="flex items-center justify-between sticky bottom-4 bg-card border rounded-lg p-3 shadow-lg z-10">
