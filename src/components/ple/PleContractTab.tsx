@@ -635,6 +635,15 @@ export function PleContractTab(props: PleDataReturn) {
                                       <Input type="number" value={newEvent.quantity || ""} onChange={e => setNewEvent(ev => ({ ...ev, quantity: parseFloat(e.target.value) || 0 }))} placeholder="Qtde" className="h-7 text-[11px] border-dashed w-16 text-right" />
                                       {isIntegrated && (
                                         <>
+                                          <Select value={newEvent.billing_type} onValueChange={v => setNewEvent(ev => ({ ...ev, billing_type: v }))}>
+                                            <SelectTrigger className="h-7 text-[10px] w-[75px] border-dashed">
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="per_house">Por casa</SelectItem>
+                                              <SelectItem value="fixed">Total</SelectItem>
+                                            </SelectContent>
+                                          </Select>
                                           <Input type="number" step="0.01" value={newEvent.mat_unit_value || ""} onChange={e => {
                                             const mat = parseFloat(e.target.value) || 0;
                                             setNewEvent(ev => ({ ...ev, mat_unit_value: mat, unit_value: mat + ev.mo_unit_value }));
