@@ -1589,6 +1589,26 @@ export function WeeklyProductionView() {
                       </div>
                     </ScrollArea>
                     
+                    {/* Released plan counter */}
+                    {selectedReleasedService && (
+                      <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 text-xs">
+                        {(() => {
+                          const plannedIds: number[] = selectedReleasedService.planned_house_ids || [];
+                          const selected = selectedHouses;
+                          const fromPlan = selected.filter((id: number) => plannedIds.includes(id)).length;
+                          const extras = selected.filter((id: number) => !plannedIds.includes(id)).length;
+                          const pending = plannedIds.filter((id: number) => !selected.includes(id)).length;
+                          return (
+                            <span className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium">{fromPlan} de {plannedIds.length} planejadas</span>
+                              {extras > 0 && <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600">{extras} extras</Badge>}
+                              {pending > 0 && <Badge variant="outline" className="text-[10px] border-red-400 text-red-600">{pending} pendentes</Badge>}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    )}
+
                     {/* Legend */}
                     <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t text-xs text-muted-foreground">
                       <div className="flex items-center gap-1">
