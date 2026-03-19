@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useSystemModules } from "@/hooks/useSystemModules";
 import { supabase } from "@/integrations/supabase/client";
+import { useSupplyOverdueCount } from "@/components/supplies/hooks/useSupplyOverdueCount";
 import {
   Sidebar,
   SidebarContent,
