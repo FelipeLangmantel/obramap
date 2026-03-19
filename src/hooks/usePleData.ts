@@ -77,6 +77,7 @@ export interface PleEvent {
   obramap_macro_name: string | null;
   obramap_scope_id: string | null;
   obramap_scope_name: string | null;
+  billing_type: 'per_house' | 'fixed';
 }
 
 export interface PleMeasurement {
