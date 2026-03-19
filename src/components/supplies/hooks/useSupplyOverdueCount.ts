@@ -14,7 +14,7 @@ export function useSupplyOverdueCount(projectId: string | null | undefined) {
       .select('*', { count: 'exact', head: true })
       .eq('project_id', projectId)
       .eq('purchase_overdue', true)
-      .not('status', 'in', '("ordered","delivered","cancelled")')
+      .not('status', 'in', '(ordered,delivered,cancelled)')
       .then(({ count: c }) => setCount(c || 0));
   }, [projectId]);
 

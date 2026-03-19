@@ -16,7 +16,7 @@ export interface StockEntry {
   is_confirmed: boolean;
 }
 
-export function useMeasurementStock(projectId: string | undefined) {
+export function useMeasurementStock(projectId: string | undefined, currentPlanningPeriodId: string | undefined) {
   const storageKey = useMemo(() => projectId ? `obramap_supply_stock_${projectId}` : null, [projectId]);
   const [stockEntries, setStockEntries] = useState<StockEntry[]>(() => {
     if (!storageKey) return [];
@@ -38,6 +38,30 @@ export function useMeasurementStock(projectId: string | undefined) {
       // noop
     }
   }, [storageKey, stockEntries]);
+
+  // Auto-save to DB with 2s debounce
+  useEffect(() => {
+    if (!storageKey || stockEntries.length === 0 || !currentPlanningPeriodId || !projectId) return;
+    const timer = setTimeout(() => {
+      const upsertData = stockEntries.map(e => ({
+        ...(e.id ? { id: e.id } : {}),
+        project_id: projectId,
+        planning_period_id: currentPlanningPeriodId,
+        item_id: e.item_id,
+        item_name: e.item_name,
+        item_unit: e.item_unit,
+        family_id: e.family_id,
+        family_name: e.family_name,
+        quantity_required: e.quantity_required,
+        quantity_in_stock: e.quantity_in_stock,
+      }));
+      supabase
+        .from('measurement_stock_entries' as any)
+        .upsert(upsertData, { onConflict: 'id' })
+        .then(() => {}); // silent
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [stockEntries, storageKey, currentPlanningPeriodId, projectId]);
 
   const loadStockEntries = useCallback(async (planningPeriodId: string, requests: MeasurementSupplyRequest[]) => {
     if (!projectId || !planningPeriodId) return;

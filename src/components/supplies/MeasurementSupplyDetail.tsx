@@ -70,6 +70,8 @@ export function MeasurementSupplyDetail({
     }
   });
 
+  const planningPeriodId = measurement.planning_period_id || measurement.measurement_id;
+
   const { transitionStatus } = useSupplyRequests(projectId);
   const {
     stockEntries,
@@ -81,7 +83,7 @@ export function MeasurementSupplyDetail({
     loadStockEntries,
     updateStockQuantity,
     saveStockEntries,
-  } = useMeasurementStock(projectId);
+  } = useMeasurementStock(projectId, planningPeriodId);
 
   // Carryover data from supply_requests
   const [carryoverMap, setCarryoverMap] = useState<Record<string, number>>({});
@@ -99,25 +101,25 @@ export function MeasurementSupplyDetail({
 
   // Load stock entries when measurement or requests change
   useEffect(() => {
-    if (measurement.measurement_id && requests.length > 0) {
-      loadStockEntries(measurement.measurement_id, requests);
+    if (planningPeriodId && requests.length > 0) {
+      loadStockEntries(planningPeriodId, requests);
     }
-  }, [measurement.measurement_id, requests, loadStockEntries]);
+  }, [planningPeriodId, requests, loadStockEntries]);
 
   // Load carryover data
   useEffect(() => {
-    if (!measurement.measurement_id) return;
+    if (!planningPeriodId) return;
     supabase
       .from('supply_requests')
       .select('item_id, quantity_carried_over')
-      .eq('planning_period_id', measurement.measurement_id)
+      .eq('planning_period_id', planningPeriodId)
       .gt('quantity_carried_over', 0)
       .then(({ data }) => {
         const map: Record<string, number> = {};
         (data || []).forEach((r: any) => { if (r.item_id) map[r.item_id] = Number(r.quantity_carried_over); });
         setCarryoverMap(map);
       });
-  }, [measurement.measurement_id]);
+  }, [planningPeriodId]);
 
   const toggleFamily = (familyName: string) => {
     setExpandedFamilies(prev => {
@@ -167,7 +169,7 @@ export function MeasurementSupplyDetail({
   };
 
   const handleSaveStock = async () => {
-    const saved = await saveStockEntries(measurement.measurement_id);
+    const saved = await saveStockEntries(planningPeriodId);
     if (!saved) return;
 
     // Try to carry over stock to next period
@@ -184,7 +186,7 @@ export function MeasurementSupplyDetail({
 
       if (nextPeriod) {
         const { data: result } = await supabase.rpc('carry_over_stock', {
-          p_from_period_id: measurement.measurement_id,
+          p_from_period_id: planningPeriodId,
           p_to_period_id: nextPeriod.id,
         });
         const carried = (result as any)?.carried_items || 0;

@@ -4,6 +4,7 @@ import { toast } from 'sonner';
  
  export interface MeasurementSupplySummary {
    measurement_id: string;
+   planning_period_id: string; // Same as measurement_id (pp.id), explicit for clarity
    measurement_number: number;
    start_date: string;
    end_date: string;
@@ -131,7 +132,9 @@ export function useMeasurementSupplies(projectId: string | undefined) {
        });
  
        if (error) throw error;
-       setMeasurements((data || []) as MeasurementSupplySummary[]);
+        // Add planning_period_id (same as measurement_id since RPC returns pp.id AS measurement_id)
+        const enriched = (data || []).map((d: any) => ({ ...d, planning_period_id: d.measurement_id }));
+        setMeasurements(enriched as MeasurementSupplySummary[]);
      } catch (error) {
        console.error('Error loading measurement supplies:', error);
        toast.error('Erro ao carregar medições');
