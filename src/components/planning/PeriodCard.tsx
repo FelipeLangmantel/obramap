@@ -69,7 +69,7 @@ export function PeriodCard({
   isGeneratingSupplies,
   canEdit = true 
 }: PeriodCardProps) {
-  const { isSystemAdmin } = useAuth();
+  const { isSystemAdmin, isCompanyAdmin } = useAuth();
   const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
   const [isReopening, setIsReopening] = useState(false);
 
