@@ -857,6 +857,12 @@ export function WeeklyPlanningFromPeriod() {
         planned_house_ids: [],
         planned_houses: 0,
         contractor_contract_service_id: null,
+        contractor_id: null,
+        contractor_name: null,
+        contractor_house_ids: [],
+        contractor_houses: 0,
+        has_out_of_contract_houses: false,
+        out_of_contract_house_ids: [],
       }));
 
       return {
