@@ -60,11 +60,18 @@ interface WeekServicePlan {
   planned_house_ids: number[];
   planned_houses: number;
   contractor_contract_service_id: string | null;
+  contractor_id: string | null;
+  contractor_name: string | null;
+  contractor_house_ids: number[];
+  contractor_houses: number;
+  has_out_of_contract_houses: boolean;
+  out_of_contract_house_ids: number[];
 }
 
 interface ContractorServiceOption {
   id: string;
   contract_id: string;
+  contractor_id: string;
   contractor_name: string;
   macro_id: string;
   scope_id: string;
