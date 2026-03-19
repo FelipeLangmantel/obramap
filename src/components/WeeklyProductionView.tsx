@@ -25,22 +25,15 @@ import {
   ArrowDownRight,
   Minus,
   Filter,
-  CalendarDays,
   Pencil,
   Target,
   Trash2,
-  ListChecks,
   AlertTriangle,
   Percent,
   Settings2,
   ClipboardCheck,
-  Zap,
   RotateCcw,
-  Users,
-  Plus,
-  Bell,
-  X as XIcon,
-  HardHat
+  Plus
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
