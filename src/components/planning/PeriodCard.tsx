@@ -66,6 +66,7 @@ export function PeriodCard({
   onClick, 
   onStatusChange,
   onGenerateSupplies,
+  onValidateBeforeClose,
   isChangingStatus,
   isGeneratingSupplies,
   canEdit = true 
