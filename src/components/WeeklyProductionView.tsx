@@ -1690,6 +1690,20 @@ export function WeeklyProductionView() {
         </TabsContent>
 
         <TabsContent value="analysis" className="flex-1 overflow-auto mt-4 space-y-4">
+          <Tabs defaultValue="evolution" className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="evolution">Evolução</TabsTrigger>
+              <TabsTrigger value="alerts" className="gap-1.5">
+                Alertas
+                {openDeviationAlertCount > 0 && (
+                  <Badge variant="destructive" className="text-[10px] px-1.5 py-0 min-w-[18px] h-[18px]">
+                    {openDeviationAlertCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="evolution" className="space-y-4">
           {/* Filters */}
           <Card className="p-4">
             <div className="space-y-4">
