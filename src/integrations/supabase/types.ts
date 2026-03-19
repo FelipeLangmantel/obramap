@@ -5599,6 +5599,7 @@ export type Database = {
       }
       project_lead_times: {
         Row: {
+          company_id: string | null
           created_at: string
           family_id: string
           id: string
@@ -5607,6 +5608,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          company_id?: string | null
           created_at?: string
           family_id: string
           id?: string
@@ -5615,6 +5617,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          company_id?: string | null
           created_at?: string
           family_id?: string
           id?: string
@@ -5623,6 +5626,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "project_lead_times_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_lead_times_family_id_fkey"
             columns: ["family_id"]
@@ -7202,9 +7212,14 @@ export type Database = {
       }
       supply_requests: {
         Row: {
+          blocked_house_ids: number[]
+          blocked_scope_ids: string[]
+          carried_over_from_period_id: string | null
           created_at: string
+          days_overdue: number
           family_id: string | null
           id: string
+          impact_description: string | null
           is_critical: boolean | null
           item_id: string | null
           item_name: string
@@ -7217,7 +7232,10 @@ export type Database = {
           planning_period_id: string | null
           project_id: string
           purchase_order_id: string | null
+          purchase_overdue: boolean
           quantity: number
+          quantity_carried_over: number
+          quantity_net: number
           quotation_id: string | null
           required_date: string | null
           scope_id: string | null
@@ -7229,9 +7247,14 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          blocked_house_ids?: number[]
+          blocked_scope_ids?: string[]
+          carried_over_from_period_id?: string | null
           created_at?: string
+          days_overdue?: number
           family_id?: string | null
           id?: string
+          impact_description?: string | null
           is_critical?: boolean | null
           item_id?: string | null
           item_name: string
@@ -7244,7 +7267,10 @@ export type Database = {
           planning_period_id?: string | null
           project_id: string
           purchase_order_id?: string | null
+          purchase_overdue?: boolean
           quantity?: number
+          quantity_carried_over?: number
+          quantity_net?: number
           quotation_id?: string | null
           required_date?: string | null
           scope_id?: string | null
@@ -7256,9 +7282,14 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          blocked_house_ids?: number[]
+          blocked_scope_ids?: string[]
+          carried_over_from_period_id?: string | null
           created_at?: string
+          days_overdue?: number
           family_id?: string | null
           id?: string
+          impact_description?: string | null
           is_critical?: boolean | null
           item_id?: string | null
           item_name?: string
@@ -7271,7 +7302,10 @@ export type Database = {
           planning_period_id?: string | null
           project_id?: string
           purchase_order_id?: string | null
+          purchase_overdue?: boolean
           quantity?: number
+          quantity_carried_over?: number
+          quantity_net?: number
           quotation_id?: string | null
           required_date?: string | null
           scope_id?: string | null
@@ -7283,6 +7317,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "supply_requests_carried_over_from_period_id_fkey"
+            columns: ["carried_over_from_period_id"]
+            isOneToOne: false
+            referencedRelation: "planning_periods"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "supply_requests_family_id_fkey"
             columns: ["family_id"]
@@ -7989,6 +8030,10 @@ export type Database = {
           p_scope_id: string
         }
         Returns: number
+      }
+      carry_over_stock: {
+        Args: { p_from_period_id: string; p_to_period_id: string }
+        Returns: Json
       }
       check_legacy_data_status: { Args: never; Returns: Json }
       clone_planning_version: {
