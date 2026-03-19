@@ -277,6 +277,79 @@ export function WeeklyProductionView() {
     setAnalysisMacroFilter("");
     setAnalysisScopeFilter("");
   }, [currentProject?.id]);
+
+  // C2: Load released weeks when project changes
+  useEffect(() => {
+    if (!currentProject?.id) return;
+    supabase
+      .from('weekly_plan_weeks')
+      .select(`
+        id, week_number, week_start, week_end,
+        planning_periods!inner(period_number, status)
+      `)
+      .eq('project_id', currentProject.id)
+      .in('planning_periods.status', ['released_to_weekly', 'closed'])
+      .order('week_start', { ascending: false })
+      .then(({ data }) => setReleasedWeeks(data || []));
+  }, [currentProject?.id]);
+
+  // C3: Load deviation alerts
+  const loadDeviationAlerts = useCallback(async () => {
+    if (!currentProject?.id) return;
+    const { data } = await supabase
+      .from('production_deviations')
+      .select('*')
+      .eq('project_id', currentProject.id)
+      .in('status', ['open', 'acknowledged'])
+      .order('created_at', { ascending: false });
+    setDeviationAlerts(data || []);
+  }, [currentProject?.id]);
+
+  useEffect(() => {
+    loadDeviationAlerts();
+  }, [loadDeviationAlerts]);
+
+  const openDeviationAlertCount = useMemo(() => 
+    deviationAlerts.filter(a => a.status === 'open').length
+  , [deviationAlerts]);
+
+  // C2: Select released week handler
+  const onSelectReleasedWeek = async (weekId: string) => {
+    const week = releasedWeeks.find(w => w.id === weekId) || null;
+    setSelectedReleasedWeek(week);
+    setSelectedReleasedService(null);
+    if (!weekId) { setReleasedWeekServices([]); return; }
+    const { data } = await supabase
+      .from('weekly_plan_services')
+      .select('*')
+      .eq('weekly_plan_week_id', weekId);
+    // Check which services already have production registered
+    const serviceIds = (data || []).map(s => s.id);
+    let registeredServiceIds: string[] = [];
+    if (serviceIds.length > 0) {
+      const { data: prods } = await supabase
+        .from('weekly_productions')
+        .select('weekly_plan_service_id')
+        .in('weekly_plan_service_id', serviceIds);
+      registeredServiceIds = (prods || []).map(p => p.weekly_plan_service_id).filter(Boolean) as string[];
+    }
+    setReleasedWeekServices((data || []).map(s => ({
+      ...s,
+      _registered: registeredServiceIds.includes(s.id)
+    })));
+  };
+
+  // C2: Apply released service to form
+  const applyReleasedService = (svc: any) => {
+    setSelectedReleasedService(svc);
+    setSelectedMacro(svc.macro_id);
+    setTimeout(() => setSelectedScope(svc.scope_id), 100);
+    setSelectedHouses(svc.planned_house_ids || []);
+    if (selectedReleasedWeek) {
+      setMeasurementStartDate(selectedReleasedWeek.week_start);
+      setMeasurementEndDate(selectedReleasedWeek.week_end);
+    }
+  };
   
   // Get scopes for selected macro
   const scopes = useMemo(() => {
