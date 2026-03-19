@@ -121,11 +121,22 @@ export function PeriodCard({
   const nextAction = getNextAction(period.status);
   const isLocked = period.status === "closed";
 
-  const handleActionClick = (e: React.MouseEvent) => {
+  const handleActionClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onStatusChange && nextAction) {
-      onStatusChange(period.id, nextAction.nextStatus);
+    if (!onStatusChange || !nextAction) return;
+
+    // Validação especial para fechar
+    if (nextAction.nextStatus === 'closed' && onValidateBeforeClose) {
+      const { canClose, warnings } = await onValidateBeforeClose(period.id);
+
+      if (warnings.length > 0) {
+        const message = warnings.join('\n') + '\n\nDeseja fechar mesmo assim?';
+        const confirmed = window.confirm(message);
+        if (!confirmed) return;
+      }
     }
+
+    onStatusChange(period.id, nextAction.nextStatus);
   };
 
   return (
