@@ -190,7 +190,7 @@ export function ContractorContractsTab({
     } else {
       next.add(svcId);
       if (!negotiatedValues[svcId]) {
-        setNegotiatedValues(prev => ({ ...prev, [svcId]: svc.max_cost_value || 0 }));
+        setNegotiatedValues(prev => ({ ...prev, [svcId]: svc.mo_unit_value ?? svc.max_cost_value ?? 0 }));
       }
     }
     setSelectedServiceIds(next);
