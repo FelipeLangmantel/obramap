@@ -1560,6 +1560,26 @@ export function WeeklyPlanningFromPeriod() {
             </CardContent>
           </Card>
 
+          {/* Contractor warning alert */}
+          {(() => {
+            const servicesWithoutContractor = weekPlans.flatMap(w => w.services)
+              .filter((s, i, arr) => {
+                // Unique by svcKey, has planned houses, no contractor
+                const k = svcKey(s);
+                return s.planned_houses > 0 && !s.contractor_id && arr.findIndex(x => svcKey(x) === k) === i;
+              });
+            if (servicesWithoutContractor.length === 0) return null;
+            return (
+              <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 text-sm">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                <span>
+                  {servicesWithoutContractor.length} serviço(s) sem empreiteiro alocado:{" "}
+                  {servicesWithoutContractor.map(s => s.scope_name).join(", ")}
+                </span>
+              </div>
+            );
+          })()}
+
           {/* Save bar */}
           <div className="flex items-center justify-between sticky bottom-4 bg-card border rounded-lg p-3 shadow-lg z-10">
             <div className="flex items-center gap-2 text-sm">
