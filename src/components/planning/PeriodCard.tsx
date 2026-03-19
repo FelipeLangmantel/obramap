@@ -1,11 +1,25 @@
+import { useState } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, Home, DollarSign, TrendingUp, TrendingDown, CheckCircle2, Lock, Loader2, Users, AlertTriangle, Play, Archive, Package, RefreshCw } from "lucide-react";
+import { Calendar, Home, DollarSign, TrendingUp, TrendingDown, CheckCircle2, Lock, Loader2, Users, AlertTriangle, Play, Archive, Package, RefreshCw, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PlanningPeriod, PeriodStatus } from "@/hooks/usePeriodPlanning";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface PeriodCardProps {
   period: PlanningPeriod;
@@ -55,6 +69,33 @@ export function PeriodCard({
   isGeneratingSupplies,
   canEdit = true 
 }: PeriodCardProps) {
+  const { isSystemAdmin } = useAuth();
+  const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
+  const [isReopening, setIsReopening] = useState(false);
+
+  const handleReopenPeriod = async () => {
+    setIsReopening(true);
+    const { error } = await supabase
+      .from('planning_periods')
+      .update({
+        status: 'released_to_weekly',
+        is_closed: false,
+        closed_at: null,
+        closed_by: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', period.id);
+
+    if (!error) {
+      toast.success('Período reaberto com sucesso.');
+      onStatusChange?.(period.id, 'released_to_weekly');
+    } else {
+      toast.error('Erro ao reabrir período.');
+    }
+    setIsReopening(false);
+    setReopenDialogOpen(false);
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
@@ -268,7 +309,51 @@ export function PeriodCard({
             )}
           </Button>
         )}
+
+        {/* Botão Reabrir — apenas system_admin em períodos fechados */}
+        {isSystemAdmin && period.status === "closed" && (
+          <Button
+            className="w-full mt-2"
+            variant="destructive"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setReopenDialogOpen(true);
+            }}
+            disabled={isReopening}
+          >
+            {isReopening ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Reabrindo...
+              </>
+            ) : (
+              <>
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Reabrir Período
+              </>
+            )}
+          </Button>
+        )}
       </CardContent>
+
+      {/* Dialog de confirmação de reabertura */}
+      <AlertDialog open={reopenDialogOpen} onOpenChange={setReopenDialogOpen}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reabrir Período?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza? O período voltará para "Liberado" e poderá ser editado novamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isReopening}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReopenPeriod} disabled={isReopening}>
+              {isReopening ? "Reabrindo..." : "Confirmar Reabertura"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
