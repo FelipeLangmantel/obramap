@@ -1260,6 +1260,11 @@ export function WeeklyPlanningFromPeriod() {
                   const expected = Math.min(svc.target_houses, available);
                   const isComplete = allocated >= expected;
 
+                  // Contractor info from first week service instance
+                  const firstSvc = weekPlans.flatMap(w => w.services).find(s => svcKey(s) === key && s.contractor_id);
+                  const hasContractor = !!firstSvc?.contractor_id;
+                  const hasOutOfContract = !!firstSvc?.has_out_of_contract_houses;
+
                   return (
                     <button
                       key={key}
@@ -1285,6 +1290,21 @@ export function WeeklyPlanningFromPeriod() {
                         {allocated}/{expected}
                       </Badge>
                       {isComplete && <CheckCircle2 className="h-3.5 w-3.5 text-primary shrink-0" />}
+                      {/* Contractor badge */}
+                      {hasContractor ? (
+                        <Badge variant="outline" className="text-[10px] px-1.5 h-4 shrink-0 gap-0.5 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800">
+                          <HardHat className="h-2.5 w-2.5" />
+                          {firstSvc!.contractor_name} · {firstSvc!.contractor_houses}
+                        </Badge>
+                      ) : allocated > 0 ? (
+                        <Badge variant="outline" className="text-[10px] px-1.5 h-4 shrink-0 gap-0.5 text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
+                          <AlertTriangle className="h-2.5 w-2.5" />
+                          Sem empreiteiro
+                        </Badge>
+                      ) : null}
+                      {hasOutOfContract && (
+                        <Home className="h-3.5 w-3.5 text-destructive shrink-0" />
+                      )}
                     </button>
                   );
                 })}
