@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea";
 import { 
   ClipboardList, 
   Save, 
@@ -24,18 +25,14 @@ import {
   ArrowDownRight,
   Minus,
   Filter,
-  CalendarDays,
   Pencil,
   Target,
   Trash2,
-  ListChecks,
   AlertTriangle,
   Percent,
   Settings2,
   ClipboardCheck,
-  Zap,
   RotateCcw,
-  Users,
   Plus
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
@@ -238,10 +235,23 @@ export function WeeklyProductionView() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<'select' | 'deselect'>('select');
   const dragStartRef = useRef<number | null>(null);
+
+  // C2: Released weekly planning state
+  const [releasedWeeks, setReleasedWeeks] = useState<any[]>([]);
+  const [releasedWeekServices, setReleasedWeekServices] = useState<any[]>([]);
+  const [selectedReleasedWeek, setSelectedReleasedWeek] = useState<any | null>(null);
+  const [selectedReleasedService, setSelectedReleasedService] = useState<any | null>(null);
+
+  // C3: Deviation alerts state
+  const [deviationAlerts, setDeviationAlerts] = useState<any[]>([]);
+  
+  const [reasonDialogOpen, setReasonDialogOpen] = useState(false);
+  const [selectedAlert, setSelectedAlert] = useState<any | null>(null);
+  const [deviationReason, setDeviationReason] = useState("");
+  const [correctiveAction, setCorrectiveAction] = useState("");
+
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
-  
-  // Load saved filters from localStorage (global, not per project)
   useEffect(() => {
     const savedPeriod = localStorage.getItem(`${FILTER_STORAGE_KEY}_period`);
     if (savedPeriod) {
@@ -260,6 +270,79 @@ export function WeeklyProductionView() {
     setAnalysisMacroFilter("");
     setAnalysisScopeFilter("");
   }, [currentProject?.id]);
+
+  // C2: Load released weeks when project changes
+  useEffect(() => {
+    if (!currentProject?.id) return;
+    supabase
+      .from('weekly_plan_weeks')
+      .select(`
+        id, week_number, week_start, week_end,
+        planning_periods!inner(period_number, status)
+      `)
+      .eq('project_id', currentProject.id)
+      .in('planning_periods.status', ['released_to_weekly', 'closed'])
+      .order('week_start', { ascending: false })
+      .then(({ data }) => setReleasedWeeks(data || []));
+  }, [currentProject?.id]);
+
+  // C3: Load deviation alerts
+  const loadDeviationAlerts = useCallback(async () => {
+    if (!currentProject?.id) return;
+    const { data } = await supabase
+      .from('production_deviations')
+      .select('*')
+      .eq('project_id', currentProject.id)
+      .in('status', ['open', 'acknowledged'])
+      .order('created_at', { ascending: false });
+    setDeviationAlerts(data || []);
+  }, [currentProject?.id]);
+
+  useEffect(() => {
+    loadDeviationAlerts();
+  }, [loadDeviationAlerts]);
+
+  const openDeviationAlertCount = useMemo(() => 
+    deviationAlerts.filter(a => a.status === 'open').length
+  , [deviationAlerts]);
+
+  // C2: Select released week handler
+  const onSelectReleasedWeek = async (weekId: string) => {
+    const week = releasedWeeks.find(w => w.id === weekId) || null;
+    setSelectedReleasedWeek(week);
+    setSelectedReleasedService(null);
+    if (!weekId) { setReleasedWeekServices([]); return; }
+    const { data } = await supabase
+      .from('weekly_plan_services')
+      .select('*')
+      .eq('weekly_plan_week_id', weekId);
+    // Check which services already have production registered
+    const serviceIds = (data || []).map(s => s.id);
+    let registeredServiceIds: string[] = [];
+    if (serviceIds.length > 0) {
+      const { data: prods } = await supabase
+        .from('weekly_productions')
+        .select('weekly_plan_service_id')
+        .in('weekly_plan_service_id', serviceIds);
+      registeredServiceIds = (prods || []).map(p => p.weekly_plan_service_id).filter(Boolean) as string[];
+    }
+    setReleasedWeekServices((data || []).map(s => ({
+      ...s,
+      _registered: registeredServiceIds.includes(s.id)
+    })));
+  };
+
+  // C2: Apply released service to form
+  const applyReleasedService = (svc: any) => {
+    setSelectedReleasedService(svc);
+    setSelectedMacro(svc.macro_id);
+    setTimeout(() => setSelectedScope(svc.scope_id), 100);
+    setSelectedHouses(svc.planned_house_ids || []);
+    if (selectedReleasedWeek) {
+      setMeasurementStartDate(selectedReleasedWeek.week_start);
+      setMeasurementEndDate(selectedReleasedWeek.week_end);
+    }
+  };
   
   // Get scopes for selected macro
   const scopes = useMemo(() => {
@@ -567,6 +650,60 @@ export function WeeklyProductionView() {
       
       // Reload productions
       await reloadProductions();
+
+      // C2: Deviation tracking after save
+      if (selectedReleasedService && !isInitialDatabase) {
+        try {
+          const plannedIds: number[] = selectedReleasedService.planned_house_ids || [];
+          const missingIds = plannedIds.filter(id => !selectedHouses.includes(id));
+          const unplannedIds = selectedHouses.filter(id => !plannedIds.includes(id));
+
+          // Link production to weekly plan service
+          await supabase.from('weekly_productions')
+            .update({ 
+              weekly_plan_service_id: selectedReleasedService.id,
+              contractor_id: selectedReleasedService.contractor_id || null,
+            })
+            .eq('project_id', currentProject.id)
+            .eq('scope_id', scope.id)
+            .eq('macro_id', macro.id)
+            .eq('week_start', measurementStartDate)
+            .is('weekly_plan_service_id', null)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          if (missingIds.length > 0) {
+            const pct = (missingIds.length / plannedIds.length) * 100;
+            await supabase.from('production_deviations').insert({
+              project_id: currentProject.id,
+              company_id: profile?.company_id,
+              week_start: measurementStartDate,
+              week_end: measurementEndDate,
+              scope_id: scope.id,
+              scope_name: scope.name,
+              macro_id: macro.id,
+              macro_name: macro.name,
+              weekly_plan_service_id: selectedReleasedService.id,
+              planned_count: plannedIds.length,
+              actual_count: selectedHouses.length,
+              deviation: selectedHouses.length - plannedIds.length,
+              planned_house_ids: plannedIds,
+              actual_house_ids: [...selectedHouses],
+              missing_house_ids: missingIds,
+              unplanned_house_ids: unplannedIds,
+              severity: pct > 40 ? 'critical' : pct > 20 ? 'warning' : 'info',
+              status: 'open',
+            });
+            toast.warning(`${missingIds.length} casa(s) não executadas — alerta gerado.`);
+          }
+        } catch (devErr) {
+          console.error('Error tracking deviation:', devErr);
+        }
+        setSelectedReleasedService(null);
+        setSelectedReleasedWeek(null);
+        setReleasedWeekServices([]);
+      }
+
       setSelectedHouses([]);
       setSelectedScope("");
       setHousePercentages({});
@@ -885,6 +1022,94 @@ export function WeeklyProductionView() {
         </TabsList>
 
         <TabsContent value="register" className="flex-1 overflow-auto mt-4 space-y-4">
+          {/* C2: Released Weekly Planning Card */}
+          {!isInitialDatabase && !isAddingUnplanned && releasedWeeks.length > 0 && (
+            <Card className="border-blue-200 dark:border-blue-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Target className="w-5 h-5 text-blue-600" />
+                  Do Planejamento Semanal
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Select
+                  value={selectedReleasedWeek?.id || ""}
+                  onValueChange={(v) => onSelectReleasedWeek(v)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecione a semana..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {releasedWeeks.map((w: any) => {
+                      const pp = Array.isArray(w.planning_periods) ? w.planning_periods[0] : w.planning_periods;
+                      return (
+                        <SelectItem key={w.id} value={w.id}>
+                          Semana {w.week_number} — {format(parseISO(w.week_start), 'dd/MM', { locale: ptBR })} a {format(parseISO(w.week_end), 'dd/MM', { locale: ptBR })} (Medição {pp?.period_number || '?'})
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+
+                {selectedReleasedWeek && releasedWeekServices.length > 0 && (
+                  <ScrollArea className="h-[160px] pr-2">
+                    <div className="space-y-1.5">
+                      {releasedWeekServices.map((svc: any) => {
+                        const isSelected = selectedReleasedService?.id === svc.id;
+                        const isRegistered = svc._registered;
+                        return (
+                          <button
+                            key={svc.id}
+                            onClick={() => !isRegistered && applyReleasedService(isSelected ? null : svc)}
+                            disabled={isRegistered}
+                            className={`w-full p-2.5 rounded-lg border text-left transition-all ${
+                              isRegistered 
+                                ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 opacity-60 cursor-not-allowed"
+                                : isSelected
+                                  ? "bg-blue-50 dark:bg-blue-900/20 border-blue-500 ring-2 ring-blue-200"
+                                  : "bg-background hover:bg-muted/50 border-border hover:border-blue-300"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: svc.macro_color }} />
+                                <span className="font-medium text-sm">{svc.scope_name}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <Badge variant="secondary" className="text-xs">
+                                  {svc.planned_houses} casas
+                                </Badge>
+                                {svc.contractor_name && (
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {svc.contractor_name}
+                                  </Badge>
+                                )}
+                                {isRegistered && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                )}
+
+                {selectedReleasedService && (
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => {
+                    setSelectedReleasedService(null);
+                    setSelectedReleasedWeek(null);
+                    setReleasedWeekServices([]);
+                    setSelectedMacro("");
+                    setSelectedScope("");
+                    setSelectedHouses([]);
+                  }}>
+                    Limpar seleção do planejamento
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Measurement Selector - Priority: new measurements table, fallback to legacy */}
           {!isInitialDatabase && !isAddingUnplanned && (
             <>
@@ -1339,6 +1564,9 @@ export function WeeklyProductionView() {
                           const isCompleted = completedHouses.includes(house.id);
                           const isSelected = selectedHouses.includes(house.id);
                           const isPlanned = selectedPlannedPeriod?.planned_house_ids?.includes(house.id);
+                          const isReleasedPlanned = selectedReleasedService?.planned_house_ids?.includes(house.id);
+                          const isDeselectedFromPlan = selectedReleasedService && isReleasedPlanned && !isSelected;
+                          const isExtraFromPlan = selectedReleasedService && !isReleasedPlanned && isSelected;
                           const macro = macros.find(m => m.id === selectedMacro);
                           
                           const houseMacros = (house.macros as any[]) || [];
@@ -1376,7 +1604,15 @@ export function WeeklyProductionView() {
                                 }
                                 ${isDragging && !isCompleted ? 'cursor-crosshair' : ''}
                               `}
-                              style={isSelected && macro ? { borderColor: macro.color, backgroundColor: macro.color + '20' } : undefined}
+                              style={
+                                isDeselectedFromPlan && !isCompleted
+                                  ? { borderColor: '#ef4444', borderStyle: 'dashed' }
+                                  : isExtraFromPlan && !isCompleted
+                                    ? { borderColor: '#f59e0b', borderStyle: 'dashed', backgroundColor: '#fef3c720' }
+                                    : isSelected && macro 
+                                      ? { borderColor: macro.color, backgroundColor: macro.color + '20' } 
+                                      : undefined
+                              }
                               title={`Casa ${house.id}: ${currentProgress}% concluído`}
                             >
                               <span className="font-bold text-[11px]">{house.id}</span>
@@ -1400,6 +1636,26 @@ export function WeeklyProductionView() {
                       </div>
                     </ScrollArea>
                     
+                    {/* Released plan counter */}
+                    {selectedReleasedService && (
+                      <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 text-xs">
+                        {(() => {
+                          const plannedIds: number[] = selectedReleasedService.planned_house_ids || [];
+                          const selected = selectedHouses;
+                          const fromPlan = selected.filter((id: number) => plannedIds.includes(id)).length;
+                          const extras = selected.filter((id: number) => !plannedIds.includes(id)).length;
+                          const pending = plannedIds.filter((id: number) => !selected.includes(id)).length;
+                          return (
+                            <span className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium">{fromPlan} de {plannedIds.length} planejadas</span>
+                              {extras > 0 && <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600">{extras} extras</Badge>}
+                              {pending > 0 && <Badge variant="outline" className="text-[10px] border-red-400 text-red-600">{pending} pendentes</Badge>}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    )}
+
                     {/* Legend */}
                     <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t text-xs text-muted-foreground">
                       <div className="flex items-center gap-1">
@@ -1427,6 +1683,20 @@ export function WeeklyProductionView() {
         </TabsContent>
 
         <TabsContent value="analysis" className="flex-1 overflow-auto mt-4 space-y-4">
+          <Tabs defaultValue="evolution" className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="evolution">Evolução</TabsTrigger>
+              <TabsTrigger value="alerts" className="gap-1.5">
+                Alertas
+                {openDeviationAlertCount > 0 && (
+                  <Badge variant="destructive" className="text-[10px] px-1.5 py-0 min-w-[18px] h-[18px]">
+                    {openDeviationAlertCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="evolution" className="space-y-4">
           {/* Filters */}
           <Card className="p-4">
             <div className="space-y-4">
@@ -1790,6 +2060,183 @@ export function WeeklyProductionView() {
                     ))}
                   </div>
                 )}
+              </div>
+            </DialogContent>
+          </Dialog>
+            </TabsContent>
+
+            {/* C3: Alerts Sub-Tab */}
+            <TabsContent value="alerts" className="space-y-4">
+              {deviationAlerts.length === 0 ? (
+                <Card className="p-8 text-center text-muted-foreground">
+                  <CheckCircle2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">Nenhum alerta de desvio ativo</p>
+                  <p className="text-xs mt-1">Alertas são gerados automaticamente quando a produção difere do planejamento</p>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {deviationAlerts.map((alert: any) => (
+                    <Card key={alert.id} className={`border-l-4 ${
+                      alert.severity === 'critical' ? 'border-l-red-500' : 
+                      alert.severity === 'warning' ? 'border-l-amber-500' : 'border-l-blue-500'
+                    }`}>
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <Badge className={`text-[10px] ${
+                              alert.severity === 'critical' ? 'bg-red-500 hover:bg-red-600' :
+                              alert.severity === 'warning' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-500 hover:bg-blue-600'
+                            }`}>
+                              {alert.severity === 'critical' ? 'Crítico' : alert.severity === 'warning' ? 'Atenção' : 'Info'}
+                            </Badge>
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: alert.macro_color || '#888' }} />
+                              <span className="text-sm font-medium">{alert.macro_name}</span>
+                              <span className="text-muted-foreground">→</span>
+                              <span className="text-sm">{alert.scope_name}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={alert.status === 'open' ? 'destructive' : 'secondary'} className="text-[10px]">
+                              {alert.status === 'open' ? 'Aberto' : 'Registrado'}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {alert.week_start && alert.week_end && 
+                                `${format(parseISO(alert.week_start), 'dd/MM', { locale: ptBR })} a ${format(parseISO(alert.week_end), 'dd/MM', { locale: ptBR })}`
+                              }
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="text-sm">
+                          Planejado: <strong>{alert.planned_count}</strong> · Executado: <strong>{alert.actual_count}</strong> · Faltando: <strong>{(alert.missing_house_ids || []).length}</strong> casas
+                        </div>
+
+                        {(alert.missing_house_ids || []).length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {(alert.missing_house_ids as number[]).map((id: number) => (
+                              <span key={id} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                                {id}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {(alert.unplanned_house_ids || []).length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            <span className="text-[10px] text-amber-600 mr-1">Extras:</span>
+                            {(alert.unplanned_house_ids as number[]).map((id: number) => (
+                              <span key={id} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                {id}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {alert.deviation_reason && (
+                          <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded">
+                            <span className="font-medium">Motivo:</span> {alert.deviation_reason}
+                            {alert.corrective_action && <><br/><span className="font-medium">Ação:</span> {alert.corrective_action}</>}
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2 pt-1">
+                          {alert.status === 'open' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                setSelectedAlert(alert);
+                                setDeviationReason("");
+                                setCorrectiveAction("");
+                                setReasonDialogOpen(true);
+                              }}
+                            >
+                              Registrar motivo
+                            </Button>
+                          )}
+                          {alert.status === 'acknowledged' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs text-green-600 border-green-300 hover:bg-green-50"
+                              onClick={async () => {
+                                await supabase.from('production_deviations')
+                                  .update({ status: 'resolved', resolved_at: new Date().toISOString(), resolved_by: profile?.user_id })
+                                  .eq('id', alert.id);
+                                toast.success("Alerta resolvido.");
+                                loadDeviationAlerts();
+                              }}
+                            >
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Resolver
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+
+          {/* Reason Dialog */}
+          <Dialog open={reasonDialogOpen} onOpenChange={setReasonDialogOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Registrar Motivo do Desvio</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Motivo</Label>
+                  <Select value={deviationReason} onValueChange={setDeviationReason}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o motivo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        'Falta de material', 'Falta de mão de obra', 'Mão de obra insuficiente',
+                        'Empreiteiro substituído', 'Problemas climáticos', 'Chuva excessiva',
+                        'Problema técnico', 'Atraso de fornecedor', 'Retrabalho necessário',
+                        'Mudança de escopo', 'Equipamento indisponível', 'Acidente/afastamento',
+                        'Feriado não previsto', 'Casas inacessíveis', 'Problema de qualidade', 'Outros'
+                      ].map(reason => (
+                        <SelectItem key={reason} value={reason}>{reason}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Ação corretiva planejada</Label>
+                  <Textarea
+                    value={correctiveAction}
+                    onChange={(e) => setCorrectiveAction(e.target.value)}
+                    placeholder="Descreva a ação corretiva..."
+                    rows={3}
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  disabled={!deviationReason}
+                  onClick={async () => {
+                    if (!selectedAlert) return;
+                    await supabase.from('production_deviations')
+                      .update({
+                        deviation_reason: deviationReason,
+                        corrective_action: correctiveAction || null,
+                        status: 'acknowledged',
+                      })
+                      .eq('id', selectedAlert.id);
+                    toast.success("Motivo registrado.");
+                    setReasonDialogOpen(false);
+                    setSelectedAlert(null);
+                    loadDeviationAlerts();
+                  }}
+                >
+                  Salvar Motivo
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
