@@ -169,7 +169,7 @@ export function MeasurementSupplyDetail({
   };
 
   const handleSaveStock = async () => {
-    const saved = await saveStockEntries(measurement.measurement_id);
+    const saved = await saveStockEntries(planningPeriodId);
     if (!saved) return;
 
     // Try to carry over stock to next period
