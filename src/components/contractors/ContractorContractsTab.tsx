@@ -336,8 +336,9 @@ export function ContractorContractsTab({
                   <TableHead className="w-8" />
                   <TableHead>Etapa</TableHead>
                   <TableHead>Serviço</TableHead>
-                  <TableHead className="text-right">Orçamento</TableHead>
-                  <TableHead className="text-right">Negociado</TableHead>
+                   <TableHead className="text-right">MO Unit.</TableHead>
+                   <TableHead className="text-right text-muted-foreground">Custo Total</TableHead>
+                   <TableHead className="text-right">Negociado</TableHead>
                   <TableHead className="text-center">Casas</TableHead>
                 </TableRow>
               </TableHeader>
