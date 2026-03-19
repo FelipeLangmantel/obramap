@@ -1037,15 +1037,37 @@ export function WeeklyPlanningFromPeriod() {
     if (!projectId || !companyId || !selectedPeriodId) return;
     setIsSaving(true);
     try {
-      await supabase.from("weekly_plan_weeks").delete().eq("planning_period_id", selectedPeriodId);
+      // 1. Buscar semanas existentes para reutilizar IDs (preserva log)
+      const { data: existingWeeks } = await supabase
+        .from("weekly_plan_weeks")
+        .select("id, week_number")
+        .eq("planning_period_id", selectedPeriodId);
+
+      const existingWeekMap = new Map(
+        (existingWeeks || []).map(w => [w.week_number, w.id])
+      );
+
       for (const week of weekPlans) {
-        const { data: wd, error: we } = await supabase
-          .from("weekly_plan_weeks")
-          .insert({ planning_period_id: selectedPeriodId, project_id: projectId, company_id: companyId, week_number: week.week_number, week_start: week.week_start, week_end: week.week_end, status: week.status })
-          .select("id").single();
-        if (we || !wd) throw we;
+        let weekId = existingWeekMap.get(week.week_number);
+
+        if (weekId) {
+          // Atualizar semana existente (preserva IDs dos serviços)
+          await supabase.from("weekly_plan_weeks")
+            .update({ week_start: week.week_start, week_end: week.week_end, status: week.status })
+            .eq("id", weekId);
+        } else {
+          // Criar nova semana
+          const { data: wd, error: we } = await supabase
+            .from("weekly_plan_weeks")
+            .insert({ planning_period_id: selectedPeriodId, project_id: projectId, company_id: companyId, week_number: week.week_number, week_start: week.week_start, week_end: week.week_end, status: week.status })
+            .select("id").single();
+          if (we || !wd) throw we;
+          weekId = wd.id;
+        }
+
+        // Para cada serviço: upsert pelo unique key (weekly_plan_week_id, macro_id, scope_id)
         const rows = week.services.filter(s => s.planned_house_ids.length > 0).map(s => ({
-          weekly_plan_week_id: wd.id, planning_period_id: selectedPeriodId, project_id: projectId, company_id: companyId,
+          weekly_plan_week_id: weekId, planning_period_id: selectedPeriodId, project_id: projectId, company_id: companyId,
           macro_id: s.macro_id, macro_name: s.macro_name, macro_color: s.macro_color,
           scope_id: s.scope_id, scope_name: s.scope_name,
           planned_house_ids: s.planned_house_ids, planned_houses: s.planned_house_ids.length,
@@ -1057,19 +1079,41 @@ export function WeeklyPlanningFromPeriod() {
           has_out_of_contract_houses: s.has_out_of_contract_houses || false,
           out_of_contract_house_ids: s.out_of_contract_house_ids || [],
         }));
+
         if (rows.length > 0) {
-          const { error } = await supabase.from("weekly_plan_services").insert(rows);
+          const { error } = await supabase.from("weekly_plan_services")
+            .upsert(rows, { onConflict: "weekly_plan_week_id,macro_id,scope_id" });
           if (error) throw error;
         }
+
+        // Remover serviços que não estão mais no plano (casas = 0)
+        const activeScopeIds = week.services
+          .filter(s => s.planned_house_ids.length > 0)
+          .map(s => s.scope_id);
+
+        if (activeScopeIds.length > 0 && weekId) {
+          await supabase.from("weekly_plan_services")
+            .delete()
+            .eq("weekly_plan_week_id", weekId)
+            .not("scope_id", "in", `(${activeScopeIds.join(",")})`)
+        }
       }
-      // Update period: mark as generated/locked and set status to released_to_weekly
+
+      // Remover semanas que não existem mais no plano
+      const activeWeekNumbers = weekPlans.map(w => w.week_number);
+      const weeksToDelete = (existingWeeks || [])
+        .filter(w => !activeWeekNumbers.includes(w.week_number))
+        .map(w => w.id);
+      if (weeksToDelete.length > 0) {
+        await supabase.from("weekly_plan_weeks").delete().in("id", weeksToDelete);
+      }
+
       await supabase.from("planning_periods").update({ 
         weekly_plan_generated: true, 
         weekly_plan_locked: true,
         status: "released_to_weekly"
       }).eq("id", selectedPeriodId);
       
-      // Refresh periods list to reflect new status
       await loadPeriods();
       
       toast.success("Planejamento semanal salvo e medição liberada!");
