@@ -651,6 +651,10 @@ export function WeeklyPlanningFromPeriod() {
   const [isGenerated, setIsGenerated] = useState(false);
   const [showWeekConfig, setShowWeekConfig] = useState(false);
 
+  // Contractor allocation state
+  const [contractorServices, setContractorServices] = useState<ContractorServiceOption[]>([]);
+  const [serviceContractorMap, setServiceContractorMap] = useState<Record<string, string>>({}); // svcKey -> contractor_contract_service_id
+
   // Service-first flow state
   const [selectedServiceKey, setSelectedServiceKey] = useState<string>("");
   const [selectedHouseIds, setSelectedHouseIds] = useState<Set<number>>(new Set());
