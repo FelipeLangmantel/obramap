@@ -238,6 +238,8 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   const [alertsData, setAlertsData] = useState<{ scopeItems: ScopeItem[], pendingQuotations: number, inTransitOrders: number }>({ scopeItems: [], pendingQuotations: 0, inTransitOrders: 0 });
   const [dataLoaded, setDataLoaded] = useState<Record<string, boolean>>({});
   const [supplyKpis, setSupplyKpis] = useState<SupplyKPIs | null>(null);
+  const [projectLeadTimes, setProjectLeadTimes] = useState<Record<string, number>>({});
+  const [overdueRequests, setOverdueRequests] = useState<any[]>([]);
 
   // Dialog states
   const [inputDialogOpen, setInputDialogOpen] = useState(false);
