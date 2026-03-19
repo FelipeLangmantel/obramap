@@ -28,7 +28,7 @@ interface ObraMapProject {
 }
 
 function SetupContent({ onCreated, ...props }: Props) {
-  const { currentProject, groups, events, createProject, createGroup, updateGroup, deleteGroup, createEvent, updateEvent, deleteEvent, updateProject } = props;
+  const { currentProject, groups, events, createProject, createGroup, deleteGroup, createEvent, deleteEvent, updateProject } = props;
 
   const [showAIImport, setShowAIImport] = useState(false);
   const [obraMapProjects, setObraMapProjects] = useState<ObraMapProject[]>([]);
