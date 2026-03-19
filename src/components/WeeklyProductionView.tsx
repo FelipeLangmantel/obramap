@@ -657,6 +657,60 @@ export function WeeklyProductionView() {
       
       // Reload productions
       await reloadProductions();
+
+      // C2: Deviation tracking after save
+      if (selectedReleasedService && !isInitialDatabase) {
+        try {
+          const plannedIds: number[] = selectedReleasedService.planned_house_ids || [];
+          const missingIds = plannedIds.filter(id => !selectedHouses.includes(id));
+          const unplannedIds = selectedHouses.filter(id => !plannedIds.includes(id));
+
+          // Link production to weekly plan service
+          await supabase.from('weekly_productions')
+            .update({ 
+              weekly_plan_service_id: selectedReleasedService.id,
+              contractor_id: selectedReleasedService.contractor_id || null,
+            })
+            .eq('project_id', currentProject.id)
+            .eq('scope_id', scope.id)
+            .eq('macro_id', macro.id)
+            .eq('week_start', measurementStartDate)
+            .is('weekly_plan_service_id', null)
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+          if (missingIds.length > 0) {
+            const pct = (missingIds.length / plannedIds.length) * 100;
+            await supabase.from('production_deviations').insert({
+              project_id: currentProject.id,
+              company_id: profile?.company_id,
+              week_start: measurementStartDate,
+              week_end: measurementEndDate,
+              scope_id: scope.id,
+              scope_name: scope.name,
+              macro_id: macro.id,
+              macro_name: macro.name,
+              weekly_plan_service_id: selectedReleasedService.id,
+              planned_count: plannedIds.length,
+              actual_count: selectedHouses.length,
+              deviation: selectedHouses.length - plannedIds.length,
+              planned_house_ids: plannedIds,
+              actual_house_ids: [...selectedHouses],
+              missing_house_ids: missingIds,
+              unplanned_house_ids: unplannedIds,
+              severity: pct > 40 ? 'critical' : pct > 20 ? 'warning' : 'info',
+              status: 'open',
+            });
+            toast.warning(`${missingIds.length} casa(s) não executadas — alerta gerado.`);
+          }
+        } catch (devErr) {
+          console.error('Error tracking deviation:', devErr);
+        }
+        setSelectedReleasedService(null);
+        setSelectedReleasedWeek(null);
+        setReleasedWeekServices([]);
+      }
+
       setSelectedHouses([]);
       setSelectedScope("");
       setHousePercentages({});
