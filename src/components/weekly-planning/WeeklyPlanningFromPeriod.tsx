@@ -829,7 +829,6 @@ export function WeeklyPlanningFromPeriod() {
           weeksWithSvcs.push({ ...w, services, working_days: [] });
         }
         setWeekPlans(weeksWithSvcs);
-        setServiceContractorMap(contractorMap);
         setIsGenerated(true);
         setShowWeekConfig(false);
       } else {
