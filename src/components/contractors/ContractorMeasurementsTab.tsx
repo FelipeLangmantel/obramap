@@ -41,6 +41,9 @@ export function ContractorMeasurementsTab({
   approveMeasurement, updateContractService, deleteContractService,
   recalcContractTotal, onBack,
 }: Props) {
+  const { currentProject } = useConstruction();
+  const { company } = useAuth();
+
   const [services, setServices] = useState<ContractorContractService[]>([]);
   const [measurements, setMeasurements] = useState<ContractorMeasurement[]>([]);
   const [selectedMeasurement, setSelectedMeasurement] = useState<ContractorMeasurement | null>(null);
@@ -52,6 +55,12 @@ export function ContractorMeasurementsTab({
   // Edit service state
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [editNegotiatedValue, setEditNegotiatedValue] = useState(0);
+  const [editHouseIds, setEditHouseIds] = useState<number[]>([]);
+
+  // House map selector state
+  const [mapSelectorOpen, setMapSelectorOpen] = useState(false);
+  const [mapSelectorService, setMapSelectorService] = useState<ContractorContractService | null>(null);
+  const [allAssignedHouses, setAllAssignedHouses] = useState<Record<string, Set<number>>>({}); 
 
   // New measurement form
   const [periodStart, setPeriodStart] = useState("");
