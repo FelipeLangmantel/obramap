@@ -1095,7 +1095,7 @@ export function WeeklyPlanningFromPeriod() {
           await supabase.from("weekly_plan_services")
             .delete()
             .eq("weekly_plan_week_id", weekId)
-            .not("scope_id", "in", `(${activeScopeIds.join(",")})`)
+            .not("scope_id", "in", `(${activeScopeIds.map(id => `"${id}"`).join(",")})`)
         }
       }
 
