@@ -46,6 +46,8 @@ export interface PleProject {
   art_rrt_number: string | null;
   notes: string | null;
   updated_by: string | null;
+  obramap_project_id: string | null;
+  mode: 'standalone' | 'integrated';
 }
 
 export interface PleEventGroup {
