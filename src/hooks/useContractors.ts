@@ -220,10 +220,17 @@ export function useContractors() {
   };
 
   const updateContractService = async (serviceId: string, updates: Partial<ContractorContractService>) => {
-    const totalValue = (updates.negotiated_unit_value || 0) * ((updates.house_ids?.length || updates.total_houses) || 0);
+    const houseCount = updates.house_ids?.length ?? updates.total_houses ?? 0;
+    const unitValue = updates.negotiated_unit_value ?? 0;
+    const totalValue = unitValue * houseCount;
     const { error } = await supabase
       .from("contractor_contract_services")
-      .update({ ...updates, total_value: totalValue, updated_at: new Date().toISOString() } as any)
+      .update({
+        ...updates,
+        total_houses: houseCount,
+        total_value: totalValue,
+        updated_at: new Date().toISOString(),
+      } as any)
       .eq("id", serviceId);
     if (error) {
       toast({ title: "Erro ao atualizar serviço", description: error.message, variant: "destructive" });
