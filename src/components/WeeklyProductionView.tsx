@@ -242,10 +242,23 @@ export function WeeklyProductionView() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<'select' | 'deselect'>('select');
   const dragStartRef = useRef<number | null>(null);
+
+  // C2: Released weekly planning state
+  const [releasedWeeks, setReleasedWeeks] = useState<any[]>([]);
+  const [releasedWeekServices, setReleasedWeekServices] = useState<any[]>([]);
+  const [selectedReleasedWeek, setSelectedReleasedWeek] = useState<any | null>(null);
+  const [selectedReleasedService, setSelectedReleasedService] = useState<any | null>(null);
+
+  // C3: Deviation alerts state
+  const [deviationAlerts, setDeviationAlerts] = useState<any[]>([]);
+  const [analysisSubTab, setAnalysisSubTab] = useState<string>("evolution");
+  const [reasonDialogOpen, setReasonDialogOpen] = useState(false);
+  const [selectedAlert, setSelectedAlert] = useState<any | null>(null);
+  const [deviationReason, setDeviationReason] = useState("");
+  const [correctiveAction, setCorrectiveAction] = useState("");
+
   const macros = currentProject?.macrosTemplate || [];
   const houses = currentProject?.houses || [];
-  
-  // Load saved filters from localStorage (global, not per project)
   useEffect(() => {
     const savedPeriod = localStorage.getItem(`${FILTER_STORAGE_KEY}_period`);
     if (savedPeriod) {
