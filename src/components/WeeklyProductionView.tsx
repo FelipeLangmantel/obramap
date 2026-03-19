@@ -242,7 +242,7 @@ export function WeeklyProductionView() {
   const [releasedWeekServices, setReleasedWeekServices] = useState<any[]>([]);
   const [selectedReleasedWeek, setSelectedReleasedWeek] = useState<any | null>(null);
   const [selectedReleasedService, setSelectedReleasedService] = useState<any | null>(null);
-
+  const [planViewMode, setPlanViewMode] = useState<'service' | 'contractor'>('service');
   // C3: Deviation alerts state
   const [deviationAlerts, setDeviationAlerts] = useState<any[]>([]);
   
