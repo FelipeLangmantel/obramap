@@ -4,6 +4,7 @@ import { toast } from 'sonner';
  
  export interface MeasurementSupplySummary {
    measurement_id: string;
+   planning_period_id: string; // Same as measurement_id (pp.id), explicit for clarity
    measurement_number: number;
    start_date: string;
    end_date: string;
