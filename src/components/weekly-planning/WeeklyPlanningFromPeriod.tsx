@@ -58,6 +58,17 @@ interface WeekServicePlan {
   scope_name: string;
   planned_house_ids: number[];
   planned_houses: number;
+  contractor_contract_service_id: string | null;
+}
+
+interface ContractorServiceOption {
+  id: string;
+  contract_id: string;
+  contractor_name: string;
+  macro_id: string;
+  scope_id: string;
+  negotiated_unit_value: number;
+  house_ids: number[];
 }
 
 interface WeekDefinition {
@@ -640,6 +651,10 @@ export function WeeklyPlanningFromPeriod() {
   const [isGenerated, setIsGenerated] = useState(false);
   const [showWeekConfig, setShowWeekConfig] = useState(false);
 
+  // Contractor allocation state
+  const [contractorServices, setContractorServices] = useState<ContractorServiceOption[]>([]);
+  const [serviceContractorMap, setServiceContractorMap] = useState<Record<string, string>>({}); // svcKey -> contractor_contract_service_id
+
   // Service-first flow state
   const [selectedServiceKey, setSelectedServiceKey] = useState<string>("");
   const [selectedHouseIds, setSelectedHouseIds] = useState<Set<number>>(new Set());
@@ -740,6 +755,30 @@ export function WeeklyPlanningFromPeriod() {
     if (data) setPeriods(data as PeriodForWeekly[]);
   }, [projectId, companyId]);
 
+  // Load contractor contract services for this project
+  useEffect(() => {
+    if (!projectId || !companyId) return;
+    (async () => {
+      const { data } = await supabase
+        .from("contractor_contract_services")
+        .select("id, contract_id, macro_id, scope_id, negotiated_unit_value, house_ids, contractor_contracts!inner(contractor_id, contractors!inner(name))")
+        .eq("project_id", projectId)
+        .eq("company_id", companyId);
+      if (data) {
+        const options: ContractorServiceOption[] = data.map((s: any) => ({
+          id: s.id,
+          contract_id: s.contract_id,
+          contractor_name: s.contractor_contracts?.contractors?.name || "Empreiteiro",
+          macro_id: s.macro_id,
+          scope_id: s.scope_id,
+          negotiated_unit_value: s.negotiated_unit_value,
+          house_ids: s.house_ids || [],
+        }));
+        setContractorServices(options);
+      }
+    })();
+  }, [projectId, companyId]);
+
   useEffect(() => {
     loadPeriods();
   }, [loadPeriods]);
@@ -762,14 +801,26 @@ export function WeeklyPlanningFromPeriod() {
 
       if (existingWeeks && existingWeeks.length > 0) {
         const weeksWithSvcs: WeekPlan[] = [];
+        const contractorMap: Record<string, string> = {};
         for (const w of existingWeeks) {
           const { data: ws } = await supabase
             .from("weekly_plan_services")
-            .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, planned_house_ids, planned_houses")
+            .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, planned_house_ids, planned_houses, contractor_contract_service_id")
             .eq("weekly_plan_week_id", w.id);
-          weeksWithSvcs.push({ ...w, services: (ws || []) as WeekServicePlan[], working_days: [] });
+          const services = (ws || []).map((s: any) => ({
+            ...s,
+            contractor_contract_service_id: s.contractor_contract_service_id || null,
+          })) as WeekServicePlan[];
+          // Build contractor map from saved data
+          for (const s of services) {
+            if (s.contractor_contract_service_id) {
+              contractorMap[`${s.macro_id}:${s.scope_id}`] = s.contractor_contract_service_id;
+            }
+          }
+          weeksWithSvcs.push({ ...w, services, working_days: [] });
         }
         setWeekPlans(weeksWithSvcs);
+        setServiceContractorMap(contractorMap);
         setIsGenerated(true);
         setShowWeekConfig(false);
       } else {
@@ -798,6 +849,7 @@ export function WeeklyPlanningFromPeriod() {
         scope_name: svc.scope_name,
         planned_house_ids: [],
         planned_houses: 0,
+        contractor_contract_service_id: null,
       }));
 
       return {
@@ -985,6 +1037,7 @@ export function WeeklyPlanningFromPeriod() {
           macro_id: s.macro_id, macro_name: s.macro_name, macro_color: s.macro_color,
           scope_id: s.scope_id, scope_name: s.scope_name,
           planned_house_ids: s.planned_house_ids, planned_houses: s.planned_house_ids.length,
+          contractor_contract_service_id: serviceContractorMap[`${s.macro_id}:${s.scope_id}`] || null,
         }));
         if (rows.length > 0) {
           const { error } = await supabase.from("weekly_plan_services").insert(rows);
@@ -1218,6 +1271,41 @@ export function WeeklyPlanningFromPeriod() {
                   );
                 })}
               </div>
+
+              {/* Contractor selector per service */}
+              {selectedService && (() => {
+                const sKey = selectedServiceKey;
+                const options = contractorServices.filter(
+                  cs => cs.macro_id === selectedService.macro_id && cs.scope_id === selectedService.scope_id
+                );
+                if (options.length === 0) return null;
+                const currentVal = serviceContractorMap[sKey] || "";
+                return (
+                  <div className="mt-3 flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+                    <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Empreiteiro:</span>
+                    <Select
+                      value={currentVal}
+                      onValueChange={(val) => setServiceContractorMap(prev => ({ ...prev, [sKey]: val }))}
+                    >
+                      <SelectTrigger className="h-8 text-xs max-w-xs">
+                        <SelectValue placeholder="Selecionar empreiteiro..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {options.map(opt => (
+                          <SelectItem key={opt.id} value={opt.id}>
+                            {opt.contractor_name} — {opt.house_ids.length} casas • {opt.negotiated_unit_value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}/un
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {currentVal && (
+                      <Badge variant="outline" className="text-[10px] shrink-0 gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-primary" /> Alocado
+                      </Badge>
+                    )}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
 

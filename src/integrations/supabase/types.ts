@@ -620,6 +620,98 @@ export type Database = {
           },
         ]
       }
+      contractor_period_performance: {
+        Row: {
+          company_id: string
+          completed_houses: number
+          completion_percent: number
+          contractor_contract_id: string
+          created_at: string
+          executed_value: number
+          id: string
+          macro_id: string
+          macro_name: string
+          notes: string | null
+          planned_houses: number
+          planned_value: number
+          planning_period_id: string
+          project_id: string
+          scope_id: string
+          scope_name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          completed_houses?: number
+          completion_percent?: number
+          contractor_contract_id: string
+          created_at?: string
+          executed_value?: number
+          id?: string
+          macro_id: string
+          macro_name: string
+          notes?: string | null
+          planned_houses?: number
+          planned_value?: number
+          planning_period_id: string
+          project_id: string
+          scope_id: string
+          scope_name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          completed_houses?: number
+          completion_percent?: number
+          contractor_contract_id?: string
+          created_at?: string
+          executed_value?: number
+          id?: string
+          macro_id?: string
+          macro_name?: string
+          notes?: string | null
+          planned_houses?: number
+          planned_value?: number
+          planning_period_id?: string
+          project_id?: string
+          scope_id?: string
+          scope_name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contractor_period_performance_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contractor_period_performance_contractor_contract_id_fkey"
+            columns: ["contractor_contract_id"]
+            isOneToOne: false
+            referencedRelation: "contractor_contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contractor_period_performance_planning_period_id_fkey"
+            columns: ["planning_period_id"]
+            isOneToOne: false
+            referencedRelation: "planning_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contractor_period_performance_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contractors: {
         Row: {
           address: string | null
@@ -7438,6 +7530,7 @@ export type Database = {
       weekly_plan_services: {
         Row: {
           company_id: string
+          contractor_contract_service_id: string | null
           created_at: string
           id: string
           macro_color: string
@@ -7455,6 +7548,7 @@ export type Database = {
         }
         Insert: {
           company_id: string
+          contractor_contract_service_id?: string | null
           created_at?: string
           id?: string
           macro_color?: string
@@ -7472,6 +7566,7 @@ export type Database = {
         }
         Update: {
           company_id?: string
+          contractor_contract_service_id?: string | null
           created_at?: string
           id?: string
           macro_color?: string
@@ -7493,6 +7588,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_plan_services_contractor_contract_service_id_fkey"
+            columns: ["contractor_contract_service_id"]
+            isOneToOne: false
+            referencedRelation: "contractor_contract_services"
             referencedColumns: ["id"]
           },
           {
