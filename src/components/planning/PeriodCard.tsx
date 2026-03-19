@@ -69,7 +69,7 @@ export function PeriodCard({
   isGeneratingSupplies,
   canEdit = true 
 }: PeriodCardProps) {
-  const { isSystemAdmin } = useAuth();
+  const { isSystemAdmin, isCompanyAdmin } = useAuth();
   const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
   const [isReopening, setIsReopening] = useState(false);
 
@@ -311,7 +311,7 @@ export function PeriodCard({
         )}
 
         {/* Botão Reabrir — apenas system_admin em períodos fechados */}
-        {isSystemAdmin && period.status === "closed" && (
+        {(isSystemAdmin || isCompanyAdmin) && period.status === "closed" && (
           <Button
             className="w-full mt-2"
             variant="destructive"
