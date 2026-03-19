@@ -186,7 +186,7 @@ export function MeasurementSupplyDetail({
 
       if (nextPeriod) {
         const { data: result } = await supabase.rpc('carry_over_stock', {
-          p_from_period_id: measurement.measurement_id,
+          p_from_period_id: planningPeriodId,
           p_to_period_id: nextPeriod.id,
         });
         const carried = (result as any)?.carried_items || 0;
