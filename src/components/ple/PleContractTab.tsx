@@ -142,7 +142,7 @@ export function PleContractTab(props: PleDataReturn) {
   const [newEvent, setNewEvent] = useState({
     group_id: "", item_code: "", description: "", discrimination: "",
     sinapi_code: "", unit: "UN", quantity: 0, unit_value: 0,
-    mat_unit_value: 0, mo_unit_value: 0,
+    mat_unit_value: 0, mo_unit_value: 0, billing_type: "per_house" as string,
   });
 
   const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
