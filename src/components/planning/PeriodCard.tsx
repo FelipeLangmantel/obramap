@@ -127,7 +127,7 @@ export function PeriodCard({
 
     // Validação especial para fechar
     if (nextAction.nextStatus === 'closed' && onValidateBeforeClose) {
-      const { canClose, warnings } = await onValidateBeforeClose(period.id);
+      const { warnings } = await onValidateBeforeClose(period.id);
 
       if (warnings.length > 0) {
         const message = warnings.join('\n') + '\n\nDeseja fechar mesmo assim?';

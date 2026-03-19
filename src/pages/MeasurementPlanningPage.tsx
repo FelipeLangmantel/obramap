@@ -196,6 +196,7 @@ export default function MeasurementPlanningPage() {
                     onClick={() => handlePeriodClick(period.id)}
                     onStatusChange={canEdit ? changePeriodStatus : undefined}
                     onGenerateSupplies={canEdit ? handleGenerateSupplies : undefined}
+                    onValidateBeforeClose={canEdit ? validateBeforeClose : undefined}
                     isChangingStatus={approvingPeriodId === period.id}
                     isGeneratingSupplies={generatingSuppliesPeriodId === period.id}
                     canEdit={canEdit}
