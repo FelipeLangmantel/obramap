@@ -423,14 +423,24 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
 
   useEffect(() => {
     if (activeTab !== 'alerts') {
-      // Lead time tab needs families from inputs tab data
       if (activeTab === 'leadtime') {
         loadTabData('inputs');
+        if (projectId) {
+          supabase
+            .from('project_lead_times')
+            .select('family_id, lead_time_days')
+            .eq('project_id', projectId)
+            .then(({ data }) => {
+              const map: Record<string, number> = {};
+              (data || []).forEach((p: any) => { map[p.family_id] = p.lead_time_days; });
+              setProjectLeadTimes(map);
+            });
+        }
       } else {
         loadTabData(activeTab);
       }
     }
-  }, [activeTab, loadTabData]);
+  }, [activeTab, loadTabData, projectId]);
 
   // Get scopes that have planned production (future only) - match by ID and by name
   const scopesWithPlannedProduction = useMemo(() => {
