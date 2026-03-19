@@ -1517,6 +1517,9 @@ export function WeeklyProductionView() {
                           const isCompleted = completedHouses.includes(house.id);
                           const isSelected = selectedHouses.includes(house.id);
                           const isPlanned = selectedPlannedPeriod?.planned_house_ids?.includes(house.id);
+                          const isReleasedPlanned = selectedReleasedService?.planned_house_ids?.includes(house.id);
+                          const isDeselectedFromPlan = selectedReleasedService && isReleasedPlanned && !isSelected;
+                          const isExtraFromPlan = selectedReleasedService && !isReleasedPlanned && isSelected;
                           const macro = macros.find(m => m.id === selectedMacro);
                           
                           const houseMacros = (house.macros as any[]) || [];
