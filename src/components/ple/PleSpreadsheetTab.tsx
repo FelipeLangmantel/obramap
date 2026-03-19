@@ -13,7 +13,6 @@ interface Props extends PleDataReturn {
   selectedMeasurement: PleMeasurement | null;
 }
 
-// Column header with formula tooltip
 function ColHeader({ label, formula, className }: { label: string; formula: string; className?: string }) {
   return (
     <Tooltip>
@@ -35,9 +34,10 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
   const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtCur = (v: number) => `R$ ${fmt(v)}`;
 
+  const isIntegrated = currentProject?.mode === "integrated";
+
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set(groups.map(g => g.id)));
 
-  // Auto-expand all when measurement changes
   useEffect(() => {
     setExpandedGroups(new Set(groups.map(g => g.id)));
   }, [selectedMeasurement, groups]);
@@ -58,23 +58,18 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
 
   const rows = useMemo(() => {
     return events.map(event => {
-      // Valor total do item por unidade habitacional = Quantidade × Preço Unitário
       const valorPorCasa = event.quantity * event.unit_value;
-      // Valor total do contrato para este item = Valor por casa × Nº de casas
       const totalContrato = valorPorCasa * totalHouses;
 
-      // Quantidade medida (casas) na medição selecionada
       let qtdMed = 0;
       if (selectedMeasurement) {
         qtdMed = entries.filter(e => e.event_id === event.id && e.measurement_id === selectedMeasurement.id).length;
       } else {
         qtdMed = entries.filter(e => e.event_id === event.id).length;
       }
-      // Valor medido = Casas medidas × Valor por casa
       const valorMed = qtdMed * valorPorCasa;
       const pctItem = totalContrato > 0 ? (valorMed / totalContrato) * 100 : 0;
 
-      // Acumulado até a medição selecionada
       let qtdAcum = entries.filter(e => e.event_id === event.id).length;
       if (selectedMeasurement) {
         const measurementsUpTo = measurements.filter(m => m.measurement_number <= selectedMeasurement.measurement_number);
@@ -111,6 +106,10 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
   const totalMedido = rows.reduce((sum, r) => sum + r.valorMed, 0);
   const totalAcum = rows.reduce((sum, r) => sum + r.valorAcum, 0);
 
+  // Extra column count for integrated mode
+  const extraCols = isIntegrated ? 2 : 0;
+  const totalColSpan = 11 + extraCols;
+
   if (events.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
@@ -122,7 +121,6 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
   return (
     <TooltipProvider delayDuration={150}>
       <div className="border border-border rounded-lg overflow-hidden h-full flex flex-col bg-card">
-        {/* Project info header */}
         {currentProject && (
           <div className="bg-muted/50 px-3 sm:px-5 py-2 sm:py-3 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-6 border-b border-border">
             <div className="min-w-0">
@@ -149,7 +147,6 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
           </div>
         )}
 
-        {/* Expand/Collapse */}
         <div className="px-3 sm:px-4 py-1.5 border-b border-border flex items-center gap-3">
           <Button variant="outline" size="sm" onClick={toggleAll} className="gap-1.5 text-xs h-7 px-2.5">
             <ChevronsUpDown className="h-3 w-3" /> {allExpanded ? "Recolher" : "Expandir"}
@@ -160,7 +157,7 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
         </div>
 
         <ScrollArea className="flex-1">
-          <div className="min-w-[700px] lg:min-w-[1000px]">
+          <div className="min-w-[700px] lg:min-w-[1100px]">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/80 text-[10px] sm:text-xs uppercase tracking-wide border-b-2 border-border">
@@ -176,6 +173,16 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
                   <TableHead className="w-14 sm:w-16 font-extrabold text-foreground text-right px-1 sm:px-2">
                     <ColHeader label="QTDE" formula="Quantidade do serviço por unidade habitacional conforme orçamento" className="justify-end" />
                   </TableHead>
+                  {isIntegrated && (
+                    <>
+                      <TableHead className="w-20 sm:w-24 font-extrabold text-foreground text-right px-1 sm:px-2">
+                        <ColHeader label="MAT UNIT." formula="Valor unitário de Material por unidade do serviço" className="justify-end" />
+                      </TableHead>
+                      <TableHead className="w-20 sm:w-24 font-extrabold text-foreground text-right px-1 sm:px-2">
+                        <ColHeader label="MO UNIT." formula="Valor unitário de Mão de Obra por unidade do serviço" className="justify-end" />
+                      </TableHead>
+                    </>
+                  )}
                   <TableHead className="w-20 sm:w-24 font-extrabold text-foreground text-right px-1 sm:px-2">
                     <ColHeader label="UNIT." formula="Preço unitário do serviço conforme orçamento (R$/unidade)" className="justify-end" />
                   </TableHead>
@@ -183,7 +190,7 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
                     <ColHeader label="TOTAL" formula="Valor total do contrato para este item = (Qtde × Preço Unit.) × Nº de Casas" className="justify-end" />
                   </TableHead>
                   <TableHead className="w-12 sm:w-16 font-extrabold text-right text-emerald-600 dark:text-emerald-400 px-1 sm:px-2">
-                    <ColHeader label="MED" formula="Quantidade de casas medidas na medição selecionada (lançamentos na aba 'Lançar')" className="justify-end" />
+                    <ColHeader label="MED" formula="Quantidade de casas medidas na medição selecionada" className="justify-end" />
                   </TableHead>
                   <TableHead className="w-24 sm:w-28 font-extrabold text-right text-emerald-600 dark:text-emerald-400 px-1 sm:px-2">
                     <ColHeader label="V.MED" formula="Valor medido = Casas Medidas × (Qtde × Preço Unit.)" className="justify-end" />
@@ -205,7 +212,7 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
                     const isExp = expandedGroups.has(item.stage.id);
                     return (
                       <TableRow key={`s-${item.stage.id}`} className="bg-primary/10 border-t-2 border-primary/40 cursor-pointer hover:bg-primary/15" onClick={() => toggleGroup(item.stage!.id)}>
-                        <TableCell colSpan={11} className="font-black text-xs sm:text-sm text-primary py-2 sm:py-2.5 tracking-wide uppercase px-2">
+                        <TableCell colSpan={totalColSpan} className="font-black text-xs sm:text-sm text-primary py-2 sm:py-2.5 tracking-wide uppercase px-2">
                           {isExp ? "▾" : "▸"} {item.stage.code} – {item.stage.name.toUpperCase()}
                         </TableCell>
                       </TableRow>
@@ -215,7 +222,7 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
                     const isExp = expandedGroups.has(item.substage.id);
                     return (
                       <TableRow key={`sub-${item.substage.id}`} className="bg-muted/40 border-t border-border cursor-pointer hover:bg-muted/60" onClick={() => toggleGroup(item.substage!.id)}>
-                        <TableCell colSpan={11} className="font-bold text-[11px] sm:text-xs text-foreground/80 py-1.5 pl-4 sm:pl-6">
+                        <TableCell colSpan={totalColSpan} className="font-bold text-[11px] sm:text-xs text-foreground/80 py-1.5 pl-4 sm:pl-6">
                           {isExp ? "▾" : "▸"} {item.substage.code} – {item.substage.name}
                         </TableCell>
                       </TableRow>
@@ -239,6 +246,12 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
                         </TableCell>
                         <TableCell className="text-center text-muted-foreground px-1">{r.event.unit}</TableCell>
                         <TableCell className="text-right font-mono text-foreground px-1 sm:px-2">{fmt(r.event.quantity)}</TableCell>
+                        {isIntegrated && (
+                          <>
+                            <TableCell className="text-right font-mono text-muted-foreground px-1 sm:px-2 whitespace-nowrap">{fmtCur(r.event.mat_unit_value || 0)}</TableCell>
+                            <TableCell className="text-right font-mono text-muted-foreground px-1 sm:px-2 whitespace-nowrap">{fmtCur(r.event.mo_unit_value || 0)}</TableCell>
+                          </>
+                        )}
                         <TableCell className="text-right font-mono text-foreground px-1 sm:px-2 whitespace-nowrap">{fmtCur(r.event.unit_value)}</TableCell>
                         <TableCell className="text-right font-mono font-semibold text-foreground px-1 sm:px-2 whitespace-nowrap hidden md:table-cell">{fmtCur(r.totalContrato)}</TableCell>
                         <TableCell className="text-right font-mono font-bold text-emerald-600 dark:text-emerald-400 px-1 sm:px-2">
@@ -263,7 +276,7 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
                 })}
                 {/* Totais */}
                 <TableRow className="bg-muted/80 font-extrabold text-xs sm:text-sm border-t-2 border-border">
-                  <TableCell colSpan={5} className="text-right text-foreground uppercase tracking-wide px-2">TOTAIS:</TableCell>
+                  <TableCell colSpan={isIntegrated ? 7 : 5} className="text-right text-foreground uppercase tracking-wide px-2">TOTAIS:</TableCell>
                   <TableCell className="text-right font-mono text-foreground px-1 sm:px-2 hidden md:table-cell">{fmtCur(totalContrato)}</TableCell>
                   <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400 px-1 sm:px-2">—</TableCell>
                   <TableCell className="text-right font-mono text-emerald-600 dark:text-emerald-400 px-1 sm:px-2 whitespace-nowrap">{fmtCur(totalMedido)}</TableCell>
