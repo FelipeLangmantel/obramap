@@ -2070,6 +2070,183 @@ export function WeeklyProductionView() {
               </div>
             </DialogContent>
           </Dialog>
+            </TabsContent>
+
+            {/* C3: Alerts Sub-Tab */}
+            <TabsContent value="alerts" className="space-y-4">
+              {deviationAlerts.length === 0 ? (
+                <Card className="p-8 text-center text-muted-foreground">
+                  <CheckCircle2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">Nenhum alerta de desvio ativo</p>
+                  <p className="text-xs mt-1">Alertas são gerados automaticamente quando a produção difere do planejamento</p>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {deviationAlerts.map((alert: any) => (
+                    <Card key={alert.id} className={`border-l-4 ${
+                      alert.severity === 'critical' ? 'border-l-red-500' : 
+                      alert.severity === 'warning' ? 'border-l-amber-500' : 'border-l-blue-500'
+                    }`}>
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <Badge className={`text-[10px] ${
+                              alert.severity === 'critical' ? 'bg-red-500 hover:bg-red-600' :
+                              alert.severity === 'warning' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-500 hover:bg-blue-600'
+                            }`}>
+                              {alert.severity === 'critical' ? 'Crítico' : alert.severity === 'warning' ? 'Atenção' : 'Info'}
+                            </Badge>
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: alert.macro_color || '#888' }} />
+                              <span className="text-sm font-medium">{alert.macro_name}</span>
+                              <span className="text-muted-foreground">→</span>
+                              <span className="text-sm">{alert.scope_name}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={alert.status === 'open' ? 'destructive' : 'secondary'} className="text-[10px]">
+                              {alert.status === 'open' ? 'Aberto' : 'Registrado'}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              {alert.week_start && alert.week_end && 
+                                `${format(parseISO(alert.week_start), 'dd/MM', { locale: ptBR })} a ${format(parseISO(alert.week_end), 'dd/MM', { locale: ptBR })}`
+                              }
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="text-sm">
+                          Planejado: <strong>{alert.planned_count}</strong> · Executado: <strong>{alert.actual_count}</strong> · Faltando: <strong>{(alert.missing_house_ids || []).length}</strong> casas
+                        </div>
+
+                        {(alert.missing_house_ids || []).length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {(alert.missing_house_ids as number[]).map((id: number) => (
+                              <span key={id} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                                {id}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {(alert.unplanned_house_ids || []).length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            <span className="text-[10px] text-amber-600 mr-1">Extras:</span>
+                            {(alert.unplanned_house_ids as number[]).map((id: number) => (
+                              <span key={id} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                {id}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {alert.deviation_reason && (
+                          <div className="text-xs text-muted-foreground p-2 bg-muted/50 rounded">
+                            <span className="font-medium">Motivo:</span> {alert.deviation_reason}
+                            {alert.corrective_action && <><br/><span className="font-medium">Ação:</span> {alert.corrective_action}</>}
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2 pt-1">
+                          {alert.status === 'open' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                setSelectedAlert(alert);
+                                setDeviationReason("");
+                                setCorrectiveAction("");
+                                setReasonDialogOpen(true);
+                              }}
+                            >
+                              Registrar motivo
+                            </Button>
+                          )}
+                          {alert.status === 'acknowledged' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs text-green-600 border-green-300 hover:bg-green-50"
+                              onClick={async () => {
+                                await supabase.from('production_deviations')
+                                  .update({ status: 'resolved', resolved_at: new Date().toISOString(), resolved_by: profile?.user_id })
+                                  .eq('id', alert.id);
+                                toast.success("Alerta resolvido.");
+                                loadDeviationAlerts();
+                              }}
+                            >
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Resolver
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+
+          {/* Reason Dialog */}
+          <Dialog open={reasonDialogOpen} onOpenChange={setReasonDialogOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Registrar Motivo do Desvio</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Motivo</Label>
+                  <Select value={deviationReason} onValueChange={setDeviationReason}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o motivo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        'Falta de material', 'Falta de mão de obra', 'Mão de obra insuficiente',
+                        'Empreiteiro substituído', 'Problemas climáticos', 'Chuva excessiva',
+                        'Problema técnico', 'Atraso de fornecedor', 'Retrabalho necessário',
+                        'Mudança de escopo', 'Equipamento indisponível', 'Acidente/afastamento',
+                        'Feriado não previsto', 'Casas inacessíveis', 'Problema de qualidade', 'Outros'
+                      ].map(reason => (
+                        <SelectItem key={reason} value={reason}>{reason}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Ação corretiva planejada</Label>
+                  <Textarea
+                    value={correctiveAction}
+                    onChange={(e) => setCorrectiveAction(e.target.value)}
+                    placeholder="Descreva a ação corretiva..."
+                    rows={3}
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  disabled={!deviationReason}
+                  onClick={async () => {
+                    if (!selectedAlert) return;
+                    await supabase.from('production_deviations')
+                      .update({
+                        deviation_reason: deviationReason,
+                        corrective_action: correctiveAction || null,
+                        status: 'acknowledged',
+                      })
+                      .eq('id', selectedAlert.id);
+                    toast.success("Motivo registrado.");
+                    setReasonDialogOpen(false);
+                    setSelectedAlert(null);
+                    loadDeviationAlerts();
+                  }}
+                >
+                  Salvar Motivo
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
 
