@@ -1557,7 +1557,15 @@ export function WeeklyProductionView() {
                                 }
                                 ${isDragging && !isCompleted ? 'cursor-crosshair' : ''}
                               `}
-                              style={isSelected && macro ? { borderColor: macro.color, backgroundColor: macro.color + '20' } : undefined}
+                              style={
+                                isDeselectedFromPlan && !isCompleted
+                                  ? { borderColor: '#ef4444', borderStyle: 'dashed' }
+                                  : isExtraFromPlan && !isCompleted
+                                    ? { borderColor: '#f59e0b', borderStyle: 'dashed', backgroundColor: '#fef3c720' }
+                                    : isSelected && macro 
+                                      ? { borderColor: macro.color, backgroundColor: macro.color + '20' } 
+                                      : undefined
+                              }
                               title={`Casa ${house.id}: ${currentProgress}% concluído`}
                             >
                               <span className="font-bold text-[11px]">{house.id}</span>
