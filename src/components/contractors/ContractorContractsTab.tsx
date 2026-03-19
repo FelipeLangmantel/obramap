@@ -400,7 +400,7 @@ export function ContractorContractsTab({
                 const svc = budgetServices.find(s => `${s.macro_id}::${s.scope_id}` === k);
                 const ids = selectedHouseIds[k] || [];
                 if (!svc || ids.length === 0) return null;
-                const negVal = negotiatedValues[k] ?? svc.max_cost_value;
+                const negVal = negotiatedValues[k] ?? svc.mo_unit_value ?? svc.max_cost_value;
                 return (
                   <div key={k} className="flex items-center justify-between text-xs">
                     <span>{svc.scope_name}</span>
