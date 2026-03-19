@@ -573,7 +573,7 @@ export function PleContractTab(props: PleDataReturn) {
                                     {/* Desktop row */}
                                     <div className={`hidden sm:grid gap-0 border-b px-2 py-1.5 hover:bg-accent/20 transition-colors items-center group/row ${
                                       isIntegrated
-                                        ? "grid-cols-[36px_70px_90px_80px_1fr_50px_70px_80px_80px_90px_110px_140px_36px]"
+                                        ? "grid-cols-[36px_70px_90px_80px_1fr_50px_70px_70px_80px_80px_90px_110px_140px_36px]"
                                         : "grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px]"
                                     }`}>
                                       <span />
@@ -585,8 +585,9 @@ export function PleContractTab(props: PleDataReturn) {
                                       <span className="text-[11px] text-right font-mono">{fmt(ev.quantity)}</span>
                                       {isIntegrated && (
                                         <>
-                                          <span className="text-[11px] text-right font-mono text-muted-foreground">{fmtCur(ev.mat_unit_value || 0)}</span>
-                                          <span className="text-[11px] text-right font-mono text-muted-foreground">{fmtCur(ev.mo_unit_value || 0)}</span>
+                                          <span className="flex justify-center"><BillingTypeBadge ev={ev} /></span>
+                                          <InlineNumber value={ev.mat_unit_value || 0} eventId={ev.id} field="mat_unit_value" ev={ev} />
+                                          <InlineNumber value={ev.mo_unit_value || 0} eventId={ev.id} field="mo_unit_value" ev={ev} />
                                         </>
                                       )}
                                       <span className="text-[11px] text-right font-mono">{fmtCur(ev.unit_value)}</span>
