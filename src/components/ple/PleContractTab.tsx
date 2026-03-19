@@ -36,6 +36,65 @@ export function PleContractTab(props: PleDataReturn) {
   const [syncResult, setSyncResult] = useState<{ synced: number; projectName: string } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
+  // Inline editable number cell
+  const InlineNumber = ({ value, eventId, field, ev }: { value: number; eventId: string; field: 'mat_unit_value' | 'mo_unit_value' | 'unit_value'; ev: PleEvent }) => {
+    const [editing, setEditing] = useState(false);
+    const [val, setVal] = useState(String(value));
+    const handleBlur = () => {
+      setEditing(false);
+      const num = parseFloat(val) || 0;
+      if (num === value) return;
+      if (field === 'mat_unit_value') {
+        updateEvent(eventId, { mat_unit_value: num, mo_unit_value: ev.mo_unit_value, unit_value: num + ev.mo_unit_value } as any);
+      } else if (field === 'mo_unit_value') {
+        updateEvent(eventId, { mat_unit_value: ev.mat_unit_value, mo_unit_value: num, unit_value: ev.mat_unit_value + num } as any);
+      } else {
+        updateEvent(eventId, { unit_value: num, mat_unit_value: 0, mo_unit_value: 0 } as any);
+      }
+    };
+    if (editing) {
+      return (
+        <Input
+          type="number"
+          step="0.01"
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          onBlur={handleBlur}
+          onKeyDown={e => { if (e.key === 'Enter') handleBlur(); if (e.key === 'Escape') setEditing(false); }}
+          autoFocus
+          className="h-6 text-[11px] text-right font-mono w-full border-primary/50"
+        />
+      );
+    }
+    return (
+      <span
+        className="text-[11px] text-right font-mono text-muted-foreground cursor-pointer hover:text-primary hover:underline decoration-dashed underline-offset-2 block w-full"
+        onClick={() => { setVal(String(value)); setEditing(true); }}
+      >
+        {fmtCur(value)}
+      </span>
+    );
+  };
+
+  // Billing type badge
+  const BillingTypeBadge = ({ ev }: { ev: PleEvent }) => {
+    const billingType = ev.billing_type || 'per_house';
+    return (
+      <Select
+        value={billingType}
+        onValueChange={(v) => updateEvent(ev.id, { billing_type: v } as any)}
+      >
+        <SelectTrigger className="h-5 text-[9px] w-[70px] border-dashed px-1.5 gap-0.5">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="per_house">Por casa</SelectItem>
+          <SelectItem value="fixed">Total</SelectItem>
+        </SelectContent>
+      </Select>
+    );
+  };
+
   const isIntegrated = currentProject?.mode === "integrated";
 
   // Load ObraMap services when integrated
@@ -83,7 +142,7 @@ export function PleContractTab(props: PleDataReturn) {
   const [newEvent, setNewEvent] = useState({
     group_id: "", item_code: "", description: "", discrimination: "",
     sinapi_code: "", unit: "UN", quantity: 0, unit_value: 0,
-    mat_unit_value: 0, mo_unit_value: 0,
+    mat_unit_value: 0, mo_unit_value: 0, billing_type: "per_house" as string,
   });
 
   const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -166,8 +225,9 @@ export function PleContractTab(props: PleDataReturn) {
       ...newEvent,
       unit_value: finalUnitValue,
       group_id: substageId,
+      billing_type: newEvent.billing_type,
     } as any);
-    setNewEvent({ group_id: "", item_code: "", description: "", discrimination: "", sinapi_code: "", unit: "UN", quantity: 0, unit_value: 0, mat_unit_value: 0, mo_unit_value: 0 });
+    setNewEvent({ group_id: "", item_code: "", description: "", discrimination: "", sinapi_code: "", unit: "UN", quantity: 0, unit_value: 0, mat_unit_value: 0, mo_unit_value: 0, billing_type: "per_house" });
     setAddingEventTo(null);
   };
 
@@ -430,7 +490,7 @@ export function PleContractTab(props: PleDataReturn) {
             {/* Table Header */}
             <div className={`hidden sm:grid gap-0 bg-muted/50 border-b px-2 py-2 sticky top-0 z-10 ${
               isIntegrated
-                ? "grid-cols-[36px_70px_90px_80px_1fr_50px_70px_80px_80px_90px_110px_140px_36px]"
+                ? "grid-cols-[36px_70px_90px_80px_1fr_50px_70px_70px_80px_80px_90px_110px_140px_36px]"
                 : "grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px]"
             }`}>
               <span />
@@ -442,6 +502,7 @@ export function PleContractTab(props: PleDataReturn) {
               <span className="text-[10px] font-bold text-muted-foreground uppercase text-right">QTDE</span>
               {isIntegrated && (
                 <>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase text-center">TIPO</span>
                   <span className="text-[10px] font-bold text-muted-foreground uppercase text-right">MAT UNIT.</span>
                   <span className="text-[10px] font-bold text-muted-foreground uppercase text-right">MO UNIT.</span>
                 </>
@@ -513,7 +574,7 @@ export function PleContractTab(props: PleDataReturn) {
                                     {/* Desktop row */}
                                     <div className={`hidden sm:grid gap-0 border-b px-2 py-1.5 hover:bg-accent/20 transition-colors items-center group/row ${
                                       isIntegrated
-                                        ? "grid-cols-[36px_70px_90px_80px_1fr_50px_70px_80px_80px_90px_110px_140px_36px]"
+                                        ? "grid-cols-[36px_70px_90px_80px_1fr_50px_70px_70px_80px_80px_90px_110px_140px_36px]"
                                         : "grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px]"
                                     }`}>
                                       <span />
@@ -525,8 +586,9 @@ export function PleContractTab(props: PleDataReturn) {
                                       <span className="text-[11px] text-right font-mono">{fmt(ev.quantity)}</span>
                                       {isIntegrated && (
                                         <>
-                                          <span className="text-[11px] text-right font-mono text-muted-foreground">{fmtCur(ev.mat_unit_value || 0)}</span>
-                                          <span className="text-[11px] text-right font-mono text-muted-foreground">{fmtCur(ev.mo_unit_value || 0)}</span>
+                                          <span className="flex justify-center"><BillingTypeBadge ev={ev} /></span>
+                                          <InlineNumber value={ev.mat_unit_value || 0} eventId={ev.id} field="mat_unit_value" ev={ev} />
+                                          <InlineNumber value={ev.mo_unit_value || 0} eventId={ev.id} field="mo_unit_value" ev={ev} />
                                         </>
                                       )}
                                       <span className="text-[11px] text-right font-mono">{fmtCur(ev.unit_value)}</span>
@@ -573,6 +635,15 @@ export function PleContractTab(props: PleDataReturn) {
                                       <Input type="number" value={newEvent.quantity || ""} onChange={e => setNewEvent(ev => ({ ...ev, quantity: parseFloat(e.target.value) || 0 }))} placeholder="Qtde" className="h-7 text-[11px] border-dashed w-16 text-right" />
                                       {isIntegrated && (
                                         <>
+                                          <Select value={newEvent.billing_type} onValueChange={v => setNewEvent(ev => ({ ...ev, billing_type: v }))}>
+                                            <SelectTrigger className="h-7 text-[10px] w-[75px] border-dashed">
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="per_house">Por casa</SelectItem>
+                                              <SelectItem value="fixed">Total</SelectItem>
+                                            </SelectContent>
+                                          </Select>
                                           <Input type="number" step="0.01" value={newEvent.mat_unit_value || ""} onChange={e => {
                                             const mat = parseFloat(e.target.value) || 0;
                                             setNewEvent(ev => ({ ...ev, mat_unit_value: mat, unit_value: mat + ev.mo_unit_value }));
@@ -643,7 +714,7 @@ export function PleContractTab(props: PleDataReturn) {
                   <div key={ev.id}>
                     <div className={`hidden sm:grid gap-0 border-b px-2 py-1.5 hover:bg-accent/20 transition-colors items-center group/row ${
                       isIntegrated
-                        ? "grid-cols-[36px_70px_90px_80px_1fr_50px_70px_80px_80px_90px_110px_140px_36px]"
+                        ? "grid-cols-[36px_70px_90px_80px_1fr_50px_70px_70px_80px_80px_90px_110px_140px_36px]"
                         : "grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px]"
                     }`}>
                       <span />
@@ -655,8 +726,9 @@ export function PleContractTab(props: PleDataReturn) {
                       <span className="text-[11px] text-right font-mono">{fmt(ev.quantity)}</span>
                       {isIntegrated && (
                         <>
-                          <span className="text-[11px] text-right font-mono text-muted-foreground">{fmtCur(ev.mat_unit_value || 0)}</span>
-                          <span className="text-[11px] text-right font-mono text-muted-foreground">{fmtCur(ev.mo_unit_value || 0)}</span>
+                          <span className="flex justify-center"><BillingTypeBadge ev={ev} /></span>
+                          <InlineNumber value={ev.mat_unit_value || 0} eventId={ev.id} field="mat_unit_value" ev={ev} />
+                          <InlineNumber value={ev.mo_unit_value || 0} eventId={ev.id} field="mo_unit_value" ev={ev} />
                         </>
                       )}
                       <span className="text-[11px] text-right font-mono">{fmtCur(ev.unit_value)}</span>

@@ -4753,6 +4753,7 @@ export type Database = {
       }
       ple_events: {
         Row: {
+          billing_type: string
           created_at: string
           description: string
           discrimination: string | null
@@ -4774,6 +4775,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          billing_type?: string
           created_at?: string
           description: string
           discrimination?: string | null
@@ -4795,6 +4797,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          billing_type?: string
           created_at?: string
           description?: string
           discrimination?: string | null
