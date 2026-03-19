@@ -101,10 +101,10 @@ export function MeasurementSupplyDetail({
 
   // Load stock entries when measurement or requests change
   useEffect(() => {
-    if (measurement.measurement_id && requests.length > 0) {
-      loadStockEntries(measurement.measurement_id, requests);
+    if (planningPeriodId && requests.length > 0) {
+      loadStockEntries(planningPeriodId, requests);
     }
-  }, [measurement.measurement_id, requests, loadStockEntries]);
+  }, [planningPeriodId, requests, loadStockEntries]);
 
   // Load carryover data
   useEffect(() => {
