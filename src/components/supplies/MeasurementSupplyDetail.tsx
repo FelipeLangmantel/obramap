@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, RefreshCw, Package, AlertTriangle, FileText, ShoppingCart, CheckCircle, XCircle, Warehouse, Save, ArrowRightLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
