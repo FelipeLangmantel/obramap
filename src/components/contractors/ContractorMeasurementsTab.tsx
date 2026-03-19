@@ -79,6 +79,29 @@ export function ContractorMeasurementsTab({
 
   useEffect(() => { load(); }, [load]);
 
+  // Load all assigned houses across ALL contracts for this project (for cross-checking)
+  const loadAllAssigned = useCallback(async () => {
+    if (!currentProject?.id || !company?.id) return;
+    const { data } = await supabase
+      .from("contractor_contract_services")
+      .select("id, macro_id, scope_id, house_ids")
+      .eq("project_id", currentProject.id)
+      .eq("company_id", company.id);
+    const map: Record<string, Set<number>> = {};
+    (data || []).forEach((s: any) => {
+      const key = `${s.macro_id}::${s.scope_id}`;
+      if (!map[key]) map[key] = new Set();
+      (s.house_ids || []).forEach((id: number) => {
+        // Exclude current service's own houses from "assigned" so they remain selectable
+        if (editingServiceId && services.find(sv => sv.id === editingServiceId)?.macro_id === s.macro_id
+            && services.find(sv => sv.id === editingServiceId)?.scope_id === s.scope_id
+            && s.id === editingServiceId) return;
+        map[key].add(id);
+      });
+    });
+    setAllAssignedHouses(map);
+  }, [currentProject?.id, company?.id, editingServiceId, services]);
+
   const loadItems = async (measId: string) => {
     const items = await fetchMeasurementItems(measId);
     setMeasurementItems(items);
