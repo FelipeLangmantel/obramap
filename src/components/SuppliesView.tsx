@@ -1337,6 +1337,51 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         <TabsContent value="alerts" className="flex-1 overflow-y-auto mt-2 md:mt-4 space-y-3 md:space-y-4">
           {/* Backend-driven KPI Dashboard */}
           <SupplyDashboard kpis={supplyKpis} isLoading={isLoading} />
+
+          {/* Overdue Purchases */}
+          {overdueRequests.length > 0 && (
+            <Card className="border-red-300 bg-red-50/50 dark:bg-red-900/10">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg text-red-700">
+                  <AlertTriangle className="w-5 h-5" />
+                  Compras em Atraso ({overdueRequests.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[200px] md:h-[250px]">
+                  <div className="space-y-2 pr-2 md:pr-4">
+                    {overdueRequests.map((req: any) => (
+                      <div key={req.id} className="p-2 md:p-3 rounded-lg border border-red-200 bg-white dark:bg-background">
+                        <div className="flex items-start md:items-center gap-2 md:gap-3 flex-wrap md:flex-nowrap">
+                          <div className="w-3 h-3 rounded-full shrink-0 mt-1 md:mt-0" style={{ backgroundColor: req.family_color || '#9ca3af' }} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-xs md:text-sm">{req.item_name}</span>
+                              <Badge variant="destructive" className="text-[10px]">{req.days_overdue}d atraso</Badge>
+                              {req.family_name && (
+                                <Badge variant="outline" className="text-[10px]">{req.family_name}</Badge>
+                              )}
+                            </div>
+                            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">
+                              Limite: {req.order_by_date ? format(new Date(req.order_by_date), 'dd/MM/yyyy', { locale: ptBR }) : '-'} | 
+                              Uso: {req.required_date ? format(new Date(req.required_date), 'dd/MM/yyyy', { locale: ptBR }) : '-'} | 
+                              {req.quantity} {req.item_unit || 'un'}
+                            </p>
+                            {req.blocked_house_ids && req.blocked_house_ids.length > 0 && (
+                              <p className="text-[10px] md:text-xs text-red-600 font-medium mt-1">
+                                ⚠ Impacto: casas {req.blocked_house_ids.join(', ')} podem parar
+                              </p>
+                            )}
+                          </div>
+                          <Badge variant="secondary" className="text-[10px] shrink-0">{req.status}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
           
           {/* Material Alerts by Family */}
           {visibleMaterialAlerts.length > 0 && (
