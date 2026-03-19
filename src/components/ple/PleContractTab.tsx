@@ -489,7 +489,7 @@ export function PleContractTab(props: PleDataReturn) {
             {/* Table Header */}
             <div className={`hidden sm:grid gap-0 bg-muted/50 border-b px-2 py-2 sticky top-0 z-10 ${
               isIntegrated
-                ? "grid-cols-[36px_70px_90px_80px_1fr_50px_70px_80px_80px_90px_110px_140px_36px]"
+                ? "grid-cols-[36px_70px_90px_80px_1fr_50px_70px_70px_80px_80px_90px_110px_140px_36px]"
                 : "grid-cols-[36px_70px_90px_80px_1fr_50px_70px_90px_110px_36px]"
             }`}>
               <span />
@@ -501,6 +501,7 @@ export function PleContractTab(props: PleDataReturn) {
               <span className="text-[10px] font-bold text-muted-foreground uppercase text-right">QTDE</span>
               {isIntegrated && (
                 <>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase text-center">TIPO</span>
                   <span className="text-[10px] font-bold text-muted-foreground uppercase text-right">MAT UNIT.</span>
                   <span className="text-[10px] font-bold text-muted-foreground uppercase text-right">MO UNIT.</span>
                 </>
