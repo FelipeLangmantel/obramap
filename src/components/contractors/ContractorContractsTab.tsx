@@ -55,16 +55,33 @@ export function ContractorContractsTab({
   // All contractor service assignments for this project (for cross-checking)
   const [allAssignedHouses, setAllAssignedHouses] = useState<Record<string, Set<number>>>({});
 
-  // Load budget services (project_contract_services) - use max_cost_value
+  // Load budget services with labor cost from scope_costs
   useEffect(() => {
     if (!currentProject?.id || !company?.id) return;
-    supabase
-      .from("project_contract_services")
-      .select("*")
-      .eq("project_id", currentProject.id)
-      .eq("company_id", company.id)
-      .order("macro_order, scope_order")
-      .then(({ data }) => { if (data) setBudgetServices(data); });
+    Promise.all([
+      supabase
+        .from("project_contract_services")
+        .select("*")
+        .eq("project_id", currentProject.id)
+        .eq("company_id", company.id)
+        .order("macro_order, scope_order"),
+      supabase
+        .from("scope_costs")
+        .select("scope_id, macro_id, labor_cost, material_cost")
+        .eq("project_id", currentProject.id),
+    ]).then(([servicesRes, costsRes]) => {
+      if (servicesRes.data) {
+        const laborCostMap: Record<string, number> = {};
+        (costsRes.data || []).forEach((c: any) => {
+          laborCostMap[`${c.macro_id}::${c.scope_id}`] = c.labor_cost || 0;
+        });
+        const merged = servicesRes.data.map((svc: any) => {
+          const labor = laborCostMap[`${svc.macro_id}::${svc.scope_id}`];
+          return { ...svc, mo_unit_value: labor && labor > 0 ? labor : svc.max_cost_value };
+        });
+        setBudgetServices(merged);
+      }
+    });
   }, [currentProject?.id, company?.id]);
 
   // Determine which services are fully in banco inicial or 100% completed
