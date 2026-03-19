@@ -810,7 +810,6 @@ export function WeeklyPlanningFromPeriod() {
 
       if (existingWeeks && existingWeeks.length > 0) {
         const weeksWithSvcs: WeekPlan[] = [];
-        const contractorMap: Record<string, string> = {};
         for (const w of existingWeeks) {
           const { data: ws } = await supabase
             .from("weekly_plan_services")
