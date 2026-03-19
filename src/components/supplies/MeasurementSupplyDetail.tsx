@@ -372,42 +372,58 @@ export function MeasurementSupplyDetail({
               </tr>
             </thead>
             <tbody>
-              {stockEntries.map((entry, idx) => (
-                <tr key={entry.item_id} className={`border-b last:border-0 ${idx % 2 === 0 ? '' : 'bg-muted/20'}`}>
-                  <td className="p-3">
-                    <div className="font-medium">{entry.item_name}</div>
-                    {entry.item_unit && <div className="text-xs text-muted-foreground">{entry.item_unit}</div>}
-                  </td>
-                  <td className="p-3">
-                    <div className="flex items-center gap-1.5">
-                      {entry.family_id && (
-                        <div className="w-2 h-2 rounded-full bg-primary opacity-70" />
+              {stockEntries.map((entry, idx) => {
+                const carryover = carryoverMap[entry.item_id] || 0;
+                const netToPurchase = Math.max(entry.quantity_required - entry.quantity_in_stock - carryover, 0);
+                const isCovered = netToPurchase === 0;
+
+                return (
+                  <tr key={entry.item_id} className={`border-b last:border-0 ${isCovered ? 'bg-green-50/50 dark:bg-green-900/10' : idx % 2 === 0 ? '' : 'bg-muted/20'}`}>
+                    <td className="p-3">
+                      <div className="font-medium">{entry.item_name}</div>
+                      {entry.item_unit && <div className="text-xs text-muted-foreground">{entry.item_unit}</div>}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-1.5">
+                        {entry.family_id && (
+                          <div className="w-2 h-2 rounded-full bg-primary opacity-70" />
+                        )}
+                        <span className="text-muted-foreground text-xs">{entry.family_name || '—'}</span>
+                      </div>
+                    </td>
+                    <td className="p-3 text-right font-mono">
+                      {entry.quantity_required.toFixed(2)}
+                    </td>
+                    <td className="p-3">
+                      <Input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={entry.quantity_in_stock}
+                        onChange={e => updateStockQuantity(entry.item_id, parseFloat(e.target.value) || 0)}
+                        className="h-8 text-right font-mono w-full"
+                        disabled={!canEdit}
+                      />
+                      {carryover > 0 && (
+                        <div className="flex items-center gap-1 mt-1">
+                          <ArrowRightLeft className="h-3 w-3 text-amber-600" />
+                          <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                            Excedente anterior: +{carryover.toFixed(2)}
+                          </Badge>
+                        </div>
                       )}
-                      <span className="text-muted-foreground text-xs">{entry.family_name || '—'}</span>
-                    </div>
-                  </td>
-                  <td className="p-3 text-right font-mono">
-                    {entry.quantity_required.toFixed(2)}
-                  </td>
-                  <td className="p-3">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={entry.quantity_required}
-                      step={0.01}
-                      value={entry.quantity_in_stock}
-                      onChange={e => updateStockQuantity(entry.item_id, parseFloat(e.target.value) || 0)}
-                      className="h-8 text-right font-mono w-full"
-                      disabled={!canEdit}
-                    />
-                  </td>
-                  <td className="p-3 text-right font-mono">
-                    <span className={entry.quantity_to_purchase > 0 ? 'text-yellow-700 font-semibold' : 'text-green-700'}>
-                      {entry.quantity_to_purchase.toFixed(2)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="p-3 text-right font-mono">
+                      <span className={netToPurchase > 0 ? 'text-yellow-700 font-semibold' : 'text-green-700 font-semibold'}>
+                        {netToPurchase.toFixed(2)}
+                      </span>
+                      {isCovered && (
+                        <div className="text-[10px] text-green-600 mt-0.5">✓ Coberto</div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
