@@ -35,8 +35,65 @@ export function PleContractTab(props: PleDataReturn) {
   const [batchMappings, setBatchMappings] = useState<Record<string, string>>({});
   const [syncResult, setSyncResult] = useState<{ synced: number; projectName: string } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [editingCell, setEditingCell] = useState<{ eventId: string; field: string } | null>(null);
-  const [editValue, setEditValue] = useState("");
+
+  // Inline editable number cell
+  const InlineNumber = ({ value, eventId, field, ev }: { value: number; eventId: string; field: 'mat_unit_value' | 'mo_unit_value' | 'unit_value'; ev: PleEvent }) => {
+    const [editing, setEditing] = useState(false);
+    const [val, setVal] = useState(String(value));
+    const handleBlur = () => {
+      setEditing(false);
+      const num = parseFloat(val) || 0;
+      if (num === value) return;
+      if (field === 'mat_unit_value') {
+        updateEvent(eventId, { mat_unit_value: num, mo_unit_value: ev.mo_unit_value, unit_value: num + ev.mo_unit_value } as any);
+      } else if (field === 'mo_unit_value') {
+        updateEvent(eventId, { mat_unit_value: ev.mat_unit_value, mo_unit_value: num, unit_value: ev.mat_unit_value + num } as any);
+      } else {
+        updateEvent(eventId, { unit_value: num, mat_unit_value: 0, mo_unit_value: 0 } as any);
+      }
+    };
+    if (editing) {
+      return (
+        <Input
+          type="number"
+          step="0.01"
+          value={val}
+          onChange={e => setVal(e.target.value)}
+          onBlur={handleBlur}
+          onKeyDown={e => { if (e.key === 'Enter') handleBlur(); if (e.key === 'Escape') setEditing(false); }}
+          autoFocus
+          className="h-6 text-[11px] text-right font-mono w-full border-primary/50"
+        />
+      );
+    }
+    return (
+      <span
+        className="text-[11px] text-right font-mono text-muted-foreground cursor-pointer hover:text-primary hover:underline decoration-dashed underline-offset-2 block w-full"
+        onClick={() => { setVal(String(value)); setEditing(true); }}
+      >
+        {fmtCur(value)}
+      </span>
+    );
+  };
+
+  // Billing type badge
+  const BillingTypeBadge = ({ ev }: { ev: PleEvent }) => {
+    const billingType = ev.billing_type || 'per_house';
+    return (
+      <Select
+        value={billingType}
+        onValueChange={(v) => updateEvent(ev.id, { billing_type: v } as any)}
+      >
+        <SelectTrigger className="h-5 text-[9px] w-[70px] border-dashed px-1.5 gap-0.5">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="per_house">Por casa</SelectItem>
+          <SelectItem value="fixed">Total</SelectItem>
+        </SelectContent>
+      </Select>
+    );
+  };
 
   const isIntegrated = currentProject?.mode === "integrated";
 
