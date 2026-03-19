@@ -359,7 +359,8 @@ export function ContractorContractsTab({
                       </TableCell>
                       <TableCell className="text-xs">{svc.macro_name}</TableCell>
                       <TableCell className="text-xs">{svc.scope_name}</TableCell>
-                      <TableCell className="text-right text-xs font-mono">{fmt(svc.max_cost_value)}</TableCell>
+                      <TableCell className="text-right text-xs font-mono text-amber-700 font-semibold">{fmt(svc.mo_unit_value ?? svc.max_cost_value)}</TableCell>
+                      <TableCell className="text-right text-xs font-mono text-muted-foreground">{fmt(svc.max_cost_value)}</TableCell>
                       <TableCell className="text-right">
                         {isSelected && (
                           <Input
