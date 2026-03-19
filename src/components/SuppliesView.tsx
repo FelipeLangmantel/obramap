@@ -315,17 +315,21 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
     setIsLoading(true);
 
     try {
-      const [scopeRes, quotRes, ordersRes, laborRes, prodRes, plannedRes, familiesRes, kpisRes] = await Promise.all([
+      const [scopeRes, quotRes, ordersRes, laborRes, prodRes, plannedRes, familiesRes, kpisRes, overdueRes] = await Promise.all([
         supabase.from('scope_items').select('id, name, category, quantity, unit, unit_value, scope_id, macro_id, material_family').eq('project_id', projectId),
         supabase.from('quotation_requests').select('id, status').eq('project_id', projectId).eq('status', 'pending'),
         supabase.from('purchase_orders').select('id, status').eq('project_id', projectId).eq('status', 'in_transit'),
         supabase.from('labor_contracts').select('*').eq('project_id', projectId),
-        // Only get non-initial database productions for executed count
         supabase.from('weekly_productions').select('scope_id, house_ids, is_initial_database').eq('project_id', projectId),
         supabase.from('planned_productions').select('*').eq('project_id', projectId).gte('week_start', new Date().toISOString().split('T')[0]),
         supabase.from('material_families').select('*').order('display_order'),
-        // Load backend KPIs
-        supabase.rpc('get_supply_kpis', { p_project_id: projectId })
+        supabase.rpc('get_supply_kpis', { p_project_id: projectId }),
+        supabase.from('supply_requests')
+          .select('id, item_name, item_unit, quantity, status, family_name, family_color, order_by_date, required_date, days_overdue, blocked_house_ids, blocked_scope_ids, family_id')
+          .eq('project_id', projectId)
+          .eq('purchase_overdue', true)
+          .not('status', 'in', '("ordered","delivered","cancelled")')
+          .order('days_overdue', { ascending: false })
       ]);
 
       if (scopeRes.data) {
