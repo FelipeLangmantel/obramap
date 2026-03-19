@@ -57,10 +57,10 @@ export function ContractorMeasurementsTab({
   const [editNegotiatedValue, setEditNegotiatedValue] = useState(0);
   const [editHouseIds, setEditHouseIds] = useState<number[]>([]);
 
-  // House map selector state
+  // House map selector
   const [mapSelectorOpen, setMapSelectorOpen] = useState(false);
   const [mapSelectorService, setMapSelectorService] = useState<ContractorContractService | null>(null);
-  const [allAssignedHouses, setAllAssignedHouses] = useState<Record<string, Set<number>>>({}); 
+  const [allAssignedHouses, setAllAssignedHouses] = useState<Record<string, Set<number>>>({});
 
   // New measurement form
   const [periodStart, setPeriodStart] = useState("");
@@ -79,8 +79,8 @@ export function ContractorMeasurementsTab({
 
   useEffect(() => { load(); }, [load]);
 
-  // Load all assigned houses across ALL contracts for this project (for cross-checking)
-  const loadAllAssigned = useCallback(async () => {
+  // Load all assigned houses across ALL contracts for cross-checking
+  const loadAllAssigned = useCallback(async (excludeServiceId?: string) => {
     if (!currentProject?.id || !company?.id) return;
     const { data } = await supabase
       .from("contractor_contract_services")
@@ -91,16 +91,12 @@ export function ContractorMeasurementsTab({
     (data || []).forEach((s: any) => {
       const key = `${s.macro_id}::${s.scope_id}`;
       if (!map[key]) map[key] = new Set();
-      (s.house_ids || []).forEach((id: number) => {
-        // Exclude current service's own houses from "assigned" so they remain selectable
-        if (editingServiceId && services.find(sv => sv.id === editingServiceId)?.macro_id === s.macro_id
-            && services.find(sv => sv.id === editingServiceId)?.scope_id === s.scope_id
-            && s.id === editingServiceId) return;
-        map[key].add(id);
-      });
+      // Exclude the service being edited so its own houses remain selectable
+      if (excludeServiceId && s.id === excludeServiceId) return;
+      (s.house_ids || []).forEach((id: number) => map[key].add(id));
     });
     setAllAssignedHouses(map);
-  }, [currentProject?.id, company?.id, editingServiceId, services]);
+  }, [currentProject?.id, company?.id]);
 
   const loadItems = async (measId: string) => {
     const items = await fetchMeasurementItems(measId);
@@ -161,23 +157,35 @@ export function ContractorMeasurementsTab({
     }
   };
 
-  const handleEditService = (svc: ContractorContractService) => {
+  const handleEditService = async (svc: ContractorContractService) => {
     setEditingServiceId(svc.id);
     setEditNegotiatedValue(svc.negotiated_unit_value);
+    setEditHouseIds(svc.house_ids || []);
+    await loadAllAssigned(svc.id);
+  };
+
+  const handleOpenMapSelector = (svc: ContractorContractService) => {
+    setMapSelectorService(svc);
+    setMapSelectorOpen(true);
+  };
+
+  const handleHouseSelectionConfirm = (houseIds: number[]) => {
+    setEditHouseIds(houseIds);
   };
 
   const handleSaveService = async (svc: ContractorContractService) => {
     setSaving(true);
     const ok = await updateContractService(svc.id, {
       negotiated_unit_value: editNegotiatedValue,
-      total_houses: svc.house_ids?.length || svc.total_houses,
-      house_ids: svc.house_ids,
+      total_houses: editHouseIds.length,
+      house_ids: editHouseIds,
     });
     if (ok) {
       await recalcContractTotal(contract.id);
       await load();
     }
     setEditingServiceId(null);
+    setEditHouseIds([]);
     setSaving(false);
   };
 
@@ -225,7 +233,7 @@ export function ContractorMeasurementsTab({
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[
           { label: "Valor Contrato", value: fmt(contract.total_value), color: "text-amber-500" },
-          { label: "Total Medido", value: fmt(contract.total_measured), color: "text-green-500" },
+          { label: "Total Medido", value: fmt(contract.total_measured), color: "text-emerald-500" },
           { label: "Total Retido", value: fmt(contract.total_retained), color: "text-orange-500" },
           { label: "Total Pago", value: fmt(contract.total_paid), color: "text-primary" },
         ].map(c => (
@@ -269,12 +277,14 @@ export function ContractorMeasurementsTab({
                       <TableHead className="text-right">Negociado Un.</TableHead>
                       <TableHead className="text-center">Casas</TableHead>
                       <TableHead className="text-right">Total</TableHead>
-                      <TableHead className="w-20 text-center">Ações</TableHead>
+                      <TableHead className="w-24 text-center">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {services.map(svc => {
                       const isEditing = editingServiceId === svc.id;
+                      const currentHouseCount = isEditing ? editHouseIds.length : (svc.house_ids?.length || svc.total_houses);
+                      const currentNegotiated = isEditing ? editNegotiatedValue : svc.negotiated_unit_value;
                       return (
                         <TableRow key={svc.id}>
                           <TableCell className="text-xs">{svc.macro_name}</TableCell>
@@ -294,22 +304,31 @@ export function ContractorMeasurementsTab({
                               <span className="text-xs font-mono">{fmt(svc.negotiated_unit_value)}</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-center text-xs font-mono">
-                            {svc.house_ids?.length || svc.total_houses}
+                          <TableCell className="text-center">
+                            {isEditing ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs gap-1"
+                                onClick={() => handleOpenMapSelector(svc)}
+                              >
+                                <MapPin className="h-3 w-3" />
+                                {editHouseIds.length > 0 ? `${editHouseIds.length} casas` : "Selecionar"}
+                              </Button>
+                            ) : (
+                              <span className="text-xs font-mono">{currentHouseCount}</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right text-xs font-mono font-semibold">
-                            {isEditing
-                              ? fmt(editNegotiatedValue * (svc.house_ids?.length || svc.total_houses))
-                              : fmt(svc.total_value)
-                            }
+                            {fmt(currentNegotiated * currentHouseCount)}
                           </TableCell>
                           <TableCell className="text-center">
                             {isEditing ? (
                               <div className="flex items-center justify-center gap-1">
                                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleSaveService(svc)} disabled={saving}>
-                                  <Save className="h-3.5 w-3.5 text-green-600" />
+                                  <Save className="h-3.5 w-3.5 text-emerald-600" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setEditingServiceId(null)}>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingServiceId(null); setEditHouseIds([]); }}>
                                   <X className="h-3.5 w-3.5 text-muted-foreground" />
                                 </Button>
                               </div>
@@ -360,14 +379,14 @@ export function ContractorMeasurementsTab({
                   </Badge>
                 </div>
                 {selectedMeasurement.status === "draft" && (
-                  <Button size="sm" className="gap-1.5 text-xs h-7 bg-green-600 hover:bg-green-700" onClick={handleApprove}>
+                  <Button size="sm" className="gap-1.5 text-xs h-7 bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove}>
                     <CheckCircle className="h-3.5 w-3.5" /> Aprovar
                   </Button>
                 )}
               </div>
 
               <div className="grid grid-cols-3 gap-2 text-xs">
-                <Card><CardContent className="p-2 text-center"><p className="text-[10px] text-muted-foreground">Bruto</p><p className="font-mono font-bold text-green-500">{fmt(totalGross)}</p></CardContent></Card>
+                <Card><CardContent className="p-2 text-center"><p className="text-[10px] text-muted-foreground">Bruto</p><p className="font-mono font-bold text-emerald-500">{fmt(totalGross)}</p></CardContent></Card>
                 <Card><CardContent className="p-2 text-center"><p className="text-[10px] text-muted-foreground">Retenção ({contract.retention_percent}%)</p><p className="font-mono font-bold text-orange-500">{fmt(retentionValue)}</p></CardContent></Card>
                 <Card><CardContent className="p-2 text-center"><p className="text-[10px] text-muted-foreground">Líquido</p><p className="font-mono font-bold text-primary">{fmt(netValue)}</p></CardContent></Card>
               </div>
@@ -490,6 +509,24 @@ export function ContractorMeasurementsTab({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* House Map Selector */}
+      {mapSelectorService && (
+        <ContractorHouseMapSelector
+          open={mapSelectorOpen}
+          onOpenChange={(open) => {
+            setMapSelectorOpen(open);
+            if (!open) setMapSelectorService(null);
+          }}
+          macroId={mapSelectorService.macro_id}
+          scopeId={mapSelectorService.scope_id}
+          macroName={mapSelectorService.macro_name}
+          scopeName={mapSelectorService.scope_name}
+          assignedHouseIds={allAssignedHouses[`${mapSelectorService.macro_id}::${mapSelectorService.scope_id}`] || new Set()}
+          selectedHouseIds={editHouseIds}
+          onConfirm={handleHouseSelectionConfirm}
+        />
+      )}
     </div>
   );
 }
