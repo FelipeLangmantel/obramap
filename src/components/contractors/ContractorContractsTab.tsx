@@ -366,7 +366,7 @@ export function ContractorContractsTab({
                           <Input
                             type="number"
                             step="0.01"
-                            value={negotiatedValues[key] ?? svc.max_cost_value}
+                            value={negotiatedValues[key] ?? svc.mo_unit_value ?? svc.max_cost_value}
                             onChange={e => setNegotiatedValues(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))}
                             className="h-7 w-24 text-xs text-right ml-auto"
                           />
