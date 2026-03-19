@@ -975,6 +975,94 @@ export function WeeklyProductionView() {
         </TabsList>
 
         <TabsContent value="register" className="flex-1 overflow-auto mt-4 space-y-4">
+          {/* C2: Released Weekly Planning Card */}
+          {!isInitialDatabase && !isAddingUnplanned && releasedWeeks.length > 0 && (
+            <Card className="border-blue-200 dark:border-blue-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Target className="w-5 h-5 text-blue-600" />
+                  Do Planejamento Semanal
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Select
+                  value={selectedReleasedWeek?.id || ""}
+                  onValueChange={(v) => onSelectReleasedWeek(v)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecione a semana..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {releasedWeeks.map((w: any) => {
+                      const pp = Array.isArray(w.planning_periods) ? w.planning_periods[0] : w.planning_periods;
+                      return (
+                        <SelectItem key={w.id} value={w.id}>
+                          Semana {w.week_number} — {format(parseISO(w.week_start), 'dd/MM', { locale: ptBR })} a {format(parseISO(w.week_end), 'dd/MM', { locale: ptBR })} (Medição {pp?.period_number || '?'})
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+
+                {selectedReleasedWeek && releasedWeekServices.length > 0 && (
+                  <ScrollArea className="h-[160px] pr-2">
+                    <div className="space-y-1.5">
+                      {releasedWeekServices.map((svc: any) => {
+                        const isSelected = selectedReleasedService?.id === svc.id;
+                        const isRegistered = svc._registered;
+                        return (
+                          <button
+                            key={svc.id}
+                            onClick={() => !isRegistered && applyReleasedService(isSelected ? null : svc)}
+                            disabled={isRegistered}
+                            className={`w-full p-2.5 rounded-lg border text-left transition-all ${
+                              isRegistered 
+                                ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 opacity-60 cursor-not-allowed"
+                                : isSelected
+                                  ? "bg-blue-50 dark:bg-blue-900/20 border-blue-500 ring-2 ring-blue-200"
+                                  : "bg-background hover:bg-muted/50 border-border hover:border-blue-300"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: svc.macro_color }} />
+                                <span className="font-medium text-sm">{svc.scope_name}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <Badge variant="secondary" className="text-xs">
+                                  {svc.planned_houses} casas
+                                </Badge>
+                                {svc.contractor_name && (
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {svc.contractor_name}
+                                  </Badge>
+                                )}
+                                {isRegistered && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                )}
+
+                {selectedReleasedService && (
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => {
+                    setSelectedReleasedService(null);
+                    setSelectedReleasedWeek(null);
+                    setReleasedWeekServices([]);
+                    setSelectedMacro("");
+                    setSelectedScope("");
+                    setSelectedHouses([]);
+                  }}>
+                    Limpar seleção do planejamento
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Measurement Selector - Priority: new measurements table, fallback to legacy */}
           {!isInitialDatabase && !isAddingUnplanned && (
             <>
