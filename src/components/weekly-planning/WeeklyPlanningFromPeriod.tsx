@@ -776,6 +776,7 @@ export function WeeklyPlanningFromPeriod() {
         const options: ContractorServiceOption[] = data.map((s: any) => ({
           id: s.id,
           contract_id: s.contract_id,
+          contractor_id: s.contractor_contracts?.contractor_id || "",
           contractor_name: s.contractor_contracts?.contractors?.name || "Empreiteiro",
           macro_id: s.macro_id,
           scope_id: s.scope_id,
