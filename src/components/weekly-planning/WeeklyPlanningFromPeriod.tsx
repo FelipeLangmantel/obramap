@@ -814,18 +814,18 @@ export function WeeklyPlanningFromPeriod() {
         for (const w of existingWeeks) {
           const { data: ws } = await supabase
             .from("weekly_plan_services")
-            .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, planned_house_ids, planned_houses, contractor_contract_service_id")
+            .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, planned_house_ids, planned_houses, contractor_contract_service_id, contractor_id, contractor_name, contractor_house_ids, contractor_houses, has_out_of_contract_houses, out_of_contract_house_ids")
             .eq("weekly_plan_week_id", w.id);
           const services = (ws || []).map((s: any) => ({
             ...s,
             contractor_contract_service_id: s.contractor_contract_service_id || null,
+            contractor_id: s.contractor_id || null,
+            contractor_name: s.contractor_name || null,
+            contractor_house_ids: s.contractor_house_ids || [],
+            contractor_houses: s.contractor_houses || 0,
+            has_out_of_contract_houses: s.has_out_of_contract_houses || false,
+            out_of_contract_house_ids: s.out_of_contract_house_ids || [],
           })) as WeekServicePlan[];
-          // Build contractor map from saved data
-          for (const s of services) {
-            if (s.contractor_contract_service_id) {
-              contractorMap[`${s.macro_id}:${s.scope_id}`] = s.contractor_contract_service_id;
-            }
-          }
           weeksWithSvcs.push({ ...w, services, working_days: [] });
         }
         setWeekPlans(weeksWithSvcs);
