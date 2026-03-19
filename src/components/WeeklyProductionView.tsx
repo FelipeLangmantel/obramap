@@ -1737,7 +1737,18 @@ export function WeeklyProductionView() {
                       </div>
                     )}
 
-                    {/* Legend */}
+                    {/* Nota informativa sobre flexibilidade */}
+                    {selectedReleasedService && (
+                      <div className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1.5 flex items-center gap-1.5 mt-2">
+                        <Info className="h-3 w-3 flex-shrink-0" />
+                        <span>
+                          Planejado para <strong>{selectedReleasedService.contractor_name || 'sem empreiteiro'}</strong>.
+                          Você pode ajustar as casas livremente — o real registrado é o que vale.
+                          Qualquer diferença do planejamento gerará um alerta automático.
+                        </span>
+                      </div>
+                    )}
+
                     <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t text-xs text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <div className="w-3 h-3 rounded-full bg-blue-500" />
