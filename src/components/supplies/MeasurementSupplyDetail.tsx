@@ -167,7 +167,34 @@ export function MeasurementSupplyDetail({
   };
 
   const handleSaveStock = async () => {
-    await saveStockEntries(measurement.measurement_id);
+    const saved = await saveStockEntries(measurement.measurement_id);
+    if (!saved) return;
+
+    // Try to carry over stock to next period
+    try {
+      const { data: nextPeriod } = await supabase
+        .from('planning_periods')
+        .select('id, period_number')
+        .eq('project_id', projectId)
+        .gt('period_number', measurement.measurement_number)
+        .in('status', ['approved', 'released_to_weekly'])
+        .order('period_number', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (nextPeriod) {
+        const { data: result } = await supabase.rpc('carry_over_stock', {
+          p_from_period_id: measurement.measurement_id,
+          p_to_period_id: nextPeriod.id,
+        });
+        const carried = (result as any)?.carried_items || 0;
+        if (carried > 0) {
+          toast.success(`${carried} iten(s) com excedente transferidos para a Medição ${nextPeriod.period_number}.`);
+        }
+      }
+    } catch (err) {
+      console.error('Error carrying over stock:', err);
+    }
   };
 
   const renderRequestCard = (request: MeasurementSupplyRequest) => {
