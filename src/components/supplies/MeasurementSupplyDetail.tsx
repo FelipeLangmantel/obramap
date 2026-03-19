@@ -108,18 +108,18 @@ export function MeasurementSupplyDetail({
 
   // Load carryover data
   useEffect(() => {
-    if (!measurement.measurement_id) return;
+    if (!planningPeriodId) return;
     supabase
       .from('supply_requests')
       .select('item_id, quantity_carried_over')
-      .eq('planning_period_id', measurement.measurement_id)
+      .eq('planning_period_id', planningPeriodId)
       .gt('quantity_carried_over', 0)
       .then(({ data }) => {
         const map: Record<string, number> = {};
         (data || []).forEach((r: any) => { if (r.item_id) map[r.item_id] = Number(r.quantity_carried_over); });
         setCarryoverMap(map);
       });
-  }, [measurement.measurement_id]);
+  }, [planningPeriodId]);
 
   const toggleFamily = (familyName: string) => {
     setExpandedFamilies(prev => {
