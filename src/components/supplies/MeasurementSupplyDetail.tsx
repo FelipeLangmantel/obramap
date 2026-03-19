@@ -70,6 +70,8 @@ export function MeasurementSupplyDetail({
     }
   });
 
+  const planningPeriodId = measurement.planning_period_id || measurement.measurement_id;
+
   const { transitionStatus } = useSupplyRequests(projectId);
   const {
     stockEntries,
@@ -81,7 +83,7 @@ export function MeasurementSupplyDetail({
     loadStockEntries,
     updateStockQuantity,
     saveStockEntries,
-  } = useMeasurementStock(projectId);
+  } = useMeasurementStock(projectId, planningPeriodId);
 
   // Carryover data from supply_requests
   const [carryoverMap, setCarryoverMap] = useState<Record<string, number>>({});
