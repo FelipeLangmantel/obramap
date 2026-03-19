@@ -212,13 +212,13 @@ export function ContractorContractsTab({
       const svc = budgetServices.find(s => `${s.macro_id}::${s.scope_id}` === svcId);
       if (!svc) continue;
       const houseIds = selectedHouseIds[svcId] || [];
-      const negotiated = negotiatedValues[svcId] ?? svc.max_cost_value;
+      const negotiated = negotiatedValues[svcId] ?? svc.mo_unit_value ?? svc.max_cost_value;
       await addContractService(assignContractId, {
         macro_id: svc.macro_id,
         macro_name: svc.macro_name,
         scope_id: svc.scope_id,
         scope_name: svc.scope_name,
-        budget_unit_value: svc.max_cost_value || 0,
+        budget_unit_value: svc.mo_unit_value ?? svc.max_cost_value ?? 0,
         negotiated_unit_value: negotiated,
         house_ids: houseIds,
         total_houses: houseIds.length || svc.total_houses,
