@@ -1271,6 +1271,41 @@ export function WeeklyPlanningFromPeriod() {
                   );
                 })}
               </div>
+
+              {/* Contractor selector per service */}
+              {selectedService && (() => {
+                const sKey = selectedServiceKey;
+                const options = contractorServices.filter(
+                  cs => cs.macro_id === selectedService.macro_id && cs.scope_id === selectedService.scope_id
+                );
+                if (options.length === 0) return null;
+                const currentVal = serviceContractorMap[sKey] || "";
+                return (
+                  <div className="mt-3 flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+                    <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Empreiteiro:</span>
+                    <Select
+                      value={currentVal}
+                      onValueChange={(val) => setServiceContractorMap(prev => ({ ...prev, [sKey]: val }))}
+                    >
+                      <SelectTrigger className="h-8 text-xs max-w-xs">
+                        <SelectValue placeholder="Selecionar empreiteiro..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {options.map(opt => (
+                          <SelectItem key={opt.id} value={opt.id}>
+                            {opt.contractor_name} — {opt.house_ids.length} casas • {opt.negotiated_unit_value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}/un
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {currentVal && (
+                      <Badge variant="outline" className="text-[10px] shrink-0 gap-1">
+                        <CheckCircle2 className="h-3 w-3 text-primary" /> Alocado
+                      </Badge>
+                    )}
+                  </div>
+                );
+              })()}
             </CardContent>
           </Card>
 
