@@ -225,8 +225,9 @@ export function PleContractTab(props: PleDataReturn) {
       ...newEvent,
       unit_value: finalUnitValue,
       group_id: substageId,
+      billing_type: newEvent.billing_type,
     } as any);
-    setNewEvent({ group_id: "", item_code: "", description: "", discrimination: "", sinapi_code: "", unit: "UN", quantity: 0, unit_value: 0, mat_unit_value: 0, mo_unit_value: 0 });
+    setNewEvent({ group_id: "", item_code: "", description: "", discrimination: "", sinapi_code: "", unit: "UN", quantity: 0, unit_value: 0, mat_unit_value: 0, mo_unit_value: 0, billing_type: "per_house" });
     setAddingEventTo(null);
   };
 
