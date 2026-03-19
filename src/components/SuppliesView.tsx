@@ -362,6 +362,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         });
         setExecutedHouses(executed);
       }
+      if (overdueRes.data) setOverdueRequests(overdueRes.data);
     } catch (error) {
       console.error('Error loading alert data:', error);
     } finally {
