@@ -27,6 +27,7 @@ interface PeriodCardProps {
   onClick: () => void;
   onStatusChange?: (periodId: string, newStatus: PeriodStatus) => void;
   onGenerateSupplies?: (periodId: string) => void;
+  onValidateBeforeClose?: (periodId: string) => Promise<{ canClose: boolean; warnings: string[] }>;
   isChangingStatus?: boolean;
   isGeneratingSupplies?: boolean;
   canEdit?: boolean;
@@ -65,6 +66,7 @@ export function PeriodCard({
   onClick, 
   onStatusChange,
   onGenerateSupplies,
+  onValidateBeforeClose,
   isChangingStatus,
   isGeneratingSupplies,
   canEdit = true 
@@ -119,11 +121,22 @@ export function PeriodCard({
   const nextAction = getNextAction(period.status);
   const isLocked = period.status === "closed";
 
-  const handleActionClick = (e: React.MouseEvent) => {
+  const handleActionClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onStatusChange && nextAction) {
-      onStatusChange(period.id, nextAction.nextStatus);
+    if (!onStatusChange || !nextAction) return;
+
+    // Validação especial para fechar
+    if (nextAction.nextStatus === 'closed' && onValidateBeforeClose) {
+      const { warnings } = await onValidateBeforeClose(period.id);
+
+      if (warnings.length > 0) {
+        const message = warnings.join('\n') + '\n\nDeseja fechar mesmo assim?';
+        const confirmed = window.confirm(message);
+        if (!confirmed) return;
+      }
     }
+
+    onStatusChange(period.id, nextAction.nextStatus);
   };
 
   return (

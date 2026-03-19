@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { usePeriodPlanning } from "@/hooks/usePeriodPlanning";
 import { ModuleAccessGuard } from "@/components/guards/ModuleAccessGuard";
+import { supabase } from "@/integrations/supabase/client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,26 @@ export default function MeasurementPlanningPage() {
     await generateSupplies(periodId);
     setGeneratingSuppliesPeriodId(null);
   };
+
+  const validateBeforeClose = useCallback(async (periodId: string): Promise<{ canClose: boolean; warnings: string[] }> => {
+    const warnings: string[] = [];
+
+    const { data: servicesWithoutContractor } = await supabase
+      .from('weekly_plan_services')
+      .select('scope_name, macro_name, planned_houses')
+      .eq('planning_period_id', periodId)
+      .is('contractor_id', null)
+      .gt('planned_houses', 0);
+
+    if (servicesWithoutContractor && servicesWithoutContractor.length > 0) {
+      const names = servicesWithoutContractor.map(s => `• ${s.scope_name} (${s.planned_houses} casas)`).join('\n');
+      warnings.push(
+        `⚠ ${servicesWithoutContractor.length} serviço(s) sem empreiteiro alocado:\n${names}\n\nFechar sem empreiteiro deixa estes serviços sem rastreabilidade de quem executou.`
+      );
+    }
+
+    return { canClose: true, warnings };
+  }, []);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -175,6 +196,7 @@ export default function MeasurementPlanningPage() {
                     onClick={() => handlePeriodClick(period.id)}
                     onStatusChange={canEdit ? changePeriodStatus : undefined}
                     onGenerateSupplies={canEdit ? handleGenerateSupplies : undefined}
+                    onValidateBeforeClose={canEdit ? validateBeforeClose : undefined}
                     isChangingStatus={approvingPeriodId === period.id}
                     isGeneratingSupplies={generatingSuppliesPeriodId === period.id}
                     canEdit={canEdit}
