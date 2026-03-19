@@ -33,7 +33,8 @@ import {
   Settings2,
   ClipboardCheck,
   RotateCcw,
-  Plus
+  Plus,
+  Info
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
