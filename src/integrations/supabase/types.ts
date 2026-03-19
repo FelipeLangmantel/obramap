@@ -7527,16 +7527,121 @@ export type Database = {
           },
         ]
       }
+      weekly_plan_contractor_log: {
+        Row: {
+          change_reason: string | null
+          changed_by: string | null
+          company_id: string
+          created_at: string
+          id: string
+          macro_id: string
+          new_contractor_id: string | null
+          new_contractor_name: string | null
+          new_house_ids: number[]
+          previous_contractor_id: string | null
+          previous_contractor_name: string | null
+          previous_house_ids: number[]
+          project_id: string
+          scope_id: string
+          scope_name: string
+          transferred_house_ids: number[]
+          week_start: string
+          weekly_plan_service_id: string
+        }
+        Insert: {
+          change_reason?: string | null
+          changed_by?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          macro_id: string
+          new_contractor_id?: string | null
+          new_contractor_name?: string | null
+          new_house_ids?: number[]
+          previous_contractor_id?: string | null
+          previous_contractor_name?: string | null
+          previous_house_ids?: number[]
+          project_id: string
+          scope_id: string
+          scope_name: string
+          transferred_house_ids?: number[]
+          week_start: string
+          weekly_plan_service_id: string
+        }
+        Update: {
+          change_reason?: string | null
+          changed_by?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          macro_id?: string
+          new_contractor_id?: string | null
+          new_contractor_name?: string | null
+          new_house_ids?: number[]
+          previous_contractor_id?: string | null
+          previous_contractor_name?: string | null
+          previous_house_ids?: number[]
+          project_id?: string
+          scope_id?: string
+          scope_name?: string
+          transferred_house_ids?: number[]
+          week_start?: string
+          weekly_plan_service_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_plan_contractor_log_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_plan_contractor_log_new_contractor_id_fkey"
+            columns: ["new_contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_plan_contractor_log_previous_contractor_id_fkey"
+            columns: ["previous_contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_plan_contractor_log_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_plan_contractor_log_weekly_plan_service_id_fkey"
+            columns: ["weekly_plan_service_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_plan_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       weekly_plan_services: {
         Row: {
           company_id: string
           contractor_contract_service_id: string | null
+          contractor_house_ids: number[]
+          contractor_houses: number
+          contractor_id: string | null
+          contractor_name: string | null
           created_at: string
+          has_out_of_contract_houses: boolean
           id: string
           macro_color: string
           macro_id: string
           macro_name: string
           notes: string | null
+          out_of_contract_house_ids: number[]
           planned_house_ids: number[]
           planned_houses: number
           planning_period_id: string
@@ -7549,12 +7654,18 @@ export type Database = {
         Insert: {
           company_id: string
           contractor_contract_service_id?: string | null
+          contractor_house_ids?: number[]
+          contractor_houses?: number
+          contractor_id?: string | null
+          contractor_name?: string | null
           created_at?: string
+          has_out_of_contract_houses?: boolean
           id?: string
           macro_color?: string
           macro_id: string
           macro_name: string
           notes?: string | null
+          out_of_contract_house_ids?: number[]
           planned_house_ids?: number[]
           planned_houses?: number
           planning_period_id: string
@@ -7567,12 +7678,18 @@ export type Database = {
         Update: {
           company_id?: string
           contractor_contract_service_id?: string | null
+          contractor_house_ids?: number[]
+          contractor_houses?: number
+          contractor_id?: string | null
+          contractor_name?: string | null
           created_at?: string
+          has_out_of_contract_houses?: boolean
           id?: string
           macro_color?: string
           macro_id?: string
           macro_name?: string
           notes?: string | null
+          out_of_contract_house_ids?: number[]
           planned_house_ids?: number[]
           planned_houses?: number
           planning_period_id?: string
@@ -7595,6 +7712,13 @@ export type Database = {
             columns: ["contractor_contract_service_id"]
             isOneToOne: false
             referencedRelation: "contractor_contract_services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_plan_services_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
             referencedColumns: ["id"]
           },
           {
