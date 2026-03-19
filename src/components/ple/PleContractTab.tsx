@@ -35,6 +35,8 @@ export function PleContractTab(props: PleDataReturn) {
   const [batchMappings, setBatchMappings] = useState<Record<string, string>>({});
   const [syncResult, setSyncResult] = useState<{ synced: number; projectName: string } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [editingCell, setEditingCell] = useState<{ eventId: string; field: string } | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   const isIntegrated = currentProject?.mode === "integrated";
 
