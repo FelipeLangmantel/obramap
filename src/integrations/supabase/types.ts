@@ -4760,6 +4760,12 @@ export type Database = {
           group_id: string | null
           id: string
           item_code: string
+          mat_unit_value: number
+          mo_unit_value: number
+          obramap_macro_id: string | null
+          obramap_macro_name: string | null
+          obramap_scope_id: string | null
+          obramap_scope_name: string | null
           ple_project_id: string
           quantity: number
           sinapi_code: string | null
@@ -4775,6 +4781,12 @@ export type Database = {
           group_id?: string | null
           id?: string
           item_code: string
+          mat_unit_value?: number
+          mo_unit_value?: number
+          obramap_macro_id?: string | null
+          obramap_macro_name?: string | null
+          obramap_scope_id?: string | null
+          obramap_scope_name?: string | null
           ple_project_id: string
           quantity?: number
           sinapi_code?: string | null
@@ -4790,6 +4802,12 @@ export type Database = {
           group_id?: string | null
           id?: string
           item_code?: string
+          mat_unit_value?: number
+          mo_unit_value?: number
+          obramap_macro_id?: string | null
+          obramap_macro_name?: string | null
+          obramap_scope_id?: string | null
+          obramap_scope_name?: string | null
           ple_project_id?: string
           quantity?: number
           sinapi_code?: string | null
@@ -4966,8 +4984,10 @@ export type Database = {
           id: string
           inspector_name: string | null
           location: string | null
+          mode: string
           name: string
           notes: string | null
+          obramap_project_id: string | null
           program: string | null
           responsible_engineer: string | null
           start_date: string | null
@@ -5000,8 +5020,10 @@ export type Database = {
           id?: string
           inspector_name?: string | null
           location?: string | null
+          mode?: string
           name: string
           notes?: string | null
+          obramap_project_id?: string | null
           program?: string | null
           responsible_engineer?: string | null
           start_date?: string | null
@@ -5034,8 +5056,10 @@ export type Database = {
           id?: string
           inspector_name?: string | null
           location?: string | null
+          mode?: string
           name?: string
           notes?: string | null
+          obramap_project_id?: string | null
           program?: string | null
           responsible_engineer?: string | null
           start_date?: string | null
@@ -5050,6 +5074,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ple_projects_obramap_project_id_fkey"
+            columns: ["obramap_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -8636,6 +8667,10 @@ export type Database = {
           p_macro_id: string
           p_total_value: number
         }
+        Returns: Json
+      }
+      sync_contract_from_ple: {
+        Args: { p_ple_project_id: string }
         Returns: Json
       }
       sync_contract_services: {
