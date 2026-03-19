@@ -70,7 +70,13 @@ export interface PleEvent {
   unit: string;
   quantity: number;
   unit_value: number;
+  mat_unit_value: number;
+  mo_unit_value: number;
   display_order: number;
+  obramap_macro_id: string | null;
+  obramap_macro_name: string | null;
+  obramap_scope_id: string | null;
+  obramap_scope_name: string | null;
 }
 
 export interface PleMeasurement {
