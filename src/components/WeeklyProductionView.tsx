@@ -1053,46 +1053,126 @@ export function WeeklyProductionView() {
                 </Select>
 
                 {selectedReleasedWeek && releasedWeekServices.length > 0 && (
-                  <ScrollArea className="h-[160px] pr-2">
-                    <div className="space-y-1.5">
-                      {releasedWeekServices.map((svc: any) => {
-                        const isSelected = selectedReleasedService?.id === svc.id;
-                        const isRegistered = svc._registered;
-                        return (
-                          <button
-                            key={svc.id}
-                            onClick={() => !isRegistered && applyReleasedService(isSelected ? null : svc)}
-                            disabled={isRegistered}
-                            className={`w-full p-2.5 rounded-lg border text-left transition-all ${
-                              isRegistered 
-                                ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 opacity-60 cursor-not-allowed"
-                                : isSelected
-                                  ? "bg-blue-50 dark:bg-blue-900/20 border-blue-500 ring-2 ring-blue-200"
-                                  : "bg-background hover:bg-muted/50 border-border hover:border-blue-300"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: svc.macro_color }} />
-                                <span className="font-medium text-sm">{svc.scope_name}</span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <Badge variant="secondary" className="text-xs">
-                                  {svc.planned_houses} casas
-                                </Badge>
-                                {svc.contractor_name && (
-                                  <Badge variant="outline" className="text-[10px]">
-                                    {svc.contractor_name}
-                                  </Badge>
-                                )}
-                                {isRegistered && <CheckCircle2 className="w-4 h-4 text-green-600" />}
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
+                  <>
+                    {/* Toggle de modo */}
+                    <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+                      <button
+                        onClick={() => setPlanViewMode('service')}
+                        className={`px-3 py-1 text-xs rounded-md transition-all ${planViewMode === 'service' ? 'bg-background shadow font-medium' : 'text-muted-foreground'}`}
+                      >
+                        Por Serviço
+                      </button>
+                      <button
+                        onClick={() => setPlanViewMode('contractor')}
+                        className={`px-3 py-1 text-xs rounded-md transition-all ${planViewMode === 'contractor' ? 'bg-background shadow font-medium' : 'text-muted-foreground'}`}
+                      >
+                        Por Empreiteiro
+                      </button>
                     </div>
-                  </ScrollArea>
+
+                    <ScrollArea className="h-[200px] pr-2">
+                      <div className="space-y-1.5">
+                        {planViewMode === 'service' ? (
+                          /* Modo por Serviço (original) */
+                          releasedWeekServices.map((svc: any) => {
+                            const isSelected = selectedReleasedService?.id === svc.id;
+                            const isRegistered = svc._registered;
+                            return (
+                              <button
+                                key={svc.id}
+                                onClick={() => !isRegistered && applyReleasedService(isSelected ? null : svc)}
+                                disabled={isRegistered}
+                                className={`w-full p-2.5 rounded-lg border text-left transition-all ${
+                                  isRegistered 
+                                    ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 opacity-60 cursor-not-allowed"
+                                    : isSelected
+                                      ? "bg-blue-50 dark:bg-blue-900/20 border-blue-500 ring-2 ring-blue-200"
+                                      : "bg-background hover:bg-muted/50 border-border hover:border-blue-300"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: svc.macro_color }} />
+                                    <span className="font-medium text-sm">{svc.scope_name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <Badge variant="secondary" className="text-xs">
+                                      {svc.planned_houses} casas
+                                    </Badge>
+                                    {svc.contractor_name && (
+                                      <Badge variant="outline" className="text-[10px]">
+                                        {svc.contractor_name}
+                                      </Badge>
+                                    )}
+                                    {isRegistered && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })
+                        ) : (
+                          /* Modo por Empreiteiro */
+                          (() => {
+                            const grouped: Record<string, { name: string; services: any[] }> = {};
+                            releasedWeekServices.forEach((svc: any) => {
+                              const key = svc.contractor_id || '_none';
+                              if (!grouped[key]) {
+                                grouped[key] = { name: svc.contractor_name || 'Sem empreiteiro', services: [] };
+                              }
+                              grouped[key].services.push(svc);
+                            });
+                            return Object.entries(grouped).map(([key, group]) => {
+                              const totalHouses = group.services.reduce((sum: number, s: any) => sum + (s.planned_houses || 0), 0);
+                              const isNone = key === '_none';
+                              return (
+                                <div key={key} className="space-y-1">
+                                  <div className="flex items-center justify-between px-1 pt-1">
+                                    <span className={`text-xs font-semibold ${isNone ? 'text-amber-600' : 'text-foreground'}`}>
+                                      {group.name}
+                                    </span>
+                                    <Badge variant={isNone ? "outline" : "secondary"} className={`text-[10px] ${isNone ? 'border-amber-400 text-amber-600' : ''}`}>
+                                      {totalHouses} casas
+                                    </Badge>
+                                  </div>
+                                  {group.services.map((svc: any) => {
+                                    const isSelected = selectedReleasedService?.id === svc.id;
+                                    const isRegistered = svc._registered;
+                                    return (
+                                      <button
+                                        key={svc.id}
+                                        onClick={() => !isRegistered && applyReleasedService(isSelected ? null : svc)}
+                                        disabled={isRegistered}
+                                        className={`w-full p-2 rounded-lg border text-left transition-all ${
+                                          isRegistered
+                                            ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 opacity-60 cursor-not-allowed"
+                                            : isSelected
+                                              ? "bg-blue-50 dark:bg-blue-900/20 border-blue-500 ring-2 ring-blue-200"
+                                              : "bg-background hover:bg-muted/50 border-border hover:border-blue-300"
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: svc.macro_color }} />
+                                            <span className="text-sm">{svc.scope_name}</span>
+                                          </div>
+                                          <div className="flex items-center gap-1.5">
+                                            <Badge variant="secondary" className="text-[10px]">
+                                              {svc.planned_houses} casas
+                                            </Badge>
+                                            {isRegistered && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                                          </div>
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            });
+                          })()
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </>
                 )}
 
                 {selectedReleasedService && (
