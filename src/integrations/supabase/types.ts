@@ -5057,59 +5057,96 @@ export type Database = {
       production_deviations: {
         Row: {
           actual_count: number
+          actual_house_ids: number[]
+          company_id: string | null
           corrective_action: string | null
           created_at: string
           deviation: number
-          deviation_reason: string
+          deviation_reason: string | null
           id: string
           macro_id: string
           macro_name: string
+          missing_house_ids: number[]
           planned_count: number
-          planned_production_id: string
+          planned_house_ids: number[]
+          planned_production_id: string | null
           project_id: string
+          resolved_at: string | null
+          resolved_by: string | null
           scope_id: string
           scope_name: string
+          severity: string
+          status: string
+          unplanned_house_ids: number[]
           updated_at: string
           week_end: string
           week_start: string
+          weekly_plan_service_id: string | null
         }
         Insert: {
           actual_count?: number
+          actual_house_ids?: number[]
+          company_id?: string | null
           corrective_action?: string | null
           created_at?: string
           deviation?: number
-          deviation_reason: string
+          deviation_reason?: string | null
           id?: string
           macro_id: string
           macro_name: string
+          missing_house_ids?: number[]
           planned_count?: number
-          planned_production_id: string
+          planned_house_ids?: number[]
+          planned_production_id?: string | null
           project_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
           scope_id: string
           scope_name: string
+          severity?: string
+          status?: string
+          unplanned_house_ids?: number[]
           updated_at?: string
           week_end: string
           week_start: string
+          weekly_plan_service_id?: string | null
         }
         Update: {
           actual_count?: number
+          actual_house_ids?: number[]
+          company_id?: string | null
           corrective_action?: string | null
           created_at?: string
           deviation?: number
-          deviation_reason?: string
+          deviation_reason?: string | null
           id?: string
           macro_id?: string
           macro_name?: string
+          missing_house_ids?: number[]
           planned_count?: number
-          planned_production_id?: string
+          planned_house_ids?: number[]
+          planned_production_id?: string | null
           project_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
           scope_id?: string
           scope_name?: string
+          severity?: string
+          status?: string
+          unplanned_house_ids?: number[]
           updated_at?: string
           week_end?: string
           week_start?: string
+          weekly_plan_service_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "production_deviations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "production_deviations_planned_production_id_fkey"
             columns: ["planned_production_id"]
@@ -5122,6 +5159,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_deviations_weekly_plan_service_id_fkey"
+            columns: ["weekly_plan_service_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_plan_services"
             referencedColumns: ["id"]
           },
         ]
@@ -7546,7 +7590,7 @@ export type Database = {
           scope_name: string
           transferred_house_ids: number[]
           week_start: string
-          weekly_plan_service_id: string
+          weekly_plan_service_id: string | null
         }
         Insert: {
           change_reason?: string | null
@@ -7566,7 +7610,7 @@ export type Database = {
           scope_name: string
           transferred_house_ids?: number[]
           week_start: string
-          weekly_plan_service_id: string
+          weekly_plan_service_id?: string | null
         }
         Update: {
           change_reason?: string | null
@@ -7586,7 +7630,7 @@ export type Database = {
           scope_name?: string
           transferred_house_ids?: number[]
           week_start?: string
-          weekly_plan_service_id?: string
+          weekly_plan_service_id?: string | null
         }
         Relationships: [
           {
@@ -7807,6 +7851,7 @@ export type Database = {
       }
       weekly_productions: {
         Row: {
+          contractor_id: string | null
           created_at: string
           created_by_name: string | null
           created_by_user_id: string | null
@@ -7814,6 +7859,7 @@ export type Database = {
           houses_count: number
           id: string
           is_initial_database: boolean
+          is_unplanned: boolean
           macro_color: string
           macro_id: string
           macro_name: string
@@ -7824,8 +7870,10 @@ export type Database = {
           updated_at: string
           week_end: string
           week_start: string
+          weekly_plan_service_id: string | null
         }
         Insert: {
+          contractor_id?: string | null
           created_at?: string
           created_by_name?: string | null
           created_by_user_id?: string | null
@@ -7833,6 +7881,7 @@ export type Database = {
           houses_count?: number
           id?: string
           is_initial_database?: boolean
+          is_unplanned?: boolean
           macro_color?: string
           macro_id: string
           macro_name: string
@@ -7843,8 +7892,10 @@ export type Database = {
           updated_at?: string
           week_end: string
           week_start: string
+          weekly_plan_service_id?: string | null
         }
         Update: {
+          contractor_id?: string | null
           created_at?: string
           created_by_name?: string | null
           created_by_user_id?: string | null
@@ -7852,6 +7903,7 @@ export type Database = {
           houses_count?: number
           id?: string
           is_initial_database?: boolean
+          is_unplanned?: boolean
           macro_color?: string
           macro_id?: string
           macro_name?: string
@@ -7862,13 +7914,28 @@ export type Database = {
           updated_at?: string
           week_end?: string
           week_start?: string
+          weekly_plan_service_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "weekly_productions_contractor_id_fkey"
+            columns: ["contractor_id"]
+            isOneToOne: false
+            referencedRelation: "contractors"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "weekly_productions_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_productions_weekly_plan_service_id_fkey"
+            columns: ["weekly_plan_service_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_plan_services"
             referencedColumns: ["id"]
           },
         ]
