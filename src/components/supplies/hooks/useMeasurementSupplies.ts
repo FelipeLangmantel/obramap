@@ -132,7 +132,9 @@ export function useMeasurementSupplies(projectId: string | undefined) {
        });
  
        if (error) throw error;
-       setMeasurements((data || []) as MeasurementSupplySummary[]);
+        // Add planning_period_id (same as measurement_id since RPC returns pp.id AS measurement_id)
+        const enriched = (data || []).map((d: any) => ({ ...d, planning_period_id: d.measurement_id }));
+        setMeasurements(enriched as MeasurementSupplySummary[]);
      } catch (error) {
        console.error('Error loading measurement supplies:', error);
        toast.error('Erro ao carregar medições');
