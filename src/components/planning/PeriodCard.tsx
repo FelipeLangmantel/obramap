@@ -27,6 +27,7 @@ interface PeriodCardProps {
   onClick: () => void;
   onStatusChange?: (periodId: string, newStatus: PeriodStatus) => void;
   onGenerateSupplies?: (periodId: string) => void;
+  onValidateBeforeClose?: (periodId: string) => Promise<{ canClose: boolean; warnings: string[] }>;
   isChangingStatus?: boolean;
   isGeneratingSupplies?: boolean;
   canEdit?: boolean;
