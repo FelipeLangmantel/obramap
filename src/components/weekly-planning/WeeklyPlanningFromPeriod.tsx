@@ -13,10 +13,11 @@ import { toast } from "sonner";
 import {
   Calendar, Home, Save, RefreshCcw, Zap,
   AlertTriangle, CheckCircle2, Lock, Unlock, Undo2,
-  MousePointerClick, Plus, X,
+  MousePointerClick, Plus, X, HardHat, AlertCircle,
 } from "lucide-react";
 import { format, parseISO, differenceInDays, eachDayOfInterval, getDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { ContractorAllocationPanel, type ContractorAllocation } from "./ContractorAllocationPanel";
 
 // ── Types ──────────────────────────────────────────────────
 interface PeriodForWeekly {
