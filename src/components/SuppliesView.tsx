@@ -238,6 +238,8 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   const [alertsData, setAlertsData] = useState<{ scopeItems: ScopeItem[], pendingQuotations: number, inTransitOrders: number }>({ scopeItems: [], pendingQuotations: 0, inTransitOrders: 0 });
   const [dataLoaded, setDataLoaded] = useState<Record<string, boolean>>({});
   const [supplyKpis, setSupplyKpis] = useState<SupplyKPIs | null>(null);
+  const [projectLeadTimes, setProjectLeadTimes] = useState<Record<string, number>>({});
+  const [overdueRequests, setOverdueRequests] = useState<any[]>([]);
 
   // Dialog states
   const [inputDialogOpen, setInputDialogOpen] = useState(false);
@@ -313,17 +315,21 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
     setIsLoading(true);
 
     try {
-      const [scopeRes, quotRes, ordersRes, laborRes, prodRes, plannedRes, familiesRes, kpisRes] = await Promise.all([
+      const [scopeRes, quotRes, ordersRes, laborRes, prodRes, plannedRes, familiesRes, kpisRes, overdueRes] = await Promise.all([
         supabase.from('scope_items').select('id, name, category, quantity, unit, unit_value, scope_id, macro_id, material_family').eq('project_id', projectId),
         supabase.from('quotation_requests').select('id, status').eq('project_id', projectId).eq('status', 'pending'),
         supabase.from('purchase_orders').select('id, status').eq('project_id', projectId).eq('status', 'in_transit'),
         supabase.from('labor_contracts').select('*').eq('project_id', projectId),
-        // Only get non-initial database productions for executed count
         supabase.from('weekly_productions').select('scope_id, house_ids, is_initial_database').eq('project_id', projectId),
         supabase.from('planned_productions').select('*').eq('project_id', projectId).gte('week_start', new Date().toISOString().split('T')[0]),
         supabase.from('material_families').select('*').order('display_order'),
-        // Load backend KPIs
-        supabase.rpc('get_supply_kpis', { p_project_id: projectId })
+        supabase.rpc('get_supply_kpis', { p_project_id: projectId }),
+        supabase.from('supply_requests')
+          .select('id, item_name, item_unit, quantity, status, family_name, family_color, order_by_date, required_date, days_overdue, blocked_house_ids, blocked_scope_ids, family_id')
+          .eq('project_id', projectId)
+          .eq('purchase_overdue', true)
+          .not('status', 'in', '("ordered","delivered","cancelled")')
+          .order('days_overdue', { ascending: false })
       ]);
 
       if (scopeRes.data) {
@@ -356,6 +362,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         });
         setExecutedHouses(executed);
       }
+      if (overdueRes.data) setOverdueRequests(overdueRes.data);
     } catch (error) {
       console.error('Error loading alert data:', error);
     } finally {
@@ -416,14 +423,24 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
 
   useEffect(() => {
     if (activeTab !== 'alerts') {
-      // Lead time tab needs families from inputs tab data
       if (activeTab === 'leadtime') {
         loadTabData('inputs');
+        if (projectId) {
+          supabase
+            .from('project_lead_times')
+            .select('family_id, lead_time_days')
+            .eq('project_id', projectId)
+            .then(({ data }) => {
+              const map: Record<string, number> = {};
+              (data || []).forEach((p: any) => { map[p.family_id] = p.lead_time_days; });
+              setProjectLeadTimes(map);
+            });
+        }
       } else {
         loadTabData(activeTab);
       }
     }
-  }, [activeTab, loadTabData]);
+  }, [activeTab, loadTabData, projectId]);
 
   // Get scopes that have planned production (future only) - match by ID and by name
   const scopesWithPlannedProduction = useMemo(() => {
@@ -1320,6 +1337,51 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         <TabsContent value="alerts" className="flex-1 overflow-y-auto mt-2 md:mt-4 space-y-3 md:space-y-4">
           {/* Backend-driven KPI Dashboard */}
           <SupplyDashboard kpis={supplyKpis} isLoading={isLoading} />
+
+          {/* Overdue Purchases */}
+          {overdueRequests.length > 0 && (
+            <Card className="border-red-300 bg-red-50/50 dark:bg-red-900/10">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-lg text-red-700">
+                  <AlertTriangle className="w-5 h-5" />
+                  Compras em Atraso ({overdueRequests.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[200px] md:h-[250px]">
+                  <div className="space-y-2 pr-2 md:pr-4">
+                    {overdueRequests.map((req: any) => (
+                      <div key={req.id} className="p-2 md:p-3 rounded-lg border border-red-200 bg-white dark:bg-background">
+                        <div className="flex items-start md:items-center gap-2 md:gap-3 flex-wrap md:flex-nowrap">
+                          <div className="w-3 h-3 rounded-full shrink-0 mt-1 md:mt-0" style={{ backgroundColor: req.family_color || '#9ca3af' }} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-xs md:text-sm">{req.item_name}</span>
+                              <Badge variant="destructive" className="text-[10px]">{req.days_overdue}d atraso</Badge>
+                              {req.family_name && (
+                                <Badge variant="outline" className="text-[10px]">{req.family_name}</Badge>
+                              )}
+                            </div>
+                            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">
+                              Limite: {req.order_by_date ? format(new Date(req.order_by_date), 'dd/MM/yyyy', { locale: ptBR }) : '-'} | 
+                              Uso: {req.required_date ? format(new Date(req.required_date), 'dd/MM/yyyy', { locale: ptBR }) : '-'} | 
+                              {req.quantity} {req.item_unit || 'un'}
+                            </p>
+                            {req.blocked_house_ids && req.blocked_house_ids.length > 0 && (
+                              <p className="text-[10px] md:text-xs text-red-600 font-medium mt-1">
+                                ⚠ Impacto: casas {req.blocked_house_ids.join(', ')} podem parar
+                              </p>
+                            )}
+                          </div>
+                          <Badge variant="secondary" className="text-[10px] shrink-0">{req.status}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
           
           {/* Material Alerts by Family */}
           {visibleMaterialAlerts.length > 0 && (
@@ -2579,44 +2641,87 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
           />
         </TabsContent>
 
-        {/* Settings Tab */}
+        {/* Lead Time Tab — Project-level */}
         <TabsContent value="leadtime" className="flex-1 overflow-auto mt-4 space-y-4">
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><Clock className="w-5 h-5" />Lead Time por Família de Material</CardTitle></CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">
-                Configure o prazo de antecedência (em dias) para iniciar cotações de cada família de materiais.
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="w-5 h-5" />
+                Lead Time por Família — Esta Obra
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Configure o prazo de antecedência para pedidos de cada família. Valores são específicos desta obra e não alteram o padrão da empresa.
               </p>
+            </CardHeader>
+            <CardContent>
               <ScrollArea className="h-[400px]">
                 <div className="space-y-2">
-                  {families.map(family => (
-                    <div key={family.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: family.color }} />
-                        <span className="font-medium">{family.name}</span>
+                  {families.map(family => {
+                    const projectLT = projectLeadTimes[family.id];
+                    const currentLT = projectLT ?? family.lead_time_days;
+                    const isCustom = projectLT !== undefined;
+
+                    return (
+                      <div key={family.id} className="flex items-center justify-between p-3 border rounded-lg gap-3">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: family.color }} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-sm">{family.name}</span>
+                              {!isCustom ? (
+                                <Badge variant="outline" className="text-[10px] text-muted-foreground">(padrão empresa)</Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20">Personalizado</Badge>
+                              )}
+                            </div>
+                            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">
+                              Ex: Início Medição - {currentLT} dias = data limite de compra
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {currentLT === 0 ? (
+                            <Badge variant="destructive" className="text-[10px]">Sem prazo</Badge>
+                          ) : currentLT < 5 ? (
+                            <Badge className="text-[10px] bg-amber-500">Curto</Badge>
+                          ) : (
+                            <Badge className="text-[10px] bg-green-500">OK</Badge>
+                          )}
+                          {canEdit ? (
+                            <Input
+                              type="number"
+                              min="0"
+                              max="365"
+                              className="w-20 h-8"
+                              value={currentLT}
+                              onChange={async (e) => {
+                                const newDays = parseInt(e.target.value) || 0;
+                                try {
+                                  if (isCustom) {
+                                    await supabase.from('project_lead_times')
+                                      .update({ lead_time_days: newDays })
+                                      .eq('project_id', projectId!)
+                                      .eq('family_id', family.id);
+                                  } else {
+                                    await supabase.from('project_lead_times')
+                                      .insert({ project_id: projectId!, family_id: family.id, lead_time_days: newDays, company_id: companyId! });
+                                  }
+                                  setProjectLeadTimes(prev => ({ ...prev, [family.id]: newDays }));
+                                  toast.success(`Lead time: ${family.name} → ${newDays} dias`);
+                                } catch (error) {
+                                  console.error('Error updating lead time:', error);
+                                  toast.error('Erro ao salvar lead time');
+                                }
+                              }}
+                            />
+                          ) : (
+                            <span className="text-sm font-medium w-20 text-right">{currentLT}</span>
+                          )}
+                          <span className="text-sm text-muted-foreground">dias</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min="1"
-                          max="90"
-                          className="w-20 h-8"
-                          value={family.lead_time_days}
-                          onChange={async (e) => {
-                            const newDays = parseInt(e.target.value) || 7;
-                            try {
-                              await supabase.from('material_families').update({ lead_time_days: newDays }).eq('id', family.id);
-                              setFamilies(prev => prev.map(f => f.id === family.id ? { ...f, lead_time_days: newDays } : f));
-                              setAlertFamilies(prev => prev.map(f => f.id === family.id ? { ...f, lead_time_days: newDays } : f));
-                            } catch (error) {
-                              console.error('Error updating lead time:', error);
-                            }
-                          }}
-                        />
-                        <span className="text-sm text-muted-foreground">dias</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {families.length === 0 && (
                     <p className="text-center text-muted-foreground py-8">
                       Cadastre famílias de materiais na aba Insumos

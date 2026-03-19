@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useSystemModules } from "@/hooks/useSystemModules";
 import { supabase } from "@/integrations/supabase/client";
+import { useSupplyOverdueCount } from "@/components/supplies/hooks/useSupplyOverdueCount";
 import {
   Sidebar,
   SidebarContent,
@@ -118,6 +119,8 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const currentActiveView = getActiveView();
   const { profile, company, signOut, isAdmin, canEdit, canAccessMenu, canAccessManagement, systemRole, isCompanyAdmin, isSystemAdmin, canAccessProject } = useAuth();
   const { projects, currentProject, setCurrentProject } = useConstruction();
+  const supplyOverdueCount = useSupplyOverdueCount(currentProject?.id);
+  
   
   // ✅ Hook para governança global de módulos
   const { isModuleEnabled, isModuleBeta } = useSystemModules();
@@ -297,6 +300,11 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
           <span className="text-sm">{item.title}</span>
 
           <div className="ml-auto flex items-center gap-1">
+            {item.view === 'supplies' && supplyOverdueCount > 0 && (
+              <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4 min-w-[16px] justify-center">
+                {supplyOverdueCount}
+              </Badge>
+            )}
             {isSystemAdmin && isBeta && (
               <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-amber-500/10 text-amber-600 border-amber-500/30">
                 <Beaker className="h-2.5 w-2.5 mr-0.5" />
