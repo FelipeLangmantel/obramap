@@ -1625,7 +1625,7 @@ export function WeeklyPlanningFromPeriod() {
           })()}
 
           {/* Save bar */}
-          <div className="flex items-center justify-between sticky bottom-4 bg-card border rounded-lg p-3 shadow-lg z-10">
+          <div className="flex items-center justify-between bg-card border rounded-lg p-3 shadow-sm">
             <div className="flex items-center gap-2 text-sm">
               {validationErrors.length === 0 ? (
                 <>
