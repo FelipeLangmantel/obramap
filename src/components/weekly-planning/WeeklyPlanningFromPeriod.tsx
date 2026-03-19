@@ -1291,37 +1291,77 @@ export function WeeklyPlanningFromPeriod() {
                 })}
               </div>
 
-              {/* Contractor selector per service */}
+              {/* Contractor allocation panel per service */}
               {selectedService && (() => {
+                // Find current allocation from the first week that has this service
                 const sKey = selectedServiceKey;
-                const options = contractorServices.filter(
-                  cs => cs.macro_id === selectedService.macro_id && cs.scope_id === selectedService.scope_id
+                const allSvcInstances = weekPlans.flatMap(w =>
+                  w.services.filter(s => svcKey(s) === sKey && s.planned_house_ids.length > 0)
                 );
-                if (options.length === 0) return null;
-                const currentVal = serviceContractorMap[sKey] || "";
+                const firstInstance = allSvcInstances[0];
+                const currentAlloc: ContractorAllocation | null = firstInstance?.contractor_id ? {
+                  contractorContractServiceId: firstInstance.contractor_contract_service_id,
+                  contractorId: firstInstance.contractor_id,
+                  contractorName: firstInstance.contractor_name,
+                  contractorHouseIds: firstInstance.contractor_house_ids || [],
+                  contractorHouses: firstInstance.contractor_houses || 0,
+                  hasOutOfContractHouses: firstInstance.has_out_of_contract_houses || false,
+                  outOfContractHouseIds: firstInstance.out_of_contract_house_ids || [],
+                } : null;
+
+                // Get all planned house ids for this service across all weeks
+                const allPlannedIds = weekPlans.flatMap(w => {
+                  const ws = w.services.find(s => svcKey(s) === sKey);
+                  return ws?.planned_house_ids || [];
+                });
+
+                // Other allocations this week for conflict detection
+                const otherAllocations = weekPlans.flatMap(w =>
+                  w.services.filter(s => svcKey(s) !== sKey && s.contractor_id)
+                    .map(s => ({ contractorName: s.contractor_name || "", houseIds: s.contractor_house_ids || [] }))
+                );
+
+                // Assigned house ids from contracts
+                const assignedSet = new Set<number>();
+                contractorServices
+                  .filter(cs => cs.macro_id === selectedService.macro_id && cs.scope_id === selectedService.scope_id)
+                  .forEach(cs => cs.house_ids.forEach(id => assignedSet.add(id)));
+
                 return (
-                  <div className="mt-3 flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
-                    <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Empreiteiro:</span>
-                    <Select
-                      value={currentVal}
-                      onValueChange={(val) => setServiceContractorMap(prev => ({ ...prev, [sKey]: val }))}
-                    >
-                      <SelectTrigger className="h-8 text-xs max-w-xs">
-                        <SelectValue placeholder="Selecionar empreiteiro..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {options.map(opt => (
-                          <SelectItem key={opt.id} value={opt.id}>
-                            {opt.contractor_name} — {opt.house_ids.length} casas • {opt.negotiated_unit_value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}/un
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {currentVal && (
-                      <Badge variant="outline" className="text-[10px] shrink-0 gap-1">
-                        <CheckCircle2 className="h-3 w-3 text-primary" /> Alocado
-                      </Badge>
-                    )}
+                  <div className="mt-3">
+                    <ContractorAllocationPanel
+                      projectId={projectId!}
+                      companyId={companyId!}
+                      macroId={selectedService.macro_id}
+                      scopeId={selectedService.scope_id}
+                      macroName={selectedService.macro_name}
+                      scopeName={selectedService.scope_name}
+                      weekPlanServiceId={firstInstance?.id || null}
+                      weekStart={weekPlans[0]?.week_start || ""}
+                      plannedHouseIds={allPlannedIds}
+                      currentAllocation={currentAlloc}
+                      otherAllocationsThisWeek={otherAllocations}
+                      assignedHouseIds={assignedSet}
+                      onAllocationChange={(alloc) => {
+                        // Update all week services for this svcKey
+                        setWeekPlans(prev => prev.map(w => ({
+                          ...w,
+                          services: w.services.map(s => {
+                            if (svcKey(s) !== sKey) return s;
+                            return {
+                              ...s,
+                              contractor_contract_service_id: alloc.contractorContractServiceId,
+                              contractor_id: alloc.contractorId,
+                              contractor_name: alloc.contractorName,
+                              contractor_house_ids: alloc.contractorHouseIds,
+                              contractor_houses: alloc.contractorHouses,
+                              has_out_of_contract_houses: alloc.hasOutOfContractHouses,
+                              out_of_contract_house_ids: alloc.outOfContractHouseIds,
+                            };
+                          }),
+                        })));
+                      }}
+                    />
                   </div>
                 );
               })()}
