@@ -115,7 +115,7 @@ const WEEK_DOT_COLORS = [
 ];
 
 // ── House Cell ─────────────────────────────────────────────
-type HouseStatus = "done" | "in_progress" | "available" | "selected";
+type HouseStatus = "done" | "in_progress" | "available" | "selected" | "blocked";
 
 function HouseCell({
   houseId, status, weekAssigned, onClick, quadraName,
