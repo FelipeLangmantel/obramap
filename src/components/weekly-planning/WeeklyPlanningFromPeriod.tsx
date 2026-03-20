@@ -703,6 +703,12 @@ export function WeeklyPlanningFromPeriod() {
       }
     }
 
+    // Calculate total allocated for this service across all weeks
+    const totalAllocatedForService = Array.from(assignmentMap.values()).length;
+    const available = houses.filter(h => getHouseProgress(h, selectedService.macro_id, selectedService.scope_id) < 100).length;
+    const targetLimit = Math.min(selectedService.target_houses, available);
+    const isAtLimit = totalAllocatedForService + selectedHouseIds.size >= targetLimit;
+
     for (const h of houses) {
       const progress = getHouseProgress(h, selectedService.macro_id, selectedService.scope_id);
       if (progress >= 100) {
@@ -712,7 +718,8 @@ export function WeeklyPlanningFromPeriod() {
       } else if (assignmentMap.has(h.id)) {
         map.set(h.id, { status: "in_progress", weekAssigned: assignmentMap.get(h.id)! });
       } else if (availableHouses.includes(h.id)) {
-        map.set(h.id, { status: "available", weekAssigned: null });
+        // Block available houses when limit is reached
+        map.set(h.id, { status: isAtLimit ? "blocked" : "available", weekAssigned: null });
       } else {
         map.set(h.id, { status: "done", weekAssigned: null });
       }
