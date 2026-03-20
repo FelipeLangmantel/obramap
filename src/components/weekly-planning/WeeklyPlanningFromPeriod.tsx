@@ -1668,10 +1668,31 @@ export function WeeklyPlanningFromPeriod() {
             );
           })()}
 
+          {/* Overflow alert */}
+          {overflowErrors.length > 0 && (
+            <div className="flex items-start gap-2 text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2 text-sm">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold">Excesso de casas alocadas:</span>
+                <ul className="mt-1 space-y-0.5">
+                  {overflowErrors.map(e => (
+                    <li key={e.scopeName}>• {e.scopeName}: {e.allocated}/{e.target} ({e.excess} casa(s) acima da meta)</li>
+                  ))}
+                </ul>
+                <span className="text-xs mt-1 block">Remova o excesso antes de salvar.</span>
+              </div>
+            </div>
+          )}
+
           {/* Save bar */}
           <div className="flex items-center justify-between bg-card border rounded-lg p-3 shadow-sm">
             <div className="flex items-center gap-2 text-sm">
-              {validationErrors.length === 0 ? (
+              {overflowErrors.length > 0 ? (
+                <>
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  <span className="text-destructive font-medium">Corrija o excesso antes de salvar</span>
+                </>
+              ) : validationErrors.length === 0 ? (
                 <>
                   <CheckCircle2 className="h-4 w-4 text-primary" />
                   <span>Todas as casas distribuídas</span>
@@ -1683,7 +1704,7 @@ export function WeeklyPlanningFromPeriod() {
                 </>
               )}
             </div>
-            <Button onClick={saveWeeklyPlan} disabled={isSaving || validationErrors.length > 0}>
+            <Button onClick={saveWeeklyPlan} disabled={isSaving || validationErrors.length > 0 || overflowErrors.length > 0}>
               <Save className="h-4 w-4 mr-1" />
               {isSaving ? "Salvando..." : "Salvar"}
             </Button>
