@@ -139,7 +139,7 @@ function HouseCell({
       <Tooltip>
         <TooltipTrigger asChild>
           <button
-            onClick={status !== "done" ? onClick : undefined}
+            onClick={status !== "done" && status !== "blocked" ? onClick : undefined}
             className={`
               relative w-11 h-11 rounded-lg border-2 text-xs font-bold
               transition-all duration-150 flex flex-col items-center justify-center
