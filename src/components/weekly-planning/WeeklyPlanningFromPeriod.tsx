@@ -115,7 +115,7 @@ const WEEK_DOT_COLORS = [
 ];
 
 // ── House Cell ─────────────────────────────────────────────
-type HouseStatus = "done" | "in_progress" | "available" | "selected";
+type HouseStatus = "done" | "in_progress" | "available" | "selected" | "blocked";
 
 function HouseCell({
   houseId, status, weekAssigned, onClick, quadraName,
@@ -131,6 +131,7 @@ function HouseCell({
     in_progress: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-400/40 cursor-pointer hover:border-amber-500",
     available: "bg-card text-foreground border-border cursor-pointer hover:border-primary hover:bg-primary/5",
     selected: "bg-primary text-primary-foreground border-primary cursor-pointer ring-2 ring-primary/40 shadow-md",
+    blocked: "bg-muted/60 text-muted-foreground border-muted/40 cursor-not-allowed opacity-40",
   };
 
   return (
@@ -138,7 +139,7 @@ function HouseCell({
       <Tooltip>
         <TooltipTrigger asChild>
           <button
-            onClick={status !== "done" ? onClick : undefined}
+            onClick={status !== "done" && status !== "blocked" ? onClick : undefined}
             className={`
               relative w-11 h-11 rounded-lg border-2 text-xs font-bold
               transition-all duration-150 flex flex-col items-center justify-center
@@ -702,6 +703,12 @@ export function WeeklyPlanningFromPeriod() {
       }
     }
 
+    // Calculate total allocated for this service across all weeks
+    const totalAllocatedForService = Array.from(assignmentMap.values()).length;
+    const available = houses.filter(h => getHouseProgress(h, selectedService.macro_id, selectedService.scope_id) < 100).length;
+    const targetLimit = Math.min(selectedService.target_houses, available);
+    const isAtLimit = totalAllocatedForService + selectedHouseIds.size >= targetLimit;
+
     for (const h of houses) {
       const progress = getHouseProgress(h, selectedService.macro_id, selectedService.scope_id);
       if (progress >= 100) {
@@ -711,7 +718,8 @@ export function WeeklyPlanningFromPeriod() {
       } else if (assignmentMap.has(h.id)) {
         map.set(h.id, { status: "in_progress", weekAssigned: assignmentMap.get(h.id)! });
       } else if (availableHouses.includes(h.id)) {
-        map.set(h.id, { status: "available", weekAssigned: null });
+        // Block available houses when limit is reached
+        map.set(h.id, { status: isAtLimit ? "blocked" : "available", weekAssigned: null });
       } else {
         map.set(h.id, { status: "done", weekAssigned: null });
       }
@@ -932,13 +940,31 @@ export function WeeklyPlanningFromPeriod() {
 
   // ── House click handler ─────────────────────────────────
   const toggleHouseSelection = useCallback((houseId: number) => {
+    if (!selectedService) return;
+    
     setSelectedHouseIds(prev => {
       const next = new Set(prev);
-      if (next.has(houseId)) next.delete(houseId);
-      else next.add(houseId);
+      if (next.has(houseId)) {
+        next.delete(houseId);
+      } else {
+        // Check limit before adding
+        const key = `${selectedService.macro_id}:${selectedService.scope_id}`;
+        const totalAllocated = weekPlans.reduce((sum, w) => {
+          const ws = w.services.find(s => svcKey(s) === key);
+          return sum + (ws?.planned_house_ids.length || 0);
+        }, 0);
+        const available = houses.filter(h => getHouseProgress(h, selectedService.macro_id, selectedService.scope_id) < 100).length;
+        const targetLimit = Math.min(selectedService.target_houses, available);
+        
+        if (totalAllocated + next.size + 1 > targetLimit) {
+          toast.warning(`Limite atingido: meta de ${targetLimit} casas para ${selectedService.scope_name}. Já alocadas: ${totalAllocated}.`);
+          return prev;
+        }
+        next.add(houseId);
+      }
       return next;
     });
-  }, []);
+  }, [selectedService, weekPlans, houses]);
 
   // ── Assign selected houses to week ──────────────────────
   const assignToWeek = useCallback((weekNumber: number) => {
@@ -1027,6 +1053,24 @@ export function WeeklyPlanningFromPeriod() {
       }, 0);
       if (allocated < expected) {
         errors.push(`${svc.scope_name}: ${allocated}/${expected}`);
+      }
+    }
+    return errors;
+  }, [weekPlans, periodServices, houses]);
+
+  // Check for overflow (more houses allocated than target)
+  const overflowErrors = useMemo(() => {
+    const errors: { scopeName: string; allocated: number; target: number; excess: number }[] = [];
+    for (const svc of periodServices) {
+      const key = `${svc.macro_id}:${svc.scope_id}`;
+      const available = houses.filter(h => getHouseProgress(h, svc.macro_id, svc.scope_id) < 100).length;
+      const targetLimit = Math.min(svc.target_houses, available);
+      const allocated = weekPlans.reduce((sum, w) => {
+        const ws = w.services.find(s => svcKey(s) === key);
+        return sum + (ws?.planned_house_ids.length || 0);
+      }, 0);
+      if (allocated > targetLimit) {
+        errors.push({ scopeName: svc.scope_name, allocated, target: targetLimit, excess: allocated - targetLimit });
       }
     }
     return errors;
@@ -1624,10 +1668,31 @@ export function WeeklyPlanningFromPeriod() {
             );
           })()}
 
+          {/* Overflow alert */}
+          {overflowErrors.length > 0 && (
+            <div className="flex items-start gap-2 text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2 text-sm">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold">Excesso de casas alocadas:</span>
+                <ul className="mt-1 space-y-0.5">
+                  {overflowErrors.map(e => (
+                    <li key={e.scopeName}>• {e.scopeName}: {e.allocated}/{e.target} ({e.excess} casa(s) acima da meta)</li>
+                  ))}
+                </ul>
+                <span className="text-xs mt-1 block">Remova o excesso antes de salvar.</span>
+              </div>
+            </div>
+          )}
+
           {/* Save bar */}
           <div className="flex items-center justify-between bg-card border rounded-lg p-3 shadow-sm">
             <div className="flex items-center gap-2 text-sm">
-              {validationErrors.length === 0 ? (
+              {overflowErrors.length > 0 ? (
+                <>
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  <span className="text-destructive font-medium">Corrija o excesso antes de salvar</span>
+                </>
+              ) : validationErrors.length === 0 ? (
                 <>
                   <CheckCircle2 className="h-4 w-4 text-primary" />
                   <span>Todas as casas distribuídas</span>
@@ -1639,7 +1704,7 @@ export function WeeklyPlanningFromPeriod() {
                 </>
               )}
             </div>
-            <Button onClick={saveWeeklyPlan} disabled={isSaving || validationErrors.length > 0}>
+            <Button onClick={saveWeeklyPlan} disabled={isSaving || validationErrors.length > 0 || overflowErrors.length > 0}>
               <Save className="h-4 w-4 mr-1" />
               {isSaving ? "Salvando..." : "Salvar"}
             </Button>

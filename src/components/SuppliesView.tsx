@@ -328,7 +328,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
           .select('id, item_name, item_unit, quantity, status, family_name, family_color, order_by_date, required_date, days_overdue, blocked_house_ids, blocked_scope_ids, family_id')
           .eq('project_id', projectId)
           .eq('purchase_overdue', true)
-          .not('status', 'in', '("ordered","delivered","cancelled")')
+          .not('status', 'in', '(ordered,delivered,cancelled)')
           .order('days_overdue', { ascending: false })
       ]);
 
@@ -379,7 +379,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         const [inputsRes, unitsRes, familiesRes] = await Promise.all([
           supabase.from('inputs').select('*, material_families(*)').eq('project_id', projectId).order('name'),
           supabase.from('units').select('*').eq('project_id', projectId).order('name'),
-          supabase.from('material_families').select('*').eq('project_id', projectId).order('display_order').order('name')
+          supabase.from('material_families').select('*').order('display_order').order('name')
         ]);
         if (inputsRes.data) setInputs(inputsRes.data.map((i: any) => ({ ...i, material_family: i.material_families, category: i.category as 'material' | 'labor' | 'equipment', unit_value: i.unit_value || 0, stock_quantity: i.stock_quantity || 0 })));
         if (unitsRes.data) setUnits(unitsRes.data);
@@ -424,7 +424,12 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   useEffect(() => {
     if (activeTab !== 'alerts') {
       if (activeTab === 'leadtime') {
-        loadTabData('inputs');
+        // Use alertFamilies as fallback if families not loaded yet
+        if (families.length === 0 && alertFamilies.length > 0) {
+          setFamilies(alertFamilies);
+        } else {
+          loadTabData('inputs');
+        }
         if (projectId) {
           supabase
             .from('project_lead_times')
@@ -440,7 +445,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         loadTabData(activeTab);
       }
     }
-  }, [activeTab, loadTabData, projectId]);
+  }, [activeTab, loadTabData, projectId, families.length, alertFamilies]);
 
   // Get scopes that have planned production (future only) - match by ID and by name
   const scopesWithPlannedProduction = useMemo(() => {
