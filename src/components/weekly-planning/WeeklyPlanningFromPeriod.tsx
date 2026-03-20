@@ -940,13 +940,31 @@ export function WeeklyPlanningFromPeriod() {
 
   // ── House click handler ─────────────────────────────────
   const toggleHouseSelection = useCallback((houseId: number) => {
+    if (!selectedService) return;
+    
     setSelectedHouseIds(prev => {
       const next = new Set(prev);
-      if (next.has(houseId)) next.delete(houseId);
-      else next.add(houseId);
+      if (next.has(houseId)) {
+        next.delete(houseId);
+      } else {
+        // Check limit before adding
+        const key = `${selectedService.macro_id}:${selectedService.scope_id}`;
+        const totalAllocated = weekPlans.reduce((sum, w) => {
+          const ws = w.services.find(s => svcKey(s) === key);
+          return sum + (ws?.planned_house_ids.length || 0);
+        }, 0);
+        const available = houses.filter(h => getHouseProgress(h, selectedService.macro_id, selectedService.scope_id) < 100).length;
+        const targetLimit = Math.min(selectedService.target_houses, available);
+        
+        if (totalAllocated + next.size + 1 > targetLimit) {
+          toast.warning(`Limite atingido: meta de ${targetLimit} casas para ${selectedService.scope_name}. Já alocadas: ${totalAllocated}.`);
+          return prev;
+        }
+        next.add(houseId);
+      }
       return next;
     });
-  }, []);
+  }, [selectedService, weekPlans, houses]);
 
   // ── Assign selected houses to week ──────────────────────
   const assignToWeek = useCallback((weekNumber: number) => {
