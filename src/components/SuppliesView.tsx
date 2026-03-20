@@ -328,7 +328,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
           .select('id, item_name, item_unit, quantity, status, family_name, family_color, order_by_date, required_date, days_overdue, blocked_house_ids, blocked_scope_ids, family_id')
           .eq('project_id', projectId)
           .eq('purchase_overdue', true)
-          .not('status', 'in', '("ordered","delivered","cancelled")')
+          .not('status', 'in', '(ordered,delivered,cancelled)')
           .order('days_overdue', { ascending: false })
       ]);
 
