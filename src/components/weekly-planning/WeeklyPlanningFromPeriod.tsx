@@ -1058,6 +1058,24 @@ export function WeeklyPlanningFromPeriod() {
     return errors;
   }, [weekPlans, periodServices, houses]);
 
+  // Check for overflow (more houses allocated than target)
+  const overflowErrors = useMemo(() => {
+    const errors: { scopeName: string; allocated: number; target: number; excess: number }[] = [];
+    for (const svc of periodServices) {
+      const key = `${svc.macro_id}:${svc.scope_id}`;
+      const available = houses.filter(h => getHouseProgress(h, svc.macro_id, svc.scope_id) < 100).length;
+      const targetLimit = Math.min(svc.target_houses, available);
+      const allocated = weekPlans.reduce((sum, w) => {
+        const ws = w.services.find(s => svcKey(s) === key);
+        return sum + (ws?.planned_house_ids.length || 0);
+      }, 0);
+      if (allocated > targetLimit) {
+        errors.push({ scopeName: svc.scope_name, allocated, target: targetLimit, excess: allocated - targetLimit });
+      }
+    }
+    return errors;
+  }, [weekPlans, periodServices, houses]);
+
   // ── Save ────────────────────────────────────────────────
   const saveWeeklyPlan = async () => {
     if (!projectId || !companyId || !selectedPeriodId) return;

@@ -424,7 +424,12 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   useEffect(() => {
     if (activeTab !== 'alerts') {
       if (activeTab === 'leadtime') {
-        loadTabData('inputs');
+        // Use alertFamilies as fallback if families not loaded yet
+        if (families.length === 0 && alertFamilies.length > 0) {
+          setFamilies(alertFamilies);
+        } else {
+          loadTabData('inputs');
+        }
         if (projectId) {
           supabase
             .from('project_lead_times')
@@ -440,7 +445,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         loadTabData(activeTab);
       }
     }
-  }, [activeTab, loadTabData, projectId]);
+  }, [activeTab, loadTabData, projectId, families.length, alertFamilies]);
 
   // Get scopes that have planned production (future only) - match by ID and by name
   const scopesWithPlannedProduction = useMemo(() => {
