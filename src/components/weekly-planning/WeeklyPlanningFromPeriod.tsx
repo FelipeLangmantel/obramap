@@ -131,6 +131,7 @@ function HouseCell({
     in_progress: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-400/40 cursor-pointer hover:border-amber-500",
     available: "bg-card text-foreground border-border cursor-pointer hover:border-primary hover:bg-primary/5",
     selected: "bg-primary text-primary-foreground border-primary cursor-pointer ring-2 ring-primary/40 shadow-md",
+    blocked: "bg-muted/60 text-muted-foreground border-muted/40 cursor-not-allowed opacity-40",
   };
 
   return (
