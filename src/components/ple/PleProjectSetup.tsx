@@ -139,7 +139,7 @@ function SetupContent({ onCreated, ...props }: Props) {
   const selectedObraName = obraMapProjects.find(p => p.id === projectForm.obramap_project_id)?.name;
 
   return (
-    <div className="space-y-6 max-h-[70vh] overflow-y-auto">
+    <div className="space-y-6">
       {/* Project Info */}
       <Card>
         <CardHeader><CardTitle className="text-sm">Dados do Projeto</CardTitle></CardHeader>
