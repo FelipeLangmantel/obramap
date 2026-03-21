@@ -1218,11 +1218,22 @@ export function WeeklyPlanningFromPeriod() {
           .filter(s => s.planned_house_ids.length > 0)
           .map(s => s.scope_id);
 
-        if (activeScopeIds.length > 0 && weekId) {
-          await supabase.from("weekly_plan_services")
+        if (weekId) {
+          let deleteQuery = supabase
+            .from("weekly_plan_services")
             .delete()
-            .eq("weekly_plan_week_id", weekId)
-            .not("scope_id", "in", `(${activeScopeIds.map(id => `"${id}"`).join(",")})`)
+            .eq("weekly_plan_week_id", weekId);
+
+          if (activeScopeIds.length > 0) {
+            deleteQuery = deleteQuery.not(
+              "scope_id",
+              "in",
+              `(${activeScopeIds.map(id => `"${id}"`).join(",")})`
+            );
+          }
+
+          const { error: deleteError } = await deleteQuery;
+          if (deleteError) throw deleteError;
         }
       }
 
