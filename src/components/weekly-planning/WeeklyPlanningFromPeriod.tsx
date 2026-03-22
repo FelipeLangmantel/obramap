@@ -800,136 +800,53 @@ export function WeeklyPlanningFromPeriod() {
   }, [loadPeriods]);
 
   useEffect(() => {
-    if (!selectedPeriodId || !projectId || !companyId) return;
-
+    if (!selectedPeriodId || !projectId) return;
     (async () => {
-      try {
-        // Garantia de consistência: semanal sempre reflete o que existe no estratégico/período
-        const syncResult = await supabase.rpc("sync_period_services_with_strategic", {
-          p_project_id: projectId,
-        });
-        if (syncResult.error) {
-          console.error("Erro ao sincronizar serviços do período:", syncResult.error);
-        }
+      const { data: svcs } = await supabase
+        .from("service_planning_by_period")
+        .select("id, macro_id, macro_name, scope_id, scope_name, target_houses")
+        .eq("planning_period_id", selectedPeriodId)
+        .eq("project_id", projectId);
+      if (svcs) setPeriodServices(svcs);
 
-        const [periodServicesRes, existingWeeksRes, strategicServicesRes] = await Promise.all([
-          supabase
-            .from("service_planning_by_period")
-            .select("id, macro_id, macro_name, scope_id, scope_name, target_houses")
-            .eq("planning_period_id", selectedPeriodId)
-            .eq("project_id", projectId),
-          supabase
-            .from("weekly_plan_weeks")
-            .select("id, week_number, week_start, week_end, status")
-            .eq("planning_period_id", selectedPeriodId)
-            .order("week_number"),
-          supabase
-            .from("project_contract_services")
-            .select("macro_id, scope_id")
-            .eq("project_id", projectId)
-            .eq("company_id", companyId),
-        ]);
+      const { data: existingWeeks } = await supabase
+        .from("weekly_plan_weeks")
+        .select("id, week_number, week_start, week_end, status")
+        .eq("planning_period_id", selectedPeriodId)
+        .order("week_number");
 
-        const strategicKeys = new Set(
-          (strategicServicesRes.data || []).map((s) => `${s.macro_id}:${s.scope_id}`)
-        );
-
-        const normalizedPeriodServices = ((periodServicesRes.data || []) as ServiceForPeriod[])
-          .filter((svc) => strategicKeys.has(`${svc.macro_id}:${svc.scope_id}`));
-
-        setPeriodServices(normalizedPeriodServices);
-
-        const existingWeeks = existingWeeksRes.data || [];
-        if (existingWeeks.length > 0) {
-          const weekIds = existingWeeks.map((w) => w.id);
-
-          const { data: weeklyServicesRows } = await supabase
+      if (existingWeeks && existingWeeks.length > 0) {
+        const weeksWithSvcs: WeekPlan[] = [];
+        for (const w of existingWeeks) {
+          const { data: ws } = await supabase
             .from("weekly_plan_services")
-            .select("id, weekly_plan_week_id, macro_id, macro_name, macro_color, scope_id, scope_name, planned_house_ids, planned_houses, contractor_contract_service_id, contractor_id, contractor_name, contractor_house_ids, contractor_houses, has_out_of_contract_houses, out_of_contract_house_ids")
-            .in("weekly_plan_week_id", weekIds);
-
-          const servicesByWeek = new Map<string, WeekServicePlan[]>();
-          (weeklyServicesRows || []).forEach((s: any) => {
-            const normalized: WeekServicePlan = {
-              id: s.id,
-              macro_id: s.macro_id,
-              macro_name: s.macro_name,
-              macro_color: s.macro_color,
-              scope_id: s.scope_id,
-              scope_name: s.scope_name,
-              planned_house_ids: s.planned_house_ids || [],
-              planned_houses: s.planned_houses || 0,
-              contractor_contract_service_id: s.contractor_contract_service_id || null,
-              contractor_id: s.contractor_id || null,
-              contractor_name: s.contractor_name || null,
-              contractor_house_ids: s.contractor_house_ids || [],
-              contractor_houses: s.contractor_houses || 0,
-              has_out_of_contract_houses: s.has_out_of_contract_houses || false,
-              out_of_contract_house_ids: s.out_of_contract_house_ids || [],
-            };
-
-            const list = servicesByWeek.get(s.weekly_plan_week_id) || [];
-            list.push(normalized);
-            servicesByWeek.set(s.weekly_plan_week_id, list);
-          });
-
-          const weeksWithSvcs: WeekPlan[] = existingWeeks.map((w: any) => {
-            const savedByKey = new Map(
-              (servicesByWeek.get(w.id) || []).map((svc) => [svcKey(svc), svc])
-            );
-
-            const services: WeekServicePlan[] = normalizedPeriodServices.map((svc) => {
-              const key = `${svc.macro_id}:${svc.scope_id}`;
-              const saved = savedByKey.get(key);
-
-              const base: WeekServicePlan = {
-                id: null,
-                macro_id: svc.macro_id,
-                macro_name: svc.macro_name,
-                macro_color: getMacroColor(svc.macro_id, macros),
-                scope_id: svc.scope_id,
-                scope_name: svc.scope_name,
-                planned_house_ids: [],
-                planned_houses: 0,
-                contractor_contract_service_id: null,
-                contractor_id: null,
-                contractor_name: null,
-                contractor_house_ids: [],
-                contractor_houses: 0,
-                has_out_of_contract_houses: false,
-                out_of_contract_house_ids: [],
-              };
-
-              return saved
-                ? {
-                    ...base,
-                    ...saved,
-                    macro_color: saved.macro_color || base.macro_color,
-                  }
-                : base;
-            });
-
-            return { ...w, services, working_days: [] };
-          });
-
-          setWeekPlans(weeksWithSvcs);
-          setIsGenerated(true);
-          setShowWeekConfig(false);
-        } else {
-          setWeekPlans([]);
-          setIsGenerated(false);
-          setShowWeekConfig(true);
+            .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, planned_house_ids, planned_houses, contractor_contract_service_id, contractor_id, contractor_name, contractor_house_ids, contractor_houses, has_out_of_contract_houses, out_of_contract_house_ids")
+            .eq("weekly_plan_week_id", w.id);
+          const services = (ws || []).map((s: any) => ({
+            ...s,
+            contractor_contract_service_id: s.contractor_contract_service_id || null,
+            contractor_id: s.contractor_id || null,
+            contractor_name: s.contractor_name || null,
+            contractor_house_ids: s.contractor_house_ids || [],
+            contractor_houses: s.contractor_houses || 0,
+            has_out_of_contract_houses: s.has_out_of_contract_houses || false,
+            out_of_contract_house_ids: s.out_of_contract_house_ids || [],
+          })) as WeekServicePlan[];
+          weeksWithSvcs.push({ ...w, services, working_days: [] });
         }
-      } catch (error) {
-        console.error("Erro ao carregar planejamento semanal:", error);
-        toast.error("Erro ao carregar planejamento semanal");
+        setWeekPlans(weeksWithSvcs);
+        setIsGenerated(true);
+        setShowWeekConfig(false);
+      } else {
+        setWeekPlans([]);
+        setIsGenerated(false);
+        setShowWeekConfig(true);
       }
     })();
-
     setSelectedServiceKey("");
     setSelectedHouseIds(new Set());
     setTargetWeek(null);
-  }, [selectedPeriodId, projectId, companyId, macros]);
+  }, [selectedPeriodId, projectId]);
 
   // ── Create weeks from calendar config ──────────────────
   const handleWeekConfigConfirm = useCallback((weekDefs: WeekDefinition[]) => {
@@ -1218,22 +1135,11 @@ export function WeeklyPlanningFromPeriod() {
           .filter(s => s.planned_house_ids.length > 0)
           .map(s => s.scope_id);
 
-        if (weekId) {
-          let deleteQuery = supabase
-            .from("weekly_plan_services")
+        if (activeScopeIds.length > 0 && weekId) {
+          await supabase.from("weekly_plan_services")
             .delete()
-            .eq("weekly_plan_week_id", weekId);
-
-          if (activeScopeIds.length > 0) {
-            deleteQuery = deleteQuery.not(
-              "scope_id",
-              "in",
-              `(${activeScopeIds.map(id => `"${id}"`).join(",")})`
-            );
-          }
-
-          const { error: deleteError } = await deleteQuery;
-          if (deleteError) throw deleteError;
+            .eq("weekly_plan_week_id", weekId)
+            .not("scope_id", "in", `(${activeScopeIds.map(id => `"${id}"`).join(",")})`)
         }
       }
 
