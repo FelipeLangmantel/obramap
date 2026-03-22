@@ -311,7 +311,7 @@ export function PleProjectSetup(props: Props) {
   }
 
   return (
-    <div className="flex-1 flex items-center justify-center p-8">
+    <div className="flex-1 overflow-y-auto p-8">
       <div className="max-w-2xl w-full">
         <h1 className="text-2xl font-bold mb-2 text-foreground">Módulo de Medições PLE</h1>
         <p className="text-muted-foreground mb-6">Crie um novo projeto para começar a lançar medições.</p>
