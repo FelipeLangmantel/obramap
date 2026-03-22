@@ -85,7 +85,122 @@ export function useLongTermPlanning(projectId: string | undefined) {
     setTotalHouses(0);
   }, [projectId]);
 
-  // Buscar ou inicializar planejamento
+  // Load periods with explicit versionId (avoids stale state dependency)
+  const loadPeriodsWithVersion = useCallback(async (versionId: string): Promise<PlanningPeriod[]> => {
+    if (!projectId || !company?.id) return [];
+    const { data, error } = await supabase
+      .from("planning_periods")
+      .select("id, period_number, name, start_date, end_date, is_closed, status")
+      .eq("project_id", projectId)
+      .eq("company_id", company.id)
+      .eq("planning_version_id", versionId)
+      .order("period_number", { ascending: true });
+    if (error) { console.error("Erro ao carregar períodos:", error); return []; }
+    const normalized: PlanningPeriod[] = (data || []).map(p => ({
+      id: p.id, period_number: p.period_number, name: p.name,
+      start_date: p.start_date, end_date: p.end_date,
+      is_closed: p.is_closed, status: normalizeStatus(p.status),
+    }));
+    setPeriods(normalized);
+    return normalized;
+  }, [projectId, company?.id]);
+
+  // Load matrix data with explicit periods param (avoids stale state dependency)
+  const loadMatrixDataWithPeriods = useCallback(async (periodsData: PlanningPeriod[]) => {
+    if (!projectId || !company?.id || !periodsData.length) {
+      setServiceRows([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const [executionBankResult, servicesResult, planningResult] = await Promise.all([
+        supabase.rpc('get_service_execution_bank', { p_project_id: projectId }),
+        supabase
+          .from("project_contract_services")
+          .select("macro_id, macro_name, scope_id, scope_name, macro_order, scope_order")
+          .eq("project_id", projectId)
+          .eq("company_id", company.id)
+          .order("macro_order", { ascending: true })
+          .order("scope_order", { ascending: true }),
+        supabase
+          .from("service_planning_by_period")
+          .select("id, macro_id, scope_id, planning_period_id, target_houses, unit_cost_value, unit_revenue_value")
+          .eq("project_id", projectId)
+          .eq("company_id", company.id)
+          .in("planning_period_id", periodsData.map(p => p.id)),
+      ]);
+
+      if (servicesResult.error) throw servicesResult.error;
+      if (planningResult.error) throw planningResult.error;
+
+      const executionMap = new Map<string, {
+        executed_houses: number; available_houses: number;
+        completion_percent: number; status: ServiceStatus;
+      }>();
+      if (!executionBankResult.error && executionBankResult.data) {
+        (executionBankResult.data as any[]).forEach((row: any) => {
+          executionMap.set(`${row.macro_id}_${row.scope_id}`, {
+            executed_houses: Number(row.executed_houses) || 0,
+            available_houses: Number(row.available_houses) || 0,
+            completion_percent: Number(row.completion_percent) || 0,
+            status: (row.status as ServiceStatus) || 'not_started',
+          });
+        });
+      }
+
+      const uniqueServicesMap = new Map<string, { macro_id: string; macro_name: string; scope_id: string; scope_name: string; macro_color: string; }>();
+      servicesResult.data?.forEach(s => {
+        const key = `${s.macro_id}_${s.scope_id}`;
+        if (!uniqueServicesMap.has(key)) uniqueServicesMap.set(key, { ...s, macro_color: "#6b7280" });
+      });
+
+      const planningMap = new Map<string, typeof planningResult.data[0]>();
+      planningResult.data?.forEach(p => planningMap.set(`${p.macro_id}_${p.scope_id}_${p.planning_period_id}`, p));
+
+      const rows: ServiceRow[] = Array.from(uniqueServicesMap.values()).map(service => {
+        const serviceKey = `${service.macro_id}_${service.scope_id}`;
+        const execData = executionMap.get(serviceKey);
+        const executedHouses = execData?.executed_houses || 0;
+        const availableHouses = execData?.available_houses ?? totalHouses;
+        const completionPercent = execData?.completion_percent || 0;
+        const executionStatus = execData?.status || 'not_started';
+        const periodValues: Record<string, CellData> = {};
+        let totalPlanned = 0;
+        let unit_cost_value = 0;
+        let unit_revenue_value = 0;
+
+        periodsData.forEach(period => {
+          const planningRecord = planningMap.get(`${service.macro_id}_${service.scope_id}_${period.id}`);
+          const targetHouses = planningRecord?.target_houses || 0;
+          totalPlanned += targetHouses;
+          if (planningRecord && !unit_cost_value) {
+            unit_cost_value = planningRecord.unit_cost_value || 0;
+            unit_revenue_value = planningRecord.unit_revenue_value || 0;
+          }
+          periodValues[period.id] = { id: planningRecord?.id || null, target_houses: targetHouses, is_closed: period.is_closed || false };
+        });
+
+        return {
+          macro_id: service.macro_id, macro_name: service.macro_name,
+          scope_id: service.scope_id, scope_name: service.scope_name,
+          macro_color: service.macro_color, unit_cost_value, unit_revenue_value,
+          initial_bank: executedHouses, available_houses: availableHouses,
+          completion_percent: completionPercent, execution_status: executionStatus,
+          total_planned: totalPlanned, remaining_to_plan: Math.max(0, availableHouses - totalPlanned),
+          is_completed: executionStatus === 'completed', periodValues,
+        };
+      });
+
+      setServiceRows(rows);
+    } catch (error) {
+      console.error("Erro ao carregar matriz:", error);
+      toast.error("Erro ao carregar dados do planejamento");
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId, company?.id, totalHouses]);
+
+  // Buscar ou inicializar planejamento — single cascaded flow
   const initializePlanning = useCallback(async () => {
     if (!projectId || !company?.id) return;
 
@@ -124,8 +239,11 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
       if (versionsError) throw versionsError;
 
+      let versionId: string;
+
       if (versions && versions.length > 0) {
         setActiveVersion(versions[0]);
+        versionId = versions[0].id;
       } else {
         const { data: rpcResult, error: rpcError } = await supabase
           .rpc("initialize_long_term_planning", {
@@ -153,8 +271,13 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
         if (newVersionError) throw newVersionError;
         setActiveVersion(newVersion);
+        versionId = newVersion.id;
         toast.success("Planejamento inicializado com sucesso!");
       }
+
+      // Chain: load periods then matrix in a single flow
+      const periodsData = await loadPeriodsWithVersion(versionId);
+      await loadMatrixDataWithPeriods(periodsData);
     } catch (error) {
       console.error("Erro ao inicializar planejamento:", error);
       const errorMessage = error instanceof Error ? error.message : "Erro ao carregar planejamento";
@@ -163,7 +286,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
     } finally {
       setInitializing(false);
     }
-  }, [projectId, company?.id]);
+  }, [projectId, company?.id, loadPeriodsWithVersion, loadMatrixDataWithPeriods]);
 
   // Carregar períodos da versão ativa
   const loadPeriods = useCallback(async () => {
@@ -683,18 +806,12 @@ export function useLongTermPlanning(projectId: string | undefined) {
     }
   }, [periods, loadPeriods]);
 
+  // Single entry point — replaces 3 cascading useEffects
   useEffect(() => {
     if (!projectId || !company?.id) return;
     initializePlanning();
-  }, [projectId, company?.id, initializePlanning]);
+  }, [projectId, company?.id]);
 
-  useEffect(() => {
-    loadPeriods();
-  }, [loadPeriods]);
-
-  useEffect(() => {
-    loadMatrixData();
-  }, [loadMatrixData]);
 
   // Auto-refresh when production data changes (banco inicial edits, new productions)
   useEffect(() => {
