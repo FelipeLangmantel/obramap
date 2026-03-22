@@ -806,18 +806,12 @@ export function useLongTermPlanning(projectId: string | undefined) {
     }
   }, [periods, loadPeriods]);
 
+  // Single entry point — replaces 3 cascading useEffects
   useEffect(() => {
     if (!projectId || !company?.id) return;
     initializePlanning();
-  }, [projectId, company?.id, initializePlanning]);
+  }, [projectId, company?.id]);
 
-  useEffect(() => {
-    loadPeriods();
-  }, [loadPeriods]);
-
-  useEffect(() => {
-    loadMatrixData();
-  }, [loadMatrixData]);
 
   // Auto-refresh when production data changes (banco inicial edits, new productions)
   useEffect(() => {
