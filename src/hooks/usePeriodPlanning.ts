@@ -108,21 +108,6 @@ export function usePeriodPlanning(projectId: string | null) {
 
     setIsLoading(true);
     try {
-      // Sincronizar serviços do período com o planejamento estratégico
-      // Remove órfãos, atualiza nomes/valores e insere serviços faltantes
-      const syncResult = await supabase.rpc("sync_period_services_with_strategic", {
-        p_project_id: projectId,
-      });
-      
-      if (syncResult.error) {
-        console.error("Erro ao sincronizar serviços:", syncResult.error);
-      } else {
-        const syncData = syncResult.data as { success: boolean; deleted_count?: number; updated_count?: number; inserted_count?: number } | null;
-        if (syncData && (syncData.deleted_count || syncData.updated_count || syncData.inserted_count)) {
-          console.log("Sincronização:", syncData);
-        }
-      }
-
       // Buscar versão ativa de planejamento
       const { data: version, error: versionError } = await supabase
         .from("planning_versions")
@@ -155,45 +140,47 @@ export function usePeriodPlanning(projectId: string | null) {
 
       const strategicServicesMap = await fetchStrategicServicesMap();
 
-      // Para cada período, calcular totais considerando APENAS serviços válidos do planejamento estratégico
-      const periodsWithTotals = await Promise.all(
-        periodsData.map(async (period) => {
-          const { data: services } = await supabase
-            .from("service_planning_by_period")
-            .select("macro_id, scope_id, target_houses, expected_output")
-            .eq("planning_period_id", period.id);
+      // Batch: buscar TODOS os serviços de todos os períodos em uma única query
+      const periodIds = periodsData.map(p => p.id);
+      const { data: allServices } = await supabase
+        .from("service_planning_by_period")
+        .select("planning_period_id, macro_id, scope_id, target_houses, expected_output")
+        .in("planning_period_id", periodIds);
 
-          const totals = (services || []).reduce(
-            (acc, s) => {
-              const strategicService = strategicServicesMap.get(getServiceKey(s.macro_id, s.scope_id));
-              if (!strategicService) return acc;
+      const servicesByPeriod = new Map<string, any[]>();
+      (allServices || []).forEach(s => {
+        const arr = servicesByPeriod.get(s.planning_period_id) || [];
+        arr.push(s);
+        servicesByPeriod.set(s.planning_period_id, arr);
+      });
 
-              const targetHouses = s.target_houses || 0;
-              const plannedCost = targetHouses * strategicService.max_cost_value;
-              const plannedRevenue = targetHouses * strategicService.unit_revenue_value;
-
-              return {
-                total_planned_houses: acc.total_planned_houses + targetHouses,
-                total_planned_cost: acc.total_planned_cost + plannedCost,
-                total_planned_revenue: acc.total_planned_revenue + plannedRevenue,
-                total_planned_profit: acc.total_planned_profit + (plannedRevenue - plannedCost),
-                total_capacity: acc.total_capacity + (s.expected_output || 0),
-              };
-            },
-            { total_planned_houses: 0, total_planned_cost: 0, total_planned_revenue: 0, total_planned_profit: 0, total_capacity: 0 }
-          );
-
-          const capacity_gap = totals.total_capacity - totals.total_planned_houses;
-
-          return {
-            ...period,
-            ...totals,
-            capacity_gap,
-            status: normalizeStatus(period.status),
-            supplies_generated_at: period.supplies_generated_at,
-          } as PlanningPeriod;
-        })
-      );
+      const periodsWithTotals = periodsData.map(period => {
+        const services = servicesByPeriod.get(period.id) || [];
+        const totals = services.reduce(
+          (acc, s) => {
+            const strategicService = strategicServicesMap.get(getServiceKey(s.macro_id, s.scope_id));
+            if (!strategicService) return acc;
+            const targetHouses = s.target_houses || 0;
+            const plannedCost = targetHouses * strategicService.max_cost_value;
+            const plannedRevenue = targetHouses * strategicService.unit_revenue_value;
+            return {
+              total_planned_houses: acc.total_planned_houses + targetHouses,
+              total_planned_cost: acc.total_planned_cost + plannedCost,
+              total_planned_revenue: acc.total_planned_revenue + plannedRevenue,
+              total_planned_profit: acc.total_planned_profit + (plannedRevenue - plannedCost),
+              total_capacity: acc.total_capacity + (s.expected_output || 0),
+            };
+          },
+          { total_planned_houses: 0, total_planned_cost: 0, total_planned_revenue: 0, total_planned_profit: 0, total_capacity: 0 }
+        );
+        return {
+          ...period,
+          ...totals,
+          capacity_gap: totals.total_capacity - totals.total_planned_houses,
+          status: normalizeStatus(period.status),
+          supplies_generated_at: period.supplies_generated_at,
+        } as PlanningPeriod;
+      });
 
       setPeriods(periodsWithTotals);
     } catch (error) {
