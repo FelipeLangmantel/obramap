@@ -65,10 +65,10 @@ const RS_PATH = "M100,60 L140,55 L170,60 L200,55 L230,65 L260,80 L275,100 L280,1
 const MUNICIPIO_COORDS: Record<string, { x: number; y: number }> = {
   "Taquara": { x: 195, y: 142 },
   "Estrela": { x: 235, y: 148 },
-  "Lajeado": { x: 228, y: 155 },
-  "Encruzilhada do Sul": { x: 215, y: 195 },
+  "Lajeado": { x: 225, y: 152 },
+  "Encruzilhada do Sul": { x: 212, y: 192 },
   "São João do Polêsine": { x: 205, y: 160 },
-  "São Sebastião do Caí": { x: 200, y: 145 },
+  "São Sebastião do Caí": { x: 200, y: 143 },
   "São Francisco de Paula": { x: 210, y: 132 },
   "Arroio do Meio": { x: 238, y: 152 },
   "Esteio": { x: 193, y: 148 },
@@ -78,6 +78,7 @@ const MUNICIPIO_COORDS: Record<string, { x: number; y: number }> = {
   "Viamão": { x: 198, y: 155 },
   "Porto Alegre": { x: 197, y: 152 },
   "Muçum": { x: 232, y: 148 },
+  "Eldorado do Sul": { x: 196, y: 157 },
 };
 
 const HEALTH_PIN: Record<string, string> = {
