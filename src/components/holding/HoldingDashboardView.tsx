@@ -666,6 +666,31 @@ export default function HoldingDashboardView() {
 
   return (
     <div className="space-y-4">
+    {/* Global Company Filter */}
+      {empresas.length > 1 && (
+        <div className="flex items-center gap-3 pb-2 border-b border-border mb-2 flex-wrap">
+          <span className="text-xs text-muted-foreground font-medium">Visualizando:</span>
+          {empresas.map(emp => (
+            <button
+              key={emp}
+              onClick={() => setGlobalEmpresa(globalEmpresa === emp ? "all" : emp)}
+              className={`px-3 py-1 text-xs rounded-full border transition-all ${
+                globalEmpresa === emp
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border text-muted-foreground hover:border-primary/50"
+              }`}
+            >
+              {emp}
+            </button>
+          ))}
+          {globalEmpresa !== "all" && (
+            <button onClick={() => setGlobalEmpresa("all")} className="text-xs text-muted-foreground hover:text-foreground">
+              × Limpar
+            </button>
+          )}
+        </div>
+      )}
+
       {/* KPI Row — 6 cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <KpiCard icon={DollarSign} label="Total em Contratos" value={BRL.format(kpis.totalContratos)} borderColor="border-b-emerald-500" valueColor="text-emerald-600 dark:text-emerald-400" />
