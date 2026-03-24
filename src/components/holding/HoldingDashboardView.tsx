@@ -441,7 +441,17 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
         };
       });
 
-      const { data: inserted, error } = await supabase.from("obras_portfolio").insert(obrasToInsert).select("id");
+      // Duplicate check
+      const existingNames = obras.map(o => o.nome.toLowerCase().trim());
+      const newObras = obrasToInsert.filter(o => !existingNames.includes(o.nome.toLowerCase().trim()));
+      const skipped = obrasToInsert.length - newObras.length;
+      if (newObras.length === 0) {
+        toast.warning("Todas as obras já estão cadastradas.");
+        setImporting(false);
+        return;
+      }
+
+      const { data: inserted, error } = await supabase.from("obras_portfolio").insert(newObras).select("id");
       if (error) throw error;
 
       if (inserted && inserted.length > 0) {
@@ -450,7 +460,8 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
       }
 
       queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
-      toast.success(`${inserted?.length || 0} obras importadas com sucesso!`);
+      if (skipped > 0) toast.success(`${inserted?.length || 0} obras importadas. ${skipped} já existiam e foram ignoradas.`);
+      else toast.success(`${inserted?.length || 0} obras importadas com sucesso!`);
       setShowImportDialog(false);
       setImportText("");
     } catch (e: any) {
