@@ -500,12 +500,15 @@ export default function HoldingDashboardView() {
   };
 
   const exportarCSV = () => {
-    const header = "Obra;Empresa;Contrato;SCP;UH;Tipo Contrato;Responsável;Valor Contrato;Data Início;Prazo;Previsão Fim;Status;% And.;Docs;Saúde";
+    const header = "Obra;Empresa;Contrato;SCP;UH;Tipo Contrato;Responsável;Telefone;Valor Contrato;Receitas;Saldo;% Financ.;Data Início;Prazo;Previsão Fim;Status;% And.;Docs;Saúde";
     const rows = obrasFiltradas.map((o) => {
       const fim = o.data_inicio ? format(addDays(parseLocalDate(o.data_inicio!), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
       const statusLbl = STATUS_CONFIG[o.status]?.label || o.status;
       const healthLbl = o.health === "green" ? "Verde" : o.health === "yellow" ? "Amarelo" : "Vermelho";
-      return `${o.nome};${o.empresa || "—"};${o.num_contrato || "—"};${o.parceria_scp || "—"};${o.uh || "—"};${o.tipo_contrato || "—"};${o.responsavel || "—"};${o.valor_contrato};${o.data_inicio || "—"};${o.prazo_dias || "—"};${fim};${statusLbl};${o.percentual_andamento}%;${o.docsCount}/${o.docsTotal};${healthLbl}`;
+      const receitas = o.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
+      const saldo = o.valor_contrato - receitas;
+      const pctFin = o.valor_contrato > 0 && receitas > 0 ? (receitas / o.valor_contrato * 100).toFixed(1) + "%" : "—";
+      return `${o.nome};${o.empresa || "—"};${o.num_contrato || "—"};${o.parceria_scp || "—"};${o.uh || "—"};${o.tipo_contrato || "—"};${o.responsavel_nome || o.responsavel || "—"};${o.responsavel_telefone || "—"};${o.valor_contrato};${receitas};${saldo};${pctFin};${o.data_inicio || "—"};${o.prazo_dias || "—"};${fim};${statusLbl};${o.percentual_andamento}%;${o.docsCount}/${o.docsTotal};${healthLbl}`;
     });
     const csv = [header, ...rows].join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
@@ -988,8 +991,33 @@ export default function HoldingDashboardView() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Andamento: {newObraForm.percentual_andamento}%</Label>
-              <Slider value={[newObraForm.percentual_andamento]} onValueChange={([v]) => setNewObraForm(p => ({ ...p, percentual_andamento: v }))} max={100} step={1} className="mt-2" />
+              <Label className="text-xs">% Andamento Físico</Label>
+              <div className="flex items-center gap-3 mt-2">
+                <Slider value={[newObraForm.percentual_andamento]} onValueChange={([v]) => setNewObraForm(p => ({ ...p, percentual_andamento: v }))} max={100} step={0.5} className="flex-1" />
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    min={0} max={100} step={0.5}
+                    value={newObraForm.percentual_andamento}
+                    onChange={(e) => {
+                      const v = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0));
+                      setNewObraForm(p => ({ ...p, percentual_andamento: v }));
+                    }}
+                    className="w-20 text-sm text-right"
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                </div>
+              </div>
+              {newObraForm.valor_contrato && Number(newObraForm.valor_contrato) > 0 && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Valor executado estimado:{" "}
+                  <span className="font-medium text-foreground">
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                      Number(newObraForm.valor_contrato) * newObraForm.percentual_andamento / 100
+                    )}
+                  </span>
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">Período Medição</Label><Input value={newObraForm.periodo_medicao} onChange={(e) => setNewObraForm(p => ({ ...p, periodo_medicao: e.target.value }))} placeholder="Mensal, Bimestral..." /></div>
@@ -1192,6 +1220,9 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
   const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
   const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
   const receitas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
+  const valorContrato = obra.valor_contrato || 0;
+  const percentualFinanceiro = valorContrato > 0 && receitas > 0 ? Math.min(100, (receitas / valorContrato) * 100) : 0;
+  const saldoContrato = valorContrato - receitas;
 
   return (
     <Card className={`border-border/60 border-l-4 ${HEALTH_BORDER[obra.health]} hover:border-primary/40 hover:shadow-md transition-all cursor-pointer`} onClick={onClick}>
@@ -1256,7 +1287,28 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
           );
         })()}
 
-        {receitas > 0 && (
+        {valorContrato > 0 && (
+          <div className="space-y-1.5 border-t border-border/40 pt-2">
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="text-muted-foreground">Físico: {obra.percentual_andamento}%</span>
+              {percentualFinanceiro > 0 && (
+                <span className="text-muted-foreground">Financeiro: {percentualFinanceiro.toFixed(1)}%</span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[10px]">
+              <div>
+                <span className="text-muted-foreground">Medido/Faturado</span>
+                <p className="font-medium text-emerald-600 dark:text-emerald-400">{receitas > 0 ? BRL_SHORT(receitas) : "R$ 0,00"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Saldo a Faturar</span>
+                <p className={`font-medium ${saldoContrato > 0 ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground"}`}>{BRL_SHORT(Math.max(0, saldoContrato))}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {valorContrato === 0 && receitas > 0 && (
           <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">✓ {BRL_SHORT(receitas)} recebido</p>
         )}
       </CardContent>
@@ -1287,6 +1339,8 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">SCP</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-right">Valor Contrato</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-right">Receitas</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-right">Saldo</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-center">% Financ.</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">Data Início</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-center">Prazo</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">Prev. Fim</TableHead>
@@ -1326,6 +1380,8 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
                     <TableCell className="text-[10px] py-2">{obra.parceria_scp || "—"}</TableCell>
                     <TableCell className="text-[10px] py-2 text-right font-mono">{BRL.format(obra.valor_contrato)}</TableCell>
                     <TableCell className="text-[10px] py-2 text-right font-mono">{receitas > 0 ? BRL.format(receitas) : "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2 text-right font-mono">{(() => { const s = obra.valor_contrato - receitas; return s > 0 ? BRL.format(s) : "—"; })()}</TableCell>
+                    <TableCell className="text-[10px] py-2 text-center">{(() => { const p = obra.valor_contrato > 0 && receitas > 0 ? (receitas / obra.valor_contrato * 100).toFixed(1) : null; return p ? <span className="font-medium">{p}%</span> : "—"; })()}</TableCell>
                     <TableCell className="text-[10px] py-2">{obra.data_inicio ? format(parseLocalDate(obra.data_inicio!), "dd/MM/yy") : "—"}</TableCell>
                     <TableCell className="text-[10px] py-2 text-center">{obra.prazo_dias ? `${obra.prazo_dias}d` : "—"}</TableCell>
                     <TableCell className="text-[10px] py-2">{previsaoFim}</TableCell>
