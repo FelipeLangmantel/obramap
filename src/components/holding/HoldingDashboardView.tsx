@@ -1223,10 +1223,9 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
         </div>
 
         <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 text-xs">
-          <div><span className="text-muted-foreground">Contrato</span><p className="font-medium text-foreground truncate">{obra.num_contrato || "—"}</p></div>
+          <div className="col-span-2"><span className="text-muted-foreground">Valor Contrato</span><p className="font-semibold text-foreground break-words">{BRL.format(obra.valor_contrato)}</p></div>
           <div><span className="text-muted-foreground">UH</span><p className="font-medium text-foreground truncate">{obra.uh || "—"}</p></div>
-          <div><span className="text-muted-foreground">SCP</span><p className="font-medium text-foreground truncate">{obra.parceria_scp || "—"}</p></div>
-          <div><span className="text-muted-foreground">Valor</span><p className="font-medium text-foreground truncate">{BRL_SHORT(obra.valor_contrato)}</p></div>
+          <div><span className="text-muted-foreground">Contrato</span><p className="font-medium text-foreground truncate">{obra.num_contrato || "—"}</p></div>
           <div><span className="text-muted-foreground">Início</span><p className="font-medium text-foreground">{obra.data_inicio ? format(parseLocalDate(obra.data_inicio!), "dd/MM/yy") : "—"}</p></div>
           <div><span className="text-muted-foreground">Prev. Fim</span><p className="font-medium text-foreground">{previsaoFim}</p></div>
         </div>
