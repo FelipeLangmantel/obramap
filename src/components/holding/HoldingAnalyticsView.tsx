@@ -24,6 +24,8 @@ interface ObraPortfolio {
   percentual_andamento: number;
   municipio: string | null;
   estado: string | null;
+  uh: number | null;
+  tipo_contrato: string | null;
 }
 
 interface ObraEnriched extends ObraPortfolio {
