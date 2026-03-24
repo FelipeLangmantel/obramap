@@ -246,12 +246,12 @@ export default function HoldingDashboardView() {
         </div>
       )}
 
-      {/* Detail Sheet */}
-      <Sheet open={!!selectedObra} onOpenChange={(open) => !open && setSelectedObra(null)}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
-          {selectedObra && <ObraDetail obra={selectedObra} />}
-        </SheetContent>
-      </Sheet>
+      {/* Detail Drawer */}
+      <ObraDetailDrawer
+        obraId={selectedObra?.id || null}
+        obraNome={selectedObra?.nome || ""}
+        onClose={() => setSelectedObra(null)}
+      />
     </div>
   );
 }
