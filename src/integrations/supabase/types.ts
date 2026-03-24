@@ -4154,6 +4154,7 @@ export type Database = {
           obra_id: string
           status_medicao: Database["public"]["Enums"]["medicao_status"]
           status_nf: Database["public"]["Enums"]["nf_status"]
+          valor_acatado: number | null
           valor_medicao: number
           valor_previsto_medicao: number | null
         }
@@ -4170,6 +4171,7 @@ export type Database = {
           obra_id: string
           status_medicao?: Database["public"]["Enums"]["medicao_status"]
           status_nf?: Database["public"]["Enums"]["nf_status"]
+          valor_acatado?: number | null
           valor_medicao?: number
           valor_previsto_medicao?: number | null
         }
@@ -4186,6 +4188,7 @@ export type Database = {
           obra_id?: string
           status_medicao?: Database["public"]["Enums"]["medicao_status"]
           status_nf?: Database["public"]["Enums"]["nf_status"]
+          valor_acatado?: number | null
           valor_medicao?: number
           valor_previsto_medicao?: number | null
         }
