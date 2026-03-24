@@ -235,6 +235,22 @@ export default function HoldingDashboardView() {
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
 
+  // Holding empresas for select
+  const { data: holdingEmpresas = [] } = useQuery({
+    queryKey: ["holding-empresas-list", company?.id],
+    queryFn: async () => {
+      if (!company?.id) return [];
+      const { data } = await supabase
+        .from("holding_empresas")
+        .select("id, nome")
+        .eq("company_id", company.id)
+        .eq("ativo", true)
+        .order("nome");
+      return (data || []) as { id: string; nome: string }[];
+    },
+    enabled: !!company?.id,
+  });
+
   // Global company filter (persists across all views)
   const [globalEmpresa, setGlobalEmpresa] = useState("all");
 
