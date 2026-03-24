@@ -223,6 +223,9 @@ export default function HoldingInsightsPage() {
           <p className="text-sm text-muted-foreground mt-1">Análise automática gerada por inteligência artificial</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-insights-data"] })} className="gap-1">
+            <RefreshCw className="h-4 w-4" /> Atualizar
+          </Button>
           <Button onClick={handleGenerateInsights} disabled={insightsLoading || enrichedObras.length === 0} className="gap-2">
             {insightsLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             Gerar Insights
