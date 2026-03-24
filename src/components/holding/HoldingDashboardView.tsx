@@ -1377,6 +1377,8 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
                     <TableCell className="text-[10px] py-2">{obra.parceria_scp || "—"}</TableCell>
                     <TableCell className="text-[10px] py-2 text-right font-mono">{BRL.format(obra.valor_contrato)}</TableCell>
                     <TableCell className="text-[10px] py-2 text-right font-mono">{receitas > 0 ? BRL.format(receitas) : "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2 text-right font-mono">{(() => { const s = obra.valor_contrato - receitas; return s > 0 ? BRL.format(s) : "—"; })()}</TableCell>
+                    <TableCell className="text-[10px] py-2 text-center">{(() => { const p = obra.valor_contrato > 0 && receitas > 0 ? (receitas / obra.valor_contrato * 100).toFixed(1) : null; return p ? <span className="font-medium">{p}%</span> : "—"; })()}</TableCell>
                     <TableCell className="text-[10px] py-2">{obra.data_inicio ? format(parseLocalDate(obra.data_inicio!), "dd/MM/yy") : "—"}</TableCell>
                     <TableCell className="text-[10px] py-2 text-center">{obra.prazo_dias ? `${obra.prazo_dias}d` : "—"}</TableCell>
                     <TableCell className="text-[10px] py-2">{previsaoFim}</TableCell>
