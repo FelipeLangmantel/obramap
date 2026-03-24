@@ -299,7 +299,7 @@ export default function HoldingDocumentosPage() {
                   <TableHead className="text-xs">Obra</TableHead>
                   <TableHead className="text-xs">Empresa</TableHead>
                   <TableHead className="text-xs text-center">Doc_Obra</TableHead>
-                  <TableHead className="text-xs text-center">Acomp_Obra</TableHead>
+                  <TableHead className="text-xs text-center">Ensaios e Projetos</TableHead>
                   <TableHead className="text-xs text-center">Saúde</TableHead>
                   <TableHead className="text-xs">Status Obra</TableHead>
                   <TableHead className="text-xs text-center">Pendências</TableHead>
