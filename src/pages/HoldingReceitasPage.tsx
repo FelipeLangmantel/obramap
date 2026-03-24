@@ -247,7 +247,7 @@ export default function HoldingReceitasPage() {
   };
 
   const clearFilters = () => {
-    setFilterObra("all"); setFilterEmpresa("all"); setFilterStatusMed("all"); setFilterStatusNF("all"); setSearchText("");
+    setFilterObra("all"); setFilterEmpresa("all"); setFilterStatusMed("all"); setFilterStatusNF("all"); setFilterTipoContrato("all"); setSearchText("");
   };
 
   return (
