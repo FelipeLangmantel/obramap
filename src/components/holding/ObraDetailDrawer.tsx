@@ -102,6 +102,7 @@ const ACOMP_OBRA_FIELDS: { key: string; label: string }[] = [
 ];
 
 function DocumentosTab({ obraId }: { obraId: string }) {
+  const invalidateHolding = useInvalidateHolding();
   const [docs, setDocs] = useState<Record<string, boolean> | null>(null);
   const [docId, setDocId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
