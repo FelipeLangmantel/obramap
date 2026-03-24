@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import ObraDetailDrawer from "./ObraDetailDrawer";
+import HoldingAnalyticsView from "./HoldingAnalyticsView";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
@@ -27,6 +28,7 @@ import {
   Loader2,
   LayoutGrid,
   GanttChart,
+  BarChart3,
   Eye,
   FileWarning,
   Clock,
@@ -185,7 +187,7 @@ export default function HoldingDashboardView() {
   const { company } = useAuth();
   const queryClient = useQueryClient();
   const [selectedObra, setSelectedObra] = useState<ObraEnriched | null>(null);
-  const [viewMode, setViewMode] = useState<"cards" | "gantt">("cards");
+  const [viewMode, setViewMode] = useState<"cards" | "gantt" | "analytics">("cards");
   const [showNewObraDialog, setShowNewObraDialog] = useState(false);
   const [newObraForm, setNewObraForm] = useState({
     nome: "", empresa: "", num_contrato: "", parceria_scp: "",
@@ -561,6 +563,12 @@ export default function HoldingDashboardView() {
             >
               <GanttChart className="h-3.5 w-3.5" /> Gantt
             </button>
+            <button
+              onClick={() => setViewMode("analytics")}
+              className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${viewMode === "analytics" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <BarChart3 className="h-3.5 w-3.5" /> Analytics
+            </button>
           </div>
         )}
       </div>
@@ -571,6 +579,8 @@ export default function HoldingDashboardView() {
           <Crown className="h-12 w-12 text-muted-foreground" />
           <p className="text-muted-foreground">Nenhuma obra cadastrada no portfólio.</p>
         </div>
+      ) : viewMode === "analytics" ? (
+        <HoldingAnalyticsView obras={obras} alerts={alerts} onObraClick={openObra} />
       ) : viewMode === "cards" ? (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {obras.map((obra) => (
