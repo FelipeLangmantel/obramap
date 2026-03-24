@@ -86,7 +86,7 @@ function ObraDetailContent({ obraId, obraNome, obraUH, obraResponsavel, obraTipo
    TAB 1 — DOCUMENTOS
    ══════════════════════════════════════════════ */
 
-const DOC_OBRA_FIELDS: { key: string; label: string }[] = [
+const PRE_OBRA_FIELDS: { key: string; label: string }[] = [
   { key: "ata", label: "Ata" },
   { key: "ois", label: "OIS" },
   { key: "art", label: "ART" },
