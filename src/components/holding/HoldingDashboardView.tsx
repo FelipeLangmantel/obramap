@@ -563,6 +563,12 @@ export default function HoldingDashboardView() {
             >
               <GanttChart className="h-3.5 w-3.5" /> Gantt
             </button>
+            <button
+              onClick={() => setViewMode("analytics")}
+              className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${viewMode === "analytics" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <BarChart3 className="h-3.5 w-3.5" /> Analytics
+            </button>
           </div>
         )}
       </div>
