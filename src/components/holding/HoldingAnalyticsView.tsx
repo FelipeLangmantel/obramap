@@ -492,3 +492,23 @@ function DonutKpi({ label, value, color, subtitle }: { label: string; value: num
     </Card>
   );
 }
+
+/* ═══════════════════════════════════════
+   Mini KPI card for summary stats
+   ═══════════════════════════════════════ */
+
+function MiniKpi({ icon: Icon, label, value, className }: { icon: any; label: string; value: string; className?: string }) {
+  return (
+    <Card className="border-border/60">
+      <CardContent className="p-3 flex items-center gap-3">
+        <div className={`p-2 rounded-lg bg-muted/50 ${className}`}>
+          <Icon className="h-4 w-4" />
+        </div>
+        <div>
+          <p className="text-[10px] text-muted-foreground">{label}</p>
+          <p className={`text-base font-bold ${className}`}>{value}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
