@@ -630,10 +630,10 @@ export default function HoldingDashboardView() {
       />
 
       {/* Nova Obra Dialog */}
-      <Dialog open={showNewObraDialog} onOpenChange={setShowNewObraDialog}>
+      <Dialog open={showNewObraDialog} onOpenChange={(o) => { if (!o) { setShowNewObraDialog(false); setEditingObra(null); resetNewObraForm(); } }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Cadastrar Nova Obra</DialogTitle>
+            <DialogTitle>{editingObra ? "Editar Obra" : "Cadastrar Nova Obra"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
             <div>
