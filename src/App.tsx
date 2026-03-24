@@ -22,6 +22,7 @@ import LongTermPlanningPage from "./pages/LongTermPlanningPage";
 import ProjectContractPage from "./pages/ProjectContractPage";
 import PleMeasurementsPage from "./pages/PleMeasurementsPage";
 import HoldingReceitasPage from "./pages/HoldingReceitasPage";
+import HoldingDespesasPage from "./pages/HoldingDespesasPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,6 +42,7 @@ const ROUTE_PERMISSION_MAP: Record<string, string> = {
   "/project-contract": "contrato",
   "/ple-measurements": "ple_medicoes",
   "/holding-receitas": "holding",
+  "/holding-despesas": "holding",
 };
 
 /** Layout para rotas de System Admin */
@@ -119,6 +121,7 @@ const App = () => {
                   <Route path="/project-contract" element={<ProjectContractPage />} />
                   <Route path="/ple-measurements" element={<PleMeasurementsPage />} />
                   <Route path="/holding-receitas" element={<HoldingReceitasPage />} />
+                  <Route path="/holding-despesas" element={<HoldingDespesasPage />} />
                   <Route path="/dashboard" element={<Index />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>

@@ -47,7 +47,8 @@ import {
   ChevronDown,
   Check,
   Factory,
-  TrendingUp, // Receitas Holding icon
+  TrendingUp,
+  Receipt,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -76,7 +77,7 @@ import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard";
 
 // Views com rotas separadas (navegam para página diferente)
-type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements" | "holding-receitas";
+type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements" | "holding-receitas" | "holding-despesas";
 type MenuViewType = ViewType | RouteViewType;
 
 // Rotas dedicadas (navegam para páginas separadas)
@@ -86,6 +87,7 @@ const DEDICATED_ROUTE_MAP: Record<RouteViewType, string> = {
   "project-contract": "/project-contract",
   "ple-measurements": "/ple-measurements",
   "holding-receitas": "/holding-receitas",
+  "holding-despesas": "/holding-despesas",
 };
 
 interface AppSidebarProps {
@@ -115,6 +117,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     if (pathname === "/project-contract") return "project-contract";
     if (pathname === "/ple-measurements") return "ple-measurements";
     if (pathname === "/holding-receitas") return "holding-receitas";
+    if (pathname === "/holding-despesas") return "holding-despesas";
     
     return activeView;
   };
@@ -235,6 +238,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       items: [
         { title: "Painel da Holding", view: "holding-dashboard", icon: Crown, permissionId: "holding" },
         { title: "Receitas & Medições", view: "holding-receitas" as any, icon: TrendingUp, permissionId: "holding" },
+        { title: "Despesas & Custos", view: "holding-despesas" as any, icon: Receipt, permissionId: "holding" },
       ],
     },
     {
