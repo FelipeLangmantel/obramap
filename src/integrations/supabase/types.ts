@@ -1344,6 +1344,136 @@ export type Database = {
           },
         ]
       }
+      holding_doc_tipos: {
+        Row: {
+          ativo: boolean
+          categoria: string
+          company_id: string
+          created_at: string
+          id: string
+          nome: string
+          obrigatorio: boolean
+          ordem: number
+        }
+        Insert: {
+          ativo?: boolean
+          categoria?: string
+          company_id: string
+          created_at?: string
+          id?: string
+          nome: string
+          obrigatorio?: boolean
+          ordem?: number
+        }
+        Update: {
+          ativo?: boolean
+          categoria?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          obrigatorio?: boolean
+          ordem?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holding_doc_tipos_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      holding_empresas: {
+        Row: {
+          ativo: boolean
+          cnpj: string | null
+          company_id: string
+          created_at: string
+          email: string | null
+          id: string
+          nome: string
+          responsavel: string | null
+          telefone: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          cnpj?: string | null
+          company_id: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          nome: string
+          responsavel?: string | null
+          telefone?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          cnpj?: string | null
+          company_id?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          nome?: string
+          responsavel?: string | null
+          telefone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holding_empresas_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      holding_obra_docs: {
+        Row: {
+          checked: boolean
+          created_at: string
+          data_entrega: string | null
+          doc_tipo_id: string
+          id: string
+          obra_id: string
+          observacao: string | null
+        }
+        Insert: {
+          checked?: boolean
+          created_at?: string
+          data_entrega?: string | null
+          doc_tipo_id: string
+          id?: string
+          obra_id: string
+          observacao?: string | null
+        }
+        Update: {
+          checked?: boolean
+          created_at?: string
+          data_entrega?: string | null
+          doc_tipo_id?: string
+          id?: string
+          obra_id?: string
+          observacao?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holding_obra_docs_doc_tipo_id_fkey"
+            columns: ["doc_tipo_id"]
+            isOneToOne: false
+            referencedRelation: "holding_doc_tipos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "holding_obra_docs_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       houses: {
         Row: {
           area: number
