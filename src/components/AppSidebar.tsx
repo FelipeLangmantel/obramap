@@ -237,6 +237,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       items: [
         { title: "Painel da Holding", view: "holding-dashboard", icon: Crown, permissionId: "holding" },
         { title: "Receitas & Medições", view: "holding-receitas" as any, icon: TrendingUp, permissionId: "holding" },
+        { title: "Despesas & Custos", view: "holding-despesas" as any, icon: Receipt, permissionId: "holding" },
       ],
     },
     {
