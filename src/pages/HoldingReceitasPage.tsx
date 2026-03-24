@@ -127,6 +127,7 @@ export default function HoldingReceitasPage() {
           obra_uh: (o as any).uh || null,
           obra_responsavel: (o as any).responsavel || null,
           obra_tipo_contrato: (o as any).tipo_contrato || null,
+          obra_prazo_pagamento: parsePrazoDias((o as any).prazo_pagamento),
           num_medicao: m.num_medicao,
           mes_referencia: m.mes_referencia,
           ano_referencia: m.ano_referencia,
