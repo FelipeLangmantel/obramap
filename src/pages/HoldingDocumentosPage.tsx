@@ -140,7 +140,7 @@ export default function HoldingDocumentosPage() {
   const uniqueEmpresas = useMemo(() => [...new Set(obras.map(o => o.empresa).filter(Boolean))], [obras]);
 
   const kpis = useMemo(() => {
-    const completa = obrasDoc.filter(o => o.docCount >= 6 && o.acompCount >= 5).length;
+    const completa = obrasDoc.filter(o => o.docCount >= 6 && o.ensaiosCount >= 5).length;
     const parcial = obrasDoc.filter(o => o.health === "amarelo").length;
     const critica = obrasDoc.filter(o => o.docCount < 3).length;
     const pendAberta = pendencias.filter((p: any) => !p.concluido).length;
