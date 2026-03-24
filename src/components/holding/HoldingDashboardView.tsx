@@ -1284,7 +1284,28 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
           );
         })()}
 
-        {receitas > 0 && (
+        {valorContrato > 0 && (
+          <div className="space-y-1.5 border-t border-border/40 pt-2">
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="text-muted-foreground">Físico: {obra.percentual_andamento}%</span>
+              {percentualFinanceiro > 0 && (
+                <span className="text-muted-foreground">Financeiro: {percentualFinanceiro.toFixed(1)}%</span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[10px]">
+              <div>
+                <span className="text-muted-foreground">Medido/Faturado</span>
+                <p className="font-medium text-emerald-600 dark:text-emerald-400">{receitas > 0 ? BRL_SHORT(receitas) : "R$ 0,00"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Saldo a Faturar</span>
+                <p className={`font-medium ${saldoContrato > 0 ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground"}`}>{BRL_SHORT(Math.max(0, saldoContrato))}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {valorContrato === 0 && receitas > 0 && (
           <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">✓ {BRL_SHORT(receitas)} recebido</p>
         )}
       </CardContent>
