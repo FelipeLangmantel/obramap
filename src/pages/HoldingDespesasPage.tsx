@@ -235,9 +235,14 @@ export default function HoldingDespesasPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
+      <SidebarProvider defaultOpen={true}>
+        <div className="h-screen flex w-full overflow-hidden">
+          <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
+          <main className="flex-1 min-w-0 h-full overflow-auto flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          </main>
+        </div>
+      </SidebarProvider>
     );
   }
 
