@@ -127,6 +127,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     if (pathname === "/holding-documentos") return "holding-documentos";
     if (pathname === "/holding-prd") return "holding-prd";
     if (pathname === "/holding-insights") return "holding-insights";
+    if (pathname === "/holding-config") return "holding-config";
     
     return activeView;
   };
