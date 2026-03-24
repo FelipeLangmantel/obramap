@@ -207,20 +207,28 @@ export default function HoldingReceitasPage() {
 
   const previsaoData = useMemo(() => {
     return next12Months.map(month => {
-      const matching = medicoes.filter(m => {
+      const porMesRef = medicoes.filter(m => {
         if (!m.ano_referencia) return false;
         const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0, 3).toLowerCase());
         return mesIdx === month.monthIdx && m.ano_referencia === month.year;
       });
-      const obrasCount = new Set(matching.map(m => m.obra_id)).size;
+      const porPrevisao = medicoes.filter(m => {
+        if (!m.data_previsao_medicao) return false;
+        const d = new Date(m.data_previsao_medicao + "T12:00:00");
+        return d.getMonth() === month.monthIdx && d.getFullYear() === month.year;
+      });
+      const obrasCount = new Set([...porMesRef, ...porPrevisao].map(m => m.obra_id)).size;
       return {
         mes: month.label,
+        key: month.key,
         obrasCount,
-        aprovado: matching.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0),
-        enviado: matching.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + m.valor_medicao, 0),
-        pendente: matching.filter(m => m.status_medicao === "pendente").reduce((s, m) => s + m.valor_medicao, 0),
-        nfRecebido: matching.filter(m => m.status_nf === "recebido").reduce((s, m) => s + m.valor_medicao, 0),
-        total: matching.reduce((s, m) => s + m.valor_medicao, 0),
+        aprovado: porMesRef.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0),
+        enviado: porMesRef.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + m.valor_medicao, 0),
+        pendente: porMesRef.filter(m => m.status_medicao === "pendente").reduce((s, m) => s + m.valor_medicao, 0),
+        nfRecebido: porMesRef.filter(m => m.status_nf === "recebido").reduce((s, m) => s + m.valor_medicao, 0),
+        total: porMesRef.reduce((s, m) => s + m.valor_medicao, 0),
+        previsto: porPrevisao.reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0),
+        countPrevistas: porPrevisao.length,
       };
     });
   }, [medicoes, next12Months]);
