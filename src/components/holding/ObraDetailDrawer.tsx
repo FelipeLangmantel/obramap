@@ -327,8 +327,12 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
   const [despesas, setDespesas] = useState<any[]>([]);
   const [medicoes, setMedicoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showNewDespesa, setShowNewDespesa] = useState(false);
+  const [newDespesa, setNewDespesa] = useState({ mes_referencia: "", ano_referencia: String(new Date().getFullYear()), valor: "", status: "nao_iniciado" });
+  const [savingDespesa, setSavingDespesa] = useState(false);
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
+    setLoading(true);
     Promise.all([
       supabase.from("despesas_mensais").select("*").eq("obra_id", obraId).order("ano_referencia").order("mes_referencia"),
       supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).eq("status_medicao", "aprovada"),
@@ -339,9 +343,31 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
     });
   }, [obraId]);
 
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const handleSaveDespesa = async () => {
+    if (!newDespesa.mes_referencia || !newDespesa.valor) {
+      toast("Preencha mês e valor.");
+      return;
+    }
+    setSavingDespesa(true);
+    const { error } = await supabase.from("despesas_mensais").insert({
+      obra_id: obraId,
+      mes_referencia: newDespesa.mes_referencia,
+      ano_referencia: Number(newDespesa.ano_referencia),
+      valor: Number(newDespesa.valor),
+      status: newDespesa.status as any,
+    });
+    setSavingDespesa(false);
+    if (error) { toast("Erro ao salvar despesa."); return; }
+    toast("Despesa adicionada.");
+    setNewDespesa({ mes_referencia: "", ano_referencia: String(new Date().getFullYear()), valor: "", status: "nao_iniciado" });
+    setShowNewDespesa(false);
+    loadData();
+  };
+
   if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
 
-  // Build chart data by month
   const monthMap = new Map<string, { despesa: number; receita: number }>();
   despesas.forEach((d) => {
     const key = `${d.mes_referencia}/${d.ano_referencia}`;
@@ -373,6 +399,51 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
                 <Line dataKey="receita" stroke="hsl(var(--primary))" strokeWidth={2} name="Receitas" dot={{ r: 3 }} />
               </ComposedChart>
             </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="flex items-center justify-between">
+        <h4 className="font-semibold text-sm">Despesas</h4>
+        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowNewDespesa(!showNewDespesa)}>
+          <Plus className="h-3.5 w-3.5 mr-1" /> Nova Despesa
+        </Button>
+      </div>
+
+      {showNewDespesa && (
+        <Card className="border-dashed">
+          <CardContent className="p-3 space-y-3">
+            <div className="grid grid-cols-4 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground">Mês</label>
+                <Input placeholder="Jan" value={newDespesa.mes_referencia} onChange={(e) => setNewDespesa(p => ({ ...p, mes_referencia: e.target.value }))} className="h-8 text-xs" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Ano</label>
+                <Input type="number" value={newDespesa.ano_referencia} onChange={(e) => setNewDespesa(p => ({ ...p, ano_referencia: e.target.value }))} className="h-8 text-xs" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Valor (R$)</label>
+                <Input type="number" value={newDespesa.valor} onChange={(e) => setNewDespesa(p => ({ ...p, valor: e.target.value }))} className="h-8 text-xs" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Status</label>
+                <Select value={newDespesa.status} onValueChange={(v) => setNewDespesa(p => ({ ...p, status: v }))}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nao_iniciado">Não Iniciado</SelectItem>
+                    <SelectItem value="em_fechamento">Em Fechamento</SelectItem>
+                    <SelectItem value="fechado">Fechado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button size="sm" className="h-7 text-xs" onClick={handleSaveDespesa} disabled={savingDespesa}>
+                {savingDespesa ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                Salvar
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

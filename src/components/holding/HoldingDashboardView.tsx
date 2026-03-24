@@ -1,11 +1,17 @@
 import { useMemo, useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import ObraDetailDrawer from "./ObraDetailDrawer";
 
 import {
@@ -22,6 +28,7 @@ import {
   Clock,
   CalendarClock,
   FileCheck2,
+  Plus,
 } from "lucide-react";
 import { addDays, format, differenceInDays, differenceInMonths } from "date-fns";
 import {
@@ -165,8 +172,58 @@ function calcHealth(docsCount: number, docsTotal: number, latestMedicao: Medicao
 
 export default function HoldingDashboardView() {
   const { company } = useAuth();
+  const queryClient = useQueryClient();
   const [selectedObra, setSelectedObra] = useState<ObraEnriched | null>(null);
   const [viewMode, setViewMode] = useState<"cards" | "gantt">("cards");
+  const [showNewObraDialog, setShowNewObraDialog] = useState(false);
+  const [newObraForm, setNewObraForm] = useState({
+    nome: "", empresa: "", num_contrato: "", parceria_scp: "",
+    valor_contrato: "", data_inicio: "", prazo_dias: "",
+    status: "nao_iniciada" as string, percentual_andamento: 0,
+    periodo_medicao: "", prazo_pagamento: "",
+  });
+  const [savingObra, setSavingObra] = useState(false);
+
+  const resetNewObraForm = () => setNewObraForm({
+    nome: "", empresa: "", num_contrato: "", parceria_scp: "",
+    valor_contrato: "", data_inicio: "", prazo_dias: "",
+    status: "nao_iniciada", percentual_andamento: 0,
+    periodo_medicao: "", prazo_pagamento: "",
+  });
+
+  const handleSaveNewObra = async () => {
+    if (!newObraForm.nome.trim() || !company?.id) {
+      toast.error("Nome da obra é obrigatório.");
+      return;
+    }
+    setSavingObra(true);
+    const { data, error } = await supabase.from("obras_portfolio").insert({
+      company_id: company.id,
+      nome: newObraForm.nome.trim(),
+      empresa: newObraForm.empresa || null,
+      num_contrato: newObraForm.num_contrato || null,
+      parceria_scp: newObraForm.parceria_scp || null,
+      valor_contrato: Number(newObraForm.valor_contrato) || 0,
+      data_inicio: newObraForm.data_inicio || null,
+      prazo_dias: Number(newObraForm.prazo_dias) || 0,
+      status: newObraForm.status as any,
+      percentual_andamento: newObraForm.percentual_andamento,
+      periodo_medicao: newObraForm.periodo_medicao || null,
+      prazo_pagamento: newObraForm.prazo_pagamento || null,
+    }).select("id").single();
+
+    if (error || !data) {
+      toast.error("Erro ao cadastrar obra.");
+      setSavingObra(false);
+      return;
+    }
+    await supabase.from("documentos_obra").insert({ obra_id: data.id });
+    queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+    toast.success("Obra cadastrada com sucesso!");
+    setShowNewObraDialog(false);
+    resetNewObraForm();
+    setSavingObra(false);
+  };
 
   const { data: obras = [], isLoading } = useQuery({
     queryKey: ["holding-portfolio", company?.id],
@@ -334,10 +391,15 @@ export default function HoldingDashboardView() {
         <KpiCard icon={AlertTriangle} label="Alertas Críticos" value={String(kpis.alertasCriticos)} color={kpis.alertasCriticos > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"} bgColor={kpis.alertasCriticos > 0 ? "bg-red-100 dark:bg-red-900/30" : "bg-muted/50"} />
       </div>
 
-      {/* View Toggle */}
-      {obras.length > 0 && (
-        <div className="flex items-center justify-between">
+      {/* View Toggle + Nova Obra */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
           <h3 className="text-sm font-semibold text-foreground">Obras do Portfólio ({obras.length})</h3>
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowNewObraDialog(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> Nova Obra
+          </Button>
+        </div>
+        {obras.length > 0 && (
           <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
             <button
               onClick={() => setViewMode("cards")}
@@ -352,8 +414,8 @@ export default function HoldingDashboardView() {
               <GanttChart className="h-3.5 w-3.5" /> Gantt
             </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Obras View */}
       {obras.length === 0 ? (
@@ -408,6 +470,84 @@ export default function HoldingDashboardView() {
         obraNome={selectedObra?.nome || ""}
         onClose={() => setSelectedObra(null)}
       />
+
+      {/* Nova Obra Dialog */}
+      <Dialog open={showNewObraDialog} onOpenChange={setShowNewObraDialog}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Cadastrar Nova Obra</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div>
+              <Label className="text-xs">Nome *</Label>
+              <Input value={newObraForm.nome} onChange={(e) => setNewObraForm(p => ({ ...p, nome: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Empresa</Label>
+                <Input value={newObraForm.empresa} onChange={(e) => setNewObraForm(p => ({ ...p, empresa: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Nº Contrato</Label>
+                <Input value={newObraForm.num_contrato} onChange={(e) => setNewObraForm(p => ({ ...p, num_contrato: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Parceria SCP</Label>
+                <Input value={newObraForm.parceria_scp} onChange={(e) => setNewObraForm(p => ({ ...p, parceria_scp: e.target.value }))} placeholder="Ex: SCP Binotto" />
+              </div>
+              <div>
+                <Label className="text-xs">Valor Contrato (R$)</Label>
+                <Input type="number" value={newObraForm.valor_contrato} onChange={(e) => setNewObraForm(p => ({ ...p, valor_contrato: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Data Início</Label>
+                <Input type="date" value={newObraForm.data_inicio} onChange={(e) => setNewObraForm(p => ({ ...p, data_inicio: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Prazo (dias)</Label>
+                <Input type="number" value={newObraForm.prazo_dias} onChange={(e) => setNewObraForm(p => ({ ...p, prazo_dias: e.target.value }))} />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Status</Label>
+              <Select value={newObraForm.status} onValueChange={(v) => setNewObraForm(p => ({ ...p, status: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nao_iniciada">Não Iniciada</SelectItem>
+                  <SelectItem value="em_andamento">Em Andamento</SelectItem>
+                  <SelectItem value="concluida">Concluída</SelectItem>
+                  <SelectItem value="paralisada">Paralisada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Andamento: {newObraForm.percentual_andamento}%</Label>
+              <Slider value={[newObraForm.percentual_andamento]} onValueChange={([v]) => setNewObraForm(p => ({ ...p, percentual_andamento: v }))} max={100} step={1} className="mt-2" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Período Medição</Label>
+                <Input value={newObraForm.periodo_medicao} onChange={(e) => setNewObraForm(p => ({ ...p, periodo_medicao: e.target.value }))} placeholder="Mensal, Bimestral..." />
+              </div>
+              <div>
+                <Label className="text-xs">Prazo Pagamento</Label>
+                <Input value={newObraForm.prazo_pagamento} onChange={(e) => setNewObraForm(p => ({ ...p, prazo_pagamento: e.target.value }))} placeholder="30 dias, 45 dias..." />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewObraDialog(false)}>Cancelar</Button>
+            <Button onClick={handleSaveNewObra} disabled={savingObra}>
+              {savingObra ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
