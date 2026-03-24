@@ -15,7 +15,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, ComposedChart, Line
+  ResponsiveContainer
 } from "recharts";
 import {
   TrendingUp, DollarSign, Clock, CheckCircle2, AlertCircle, Download, RefreshCw,
