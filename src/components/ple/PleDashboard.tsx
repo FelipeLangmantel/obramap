@@ -127,7 +127,12 @@ export function PleDashboard({ projects, onSelectProject, onCreateProject }: Pro
                       <h3 className="font-semibold text-foreground text-xs sm:text-sm truncate">{p.name}</h3>
                       <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{p.location || "Sem localização"}</p>
                     </div>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0 ml-2" />
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {(p as any).obras_portfolio_id && (
+                        <Badge className="text-[9px] bg-amber-500/90 hover:bg-amber-500 px-1.5 py-0">Holding</Badge>
+                      )}
+                      <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </div>
                   </div>
 
                   <div className="space-y-1.5 sm:space-y-2 mt-2 sm:mt-3">
