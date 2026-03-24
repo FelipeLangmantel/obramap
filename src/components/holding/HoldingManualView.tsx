@@ -255,7 +255,7 @@ export default function HoldingManualView() {
             <ul className="list-disc pl-5 space-y-1">
               <li>Tabela com 6 colunas de checkmarks: Ata ✓/✗, OIS ✓/✗, ART ✓/✗, CNO ✓/✗, Impl ✓/✗, SCP ✓/✗.</li>
             </ul>
-            <p><strong>Aba Acomp_Obra:</strong></p>
+            <p><strong>Aba Ensaios e Projetos:</strong></p>
             <ul className="list-disc pl-5 space-y-1">
               <li>Tabela com 5 colunas: Sondagem SPT, Planta Localiz., Plano Altim., Painel Bordo, Check Seg.</li>
             </ul>
