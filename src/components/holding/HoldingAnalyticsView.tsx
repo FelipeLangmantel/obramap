@@ -108,17 +108,18 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
   const [despesasData, setDespesasData] = useState<any[]>([]);
 
   // Load financial data
+  const obraIds = obras.map(o => o.id).join(",");
   useEffect(() => {
     if (obras.length === 0) return;
-    const obraIds = obras.map(o => o.id);
+    const ids = obras.map(o => o.id);
     Promise.all([
-      supabase.from("medicoes_ple").select("*").in("obra_id", obraIds),
-      supabase.from("despesas_mensais").select("*").in("obra_id", obraIds),
+      supabase.from("medicoes_ple").select("*").in("obra_id", ids),
+      supabase.from("despesas_mensais").select("*").in("obra_id", ids),
     ]).then(([medRes, despRes]) => {
       setMedicoesData(medRes.data || []);
       setDespesasData(despRes.data || []);
     });
-  }, [obras]);
+  }, [obraIds]);
 
   // PRD chart data
   const prdData = useMemo(() => {

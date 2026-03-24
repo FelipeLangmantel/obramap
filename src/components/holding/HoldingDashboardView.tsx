@@ -202,6 +202,9 @@ export default function HoldingDashboardView() {
   const [editingObra, setEditingObra] = useState<ObraEnriched | null>(null);
   const [deletingObraId, setDeletingObraId] = useState<string | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importing, setImporting] = useState(false);
 
   const exportarPDF = async () => {
     setIsPrinting(true);
