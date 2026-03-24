@@ -224,25 +224,7 @@ export default function HoldingDashboardView() {
   const [deletingObraId, setDeletingObraId] = useState<string | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
-  const [importText, setImportText] = useState(`Eldorado 01,PreviBras,23883/2025,SCP Binotto,2939431.80,2026-02-16,120,em_andamento,0,Eldorado do Sul,RS
-Eldorado 02,PreviBras,23875/2025,SCP Binotto,4115204.52,2025-12-01,120,em_andamento,0,Eldorado do Sul,RS
-Taquara,PreviBras,24217/2025,SCP Trifty,5144005.65,2026-04-15,120,nao_iniciada,0,Taquara,RS
-Estrela,PreviBras,24173/2025,SCP Malai,2226888.15,2026-01-13,69,em_andamento,0,Estrela,RS
-Lajeado 01,PreviBras,24198/2025,SCP Vinicius,1352225.37,2026-01-21,120,em_andamento,0,Lajeado,RS
-Lajeado 02,PreviBras,,, 2939431.80,2026-05-11,120,nao_iniciada,0,Lajeado,RS
-Encruzilhada do Sul 01,PreviBras,24199/2025,,7348574.50,2025-12-29,120,nao_iniciada,0,Encruzilhada do Sul,RS
-São João do Polêsine,PreviBras,24207/2025,,2057602.26,2025-12-29,120,nao_iniciada,0,São João do Polêsine,RS
-São Sebastião do Caí,PreviBras,24212/2025,SCP Maracon,6172806.78,2026-02-02,120,em_andamento,0,São Sebastião do Caí,RS
-São Francisco de Paula,PreviBras,23661/2025,SCP Realize,9406181.76,2026-02-23,120,em_andamento,0,São Francisco de Paula,RS
-Arroio do Meio - adesão MP,PreviBras,025/2026,SCP Bruno/Duzan,5584916.62,2026-01-22,120,nao_iniciada,0,Arroio do Meio,RS
-Encruzilhada do Sul 02,PreviBras,,,5290973.64,2026-04-17,120,nao_iniciada,0,Encruzilhada do Sul,RS
-Esteio,PreviBras,,,9350000.00,2024-09-05,730,em_andamento,68.87,Esteio,RS
-Tapejara 01,PreviBras,,,9015008.29,2024-09-05,570,em_andamento,0,Tapejara,RS
-Tapejara 02,PreviBras,,,6033846.82,2024-09-05,600,em_andamento,0,Tapejara,RS
-Santa Rosa,PreviBras,,,8594473.84,2024-10-02,540,em_andamento,35.83,Santa Rosa,RS
-Tupanciretã,PreviBras,,,0,,,em_andamento,0,Tupanciretã,RS
-Viamão,Binotto,,,849480.69,,,em_andamento,0,Viamão,RS
-Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
+  const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
 
   // Filters
