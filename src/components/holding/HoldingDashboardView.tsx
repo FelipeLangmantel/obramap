@@ -39,7 +39,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { addDays, format, differenceInDays, differenceInMonths } from "date-fns";
-import { ptBR } from "date-fns/locale";
+
 import {
   BarChart,
   Bar,
