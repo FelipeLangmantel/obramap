@@ -116,7 +116,7 @@ export default function IndustrializationModuleView() {
       toast.error("Selecione o projeto ObraMap para modo integrado");
       return;
     }
-    const { data, error } = await supabase.from("ind_operation_contexts").insert({
+    const { error } = await supabase.from("ind_operation_contexts").insert({
       company_id: companyId,
       context_type: newContextForm.context_type,
       name: newContextForm.name.trim(),
