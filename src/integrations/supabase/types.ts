@@ -4222,6 +4222,8 @@ export type Database = {
           prazo_dias: number
           prazo_pagamento: string | null
           responsavel: string | null
+          responsavel_nome: string | null
+          responsavel_telefone: string | null
           status: Database["public"]["Enums"]["obra_status"]
           tipo_contrato: string | null
           uh: number | null
@@ -4246,6 +4248,8 @@ export type Database = {
           prazo_dias?: number
           prazo_pagamento?: string | null
           responsavel?: string | null
+          responsavel_nome?: string | null
+          responsavel_telefone?: string | null
           status?: Database["public"]["Enums"]["obra_status"]
           tipo_contrato?: string | null
           uh?: number | null
@@ -4270,6 +4274,8 @@ export type Database = {
           prazo_dias?: number
           prazo_pagamento?: string | null
           responsavel?: string | null
+          responsavel_nome?: string | null
+          responsavel_telefone?: string | null
           status?: Database["public"]["Enums"]["obra_status"]
           tipo_contrato?: string | null
           uh?: number | null
