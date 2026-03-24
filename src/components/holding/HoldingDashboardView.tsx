@@ -414,7 +414,7 @@ export default function HoldingDashboardView() {
       const lines = importText.trim().split("\n").filter(l => l.trim());
       const obrasToInsert = lines.map((line, idx) => {
         const parts = line.split(",").map(s => s.trim());
-        const [nome, empresa, num_contrato, parceria_scp, valor_contrato, data_inicio, prazo_dias, status, percentual_andamento, municipio, estado] = parts;
+        const [nome, empresa, num_contrato, parceria_scp, valor_contrato, data_inicio, prazo_dias, status, percentual_andamento, municipio, estado, uh, responsavel, tipo_contrato] = parts;
         return {
           company_id: company.id,
           nome: nome || `Obra ${idx + 1}`,
@@ -428,6 +428,9 @@ export default function HoldingDashboardView() {
           percentual_andamento: Number(percentual_andamento) || 0,
           municipio: municipio || null,
           estado: estado || "RS",
+          uh: Number(uh?.trim()) || null,
+          responsavel: responsavel?.trim() || null,
+          tipo_contrato: tipo_contrato?.trim() || null,
         };
       });
 
