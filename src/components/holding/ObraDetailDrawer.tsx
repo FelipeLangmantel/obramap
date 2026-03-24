@@ -172,10 +172,10 @@ function DocumentosTab({ obraId }: { obraId: string }) {
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="font-semibold text-sm flex items-center gap-1.5">
-              <ClipboardCheck className="h-4 w-4" /> Acomp_Obra
+              <ClipboardCheck className="h-4 w-4" /> Ensaios e Projetos
             </h4>
-            <Badge variant={acompCount === 5 ? "default" : "secondary"} className={acompCount === 5 ? "bg-emerald-600" : ""}>
-              {acompCount}/5
+            <Badge variant={ensaiosCount === 5 ? "default" : "secondary"} className={ensaiosCount === 5 ? "bg-emerald-600" : ""}>
+              {ensaiosCount}/5
             </Badge>
           </div>
           {ACOMP_OBRA_FIELDS.map((f) => (
