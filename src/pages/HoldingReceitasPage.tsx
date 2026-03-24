@@ -762,7 +762,7 @@ export default function HoldingReceitasPage() {
                   <Card className="border-l-4 border-l-primary">
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground mb-1">Valor previsto próx. 3 meses</p>
-                      <p className="text-sm font-semibold text-primary">{BRL_SHORT(previsaoData.slice(0, 3).reduce((s, p) => s + p.previsto, 0))}</p>
+                      <p className="text-sm font-semibold text-primary">{BRL_SHORT(previsaoData.slice(3, 6).reduce((s, p) => s + p.previsto, 0))}</p>
                       <p className="text-[10px] text-muted-foreground">baseado nas datas de previsão cadastradas</p>
                     </CardContent>
                   </Card>
