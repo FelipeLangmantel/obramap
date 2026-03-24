@@ -252,6 +252,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         { title: "Documentação", view: "holding-documentos", icon: FolderOpen, permissionId: "holding_documentos" },
         { title: "PRD — Cronograma", view: "holding-prd", icon: BarChart3, permissionId: "holding_prd" },
         { title: "IA — Insights", view: "holding-insights", icon: Sparkles, permissionId: "holding_insights", badge: "BETA" },
+        { title: "Configurações", view: "holding-config", icon: Settings, permissionId: "holding" },
       ],
     },
     {

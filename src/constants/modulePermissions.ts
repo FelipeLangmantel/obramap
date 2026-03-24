@@ -56,6 +56,7 @@ export const MENU_MODULES: MenuModule[] = [
   { id: "holding_documentos", label: "Holding — Documentação" },
   { id: "holding_prd", label: "Holding — PRD Cronograma" },
   { id: "holding_insights", label: "Holding — IA Insights" },
+  { id: "holding_config", label: "Holding — Configurações" },
 ];
 
 /**
