@@ -1312,7 +1312,16 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
                     <TableCell className="text-[10px] py-2">{obra.num_contrato || "—"}</TableCell>
                     <TableCell className="text-[10px] py-2 text-center">{obra.uh || "—"}</TableCell>
                     <TableCell className="text-[10px] py-2">{obra.tipo_contrato || "—"}</TableCell>
-                    <TableCell className="text-[10px] py-2 truncate max-w-[120px]">{obra.responsavel || "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2">{obra.responsavel_nome || obra.responsavel?.split(" - ")[0] || "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2">
+                      {(() => {
+                        const tel = obra.responsavel_telefone || obra.responsavel?.split(" - ")[1] || "";
+                        const telLimpo = tel.replace(/\D/g, "");
+                        if (!telLimpo) return "—";
+                        const waNumber = telLimpo.startsWith("55") ? telLimpo : `55${telLimpo}`;
+                        return <a href={`https://wa.me/${waNumber}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-emerald-600 hover:underline">{tel}</a>;
+                      })()}
+                    </TableCell>
                     <TableCell className="text-[10px] py-2">{obra.parceria_scp || "—"}</TableCell>
                     <TableCell className="text-[10px] py-2 text-right font-mono">{BRL.format(obra.valor_contrato)}</TableCell>
                     <TableCell className="text-[10px] py-2 text-right font-mono">{receitas > 0 ? BRL.format(receitas) : "—"}</TableCell>
