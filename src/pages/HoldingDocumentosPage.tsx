@@ -148,7 +148,7 @@ export default function HoldingDocumentosPage() {
   }, [obrasDoc, pendencias]);
 
   const avgDoc = obrasDoc.length > 0 ? obrasDoc.reduce((s, o) => s + o.docCount, 0) / obrasDoc.length : 0;
-  const avgAcomp = obrasDoc.length > 0 ? obrasDoc.reduce((s, o) => s + o.acompCount, 0) / obrasDoc.length : 0;
+  const avgEnsaios = obrasDoc.length > 0 ? obrasDoc.reduce((s, o) => s + o.ensaiosCount, 0) / obrasDoc.length : 0;
 
   const pendenciasFiltradas = useMemo(() => {
     return pendencias.filter((p: any) => {
