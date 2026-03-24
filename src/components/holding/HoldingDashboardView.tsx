@@ -67,6 +67,8 @@ interface ObraPortfolio {
   percentual_andamento: number;
   periodo_medicao: string | null;
   prazo_pagamento: string | null;
+  municipio: string | null;
+  estado: string | null;
   created_at: string;
 }
 
