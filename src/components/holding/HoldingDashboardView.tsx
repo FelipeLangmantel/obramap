@@ -317,13 +317,13 @@ export default function HoldingDashboardView() {
     periodo_medicao: "", prazo_pagamento: "",
   });
 
-  const handleSaveNewObra = async () => {
+  const handleSaveObra = async () => {
     if (!newObraForm.nome.trim() || !company?.id) {
       toast.error("Nome da obra é obrigatório.");
       return;
     }
     setSavingObra(true);
-    const { data, error } = await supabase.from("obras_portfolio").insert({
+    const payload = {
       company_id: company.id,
       nome: newObraForm.nome.trim(),
       empresa: newObraForm.empresa || null,
@@ -336,14 +336,18 @@ export default function HoldingDashboardView() {
       percentual_andamento: newObraForm.percentual_andamento,
       periodo_medicao: newObraForm.periodo_medicao || null,
       prazo_pagamento: newObraForm.prazo_pagamento || null,
-    }).select("id").single();
+    };
 
-    if (error || !data) {
-      toast.error("Erro ao cadastrar obra.");
-      setSavingObra(false);
-      return;
+    if (editingObra) {
+      const { error } = await supabase.from("obras_portfolio").update(payload).eq("id", editingObra.id);
+      if (error) { toast.error("Erro ao atualizar obra."); setSavingObra(false); return; }
+      toast.success("Obra atualizada!");
+    } else {
+      const { data, error } = await supabase.from("obras_portfolio").insert(payload).select("id").single();
+      if (error || !data) { toast.error("Erro ao cadastrar obra."); setSavingObra(false); return; }
+      await supabase.from("documentos_obra").insert({ obra_id: data.id });
+      toast.success("Obra cadastrada com sucesso!");
     }
-    await supabase.from("documentos_obra").insert({ obra_id: data.id });
     queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
     toast.success("Obra cadastrada com sucesso!");
     setShowNewObraDialog(false);
