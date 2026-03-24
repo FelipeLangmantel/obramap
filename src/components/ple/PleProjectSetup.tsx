@@ -214,7 +214,6 @@ function SetupContent({ onCreated, ...props }: Props) {
               </Button>
             )}
           </div>
-          </div>
         </CardContent>
       </Card>
 
