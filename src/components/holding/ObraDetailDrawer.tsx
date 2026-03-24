@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -13,7 +13,8 @@ import { Separator } from "@/components/ui/separator";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { FileText, ClipboardCheck, Plus, Loader2, ListChecks, Pencil, Trash2, X } from "lucide-react";
+import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart } from "recharts";
 import { format } from "date-fns";
 
@@ -102,90 +103,171 @@ const ENSAIOS_PROJETOS_FIELDS: { key: string; label: string }[] = [
 ];
 
 function DocumentosTab({ obraId }: { obraId: string }) {
+  const { company } = useAuth();
   const invalidateHolding = useInvalidateHolding();
-  const [docs, setDocs] = useState<Record<string, boolean> | null>(null);
-  const [docId, setDocId] = useState<string | null>(null);
+
+  // Fetch configured doc types for this company
+  const [docTipos, setDocTipos] = useState<{ id: string; nome: string; categoria: string; obrigatorio: boolean }[]>([]);
+  const [obraDocsMap, setObraDocsMap] = useState<Map<string, any>>(new Map());
+
+  // Legacy documentos_obra for backwards compatibility
+  const [legacyDocs, setLegacyDocs] = useState<Record<string, boolean> | null>(null);
+  const [legacyDocId, setLegacyDocId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const { data } = await supabase
+    if (!company?.id) return;
+
+    // Load configured doc types
+    const { data: tipos } = await supabase
+      .from("holding_doc_tipos")
+      .select("id, nome, categoria, obrigatorio")
+      .eq("company_id", company.id)
+      .eq("ativo", true)
+      .order("categoria")
+      .order("ordem");
+
+    setDocTipos(tipos || []);
+
+    // Load obra docs (flexible system)
+    const { data: obraDocs } = await supabase
+      .from("holding_obra_docs")
+      .select("*")
+      .eq("obra_id", obraId);
+
+    const map = new Map<string, any>();
+    (obraDocs || []).forEach((d: any) => map.set(d.doc_tipo_id, d));
+    setObraDocsMap(map);
+
+    // Auto-create missing entries
+    if (tipos && tipos.length > 0) {
+      const missingTipos = tipos.filter(t => !map.has(t.id));
+      if (missingTipos.length > 0) {
+        const { data: created } = await supabase
+          .from("holding_obra_docs")
+          .insert(missingTipos.map(t => ({ obra_id: obraId, doc_tipo_id: t.id, checked: false })) as any)
+          .select();
+        if (created) {
+          created.forEach((d: any) => map.set(d.doc_tipo_id, d));
+          setObraDocsMap(new Map(map));
+        }
+      }
+    }
+
+    // Legacy documentos_obra
+    const { data: legacy } = await supabase
       .from("documentos_obra")
       .select("*")
       .eq("obra_id", obraId)
       .maybeSingle();
 
-    if (data) {
-      setDocId(data.id);
-      const { id: _id, obra_id: _oid, ...fields } = data as any;
-      setDocs(fields);
+    if (legacy) {
+      setLegacyDocId(legacy.id);
+      const { id: _id, obra_id: _oid, ...fields } = legacy as any;
+      setLegacyDocs(fields);
     } else {
-      // Create doc row
+      // Create legacy doc row if none exists
       const { data: created } = await supabase
         .from("documentos_obra")
         .insert({ obra_id: obraId } as any)
         .select()
         .single();
       if (created) {
-        setDocId(created.id);
+        setLegacyDocId(created.id);
         const { id: _id2, obra_id: _oid2, ...fields } = created as any;
-        setDocs(fields);
+        setLegacyDocs(fields);
       }
     }
+
     setLoading(false);
-  }, [obraId]);
+  }, [obraId, company?.id]);
 
   useEffect(() => { load(); }, [load]);
 
-  const toggle = async (key: string, value: boolean) => {
-    if (!docId) return;
-    setDocs((prev) => prev ? { ...prev, [key]: value } : prev);
-    await supabase.from("documentos_obra").update({ [key]: value } as any).eq("id", docId);
+  // Toggle for flexible system
+  const toggleFlexible = async (docTipoId: string, value: boolean) => {
+    const existing = obraDocsMap.get(docTipoId);
+    setObraDocsMap(prev => {
+      const next = new Map(prev);
+      const cur = next.get(docTipoId);
+      if (cur) next.set(docTipoId, { ...cur, checked: value });
+      return next;
+    });
+
+    if (existing?.id) {
+      await supabase.from("holding_obra_docs").update({ checked: value } as any).eq("id", existing.id);
+    } else {
+      await supabase.from("holding_obra_docs").insert({ obra_id: obraId, doc_tipo_id: docTipoId, checked: value } as any);
+    }
     invalidateHolding();
   };
 
-  if (loading || !docs) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
+  // Toggle for legacy system
+  const toggleLegacy = async (key: string, value: boolean) => {
+    if (!legacyDocId) return;
+    setLegacyDocs(prev => prev ? { ...prev, [key]: value } : prev);
+    await supabase.from("documentos_obra").update({ [key]: value } as any).eq("id", legacyDocId);
+    invalidateHolding();
+  };
 
-  const docObraCount = DOC_OBRA_FIELDS.filter((f) => docs[f.key]).length;
-  const ensaiosCount = ENSAIOS_PROJETOS_FIELDS.filter((f) => docs[f.key]).length;
+  if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
+
+  const docObraTipos = docTipos.filter(t => t.categoria === "doc_obra");
+  const ensaiosTipos = docTipos.filter(t => t.categoria === "ensaios_projetos");
+  const hasFlexible = docTipos.length > 0;
+
+  const renderDocCard = (
+    title: string,
+    icon: ReactNode,
+    flexibleItems: typeof docTipos,
+    legacyFields: { key: string; label: string }[],
+  ) => {
+    const useFlexible = hasFlexible && flexibleItems.length > 0;
+    const items = useFlexible ? flexibleItems : legacyFields;
+    const count = useFlexible
+      ? flexibleItems.filter(i => obraDocsMap.get(i.id)?.checked).length
+      : legacyFields.filter(i => legacyDocs?.[i.key]).length;
+    const total = items.length;
+
+    return (
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-semibold text-sm flex items-center gap-1.5">
+              {icon} {title}
+            </h4>
+            <Badge variant={count === total && total > 0 ? "default" : "secondary"} className={count === total && total > 0 ? "bg-emerald-600" : ""}>
+              {count}/{total}
+            </Badge>
+          </div>
+          {total === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Nenhum documento configurado. Acesse Configurações → {title} para adicionar.
+            </p>
+          )}
+          {useFlexible
+            ? flexibleItems.map(item => (
+                <div key={item.id} className="flex items-center justify-between">
+                  <span className="text-sm">{item.nome}</span>
+                  <Switch checked={!!obraDocsMap.get(item.id)?.checked} onCheckedChange={(v) => toggleFlexible(item.id, v)} />
+                </div>
+              ))
+            : legacyFields.map(f => (
+                <div key={f.key} className="flex items-center justify-between">
+                  <span className="text-sm">{f.label}</span>
+                  <Switch checked={!!legacyDocs?.[f.key]} onCheckedChange={(v) => toggleLegacy(f.key, v)} />
+                </div>
+              ))
+          }
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="font-semibold text-sm flex items-center gap-1.5">
-              <FileText className="h-4 w-4" /> Doc_Obra
-            </h4>
-            <Badge variant={docObraCount === 6 ? "default" : "secondary"} className={docObraCount === 6 ? "bg-emerald-600" : ""}>
-              {docObraCount}/6
-            </Badge>
-          </div>
-          {DOC_OBRA_FIELDS.map((f) => (
-            <div key={f.key} className="flex items-center justify-between">
-              <span className="text-sm">{f.label}</span>
-              <Switch checked={!!docs[f.key]} onCheckedChange={(v) => toggle(f.key, v)} />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="font-semibold text-sm flex items-center gap-1.5">
-              <ClipboardCheck className="h-4 w-4" /> Ensaios e Projetos
-            </h4>
-            <Badge variant={ensaiosCount === 5 ? "default" : "secondary"} className={ensaiosCount === 5 ? "bg-emerald-600" : ""}>
-              {ensaiosCount}/5
-            </Badge>
-          </div>
-          {ENSAIOS_PROJETOS_FIELDS.map((f) => (
-            <div key={f.key} className="flex items-center justify-between">
-              <span className="text-sm">{f.label}</span>
-              <Switch checked={!!docs[f.key]} onCheckedChange={(v) => toggle(f.key, v)} />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      {renderDocCard("Doc_Obra", <FileText className="h-4 w-4" />, docObraTipos, DOC_OBRA_FIELDS)}
+      {renderDocCard("Ensaios e Projetos", <FlaskConical className="h-4 w-4" />, ensaiosTipos, ENSAIOS_PROJETOS_FIELDS)}
     </div>
   );
 }

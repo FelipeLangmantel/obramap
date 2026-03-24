@@ -235,6 +235,22 @@ export default function HoldingDashboardView() {
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
 
+  // Holding empresas for select
+  const { data: holdingEmpresas = [] } = useQuery({
+    queryKey: ["holding-empresas-list", company?.id],
+    queryFn: async () => {
+      if (!company?.id) return [];
+      const { data } = await supabase
+        .from("holding_empresas")
+        .select("id, nome")
+        .eq("company_id", company.id)
+        .eq("ativo", true)
+        .order("nome");
+      return (data || []) as { id: string; nome: string }[];
+    },
+    enabled: !!company?.id,
+  });
+
   // Global company filter (persists across all views)
   const [globalEmpresa, setGlobalEmpresa] = useState("all");
 
@@ -924,7 +940,24 @@ export default function HoldingDashboardView() {
               <Input value={newObraForm.nome} onChange={(e) => setNewObraForm(p => ({ ...p, nome: e.target.value }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">Empresa</Label><Input value={newObraForm.empresa} onChange={(e) => setNewObraForm(p => ({ ...p, empresa: e.target.value }))} /></div>
+              <div>
+                <Label className="text-xs">Empresa</Label>
+                {holdingEmpresas.length > 0 ? (
+                  <Select value={newObraForm.empresa} onValueChange={(v) => setNewObraForm(p => ({ ...p, empresa: v }))}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                    <SelectContent>
+                      {holdingEmpresas.map(e => (
+                        <SelectItem key={e.id} value={e.nome}>{e.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div>
+                    <Input value={newObraForm.empresa} onChange={(e) => setNewObraForm(p => ({ ...p, empresa: e.target.value }))} placeholder="Digite o nome" />
+                    <p className="text-[10px] text-muted-foreground mt-0.5">💡 Cadastre empresas em Configurações para usar o seletor.</p>
+                  </div>
+                )}
+              </div>
               <div><Label className="text-xs">Nº Contrato</Label><Input value={newObraForm.num_contrato} onChange={(e) => setNewObraForm(p => ({ ...p, num_contrato: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
