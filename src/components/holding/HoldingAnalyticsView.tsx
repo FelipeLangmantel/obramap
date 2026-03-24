@@ -5,7 +5,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell,
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
-import { MapPin } from "lucide-react";
+import { MapPin, DollarSign, TrendingUp, TrendingDown, Wallet } from "lucide-react";
 
 /* ═══════════════════════════════════════
    Types (mirrors HoldingDashboardView)
