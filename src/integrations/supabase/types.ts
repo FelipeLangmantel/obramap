@@ -1712,6 +1712,7 @@ export type Database = {
       }
       ind_factories: {
         Row: {
+          advance_payment_pct: number
           avg_lead_time_days: number
           city: string | null
           cnpj: string | null
@@ -1724,12 +1725,14 @@ export type Database = {
           is_active: boolean
           name: string
           notes: string | null
+          payment_terms: string | null
           radius_km: number | null
           state: string | null
           supplier_id: string | null
           updated_at: string
         }
         Insert: {
+          advance_payment_pct?: number
           avg_lead_time_days?: number
           city?: string | null
           cnpj?: string | null
@@ -1742,12 +1745,14 @@ export type Database = {
           is_active?: boolean
           name: string
           notes?: string | null
+          payment_terms?: string | null
           radius_km?: number | null
           state?: string | null
           supplier_id?: string | null
           updated_at?: string
         }
         Update: {
+          advance_payment_pct?: number
           avg_lead_time_days?: number
           city?: string | null
           cnpj?: string | null
@@ -1760,6 +1765,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           notes?: string | null
+          payment_terms?: string | null
           radius_km?: number | null
           state?: string | null
           supplier_id?: string | null
@@ -2174,8 +2180,10 @@ export type Database = {
           end_time: string | null
           equipment_id: string | null
           id: string
+          ind_period_id: string | null
           linked_shipment_id: string | null
           notes: string | null
+          obramap_period_id: string | null
           start_time: string | null
           status: string
           supplier_name: string | null
@@ -2191,8 +2199,10 @@ export type Database = {
           end_time?: string | null
           equipment_id?: string | null
           id?: string
+          ind_period_id?: string | null
           linked_shipment_id?: string | null
           notes?: string | null
+          obramap_period_id?: string | null
           start_time?: string | null
           status?: string
           supplier_name?: string | null
@@ -2208,8 +2218,10 @@ export type Database = {
           end_time?: string | null
           equipment_id?: string | null
           id?: string
+          ind_period_id?: string | null
           linked_shipment_id?: string | null
           notes?: string | null
+          obramap_period_id?: string | null
           start_time?: string | null
           status?: string
           supplier_name?: string | null
@@ -2245,10 +2257,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "ind_lifting_schedule_ind_period_id_fkey"
+            columns: ["ind_period_id"]
+            isOneToOne: false
+            referencedRelation: "ind_periods"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "ind_lifting_schedule_linked_shipment_id_fkey"
             columns: ["linked_shipment_id"]
             isOneToOne: false
             referencedRelation: "ind_shipments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_lifting_schedule_obramap_period_id_fkey"
+            columns: ["obramap_period_id"]
+            isOneToOne: false
+            referencedRelation: "planning_periods"
             referencedColumns: ["id"]
           },
         ]
@@ -2460,7 +2486,9 @@ export type Database = {
       ind_production_batches: {
         Row: {
           actual_finish: string | null
+          actual_quantity: number
           actual_start: string | null
+          actual_value: number
           batch_code: string
           company_id: string
           context_id: string
@@ -2468,20 +2496,25 @@ export type Database = {
           demand_entry_id: string | null
           factory_id: string
           id: string
+          ind_period_id: string | null
           ind_service_id: string | null
           macro_id: string | null
           model_id: string | null
           notes: string | null
+          obramap_period_id: string | null
           planned_finish: string | null
           planned_quantity: number
           planned_start: string | null
           scope_id: string | null
           status: string
+          unit_value: number
           updated_at: string
         }
         Insert: {
           actual_finish?: string | null
+          actual_quantity?: number
           actual_start?: string | null
+          actual_value?: number
           batch_code: string
           company_id: string
           context_id: string
@@ -2489,20 +2522,25 @@ export type Database = {
           demand_entry_id?: string | null
           factory_id: string
           id?: string
+          ind_period_id?: string | null
           ind_service_id?: string | null
           macro_id?: string | null
           model_id?: string | null
           notes?: string | null
+          obramap_period_id?: string | null
           planned_finish?: string | null
           planned_quantity?: number
           planned_start?: string | null
           scope_id?: string | null
           status?: string
+          unit_value?: number
           updated_at?: string
         }
         Update: {
           actual_finish?: string | null
+          actual_quantity?: number
           actual_start?: string | null
+          actual_value?: number
           batch_code?: string
           company_id?: string
           context_id?: string
@@ -2510,15 +2548,18 @@ export type Database = {
           demand_entry_id?: string | null
           factory_id?: string
           id?: string
+          ind_period_id?: string | null
           ind_service_id?: string | null
           macro_id?: string | null
           model_id?: string | null
           notes?: string | null
+          obramap_period_id?: string | null
           planned_finish?: string | null
           planned_quantity?: number
           planned_start?: string | null
           scope_id?: string | null
           status?: string
+          unit_value?: number
           updated_at?: string
         }
         Relationships: [
@@ -2551,6 +2592,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "ind_production_batches_ind_period_id_fkey"
+            columns: ["ind_period_id"]
+            isOneToOne: false
+            referencedRelation: "ind_periods"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "ind_production_batches_ind_service_id_fkey"
             columns: ["ind_service_id"]
             isOneToOne: false
@@ -2562,6 +2610,13 @@ export type Database = {
             columns: ["model_id"]
             isOneToOne: false
             referencedRelation: "ind_factory_models"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_production_batches_obramap_period_id_fkey"
+            columns: ["obramap_period_id"]
+            isOneToOne: false
+            referencedRelation: "planning_periods"
             referencedColumns: ["id"]
           },
         ]
@@ -2755,7 +2810,9 @@ export type Database = {
           driver_name: string | null
           freight_value: number
           id: string
+          ind_period_id: string | null
           notes: string | null
+          obramap_period_id: string | null
           planned_date: string
           received_at: string | null
           received_by: string | null
@@ -2776,7 +2833,9 @@ export type Database = {
           driver_name?: string | null
           freight_value?: number
           id?: string
+          ind_period_id?: string | null
           notes?: string | null
+          obramap_period_id?: string | null
           planned_date: string
           received_at?: string | null
           received_by?: string | null
@@ -2797,7 +2856,9 @@ export type Database = {
           driver_name?: string | null
           freight_value?: number
           id?: string
+          ind_period_id?: string | null
           notes?: string | null
+          obramap_period_id?: string | null
           planned_date?: string
           received_at?: string | null
           received_by?: string | null
@@ -2829,6 +2890,20 @@ export type Database = {
             columns: ["context_id"]
             isOneToOne: false
             referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_shipments_ind_period_id_fkey"
+            columns: ["ind_period_id"]
+            isOneToOne: false
+            referencedRelation: "ind_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_shipments_obramap_period_id_fkey"
+            columns: ["obramap_period_id"]
+            isOneToOne: false
+            referencedRelation: "planning_periods"
             referencedColumns: ["id"]
           },
           {
@@ -8737,6 +8812,57 @@ export type Database = {
       get_contract_financial_dashboard: {
         Args: { p_contract_id: string }
         Returns: Json
+      }
+      get_ind_cash_projection: {
+        Args: { p_context_id: string }
+        Returns: {
+          advance_due_date: string
+          advance_pct: number
+          advance_value: number
+          factory_id: string
+          factory_name: string
+          freight_value: number
+          lifting_value: number
+          period_label: string
+          period_start: string
+          production_value: number
+          total_outflow: number
+        }[]
+      }
+      get_ind_costs_by_period: {
+        Args: { p_context_id: string }
+        Returns: {
+          actual_units: number
+          advance_pct: number
+          advance_value: number
+          batch_value: number
+          factory_id: string
+          factory_name: string
+          freight_value: number
+          lifting_value: number
+          period_end: string
+          period_id: string
+          period_label: string
+          period_start: string
+          planned_units: number
+          total_value: number
+          unit_value: number
+        }[]
+      }
+      get_ind_long_term_plan: {
+        Args: { p_context_id: string }
+        Returns: {
+          actual_units: number
+          completion_pct: number
+          factory_id: string
+          factory_name: string
+          period_end: string
+          period_id: string
+          period_label: string
+          period_start: string
+          planned_units: number
+          target_units: number
+        }[]
       }
       get_measurement_cost_summary: {
         Args: { p_measurement_id: string }
