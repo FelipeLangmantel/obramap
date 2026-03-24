@@ -627,18 +627,20 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
             <BookOpen className="h-4 w-4" /> Manual
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowNewObraDialog(true)}>
-            <Plus className="h-3.5 w-3.5 mr-1" /> Nova Obra
-          </Button>
-          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowImportDialog(true)}>
-            <Upload className="h-3.5 w-3.5 mr-1" /> Importar
-          </Button>
-          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={exportarPDF} disabled={isPrinting || obras.length === 0}>
-            {isPrinting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <FileDown className="h-3.5 w-3.5 mr-1" />}
-            Exportar PDF
-          </Button>
-        </div>
+        {mainView !== "manual" && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowNewObraDialog(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> Nova Obra
+            </Button>
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowImportDialog(true)}>
+              <Upload className="h-3.5 w-3.5 mr-1" /> Importar
+            </Button>
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={exportarPDF} disabled={isPrinting || obras.length === 0}>
+              {isPrinting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <FileDown className="h-3.5 w-3.5 mr-1" />}
+              Exportar PDF
+            </Button>
+          </div>
+        )}
       </div>
 
       {mainView === "portfolio" ? (
