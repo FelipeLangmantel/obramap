@@ -35,6 +35,7 @@ interface MedicaoCompleta {
   obra_uh: number | null;
   obra_responsavel: string | null;
   obra_tipo_contrato: string | null;
+  obra_prazo_pagamento: number; // dias do prazo de pagamento da obra
   num_medicao: string | null;
   mes_referencia: string | null;
   ano_referencia: number | null;
@@ -47,6 +48,13 @@ interface MedicaoCompleta {
   num_nf: string | null;
   data_pagamento: string | null;
   status_nf: "recebido" | "aguardando_aprovacao" | "pendente";
+}
+
+// Parse prazo_pagamento string ("30 dias", "45", etc.) to number of days
+function parsePrazoDias(prazo: string | null): number {
+  if (!prazo) return 30; // default 30 days
+  const match = prazo.match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : 30;
 }
 
 // ─── Formatters ───
@@ -89,7 +97,7 @@ export default function HoldingReceitasPage() {
       // 1. Fetch obras for this company
       const { data: obras, error: obrasError } = await supabase
         .from("obras_portfolio")
-        .select("id, nome, empresa, num_contrato, valor_contrato, parceria_scp, uh, responsavel, tipo_contrato")
+        .select("id, nome, empresa, num_contrato, valor_contrato, parceria_scp, uh, responsavel, tipo_contrato, prazo_pagamento")
         .eq("company_id", company!.id);
 
       if (obrasError) throw obrasError;
@@ -119,6 +127,7 @@ export default function HoldingReceitasPage() {
           obra_uh: (o as any).uh || null,
           obra_responsavel: (o as any).responsavel || null,
           obra_tipo_contrato: (o as any).tipo_contrato || null,
+          obra_prazo_pagamento: parsePrazoDias((o as any).prazo_pagamento),
           num_medicao: m.num_medicao,
           mes_referencia: m.mes_referencia,
           ano_referencia: m.ano_referencia,
@@ -260,38 +269,46 @@ export default function HoldingReceitasPage() {
   // ─── Programação Financeira (Semanal / Quinzenal / Mensal) ───
   const programacaoData = useMemo(() => {
     const now = new Date();
-    // Use data_envio, data_aprovacao, or data_previsao_medicao to determine when money arrives
-    // Group by: expected receipt date based on status flow
+    // Project PAYMENT dates based on obra's prazo_pagamento
+    // The financial team needs to know WHEN money will actually arrive, not when it was sent
     const medicoesComData = medicoes.map(m => {
-      // Best date to estimate when this money enters: 
-      // If NF recebido → data_pagamento
-      // If aprovada → data_aprovacao (money coming soon)
-      // If enviada → data_envio (waiting approval)
-      // If pendente → data_previsao_medicao or mes/ano reference
+      const prazo = m.obra_prazo_pagamento || 30;
       let dataRef: Date | null = null;
       let statusEntrada = "pendente";
+      let calculo = "";
 
       if (m.status_nf === "recebido" && m.data_pagamento) {
+        // Already received — use actual payment date
         dataRef = new Date(m.data_pagamento + "T12:00:00");
         statusEntrada = "recebido";
+        calculo = `Pagamento confirmado em ${m.data_pagamento}`;
       } else if (m.status_medicao === "aprovada" && m.data_aprovacao) {
-        dataRef = new Date(m.data_aprovacao + "T12:00:00");
+        // Approved → payment expected = data_aprovacao + prazo_pagamento
+        dataRef = addDays(new Date(m.data_aprovacao + "T12:00:00"), prazo);
         statusEntrada = "aprovado";
+        calculo = `Aprovada ${m.data_aprovacao} + ${prazo} dias = ${format(dataRef, "dd/MM/yy")}`;
       } else if (m.status_medicao === "enviada" && m.data_envio) {
-        dataRef = new Date(m.data_envio + "T12:00:00");
+        // Sent → estimate approval in ~15 days, then + prazo_pagamento
+        const diasAprovacao = 15;
+        dataRef = addDays(new Date(m.data_envio + "T12:00:00"), diasAprovacao + prazo);
         statusEntrada = "enviado";
+        calculo = `Enviada ${m.data_envio} + ~${diasAprovacao}d aprovação + ${prazo}d pgto = ${format(dataRef, "dd/MM/yy")}`;
       } else if (m.data_previsao_medicao) {
-        dataRef = new Date(m.data_previsao_medicao + "T12:00:00");
+        // Planned — estimate: previsao + 15 days approval + prazo_pagamento
+        const diasAprovacao = 15;
+        dataRef = addDays(new Date(m.data_previsao_medicao + "T12:00:00"), diasAprovacao + prazo);
         statusEntrada = "previsto";
+        calculo = `Prev. envio ${m.data_previsao_medicao} + ~${diasAprovacao}d + ${prazo}d = ${format(dataRef, "dd/MM/yy")}`;
       } else if (m.mes_referencia && m.ano_referencia) {
         const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === m.mes_referencia!.substring(0, 3).toLowerCase());
         if (mesIdx >= 0) {
-          dataRef = new Date(m.ano_referencia, mesIdx, 15);
+          dataRef = addDays(new Date(m.ano_referencia, mesIdx, 15), 15 + prazo);
           statusEntrada = "estimado";
+          calculo = `Ref. ${m.mes_referencia}/${m.ano_referencia} + ~15d + ${prazo}d pgto (estimativa)`;
         }
       }
 
-      return { ...m, dataRef, statusEntrada };
+      return { ...m, dataRef, statusEntrada, calculo };
     }).filter(m => m.dataRef !== null);
 
     if (agrupamento === "semanal") {
@@ -901,26 +918,45 @@ export default function HoldingReceitasPage() {
                       </Table>
                     </div>
 
-                    {/* Detail: Medições por período */}
+                    {/* Detail: Medições por período com explicação de cálculo */}
                     {programacaoData.some(p => p.medicoes.length > 0) && (
                       <Card className="border-dashed">
                         <CardHeader className="pb-2">
-                          <CardTitle className="text-xs text-muted-foreground">Detalhamento — Medições por Período</CardTitle>
+                          <CardTitle className="text-xs text-muted-foreground">Detalhamento — Previsão de Pagamento por Medição</CardTitle>
+                          <p className="text-[10px] text-muted-foreground">Datas projetadas com base no prazo de pagamento cadastrado em cada obra</p>
                         </CardHeader>
                         <CardContent>
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             {programacaoData.filter(p => p.medicoes.length > 0).map((p, i) => (
                               <div key={i}>
                                 <p className="text-xs font-semibold mb-1">{p.label} — {BRL.format(p.total)}</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
+                                <div className="space-y-1">
                                   {p.medicoes.map((m: any) => {
                                     const statusCfg = STATUS_MED_CONFIG[m.status_medicao] || STATUS_MED_CONFIG.nao_iniciada;
+                                    const statusColors: Record<string, string> = {
+                                      recebido: "border-l-emerald-500",
+                                      aprovado: "border-l-emerald-400",
+                                      enviado: "border-l-blue-500",
+                                      previsto: "border-l-amber-500",
+                                      estimado: "border-l-muted",
+                                    };
                                     return (
-                                      <div key={m.id} className="flex items-center justify-between gap-2 rounded border px-2 py-1 text-xs">
-                                        <span className="font-medium truncate">{m.obra_nome}</span>
-                                        <span className="text-muted-foreground">Med {m.num_medicao || "—"}</span>
-                                        <Badge className={`text-[9px] ${statusCfg.cls}`} variant="secondary">{statusCfg.label}</Badge>
-                                        <span className="font-semibold whitespace-nowrap">{BRL.format(m.valor_medicao)}</span>
+                                      <div key={m.id} className={`rounded border border-l-4 ${statusColors[m.statusEntrada] || ""} px-3 py-2`}>
+                                        <div className="flex items-center justify-between gap-2 text-xs">
+                                          <span className="font-medium truncate flex-1">{m.obra_nome}</span>
+                                          <span className="text-muted-foreground">Med {m.num_medicao || "—"}</span>
+                                          <Badge className={`text-[9px] ${statusCfg.cls}`} variant="secondary">{statusCfg.label}</Badge>
+                                          <span className="font-semibold whitespace-nowrap">{BRL.format(m.valor_medicao)}</span>
+                                        </div>
+                                        {m.calculo && (
+                                          <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+                                            <Calendar className="h-3 w-3" />
+                                            {m.calculo}
+                                            {m.obra_prazo_pagamento && (
+                                              <Badge variant="outline" className="text-[8px] ml-1">Prazo: {m.obra_prazo_pagamento}d</Badge>
+                                            )}
+                                          </p>
+                                        )}
                                       </div>
                                     );
                                   })}
@@ -934,12 +970,13 @@ export default function HoldingReceitasPage() {
 
                     {/* Financial planning tip */}
                     <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
-                      <p className="text-xs font-semibold text-primary mb-1">💡 Dica para o Financeiro</p>
+                      <p className="text-xs font-semibold text-primary mb-1">💡 Como o sistema calcula as projeções</p>
                       <p className="text-[11px] text-muted-foreground">
-                        Use a visão <strong>Semanal</strong> para programar pagamentos de curto prazo. 
-                        A <strong>Quinzenal</strong> para ciclos de pagamento a fornecedores. 
-                        E a <strong>Mensal</strong> para planejamento de fluxo de caixa geral.
-                        O <strong>Acumulado</strong> mostra o valor disponível total para decisões de pagamento.
+                        <strong>Recebido:</strong> data real de pagamento. {" "}
+                        <strong>Aprovada:</strong> data aprovação + prazo de pagamento da obra. {" "}
+                        <strong>Enviada:</strong> data envio + ~15 dias (aprovação estimada) + prazo pgto. {" "}
+                        <strong>Prevista:</strong> data previsão + ~15d + prazo pgto. {" "}
+                        O prazo de pagamento vem do cadastro de cada obra (padrão: 30 dias se não informado).
                       </p>
                     </div>
                   </CardContent>
