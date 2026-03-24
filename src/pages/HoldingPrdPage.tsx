@@ -31,7 +31,7 @@ interface ObraFull {
 
 interface MonthEntry {
   key: string; label: string; mes: number; ano: number;
-  previsto: number; realizado: number; despesas: number;
+  previsto: number; previstoCadastrado: number; realizado: number; despesas: number;
 }
 
 export default function HoldingPrdPage() {
