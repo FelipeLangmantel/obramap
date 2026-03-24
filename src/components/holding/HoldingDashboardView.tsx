@@ -1108,7 +1108,10 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
               <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${HEALTH_COLORS[obra.health]}`} />
               <h3 className="font-semibold text-sm text-foreground truncate">{obra.nome}</h3>
             </div>
-            {obra.empresa && <p className="text-xs text-muted-foreground mt-0.5 truncate">{obra.empresa}</p>}
+            <div className="flex items-center gap-1.5 mt-0.5">
+              {obra.empresa && <p className="text-xs text-muted-foreground truncate">{obra.empresa}</p>}
+              {obra.tipo_contrato && <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0">{obra.tipo_contrato}</Badge>}
+            </div>
             {obra.municipio && <p className="text-[10px] text-muted-foreground truncate">📍 {obra.municipio} / {obra.estado || "RS"}</p>}
           </div>
           <div className="flex items-center gap-1 shrink-0">
