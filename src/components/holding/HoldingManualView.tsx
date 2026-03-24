@@ -249,9 +249,9 @@ export default function HoldingManualView() {
             <ul className="list-disc pl-5 space-y-1">
               <li>5 KPIs: Total Obras, Documentação Completa, Parcial, Crítica, Pendências Abertas.</li>
               <li>Barras de progresso: documentação média e acompanhamento médio do portfólio.</li>
-              <li>Tabela resumo: Doc_Obra (X/6), Ensaios e Projetos (X/5), Saúde, Pendências por obra.</li>
+              <li>Tabela resumo: Pré Obra (X/6), Ensaios e Projetos (X/5), Saúde, Pendências por obra.</li>
             </ul>
-            <p><strong>Aba Doc_Obra:</strong></p>
+            <p><strong>Aba Pré Obra:</strong></p>
             <ul className="list-disc pl-5 space-y-1">
               <li>Tabela com 6 colunas de checkmarks: Ata ✓/✗, OIS ✓/✗, ART ✓/✗, CNO ✓/✗, Impl ✓/✗, SCP ✓/✗.</li>
             </ul>
@@ -360,7 +360,7 @@ export default function HoldingManualView() {
                 <TableRow><TableCell>Receitas</TableCell><TableCell>CSV</TableCell><TableCell>Todas as medições (ENGENHARIA + FINANCEIRO)</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
                 <TableRow><TableCell>Despesas</TableCell><TableCell>CSV</TableCell><TableCell>Todos os gastos mensais por obra</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
                 <TableRow><TableCell>Despesas</TableCell><TableCell>CSV PRD</TableCell><TableCell>Previsto × Realizado × Despesas por obra + ROI</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
-                <TableRow><TableCell>Documentos</TableCell><TableCell>CSV</TableCell><TableCell>Checklist completo Doc_Obra + Ensaios e Projetos</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
+                <TableRow><TableCell>Documentos</TableCell><TableCell>CSV</TableCell><TableCell>Checklist completo Pré Obra + Ensaios e Projetos</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
                 <TableRow><TableCell>PRD</TableCell><TableCell>CSV</TableCell><TableCell>Matriz mensal com Previsto/Realizado/Despesas</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
               </TableBody>
             </Table>
