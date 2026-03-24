@@ -140,6 +140,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
     if (!docId) return;
     setDocs((prev) => prev ? { ...prev, [key]: value } : prev);
     await supabase.from("documentos_obra").update({ [key]: value } as any).eq("id", docId);
+    invalidateHolding();
   };
 
   if (loading || !docs) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
