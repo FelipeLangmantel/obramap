@@ -163,12 +163,12 @@ export default function HoldingDocumentosPage() {
   }, [pendencias, filterPendObra, filterPendStatus, obras]);
 
   const exportCSV = () => {
-    const h = ["Obra", "Empresa", "Doc_Obra", "Acomp_Obra", "Saúde", "Pendências Abertas",
-      ...DOC_OBRA_FIELDS.map(f => f.label), ...ACOMP_FIELDS.map(f => f.label)];
+    const h = ["Obra", "Empresa", "Doc_Obra", "Ensaios e Projetos", "Saúde", "Pendências Abertas",
+      ...DOC_OBRA_FIELDS.map(f => f.label), ...ENSAIOS_FIELDS.map(f => f.label)];
     const rows = obrasFiltradas.map(o => [
-      o.nome, o.empresa || "", `${o.docCount}/6`, `${o.acompCount}/5`, o.health, o.pendenciasAbertas,
+      o.nome, o.empresa || "", `${o.docCount}/6`, `${o.ensaiosCount}/5`, o.health, o.pendenciasAbertas,
       ...DOC_OBRA_FIELDS.map(f => o.docs?.[f.key] ? "Sim" : "Não"),
-      ...ACOMP_FIELDS.map(f => o.docs?.[f.key] ? "Sim" : "Não"),
+      ...ENSAIOS_FIELDS.map(f => o.docs?.[f.key] ? "Sim" : "Não"),
     ]);
     const csv = [h, ...rows].map(r => r.join(";")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
