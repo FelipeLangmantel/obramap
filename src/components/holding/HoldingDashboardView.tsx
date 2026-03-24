@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -42,6 +43,12 @@ import {
   Trash2,
   Upload,
   BookOpen,
+  TableIcon,
+  Download,
+  Search,
+  X,
+  TrendingUp,
+  Pause,
 } from "lucide-react";
 import { addDays, format, differenceInDays, differenceInMonths } from "date-fns";
 
@@ -108,7 +115,7 @@ interface MedicaoPle {
   status_nf: "recebido" | "aguardando_aprovacao" | "pendente";
 }
 
-interface ObraEnriched extends ObraPortfolio {
+export interface ObraEnriched extends ObraPortfolio {
   docs: DocumentosObra | null;
   latestMedicao: MedicaoPle | null;
   allMedicoes: MedicaoPle[];
@@ -117,7 +124,7 @@ interface ObraEnriched extends ObraPortfolio {
   health: "green" | "yellow" | "red";
 }
 
-interface HoldingAlert {
+export interface HoldingAlert {
   id: string;
   obraId: string;
   obraNome: string;
@@ -127,6 +134,11 @@ interface HoldingAlert {
 }
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const BRL_SHORT = (v: number) => {
+  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`;
+  return BRL.format(v);
+};
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   em_andamento: { label: "Em Andamento", className: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" },
@@ -139,6 +151,12 @@ const HEALTH_COLORS: Record<string, string> = {
   green: "bg-emerald-500",
   yellow: "bg-amber-500",
   red: "bg-red-500",
+};
+
+const HEALTH_BORDER: Record<string, string> = {
+  green: "border-l-emerald-500",
+  yellow: "border-l-amber-500",
+  red: "border-l-red-500",
 };
 
 const STATUS_BAR_COLORS: Record<string, string> = {
@@ -191,7 +209,7 @@ export default function HoldingDashboardView() {
   const queryClient = useQueryClient();
   const [selectedObra, setSelectedObra] = useState<ObraEnriched | null>(null);
   const [mainView, setMainView] = useState<"portfolio" | "analytics" | "manual">("portfolio");
-  const [viewMode, setViewMode] = useState<"cards" | "gantt">("cards");
+  const [viewMode, setViewMode] = useState<"cards" | "gantt" | "tabela">("cards");
   const [showNewObraDialog, setShowNewObraDialog] = useState(false);
   const [newObraForm, setNewObraForm] = useState({
     nome: "", empresa: "", num_contrato: "", parceria_scp: "",
@@ -227,6 +245,12 @@ Viamão,Binotto,,,849480.69,,,em_andamento,0,Viamão,RS
 Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
   const [importing, setImporting] = useState(false);
 
+  // Filters
+  const [filterEmpresa, setFilterEmpresa] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterSaude, setFilterSaude] = useState("all");
+  const [searchNome, setSearchNome] = useState("");
+
   const exportarPDF = async () => {
     setIsPrinting(true);
     try {
@@ -234,7 +258,6 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
       const today = format(new Date(), "dd/MM/yyyy");
       const companyName = (company as any)?.name || "Holding";
 
-      // CAPA
       doc.setFillColor(15, 23, 42);
       doc.rect(0, 0, 297, 210, "F");
       doc.setTextColor(255, 255, 255);
@@ -267,7 +290,6 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
         doc.text(k.value, x + 30, 129, { align: "center" });
       });
 
-      // TABELA DE OBRAS
       doc.addPage();
       doc.setTextColor(15, 23, 42);
       doc.setFontSize(13);
@@ -309,7 +331,6 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
         },
       });
 
-      // ALERTAS
       const alertsToShow = alerts.filter((a) => a.severity !== "info");
       if (alertsToShow.length > 0) {
         doc.addPage();
@@ -439,6 +460,25 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
     setImporting(false);
   };
 
+  const exportarCSV = () => {
+    const header = "Obra;Empresa;Contrato;SCP;Valor Contrato;Data Início;Prazo;Previsão Fim;Status;% And.;Docs;Saúde";
+    const rows = obrasFiltradas.map((o) => {
+      const fim = o.data_inicio ? format(addDays(new Date(o.data_inicio), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
+      const statusLbl = STATUS_CONFIG[o.status]?.label || o.status;
+      const healthLbl = o.health === "green" ? "Verde" : o.health === "yellow" ? "Amarelo" : "Vermelho";
+      return `${o.nome};${o.empresa || "—"};${o.num_contrato || "—"};${o.parceria_scp || "—"};${o.valor_contrato};${o.data_inicio || "—"};${o.prazo_dias || "—"};${fim};${statusLbl};${o.percentual_andamento}%;${o.docsCount}/${o.docsTotal};${healthLbl}`;
+    });
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `portfolio-holding-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("CSV exportado!");
+  };
+
   const { data: obras = [], isLoading } = useQuery({
     queryKey: ["holding-portfolio", company?.id],
     queryFn: async () => {
@@ -474,7 +514,6 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
     enabled: !!company?.id,
   });
 
-  // Fetch aditivos for alerts
   const { data: aditivosPendentes = [] } = useQuery({
     queryKey: ["holding-aditivos-pendentes", company?.id],
     queryFn: async () => {
@@ -497,38 +536,34 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
       (s, o) => s + o.allMedicoes.filter((m) => m.status_medicao === "aprovada").reduce((ss, m) => ss + m.valor_medicao, 0), 0
     );
     const obrasAtivas = obras.filter((o) => o.status === "em_andamento").length;
+    const obrasNaoIniciadas = obras.filter((o) => o.status === "nao_iniciada").length;
     const alertasCriticos = obras.filter((o) => o.health === "red").length;
-    return { totalContratos, totalMedicoesAprovadas, obrasAtivas, alertasCriticos };
+    const emAndamento = obras.filter((o) => o.status === "em_andamento");
+    const andamentoMedio = emAndamento.length > 0 ? Math.round(emAndamento.reduce((s, o) => s + o.percentual_andamento, 0) / emAndamento.length) : 0;
+    return { totalContratos, totalMedicoesAprovadas, obrasAtivas, obrasNaoIniciadas, alertasCriticos, andamentoMedio };
   }, [obras]);
 
-  // Generate alerts
   const alerts = useMemo((): HoldingAlert[] => {
     const result: HoldingAlert[] = [];
     const now = new Date();
 
     for (const obra of obras) {
-      // 1. Docs incompletas (<4/6 doc_obra)
       const docObraFields = ["ata", "ois", "art", "cno", "impl", "scp"];
       const docObraCount = obra.docs ? docObraFields.filter((f) => (obra.docs as any)?.[f]).length : 0;
       if (docObraCount < 4) {
         result.push({
-          id: `doc-${obra.id}`,
-          obraId: obra.id,
-          obraNome: obra.nome,
+          id: `doc-${obra.id}`, obraId: obra.id, obraNome: obra.nome,
           severity: docObraCount < 2 ? "critical" : "warning",
           icon: FileWarning,
           message: `${obra.nome} — faltam ${6 - docObraCount} documentos obrigatórios`,
         });
       }
 
-      // 2. Medição pendente >30 dias
       if (obra.latestMedicao?.status_medicao === "pendente" && obra.latestMedicao.data_envio) {
         const days = differenceInDays(now, new Date(obra.latestMedicao.data_envio));
         if (days > 30) {
           result.push({
-            id: `med-${obra.id}`,
-            obraId: obra.id,
-            obraNome: obra.nome,
+            id: `med-${obra.id}`, obraId: obra.id, obraNome: obra.nome,
             severity: days > 60 ? "critical" : "warning",
             icon: Clock,
             message: `${obra.nome} — medição pendente há ${days} dias`,
@@ -536,56 +571,78 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
         }
       }
 
-      // 3. Prazo vencendo em <30 dias
       if (obra.data_inicio && obra.status === "em_andamento") {
         const fimPrevisto = addDays(new Date(obra.data_inicio), obra.prazo_dias + obra.aditivo_prazo_dias);
         const diasRestantes = differenceInDays(fimPrevisto, now);
         if (diasRestantes >= 0 && diasRestantes < 30) {
           result.push({
-            id: `prazo-${obra.id}`,
-            obraId: obra.id,
-            obraNome: obra.nome,
+            id: `prazo-${obra.id}`, obraId: obra.id, obraNome: obra.nome,
             severity: diasRestantes < 7 ? "critical" : "warning",
             icon: CalendarClock,
             message: `${obra.nome} — vence em ${diasRestantes} dias (${format(fimPrevisto, "dd/MM/yyyy")})`,
           });
         } else if (diasRestantes < 0) {
           result.push({
-            id: `prazo-${obra.id}`,
-            obraId: obra.id,
-            obraNome: obra.nome,
-            severity: "critical",
-            icon: CalendarClock,
+            id: `prazo-${obra.id}`, obraId: obra.id, obraNome: obra.nome,
+            severity: "critical", icon: CalendarClock,
             message: `${obra.nome} — prazo vencido há ${Math.abs(diasRestantes)} dias`,
           });
         }
       }
     }
 
-    // 4. Aditivos pendentes
     for (const adit of aditivosPendentes) {
       const obra = obras.find((o) => o.id === adit.obra_id);
       if (obra) {
         result.push({
-          id: `adit-${adit.id}`,
-          obraId: obra.id,
-          obraNome: obra.nome,
-          severity: "info",
-          icon: FileCheck2,
+          id: `adit-${adit.id}`, obraId: obra.id, obraNome: obra.nome,
+          severity: "info", icon: FileCheck2,
           message: `${obra.nome} — aditivo ${adit.num_aditivo || ""} pendente de aprovação`,
         });
       }
     }
 
-    // Sort: critical first
     const order = { critical: 0, warning: 1, info: 2 };
     return result.sort((a, b) => order[a.severity] - order[b.severity]);
   }, [obras, aditivosPendentes]);
+
+  // Filters
+  const empresas = useMemo(() => [...new Set(obras.map(o => o.empresa).filter(Boolean))].sort(), [obras]);
+
+  const obrasFiltradas = useMemo(() => {
+    return obras.filter(o => {
+      if (filterEmpresa !== "all" && o.empresa !== filterEmpresa) return false;
+      if (filterStatus !== "all" && o.status !== filterStatus) return false;
+      if (filterSaude !== "all" && o.health !== filterSaude) return false;
+      if (searchNome && !o.nome.toLowerCase().includes(searchNome.toLowerCase())) return false;
+      return true;
+    });
+  }, [obras, filterEmpresa, filterStatus, filterSaude, searchNome]);
+
+  const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || searchNome !== "";
+
+  const clearFilters = () => {
+    setFilterEmpresa("all");
+    setFilterStatus("all");
+    setFilterSaude("all");
+    setSearchNome("");
+  };
 
   const openObra = useCallback((obraId: string) => {
     const obra = obras.find((o) => o.id === obraId);
     if (obra) setSelectedObra(obra);
   }, [obras]);
+
+  // Summary stats for filtered obras
+  const summaryStats = useMemo(() => {
+    const valorTotal = obrasFiltradas.reduce((s, o) => s + (o.valor_contrato || 0), 0);
+    const emDia = obrasFiltradas.filter(o => o.health === "green").length;
+    const emAtencao = obrasFiltradas.filter(o => o.health === "yellow").length;
+    const totalDocs = obrasFiltradas.reduce((s, o) => s + o.docsCount, 0);
+    const totalDocsMax = obrasFiltradas.reduce((s, o) => s + o.docsTotal, 0);
+    const docMedia = totalDocsMax > 0 ? Math.round((totalDocs / totalDocsMax) * 100) : 0;
+    return { valorTotal, emDia, emAtencao, docMedia };
+  }, [obrasFiltradas]);
 
   if (isLoading) {
     return (
@@ -596,34 +653,27 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
   }
 
   return (
-    <div className="space-y-6">
-      {/* KPI Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard icon={DollarSign} label="Total em Contratos" value={BRL.format(kpis.totalContratos)} color="text-emerald-600 dark:text-emerald-400" bgColor="bg-emerald-100 dark:bg-emerald-900/30" />
-        <KpiCard icon={ClipboardCheck} label="Medições Aprovadas" value={BRL.format(kpis.totalMedicoesAprovadas)} color="text-blue-600 dark:text-blue-400" bgColor="bg-blue-100 dark:bg-blue-900/30" />
-        <KpiCard icon={Building2} label="Obras Ativas" value={String(kpis.obrasAtivas)} color="text-primary" bgColor="bg-primary/10" />
-        <KpiCard icon={AlertTriangle} label="Alertas Críticos" value={String(kpis.alertasCriticos)} color={kpis.alertasCriticos > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"} bgColor={kpis.alertasCriticos > 0 ? "bg-red-100 dark:bg-red-900/30" : "bg-muted/50"} />
+    <div className="space-y-4">
+      {/* KPI Row — 6 cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <KpiCard icon={DollarSign} label="Total em Contratos" value={BRL.format(kpis.totalContratos)} borderColor="border-b-emerald-500" valueColor="text-emerald-600 dark:text-emerald-400" />
+        <KpiCard icon={ClipboardCheck} label="Medições Aprovadas" value={BRL.format(kpis.totalMedicoesAprovadas)} borderColor="border-b-cyan-500" valueColor="text-cyan-600 dark:text-cyan-400" />
+        <KpiCard icon={Building2} label="Obras Ativas" value={String(kpis.obrasAtivas)} borderColor="border-b-blue-500" valueColor="text-blue-600 dark:text-blue-400" />
+        <KpiCard icon={Pause} label="Não Iniciadas" value={String(kpis.obrasNaoIniciadas)} borderColor="border-b-gray-400" valueColor="text-muted-foreground" />
+        <KpiCard icon={AlertTriangle} label="Alertas Críticos" value={String(kpis.alertasCriticos)} borderColor={kpis.alertasCriticos > 0 ? "border-b-red-500" : "border-b-gray-300"} valueColor={kpis.alertasCriticos > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"} />
+        <KpiCard icon={TrendingUp} label="% Andamento Médio" value={`${kpis.andamentoMedio}%`} borderColor="border-b-blue-500" valueColor="text-blue-600 dark:text-blue-400" />
       </div>
 
       {/* Main View Tabs + Actions */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
-          <button
-            onClick={() => setMainView("portfolio")}
-            className={`px-4 py-2 text-sm rounded-md transition-all flex items-center gap-2 ${mainView === "portfolio" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-          >
+          <button onClick={() => setMainView("portfolio")} className={`px-4 py-2 text-sm rounded-md transition-all flex items-center gap-2 ${mainView === "portfolio" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
             <Crown className="h-4 w-4" /> Portfólio
           </button>
-          <button
-            onClick={() => setMainView("analytics")}
-            className={`px-4 py-2 text-sm rounded-md transition-all flex items-center gap-2 ${mainView === "analytics" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-          >
+          <button onClick={() => setMainView("analytics")} className={`px-4 py-2 text-sm rounded-md transition-all flex items-center gap-2 ${mainView === "analytics" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
             <BarChart3 className="h-4 w-4" /> Analytics
           </button>
-          <button
-            onClick={() => setMainView("manual")}
-            className={`px-4 py-2 text-sm rounded-md transition-all flex items-center gap-2 ${mainView === "manual" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-          >
+          <button onClick={() => setMainView("manual")} className={`px-4 py-2 text-sm rounded-md transition-all flex items-center gap-2 ${mainView === "manual" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
             <BookOpen className="h-4 w-4" /> Manual
           </button>
         </div>
@@ -635,6 +685,11 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowImportDialog(true)}>
               <Upload className="h-3.5 w-3.5 mr-1" /> Importar
             </Button>
+            {viewMode === "tabela" && mainView === "portfolio" && (
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={exportarCSV}>
+                <Download className="h-3.5 w-3.5 mr-1" /> Exportar CSV
+              </Button>
+            )}
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={exportarPDF} disabled={isPrinting || obras.length === 0}>
               {isPrinting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <FileDown className="h-3.5 w-3.5 mr-1" />}
               Exportar PDF
@@ -643,38 +698,82 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
         )}
       </div>
 
+      {/* Filter Bar — only in portfolio */}
+      {mainView === "portfolio" && obras.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Buscar obra..."
+              value={searchNome}
+              onChange={(e) => setSearchNome(e.target.value)}
+              className="h-8 w-48 text-xs pl-8"
+            />
+          </div>
+          <Select value={filterEmpresa} onValueChange={setFilterEmpresa}>
+            <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="Todas Empresas" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas Empresas</SelectItem>
+              {empresas.map(e => <SelectItem key={e} value={e!}>{e}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="Todos Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos Status</SelectItem>
+              <SelectItem value="em_andamento">Em Andamento</SelectItem>
+              <SelectItem value="nao_iniciada">Não Iniciada</SelectItem>
+              <SelectItem value="concluida">Concluída</SelectItem>
+              <SelectItem value="paralisada">Paralisada</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterSaude} onValueChange={setFilterSaude}>
+            <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Toda Saúde" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Toda Saúde</SelectItem>
+              <SelectItem value="green">🟢 Verde</SelectItem>
+              <SelectItem value="yellow">🟡 Amarelo</SelectItem>
+              <SelectItem value="red">🔴 Vermelho</SelectItem>
+            </SelectContent>
+          </Select>
+          <Badge variant="secondary" className="text-xs h-6">{obrasFiltradas.length} obras</Badge>
+          {hasActiveFilter && (
+            <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={clearFilters}>
+              <X className="h-3.5 w-3.5 mr-1" /> Limpar
+            </Button>
+          )}
+        </div>
+      )}
+
       {mainView === "portfolio" ? (
         <>
-          {/* Portfolio Sub-Toggle (Cards/Gantt) */}
+          {/* Portfolio Sub-Toggle */}
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground">Obras do Portfólio ({obras.length})</h3>
-            {obras.length > 0 && (
+            <h3 className="text-sm font-semibold text-foreground">Obras do Portfólio ({obrasFiltradas.length})</h3>
+            {obrasFiltradas.length > 0 && (
               <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
-                <button
-                  onClick={() => setViewMode("cards")}
-                  className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${viewMode === "cards" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                >
+                <button onClick={() => setViewMode("cards")} className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${viewMode === "cards" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                   <LayoutGrid className="h-3.5 w-3.5" /> Cards
                 </button>
-                <button
-                  onClick={() => setViewMode("gantt")}
-                  className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${viewMode === "gantt" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                >
+                <button onClick={() => setViewMode("gantt")} className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${viewMode === "gantt" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                   <GanttChart className="h-3.5 w-3.5" /> Gantt
+                </button>
+                <button onClick={() => setViewMode("tabela")} className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${viewMode === "tabela" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                  <TableIcon className="h-3.5 w-3.5" /> Tabela
                 </button>
               </div>
             )}
           </div>
 
           {/* Obras View */}
-          {obras.length === 0 ? (
+          {obrasFiltradas.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
               <Crown className="h-12 w-12 text-muted-foreground" />
-              <p className="text-muted-foreground">Nenhuma obra cadastrada no portfólio.</p>
+              <p className="text-muted-foreground">{hasActiveFilter ? "Nenhuma obra encontrada com os filtros aplicados." : "Nenhuma obra cadastrada no portfólio."}</p>
             </div>
           ) : viewMode === "cards" ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {obras.map((obra) => (
+              {obrasFiltradas.map((obra) => (
                 <ObraCard
                   key={obra.id}
                   obra={obra}
@@ -695,8 +794,20 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
                 />
               ))}
             </div>
+          ) : viewMode === "gantt" ? (
+            <GanttTimeline obras={obrasFiltradas} onObraClick={openObra} />
           ) : (
-            <GanttTimeline obras={obras} onObraClick={openObra} />
+            <ObraTable obras={obrasFiltradas} onObraClick={openObra} />
+          )}
+
+          {/* Summary Bar */}
+          {obrasFiltradas.length > 0 && (
+            <div className="bg-muted/30 rounded-lg px-6 py-3 flex items-center justify-between flex-wrap gap-3 text-sm">
+              <div><span className="text-muted-foreground text-xs">Valor Portfólio</span><p className="font-semibold text-emerald-600 dark:text-emerald-400">{BRL_SHORT(summaryStats.valorTotal)}</p></div>
+              <div><span className="text-muted-foreground text-xs">Obras em dia</span><p className="font-semibold text-emerald-600 dark:text-emerald-400">{summaryStats.emDia}</p></div>
+              <div><span className="text-muted-foreground text-xs">Em atenção</span><p className="font-semibold text-amber-600 dark:text-amber-400">{summaryStats.emAtencao}</p></div>
+              <div><span className="text-muted-foreground text-xs">Doc. média</span><p className="font-semibold text-foreground">{summaryStats.docMedia}%</p></div>
+            </div>
           )}
         </>
       ) : mainView === "manual" ? (
@@ -706,7 +817,7 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
       )}
 
       {/* Central de Alertas */}
-      {alerts.length > 0 && (
+      {alerts.length > 0 && mainView === "portfolio" && (
         <Card className="border-border/60">
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center justify-between">
@@ -737,11 +848,7 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
       )}
 
       {/* Detail Drawer */}
-      <ObraDetailDrawer
-        obraId={selectedObra?.id || null}
-        obraNome={selectedObra?.nome || ""}
-        onClose={() => setSelectedObra(null)}
-      />
+      <ObraDetailDrawer obraId={selectedObra?.id || null} obraNome={selectedObra?.nome || ""} onClose={() => setSelectedObra(null)} />
 
       {/* Nova Obra Dialog */}
       <Dialog open={showNewObraDialog} onOpenChange={(o) => { if (!o) { setShowNewObraDialog(false); setEditingObra(null); resetNewObraForm(); } }}>
@@ -755,34 +862,16 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
               <Input value={newObraForm.nome} onChange={(e) => setNewObraForm(p => ({ ...p, nome: e.target.value }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Empresa</Label>
-                <Input value={newObraForm.empresa} onChange={(e) => setNewObraForm(p => ({ ...p, empresa: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-xs">Nº Contrato</Label>
-                <Input value={newObraForm.num_contrato} onChange={(e) => setNewObraForm(p => ({ ...p, num_contrato: e.target.value }))} />
-              </div>
+              <div><Label className="text-xs">Empresa</Label><Input value={newObraForm.empresa} onChange={(e) => setNewObraForm(p => ({ ...p, empresa: e.target.value }))} /></div>
+              <div><Label className="text-xs">Nº Contrato</Label><Input value={newObraForm.num_contrato} onChange={(e) => setNewObraForm(p => ({ ...p, num_contrato: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Parceria SCP</Label>
-                <Input value={newObraForm.parceria_scp} onChange={(e) => setNewObraForm(p => ({ ...p, parceria_scp: e.target.value }))} placeholder="Ex: SCP Binotto" />
-              </div>
-              <div>
-                <Label className="text-xs">Valor Contrato (R$)</Label>
-                <Input type="number" value={newObraForm.valor_contrato} onChange={(e) => setNewObraForm(p => ({ ...p, valor_contrato: e.target.value }))} />
-              </div>
+              <div><Label className="text-xs">Parceria SCP</Label><Input value={newObraForm.parceria_scp} onChange={(e) => setNewObraForm(p => ({ ...p, parceria_scp: e.target.value }))} placeholder="Ex: SCP Binotto" /></div>
+              <div><Label className="text-xs">Valor Contrato (R$)</Label><Input type="number" value={newObraForm.valor_contrato} onChange={(e) => setNewObraForm(p => ({ ...p, valor_contrato: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Data Início</Label>
-                <Input type="date" value={newObraForm.data_inicio} onChange={(e) => setNewObraForm(p => ({ ...p, data_inicio: e.target.value }))} />
-              </div>
-              <div>
-                <Label className="text-xs">Prazo (dias)</Label>
-                <Input type="number" value={newObraForm.prazo_dias} onChange={(e) => setNewObraForm(p => ({ ...p, prazo_dias: e.target.value }))} />
-              </div>
+              <div><Label className="text-xs">Data Início</Label><Input type="date" value={newObraForm.data_inicio} onChange={(e) => setNewObraForm(p => ({ ...p, data_inicio: e.target.value }))} /></div>
+              <div><Label className="text-xs">Prazo (dias)</Label><Input type="number" value={newObraForm.prazo_dias} onChange={(e) => setNewObraForm(p => ({ ...p, prazo_dias: e.target.value }))} /></div>
             </div>
             <div>
               <Label className="text-xs">Status</Label>
@@ -801,24 +890,12 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
               <Slider value={[newObraForm.percentual_andamento]} onValueChange={([v]) => setNewObraForm(p => ({ ...p, percentual_andamento: v }))} max={100} step={1} className="mt-2" />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Período Medição</Label>
-                <Input value={newObraForm.periodo_medicao} onChange={(e) => setNewObraForm(p => ({ ...p, periodo_medicao: e.target.value }))} placeholder="Mensal, Bimestral..." />
-              </div>
-              <div>
-                <Label className="text-xs">Prazo Pagamento</Label>
-                <Input value={newObraForm.prazo_pagamento} onChange={(e) => setNewObraForm(p => ({ ...p, prazo_pagamento: e.target.value }))} placeholder="30 dias, 45 dias..." />
-              </div>
+              <div><Label className="text-xs">Período Medição</Label><Input value={newObraForm.periodo_medicao} onChange={(e) => setNewObraForm(p => ({ ...p, periodo_medicao: e.target.value }))} placeholder="Mensal, Bimestral..." /></div>
+              <div><Label className="text-xs">Prazo Pagamento</Label><Input value={newObraForm.prazo_pagamento} onChange={(e) => setNewObraForm(p => ({ ...p, prazo_pagamento: e.target.value }))} placeholder="30 dias, 45 dias..." /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Município</Label>
-                <Input value={newObraForm.municipio} onChange={(e) => setNewObraForm(p => ({ ...p, municipio: e.target.value }))} placeholder="Ex: Taquara, Esteio..." />
-              </div>
-              <div>
-                <Label className="text-xs">Estado</Label>
-                <Input value={newObraForm.estado} onChange={(e) => setNewObraForm(p => ({ ...p, estado: e.target.value }))} placeholder="RS" />
-              </div>
+              <div><Label className="text-xs">Município</Label><Input value={newObraForm.municipio} onChange={(e) => setNewObraForm(p => ({ ...p, municipio: e.target.value }))} placeholder="Ex: Taquara, Esteio..." /></div>
+              <div><Label className="text-xs">Estado</Label><Input value={newObraForm.estado} onChange={(e) => setNewObraForm(p => ({ ...p, estado: e.target.value }))} placeholder="RS" /></div>
             </div>
           </div>
           <DialogFooter>
@@ -836,15 +913,11 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir obra?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação não pode ser desfeita. Todos os dados (documentos, medições, despesas) serão removidos.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Esta ação não pode ser desfeita. Todos os dados serão removidos.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteObra} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Excluir
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDeleteObra} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -852,18 +925,12 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
       {/* Import Dialog */}
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Importar Obras em Lote</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Importar Obras em Lote</DialogTitle></DialogHeader>
           <p className="text-xs text-muted-foreground">
             Uma obra por linha, separada por vírgulas:<br />
             <code className="text-[10px] bg-muted px-1 rounded">nome, empresa, num_contrato, parceria_scp, valor_contrato, data_inicio, prazo_dias, status, percentual_andamento, municipio, estado</code>
           </p>
-          <textarea
-            className="w-full h-64 text-xs font-mono border rounded-md p-2 bg-muted/30 focus:outline-none focus:ring-1 focus:ring-ring"
-            value={importText}
-            onChange={(e) => setImportText(e.target.value)}
-          />
+          <textarea className="w-full h-64 text-xs font-mono border rounded-md p-2 bg-muted/30 focus:outline-none focus:ring-1 focus:ring-ring" value={importText} onChange={(e) => setImportText(e.target.value)} />
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setShowImportDialog(false)}>Cancelar</Button>
             <Button size="sm" onClick={handleImportObras} disabled={importing || !importText.trim()}>
@@ -881,9 +948,9 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
    GANTT TIMELINE
    ══════════════════════════════════════════════ */
 
-const GANTT_START = new Date(2025, 0, 1); // Jan 2025
-const GANTT_END = new Date(2026, 11, 31); // Dec 2026
-const TOTAL_MONTHS = differenceInMonths(GANTT_END, GANTT_START) + 1; // 24
+const GANTT_START = new Date(2025, 0, 1);
+const GANTT_END = new Date(2026, 11, 31);
+const TOTAL_MONTHS = differenceInMonths(GANTT_END, GANTT_START) + 1;
 
 function dateToMonthIndex(date: Date): number {
   return Math.max(0, Math.min(TOTAL_MONTHS, differenceInMonths(date, GANTT_START)));
@@ -895,38 +962,27 @@ function GanttTimeline({ obras, onObraClick }: { obras: ObraEnriched[]; onObraCl
     return (
       <Card className="border-border/60">
         <CardContent className="p-8 text-center">
-          <p className="text-sm text-muted-foreground">Nenhuma obra com data de início cadastrada. Edite as obras para definir as datas.</p>
+          <p className="text-sm text-muted-foreground">Nenhuma obra com data de início cadastrada.</p>
         </CardContent>
       </Card>
     );
   }
   const todayIndex = dateToMonthIndex(new Date());
-
   const chartData = obrasWithDates.map((obra) => {
     const start = new Date(obra.data_inicio!);
     const end = addDays(start, obra.prazo_dias + obra.aditivo_prazo_dias);
     const startIdx = dateToMonthIndex(start);
     const endIdx = dateToMonthIndex(end);
     const duration = Math.max(endIdx - startIdx, 0.5);
-
     return {
       nome: obra.nome.length > 25 ? obra.nome.slice(0, 23) + "…" : obra.nome,
-      fullNome: obra.nome,
-      obraId: obra.id,
-      start: startIdx,
-      duration,
-      status: obra.status,
-      andamento: obra.percentual_andamento,
-      inicio: format(start, "dd/MM/yyyy"),
-      fim: format(end, "dd/MM/yyyy"),
+      fullNome: obra.nome, obraId: obra.id, start: startIdx, duration,
+      status: obra.status, andamento: obra.percentual_andamento,
+      inicio: format(start, "dd/MM/yyyy"), fim: format(end, "dd/MM/yyyy"),
     };
   });
 
-  const monthLabels = Array.from({ length: TOTAL_MONTHS }, (_, i) => {
-    const d = new Date(2025, i, 1);
-    return format(d, "MMM/yy");
-  });
-
+  const monthLabels = Array.from({ length: TOTAL_MONTHS }, (_, i) => format(new Date(2025, i, 1), "MMM/yy"));
   const ticks = Array.from({ length: TOTAL_MONTHS }, (_, i) => i);
 
   const CustomTooltip = ({ active, payload }: any) => {
@@ -935,9 +991,7 @@ function GanttTimeline({ obras, onObraClick }: { obras: ObraEnriched[]; onObraCl
     return (
       <div className="bg-popover border border-border rounded-lg shadow-lg p-3 text-xs space-y-1">
         <p className="font-semibold">{d.fullNome}</p>
-        <p>Início: {d.inicio}</p>
-        <p>Fim previsto: {d.fim}</p>
-        <p>Andamento: {d.andamento}%</p>
+        <p>Início: {d.inicio}</p><p>Fim previsto: {d.fim}</p><p>Andamento: {d.andamento}%</p>
       </div>
     );
   };
@@ -950,45 +1004,16 @@ function GanttTimeline({ obras, onObraClick }: { obras: ObraEnriched[]; onObraCl
         <div className="overflow-x-auto">
           <div style={{ minWidth: 800 }}>
             <ResponsiveContainer width="100%" height={barHeight}>
-              <BarChart
-                data={chartData}
-                layout="vertical"
-                margin={{ left: 10, right: 20, top: 10, bottom: 10 }}
-                onClick={(e: any) => {
-                  if (e?.activePayload?.[0]?.payload?.obraId) {
-                    onObraClick(e.activePayload[0].payload.obraId);
-                  }
-                }}
-              >
+              <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 20, top: 10, bottom: 10 }}
+                onClick={(e: any) => { if (e?.activePayload?.[0]?.payload?.obraId) onObraClick(e.activePayload[0].payload.obraId); }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-border/40" />
-                <XAxis
-                  type="number"
-                  domain={[0, TOTAL_MONTHS]}
-                  ticks={ticks}
-                  tickFormatter={(v) => monthLabels[v] || ""}
-                  tick={{ fontSize: 9 }}
-                  interval={1}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="nome"
-                  width={160}
-                  tick={{ fontSize: 11 }}
-                />
+                <XAxis type="number" domain={[0, TOTAL_MONTHS]} ticks={ticks} tickFormatter={(v) => monthLabels[v] || ""} tick={{ fontSize: 9 }} interval={1} />
+                <YAxis type="category" dataKey="nome" width={160} tick={{ fontSize: 11 }} />
                 <ReTooltip content={<CustomTooltip />} />
-                <ReferenceLine
-                  x={todayIndex}
-                  stroke="hsl(var(--destructive))"
-                  strokeWidth={2}
-                  strokeDasharray="4 4"
-                  label={{ value: "Hoje", position: "top", fontSize: 10, fill: "hsl(var(--destructive))" }}
-                />
-                {/* Invisible spacer bar for start offset */}
+                <ReferenceLine x={todayIndex} stroke="hsl(var(--destructive))" strokeWidth={2} strokeDasharray="4 4" label={{ value: "Hoje", position: "top", fontSize: 10, fill: "hsl(var(--destructive))" }} />
                 <Bar dataKey="start" stackId="gantt" fill="transparent" radius={0} />
                 <Bar dataKey="duration" stackId="gantt" radius={[4, 4, 4, 4]} cursor="pointer">
-                  {chartData.map((entry, idx) => (
-                    <Cell key={idx} fill={STATUS_BAR_COLORS[entry.status] || STATUS_BAR_COLORS.nao_iniciada} />
-                  ))}
+                  {chartData.map((entry, idx) => (<Cell key={idx} fill={STATUS_BAR_COLORS[entry.status] || STATUS_BAR_COLORS.nao_iniciada} />))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -1006,19 +1031,17 @@ function GanttTimeline({ obras, onObraClick }: { obras: ObraEnriched[]; onObraCl
 }
 
 /* ══════════════════════════════════════════════
-   KPI Card
+   KPI Card (compact with bottom border)
    ══════════════════════════════════════════════ */
 
-function KpiCard({ icon: Icon, label, value, color, bgColor }: { icon: any; label: string; value: string; color: string; bgColor: string }) {
+function KpiCard({ icon: Icon, label, value, borderColor, valueColor }: { icon: any; label: string; value: string; borderColor: string; valueColor: string }) {
   return (
-    <Card className="border-border/60">
+    <Card className={`border-border/60 border-b-2 ${borderColor}`}>
       <CardContent className="p-4 flex items-center gap-3">
-        <div className={`p-2.5 rounded-lg ${bgColor}`}>
-          <Icon className={`h-5 w-5 ${color}`} />
-        </div>
+        <Icon className={`h-4 w-4 shrink-0 ${valueColor}`} />
         <div className="min-w-0">
-          <p className="text-xs text-muted-foreground truncate">{label}</p>
-          <p className={`text-lg font-bold ${color} truncate`}>{value}</p>
+          <p className="text-[10px] text-muted-foreground truncate">{label}</p>
+          <p className={`text-xl font-bold ${valueColor} truncate`}>{value}</p>
         </div>
       </CardContent>
     </Card>
@@ -1026,19 +1049,17 @@ function KpiCard({ icon: Icon, label, value, color, bgColor }: { icon: any; labe
 }
 
 /* ══════════════════════════════════════════════
-   Obra Card
+   Obra Card (redesigned, denser)
    ══════════════════════════════════════════════ */
 
 function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onClick: () => void; onEdit: () => void; onDelete: () => void }) {
   const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
-  const previsaoFim =
-    obra.data_inicio
-      ? format(addDays(new Date(obra.data_inicio), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yyyy")
-      : "—";
+  const previsaoFim = obra.data_inicio ? format(addDays(new Date(obra.data_inicio), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
+  const receitas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
 
   return (
-    <Card className="border-border/60 hover:border-primary/40 hover:shadow-md transition-all cursor-pointer" onClick={onClick}>
-      <CardContent className="p-4 space-y-3">
+    <Card className={`border-border/60 border-l-4 ${HEALTH_BORDER[obra.health]} hover:border-primary/40 hover:shadow-md transition-all cursor-pointer`} onClick={onClick}>
+      <CardContent className="p-4 space-y-2.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -1052,17 +1073,11 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
             <Badge className={`text-[10px] ${statusCfg.className}`} variant="secondary">{statusCfg.label}</Badge>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="p-1 rounded-md hover:bg-muted" onClick={(e) => e.stopPropagation()}>
-                  <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                </button>
+                <button className="p-1 rounded-md hover:bg-muted" onClick={(e) => e.stopPropagation()}><MoreVertical className="h-4 w-4 text-muted-foreground" /></button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
-                  <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive">
-                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir
-                </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}><Pencil className="h-3.5 w-3.5 mr-2" /> Editar</DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive"><Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -1073,21 +1088,84 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
             <span className="text-muted-foreground">Andamento</span>
             <span className="font-medium text-foreground">{obra.percentual_andamento}%</span>
           </div>
-          <Progress value={obra.percentual_andamento} className="h-2" />
+          <Progress value={obra.percentual_andamento} className="h-1.5" />
         </div>
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+        <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 text-xs">
           <div><span className="text-muted-foreground">Contrato</span><p className="font-medium text-foreground truncate">{obra.num_contrato || "—"}</p></div>
-          <div><span className="text-muted-foreground">Valor</span><p className="font-medium text-foreground truncate">{BRL.format(obra.valor_contrato)}</p></div>
-          <div><span className="text-muted-foreground">Previsão Fim</span><p className="font-medium text-foreground">{previsaoFim}</p></div>
-          <div><span className="text-muted-foreground">Docs</span><p className="font-medium text-foreground">{obra.docsCount}/{obra.docsTotal}</p></div>
+          <div><span className="text-muted-foreground">Empresa</span><p className="font-medium text-foreground truncate">{obra.empresa || "—"}</p></div>
+          <div><span className="text-muted-foreground">SCP</span><p className="font-medium text-foreground truncate">{obra.parceria_scp || "—"}</p></div>
+          <div><span className="text-muted-foreground">Valor</span><p className="font-medium text-foreground truncate">{BRL_SHORT(obra.valor_contrato)}</p></div>
+          <div><span className="text-muted-foreground">Início</span><p className="font-medium text-foreground">{obra.data_inicio ? format(new Date(obra.data_inicio), "dd/MM/yy") : "—"}</p></div>
+          <div><span className="text-muted-foreground">Prev. Fim</span><p className="font-medium text-foreground">{previsaoFim}</p></div>
         </div>
 
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {obra.parceria_scp && <Badge variant="outline" className="text-[10px]">SCP: {obra.parceria_scp}</Badge>}
-          {obra.latestMedicao && (
-            <Badge variant="outline" className="text-[10px]">Última: {obra.latestMedicao.mes_referencia}/{obra.latestMedicao.ano_referencia}</Badge>
-          )}
+        {receitas > 0 && (
+          <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">✓ {BRL_SHORT(receitas)} recebido</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   Obra Table (full data table view)
+   ══════════════════════════════════════════════ */
+
+function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick: (id: string) => void }) {
+  return (
+    <Card className="border-border/60">
+      <CardContent className="p-0">
+        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/50">
+                <TableHead className="text-[10px] font-semibold w-8 sticky top-0 bg-muted/90 z-10">#</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 min-w-[160px]">Obra</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">Empresa</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">Contrato</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">SCP</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-right">Valor Contrato</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-right">Receitas</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">Data Início</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-center">Prazo</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">Prev. Fim</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">Status</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-center">% And.</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-center">Docs</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-center">Saúde</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {obras.map((obra, idx) => {
+                const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
+                const previsaoFim = obra.data_inicio ? format(addDays(new Date(obra.data_inicio), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yy") : "—";
+                const receitas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
+                return (
+                  <TableRow
+                    key={obra.id}
+                    className={`cursor-pointer hover:bg-muted/40 ${idx % 2 === 0 ? "bg-muted/10" : ""}`}
+                    onClick={() => onObraClick(obra.id)}
+                  >
+                    <TableCell className="text-[10px] text-muted-foreground py-2">{idx + 1}</TableCell>
+                    <TableCell className="text-xs font-medium py-2 text-primary hover:underline">{obra.nome}</TableCell>
+                    <TableCell className="text-[10px] py-2">{obra.empresa || "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2">{obra.num_contrato || "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2">{obra.parceria_scp || "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2 text-right font-mono">{BRL.format(obra.valor_contrato)}</TableCell>
+                    <TableCell className="text-[10px] py-2 text-right font-mono">{receitas > 0 ? BRL.format(receitas) : "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2">{obra.data_inicio ? format(new Date(obra.data_inicio), "dd/MM/yy") : "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2 text-center">{obra.prazo_dias ? `${obra.prazo_dias}d` : "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2">{previsaoFim}</TableCell>
+                    <TableCell className="py-2"><Badge className={`text-[9px] ${statusCfg.className}`} variant="secondary">{statusCfg.label}</Badge></TableCell>
+                    <TableCell className="text-[10px] py-2 text-center font-medium">{obra.percentual_andamento}%</TableCell>
+                    <TableCell className="text-[10px] py-2 text-center">{obra.docsCount}/{obra.docsTotal}</TableCell>
+                    <TableCell className="py-2 text-center"><span className={`inline-block h-3 w-3 rounded-full ${HEALTH_COLORS[obra.health]}`} /></TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
       </CardContent>
     </Card>
