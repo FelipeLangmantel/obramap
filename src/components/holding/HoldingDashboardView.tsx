@@ -232,6 +232,9 @@ export default function HoldingDashboardView() {
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
 
+  // Global company filter (persists across all views)
+  const [globalEmpresa, setGlobalEmpresa] = useState("all");
+
   // Filters
   const [filterEmpresa, setFilterEmpresa] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
