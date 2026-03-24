@@ -324,16 +324,18 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={prdData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                <ComposedChart data={prdData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.4)" />
                   <XAxis dataKey="nome" fontSize={10} tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                  <YAxis fontSize={10} tickFormatter={(v) => BRL_SHORT(v)} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis yAxisId="left" fontSize={10} tickFormatter={(v) => BRL_SHORT(v)} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis yAxisId="right" orientation="right" fontSize={9} tickFormatter={(v: number) => `${v.toFixed(0)}%`} tick={{ fill: "hsl(var(--muted-foreground))" }} />
                   <Tooltip content={<CustomBarTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="previsto" name="Previsto" fill="#3b82f6" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="realizado" name="Realizado" fill="#22c55e" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="despesas" name="Despesas" fill="#ef4444" radius={[3, 3, 0, 0]} />
-                </BarChart>
+                  <Bar yAxisId="left" dataKey="previsto" name="Previsto" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                  <Bar yAxisId="left" dataKey="realizado" name="Realizado" fill="#22c55e" radius={[3, 3, 0, 0]} />
+                  <Bar yAxisId="left" dataKey="despesas" name="Despesas" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                  <Line yAxisId="right" type="monotone" dataKey="roi" name="ROI %" stroke="#a855f7" strokeWidth={2} dot={{ r: 3 }} />
+                </ComposedChart>
               </ResponsiveContainer>
             )}
           </CardContent>
