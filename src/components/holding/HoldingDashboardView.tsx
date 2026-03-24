@@ -349,10 +349,18 @@ export default function HoldingDashboardView() {
       toast.success("Obra cadastrada com sucesso!");
     }
     queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
-    toast.success("Obra cadastrada com sucesso!");
     setShowNewObraDialog(false);
+    setEditingObra(null);
     resetNewObraForm();
     setSavingObra(false);
+  };
+
+  const handleDeleteObra = async () => {
+    if (!deletingObraId || !company?.id) return;
+    await supabase.from("obras_portfolio").delete().eq("id", deletingObraId);
+    queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+    toast.success("Obra excluída.");
+    setDeletingObraId(null);
   };
 
   const { data: obras = [], isLoading } = useQuery({
