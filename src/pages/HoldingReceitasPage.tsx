@@ -28,6 +28,9 @@ interface MedicaoCompleta {
   obra_empresa: string | null;
   obra_contrato: string | null;
   obra_scp: string | null;
+  obra_uh: number | null;
+  obra_responsavel: string | null;
+  obra_tipo_contrato: string | null;
   num_medicao: string | null;
   mes_referencia: string | null;
   ano_referencia: number | null;
