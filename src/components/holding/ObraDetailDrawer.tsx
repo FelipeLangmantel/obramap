@@ -37,11 +37,16 @@ export default function ObraDetailDrawer({ obraId, obraNome, obraUH, obraRespons
   );
 }
 
-function ObraDetailContent({ obraId, obraNome }: { obraId: string; obraNome: string }) {
+function ObraDetailContent({ obraId, obraNome, obraUH, obraResponsavel, obraTipoContrato }: { obraId: string; obraNome: string; obraUH?: number | null; obraResponsavel?: string | null; obraTipoContrato?: string | null }) {
   return (
     <div className="flex flex-col h-full">
       <SheetHeader className="px-6 pt-6 pb-4">
         <SheetTitle className="text-lg">{obraNome}</SheetTitle>
+        <div className="flex items-center gap-2 flex-wrap">
+          {obraTipoContrato && <Badge variant="outline" className="text-[10px]">{obraTipoContrato}</Badge>}
+          {obraUH && <Badge variant="secondary" className="text-[10px]">{obraUH} UH</Badge>}
+          {obraResponsavel && <span className="text-[10px] text-muted-foreground">👤 {obraResponsavel}</span>}
+        </div>
       </SheetHeader>
       <Tabs defaultValue="documentos" className="flex-1 flex flex-col">
         <TabsList className="mx-6 w-fit">

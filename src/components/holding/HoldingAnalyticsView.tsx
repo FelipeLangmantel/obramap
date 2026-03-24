@@ -160,7 +160,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
         .reduce((s: number, d: any) => s + (d.valor || 0), 0);
       const roi = medAprovadas > 0 && despesas > 0 ? ((medAprovadas - despesas) / despesas) * 100 : 0;
       return {
-        nome: o.nome.length > 14 ? o.nome.slice(0, 12) + "…" : o.nome,
+        nome: o.uh ? `${o.nome.slice(0, 12)}… (${o.uh}UH)` : (o.nome.length > 14 ? o.nome.slice(0, 12) + "…" : o.nome),
         fullNome: o.nome,
         previsto: o.valor_contrato || 0,
         realizado: medAprovadas,

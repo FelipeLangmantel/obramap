@@ -489,7 +489,7 @@ export default function HoldingReceitasPage() {
                         );
                       })}
                       {medicoesFiltradas.length === 0 && (
-                        <TableRow><TableCell colSpan={14} className="text-center py-8 text-muted-foreground">Nenhuma medição encontrada.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={16} className="text-center py-8 text-muted-foreground">Nenhuma medição encontrada.</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>

@@ -870,7 +870,7 @@ export default function HoldingDashboardView() {
       )}
 
       {/* Detail Drawer */}
-      <ObraDetailDrawer obraId={selectedObra?.id || null} obraNome={selectedObra?.nome || ""} onClose={() => setSelectedObra(null)} />
+      <ObraDetailDrawer obraId={selectedObra?.id || null} obraNome={selectedObra?.nome || ""} obraUH={selectedObra?.uh} obraResponsavel={selectedObra?.responsavel} obraTipoContrato={selectedObra?.tipo_contrato} onClose={() => setSelectedObra(null)} />
 
       {/* Nova Obra Dialog */}
       <Dialog open={showNewObraDialog} onOpenChange={(o) => { if (!o) { setShowNewObraDialog(false); setEditingObra(null); resetNewObraForm(); } }}>
