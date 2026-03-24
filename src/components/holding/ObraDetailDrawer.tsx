@@ -820,13 +820,50 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
    ══════════════════════════════════════════════ */
 
 function AditivosTab({ obraId }: { obraId: string }) {
+  const invalidateHolding = useInvalidateHolding();
   const [aditivos, setAditivos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({
+    num_aditivo: "", aditivo_prazo_dias: 0, aditivo_valor: 0,
+    supressao_valor: 0, data: "", status: "pendente" as string,
+  });
 
-  useEffect(() => {
-    supabase.from("aditivos_contratos").select("*").eq("obra_id", obraId).order("data")
-      .then(({ data }) => { setAditivos(data || []); setLoading(false); });
+  const load = useCallback(async () => {
+    const { data } = await supabase.from("aditivos_contratos").select("*").eq("obra_id", obraId).order("data");
+    setAditivos(data || []);
+    setLoading(false);
   }, [obraId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const addAditivo = async () => {
+    const payload: any = {
+      obra_id: obraId,
+      num_aditivo: form.num_aditivo || null,
+      aditivo_prazo_dias: form.aditivo_prazo_dias || 0,
+      aditivo_valor: form.aditivo_valor || 0,
+      supressao_valor: form.supressao_valor || 0,
+      status: form.status,
+    };
+    if (form.data) payload.data = form.data;
+    const { error } = await supabase.from("aditivos_contratos").insert(payload);
+    if (error) { toast.error("Erro ao salvar aditivo"); return; }
+    toast.success("Aditivo adicionado!");
+    invalidateHolding();
+    setShowForm(false);
+    setForm({ num_aditivo: "", aditivo_prazo_dias: 0, aditivo_valor: 0, supressao_valor: 0, data: "", status: "pendente" });
+    load();
+  };
+
+  const deleteAditivo = async (id: string) => {
+    if (!confirm("Excluir este aditivo?")) return;
+    const { error } = await supabase.from("aditivos_contratos").delete().eq("id", id);
+    if (error) { toast.error("Erro ao excluir"); return; }
+    toast.success("Aditivo excluído.");
+    invalidateHolding();
+    load();
+  };
 
   if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
 
@@ -836,11 +873,48 @@ function AditivosTab({ obraId }: { obraId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4 flex-wrap">
-        <Badge variant="outline" className="text-xs">Total dias aditivados: {totalDias}</Badge>
-        <Badge variant="outline" className="text-xs">Total valor: {BRL.format(totalValor)}</Badge>
-        {totalSupressao > 0 && <Badge variant="outline" className="text-xs text-red-600">Supressão: {BRL.format(totalSupressao)}</Badge>}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4 flex-wrap">
+          <Badge variant="outline" className="text-xs">Total dias aditivados: {totalDias}</Badge>
+          <Badge variant="outline" className="text-xs">Total valor: {BRL.format(totalValor)}</Badge>
+          {totalSupressao > 0 && <Badge variant="outline" className="text-xs text-red-600">Supressão: {BRL.format(totalSupressao)}</Badge>}
+        </div>
+        <Button size="sm" variant="outline" onClick={() => setShowForm(!showForm)}>
+          <Plus className="h-4 w-4 mr-1" /> Novo Aditivo
+        </Button>
       </div>
+
+      {showForm && (
+        <Card className="border-dashed">
+          <CardContent className="p-4 space-y-3">
+            <h4 className="font-semibold text-sm">Novo Aditivo</h4>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div><label className="text-xs text-muted-foreground">Nº Aditivo</label><Input value={form.num_aditivo} onChange={(e) => setForm({ ...form, num_aditivo: e.target.value })} placeholder="Ex: 01" /></div>
+              <div><label className="text-xs text-muted-foreground">Prazo (dias)</label><Input type="number" value={form.aditivo_prazo_dias || ""} onChange={(e) => setForm({ ...form, aditivo_prazo_dias: Number(e.target.value) })} /></div>
+              <div><label className="text-xs text-muted-foreground">Valor Aditivo (R$)</label>
+                <CurrencyInput value={form.aditivo_valor} onChange={(v) => setForm({ ...form, aditivo_valor: v })} />
+              </div>
+              <div><label className="text-xs text-muted-foreground">Supressão (R$)</label>
+                <CurrencyInput value={form.supressao_valor} onChange={(v) => setForm({ ...form, supressao_valor: v })} />
+              </div>
+              <div><label className="text-xs text-muted-foreground">Data</label><Input type="date" value={form.data} onChange={(e) => setForm({ ...form, data: e.target.value })} /></div>
+              <div>
+                <label className="text-xs text-muted-foreground">Status</label>
+                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pendente">Pendente</SelectItem>
+                    <SelectItem value="aprovado">Aprovado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button size="sm" onClick={addAditivo}>Salvar Aditivo</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="overflow-x-auto">
         <Table>
@@ -852,6 +926,7 @@ function AditivosTab({ obraId }: { obraId: string }) {
               <TableHead className="text-right">Supressão</TableHead>
               <TableHead>Data</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -861,16 +936,21 @@ function AditivosTab({ obraId }: { obraId: string }) {
                 <TableCell>{a.aditivo_prazo_dias > 0 ? `+${a.aditivo_prazo_dias}` : "—"}</TableCell>
                 <TableCell className="text-right font-mono">{a.aditivo_valor > 0 ? BRL.format(a.aditivo_valor) : "—"}</TableCell>
                 <TableCell className="text-right font-mono">{a.supressao_valor > 0 ? BRL.format(a.supressao_valor) : "—"}</TableCell>
-                <TableCell>{a.data ? format(new Date(a.data), "dd/MM/yyyy") : "—"}</TableCell>
+                <TableCell>{a.data ? format(new Date(a.data + "T12:00:00"), "dd/MM/yyyy") : "—"}</TableCell>
                 <TableCell>
                   <Badge variant="secondary" className={`text-[10px] ${a.status === "aprovado" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"}`}>
                     {a.status === "aprovado" ? "Aprovado" : "Pendente"}
                   </Badge>
                 </TableCell>
+                <TableCell>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteAditivo(a.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
             {aditivos.length === 0 && (
-              <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhum aditivo.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum aditivo.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
