@@ -913,6 +913,7 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
               <h3 className="font-semibold text-sm text-foreground truncate">{obra.nome}</h3>
             </div>
             {obra.empresa && <p className="text-xs text-muted-foreground mt-0.5 truncate">{obra.empresa}</p>}
+            {obra.municipio && <p className="text-[10px] text-muted-foreground truncate">📍 {obra.municipio} / {obra.estado || "RS"}</p>}
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <Badge className={`text-[10px] ${statusCfg.className}`} variant="secondary">{statusCfg.label}</Badge>
