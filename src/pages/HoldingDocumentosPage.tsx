@@ -47,9 +47,9 @@ function countEnsaios(docs: any): number {
   return ENSAIOS_FIELDS.reduce((s, f) => s + (docs[f.key] ? 1 : 0), 0);
 }
 
-function healthDocs(docCount: number, acompCount: number): "verde" | "amarelo" | "vermelho" {
-  if (docCount >= 5 && acompCount >= 4) return "verde";
-  if (docCount >= 3 && acompCount >= 2) return "amarelo";
+function healthDocs(docCount: number, ensaiosCount: number): "verde" | "amarelo" | "vermelho" {
+  if (docCount >= 5 && ensaiosCount >= 4) return "verde";
+  if (docCount >= 3 && ensaiosCount >= 2) return "amarelo";
   return "vermelho";
 }
 
