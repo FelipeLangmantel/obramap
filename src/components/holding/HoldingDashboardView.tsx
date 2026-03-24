@@ -67,6 +67,8 @@ interface ObraPortfolio {
   percentual_andamento: number;
   periodo_medicao: string | null;
   prazo_pagamento: string | null;
+  municipio: string | null;
+  estado: string | null;
   created_at: string;
 }
 
@@ -191,6 +193,7 @@ export default function HoldingDashboardView() {
     status: "nao_iniciada" as "nao_iniciada" | "em_andamento" | "concluida" | "paralisada",
     percentual_andamento: 0,
     periodo_medicao: "", prazo_pagamento: "",
+    municipio: "", estado: "RS",
   });
   const [savingObra, setSavingObra] = useState(false);
   const [editingObra, setEditingObra] = useState<ObraEnriched | null>(null);
@@ -315,6 +318,7 @@ export default function HoldingDashboardView() {
     valor_contrato: "", data_inicio: "", prazo_dias: "",
     status: "nao_iniciada", percentual_andamento: 0,
     periodo_medicao: "", prazo_pagamento: "",
+    municipio: "", estado: "RS",
   });
 
   const handleSaveObra = async () => {
@@ -336,6 +340,8 @@ export default function HoldingDashboardView() {
       percentual_andamento: newObraForm.percentual_andamento,
       periodo_medicao: newObraForm.periodo_medicao || null,
       prazo_pagamento: newObraForm.prazo_pagamento || null,
+      municipio: newObraForm.municipio || null,
+      estado: newObraForm.estado || "RS",
     };
 
     if (editingObra) {
@@ -579,6 +585,7 @@ export default function HoldingDashboardView() {
                   data_inicio: obra.data_inicio || "", prazo_dias: String(obra.prazo_dias || ""),
                   status: obra.status, percentual_andamento: obra.percentual_andamento,
                   periodo_medicao: obra.periodo_medicao || "", prazo_pagamento: obra.prazo_pagamento || "",
+                  municipio: obra.municipio || "", estado: obra.estado || "RS",
                 });
                 setEditingObra(obra);
                 setShowNewObraDialog(true);
@@ -694,6 +701,16 @@ export default function HoldingDashboardView() {
               <div>
                 <Label className="text-xs">Prazo Pagamento</Label>
                 <Input value={newObraForm.prazo_pagamento} onChange={(e) => setNewObraForm(p => ({ ...p, prazo_pagamento: e.target.value }))} placeholder="30 dias, 45 dias..." />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Município</Label>
+                <Input value={newObraForm.municipio} onChange={(e) => setNewObraForm(p => ({ ...p, municipio: e.target.value }))} placeholder="Ex: Taquara, Esteio..." />
+              </div>
+              <div>
+                <Label className="text-xs">Estado</Label>
+                <Input value={newObraForm.estado} onChange={(e) => setNewObraForm(p => ({ ...p, estado: e.target.value }))} placeholder="RS" />
               </div>
             </div>
           </div>
@@ -897,6 +914,7 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
               <h3 className="font-semibold text-sm text-foreground truncate">{obra.nome}</h3>
             </div>
             {obra.empresa && <p className="text-xs text-muted-foreground mt-0.5 truncate">{obra.empresa}</p>}
+            {obra.municipio && <p className="text-[10px] text-muted-foreground truncate">📍 {obra.municipio} / {obra.estado || "RS"}</p>}
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <Badge className={`text-[10px] ${statusCfg.className}`} variant="secondary">{statusCfg.label}</Badge>

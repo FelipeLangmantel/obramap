@@ -4070,7 +4070,11 @@ export type Database = {
           created_at: string
           data_inicio: string | null
           empresa: string | null
+          estado: string | null
           id: string
+          latitude: number | null
+          longitude: number | null
+          municipio: string | null
           nome: string
           num_contrato: string | null
           parceria_scp: string | null
@@ -4087,7 +4091,11 @@ export type Database = {
           created_at?: string
           data_inicio?: string | null
           empresa?: string | null
+          estado?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
+          municipio?: string | null
           nome: string
           num_contrato?: string | null
           parceria_scp?: string | null
@@ -4104,7 +4112,11 @@ export type Database = {
           created_at?: string
           data_inicio?: string | null
           empresa?: string | null
+          estado?: string | null
           id?: string
+          latitude?: number | null
+          longitude?: number | null
+          municipio?: string | null
           nome?: string
           num_contrato?: string | null
           parceria_scp?: string | null
