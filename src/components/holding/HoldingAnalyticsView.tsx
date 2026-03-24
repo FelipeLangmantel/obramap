@@ -205,7 +205,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
     const medicoesOk = filteredObras.filter(o => o.latestMedicao?.status_medicao === "aprovada").length;
     const noPrazo = filteredObras.filter(o => {
       if (o.status !== "em_andamento" || !o.data_inicio) return false;
-      const fim = new Date(o.data_inicio);
+      const fim = parseLocalDate(o.data_inicio!);
       fim.setDate(fim.getDate() + o.prazo_dias + o.aditivo_prazo_dias);
       return fim >= new Date();
     }).length;

@@ -302,7 +302,7 @@ export default function HoldingDashboardView() {
         startY: 22,
         head: [["Obra", "Contrato", "Empresa", "Valor", "Status", "%", "Prev. Fim", "Docs", "Saúde"]],
         body: sorted.map((o) => {
-          const fim = o.data_inicio ? format(addDays(new Date(o.data_inicio), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yy") : "—";
+          const fim = o.data_inicio ? format(addDays(parseLocalDate(o.data_inicio!), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yy") : "—";
           return [o.nome, o.num_contrato || "—", o.empresa || "—", BRL.format(o.valor_contrato), statusLbl[o.status], `${o.percentual_andamento}%`, fim, `${o.docsCount}/${o.docsTotal}`, healthLbl[o.health]];
         }),
         styles: { fontSize: 8, cellPadding: 2.5 },
@@ -482,7 +482,7 @@ export default function HoldingDashboardView() {
   const exportarCSV = () => {
     const header = "Obra;Empresa;Contrato;SCP;UH;Tipo Contrato;Responsável;Valor Contrato;Data Início;Prazo;Previsão Fim;Status;% And.;Docs;Saúde";
     const rows = obrasFiltradas.map((o) => {
-      const fim = o.data_inicio ? format(addDays(new Date(o.data_inicio), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
+      const fim = o.data_inicio ? format(addDays(parseLocalDate(o.data_inicio!), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
       const statusLbl = STATUS_CONFIG[o.status]?.label || o.status;
       const healthLbl = o.health === "green" ? "Verde" : o.health === "yellow" ? "Amarelo" : "Vermelho";
       return `${o.nome};${o.empresa || "—"};${o.num_contrato || "—"};${o.parceria_scp || "—"};${o.uh || "—"};${o.tipo_contrato || "—"};${o.responsavel || "—"};${o.valor_contrato};${o.data_inicio || "—"};${o.prazo_dias || "—"};${fim};${statusLbl};${o.percentual_andamento}%;${o.docsCount}/${o.docsTotal};${healthLbl}`;
@@ -591,7 +591,7 @@ export default function HoldingDashboardView() {
       }
 
       if (obra.data_inicio && obra.status === "em_andamento") {
-        const fimPrevisto = addDays(new Date(obra.data_inicio), obra.prazo_dias + obra.aditivo_prazo_dias);
+        const fimPrevisto = addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias);
         const diasRestantes = differenceInDays(fimPrevisto, now);
         if (diasRestantes >= 0 && diasRestantes < 30) {
           result.push({
@@ -1064,7 +1064,7 @@ function GanttTimeline({ obras, onObraClick }: { obras: ObraEnriched[]; onObraCl
   }
   const todayIndex = dateToMonthIndex(new Date());
   const chartData = obrasWithDates.map((obra) => {
-    const start = new Date(obra.data_inicio!);
+    const start = parseLocalDate(obra.data_inicio!);
     const end = addDays(start, obra.prazo_dias + obra.aditivo_prazo_dias);
     const startIdx = dateToMonthIndex(start);
     const endIdx = dateToMonthIndex(end);
@@ -1149,7 +1149,7 @@ function KpiCard({ icon: Icon, label, value, borderColor, valueColor }: { icon: 
 
 function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onClick: () => void; onEdit: () => void; onDelete: () => void }) {
   const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
-  const previsaoFim = obra.data_inicio ? format(addDays(new Date(obra.data_inicio), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
+  const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
   const receitas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
 
   return (
@@ -1194,7 +1194,7 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
           <div><span className="text-muted-foreground">UH</span><p className="font-medium text-foreground truncate">{obra.uh || "—"}</p></div>
           <div><span className="text-muted-foreground">SCP</span><p className="font-medium text-foreground truncate">{obra.parceria_scp || "—"}</p></div>
           <div><span className="text-muted-foreground">Valor</span><p className="font-medium text-foreground truncate">{BRL_SHORT(obra.valor_contrato)}</p></div>
-          <div><span className="text-muted-foreground">Início</span><p className="font-medium text-foreground">{obra.data_inicio ? format(new Date(obra.data_inicio), "dd/MM/yy") : "—"}</p></div>
+          <div><span className="text-muted-foreground">Início</span><p className="font-medium text-foreground">{obra.data_inicio ? format(parseLocalDate(obra.data_inicio!), "dd/MM/yy") : "—"}</p></div>
           <div><span className="text-muted-foreground">Prev. Fim</span><p className="font-medium text-foreground">{previsaoFim}</p></div>
         </div>
 
@@ -1244,7 +1244,7 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
             <TableBody>
               {obras.map((obra, idx) => {
                 const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
-                const previsaoFim = obra.data_inicio ? format(addDays(new Date(obra.data_inicio), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yy") : "—";
+                const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yy") : "—";
                 const receitas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
                 return (
                   <TableRow
@@ -1262,7 +1262,7 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
                     <TableCell className="text-[10px] py-2">{obra.parceria_scp || "—"}</TableCell>
                     <TableCell className="text-[10px] py-2 text-right font-mono">{BRL.format(obra.valor_contrato)}</TableCell>
                     <TableCell className="text-[10px] py-2 text-right font-mono">{receitas > 0 ? BRL.format(receitas) : "—"}</TableCell>
-                    <TableCell className="text-[10px] py-2">{obra.data_inicio ? format(new Date(obra.data_inicio), "dd/MM/yy") : "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2">{obra.data_inicio ? format(parseLocalDate(obra.data_inicio!), "dd/MM/yy") : "—"}</TableCell>
                     <TableCell className="text-[10px] py-2 text-center">{obra.prazo_dias ? `${obra.prazo_dias}d` : "—"}</TableCell>
                     <TableCell className="text-[10px] py-2">{previsaoFim}</TableCell>
                     <TableCell className="py-2"><Badge className={`text-[9px] ${statusCfg.className}`} variant="secondary">{statusCfg.label}</Badge></TableCell>
