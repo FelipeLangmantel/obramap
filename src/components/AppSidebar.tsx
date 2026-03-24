@@ -72,7 +72,7 @@ import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import obraMapLogoDark from "@/assets/obramap-logo-new.png";
 import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 
-type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization";
+type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard";
 
 // Views com rotas separadas (navegam para página diferente)
 type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements";
