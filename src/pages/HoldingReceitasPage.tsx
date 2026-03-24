@@ -269,38 +269,46 @@ export default function HoldingReceitasPage() {
   // ─── Programação Financeira (Semanal / Quinzenal / Mensal) ───
   const programacaoData = useMemo(() => {
     const now = new Date();
-    // Use data_envio, data_aprovacao, or data_previsao_medicao to determine when money arrives
-    // Group by: expected receipt date based on status flow
+    // Project PAYMENT dates based on obra's prazo_pagamento
+    // The financial team needs to know WHEN money will actually arrive, not when it was sent
     const medicoesComData = medicoes.map(m => {
-      // Best date to estimate when this money enters: 
-      // If NF recebido → data_pagamento
-      // If aprovada → data_aprovacao (money coming soon)
-      // If enviada → data_envio (waiting approval)
-      // If pendente → data_previsao_medicao or mes/ano reference
+      const prazo = m.obra_prazo_pagamento || 30;
       let dataRef: Date | null = null;
       let statusEntrada = "pendente";
+      let calculo = "";
 
       if (m.status_nf === "recebido" && m.data_pagamento) {
+        // Already received — use actual payment date
         dataRef = new Date(m.data_pagamento + "T12:00:00");
         statusEntrada = "recebido";
+        calculo = `Pagamento confirmado em ${m.data_pagamento}`;
       } else if (m.status_medicao === "aprovada" && m.data_aprovacao) {
-        dataRef = new Date(m.data_aprovacao + "T12:00:00");
+        // Approved → payment expected = data_aprovacao + prazo_pagamento
+        dataRef = addDays(new Date(m.data_aprovacao + "T12:00:00"), prazo);
         statusEntrada = "aprovado";
+        calculo = `Aprovada ${m.data_aprovacao} + ${prazo} dias = ${format(dataRef, "dd/MM/yy")}`;
       } else if (m.status_medicao === "enviada" && m.data_envio) {
-        dataRef = new Date(m.data_envio + "T12:00:00");
+        // Sent → estimate approval in ~15 days, then + prazo_pagamento
+        const diasAprovacao = 15;
+        dataRef = addDays(new Date(m.data_envio + "T12:00:00"), diasAprovacao + prazo);
         statusEntrada = "enviado";
+        calculo = `Enviada ${m.data_envio} + ~${diasAprovacao}d aprovação + ${prazo}d pgto = ${format(dataRef, "dd/MM/yy")}`;
       } else if (m.data_previsao_medicao) {
-        dataRef = new Date(m.data_previsao_medicao + "T12:00:00");
+        // Planned — estimate: previsao + 15 days approval + prazo_pagamento
+        const diasAprovacao = 15;
+        dataRef = addDays(new Date(m.data_previsao_medicao + "T12:00:00"), diasAprovacao + prazo);
         statusEntrada = "previsto";
+        calculo = `Prev. envio ${m.data_previsao_medicao} + ~${diasAprovacao}d + ${prazo}d = ${format(dataRef, "dd/MM/yy")}`;
       } else if (m.mes_referencia && m.ano_referencia) {
         const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === m.mes_referencia!.substring(0, 3).toLowerCase());
         if (mesIdx >= 0) {
-          dataRef = new Date(m.ano_referencia, mesIdx, 15);
+          dataRef = addDays(new Date(m.ano_referencia, mesIdx, 15), 15 + prazo);
           statusEntrada = "estimado";
+          calculo = `Ref. ${m.mes_referencia}/${m.ano_referencia} + ~15d + ${prazo}d pgto (estimativa)`;
         }
       }
 
-      return { ...m, dataRef, statusEntrada };
+      return { ...m, dataRef, statusEntrada, calculo };
     }).filter(m => m.dataRef !== null);
 
     if (agrupamento === "semanal") {
