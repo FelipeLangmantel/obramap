@@ -242,34 +242,21 @@ export default function HoldingReceitasPage() {
     setFilterObra("all"); setFilterEmpresa("all"); setFilterStatusMed("all"); setFilterStatusNF("all"); setSearchText("");
   };
 
-  if (authLoading || !user) {
-    return <div className="flex items-center justify-center min-h-screen"><Skeleton className="h-12 w-48" /></div>;
-  }
-
   return (
-    <SidebarProvider defaultOpen={true}>
-      <div className="flex min-h-screen w-full bg-background">
-        <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
-        <main className="flex-1 overflow-auto">
-          {/* HEADER */}
-          <div className="sticky top-0 z-10 flex items-center justify-between bg-background/95 backdrop-blur border-b px-4 py-3">
-            <div className="flex items-center gap-3">
-              <SidebarTrigger className="p-2 -ml-1"><Menu className="h-5 w-5" /></SidebarTrigger>
-              <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}><ArrowLeft className="h-5 w-5" /></Button>
-              <div>
-                <h1 className="text-lg font-semibold flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-primary" />Receitas & Medições PLE
-                </h1>
-                <p className="text-xs text-muted-foreground">Gestão financeira de entradas — todas as obras do portfólio</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={exportarCSV}><Download className="h-4 w-4" /> Exportar CSV</Button>
-              <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-receitas"] })}><RefreshCw className="h-4 w-4" /> Atualizar</Button>
-            </div>
-          </div>
-
-          <div className="p-4 md:p-6 space-y-4">
+    <div className="space-y-4 p-4 md:p-6">
+      {/* HEADER */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" />Receitas & Medições PLE
+          </h1>
+          <p className="text-xs text-muted-foreground">Gestão financeira de entradas — todas as obras do portfólio</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={exportarCSV}><Download className="h-4 w-4" /> Exportar CSV</Button>
+          <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-receitas"] })}><RefreshCw className="h-4 w-4" /> Atualizar</Button>
+        </div>
+      </div>
             {/* 5 KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
               <Card className="border-b-2 border-b-muted-foreground/30">
