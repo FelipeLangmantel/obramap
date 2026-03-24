@@ -174,7 +174,7 @@ export default function HoldingReceitasPage() {
   }, [medicoes, filterObra, filterEmpresa, filterStatusMed, filterStatusNF, filterTipoContrato, searchText]);
 
   const uniqueEmpresas = useMemo(() => [...new Set(obras.map(o => o.empresa).filter(Boolean))], [obras]);
-  const hasActiveFilter = filterObra !== "all" || filterEmpresa !== "all" || filterStatusMed !== "all" || filterStatusNF !== "all" || searchText !== "";
+  const hasActiveFilter = filterObra !== "all" || filterEmpresa !== "all" || filterStatusMed !== "all" || filterStatusNF !== "all" || filterTipoContrato !== "all" || searchText !== "";
 
   // ─── Top obras by medicao ───
   const topObrasByMedicao = useMemo(() => {
