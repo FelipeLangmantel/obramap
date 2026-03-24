@@ -229,6 +229,7 @@ export default function HoldingPrdPage() {
               {obras.map(o => <SelectItem key={o.id} value={o.id}>{o.nome}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-prd"] })}><RefreshCw className="h-4 w-4 mr-1" /> Atualizar</Button>
           <Button variant="outline" size="sm" onClick={exportCSV}><Download className="h-4 w-4 mr-1" /> Exportar CSV</Button>
         </div>
       </div>
