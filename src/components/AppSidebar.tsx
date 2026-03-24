@@ -119,6 +119,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     if (pathname === "/ple-measurements") return "ple-measurements";
     if (pathname === "/holding-receitas") return "holding-receitas";
     if (pathname === "/holding-despesas") return "holding-despesas";
+    if (pathname === "/holding-documentos") return "holding-documentos";
     
     return activeView;
   };
