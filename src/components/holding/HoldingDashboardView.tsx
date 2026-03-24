@@ -665,7 +665,7 @@ export default function HoldingDashboardView() {
             </div>
             <div>
               <Label className="text-xs">Status</Label>
-              <Select value={newObraForm.status} onValueChange={(v) => setNewObraForm(p => ({ ...p, status: v }))}>
+              <Select value={newObraForm.status} onValueChange={(v) => setNewObraForm(p => ({ ...p, status: v as typeof p.status }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="nao_iniciada">Não Iniciada</SelectItem>
