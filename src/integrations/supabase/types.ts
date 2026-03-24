@@ -4016,6 +4016,7 @@ export type Database = {
           data_aprovacao: string | null
           data_envio: string | null
           data_pagamento: string | null
+          data_previsao_medicao: string | null
           id: string
           mes_referencia: string | null
           num_medicao: string | null
@@ -4024,12 +4025,14 @@ export type Database = {
           status_medicao: Database["public"]["Enums"]["medicao_status"]
           status_nf: Database["public"]["Enums"]["nf_status"]
           valor_medicao: number
+          valor_previsto_medicao: number | null
         }
         Insert: {
           ano_referencia?: number | null
           data_aprovacao?: string | null
           data_envio?: string | null
           data_pagamento?: string | null
+          data_previsao_medicao?: string | null
           id?: string
           mes_referencia?: string | null
           num_medicao?: string | null
@@ -4038,12 +4041,14 @@ export type Database = {
           status_medicao?: Database["public"]["Enums"]["medicao_status"]
           status_nf?: Database["public"]["Enums"]["nf_status"]
           valor_medicao?: number
+          valor_previsto_medicao?: number | null
         }
         Update: {
           ano_referencia?: number | null
           data_aprovacao?: string | null
           data_envio?: string | null
           data_pagamento?: string | null
+          data_previsao_medicao?: string | null
           id?: string
           mes_referencia?: string | null
           num_medicao?: string | null
@@ -4052,6 +4057,7 @@ export type Database = {
           status_medicao?: Database["public"]["Enums"]["medicao_status"]
           status_nf?: Database["public"]["Enums"]["nf_status"]
           valor_medicao?: number
+          valor_previsto_medicao?: number | null
         }
         Relationships: [
           {
