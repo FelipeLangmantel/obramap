@@ -2,16 +2,20 @@ import { useState, useEffect } from "react";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Factory, Plus, Package, Truck, Wrench } from "lucide-react";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Factory, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { FactoriesTabContent } from "./FactoriesTabContent";
 import { LiftingTabContent } from "./LiftingTabContent";
 import { OverviewTabContent } from "./OverviewTabContent";
 import { InstallationTabContent } from "./InstallationTabContent";
+import { BatchesTabContent } from "./BatchesTabContent";
+import { LogisticsTabContent } from "./LogisticsTabContent";
 
 interface OperationContext {
   id: string;
@@ -38,25 +42,21 @@ export default function IndustrializationModuleView() {
   useEffect(() => {
     if (!companyId) return;
     fetchContexts();
-  }, [companyId, currentProject]);
+  }, [companyId]);
 
   const fetchContexts = async () => {
+    if (!companyId) return;
     setIsLoading(true);
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from("ind_operation_contexts")
         .select("*")
         .order("created_at", { ascending: false });
-
-      if (currentProject?.id) {
-        query = query.or(`obramap_project_id.eq.${currentProject.id},context_type.eq.standalone`);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
-      setContexts((data || []) as OperationContext[]);
-      if (data && data.length > 0 && !activeContext) {
-        setActiveContext(data[0] as OperationContext);
+      const all = (data || []) as OperationContext[];
+      setContexts(all);
+      if (all.length > 0 && !activeContext) {
+        setActiveContext(all[0]);
       }
     } catch (err: any) {
       console.error("[Industrialization] Error:", err);
@@ -82,7 +82,6 @@ export default function IndustrializationModuleView() {
         })
         .select()
         .single();
-
       if (error) throw error;
       toast.success("Contexto industrial criado!");
       const ctx = data as OperationContext;
@@ -90,6 +89,34 @@ export default function IndustrializationModuleView() {
       setActiveContext(ctx);
     } catch (err: any) {
       toast.error("Erro ao criar contexto: " + err.message);
+    }
+  };
+
+  const createStandaloneContext = async () => {
+    if (!companyId) return;
+    const name = prompt("Nome do contexto (ex: El Dorado):");
+    if (!name?.trim()) return;
+    const totalStr = prompt("Total de unidades:");
+    const total = parseInt(totalStr || "0") || 0;
+    try {
+      const { data, error } = await supabase
+        .from("ind_operation_contexts")
+        .insert({
+          company_id: companyId,
+          context_type: "standalone",
+          obramap_project_id: null,
+          name: name.trim(),
+          total_units: total,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      toast.success("Contexto criado!");
+      const ctx = data as OperationContext;
+      setContexts(prev => [ctx, ...prev]);
+      setActiveContext(ctx);
+    } catch (err: any) {
+      toast.error("Erro: " + err.message);
     }
   };
 
@@ -120,7 +147,11 @@ export default function IndustrializationModuleView() {
           <p className="text-muted-foreground max-w-md mx-auto">
             Gerencie o fluxo completo de componentes industrializados: fábrica → lote → transporte → içamento → montagem.
           </p>
-          <div className="flex gap-3 justify-center pt-4">
+          <div className="flex gap-3 justify-center pt-4 flex-wrap">
+            <Button variant="outline" onClick={createStandaloneContext}>
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Contexto Standalone
+            </Button>
             <Button onClick={createIntegratedContext} disabled={!currentProject}>
               <Plus className="h-4 w-4 mr-2" />
               Vincular à Obra Atual
@@ -152,6 +183,24 @@ export default function IndustrializationModuleView() {
             </div>
           </div>
         </div>
+
+        {contexts.length > 1 && (
+          <Select
+            value={activeContext?.id || ""}
+            onValueChange={id => setActiveContext(contexts.find(c => c.id === id) || null)}
+          >
+            <SelectTrigger className="h-8 text-xs w-52">
+              <SelectValue placeholder="Selecionar contexto" />
+            </SelectTrigger>
+            <SelectContent>
+              {contexts.map(c => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name} — {c.context_type === "integrated" ? "Integrado" : "Standalone"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* Main Tabs */}
@@ -188,23 +237,21 @@ export default function IndustrializationModuleView() {
         </TabsContent>
 
         <TabsContent value="batches" className="mt-4">
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <Package className="h-10 w-10 mx-auto mb-3 opacity-50" />
-              <p className="font-medium">Lotes de Produção</p>
-              <p className="text-sm">Gerencie lotes, vincule unidades e acompanhe o progresso de fabricação.</p>
-            </CardContent>
-          </Card>
+          {activeContext && companyId && (
+            <BatchesTabContent
+              companyId={companyId}
+              contextId={activeContext.id}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="logistics" className="mt-4">
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <Truck className="h-10 w-10 mx-auto mb-3 opacity-50" />
-              <p className="font-medium">Logística & Transporte</p>
-              <p className="text-sm">Controle caminhões, viagens e rastreamento de entregas.</p>
-            </CardContent>
-          </Card>
+          {activeContext && companyId && (
+            <LogisticsTabContent
+              companyId={companyId}
+              contextId={activeContext.id}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="lifting" className="mt-4">
