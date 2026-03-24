@@ -60,25 +60,25 @@ const BRL_SHORT = (v: number) => {
    RS State SVG Path (approximate)
    ═══════════════════════════════════════ */
 
-const RS_PATH = "M100,60 L140,55 L170,60 L200,55 L230,65 L260,80 L275,100 L280,130 L270,160 L260,180 L240,200 L220,215 L200,225 L180,220 L160,210 L140,195 L120,180 L105,160 L95,140 L90,120 L85,100 L90,80 Z";
+const RS_PATH = "M208.9,4.1 L253.3,2.4 L297.8,3.7 L342.2,8.1 L355.6,17.9 L355.6,48.7 L354.7,81.2 L337.8,109.6 L337.8,125.8 L333.3,142.0 L315.6,162.3 L297.8,182.6 L275.6,202.9 L253.3,223.2 L231.1,243.5 L208.9,263.8 L191.1,273.9 L177.8,273.5 L173.3,267.8 L142.2,263.8 L120.0,251.6 L75.6,235.4 L31.1,215.1 L4.4,186.7 L4.4,154.2 L22.2,129.9 L53.3,105.5 L84.4,73.0 L106.7,40.6 L137.8,16.2 L164.4,8.1 L186.7,4.1 L208.9,4.1 Z";
 
 const MUNICIPIO_COORDS: Record<string, { x: number; y: number }> = {
-  "Taquara": { x: 195, y: 142 },
-  "Estrela": { x: 235, y: 148 },
-  "Lajeado": { x: 225, y: 152 },
-  "Encruzilhada do Sul": { x: 212, y: 192 },
-  "São João do Polêsine": { x: 205, y: 160 },
-  "São Sebastião do Caí": { x: 200, y: 143 },
-  "São Francisco de Paula": { x: 210, y: 132 },
-  "Arroio do Meio": { x: 238, y: 152 },
-  "Esteio": { x: 193, y: 148 },
-  "Tapejara": { x: 185, y: 108 },
-  "Santa Rosa": { x: 115, y: 100 },
-  "Tupanciretã": { x: 152, y: 135 },
-  "Viamão": { x: 198, y: 155 },
-  "Porto Alegre": { x: 197, y: 152 },
-  "Muçum": { x: 232, y: 148 },
-  "Eldorado do Sul": { x: 196, y: 157 },
+  "Eldorado do Sul":         { x: 272.3, y: 125.2 },
+  "Taquara":                 { x: 307.6, y: 107.6 },
+  "Estrela":                 { x: 255.1, y: 101.6 },
+  "Lajeado":                 { x: 255.1, y: 100.1 },
+  "Encruzilhada do Sul":     { x: 230.1, y: 143.8 },
+  "São João do Polêsine":    { x: 191.2, y: 106.2 },
+  "São Sebastião do Caí":    { x: 281.5, y: 105.1 },
+  "São Francisco de Paula":  { x: 316.4, y:  99.1 },
+  "Arroio do Meio":          { x: 255.6, y:  97.4 },
+  "Esteio":                  { x: 289.8, y: 115.9 },
+  "Tapejara":                { x: 252.9, y:  43.1 },
+  "Santa Rosa":              { x: 143.1, y:  35.3 },
+  "Tupanciretã":             { x: 171.7, y:  84.4 },
+  "Viamão":                  { x: 296.8, y: 125.0 },
+  "Porto Alegre":            { x: 287.6, y: 123.1 },
+  "Muçum":                   { x: 259.0, y:  87.9 },
 };
 
 const HEALTH_PIN: Record<string, string> = {
