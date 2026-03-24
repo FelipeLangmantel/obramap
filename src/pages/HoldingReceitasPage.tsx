@@ -605,7 +605,7 @@ export default function HoldingReceitasPage() {
                 </Card>
 
                 {/* Insight cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                   <Card className="border-l-4 border-l-blue-500">
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground mb-1">Próxima entrada esperada</p>
@@ -618,6 +618,13 @@ export default function HoldingReceitasPage() {
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground mb-1">Total previsto próx. 3 meses</p>
                       <p className="text-sm font-semibold text-emerald-600">{BRL.format(insights.totalProx3Meses)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-primary">
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Valor previsto próx. 3 meses</p>
+                      <p className="text-sm font-semibold text-primary">{BRL_SHORT(previsaoData.slice(0, 3).reduce((s, p) => s + p.previsto, 0))}</p>
+                      <p className="text-[10px] text-muted-foreground">baseado nas datas de previsão cadastradas</p>
                     </CardContent>
                   </Card>
                   <Card className="border-l-4 border-l-amber-500">
