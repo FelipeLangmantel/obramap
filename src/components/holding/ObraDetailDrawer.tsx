@@ -44,6 +44,8 @@ export interface ObraDrawerData {
   nome: string;
   uh?: number | null;
   responsavel?: string | null;
+  responsavel_nome?: string | null;
+  responsavel_telefone?: string | null;
   tipo_contrato?: string | null;
   valor_contrato?: number;
   data_inicio?: string | null;
