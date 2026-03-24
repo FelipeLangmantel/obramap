@@ -15,7 +15,7 @@ import {
   ComposedChart, Bar, Line, Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer
 } from "recharts";
-import { BarChart2, TrendingUp, DollarSign, AlertTriangle, Download } from "lucide-react";
+import { BarChart2, TrendingUp, DollarSign, AlertTriangle, Download, RefreshCw } from "lucide-react";
 import { format, addMonths, differenceInMonths } from "date-fns";
 import { toast } from "sonner";
 
