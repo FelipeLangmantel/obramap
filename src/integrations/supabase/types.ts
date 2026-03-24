@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      aditivos_contratos: {
+        Row: {
+          aditivo_prazo_dias: number
+          aditivo_valor: number
+          data: string | null
+          id: string
+          num_aditivo: string | null
+          obra_id: string
+          status: Database["public"]["Enums"]["aditivo_status"]
+          supressao_valor: number
+        }
+        Insert: {
+          aditivo_prazo_dias?: number
+          aditivo_valor?: number
+          data?: string | null
+          id?: string
+          num_aditivo?: string | null
+          obra_id: string
+          status?: Database["public"]["Enums"]["aditivo_status"]
+          supressao_valor?: number
+        }
+        Update: {
+          aditivo_prazo_dias?: number
+          aditivo_valor?: number
+          data?: string | null
+          id?: string
+          num_aditivo?: string | null
+          obra_id?: string
+          status?: Database["public"]["Enums"]["aditivo_status"]
+          supressao_valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aditivos_contratos_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       board_decisions: {
         Row: {
           action_taken: string
@@ -1142,6 +1183,97 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      despesas_mensais: {
+        Row: {
+          ano_referencia: number | null
+          id: string
+          mes_referencia: string | null
+          obra_id: string
+          status: Database["public"]["Enums"]["despesa_status"]
+          valor: number
+        }
+        Insert: {
+          ano_referencia?: number | null
+          id?: string
+          mes_referencia?: string | null
+          obra_id: string
+          status?: Database["public"]["Enums"]["despesa_status"]
+          valor?: number
+        }
+        Update: {
+          ano_referencia?: number | null
+          id?: string
+          mes_referencia?: string | null
+          obra_id?: string
+          status?: Database["public"]["Enums"]["despesa_status"]
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesas_mensais_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documentos_obra: {
+        Row: {
+          art: boolean
+          ata: boolean
+          checklist_seguranca: boolean
+          cno: boolean
+          id: string
+          impl: boolean
+          obra_id: string
+          ois: boolean
+          painel_bordo: boolean
+          plano_altimetrico: boolean
+          planta_localizacao: boolean
+          scp: boolean
+          sondagem_spt: boolean
+        }
+        Insert: {
+          art?: boolean
+          ata?: boolean
+          checklist_seguranca?: boolean
+          cno?: boolean
+          id?: string
+          impl?: boolean
+          obra_id: string
+          ois?: boolean
+          painel_bordo?: boolean
+          plano_altimetrico?: boolean
+          planta_localizacao?: boolean
+          scp?: boolean
+          sondagem_spt?: boolean
+        }
+        Update: {
+          art?: boolean
+          ata?: boolean
+          checklist_seguranca?: boolean
+          cno?: boolean
+          id?: string
+          impl?: boolean
+          obra_id?: string
+          ois?: boolean
+          painel_bordo?: boolean
+          plano_altimetrico?: boolean
+          planta_localizacao?: boolean
+          scp?: boolean
+          sondagem_spt?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documentos_obra_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       financial_entries: {
         Row: {
@@ -3874,6 +4006,153 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      medicoes_ple: {
+        Row: {
+          ano_referencia: number | null
+          data_aprovacao: string | null
+          data_envio: string | null
+          data_pagamento: string | null
+          id: string
+          mes_referencia: string | null
+          num_medicao: string | null
+          num_nf: string | null
+          obra_id: string
+          status_medicao: Database["public"]["Enums"]["medicao_status"]
+          status_nf: Database["public"]["Enums"]["nf_status"]
+          valor_medicao: number
+        }
+        Insert: {
+          ano_referencia?: number | null
+          data_aprovacao?: string | null
+          data_envio?: string | null
+          data_pagamento?: string | null
+          id?: string
+          mes_referencia?: string | null
+          num_medicao?: string | null
+          num_nf?: string | null
+          obra_id: string
+          status_medicao?: Database["public"]["Enums"]["medicao_status"]
+          status_nf?: Database["public"]["Enums"]["nf_status"]
+          valor_medicao?: number
+        }
+        Update: {
+          ano_referencia?: number | null
+          data_aprovacao?: string | null
+          data_envio?: string | null
+          data_pagamento?: string | null
+          id?: string
+          mes_referencia?: string | null
+          num_medicao?: string | null
+          num_nf?: string | null
+          obra_id?: string
+          status_medicao?: Database["public"]["Enums"]["medicao_status"]
+          status_nf?: Database["public"]["Enums"]["nf_status"]
+          valor_medicao?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medicoes_ple_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      obras_portfolio: {
+        Row: {
+          aditivo_prazo_dias: number
+          company_id: string
+          created_at: string
+          data_inicio: string | null
+          empresa: string | null
+          id: string
+          nome: string
+          num_contrato: string | null
+          parceria_scp: string | null
+          percentual_andamento: number
+          periodo_medicao: string | null
+          prazo_dias: number
+          prazo_pagamento: string | null
+          status: Database["public"]["Enums"]["obra_status"]
+          valor_contrato: number
+        }
+        Insert: {
+          aditivo_prazo_dias?: number
+          company_id: string
+          created_at?: string
+          data_inicio?: string | null
+          empresa?: string | null
+          id?: string
+          nome: string
+          num_contrato?: string | null
+          parceria_scp?: string | null
+          percentual_andamento?: number
+          periodo_medicao?: string | null
+          prazo_dias?: number
+          prazo_pagamento?: string | null
+          status?: Database["public"]["Enums"]["obra_status"]
+          valor_contrato?: number
+        }
+        Update: {
+          aditivo_prazo_dias?: number
+          company_id?: string
+          created_at?: string
+          data_inicio?: string | null
+          empresa?: string | null
+          id?: string
+          nome?: string
+          num_contrato?: string | null
+          parceria_scp?: string | null
+          percentual_andamento?: number
+          periodo_medicao?: string | null
+          prazo_dias?: number
+          prazo_pagamento?: string | null
+          status?: Database["public"]["Enums"]["obra_status"]
+          valor_contrato?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "obras_portfolio_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pendencias_projeto: {
+        Row: {
+          concluido: boolean
+          descricao: string | null
+          id: string
+          obra_id: string
+          tipo: string | null
+        }
+        Insert: {
+          concluido?: boolean
+          descricao?: string | null
+          id?: string
+          obra_id: string
+          tipo?: string | null
+        }
+        Update: {
+          concluido?: boolean
+          descricao?: string | null
+          id?: string
+          obra_id?: string
+          tipo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pendencias_projeto_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
             referencedColumns: ["id"]
           },
         ]
@@ -8733,6 +9012,7 @@ export type Database = {
       }
     }
     Enums: {
+      aditivo_status: "aprovado" | "pendente"
       app_role: "admin" | "editor" | "viewer"
       delivery_status:
         | "em_vistoria"
@@ -8741,12 +9021,16 @@ export type Database = {
         | "entregue_com_pendencias"
         | "pos_obra_em_atendimento"
         | "unidade_encerrada"
+      despesa_status: "fechado" | "em_fechamento" | "nao_iniciado"
       issue_severity: "critica" | "media" | "leve"
       issue_status:
         | "aberta"
         | "em_execucao"
         | "aguardando_validacao"
         | "encerrada"
+      medicao_status: "aprovada" | "enviada" | "pendente" | "nao_iniciada"
+      nf_status: "recebido" | "aguardando_aprovacao" | "pendente"
+      obra_status: "em_andamento" | "nao_iniciada" | "concluida" | "paralisada"
       supply_request_status:
         | "alert"
         | "quoted"
@@ -8881,6 +9165,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      aditivo_status: ["aprovado", "pendente"],
       app_role: ["admin", "editor", "viewer"],
       delivery_status: [
         "em_vistoria",
@@ -8890,6 +9175,7 @@ export const Constants = {
         "pos_obra_em_atendimento",
         "unidade_encerrada",
       ],
+      despesa_status: ["fechado", "em_fechamento", "nao_iniciado"],
       issue_severity: ["critica", "media", "leve"],
       issue_status: [
         "aberta",
@@ -8897,6 +9183,9 @@ export const Constants = {
         "aguardando_validacao",
         "encerrada",
       ],
+      medicao_status: ["aprovada", "enviada", "pendente", "nao_iniciada"],
+      nf_status: ["recebido", "aguardando_aprovacao", "pendente"],
+      obra_status: ["em_andamento", "nao_iniciada", "concluida", "paralisada"],
       supply_request_status: [
         "alert",
         "quoted",
