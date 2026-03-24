@@ -23,7 +23,7 @@ import {
   CalendarClock,
   FileCheck2,
 } from "lucide-react";
-import { addDays, format, differenceInDays, differenceInMonths, startOfMonth } from "date-fns";
+import { addDays, format, differenceInDays, differenceInMonths } from "date-fns";
 import {
   BarChart,
   Bar,
