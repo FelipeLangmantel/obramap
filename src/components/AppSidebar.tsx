@@ -93,6 +93,7 @@ const DEDICATED_ROUTE_MAP: Record<RouteViewType, string> = {
   "holding-documentos": "/holding-documentos",
   "holding-prd": "/holding-prd",
   "holding-insights": "/holding-insights",
+  "holding-config": "/holding-config",
 };
 
 interface AppSidebarProps {
