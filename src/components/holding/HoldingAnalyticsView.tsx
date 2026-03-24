@@ -380,7 +380,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
           </CardContent>
         </Card>
 
-      {/* Row 2: Evolution Chart */}
+        {/* Evolution Chart */}
       <Card className="border-border/60">
         <CardContent className="p-4">
           <h3 className="font-semibold text-sm mb-3">Evolução Financeira Mensal</h3>
