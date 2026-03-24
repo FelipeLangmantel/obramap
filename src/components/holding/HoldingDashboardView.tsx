@@ -39,6 +39,7 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { addDays, format, differenceInDays, differenceInMonths } from "date-fns";
 
@@ -202,6 +203,27 @@ export default function HoldingDashboardView() {
   const [editingObra, setEditingObra] = useState<ObraEnriched | null>(null);
   const [deletingObraId, setDeletingObraId] = useState<string | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importText, setImportText] = useState(`Eldorado 01,PreviBras,23883/2025,SCP Binotto,2939431.80,2026-02-16,120,em_andamento,0,Eldorado do Sul,RS
+Eldorado 02,PreviBras,23875/2025,SCP Binotto,4115204.52,2025-12-01,120,em_andamento,0,Eldorado do Sul,RS
+Taquara,PreviBras,24217/2025,SCP Trifty,5144005.65,2026-04-15,120,nao_iniciada,0,Taquara,RS
+Estrela,PreviBras,24173/2025,SCP Malai,2226888.15,2026-01-13,69,em_andamento,0,Estrela,RS
+Lajeado 01,PreviBras,24198/2025,SCP Vinicius,1352225.37,2026-01-21,120,em_andamento,0,Lajeado,RS
+Lajeado 02,PreviBras,,, 2939431.80,2026-05-11,120,nao_iniciada,0,Lajeado,RS
+Encruzilhada do Sul 01,PreviBras,24199/2025,,7348574.50,2025-12-29,120,nao_iniciada,0,Encruzilhada do Sul,RS
+São João do Polêsine,PreviBras,24207/2025,,2057602.26,2025-12-29,120,nao_iniciada,0,São João do Polêsine,RS
+São Sebastião do Caí,PreviBras,24212/2025,SCP Maracon,6172806.78,2026-02-02,120,em_andamento,0,São Sebastião do Caí,RS
+São Francisco de Paula,PreviBras,23661/2025,SCP Realize,9406181.76,2026-02-23,120,em_andamento,0,São Francisco de Paula,RS
+Arroio do Meio - adesão MP,PreviBras,025/2026,SCP Bruno/Duzan,5584916.62,2026-01-22,120,nao_iniciada,0,Arroio do Meio,RS
+Encruzilhada do Sul 02,PreviBras,,,5290973.64,2026-04-17,120,nao_iniciada,0,Encruzilhada do Sul,RS
+Esteio,PreviBras,,,9350000.00,2024-09-05,730,em_andamento,68.87,Esteio,RS
+Tapejara 01,PreviBras,,,9015008.29,2024-09-05,570,em_andamento,0,Tapejara,RS
+Tapejara 02,PreviBras,,,6033846.82,2024-09-05,600,em_andamento,0,Tapejara,RS
+Santa Rosa,PreviBras,,,8594473.84,2024-10-02,540,em_andamento,35.83,Santa Rosa,RS
+Tupanciretã,PreviBras,,,0,,,em_andamento,0,Tupanciretã,RS
+Viamão,Binotto,,,849480.69,,,em_andamento,0,Viamão,RS
+Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
+  const [importing, setImporting] = useState(false);
 
   const exportarPDF = async () => {
     setIsPrinting(true);
@@ -370,6 +392,49 @@ export default function HoldingDashboardView() {
     queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
     toast.success("Obra excluída.");
     setDeletingObraId(null);
+  };
+
+  const handleImportObras = async () => {
+    if (!company?.id || !importText.trim()) return;
+    setImporting(true);
+    try {
+      const lines = importText.trim().split("\n").filter(l => l.trim());
+      const obrasToInsert = lines.map((line, idx) => {
+        const parts = line.split(",").map(s => s.trim());
+        const [nome, empresa, num_contrato, parceria_scp, valor_contrato, data_inicio, prazo_dias, status, percentual_andamento, municipio, estado] = parts;
+        return {
+          company_id: company.id,
+          nome: nome || `Obra ${idx + 1}`,
+          empresa: empresa || null,
+          num_contrato: num_contrato || null,
+          parceria_scp: parceria_scp || null,
+          valor_contrato: Number(valor_contrato) || 0,
+          data_inicio: data_inicio || null,
+          prazo_dias: Number(prazo_dias) || 0,
+          status: (["em_andamento", "nao_iniciada", "concluida", "paralisada"].includes(status) ? status : "nao_iniciada") as "em_andamento" | "nao_iniciada" | "concluida" | "paralisada",
+          percentual_andamento: Number(percentual_andamento) || 0,
+          municipio: municipio || null,
+          estado: estado || "RS",
+        };
+      });
+
+      const { data: inserted, error } = await supabase.from("obras_portfolio").insert(obrasToInsert).select("id");
+      if (error) throw error;
+
+      if (inserted && inserted.length > 0) {
+        const docsRows = inserted.map(o => ({ obra_id: o.id }));
+        await supabase.from("documentos_obra").insert(docsRows);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+      toast.success(`${inserted?.length || 0} obras importadas com sucesso!`);
+      setShowImportDialog(false);
+      setImportText("");
+    } catch (e: any) {
+      toast.error(`Erro na importação: ${e.message || "Verifique os dados"}`);
+      console.error(e);
+    }
+    setImporting(false);
   };
 
   const { data: obras = [], isLoading } = useQuery({
@@ -557,6 +622,9 @@ export default function HoldingDashboardView() {
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowNewObraDialog(true)}>
             <Plus className="h-3.5 w-3.5 mr-1" /> Nova Obra
+          </Button>
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowImportDialog(true)}>
+            <Upload className="h-3.5 w-3.5 mr-1" /> Importar
           </Button>
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={exportarPDF} disabled={isPrinting || obras.length === 0}>
             {isPrinting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <FileDown className="h-3.5 w-3.5 mr-1" />}
@@ -768,6 +836,31 @@ export default function HoldingDashboardView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Import Dialog */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Importar Obras em Lote</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Uma obra por linha, separada por vírgulas:<br />
+            <code className="text-[10px] bg-muted px-1 rounded">nome, empresa, num_contrato, parceria_scp, valor_contrato, data_inicio, prazo_dias, status, percentual_andamento, municipio, estado</code>
+          </p>
+          <textarea
+            className="w-full h-64 text-xs font-mono border rounded-md p-2 bg-muted/30 focus:outline-none focus:ring-1 focus:ring-ring"
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+          />
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setShowImportDialog(false)}>Cancelar</Button>
+            <Button size="sm" onClick={handleImportObras} disabled={importing || !importText.trim()}>
+              {importing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Upload className="h-4 w-4 mr-1" />}
+              Processar e Importar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
