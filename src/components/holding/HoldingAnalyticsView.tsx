@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ComposedChart, BarChart, Bar, Line, AreaChart, Area, RadialBarChart, RadialBar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell,
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
-import { MapPin, DollarSign, TrendingUp, TrendingDown, Wallet } from "lucide-react";
+import { MapPin, DollarSign, TrendingUp, TrendingDown, Wallet, Filter } from "lucide-react";
 
 /* ═══════════════════════════════════════
    Types (mirrors HoldingDashboardView)
@@ -57,7 +58,7 @@ const BRL_SHORT = (v: number) => {
 };
 
 /* ═══════════════════════════════════════
-   RS State SVG Path (approximate)
+   RS State SVG Path
    ═══════════════════════════════════════ */
 
 const RS_PATH = "M208.9,4.1 L253.3,2.4 L297.8,3.7 L342.2,8.1 L355.6,17.9 L355.6,48.7 L354.7,81.2 L337.8,109.6 L337.8,125.8 L333.3,142.0 L315.6,162.3 L297.8,182.6 L275.6,202.9 L253.3,223.2 L231.1,243.5 L208.9,263.8 L191.1,273.9 L177.8,273.5 L173.3,267.8 L142.2,263.8 L120.0,251.6 L75.6,235.4 L31.1,215.1 L4.4,186.7 L4.4,154.2 L22.2,129.9 L53.3,105.5 L84.4,73.0 L106.7,40.6 L137.8,16.2 L164.4,8.1 L186.7,4.1 L208.9,4.1 Z";
@@ -79,6 +80,24 @@ const MUNICIPIO_COORDS: Record<string, { x: number; y: number }> = {
   "Viamão":                  { x: 296.8, y: 125.0 },
   "Porto Alegre":            { x: 287.6, y: 123.1 },
   "Muçum":                   { x: 259.0, y:  87.9 },
+  "Roca Sales":              { x: 260.4, y: 102.9 },
+  "Venâncio Aires":          { x: 245.0, y: 105.9 },
+  "São José do Norte":       { x: 252.0, y: 203.6 },
+  "Dona Francisca":          { x: 192.7, y: 106.7 },
+  "Parobé":                  { x: 305.2, y: 106.6 },
+  "Dois Irmãos":             { x: 294.0, y: 104.6 },
+  "Dom Pedrito":             { x: 134.6, y: 161.6 },
+  "Uruguaiana":              { x:  27.2, y: 111.8 },
+  "Pelotas":                 { x: 238.1, y: 193.6 },
+  "Rosário do Sul":          { x: 123.7, y: 132.0 },
+  "Rio Pardo":               { x: 236.7, y: 121.3 },
+  "Encantado":               { x: 259.1, y:  90.7 },
+  "São Leopoldo":            { x: 291.2, y: 112.0 },
+  "Novo Hamburgo":           { x: 292.0, y: 108.7 },
+  "Caxias do Sul":           { x: 289.8, y:  88.0 },
+  "Campo Bom":               { x: 295.4, y: 108.4 },
+  "Sapucaia do Sul":         { x: 291.0, y: 114.7 },
+  "São Lourenço do Sul":     { x: 254.2, y: 177.3 },
 };
 
 const HEALTH_PIN: Record<string, string> = {
@@ -106,8 +125,8 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
   const [hoveredObra, setHoveredObra] = useState<string | null>(null);
   const [medicoesData, setMedicoesData] = useState<any[]>([]);
   const [despesasData, setDespesasData] = useState<any[]>([]);
+  const [analyticsFilter, setAnalyticsFilter] = useState("all");
 
-  // Load financial data
   const obraIds = obras.map(o => o.id).join(",");
   useEffect(() => {
     if (obras.length === 0) return;
@@ -121,9 +140,16 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
     });
   }, [obraIds]);
 
+  // Filter obras by empresa
+  const empresas = useMemo(() => [...new Set(obras.map(o => o.empresa).filter(Boolean))].sort(), [obras]);
+  const filteredObras = useMemo(() => {
+    if (analyticsFilter === "all") return obras;
+    return obras.filter(o => o.empresa === analyticsFilter);
+  }, [obras, analyticsFilter]);
+
   // PRD chart data
   const prdData = useMemo(() => {
-    return obras.map(o => {
+    return filteredObras.map(o => {
       const medAprovadas = medicoesData
         .filter(m => m.obra_id === o.id && m.status_medicao === "aprovada")
         .reduce((s: number, m: any) => s + (m.valor_medicao || 0), 0);
@@ -140,13 +166,15 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
         roi: Math.round(roi * 10) / 10,
       };
     });
-  }, [obras, medicoesData, despesasData]);
+  }, [filteredObras, medicoesData, despesasData]);
 
   // Monthly evolution data
   const evolutionData = useMemo(() => {
+    const filteredIds = new Set(filteredObras.map(o => o.id));
     const monthMap: Record<string, { receita: number; despesa: number; sortKey: number }> = {};
 
     medicoesData.forEach((m: any) => {
+      if (!filteredIds.has(m.obra_id)) return;
       if (m.status_medicao !== "aprovada") return;
       const key = monthKey(m.mes_referencia, m.ano_referencia);
       if (!key) return;
@@ -155,6 +183,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
     });
 
     despesasData.forEach((d: any) => {
+      if (!filteredIds.has(d.obra_id)) return;
       const key = monthKey(d.mes_referencia, d.ano_referencia);
       if (!key) return;
       if (!monthMap[key]) monthMap[key] = { receita: 0, despesa: 0, sortKey: (d.ano_referencia || 0) * 100 + MONTH_NAMES.indexOf(key.split("/")[0]) };
@@ -164,37 +193,42 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
     return Object.entries(monthMap)
       .map(([month, data]) => ({ month, ...data }))
       .sort((a, b) => a.sortKey - b.sortKey);
-  }, [medicoesData, despesasData]);
+  }, [filteredObras, medicoesData, despesasData]);
 
   // Donut data
   const donutData = useMemo(() => {
-    const total = obras.length || 1;
-    const docsComplete = obras.filter(o => o.docsCount >= 9).length;
-    const medicoesOk = obras.filter(o => o.latestMedicao?.status_medicao === "aprovada").length;
-    const noPrazo = obras.filter(o => {
+    const total = filteredObras.length || 1;
+    const docsComplete = filteredObras.filter(o => o.docsCount >= 9).length;
+    const medicoesOk = filteredObras.filter(o => o.latestMedicao?.status_medicao === "aprovada").length;
+    const noPrazo = filteredObras.filter(o => {
       if (o.status !== "em_andamento" || !o.data_inicio) return false;
       const fim = new Date(o.data_inicio);
       fim.setDate(fim.getDate() + o.prazo_dias + o.aditivo_prazo_dias);
       return fim >= new Date();
     }).length;
-    const emAndamento = obras.filter(o => o.status === "em_andamento").length || 1;
+    const emAndamento = filteredObras.filter(o => o.status === "em_andamento").length || 1;
 
     return {
       docs: Math.round((docsComplete / total) * 100),
       medicoes: Math.round((medicoesOk / total) * 100),
       prazo: Math.round((noPrazo / emAndamento) * 100),
     };
-  }, [obras]);
+  }, [filteredObras]);
 
   // Obras with map pins
   const obrasOnMap = useMemo(() => {
-    return obras
+    return filteredObras
       .filter(o => o.municipio && MUNICIPIO_COORDS[o.municipio])
-      .map(o => ({
-        ...o,
-        coords: MUNICIPIO_COORDS[o.municipio!],
-      }));
-  }, [obras]);
+      .map(o => ({ ...o, coords: MUNICIPIO_COORDS[o.municipio!] }));
+  }, [filteredObras]);
+
+  // Map stats
+  const mapStats = useMemo(() => ({
+    total: filteredObras.length,
+    mapeadas: obrasOnMap.length,
+    valorTotal: filteredObras.reduce((s, o) => s + o.valor_contrato, 0),
+    criticas: filteredObras.filter(o => o.health === "red").length,
+  }), [filteredObras, obrasOnMap]);
 
   const CustomBarTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
@@ -221,15 +255,15 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
   };
 
   const summaryStats = useMemo(() => {
-    const totalPortfolio = obras.reduce((s, o) => s + (o.valor_contrato || 0), 0);
+    const totalPortfolio = filteredObras.reduce((s, o) => s + (o.valor_contrato || 0), 0);
     const totalRecebido = prdData.reduce((s, d) => s + d.realizado, 0);
     const totalDespesas = prdData.reduce((s, d) => s + d.despesas, 0);
     const saldo = totalRecebido - totalDespesas;
     return { totalPortfolio, totalRecebido, totalDespesas, saldo };
-  }, [obras, prdData]);
+  }, [filteredObras, prdData]);
 
   const rankingData = useMemo(() => {
-    return [...obras]
+    return [...filteredObras]
       .sort((a, b) => (b.valor_contrato || 0) - (a.valor_contrato || 0))
       .slice(0, 15)
       .map(o => ({
@@ -240,31 +274,61 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
         health: o.health,
         status: o.status,
       }));
-  }, [obras]);
+  }, [filteredObras]);
 
   const HEALTH_COLORS: Record<string, string> = { green: "#22c55e", yellow: "#f59e0b", red: "#ef4444" };
   const STATUS_LABELS: Record<string, string> = { em_andamento: "Em Andamento", nao_iniciada: "Não Iniciada", concluida: "Concluída", paralisada: "Paralisada" };
 
   return (
     <div className="space-y-4">
-      {/* Summary Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MiniKpi icon={DollarSign} label="Valor Total do Portfólio" value={BRL.format(summaryStats.totalPortfolio)} className="text-emerald-600 dark:text-emerald-400" />
-        <MiniKpi icon={TrendingUp} label="Total Recebido" value={BRL.format(summaryStats.totalRecebido)} className="text-blue-600 dark:text-blue-400" />
-        <MiniKpi icon={TrendingDown} label="Total Despesas" value={BRL.format(summaryStats.totalDespesas)} className="text-red-600 dark:text-red-400" />
-        <MiniKpi icon={Wallet} label="Saldo Estimado" value={BRL.format(summaryStats.saldo)} className={summaryStats.saldo >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"} />
+      {/* Filter Bar */}
+      <div className="flex items-center gap-3">
+        <Filter className="h-4 w-4 text-muted-foreground" />
+        <Select value={analyticsFilter} onValueChange={setAnalyticsFilter}>
+          <SelectTrigger className="h-8 w-48 text-xs"><SelectValue placeholder="Todas Empresas" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas Empresas</SelectItem>
+            {empresas.map(e => <SelectItem key={e} value={e!}>{e}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {analyticsFilter !== "all" && (
+          <span className="text-xs text-muted-foreground">{filteredObras.length} obras filtradas</span>
+        )}
       </div>
 
-      {/* MAPA RS + Lista de obras (full width, dashboard style) */}
+      {/* Mini Stats Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-card border rounded-lg p-3 text-center">
+          <p className="text-lg font-bold text-foreground">{mapStats.total}</p>
+          <p className="text-[10px] text-muted-foreground">Total Obras</p>
+        </div>
+        <div className="bg-card border rounded-lg p-3 text-center">
+          <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{mapStats.mapeadas}</p>
+          <p className="text-[10px] text-muted-foreground">Obras no Mapa</p>
+        </div>
+        <div className="bg-card border rounded-lg p-3 text-center">
+          <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{BRL_SHORT(mapStats.valorTotal)}</p>
+          <p className="text-[10px] text-muted-foreground">Valor Total Portfólio</p>
+        </div>
+        <div className="bg-card border rounded-lg p-3 text-center">
+          <p className={`text-lg font-bold ${mapStats.criticas > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>{mapStats.criticas}</p>
+          <p className="text-[10px] text-muted-foreground">Obras Críticas</p>
+        </div>
+      </div>
+
+      {/* MAPA RS + Sidebar List */}
       <Card className="border-border/60">
         <CardContent className="p-4">
-          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-primary" />
-            Mapa de Obras — Rio Grande do Sul
-          </h3>
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4">
-            {/* MAP */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
+            {/* Map */}
             <div className="relative bg-muted/30 rounded-lg p-2">
+              <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-primary" />
+                Obras no Rio Grande do Sul
+              </h3>
+              <p className="text-[10px] text-muted-foreground mb-2">
+                {obrasOnMap.length} obra{obrasOnMap.length !== 1 ? "s" : ""} mapeada{obrasOnMap.length !== 1 ? "s" : ""} · clique para abrir
+              </p>
               <svg viewBox="0 0 360 280" className="w-full h-auto">
                 <path d={RS_PATH} fill="hsl(var(--muted) / 0.5)" stroke="hsl(var(--border))" strokeWidth="1.5" />
                 <text x="287" y="137" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.5">Porto Alegre</text>
@@ -326,28 +390,43 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
               )}
             </div>
 
-            {/* LISTA DE OBRAS (sidebar like reference image) */}
-            <div className="flex flex-col gap-0.5 max-h-[420px] overflow-y-auto pr-1">
-              <p className="text-xs font-semibold text-muted-foreground mb-1 sticky top-0 bg-card py-1 z-10">Obras ({obras.length})</p>
-              {[...obras]
-                .sort((a, b) => (b.valor_contrato || 0) - (a.valor_contrato || 0))
-                .map((obra) => {
-                  const isHov = hoveredObra === obra.id;
-                  const hc = HEALTH_PIN[obra.health] || "#3b82f6";
-                  return (
-                    <button
-                      key={obra.id}
-                      className={`flex items-center gap-2 w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors hover:bg-muted/60 ${isHov ? "bg-muted/80 ring-1 ring-primary/30" : ""}`}
-                      onMouseEnter={() => setHoveredObra(obra.id)}
-                      onMouseLeave={() => setHoveredObra(null)}
-                      onClick={() => onObraClick(obra.id)}
-                    >
-                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: hc }} />
-                      <span className="flex-1 truncate font-medium text-foreground">{obra.nome}</span>
-                      <span className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">{BRL_SHORT(obra.valor_contrato)}</span>
-                    </button>
-                  );
-                })}
+            {/* Sidebar List */}
+            <div className="flex flex-col border-l border-border/40 pl-3">
+              <p className="text-xs font-semibold text-foreground mb-2 sticky top-0 bg-card py-1 z-10 flex items-center justify-between">
+                <span>Obras ({filteredObras.length})</span>
+              </p>
+              <div className="flex flex-col gap-0.5 max-h-[450px] overflow-y-auto pr-1">
+                {[...filteredObras]
+                  .sort((a, b) => (b.valor_contrato || 0) - (a.valor_contrato || 0))
+                  .map((obra) => {
+                    const isHov = hoveredObra === obra.id;
+                    const hc = HEALTH_PIN[obra.health] || "#3b82f6";
+                    const isOnMap = !!MUNICIPIO_COORDS[obra.municipio || ""];
+                    return (
+                      <button
+                        key={obra.id}
+                        className={`flex items-center gap-2 w-full text-left px-2.5 py-2 rounded-md text-xs transition-colors hover:bg-muted/60 border-b border-border/30 last:border-0 ${isHov ? "bg-muted/80 ring-1 ring-primary/30" : ""}`}
+                        onMouseEnter={() => setHoveredObra(obra.id)}
+                        onMouseLeave={() => setHoveredObra(null)}
+                        onClick={() => onObraClick(obra.id)}
+                      >
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: hc }} />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-foreground truncate text-xs">{obra.nome}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{obra.municipio || obra.empresa || "—"}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
+                            {obra.valor_contrato >= 1_000_000
+                              ? `R$ ${(obra.valor_contrato / 1_000_000).toFixed(1)}M`
+                              : `R$ ${(obra.valor_contrato / 1_000).toFixed(0)}k`}
+                          </p>
+                          {!isOnMap && <p className="text-[8px] text-amber-500">sem coords</p>}
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
             </div>
           </div>
         </CardContent>
@@ -360,59 +439,63 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
           <CardContent className="p-4">
             <h3 className="font-semibold text-sm mb-3">Previsto × Realizado × Despesas</h3>
             {prdData.length === 0 ? (
-              <div className="h-[220px] flex items-center justify-center text-xs text-muted-foreground">Nenhuma obra cadastrada</div>
+              <div className="h-[300px] flex items-center justify-center text-xs text-muted-foreground">Nenhuma obra cadastrada</div>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <ComposedChart data={prdData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.4)" />
-                  <XAxis dataKey="nome" fontSize={9} tick={{ fill: "hsl(var(--muted-foreground))" }} interval={0} angle={-20} textAnchor="end" height={40} />
-                  <YAxis yAxisId="left" fontSize={9} tickFormatter={(v) => BRL_SHORT(v)} tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                  <YAxis yAxisId="right" orientation="right" fontSize={9} tickFormatter={(v: number) => `${v.toFixed(0)}%`} tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                  <Tooltip content={<CustomBarTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar yAxisId="left" dataKey="previsto" name="Previsto" fill="#3b82f6" radius={[3, 3, 0, 0]} />
-                  <Bar yAxisId="left" dataKey="realizado" name="Realizado" fill="#22c55e" radius={[3, 3, 0, 0]} />
-                  <Bar yAxisId="left" dataKey="despesas" name="Despesas" fill="#ef4444" radius={[3, 3, 0, 0]} />
-                  <Line yAxisId="right" type="monotone" dataKey="roi" name="ROI %" stroke="#a855f7" strokeWidth={2} dot={{ r: 3 }} />
-                </ComposedChart>
-              </ResponsiveContainer>
+              <div className="overflow-x-auto">
+                <div style={{ minWidth: Math.max(400, prdData.length * 60) }}>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <ComposedChart data={prdData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.4)" />
+                      <XAxis dataKey="nome" fontSize={9} tick={{ fill: "hsl(var(--muted-foreground))" }} interval={0} angle={-20} textAnchor="end" height={40} />
+                      <YAxis yAxisId="left" fontSize={9} tickFormatter={(v) => BRL_SHORT(v)} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                      <YAxis yAxisId="right" orientation="right" fontSize={9} tickFormatter={(v: number) => `${v.toFixed(0)}%`} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                      <Tooltip content={<CustomBarTooltip />} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Bar yAxisId="left" dataKey="previsto" name="Previsto" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                      <Bar yAxisId="left" dataKey="realizado" name="Realizado" fill="#22c55e" radius={[3, 3, 0, 0]} />
+                      <Bar yAxisId="left" dataKey="despesas" name="Despesas" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                      <Line yAxisId="right" type="monotone" dataKey="roi" name="ROI %" stroke="#a855f7" strokeWidth={2} dot={{ r: 3 }} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
 
         {/* Evolution Chart */}
-      <Card className="border-border/60">
-        <CardContent className="p-4">
-          <h3 className="font-semibold text-sm mb-3">Evolução Financeira Mensal</h3>
-          {evolutionData.length === 0 ? (
-            <div className="h-[200px] flex items-center justify-center text-xs text-muted-foreground">
-              Cadastre medições e despesas para visualizar a evolução
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={evolutionData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                <defs>
-                  <linearGradient id="gradReceita" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="gradDespesa" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.4)" />
-                <XAxis dataKey="month" fontSize={10} tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis fontSize={10} tickFormatter={(v) => BRL_SHORT(v)} tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip content={<CustomAreaTooltip />} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Area type="monotone" dataKey="receita" name="Receitas" stroke="#22c55e" fill="url(#gradReceita)" strokeWidth={2} />
-                <Area type="monotone" dataKey="despesa" name="Despesas" stroke="#ef4444" fill="url(#gradDespesa)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
+        <Card className="border-border/60">
+          <CardContent className="p-4">
+            <h3 className="font-semibold text-sm mb-3">Evolução Financeira Mensal</h3>
+            {evolutionData.length === 0 ? (
+              <div className="h-[300px] flex items-center justify-center text-xs text-muted-foreground">
+                Cadastre medições e despesas para visualizar a evolução
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={evolutionData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                  <defs>
+                    <linearGradient id="gradReceita" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gradDespesa" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.4)" />
+                  <XAxis dataKey="month" fontSize={10} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis fontSize={10} tickFormatter={(v) => BRL_SHORT(v)} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                  <Tooltip content={<CustomAreaTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Area type="monotone" dataKey="receita" name="Receitas" stroke="#22c55e" fill="url(#gradReceita)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="despesa" name="Despesas" stroke="#ef4444" fill="url(#gradDespesa)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Row 3: Donut KPIs */}
@@ -455,6 +538,14 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
           </CardContent>
         </Card>
       )}
+
+      {/* Summary Stats Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MiniKpi icon={DollarSign} label="Valor Total do Portfólio" value={BRL.format(summaryStats.totalPortfolio)} className="text-emerald-600 dark:text-emerald-400" />
+        <MiniKpi icon={TrendingUp} label="Total Recebido" value={BRL.format(summaryStats.totalRecebido)} className="text-blue-600 dark:text-blue-400" />
+        <MiniKpi icon={TrendingDown} label="Total Despesas" value={BRL.format(summaryStats.totalDespesas)} className="text-red-600 dark:text-red-400" />
+        <MiniKpi icon={Wallet} label="Saldo Estimado" value={BRL.format(summaryStats.saldo)} className={summaryStats.saldo >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"} />
+      </div>
     </div>
   );
 }
@@ -474,18 +565,8 @@ function DonutKpi({ label, value, color, subtitle }: { label: string; value: num
       <CardContent className="p-4 flex flex-col items-center">
         <div className="relative w-[130px] h-[130px]">
           <ResponsiveContainer width="100%" height="100%">
-            <RadialBarChart
-              cx="50%" cy="50%"
-              innerRadius="72%" outerRadius="100%"
-              barSize={10}
-              data={[data[0]]}
-              startAngle={90} endAngle={-270}
-            >
-              <RadialBar
-                dataKey="value"
-                cornerRadius={5}
-                background={{ fill: "hsl(var(--muted) / 0.3)" }}
-              />
+            <RadialBarChart cx="50%" cy="50%" innerRadius="72%" outerRadius="100%" barSize={10} data={[data[0]]} startAngle={90} endAngle={-270}>
+              <RadialBar dataKey="value" cornerRadius={5} background={{ fill: "hsl(var(--muted) / 0.3)" }} />
             </RadialBarChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
