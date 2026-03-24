@@ -443,6 +443,13 @@ export default function HoldingDashboardView() {
       const existingNames = obras.map(o => o.nome.toLowerCase().trim());
       const newObras = obrasToInsert.filter(o => !existingNames.includes(o.nome.toLowerCase().trim()));
       const skipped = obrasToInsert.length - newObras.length;
+      if (skipped > 0 && newObras.length > 0) {
+        const duplicateNames = obrasToInsert
+          .filter(o => existingNames.includes(o.nome.toLowerCase().trim()))
+          .map(o => o.nome)
+          .join(", ");
+        toast.info(`Ignorando duplicadas: ${duplicateNames}`);
+      }
       if (newObras.length === 0) {
         toast.warning("Todas as obras já estão cadastradas.");
         setImporting(false);
