@@ -243,7 +243,16 @@ function MedicoesTab({ obraId }: { obraId: string }) {
         <Card>
           <CardContent className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
             <div><label className="text-xs text-muted-foreground">Nº Medição</label><Input value={form.num_medicao} onChange={(e) => setForm({ ...form, num_medicao: e.target.value })} /></div>
-            <div><label className="text-xs text-muted-foreground">Mês Ref.</label><Input value={form.mes_referencia} onChange={(e) => setForm({ ...form, mes_referencia: e.target.value })} placeholder="Jan, Fev..." /></div>
+            <div><label className="text-xs text-muted-foreground">Mês Ref.</label>
+              <Select value={form.mes_referencia} onValueChange={(v) => setForm({ ...form, mes_referencia: v })}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map(m => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div><label className="text-xs text-muted-foreground">Ano Ref.</label><Input type="number" value={form.ano_referencia} onChange={(e) => setForm({ ...form, ano_referencia: Number(e.target.value) })} /></div>
             <div><label className="text-xs text-muted-foreground">Valor</label><Input type="number" value={form.valor_medicao} onChange={(e) => setForm({ ...form, valor_medicao: Number(e.target.value) })} /></div>
             <div><label className="text-xs text-muted-foreground">Data Envio</label><Input type="date" value={form.data_envio} onChange={(e) => setForm({ ...form, data_envio: e.target.value })} /></div>
@@ -424,7 +433,14 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
             <div className="grid grid-cols-4 gap-2">
               <div>
                 <label className="text-xs text-muted-foreground">Mês</label>
-                <Input placeholder="Jan" value={newDespesa.mes_referencia} onChange={(e) => setNewDespesa(p => ({ ...p, mes_referencia: e.target.value }))} className="h-8 text-xs" />
+                <Select value={newDespesa.mes_referencia} onValueChange={(v) => setNewDespesa(p => ({ ...p, mes_referencia: v }))}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map(m => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Ano</label>

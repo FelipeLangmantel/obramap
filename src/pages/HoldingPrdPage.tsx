@@ -76,11 +76,17 @@ export default function HoldingPrdPage() {
         const key = `${ano}-${String(mes + 1).padStart(2, "0")}`;
 
         const realizado = medicoes
-          .filter((m: any) => m.obra_id === o.id && m.status_medicao === "aprovada" && MONTHS.indexOf(m.mes_referencia) === mes && m.ano_referencia === ano)
+          .filter((m: any) => {
+            const mi = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0,3).toLowerCase());
+            return m.obra_id === o.id && m.status_medicao === "aprovada" && mi === mes && m.ano_referencia === ano;
+          })
           .reduce((s: number, m: any) => s + (Number(m.valor_medicao) || 0), 0);
 
         const desp = despesas
-          .filter((d: any) => d.obra_id === o.id && MONTHS.indexOf(d.mes_referencia) === mes && d.ano_referencia === ano)
+          .filter((d: any) => {
+            const mi = MONTHS.findIndex(mn => mn.toLowerCase() === (d.mes_referencia || "").substring(0,3).toLowerCase());
+            return d.obra_id === o.id && mi === mes && d.ano_referencia === ano;
+          })
           .reduce((s: number, d: any) => s + (Number(d.valor) || 0), 0);
 
         months.push({ key, label: `${MONTHS[mes]}/${String(ano).slice(2)}`, mes: mes + 1, ano, previsto: monthlyPrevisto, realizado, despesas: desp });
