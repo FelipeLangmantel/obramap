@@ -554,9 +554,25 @@ export default function HoldingDashboardView() {
           <p className="text-muted-foreground">Nenhuma obra cadastrada no portfólio.</p>
         </div>
       ) : viewMode === "cards" ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {obras.map((obra) => (
-            <ObraCard key={obra.id} obra={obra} onClick={() => setSelectedObra(obra)} />
+            <ObraCard
+              key={obra.id}
+              obra={obra}
+              onClick={() => setSelectedObra(obra)}
+              onEdit={() => {
+                setNewObraForm({
+                  nome: obra.nome, empresa: obra.empresa || "", num_contrato: obra.num_contrato || "",
+                  parceria_scp: obra.parceria_scp || "", valor_contrato: String(obra.valor_contrato || ""),
+                  data_inicio: obra.data_inicio || "", prazo_dias: String(obra.prazo_dias || ""),
+                  status: obra.status, percentual_andamento: obra.percentual_andamento,
+                  periodo_medicao: obra.periodo_medicao || "", prazo_pagamento: obra.prazo_pagamento || "",
+                });
+                setEditingObra(obra);
+                setShowNewObraDialog(true);
+              }}
+              onDelete={() => setDeletingObraId(obra.id)}
+            />
           ))}
         </div>
       ) : (
