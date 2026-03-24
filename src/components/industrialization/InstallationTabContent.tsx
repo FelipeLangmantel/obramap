@@ -19,7 +19,7 @@ import {
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Wrench, Filter, CheckCircle2, Package, ArrowRight, Truck, CraneIcon } from "lucide-react";
+import { Wrench, Filter, CheckCircle2, Package, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
