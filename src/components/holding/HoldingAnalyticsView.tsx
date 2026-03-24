@@ -416,6 +416,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-foreground truncate text-xs">{obra.nome}</p>
                           <p className="text-[10px] text-muted-foreground truncate">{obra.municipio || obra.empresa || "—"}</p>
+                          {obra.tipo_contrato && <Badge variant="outline" className="text-[8px] h-3.5 px-1 mt-0.5">{obra.tipo_contrato}</Badge>}
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
