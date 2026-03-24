@@ -330,6 +330,11 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                 {supplyOverdueCount}
               </Badge>
             )}
+            {item.badge && (
+              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-purple-500/10 text-purple-600 border-purple-500/30">
+                {item.badge}
+              </Badge>
+            )}
             {isSystemAdmin && isBeta && (
               <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-amber-500/10 text-amber-600 border-amber-500/30">
                 <Beaker className="h-2.5 w-2.5 mr-0.5" />
