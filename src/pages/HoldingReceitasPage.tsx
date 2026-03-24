@@ -37,9 +37,11 @@ interface MedicaoCompleta {
   num_medicao: string | null;
   mes_referencia: string | null;
   ano_referencia: number | null;
+  data_previsao_medicao: string | null;
   data_envio: string | null;
   data_aprovacao: string | null;
   status_medicao: "aprovada" | "enviada" | "pendente" | "nao_iniciada";
+  valor_previsto_medicao: number;
   valor_medicao: number;
   num_nf: string | null;
   data_pagamento: string | null;
