@@ -190,7 +190,6 @@ export default function HoldingPrdPage() {
       </SidebarProvider>
     );
   }
-  }
 
   const desvioColor = kpis.desvio >= 90 ? "border-b-emerald-500" : kpis.desvio >= 70 ? "border-b-amber-500" : "border-b-red-500";
 
