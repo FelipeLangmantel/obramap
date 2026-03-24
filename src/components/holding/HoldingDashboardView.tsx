@@ -562,6 +562,9 @@ export default function HoldingDashboardView() {
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowNewObraDialog(true)}>
             <Plus className="h-3.5 w-3.5 mr-1" /> Nova Obra
           </Button>
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowImportDialog(true)}>
+            <Upload className="h-3.5 w-3.5 mr-1" /> Importar
+          </Button>
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={exportarPDF} disabled={isPrinting || obras.length === 0}>
             {isPrinting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <FileDown className="h-3.5 w-3.5 mr-1" />}
             Exportar PDF
