@@ -1001,7 +1001,7 @@ export default function HoldingDashboardView() {
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div><Label className="text-xs">UH (Unidades Hab.)</Label><Input type="number" value={newObraForm.uh} onChange={(e) => setNewObraForm(p => ({ ...p, uh: e.target.value }))} placeholder="Ex: 20, 70, 246" /></div>
-              <div><Label className="text-xs">Responsável</Label><Input value={newObraForm.responsavel} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel: e.target.value }))} placeholder="Ex: Frederico - 51 990049501" /></div>
+              <div><Label className="text-xs">Nome do Responsável</Label><Input value={newObraForm.responsavel_nome} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_nome: e.target.value }))} placeholder="Ex: Bruno" /></div>
               <div>
                 <Label className="text-xs">Tipo de Contrato</Label>
                 <Select value={newObraForm.tipo_contrato} onValueChange={(v) => setNewObraForm(p => ({ ...p, tipo_contrato: v }))}>
