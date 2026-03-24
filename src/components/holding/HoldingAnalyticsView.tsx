@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  BarChart, Bar, AreaChart, Area, RadialBarChart, RadialBar,
+  ComposedChart, BarChart, Bar, Line, AreaChart, Area, RadialBarChart, RadialBar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell,
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
-import { MapPin } from "lucide-react";
+import { MapPin, DollarSign, TrendingUp, TrendingDown, Wallet } from "lucide-react";
 
 /* ═══════════════════════════════════════
    Types (mirrors HoldingDashboardView)
@@ -130,12 +130,14 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
       const despesas = despesasData
         .filter(d => d.obra_id === o.id)
         .reduce((s: number, d: any) => s + (d.valor || 0), 0);
+      const roi = medAprovadas > 0 && despesas > 0 ? ((medAprovadas - despesas) / despesas) * 100 : 0;
       return {
         nome: o.nome.length > 14 ? o.nome.slice(0, 12) + "…" : o.nome,
         fullNome: o.nome,
         previsto: o.valor_contrato || 0,
         realizado: medAprovadas,
         despesas,
+        roi: Math.round(roi * 10) / 10,
       };
     });
   }, [obras, medicoesData, despesasData]);
@@ -218,8 +220,41 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
     );
   };
 
+  const summaryStats = useMemo(() => {
+    const totalPortfolio = obras.reduce((s, o) => s + (o.valor_contrato || 0), 0);
+    const totalRecebido = prdData.reduce((s, d) => s + d.realizado, 0);
+    const totalDespesas = prdData.reduce((s, d) => s + d.despesas, 0);
+    const saldo = totalRecebido - totalDespesas;
+    return { totalPortfolio, totalRecebido, totalDespesas, saldo };
+  }, [obras, prdData]);
+
+  const rankingData = useMemo(() => {
+    return [...obras]
+      .sort((a, b) => (b.valor_contrato || 0) - (a.valor_contrato || 0))
+      .slice(0, 15)
+      .map(o => ({
+        id: o.id,
+        nome: o.nome.length > 22 ? o.nome.slice(0, 20) + "…" : o.nome,
+        fullNome: o.nome,
+        valor: o.valor_contrato || 0,
+        health: o.health,
+        status: o.status,
+      }));
+  }, [obras]);
+
+  const HEALTH_COLORS: Record<string, string> = { green: "#22c55e", yellow: "#f59e0b", red: "#ef4444" };
+  const STATUS_LABELS: Record<string, string> = { em_andamento: "Em Andamento", nao_iniciada: "Não Iniciada", concluida: "Concluída", paralisada: "Paralisada" };
+
   return (
     <div className="space-y-4">
+      {/* Summary Stats Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MiniKpi icon={DollarSign} label="Valor Total do Portfólio" value={BRL.format(summaryStats.totalPortfolio)} className="text-emerald-600 dark:text-emerald-400" />
+        <MiniKpi icon={TrendingUp} label="Total Recebido" value={BRL.format(summaryStats.totalRecebido)} className="text-blue-600 dark:text-blue-400" />
+        <MiniKpi icon={TrendingDown} label="Total Despesas" value={BRL.format(summaryStats.totalDespesas)} className="text-red-600 dark:text-red-400" />
+        <MiniKpi icon={Wallet} label="Saldo Estimado" value={BRL.format(summaryStats.saldo)} className={summaryStats.saldo >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"} />
+      </div>
+
       {/* Row 1: Map + PRD Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* MAPA RS */}
@@ -304,7 +339,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
               {obrasOnMap.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-lg">
                   <p className="text-xs text-muted-foreground text-center px-4">
-                    Cadastre o município nas obras para visualizá-las no mapa.
+                    Informe o município ao cadastrar cada obra para visualizá-la no mapa do RS
                   </p>
                 </div>
               )}
@@ -322,16 +357,18 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
               </div>
             ) : (
               <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={prdData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                <ComposedChart data={prdData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.4)" />
                   <XAxis dataKey="nome" fontSize={10} tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                  <YAxis fontSize={10} tickFormatter={(v) => BRL_SHORT(v)} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis yAxisId="left" fontSize={10} tickFormatter={(v) => BRL_SHORT(v)} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                  <YAxis yAxisId="right" orientation="right" fontSize={9} tickFormatter={(v: number) => `${v.toFixed(0)}%`} tick={{ fill: "hsl(var(--muted-foreground))" }} />
                   <Tooltip content={<CustomBarTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="previsto" name="Previsto" fill="#3b82f6" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="realizado" name="Realizado" fill="#22c55e" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="despesas" name="Despesas" fill="#ef4444" radius={[3, 3, 0, 0]} />
-                </BarChart>
+                  <Bar yAxisId="left" dataKey="previsto" name="Previsto" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                  <Bar yAxisId="left" dataKey="realizado" name="Realizado" fill="#22c55e" radius={[3, 3, 0, 0]} />
+                  <Bar yAxisId="left" dataKey="despesas" name="Despesas" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                  <Line yAxisId="right" type="monotone" dataKey="roi" name="ROI %" stroke="#a855f7" strokeWidth={2} dot={{ r: 3 }} />
+                </ComposedChart>
               </ResponsiveContainer>
             )}
           </CardContent>
@@ -378,6 +415,40 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
         <DonutKpi label="Medições OK" value={donutData.medicoes} color="#22c55e" subtitle="obras com medição aprovada" />
         <DonutKpi label="No Prazo" value={donutData.prazo} color="#f59e0b" subtitle="obras em andamento no prazo" />
       </div>
+
+      {/* Row 4: Ranking */}
+      {rankingData.length > 0 && (
+        <Card className="border-border/60">
+          <CardContent className="p-4">
+            <h3 className="font-semibold text-sm mb-3">Top Obras por Valor de Contrato</h3>
+            <ResponsiveContainer width="100%" height={Math.max(200, rankingData.length * 36)}>
+              <BarChart data={rankingData} layout="vertical" margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.4)" horizontal={false} />
+                <XAxis type="number" fontSize={10} tickFormatter={(v) => BRL_SHORT(v)} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                <YAxis type="category" dataKey="nome" width={180} fontSize={10} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                <Tooltip
+                  content={({ active, payload }: any) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+                    return (
+                      <div className="bg-popover border border-border rounded-lg shadow-lg p-3 text-xs space-y-1">
+                        <p className="font-semibold text-foreground">{d.fullNome}</p>
+                        <p>{BRL.format(d.valor)}</p>
+                        <p className="text-muted-foreground">{STATUS_LABELS[d.status] || d.status}</p>
+                      </div>
+                    );
+                  }}
+                />
+                <Bar dataKey="valor" name="Valor Contrato" radius={[0, 4, 4, 0]} cursor="pointer" onClick={(data: any) => onObraClick(data.id)}>
+                  {rankingData.map((entry, index) => (
+                    <Cell key={index} fill={HEALTH_COLORS[entry.health] || "#3b82f6"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -417,6 +488,26 @@ function DonutKpi({ label, value, color, subtitle }: { label: string; value: num
         </div>
         <p className="font-semibold text-sm mt-2 text-foreground">{label}</p>
         <p className="text-[10px] text-muted-foreground">{subtitle}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ═══════════════════════════════════════
+   Mini KPI card for summary stats
+   ═══════════════════════════════════════ */
+
+function MiniKpi({ icon: Icon, label, value, className }: { icon: any; label: string; value: string; className?: string }) {
+  return (
+    <Card className="border-border/60">
+      <CardContent className="p-3 flex items-center gap-3">
+        <div className={`p-2 rounded-lg bg-muted/50 ${className}`}>
+          <Icon className="h-4 w-4" />
+        </div>
+        <div>
+          <p className="text-[10px] text-muted-foreground">{label}</p>
+          <p className={`text-base font-bold ${className}`}>{value}</p>
+        </div>
       </CardContent>
     </Card>
   );
