@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { FactoriesTabContent } from "./FactoriesTabContent";
 import { LiftingTabContent } from "./LiftingTabContent";
 import { OverviewTabContent } from "./OverviewTabContent";
+import { InstallationTabContent } from "./InstallationTabContent";
 
 interface OperationContext {
   id: string;
