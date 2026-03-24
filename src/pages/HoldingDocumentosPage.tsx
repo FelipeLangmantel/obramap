@@ -313,7 +313,7 @@ export default function HoldingDocumentosPage() {
                     <TableCell className="text-xs font-medium">{o.nome}</TableCell>
                     <TableCell className="text-xs">{o.empresa || "—"}</TableCell>
                     <TableCell className={`text-xs text-center font-semibold ${scoreColor(o.docCount, 6)}`}>{o.docCount}/6</TableCell>
-                    <TableCell className={`text-xs text-center font-semibold ${scoreColor(o.acompCount, 5)}`}>{o.acompCount}/5</TableCell>
+                    <TableCell className={`text-xs text-center font-semibold ${scoreColor(o.ensaiosCount, 5)}`}>{o.ensaiosCount}/5</TableCell>
                     <TableCell className="text-center"><span className={`text-lg ${HEALTH_DOT[o.health]}`}>●</span></TableCell>
                     <TableCell><Badge variant="outline" className="text-[10px]">{o.status?.replace("_", " ") || "—"}</Badge></TableCell>
                     <TableCell className="text-center">
