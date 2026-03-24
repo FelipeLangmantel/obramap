@@ -138,7 +138,7 @@ export default function HoldingDespesasPage() {
     const map = new Map<string, { fechado: number; em_fechamento: number; nao_iniciado: number }>();
     despesas.forEach(d => {
       if (!d.mes_referencia || !d.ano_referencia) return;
-      const mi = MONTHS.indexOf(d.mes_referencia);
+      const mi = MONTHS.findIndex(mn => mn.toLowerCase() === (d.mes_referencia || "").substring(0,3).toLowerCase());
       const key = `${d.ano_referencia}-${String(mi >= 0 ? mi + 1 : 1).padStart(2, "0")}`;
       const cur = map.get(key) || { fechado: 0, em_fechamento: 0, nao_iniciado: 0 };
       if (d.status === "fechado") cur.fechado += d.valor;

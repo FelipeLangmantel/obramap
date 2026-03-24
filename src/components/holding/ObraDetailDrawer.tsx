@@ -433,7 +433,14 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
             <div className="grid grid-cols-4 gap-2">
               <div>
                 <label className="text-xs text-muted-foreground">Mês</label>
-                <Input placeholder="Jan" value={newDespesa.mes_referencia} onChange={(e) => setNewDespesa(p => ({ ...p, mes_referencia: e.target.value }))} className="h-8 text-xs" />
+                <Select value={newDespesa.mes_referencia} onValueChange={(v) => setNewDespesa(p => ({ ...p, mes_referencia: v }))}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map(m => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <label className="text-xs text-muted-foreground">Ano</label>
