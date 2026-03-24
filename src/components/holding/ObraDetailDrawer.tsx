@@ -606,6 +606,7 @@ function PendenciasTab({ obraId }: { obraId: string }) {
   const toggleConcluido = async (id: string, value: boolean) => {
     setItems((prev) => prev.map((i) => i.id === id ? { ...i, concluido: value } : i));
     await supabase.from("pendencias_projeto").update({ concluido: value } as any).eq("id", id);
+    invalidateHolding();
   };
 
   const addPendencia = async () => {
