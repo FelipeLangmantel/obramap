@@ -1,4 +1,4 @@
-import { BookOpen, Building2, ClipboardList, BarChart3, AlertTriangle, FileDown, Info } from "lucide-react";
+import { BookOpen, Building2, ClipboardList, BarChart3, AlertTriangle, FileDown, Info, TrendingUp, Receipt, FolderOpen, Sparkles, DollarSign, FileText } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,9 +19,9 @@ export default function HoldingManualView() {
         </p>
         <div className="flex justify-center gap-6 pt-4">
           {[
-            { num: "6", label: "Tabelas no banco" },
-            { num: "3", label: "Visões do painel" },
-            { num: "5", label: "Abas por obra" },
+            { num: "6+", label: "Tabelas + páginas" },
+            { num: "6+", label: "Módulos independentes" },
+            { num: "5+", label: "Abas + PRD + Analytics" },
             { num: "4", label: "Tipos de alerta" },
           ].map((s) => (
             <div key={s.label} className="text-center">
@@ -42,10 +42,14 @@ export default function HoldingManualView() {
           <AccordionContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {[
-                { icon: "📊", title: "Painel do Portfólio", desc: "Visão consolidada de todas as obras com KPIs, semáforo de saúde e alertas. Substitui as planilhas de acompanhamento." },
+                { icon: "📊", title: "Painel do Portfólio", desc: "Visão consolidada de todas as obras com KPIs, semáforo de saúde, filtros avançados e alertas. Substitui as planilhas de acompanhamento." },
                 { icon: "📋", title: "Ficha da Obra", desc: "5 abas por obra: Documentos, Medições PLE, Financeiro, Aditivos e Pendências. Tudo centralizado." },
-                { icon: "📈", title: "Analytics", desc: "Mapa do RS, gráfico Previsto × Realizado × Despesas, evolução mensal e indicadores donut." },
+                { icon: "📈", title: "Analytics", desc: "Mapa do RS com lista lateral, gráfico PRD com ROI, evolução mensal e ranking de obras por valor." },
                 { icon: "📄", title: "Exportação PDF", desc: "Relatório executivo em 1 clique com capa, tabela colorida de obras e alertas. Pronto para reunião." },
+                { icon: "💰", title: "Receitas & Medições", desc: "Módulo financeiro dedicado com resumo, tabela completa e previsão de fluxo de caixa 12 meses." },
+                { icon: "💸", title: "Despesas & Custos", desc: "Controle de despesas com PRD completo (Previsto × Realizado × Despesas) e cálculo de ROI por obra." },
+                { icon: "📁", title: "Documentação", desc: "Visão consolidada de Doc_Obra (6 itens) e Acomp_Obra (5 itens) de todas as obras com progresso e pendências." },
+                { icon: "✨", title: "IA — Insights", desc: "Análise automática do portfólio por inteligência artificial com insights executivos e relatório gerado por IA." },
               ].map((f) => (
                 <Card key={f.title} className="bg-muted/30">
                   <CardContent className="p-4 space-y-1">
@@ -68,7 +72,7 @@ export default function HoldingManualView() {
               {[
                 { title: "Cards", desc: "Grade de cards com semáforo de saúde. Clique em qualquer card para abrir a ficha completa da obra." },
                 { title: "Gantt", desc: "Cronograma horizontal Jan/2025–Dez/2026. Linha vermelha = hoje. Barra terminando antes da linha = prazo vencido." },
-                { title: "Analytics", desc: "Mapa RS + PRD Chart + Evolução Financeira + 3 indicadores donut calculados automaticamente." },
+                { title: "Analytics", desc: "Mapa RS com lista lateral + PRD Chart + Evolução Financeira + Ranking + indicadores donut." },
               ].map((v) => (
                 <Card key={v.title} className="bg-muted/30">
                   <CardContent className="p-4 space-y-1">
@@ -80,7 +84,7 @@ export default function HoldingManualView() {
             </div>
             <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
               <p className="text-xs text-blue-700 dark:text-blue-300">
-                💡 Os 4 KPIs do topo (Total Contratos, Medições Aprovadas, Obras Ativas, Alertas Críticos) ficam sempre visíveis em qualquer visão — calculados em tempo real.
+                💡 Os KPIs do topo (Total Contratos, Medições, Obras Ativas, Alertas, etc.) ficam sempre visíveis — calculados em tempo real. Os módulos independentes (Receitas, Despesas, Documentação, PRD, IA) ficam no menu lateral, seção HOLDING.
               </p>
             </div>
           </AccordionContent>
@@ -117,7 +121,7 @@ export default function HoldingManualView() {
           <AccordionContent>
             <div className="space-y-4">
               {[
-                { step: "A", title: "Cadastrar obra", desc: "Clique em '+ Nova Obra' no topo. Preencha nome, empresa, contrato, SCP, valor, data, prazo e município.", tip: "Use o botão 'Importar' para cadastrar várias obras de uma vez colando os dados em formato CSV." },
+                { step: "A", title: "Cadastrar obra", desc: "Clique em '+ Nova Obra' no topo. Preencha nome, empresa, contrato, SCP, valor, data, prazo, município, UH, responsável e tipo de contrato.", tip: "Use o botão 'Importar' para cadastrar várias obras de uma vez colando os dados em formato CSV. Use 'Carregar modelo' para ver o formato." },
                 { step: "B", title: "Documentos", desc: "Ficha da obra → aba Documentos. Use os toggles para marcar Doc_Obra (6 itens: Ata, OIS, ART, CNO, Impl, SCP) e Acomp_Obra (5 itens). Salva automaticamente.", tip: null },
                 { step: "C", title: "Medições PLE", desc: "Ficha → aba Medições → + Nova Medição. Campos: Nº, Mês/Ano Ref, Data Envio, Status, Valor, Nº NF, Status NF.", tip: null },
                 { step: "D", title: "Despesas mensais", desc: "Ficha → aba Financeiro → + Nova Despesa. Campos: Mês, Ano, Valor, Status (Não Iniciado → Em Fechamento → Fechado).", tip: null },
@@ -187,9 +191,10 @@ export default function HoldingManualView() {
           <AccordionContent>
             <div className="space-y-3">
               {[
-                { icon: "🗺️", title: "Mapa do RS", desc: "Pins coloridos pelo semáforo de saúde. Hover mostra nome e valor. Clique abre a ficha. Para aparecer: preencha o campo Município com o nome exato da cidade." },
-                { icon: "📊", title: "Gráfico PRD", desc: "3 barras por obra: Previsto (azul) = valor contrato, Realizado (verde) = medições aprovadas, Despesas (vermelho) = despesas lançadas." },
+                { icon: "🗺️", title: "Mapa do RS", desc: "Pins coloridos pelo semáforo de saúde com lista lateral de obras ordenada por valor. Clique abre a ficha. Para aparecer: preencha o campo Município com o nome exato da cidade." },
+                { icon: "📊", title: "Gráfico PRD", desc: "3 barras por obra: Previsto (azul) = valor contrato, Realizado (verde) = medições aprovadas, Despesas (vermelho) = despesas lançadas. Linha de ROI % sobreposta." },
                 { icon: "📈", title: "Evolução Financeira", desc: "Curva de área: receitas realizadas (verde) vs despesas (vermelho) mês a mês. Aparece quando há medições aprovadas ou despesas com mês/ano preenchidos." },
+                { icon: "🏆", title: "Ranking de Obras", desc: "Top 15 obras ordenadas por valor de contrato em barras horizontais coloridas pelo semáforo de saúde." },
                 { icon: "🎯", title: "Donuts", desc: "Documentação: % obras com ≥9/11 docs. Medições OK: % com medição aprovada. No Prazo: % obras em andamento dentro do prazo." },
               ].map((g) => (
                 <div key={g.title} className="flex gap-3 items-start">
@@ -204,8 +209,136 @@ export default function HoldingManualView() {
           </AccordionContent>
         </AccordionItem>
 
-        {/* SECTION 7 */}
+        {/* SECTION 7 — Receitas & Medições */}
         <AccordionItem value="s7" className="border rounded-lg px-4">
+          <AccordionTrigger className="text-sm font-semibold">
+            <span className="flex items-center gap-2"><TrendingUp className="h-4 w-4 text-primary" /> Módulo Receitas & Medições</span>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-4">
+            <p className="text-xs text-muted-foreground">Acesse pelo menu lateral → seção HOLDING → "Receitas & Medições"</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <Card className="bg-muted/30">
+                <CardContent className="p-4 space-y-1">
+                  <p className="font-medium text-sm">📊 Aba Resumo</p>
+                  <p className="text-xs text-muted-foreground">KPIs financeiros (total medições, aprovadas, pendentes, NFs pagas) + gráfico de fluxo de caixa por mês e gráfico de distribuição de status.</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-muted/30">
+                <CardContent className="p-4 space-y-1">
+                  <p className="font-medium text-sm">📋 Aba Tabela</p>
+                  <p className="text-xs text-muted-foreground">Todas as medições de todas as obras em formato planilha. Divisão ENGENHARIA (Nº med, mês, envio, status) e FINANCEIRO (NF, pagamento, status NF). Filtros por obra, status e período.</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-muted/30">
+                <CardContent className="p-4 space-y-1">
+                  <p className="font-medium text-sm">📅 Aba Previsão</p>
+                  <p className="text-xs text-muted-foreground">Calendário de entradas futuras: 12 meses projetados por obra. Mostra medições previstas com base no ritmo atual. Ideal para o financeiro planejar recebíveis.</p>
+                </CardContent>
+              </Card>
+            </div>
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                💡 Use o botão "Exportar CSV" para baixar todos os dados em formato compatível com Excel. O separador é ";" para funcionar corretamente no Excel em PT-BR.
+              </p>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* SECTION 8 — Despesas & Custos */}
+        <AccordionItem value="s8" className="border rounded-lg px-4">
+          <AccordionTrigger className="text-sm font-semibold">
+            <span className="flex items-center gap-2"><Receipt className="h-4 w-4 text-primary" /> Módulo Despesas & Custos</span>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-4">
+            <p className="text-xs text-muted-foreground">Acesse pelo menu lateral → seção HOLDING → "Despesas & Custos"</p>
+            <div className="space-y-3">
+              <div className="flex gap-3 items-start">
+                <span className="text-lg">📊</span>
+                <div>
+                  <p className="text-sm font-medium">PRD — Previsto × Realizado × Despesas</p>
+                  <p className="text-xs text-muted-foreground">Gráfico combinado mostrando 3 barras por obra (Previsto em azul, Realizado em verde, Despesas em vermelho) + linha de saldo em roxo. Permite comparar o valor contratado com o que já foi medido e gasto.</p>
+                </div>
+              </div>
+              <div className="flex gap-3 items-start">
+                <span className="text-lg">💹</span>
+                <div>
+                  <p className="text-sm font-medium">ROI por Obra</p>
+                  <p className="text-xs text-muted-foreground">ROI = (Realizado - Despesas) / Despesas × 100. Verde se positivo, vermelho se negativo. Mostra quais obras estão dando retorno financeiro e quais estão consumindo mais do que gerando.</p>
+                </div>
+              </div>
+              <div className="flex gap-3 items-start">
+                <span className="text-lg">📋</span>
+                <div>
+                  <p className="text-sm font-medium">Tabela e Exportação</p>
+                  <p className="text-xs text-muted-foreground">Tabela completa com todas as despesas, filtros por obra/status e exportação CSV. O PRD também pode ser exportado separadamente com o botão "Exportar PRD".</p>
+                </div>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* SECTION 9 — Documentação */}
+        <AccordionItem value="s9" className="border rounded-lg px-4">
+          <AccordionTrigger className="text-sm font-semibold">
+            <span className="flex items-center gap-2"><FolderOpen className="h-4 w-4 text-primary" /> Módulo Documentação</span>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-4">
+            <p className="text-xs text-muted-foreground">Acesse pelo menu lateral → seção HOLDING → "Documentação"</p>
+            <div className="space-y-3">
+              <p className="text-sm font-medium">4 abas disponíveis:</p>
+              <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-5">
+                <li><strong>Visão Geral:</strong> KPIs de documentação (completa, parcial, crítica, pendências abertas) + barras de progresso do portfólio + tabela com saúde docs por obra</li>
+                <li><strong>Doc_Obra:</strong> Grid com os 6 documentos (Ata, OIS, ART, CNO, Impl, SCP) — ✓ marcado, ✗ faltando — por obra</li>
+                <li><strong>Acomp_Obra:</strong> Grid com os 5 itens de acompanhamento (Sondagem SPT, Planta, Plano Altim., Painel Bordo, Check Segurança)</li>
+                <li><strong>Pendências:</strong> Todas as pendências abertas de todas as obras com filtro por obra e status (Abertas/Concluídas/Todas)</li>
+              </ul>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* SECTION 10 — Campos das Obras */}
+        <AccordionItem value="s10" className="border rounded-lg px-4">
+          <AccordionTrigger className="text-sm font-semibold">
+            <span className="flex items-center gap-2"><FileText className="h-4 w-4 text-primary" /> Campos das Obras (referência)</span>
+          </AccordionTrigger>
+          <AccordionContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Campo</TableHead>
+                  <TableHead className="text-xs">Onde preencher</TableHead>
+                  <TableHead className="text-xs">Onde aparece</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[
+                  { campo: "Nome da Obra", onde: "Cadastro / Importação", aparece: "Cards, Tabela, Gantt, Analytics, todos os módulos" },
+                  { campo: "Empresa", onde: "Cadastro / Importação", aparece: "Cards, Tabela, filtros, exportações" },
+                  { campo: "Nº Contrato", onde: "Cadastro / Importação", aparece: "Cards, Tabela, Receitas, Despesas" },
+                  { campo: "Parceria SCP", onde: "Cadastro / Importação", aparece: "Cards, Tabela, badge no card" },
+                  { campo: "Valor Contrato", onde: "Cadastro / Importação", aparece: "KPIs, PRD, Analytics, Ranking, Gantt" },
+                  { campo: "Data Início", onde: "Cadastro / Importação", aparece: "Gantt, PRD, cálculo de previsão de fim" },
+                  { campo: "Prazo (dias)", onde: "Cadastro / Importação", aparece: "Gantt, alertas de prazo, previsão de fim" },
+                  { campo: "Município", onde: "Cadastro / Importação", aparece: "Mapa do RS (Analytics), cards, tabela" },
+                  { campo: "UH (Unidades Hab.)", onde: "Cadastro / Importação", aparece: "Cards, Tabela, Drawer, Receitas, PRD" },
+                  { campo: "Responsável", onde: "Cadastro / Importação", aparece: "Cards, Drawer da obra, Tabela" },
+                  { campo: "Tipo de Contrato", onde: "Cadastro (select)", aparece: "Cards, Tabela, filtro, Analytics sidebar, badge" },
+                  { campo: "% Andamento", onde: "Cadastro / Importação", aparece: "Cards (barra de progresso), Tabela" },
+                  { campo: "Status", onde: "Cadastro / Importação", aparece: "Cards (badge), Tabela, filtros, KPIs" },
+                ].map((r) => (
+                  <TableRow key={r.campo}>
+                    <TableCell className="text-xs font-medium">{r.campo}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{r.onde}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{r.aparece}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* SECTION 11 — Export PDF */}
+        <AccordionItem value="s11" className="border rounded-lg px-4">
           <AccordionTrigger className="text-sm font-semibold">
             <span className="flex items-center gap-2"><FileDown className="h-4 w-4 text-primary" /> Exportar PDF</span>
           </AccordionTrigger>
@@ -226,8 +359,41 @@ export default function HoldingManualView() {
           </AccordionContent>
         </AccordionItem>
 
-        {/* SECTION 8 */}
-        <AccordionItem value="s8" className="border rounded-lg px-4">
+        {/* SECTION 12 — IA Insights */}
+        <AccordionItem value="s12" className="border rounded-lg px-4">
+          <AccordionTrigger className="text-sm font-semibold">
+            <span className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> IA — Insights <Badge variant="outline" className="text-[10px] h-4 ml-2 bg-purple-500/10 text-purple-600 border-purple-500/30">BETA</Badge></span>
+          </AccordionTrigger>
+          <AccordionContent className="space-y-4">
+            <p className="text-xs text-muted-foreground">Acesse pelo menu lateral → seção HOLDING → "IA — Insights"</p>
+            <div className="space-y-3">
+              <div className="flex gap-3 items-start">
+                <span className="text-lg">🤖</span>
+                <div>
+                  <p className="text-sm font-medium">Gerar Insights</p>
+                  <p className="text-xs text-muted-foreground">Analisa automaticamente todo o portfólio e gera 5 insights executivos classificados por tipo (Risco, Oportunidade, Alerta, Ação) e impacto (Alto, Médio, Baixo). Indica a obra relacionada quando aplicável.</p>
+                </div>
+              </div>
+              <div className="flex gap-3 items-start">
+                <span className="text-lg">📝</span>
+                <div>
+                  <p className="text-sm font-medium">Relatório Executivo por IA</p>
+                  <p className="text-xs text-muted-foreground">Gera um relatório profissional em português com situação geral, riscos, destaques e ações recomendadas. Pode ser copiado ou exportado como PDF.</p>
+                </div>
+              </div>
+              <div className="flex gap-3 items-start">
+                <span className="text-lg">📊</span>
+                <div>
+                  <p className="text-sm font-medium">Análises Pré-definidas</p>
+                  <p className="text-xs text-muted-foreground">3 análises que não dependem de IA (carregam instantaneamente): obras com risco de atraso, obras sem documentação e fluxo de caixa dos próximos 3 meses.</p>
+                </div>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* SECTION 13 — Guia rápido para diretores */}
+        <AccordionItem value="s13" className="border rounded-lg px-4">
           <AccordionTrigger className="text-sm font-semibold">
             <span className="flex items-center gap-2"><Building2 className="h-4 w-4 text-primary" /> Guia rápido para diretores</span>
           </AccordionTrigger>
@@ -238,6 +404,8 @@ export default function HoldingManualView() {
                 "Veja o KPI \"Alertas Críticos\" — se > 0, clique nos alertas para ver o que precisa de ação",
                 "Leia o semáforo: verde = OK, amarelo = atenção, vermelho = ação necessária",
                 'Clique em "Gantt" — barra terminando antes da linha vermelha = prazo vencido',
+                'Use "Receitas & Medições" para acompanhar o fluxo de caixa e medições pendentes',
+                'Use "IA — Insights" para receber um resumo executivo automático do portfólio',
                 'Clique em "Exportar PDF" para levar o relatório para a reunião',
               ].map((text, i) => (
                 <div key={i} className="flex gap-3 items-start">
