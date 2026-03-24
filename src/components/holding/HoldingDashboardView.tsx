@@ -236,6 +236,7 @@ export default function HoldingDashboardView() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterSaude, setFilterSaude] = useState("all");
   const [searchNome, setSearchNome] = useState("");
+  const [filterTipo, setFilterTipo] = useState("all");
 
   const exportarPDF = async () => {
     setIsPrinting(true);
