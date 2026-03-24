@@ -26,6 +26,7 @@ import HoldingDespesasPage from "./pages/HoldingDespesasPage";
 import HoldingDocumentosPage from "./pages/HoldingDocumentosPage";
 import HoldingPrdPage from "./pages/HoldingPrdPage";
 import HoldingInsightsPage from "./pages/HoldingInsightsPage";
+import HoldingConfigPage from "./pages/HoldingConfigPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
