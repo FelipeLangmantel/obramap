@@ -255,65 +255,41 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
         <MiniKpi icon={Wallet} label="Saldo Estimado" value={BRL.format(summaryStats.saldo)} className={summaryStats.saldo >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"} />
       </div>
 
-      {/* Row 1: Map + PRD Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* MAPA RS */}
-        <Card className="border-border/60">
-          <CardContent className="p-4">
-            <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-primary" />
-              Localização das Obras
-            </h3>
+      {/* MAPA RS + Lista de obras (full width, dashboard style) */}
+      <Card className="border-border/60">
+        <CardContent className="p-4">
+          <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-primary" />
+            Mapa de Obras — Rio Grande do Sul
+          </h3>
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_260px] gap-4">
+            {/* MAP */}
             <div className="relative bg-muted/30 rounded-lg p-2">
-               <svg viewBox="0 0 360 280" className="w-full h-auto max-h-[320px]">
-                {/* RS outline */}
-                <path
-                  d={RS_PATH}
-                  fill="hsl(var(--muted) / 0.5)"
-                  stroke="hsl(var(--border))"
-                  strokeWidth="1.5"
-                />
-                {/* Geographic references */}
+              <svg viewBox="0 0 360 280" className="w-full h-auto">
+                <path d={RS_PATH} fill="hsl(var(--muted) / 0.5)" stroke="hsl(var(--border))" strokeWidth="1.5" />
                 <text x="287" y="137" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.5">Porto Alegre</text>
                 <text x="15" y="215" textAnchor="start" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.4">Uruguaiana</text>
                 <text x="330" y="70" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.4">Caxias do Sul</text>
-                {/* State label */}
-                <text x="180" y="170" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="28" fontWeight="700" opacity="0.08">
-                  RS
-                </text>
-                {/* North indicator */}
+                <text x="180" y="170" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="28" fontWeight="700" opacity="0.08">RS</text>
                 <text x="345" y="18" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="7" opacity="0.4">N↑</text>
-                {/* Ocean label */}
                 <text x="340" y="200" textAnchor="end" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.3" fontStyle="italic">Oceano Atlântico</text>
-
-                {/* Obra pins */}
                 {obrasOnMap.map(obra => {
                   const isHovered = hoveredObra === obra.id;
                   const color = HEALTH_PIN[obra.health] || "#3b82f6";
                   return (
-                    <g
-                      key={obra.id}
-                      style={{ cursor: "pointer" }}
+                    <g key={obra.id} style={{ cursor: "pointer" }}
                       onMouseEnter={() => setHoveredObra(obra.id)}
                       onMouseLeave={() => setHoveredObra(null)}
                       onClick={() => onObraClick(obra.id)}
                     >
                       {isHovered && (
-                        <circle
-                          cx={obra.coords.x} cy={obra.coords.y} r="14"
-                          fill="none" stroke={color} strokeWidth="2" opacity="0.4"
-                        >
+                        <circle cx={obra.coords.x} cy={obra.coords.y} r="14" fill="none" stroke={color} strokeWidth="2" opacity="0.4">
                           <animate attributeName="r" from="10" to="18" dur="1s" repeatCount="indefinite" />
                           <animate attributeName="opacity" from="0.6" to="0" dur="1s" repeatCount="indefinite" />
                         </circle>
                       )}
                       <circle cx={obra.coords.x + 0.5} cy={obra.coords.y + 0.5} r={isHovered ? 7 : 5} fill="rgba(0,0,0,0.15)" />
-                      <circle
-                        cx={obra.coords.x} cy={obra.coords.y}
-                        r={isHovered ? 7 : 5}
-                        fill={color} stroke="white" strokeWidth="1.5"
-                      />
-                      {/* City label */}
+                      <circle cx={obra.coords.x} cy={obra.coords.y} r={isHovered ? 7 : 5} fill={color} stroke="white" strokeWidth="1.5" />
                       {!isHovered && (
                         <text x={obra.coords.x} y={obra.coords.y + 11} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="4" opacity="0.7">
                           {obra.municipio?.split(" ")[0]}
@@ -321,11 +297,8 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
                       )}
                       {isHovered && (
                         <g>
-                          <rect
-                            x={obra.coords.x - 55} y={obra.coords.y - 42}
-                            width="110" height="32" rx="4"
-                            fill="hsl(var(--popover))" stroke="hsl(var(--border))" strokeWidth="0.5"
-                          />
+                          <rect x={obra.coords.x - 55} y={obra.coords.y - 42} width="110" height="32" rx="4"
+                            fill="hsl(var(--popover))" stroke="hsl(var(--border))" strokeWidth="0.5" />
                           <text x={obra.coords.x} y={obra.coords.y - 28} textAnchor="middle" fill="hsl(var(--foreground))" fontSize="5.5" fontWeight="600">
                             {obra.nome.slice(0, 20)}
                           </text>
@@ -338,46 +311,62 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
                   );
                 })}
               </svg>
-
-              {/* Title + Legend */}
               <div className="flex items-center justify-between mt-2">
-                <p className="text-[10px] font-medium text-muted-foreground">Obras no Rio Grande do Sul</p>
+                <p className="text-[10px] font-medium text-muted-foreground">{obrasOnMap.length} obra{obrasOnMap.length !== 1 ? "s" : ""} no mapa</p>
                 <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
                   <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#22c55e" }} /> Sob controle</span>
                   <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#f59e0b" }} /> Atenção</span>
                   <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#ef4444" }} /> Crítico</span>
                 </div>
               </div>
-
-              <p className="text-[9px] text-muted-foreground text-center mt-1">
-                {obrasOnMap.length} obra{obrasOnMap.length !== 1 ? "s" : ""} mapeada{obrasOnMap.length !== 1 ? "s" : ""} · clique nos pins para abrir a ficha
-              </p>
-
               {obrasOnMap.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-lg">
-                  <p className="text-xs text-muted-foreground text-center px-4">
-                    Informe o município ao cadastrar cada obra para visualizá-la no mapa do RS
-                  </p>
+                  <p className="text-xs text-muted-foreground text-center px-4">Informe o município ao cadastrar cada obra para visualizá-la no mapa do RS</p>
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
 
+            {/* LISTA DE OBRAS (sidebar like reference image) */}
+            <div className="flex flex-col gap-0.5 max-h-[420px] overflow-y-auto pr-1">
+              <p className="text-xs font-semibold text-muted-foreground mb-1 sticky top-0 bg-card py-1 z-10">Obras ({obras.length})</p>
+              {[...obras]
+                .sort((a, b) => (b.valor_contrato || 0) - (a.valor_contrato || 0))
+                .map((obra) => {
+                  const isHov = hoveredObra === obra.id;
+                  const hc = HEALTH_PIN[obra.health] || "#3b82f6";
+                  return (
+                    <button
+                      key={obra.id}
+                      className={`flex items-center gap-2 w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors hover:bg-muted/60 ${isHov ? "bg-muted/80 ring-1 ring-primary/30" : ""}`}
+                      onMouseEnter={() => setHoveredObra(obra.id)}
+                      onMouseLeave={() => setHoveredObra(null)}
+                      onClick={() => onObraClick(obra.id)}
+                    >
+                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: hc }} />
+                      <span className="flex-1 truncate font-medium text-foreground">{obra.nome}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">{BRL_SHORT(obra.valor_contrato)}</span>
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Row 2: PRD + Evolution */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* PRD Chart */}
         <Card className="border-border/60">
           <CardContent className="p-4">
             <h3 className="font-semibold text-sm mb-3">Previsto × Realizado × Despesas</h3>
             {prdData.length === 0 ? (
-              <div className="h-[300px] flex items-center justify-center text-xs text-muted-foreground">
-                Nenhuma obra cadastrada
-              </div>
+              <div className="h-[220px] flex items-center justify-center text-xs text-muted-foreground">Nenhuma obra cadastrada</div>
             ) : (
-              <ResponsiveContainer width="100%" height={320}>
-                <ComposedChart data={prdData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+              <ResponsiveContainer width="100%" height={220}>
+                <ComposedChart data={prdData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.4)" />
-                  <XAxis dataKey="nome" fontSize={10} tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                  <YAxis yAxisId="left" fontSize={10} tickFormatter={(v) => BRL_SHORT(v)} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                  <XAxis dataKey="nome" fontSize={9} tick={{ fill: "hsl(var(--muted-foreground))" }} interval={0} angle={-20} textAnchor="end" height={40} />
+                  <YAxis yAxisId="left" fontSize={9} tickFormatter={(v) => BRL_SHORT(v)} tick={{ fill: "hsl(var(--muted-foreground))" }} />
                   <YAxis yAxisId="right" orientation="right" fontSize={9} tickFormatter={(v: number) => `${v.toFixed(0)}%`} tick={{ fill: "hsl(var(--muted-foreground))" }} />
                   <Tooltip content={<CustomBarTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -390,9 +379,8 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
             )}
           </CardContent>
         </Card>
-      </div>
 
-      {/* Row 2: Evolution Chart */}
+        {/* Evolution Chart */}
       <Card className="border-border/60">
         <CardContent className="p-4">
           <h3 className="font-semibold text-sm mb-3">Evolução Financeira Mensal</h3>
@@ -425,6 +413,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
           )}
         </CardContent>
       </Card>
+      </div>
 
       {/* Row 3: Donut KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
