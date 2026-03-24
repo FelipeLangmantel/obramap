@@ -24,6 +24,7 @@ import PleMeasurementsPage from "./pages/PleMeasurementsPage";
 import HoldingReceitasPage from "./pages/HoldingReceitasPage";
 import HoldingDespesasPage from "./pages/HoldingDespesasPage";
 import HoldingDocumentosPage from "./pages/HoldingDocumentosPage";
+import HoldingPrdPage from "./pages/HoldingPrdPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,6 +46,7 @@ const ROUTE_PERMISSION_MAP: Record<string, string> = {
   "/holding-receitas": "holding",
   "/holding-despesas": "holding",
   "/holding-documentos": "holding",
+  "/holding-prd": "holding",
 };
 
 /** Layout para rotas de System Admin */
@@ -125,6 +127,7 @@ const App = () => {
                   <Route path="/holding-receitas" element={<HoldingReceitasPage />} />
                   <Route path="/holding-despesas" element={<HoldingDespesasPage />} />
                   <Route path="/holding-documentos" element={<HoldingDocumentosPage />} />
+                  <Route path="/holding-prd" element={<HoldingPrdPage />} />
                   <Route path="/dashboard" element={<Index />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>

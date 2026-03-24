@@ -78,7 +78,7 @@ import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard";
 
 // Views com rotas separadas (navegam para página diferente)
-type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements" | "holding-receitas" | "holding-despesas" | "holding-documentos";
+type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements" | "holding-receitas" | "holding-despesas" | "holding-documentos" | "holding-prd";
 type MenuViewType = ViewType | RouteViewType;
 
 // Rotas dedicadas (navegam para páginas separadas)
@@ -90,6 +90,7 @@ const DEDICATED_ROUTE_MAP: Record<RouteViewType, string> = {
   "holding-receitas": "/holding-receitas",
   "holding-despesas": "/holding-despesas",
   "holding-documentos": "/holding-documentos",
+  "holding-prd": "/holding-prd",
 };
 
 interface AppSidebarProps {
@@ -121,6 +122,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     if (pathname === "/holding-receitas") return "holding-receitas";
     if (pathname === "/holding-despesas") return "holding-despesas";
     if (pathname === "/holding-documentos") return "holding-documentos";
+    if (pathname === "/holding-prd") return "holding-prd";
     
     return activeView;
   };
@@ -243,6 +245,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         { title: "Receitas & Medições", view: "holding-receitas" as any, icon: TrendingUp, permissionId: "holding" },
         { title: "Despesas & Custos", view: "holding-despesas" as any, icon: Receipt, permissionId: "holding" },
         { title: "Documentação", view: "holding-documentos" as any, icon: FolderOpen, permissionId: "holding" },
+        { title: "PRD — Cronograma", view: "holding-prd" as any, icon: BarChart3, permissionId: "holding" },
       ],
     },
     {
