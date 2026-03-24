@@ -84,6 +84,7 @@ const DEDICATED_ROUTE_MAP: Record<RouteViewType, string> = {
   "long-term-planning": "/long-term-planning",
   "project-contract": "/project-contract",
   "ple-measurements": "/ple-measurements",
+  "holding-receitas": "/holding-receitas",
 };
 
 interface AppSidebarProps {
