@@ -472,8 +472,10 @@ export default function HoldingReceitasPage() {
                             <TableCell className="py-2">{idx + 1}</TableCell>
                             <TableCell className="py-2 font-medium">{m.obra_nome}</TableCell>
                             <TableCell className="py-2">{m.obra_empresa || "—"}</TableCell>
-                            <TableCell className="py-2 border-r">{m.obra_contrato || "—"}</TableCell>
-                            <TableCell className="py-2">{m.num_medicao || "—"}</TableCell>
+                             <TableCell className="py-2 border-r">{m.obra_contrato || "—"}</TableCell>
+                             <TableCell className="py-2 text-center">{m.obra_uh || "—"}</TableCell>
+                             <TableCell className="py-2">{m.obra_tipo_contrato || "—"}</TableCell>
+                             <TableCell className="py-2">{m.num_medicao || "—"}</TableCell>
                             <TableCell className="py-2">{m.mes_referencia || "—"}</TableCell>
                             <TableCell className="py-2">{m.ano_referencia || "—"}</TableCell>
                             <TableCell className="py-2">{m.data_envio ? format(new Date(m.data_envio + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
