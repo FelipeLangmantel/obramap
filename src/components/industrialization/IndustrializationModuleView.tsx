@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Factory, Plus, Package, Truck, Wrench } from "lucide-react";
+import { Factory, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { FactoriesTabContent } from "./FactoriesTabContent";
 import { LiftingTabContent } from "./LiftingTabContent";
