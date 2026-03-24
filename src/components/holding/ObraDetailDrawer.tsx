@@ -231,6 +231,17 @@ function MedicoesTab({ obraId }: { obraId: string }) {
   useEffect(() => { load(); }, [load]);
 
   const addMedicao = async () => {
+    if (form.num_medicao && form.mes_referencia) {
+      const isDuplicate = medicoes.some(m =>
+        m.num_medicao === form.num_medicao &&
+        m.mes_referencia?.toLowerCase() === form.mes_referencia.toLowerCase() &&
+        m.ano_referencia === form.ano_referencia
+      );
+      if (isDuplicate) {
+        toast.warning(`Já existe uma medição Nº ${form.num_medicao} para ${form.mes_referencia}/${form.ano_referencia} nesta obra.`);
+        return;
+      }
+    }
     const payload: any = { obra_id: obraId, ...form };
     if (!payload.data_envio) delete payload.data_envio;
     if (!payload.data_aprovacao) delete payload.data_aprovacao;
