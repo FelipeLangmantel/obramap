@@ -371,7 +371,7 @@ export default function HoldingDocumentosPage() {
                 {obrasFiltradas.map((o, i) => (
                   <TableRow key={o.id} className={i % 2 ? "bg-muted/20" : ""}>
                     <TableCell className="text-xs font-medium">{o.nome}</TableCell>
-                    {ACOMP_FIELDS.map(f => (
+                    {ENSAIOS_FIELDS.map(f => (
                       <TableCell key={f.key} className="text-center"><CheckMark ok={!!o.docs?.[f.key]} /></TableCell>
                     ))}
                     <TableCell className={`text-xs text-center font-semibold ${scoreColor(o.acompCount, 5)}`}>{o.acompCount}/5</TableCell>
