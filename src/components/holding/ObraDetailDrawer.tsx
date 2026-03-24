@@ -24,6 +24,7 @@ const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" 
 function useInvalidateHolding() {
   const qc = useQueryClient();
   return () => {
+    qc.invalidateQueries({ queryKey: ["holding-portfolio"] });
     qc.invalidateQueries({ queryKey: ["holding-receitas"] });
     qc.invalidateQueries({ queryKey: ["holding-despesas"] });
     qc.invalidateQueries({ queryKey: ["holding-prd"] });
