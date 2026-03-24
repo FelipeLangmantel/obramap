@@ -47,7 +47,7 @@ import {
   ChevronDown,
   Check,
   Factory,
-  TrendingUp,
+  TrendingUp, // Receitas Holding icon
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
