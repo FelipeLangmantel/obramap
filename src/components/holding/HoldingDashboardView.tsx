@@ -465,7 +465,7 @@ export default function HoldingDashboardView() {
   };
 
   const exportarCSV = () => {
-    const header = "Obra;Empresa;Contrato;SCP;Valor Contrato;Data Início;Prazo;Previsão Fim;Status;% And.;Docs;Saúde";
+    const header = "Obra;Empresa;Contrato;SCP;UH;Tipo Contrato;Responsável;Valor Contrato;Data Início;Prazo;Previsão Fim;Status;% And.;Docs;Saúde";
     const rows = obrasFiltradas.map((o) => {
       const fim = o.data_inicio ? format(addDays(new Date(o.data_inicio), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
       const statusLbl = STATUS_CONFIG[o.status]?.label || o.status;
