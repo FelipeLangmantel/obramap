@@ -245,11 +245,11 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       label: "Holding",
       items: [
         { title: "Painel da Holding", view: "holding-dashboard", icon: Crown, permissionId: "holding" },
-        { title: "Receitas & Medições", view: "holding-receitas" as any, icon: TrendingUp, permissionId: "holding" },
-        { title: "Despesas & Custos", view: "holding-despesas" as any, icon: Receipt, permissionId: "holding" },
-        { title: "Documentação", view: "holding-documentos" as any, icon: FolderOpen, permissionId: "holding" },
-        { title: "PRD — Cronograma", view: "holding-prd" as any, icon: BarChart3, permissionId: "holding" },
-        { title: "IA — Insights", view: "holding-insights" as any, icon: Sparkles, permissionId: "holding", badge: "BETA" },
+        { title: "Receitas & Medições", view: "holding-receitas", icon: TrendingUp, permissionId: "holding_receitas" },
+        { title: "Despesas & Custos", view: "holding-despesas", icon: Receipt, permissionId: "holding_despesas" },
+        { title: "Documentação", view: "holding-documentos", icon: FolderOpen, permissionId: "holding_documentos" },
+        { title: "PRD — Cronograma", view: "holding-prd", icon: BarChart3, permissionId: "holding_prd" },
+        { title: "IA — Insights", view: "holding-insights", icon: Sparkles, permissionId: "holding_insights", badge: "BETA" },
       ],
     },
     {

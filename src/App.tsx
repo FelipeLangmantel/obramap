@@ -44,11 +44,11 @@ const ROUTE_PERMISSION_MAP: Record<string, string> = {
   "/long-term-planning": "planejamento_estrategico",
   "/project-contract": "contrato",
   "/ple-measurements": "ple_medicoes",
-  "/holding-receitas": "holding",
-  "/holding-despesas": "holding",
-  "/holding-documentos": "holding",
-  "/holding-prd": "holding",
-  "/holding-insights": "holding",
+  "/holding-receitas": "holding_receitas",
+  "/holding-despesas": "holding_despesas",
+  "/holding-documentos": "holding_documentos",
+  "/holding-prd": "holding_prd",
+  "/holding-insights": "holding_insights",
 };
 
 /** Layout para rotas de System Admin */

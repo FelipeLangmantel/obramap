@@ -50,7 +50,12 @@ export const MENU_MODULES: MenuModule[] = [
   { id: "productivity", label: "Produtividade e Equipes" },
   { id: "empreiteiros", label: "Empreiteiros", moduleKey: "contractors" },
   { id: "industrializacao", label: "Industrialização & Logística", moduleKey: "industrialization" },
-  { id: "holding", label: "Painel da Holding", moduleKey: "holding-dashboard" },
+  { id: "holding", label: "Holding — Painel Principal", moduleKey: "holding-dashboard" },
+  { id: "holding_receitas", label: "Holding — Receitas & Medições" },
+  { id: "holding_despesas", label: "Holding — Despesas & Custos" },
+  { id: "holding_documentos", label: "Holding — Documentação" },
+  { id: "holding_prd", label: "Holding — PRD Cronograma" },
+  { id: "holding_insights", label: "Holding — IA Insights" },
 ];
 
 /**
