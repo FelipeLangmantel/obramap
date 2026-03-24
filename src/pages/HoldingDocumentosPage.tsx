@@ -29,7 +29,7 @@ const DOC_OBRA_FIELDS = [
   { key: "scp", label: "SCP" },
 ] as const;
 
-const ACOMP_FIELDS = [
+const ENSAIOS_FIELDS = [
   { key: "sondagem_spt", label: "Sondagem SPT" },
   { key: "planta_localizacao", label: "Planta Localiz." },
   { key: "plano_altimetrico", label: "Plano Altim." },
@@ -42,14 +42,14 @@ function countDocObra(docs: any): number {
   return DOC_OBRA_FIELDS.reduce((s, f) => s + (docs[f.key] ? 1 : 0), 0);
 }
 
-function countAcomp(docs: any): number {
+function countEnsaios(docs: any): number {
   if (!docs) return 0;
-  return ACOMP_FIELDS.reduce((s, f) => s + (docs[f.key] ? 1 : 0), 0);
+  return ENSAIOS_FIELDS.reduce((s, f) => s + (docs[f.key] ? 1 : 0), 0);
 }
 
-function healthDocs(docCount: number, acompCount: number): "verde" | "amarelo" | "vermelho" {
-  if (docCount >= 5 && acompCount >= 4) return "verde";
-  if (docCount >= 3 && acompCount >= 2) return "amarelo";
+function healthDocs(docCount: number, ensaiosCount: number): "verde" | "amarelo" | "vermelho" {
+  if (docCount >= 5 && ensaiosCount >= 4) return "verde";
+  if (docCount >= 3 && ensaiosCount >= 2) return "amarelo";
   return "vermelho";
 }
 
@@ -68,7 +68,7 @@ interface ObraDoc {
   status: string;
   docs: any;
   docCount: number;
-  acompCount: number;
+  ensaiosCount: number;
   health: "verde" | "amarelo" | "vermelho";
   pendenciasAbertas: number;
 }
@@ -118,11 +118,11 @@ export default function HoldingDocumentosPage() {
     return obras.map(o => {
       const docs = docsMap.get(o.id) || null;
       const dc = countDocObra(docs);
-      const ac = countAcomp(docs);
+      const ac = countEnsaios(docs);
       return {
         id: o.id, nome: o.nome, empresa: o.empresa, uh: o.uh,
         tipo_contrato: o.tipo_contrato, status: o.status,
-        docs, docCount: dc, acompCount: ac,
+        docs, docCount: dc, ensaiosCount: ac,
         health: healthDocs(dc, ac),
         pendenciasAbertas: pendMap.get(o.id) || 0,
       };
@@ -140,7 +140,7 @@ export default function HoldingDocumentosPage() {
   const uniqueEmpresas = useMemo(() => [...new Set(obras.map(o => o.empresa).filter(Boolean))], [obras]);
 
   const kpis = useMemo(() => {
-    const completa = obrasDoc.filter(o => o.docCount >= 6 && o.acompCount >= 5).length;
+    const completa = obrasDoc.filter(o => o.docCount >= 6 && o.ensaiosCount >= 5).length;
     const parcial = obrasDoc.filter(o => o.health === "amarelo").length;
     const critica = obrasDoc.filter(o => o.docCount < 3).length;
     const pendAberta = pendencias.filter((p: any) => !p.concluido).length;
@@ -148,7 +148,7 @@ export default function HoldingDocumentosPage() {
   }, [obrasDoc, pendencias]);
 
   const avgDoc = obrasDoc.length > 0 ? obrasDoc.reduce((s, o) => s + o.docCount, 0) / obrasDoc.length : 0;
-  const avgAcomp = obrasDoc.length > 0 ? obrasDoc.reduce((s, o) => s + o.acompCount, 0) / obrasDoc.length : 0;
+  const avgEnsaios = obrasDoc.length > 0 ? obrasDoc.reduce((s, o) => s + o.ensaiosCount, 0) / obrasDoc.length : 0;
 
   const pendenciasFiltradas = useMemo(() => {
     return pendencias.filter((p: any) => {
@@ -163,12 +163,12 @@ export default function HoldingDocumentosPage() {
   }, [pendencias, filterPendObra, filterPendStatus, obras]);
 
   const exportCSV = () => {
-    const h = ["Obra", "Empresa", "Doc_Obra", "Acomp_Obra", "Saúde", "Pendências Abertas",
-      ...DOC_OBRA_FIELDS.map(f => f.label), ...ACOMP_FIELDS.map(f => f.label)];
+    const h = ["Obra", "Empresa", "Doc_Obra", "Ensaios e Projetos", "Saúde", "Pendências Abertas",
+      ...DOC_OBRA_FIELDS.map(f => f.label), ...ENSAIOS_FIELDS.map(f => f.label)];
     const rows = obrasFiltradas.map(o => [
-      o.nome, o.empresa || "", `${o.docCount}/6`, `${o.acompCount}/5`, o.health, o.pendenciasAbertas,
+      o.nome, o.empresa || "", `${o.docCount}/6`, `${o.ensaiosCount}/5`, o.health, o.pendenciasAbertas,
       ...DOC_OBRA_FIELDS.map(f => o.docs?.[f.key] ? "Sim" : "Não"),
-      ...ACOMP_FIELDS.map(f => o.docs?.[f.key] ? "Sim" : "Não"),
+      ...ENSAIOS_FIELDS.map(f => o.docs?.[f.key] ? "Sim" : "Não"),
     ]);
     const csv = [h, ...rows].map(r => r.join(";")).join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
@@ -247,7 +247,7 @@ export default function HoldingDocumentosPage() {
         <TabsList>
           <TabsTrigger value="geral">Visão Geral</TabsTrigger>
           <TabsTrigger value="doc_obra">Doc_Obra</TabsTrigger>
-          <TabsTrigger value="acomp">Acomp_Obra</TabsTrigger>
+          <TabsTrigger value="ensaios">Ensaios e Projetos</TabsTrigger>
           <TabsTrigger value="pendencias">Pendências</TabsTrigger>
         </TabsList>
 
@@ -264,9 +264,9 @@ export default function HoldingDocumentosPage() {
             </Card>
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground mb-2">Acompanhamento médio</p>
-                <Progress value={(avgAcomp / 5) * 100} className="h-3" />
-                <p className="text-xs text-right mt-1 text-muted-foreground">{avgAcomp.toFixed(1)}/5 ({((avgAcomp / 5) * 100).toFixed(0)}%)</p>
+                <p className="text-xs text-muted-foreground mb-2">Ensaios e Projetos médio</p>
+                <Progress value={(avgEnsaios / 5) * 100} className="h-3" />
+                <p className="text-xs text-right mt-1 text-muted-foreground">{avgEnsaios.toFixed(1)}/5 ({((avgEnsaios / 5) * 100).toFixed(0)}%)</p>
               </CardContent>
             </Card>
           </div>
@@ -299,7 +299,7 @@ export default function HoldingDocumentosPage() {
                   <TableHead className="text-xs">Obra</TableHead>
                   <TableHead className="text-xs">Empresa</TableHead>
                   <TableHead className="text-xs text-center">Doc_Obra</TableHead>
-                  <TableHead className="text-xs text-center">Acomp_Obra</TableHead>
+                  <TableHead className="text-xs text-center">Ensaios e Projetos</TableHead>
                   <TableHead className="text-xs text-center">Saúde</TableHead>
                   <TableHead className="text-xs">Status Obra</TableHead>
                   <TableHead className="text-xs text-center">Pendências</TableHead>
@@ -313,7 +313,7 @@ export default function HoldingDocumentosPage() {
                     <TableCell className="text-xs font-medium">{o.nome}</TableCell>
                     <TableCell className="text-xs">{o.empresa || "—"}</TableCell>
                     <TableCell className={`text-xs text-center font-semibold ${scoreColor(o.docCount, 6)}`}>{o.docCount}/6</TableCell>
-                    <TableCell className={`text-xs text-center font-semibold ${scoreColor(o.acompCount, 5)}`}>{o.acompCount}/5</TableCell>
+                    <TableCell className={`text-xs text-center font-semibold ${scoreColor(o.ensaiosCount, 5)}`}>{o.ensaiosCount}/5</TableCell>
                     <TableCell className="text-center"><span className={`text-lg ${HEALTH_DOT[o.health]}`}>●</span></TableCell>
                     <TableCell><Badge variant="outline" className="text-[10px]">{o.status?.replace("_", " ") || "—"}</Badge></TableCell>
                     <TableCell className="text-center">
@@ -356,14 +356,14 @@ export default function HoldingDocumentosPage() {
           </div>
         </TabsContent>
 
-        {/* ═══ ACOMP_OBRA ═══ */}
-        <TabsContent value="acomp" className="mt-4">
+        {/* ═══ ENSAIOS E PROJETOS ═══ */}
+        <TabsContent value="ensaios" className="mt-4">
           <div className="border rounded-lg overflow-x-auto max-h-[600px] overflow-y-auto">
             <Table>
               <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
                   <TableHead className="text-xs">Obra</TableHead>
-                  {ACOMP_FIELDS.map(f => <TableHead key={f.key} className="text-xs text-center">{f.label}</TableHead>)}
+                  {ENSAIOS_FIELDS.map(f => <TableHead key={f.key} className="text-xs text-center">{f.label}</TableHead>)}
                   <TableHead className="text-xs text-center">Total</TableHead>
                 </TableRow>
               </TableHeader>
@@ -371,10 +371,10 @@ export default function HoldingDocumentosPage() {
                 {obrasFiltradas.map((o, i) => (
                   <TableRow key={o.id} className={i % 2 ? "bg-muted/20" : ""}>
                     <TableCell className="text-xs font-medium">{o.nome}</TableCell>
-                    {ACOMP_FIELDS.map(f => (
+                    {ENSAIOS_FIELDS.map(f => (
                       <TableCell key={f.key} className="text-center"><CheckMark ok={!!o.docs?.[f.key]} /></TableCell>
                     ))}
-                    <TableCell className={`text-xs text-center font-semibold ${scoreColor(o.acompCount, 5)}`}>{o.acompCount}/5</TableCell>
+                    <TableCell className={`text-xs text-center font-semibold ${scoreColor(o.ensaiosCount, 5)}`}>{o.ensaiosCount}/5</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -461,9 +461,9 @@ export default function HoldingDocumentosPage() {
                 </div>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground mb-2">Acompanhamento ({detailObra.acompCount}/5)</p>
+                <p className="text-xs font-medium text-muted-foreground mb-2">Ensaios e Projetos ({detailObra.ensaiosCount}/5)</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {ACOMP_FIELDS.map(f => (
+                  {ENSAIOS_FIELDS.map(f => (
                     <div key={f.key} className="flex items-center gap-2 text-xs">
                       <CheckMark ok={!!detailObra.docs?.[f.key]} />
                       <span>{f.label}</span>

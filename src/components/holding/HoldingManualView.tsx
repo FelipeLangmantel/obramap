@@ -131,7 +131,7 @@ export default function HoldingManualView() {
             <p><strong>A — Documentos:</strong></p>
             <ul className="list-disc pl-5 space-y-1">
               <li><strong>Doc_Obra (6 itens):</strong> Ata, OIS, ART, CNO, Implantação, SCP — toggles on/off.</li>
-              <li><strong>Acomp_Obra (5 itens):</strong> Sondagem SPT, Planta Localização, Plano Altimétrico, Painel Bordo, Checklist Segurança.</li>
+              <li><strong>Ensaios e Projetos (5 itens):</strong> Sondagem SPT, Planta Localização, Plano Altimétrico, Painel Bordo, Checklist Segurança.</li>
               <li>Progresso atualiza automaticamente o semáforo de saúde.</li>
             </ul>
             <p><strong>B — Medições PLE:</strong></p>
@@ -249,13 +249,13 @@ export default function HoldingManualView() {
             <ul className="list-disc pl-5 space-y-1">
               <li>5 KPIs: Total Obras, Documentação Completa, Parcial, Crítica, Pendências Abertas.</li>
               <li>Barras de progresso: documentação média e acompanhamento médio do portfólio.</li>
-              <li>Tabela resumo: Doc_Obra (X/6), Acomp_Obra (X/5), Saúde, Pendências por obra.</li>
+              <li>Tabela resumo: Doc_Obra (X/6), Ensaios e Projetos (X/5), Saúde, Pendências por obra.</li>
             </ul>
             <p><strong>Aba Doc_Obra:</strong></p>
             <ul className="list-disc pl-5 space-y-1">
               <li>Tabela com 6 colunas de checkmarks: Ata ✓/✗, OIS ✓/✗, ART ✓/✗, CNO ✓/✗, Impl ✓/✗, SCP ✓/✗.</li>
             </ul>
-            <p><strong>Aba Acomp_Obra:</strong></p>
+            <p><strong>Aba Ensaios e Projetos:</strong></p>
             <ul className="list-disc pl-5 space-y-1">
               <li>Tabela com 5 colunas: Sondagem SPT, Planta Localiz., Plano Altim., Painel Bordo, Check Seg.</li>
             </ul>
@@ -360,7 +360,7 @@ export default function HoldingManualView() {
                 <TableRow><TableCell>Receitas</TableCell><TableCell>CSV</TableCell><TableCell>Todas as medições (ENGENHARIA + FINANCEIRO)</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
                 <TableRow><TableCell>Despesas</TableCell><TableCell>CSV</TableCell><TableCell>Todos os gastos mensais por obra</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
                 <TableRow><TableCell>Despesas</TableCell><TableCell>CSV PRD</TableCell><TableCell>Previsto × Realizado × Despesas por obra + ROI</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
-                <TableRow><TableCell>Documentos</TableCell><TableCell>CSV</TableCell><TableCell>Checklist completo Doc_Obra + Acomp_Obra</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
+                <TableRow><TableCell>Documentos</TableCell><TableCell>CSV</TableCell><TableCell>Checklist completo Doc_Obra + Ensaios e Projetos</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
                 <TableRow><TableCell>PRD</TableCell><TableCell>CSV</TableCell><TableCell>Matriz mensal com Previsto/Realizado/Despesas</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
               </TableBody>
             </Table>

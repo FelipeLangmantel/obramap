@@ -93,7 +93,7 @@ const DOC_OBRA_FIELDS: { key: string; label: string }[] = [
   { key: "scp", label: "SCP" },
 ];
 
-const ACOMP_OBRA_FIELDS: { key: string; label: string }[] = [
+const ENSAIOS_PROJETOS_FIELDS: { key: string; label: string }[] = [
   { key: "sondagem_spt", label: "Sondagem e SPT" },
   { key: "planta_localizacao", label: "Planta Localização" },
   { key: "plano_altimetrico", label: "Plano Altimétrico" },
@@ -146,7 +146,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
   if (loading || !docs) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
 
   const docObraCount = DOC_OBRA_FIELDS.filter((f) => docs[f.key]).length;
-  const acompCount = ACOMP_OBRA_FIELDS.filter((f) => docs[f.key]).length;
+  const ensaiosCount = ENSAIOS_PROJETOS_FIELDS.filter((f) => docs[f.key]).length;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -172,13 +172,13 @@ function DocumentosTab({ obraId }: { obraId: string }) {
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="font-semibold text-sm flex items-center gap-1.5">
-              <ClipboardCheck className="h-4 w-4" /> Acomp_Obra
+              <ClipboardCheck className="h-4 w-4" /> Ensaios e Projetos
             </h4>
-            <Badge variant={acompCount === 5 ? "default" : "secondary"} className={acompCount === 5 ? "bg-emerald-600" : ""}>
-              {acompCount}/5
+            <Badge variant={ensaiosCount === 5 ? "default" : "secondary"} className={ensaiosCount === 5 ? "bg-emerald-600" : ""}>
+              {ensaiosCount}/5
             </Badge>
           </div>
-          {ACOMP_OBRA_FIELDS.map((f) => (
+          {ENSAIOS_PROJETOS_FIELDS.map((f) => (
             <div key={f.key} className="flex items-center justify-between">
               <span className="text-sm">{f.label}</span>
               <Switch checked={!!docs[f.key]} onCheckedChange={(v) => toggle(f.key, v)} />
