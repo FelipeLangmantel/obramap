@@ -29,7 +29,7 @@ const DOC_OBRA_FIELDS = [
   { key: "scp", label: "SCP" },
 ] as const;
 
-const ACOMP_FIELDS = [
+const ENSAIOS_FIELDS = [
   { key: "sondagem_spt", label: "Sondagem SPT" },
   { key: "planta_localizacao", label: "Planta Localiz." },
   { key: "plano_altimetrico", label: "Plano Altim." },
