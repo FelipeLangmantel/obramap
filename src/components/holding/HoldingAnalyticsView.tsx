@@ -220,8 +220,41 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
     );
   };
 
+  const summaryStats = useMemo(() => {
+    const totalPortfolio = obras.reduce((s, o) => s + (o.valor_contrato || 0), 0);
+    const totalRecebido = prdData.reduce((s, d) => s + d.realizado, 0);
+    const totalDespesas = prdData.reduce((s, d) => s + d.despesas, 0);
+    const saldo = totalRecebido - totalDespesas;
+    return { totalPortfolio, totalRecebido, totalDespesas, saldo };
+  }, [obras, prdData]);
+
+  const rankingData = useMemo(() => {
+    return [...obras]
+      .sort((a, b) => (b.valor_contrato || 0) - (a.valor_contrato || 0))
+      .slice(0, 15)
+      .map(o => ({
+        id: o.id,
+        nome: o.nome.length > 22 ? o.nome.slice(0, 20) + "…" : o.nome,
+        fullNome: o.nome,
+        valor: o.valor_contrato || 0,
+        health: o.health,
+        status: o.status,
+      }));
+  }, [obras]);
+
+  const HEALTH_COLORS: Record<string, string> = { green: "#22c55e", yellow: "#f59e0b", red: "#ef4444" };
+  const STATUS_LABELS: Record<string, string> = { em_andamento: "Em Andamento", nao_iniciada: "Não Iniciada", concluida: "Concluída", paralisada: "Paralisada" };
+
   return (
     <div className="space-y-4">
+      {/* Summary Stats Row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <MiniKpi icon={DollarSign} label="Valor Total do Portfólio" value={BRL.format(summaryStats.totalPortfolio)} className="text-emerald-600 dark:text-emerald-400" />
+        <MiniKpi icon={TrendingUp} label="Total Recebido" value={BRL.format(summaryStats.totalRecebido)} className="text-blue-600 dark:text-blue-400" />
+        <MiniKpi icon={TrendingDown} label="Total Despesas" value={BRL.format(summaryStats.totalDespesas)} className="text-red-600 dark:text-red-400" />
+        <MiniKpi icon={Wallet} label="Saldo Estimado" value={BRL.format(summaryStats.saldo)} className={summaryStats.saldo >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"} />
+      </div>
+
       {/* Row 1: Map + PRD Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* MAPA RS */}
