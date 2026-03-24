@@ -1203,6 +1203,9 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
                     <TableCell className="text-xs font-medium py-2 text-primary hover:underline">{obra.nome}</TableCell>
                     <TableCell className="text-[10px] py-2">{obra.empresa || "—"}</TableCell>
                     <TableCell className="text-[10px] py-2">{obra.num_contrato || "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2 text-center">{obra.uh || "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2">{obra.tipo_contrato || "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2 truncate max-w-[120px]">{obra.responsavel || "—"}</TableCell>
                     <TableCell className="text-[10px] py-2">{obra.parceria_scp || "—"}</TableCell>
                     <TableCell className="text-[10px] py-2 text-right font-mono">{BRL.format(obra.valor_contrato)}</TableCell>
                     <TableCell className="text-[10px] py-2 text-right font-mono">{receitas > 0 ? BRL.format(receitas) : "—"}</TableCell>
