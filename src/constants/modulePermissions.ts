@@ -50,6 +50,7 @@ export const MENU_MODULES: MenuModule[] = [
   { id: "productivity", label: "Produtividade e Equipes" },
   { id: "empreiteiros", label: "Empreiteiros", moduleKey: "contractors" },
   { id: "industrializacao", label: "Industrialização & Logística", moduleKey: "industrialization" },
+  { id: "holding", label: "Painel da Holding", moduleKey: "holding-dashboard" },
 ];
 
 /**
