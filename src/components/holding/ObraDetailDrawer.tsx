@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,6 +18,17 @@ import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, C
 import { format } from "date-fns";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+function useInvalidateHolding() {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: ["holding-receitas"] });
+    qc.invalidateQueries({ queryKey: ["holding-despesas"] });
+    qc.invalidateQueries({ queryKey: ["holding-prd"] });
+    qc.invalidateQueries({ queryKey: ["holding-documentos"] });
+    qc.invalidateQueries({ queryKey: ["holding-insights-data"] });
+  };
+}
 
 interface ObraDetailDrawerProps {
   obraId: string | null;
@@ -90,6 +102,7 @@ const ACOMP_OBRA_FIELDS: { key: string; label: string }[] = [
 ];
 
 function DocumentosTab({ obraId }: { obraId: string }) {
+  const invalidateHolding = useInvalidateHolding();
   const [docs, setDocs] = useState<Record<string, boolean> | null>(null);
   const [docId, setDocId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,6 +140,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
     if (!docId) return;
     setDocs((prev) => prev ? { ...prev, [key]: value } : prev);
     await supabase.from("documentos_obra").update({ [key]: value } as any).eq("id", docId);
+    invalidateHolding();
   };
 
   if (loading || !docs) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
@@ -194,6 +208,7 @@ const NF_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 };
 
 function MedicoesTab({ obraId }: { obraId: string }) {
+  const invalidateHolding = useInvalidateHolding();
   const [medicoes, setMedicoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -223,6 +238,7 @@ function MedicoesTab({ obraId }: { obraId: string }) {
     const { error } = await supabase.from("medicoes_ple").insert(payload);
     if (error) { toast.error("Erro ao salvar medição"); return; }
     toast.success("Medição adicionada");
+    invalidateHolding();
     setShowForm(false);
     setForm({ num_medicao: "", mes_referencia: "", ano_referencia: new Date().getFullYear(), data_envio: "", data_aprovacao: "", status_medicao: "nao_iniciada", valor_medicao: 0, num_nf: "", data_pagamento: "", status_nf: "pendente" });
     load();
@@ -341,6 +357,7 @@ const DESPESA_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 };
 
 function FinanceiroTab({ obraId }: { obraId: string }) {
+  const invalidateHolding = useInvalidateHolding();
   const [despesas, setDespesas] = useState<any[]>([]);
   const [medicoes, setMedicoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -378,6 +395,7 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
     setSavingDespesa(false);
     if (error) { toast.error("Erro ao salvar despesa."); return; }
     toast.success("Despesa adicionada!");
+    invalidateHolding();
     setNewDespesa({ mes_referencia: "", ano_referencia: String(new Date().getFullYear()), valor: "", status: "nao_iniciado" });
     setShowNewDespesa(false);
     loadData();
@@ -571,6 +589,7 @@ function AditivosTab({ obraId }: { obraId: string }) {
    ══════════════════════════════════════════════ */
 
 function PendenciasTab({ obraId }: { obraId: string }) {
+  const invalidateHolding = useInvalidateHolding();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [newTipo, setNewTipo] = useState("");
@@ -587,6 +606,7 @@ function PendenciasTab({ obraId }: { obraId: string }) {
   const toggleConcluido = async (id: string, value: boolean) => {
     setItems((prev) => prev.map((i) => i.id === id ? { ...i, concluido: value } : i));
     await supabase.from("pendencias_projeto").update({ concluido: value } as any).eq("id", id);
+    invalidateHolding();
   };
 
   const addPendencia = async () => {
@@ -594,6 +614,7 @@ function PendenciasTab({ obraId }: { obraId: string }) {
     await supabase.from("pendencias_projeto").insert({ obra_id: obraId, tipo: newTipo || null, descricao: newDesc } as any);
     setNewTipo(""); setNewDesc("");
     toast.success("Pendência adicionada");
+    invalidateHolding();
     load();
   };
 

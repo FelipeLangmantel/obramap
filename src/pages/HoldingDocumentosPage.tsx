@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  FolderOpen, FileCheck2, AlertTriangle, CheckCircle2, XCircle, Download, Building2, ClipboardList
+  FolderOpen, FileCheck2, AlertTriangle, CheckCircle2, XCircle, Download, Building2, ClipboardList, RefreshCw
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -76,6 +76,7 @@ interface ObraDoc {
 export default function HoldingDocumentosPage() {
   const navigate = useNavigate();
   const { company } = useAuth();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("geral");
   const [filterEmpresa, setFilterEmpresa] = useState("all");
   const [filterSaude, setFilterSaude] = useState("all");
@@ -220,7 +221,10 @@ export default function HoldingDocumentosPage() {
           </h1>
           <p className="text-xs text-muted-foreground">Controle consolidado de documentos — todas as obras</p>
         </div>
-        <Button variant="outline" size="sm" onClick={exportCSV}><Download className="h-4 w-4 mr-1" /> Exportar CSV</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-documentos"] })}><RefreshCw className="h-4 w-4 mr-1" /> Atualizar</Button>
+          <Button variant="outline" size="sm" onClick={exportCSV}><Download className="h-4 w-4 mr-1" /> Exportar CSV</Button>
+        </div>
       </div>
 
       {/* KPIs */}

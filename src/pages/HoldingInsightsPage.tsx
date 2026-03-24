@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -26,6 +26,7 @@ interface InsightItem {
 export default function HoldingInsightsPage() {
   const navigate = useNavigate();
   const { company } = useAuth();
+  const queryClient = useQueryClient();
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insights, setInsights] = useState<InsightItem[]>([]);
   const [relatorio, setRelatorio] = useState("");
@@ -222,6 +223,9 @@ export default function HoldingInsightsPage() {
           <p className="text-sm text-muted-foreground mt-1">Análise automática gerada por inteligência artificial</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-insights-data"] })} className="gap-1">
+            <RefreshCw className="h-4 w-4" /> Atualizar
+          </Button>
           <Button onClick={handleGenerateInsights} disabled={insightsLoading || enrichedObras.length === 0} className="gap-2">
             {insightsLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             Gerar Insights

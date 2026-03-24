@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -15,7 +15,7 @@ import {
   ComposedChart, Bar, Line, Area, AreaChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer
 } from "recharts";
-import { BarChart2, TrendingUp, DollarSign, AlertTriangle, Download } from "lucide-react";
+import { BarChart2, TrendingUp, DollarSign, AlertTriangle, Download, RefreshCw } from "lucide-react";
 import { format, addMonths, differenceInMonths } from "date-fns";
 import { toast } from "sonner";
 
@@ -36,6 +36,7 @@ interface MonthEntry {
 export default function HoldingPrdPage() {
   const navigate = useNavigate();
   const { company } = useAuth();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("portfolio");
   const [filterObra, setFilterObra] = useState("all");
   const [selectedObra, setSelectedObra] = useState("all");
@@ -228,6 +229,7 @@ export default function HoldingPrdPage() {
               {obras.map(o => <SelectItem key={o.id} value={o.id}>{o.nome}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-prd"] })}><RefreshCw className="h-4 w-4 mr-1" /> Atualizar</Button>
           <Button variant="outline" size="sm" onClick={exportCSV}><Download className="h-4 w-4 mr-1" /> Exportar CSV</Button>
         </div>
       </div>
