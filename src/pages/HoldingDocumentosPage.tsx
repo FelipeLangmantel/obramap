@@ -356,8 +356,8 @@ export default function HoldingDocumentosPage() {
           </div>
         </TabsContent>
 
-        {/* ═══ ACOMP_OBRA ═══ */}
-        <TabsContent value="acomp" className="mt-4">
+        {/* ═══ ENSAIOS E PROJETOS ═══ */}
+        <TabsContent value="ensaios" className="mt-4">
           <div className="border rounded-lg overflow-x-auto max-h-[600px] overflow-y-auto">
             <Table>
               <TableHeader className="sticky top-0 bg-background z-10">
