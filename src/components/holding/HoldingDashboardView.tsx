@@ -618,10 +618,11 @@ export default function HoldingDashboardView() {
       if (filterEmpresa !== "all" && o.empresa !== filterEmpresa) return false;
       if (filterStatus !== "all" && o.status !== filterStatus) return false;
       if (filterSaude !== "all" && o.health !== filterSaude) return false;
+      if (filterTipo !== "all" && o.tipo_contrato !== filterTipo) return false;
       if (searchNome && !o.nome.toLowerCase().includes(searchNome.toLowerCase())) return false;
       return true;
     });
-  }, [obras, filterEmpresa, filterStatus, filterSaude, searchNome]);
+  }, [obras, filterEmpresa, filterStatus, filterSaude, filterTipo, searchNome]);
 
   const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || searchNome !== "";
 
