@@ -1,7 +1,10 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/AppSidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,6 +74,7 @@ interface ObraDoc {
 }
 
 export default function HoldingDocumentosPage() {
+  const navigate = useNavigate();
   const { company } = useAuth();
   const [activeTab, setActiveTab] = useState("geral");
   const [filterEmpresa, setFilterEmpresa] = useState("all");
@@ -175,7 +179,16 @@ export default function HoldingDocumentosPage() {
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+    return (
+      <SidebarProvider defaultOpen={true}>
+        <div className="h-screen flex w-full overflow-hidden">
+          <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
+          <main className="flex-1 min-w-0 h-full overflow-auto flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          </main>
+        </div>
+      </SidebarProvider>
+    );
   }
 
   const kpiCards = [
@@ -194,6 +207,10 @@ export default function HoldingDocumentosPage() {
     count >= max ? "text-emerald-600" : count >= max * 0.5 ? "text-amber-600" : "text-red-600";
 
   return (
+    <SidebarProvider defaultOpen={true}>
+      <div className="h-screen flex w-full overflow-hidden">
+        <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
+        <main className="flex-1 min-w-0 h-full overflow-auto">
     <div className="space-y-6 p-6">
       {/* HEADER */}
       <div className="flex items-center justify-between">
@@ -462,5 +479,8 @@ export default function HoldingDocumentosPage() {
         </DialogContent>
       </Dialog>
     </div>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }

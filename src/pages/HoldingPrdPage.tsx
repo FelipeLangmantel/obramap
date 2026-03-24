@@ -1,7 +1,10 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/AppSidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,6 +34,7 @@ interface MonthEntry {
 }
 
 export default function HoldingPrdPage() {
+  const navigate = useNavigate();
   const { company } = useAuth();
   const [activeTab, setActiveTab] = useState("portfolio");
   const [filterObra, setFilterObra] = useState("all");
@@ -175,7 +179,16 @@ export default function HoldingPrdPage() {
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+    return (
+      <SidebarProvider defaultOpen={true}>
+        <div className="h-screen flex w-full overflow-hidden">
+          <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
+          <main className="flex-1 min-w-0 h-full overflow-auto flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          </main>
+        </div>
+      </SidebarProvider>
+    );
   }
 
   const desvioColor = kpis.desvio >= 90 ? "border-b-emerald-500" : kpis.desvio >= 70 ? "border-b-amber-500" : "border-b-red-500";
@@ -188,6 +201,10 @@ export default function HoldingPrdPage() {
   ];
 
   return (
+    <SidebarProvider defaultOpen={true}>
+      <div className="h-screen flex w-full overflow-hidden">
+        <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
+        <main className="flex-1 min-w-0 h-full overflow-auto">
     <div className="space-y-6 p-6">
       {/* HEADER */}
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -424,5 +441,8 @@ export default function HoldingPrdPage() {
         </TabsContent>
       </Tabs>
     </div>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }

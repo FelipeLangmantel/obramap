@@ -1,7 +1,10 @@
 import React, { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/AppSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +24,7 @@ interface InsightItem {
 }
 
 export default function HoldingInsightsPage() {
+  const navigate = useNavigate();
   const { company } = useAuth();
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insights, setInsights] = useState<InsightItem[]>([]);
@@ -202,6 +206,10 @@ export default function HoldingInsightsPage() {
   ];
 
   return (
+    <SidebarProvider defaultOpen={true}>
+      <div className="h-screen flex w-full overflow-hidden">
+        <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
+        <main className="flex-1 min-w-0 h-full overflow-auto">
     <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -396,5 +404,8 @@ export default function HoldingInsightsPage() {
         Desenvolvido por Felipe Langmantel — ObraMap Módulo Holding · IA Insights · 2026
       </p>
     </div>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }

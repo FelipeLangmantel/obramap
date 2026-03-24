@@ -1,7 +1,10 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/AppSidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -63,6 +66,7 @@ const STATUS_NF_CONFIG: Record<string, { label: string; cls: string }> = {
 const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 export default function HoldingReceitasPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { company } = useAuth();
 
@@ -251,6 +255,10 @@ export default function HoldingReceitasPage() {
   };
 
   return (
+    <SidebarProvider defaultOpen={true}>
+      <div className="h-screen flex w-full overflow-hidden">
+        <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
+        <main className="flex-1 min-w-0 h-full overflow-auto">
     <div className="space-y-4 p-4 md:p-6">
       {/* HEADER */}
       <div className="flex items-center justify-between">
@@ -599,5 +607,8 @@ export default function HoldingReceitasPage() {
               </TabsContent>
             </Tabs>
           </div>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }
