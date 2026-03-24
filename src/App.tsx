@@ -50,6 +50,7 @@ const ROUTE_PERMISSION_MAP: Record<string, string> = {
   "/holding-documentos": "holding_documentos",
   "/holding-prd": "holding_prd",
   "/holding-insights": "holding_insights",
+  "/holding-config": "holding",
 };
 
 /** Layout para rotas de System Admin */
