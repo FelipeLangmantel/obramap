@@ -148,18 +148,16 @@ export default function HoldingConfigPage() {
 
   const deleteDocTipo = async () => {
     if (!deletingDocId) return;
-    // Check usage
-    const { count } = await supabase.from("holding_obra_docs").select("id", { count: "exact", head: true }).eq("doc_tipo_id", deletingDocId);
-    if (count && count > 0) {
-      toast.warning("Este documento está em uso por obras. Desative-o em vez de excluir.");
-      setDeletingDocId(null);
-      return;
-    }
+    // First remove all obra_docs entries that reference this doc type
+    await supabase.from("holding_obra_docs").delete().eq("doc_tipo_id", deletingDocId);
+    // Then delete the doc type itself
     const { error } = await supabase.from("holding_doc_tipos").delete().eq("id", deletingDocId);
     if (error) { toast.error("Erro: " + error.message); return; }
     toast.success("Documento removido!");
     setDeletingDocId(null);
     invalidate();
+    // Also invalidate holding portfolio so dashboard updates
+    queryClient.invalidateQueries({ queryKey: ["holding-portfolio"] });
   };
 
   const toggleDocAtivo = async (d: DocTipo) => {
