@@ -139,7 +139,7 @@ function SetupContent({ onCreated, ...props }: Props) {
   const selectedObraName = obraMapProjects.find(p => p.id === projectForm.obramap_project_id)?.name;
 
   return (
-    <div className="space-y-6 max-h-[70vh] overflow-y-auto">
+    <div className="space-y-6 max-h-[70vh] overflow-y-auto pb-4">
       {/* Project Info */}
       <Card>
         <CardHeader><CardTitle className="text-sm">Dados do Projeto</CardTitle></CardHeader>
@@ -203,16 +203,16 @@ function SetupContent({ onCreated, ...props }: Props) {
               />
             </div>
             <div><Label className="text-xs">Valor do Contrato (R$)</Label><Input type="number" step="0.01" value={projectForm.contract_value} onChange={e => setProjectForm(p => ({ ...p, contract_value: parseFloat(e.target.value) || 0 }))} className="h-8 text-xs" /></div>
-            <div className="flex items-end gap-2">
-              <Button size="sm" onClick={currentProject ? handleSaveProject : handleCreateProject}>
-                {currentProject ? "Salvar" : "Criar Projeto"}
+          </div>
+          <div className="flex items-center gap-2 pt-2 col-span-2">
+            <Button size="sm" onClick={currentProject ? handleSaveProject : handleCreateProject} className="w-full sm:w-auto">
+              {currentProject ? "Salvar" : "Criar Projeto"}
+            </Button>
+            {currentProject && !currentProject.obramap_project_id && isIntegrated && projectForm.obramap_project_id && (
+              <Button size="sm" variant="outline" onClick={handleLinkExisting} className="gap-1">
+                <Link2 className="h-3 w-3" /> Vincular
               </Button>
-              {currentProject && !currentProject.obramap_project_id && isIntegrated && projectForm.obramap_project_id && (
-                <Button size="sm" variant="outline" onClick={handleLinkExisting} className="gap-1">
-                  <Link2 className="h-3 w-3" /> Vincular
-                </Button>
-              )}
-            </div>
+            )}
           </div>
         </CardContent>
       </Card>
