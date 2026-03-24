@@ -742,6 +742,15 @@ function dateToMonthIndex(date: Date): number {
 
 function GanttTimeline({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick: (id: string) => void }) {
   const obrasWithDates = obras.filter((o) => o.data_inicio);
+  if (obrasWithDates.length === 0) {
+    return (
+      <Card className="border-border/60">
+        <CardContent className="p-8 text-center">
+          <p className="text-sm text-muted-foreground">Nenhuma obra com data de início cadastrada. Edite as obras para definir as datas.</p>
+        </CardContent>
+      </Card>
+    );
+  }
   const todayIndex = dateToMonthIndex(new Date());
 
   const chartData = obrasWithDates.map((obra) => {
