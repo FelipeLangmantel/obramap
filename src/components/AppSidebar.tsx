@@ -79,7 +79,7 @@ import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard";
 
 // Views com rotas separadas (navegam para página diferente)
-type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements" | "holding-receitas" | "holding-despesas" | "holding-documentos" | "holding-prd" | "holding-insights";
+type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements" | "holding-receitas" | "holding-despesas" | "holding-documentos" | "holding-prd" | "holding-insights" | "holding-config";
 type MenuViewType = ViewType | RouteViewType;
 
 // Rotas dedicadas (navegam para páginas separadas)
@@ -93,6 +93,7 @@ const DEDICATED_ROUTE_MAP: Record<RouteViewType, string> = {
   "holding-documentos": "/holding-documentos",
   "holding-prd": "/holding-prd",
   "holding-insights": "/holding-insights",
+  "holding-config": "/holding-config",
 };
 
 interface AppSidebarProps {
@@ -126,6 +127,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     if (pathname === "/holding-documentos") return "holding-documentos";
     if (pathname === "/holding-prd") return "holding-prd";
     if (pathname === "/holding-insights") return "holding-insights";
+    if (pathname === "/holding-config") return "holding-config";
     
     return activeView;
   };
@@ -250,6 +252,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         { title: "Documentação", view: "holding-documentos", icon: FolderOpen, permissionId: "holding_documentos" },
         { title: "PRD — Cronograma", view: "holding-prd", icon: BarChart3, permissionId: "holding_prd" },
         { title: "IA — Insights", view: "holding-insights", icon: Sparkles, permissionId: "holding_insights", badge: "BETA" },
+        { title: "Configurações", view: "holding-config", icon: Settings, permissionId: "holding" },
       ],
     },
     {

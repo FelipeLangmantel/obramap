@@ -26,6 +26,7 @@ import HoldingDespesasPage from "./pages/HoldingDespesasPage";
 import HoldingDocumentosPage from "./pages/HoldingDocumentosPage";
 import HoldingPrdPage from "./pages/HoldingPrdPage";
 import HoldingInsightsPage from "./pages/HoldingInsightsPage";
+import HoldingConfigPage from "./pages/HoldingConfigPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,6 +50,7 @@ const ROUTE_PERMISSION_MAP: Record<string, string> = {
   "/holding-documentos": "holding_documentos",
   "/holding-prd": "holding_prd",
   "/holding-insights": "holding_insights",
+  "/holding-config": "holding",
 };
 
 /** Layout para rotas de System Admin */
@@ -131,6 +133,7 @@ const App = () => {
                   <Route path="/holding-documentos" element={<HoldingDocumentosPage />} />
                   <Route path="/holding-prd" element={<HoldingPrdPage />} />
                   <Route path="/holding-insights" element={<HoldingInsightsPage />} />
+                  <Route path="/holding-config" element={<HoldingConfigPage />} />
                   <Route path="/dashboard" element={<Index />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>
