@@ -35,6 +35,7 @@ interface MedicaoCompleta {
   obra_uh: number | null;
   obra_responsavel: string | null;
   obra_tipo_contrato: string | null;
+  obra_prazo_pagamento: number; // dias do prazo de pagamento da obra
   num_medicao: string | null;
   mes_referencia: string | null;
   ano_referencia: number | null;
@@ -47,6 +48,13 @@ interface MedicaoCompleta {
   num_nf: string | null;
   data_pagamento: string | null;
   status_nf: "recebido" | "aguardando_aprovacao" | "pendente";
+}
+
+// Parse prazo_pagamento string ("30 dias", "45", etc.) to number of days
+function parsePrazoDias(prazo: string | null): number {
+  if (!prazo) return 30; // default 30 days
+  const match = prazo.match(/(\d+)/);
+  return match ? parseInt(match[1], 10) : 30;
 }
 
 // ─── Formatters ───
