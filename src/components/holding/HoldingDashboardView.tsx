@@ -1138,12 +1138,16 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
 
         <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 text-xs">
           <div><span className="text-muted-foreground">Contrato</span><p className="font-medium text-foreground truncate">{obra.num_contrato || "—"}</p></div>
-          <div><span className="text-muted-foreground">Empresa</span><p className="font-medium text-foreground truncate">{obra.empresa || "—"}</p></div>
+          <div><span className="text-muted-foreground">UH</span><p className="font-medium text-foreground truncate">{obra.uh || "—"}</p></div>
           <div><span className="text-muted-foreground">SCP</span><p className="font-medium text-foreground truncate">{obra.parceria_scp || "—"}</p></div>
           <div><span className="text-muted-foreground">Valor</span><p className="font-medium text-foreground truncate">{BRL_SHORT(obra.valor_contrato)}</p></div>
           <div><span className="text-muted-foreground">Início</span><p className="font-medium text-foreground">{obra.data_inicio ? format(new Date(obra.data_inicio), "dd/MM/yy") : "—"}</p></div>
           <div><span className="text-muted-foreground">Prev. Fim</span><p className="font-medium text-foreground">{previsaoFim}</p></div>
         </div>
+
+        {obra.responsavel && (
+          <p className="text-[10px] text-muted-foreground truncate">👤 {obra.responsavel}</p>
+        )}
 
         {receitas > 0 && (
           <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">✓ {BRL_SHORT(receitas)} recebido</p>
