@@ -197,138 +197,117 @@ export default function HoldingDashboardView() {
   const [deletingObraId, setDeletingObraId] = useState<string | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
 
-  const generateHoldingPDF = async () => {
+  const exportarPDF = async () => {
     setIsPrinting(true);
     try {
-      const doc = new jsPDF("p", "mm", "a4");
-      const pw = doc.internal.pageSize.getWidth();
-      const ph = doc.internal.pageSize.getHeight();
-      const companyName = company?.name || "Empresa";
-      const dateStr = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const today = format(new Date(), "dd/MM/yyyy");
+      const companyName = (company as any)?.name || "Holding";
 
-      // PAGE 1 — COVER
-      doc.setFillColor(24, 24, 27);
-      doc.rect(0, 0, pw, ph, "F");
+      // CAPA
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, 297, 210, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(28);
-      doc.text("Relatório de Portfólio", pw / 2, 80, { align: "center" });
-      doc.setFontSize(16);
-      doc.setTextColor(180, 180, 180);
-      doc.text(companyName, pw / 2, 95, { align: "center" });
+      doc.setFont("helvetica", "bold");
+      doc.text("Relatório de Portfólio", 148, 55, { align: "center" });
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "normal");
+      doc.text(companyName, 148, 70, { align: "center" });
       doc.setFontSize(11);
-      doc.text(dateStr, pw / 2, 108, { align: "center" });
-
-      // KPI boxes
-      const kpiItems = [
-        { label: "Total em Contratos", value: BRL.format(kpis.totalContratos) },
+      doc.setTextColor(160, 160, 160);
+      doc.text(`Gerado em ${today}`, 148, 82, { align: "center" });
+      const kpiBoxes = [
+        { label: "Total Contratos", value: BRL.format(kpis.totalContratos) },
         { label: "Medições Aprovadas", value: BRL.format(kpis.totalMedicoesAprovadas) },
         { label: "Obras Ativas", value: String(kpis.obrasAtivas) },
         { label: "Alertas Críticos", value: String(kpis.alertasCriticos) },
       ];
-      const boxW = 42;
-      const boxH = 28;
-      const startX = (pw - (boxW * 4 + 6 * 3)) / 2;
-      const boxY = 130;
-      kpiItems.forEach((kpi, i) => {
-        const x = startX + i * (boxW + 6);
-        doc.setFillColor(40, 40, 45);
-        doc.roundedRect(x, boxY, boxW, boxH, 3, 3, "F");
-        doc.setTextColor(160, 160, 160);
-        doc.setFontSize(7);
-        doc.text(kpi.label, x + boxW / 2, boxY + 10, { align: "center" });
+      kpiBoxes.forEach((k, i) => {
+        const x = 18 + i * 66;
+        doc.setFillColor(30, 41, 59);
+        doc.roundedRect(x, 108, 60, 28, 3, 3, "F");
+        doc.setTextColor(120, 160, 255);
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.text(k.label, x + 30, 118, { align: "center" });
         doc.setTextColor(255, 255, 255);
-        doc.setFontSize(10);
-        doc.text(kpi.value, x + boxW / 2, boxY + 20, { align: "center" });
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text(k.value, x + 30, 129, { align: "center" });
       });
 
-      // PAGE 2 — OBRAS TABLE
+      // TABELA DE OBRAS
       doc.addPage();
-      doc.setTextColor(30, 30, 30);
-      doc.setFontSize(14);
-      doc.text("Obras do Portfólio", 14, 20);
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(13);
+      doc.setFont("helvetica", "bold");
+      doc.text("Portfólio Detalhado", 14, 16);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(120, 120, 120);
+      doc.text(today, 283, 16, { align: "right" });
 
-      const statusOrder = { em_andamento: 0, nao_iniciada: 1, paralisada: 2, concluida: 3 };
-      const sorted = [...obras].sort((a, b) => (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9));
-      const statusLabels: Record<string, string> = { em_andamento: "Em Andamento", nao_iniciada: "Não Iniciada", concluida: "Concluída", paralisada: "Paralisada" };
-      const statusColors: Record<string, [number, number, number]> = {
-        em_andamento: [37, 99, 235], nao_iniciada: [120, 120, 120], concluida: [22, 163, 74], paralisada: [220, 38, 38],
-      };
-      const healthLabels: Record<string, string> = { green: "● Verde", yellow: "● Amarelo", red: "● Vermelho" };
-      const healthColors: Record<string, [number, number, number]> = { green: [22, 163, 74], yellow: [202, 138, 4], red: [220, 38, 38] };
-
-      const tableBody = sorted.map((o) => {
-        const fimPrevisto = o.data_inicio ? format(addDays(new Date(o.data_inicio), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
-        return [
-          o.nome,
-          o.num_contrato || "—",
-          o.empresa || "—",
-          BRL.format(o.valor_contrato),
-          statusLabels[o.status] || o.status,
-          `${o.percentual_andamento}%`,
-          fimPrevisto,
-          `${o.docsCount}/${o.docsTotal}`,
-          healthLabels[o.health] || o.health,
-        ];
-      });
+      const statusLbl: Record<string, string> = { em_andamento: "Em Andamento", nao_iniciada: "Não Iniciada", concluida: "Concluída", paralisada: "Paralisada" };
+      const healthLbl: Record<string, string> = { green: "Verde", yellow: "Amarelo", red: "Vermelho" };
+      const sorted = [...obras].sort((a, b) => ({ em_andamento: 0, nao_iniciada: 1, concluida: 2, paralisada: 3 }[a.status] ?? 9) - ({ em_andamento: 0, nao_iniciada: 1, concluida: 2, paralisada: 3 }[b.status] ?? 9));
 
       autoTable(doc, {
-        startY: 28,
+        startY: 22,
         head: [["Obra", "Contrato", "Empresa", "Valor", "Status", "%", "Prev. Fim", "Docs", "Saúde"]],
-        body: tableBody,
-        styles: { fontSize: 7, cellPadding: 2 },
-        headStyles: { fillColor: [24, 24, 27], textColor: [255, 255, 255], fontSize: 7 },
+        body: sorted.map((o) => {
+          const fim = o.data_inicio ? format(addDays(new Date(o.data_inicio), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yy") : "—";
+          return [o.nome, o.num_contrato || "—", o.empresa || "—", BRL.format(o.valor_contrato), statusLbl[o.status], `${o.percentual_andamento}%`, fim, `${o.docsCount}/${o.docsTotal}`, healthLbl[o.health]];
+        }),
+        styles: { fontSize: 8, cellPadding: 2.5 },
+        headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: "bold" },
         columnStyles: { 3: { halign: "right" }, 5: { halign: "center" }, 7: { halign: "center" } },
         didParseCell: (data: any) => {
-          if (data.section === "body") {
-            if (data.column.index === 4) {
-              const status = sorted[data.row.index]?.status;
-              if (status && statusColors[status]) data.cell.styles.textColor = statusColors[status];
-            }
-            if (data.column.index === 8) {
-              const health = sorted[data.row.index]?.health;
-              if (health && healthColors[health]) data.cell.styles.textColor = healthColors[health];
-            }
+          if (data.section !== "body") return;
+          if (data.column.index === 4) {
+            const v = data.cell.raw;
+            if (v === "Em Andamento") data.cell.styles.textColor = [37, 99, 235];
+            else if (v === "Concluída") data.cell.styles.textColor = [22, 163, 74];
+            else if (v === "Paralisada") data.cell.styles.textColor = [220, 38, 38];
+          }
+          if (data.column.index === 8) {
+            const v = data.cell.raw;
+            if (v === "Verde") data.cell.styles.textColor = [22, 163, 74];
+            else if (v === "Amarelo") data.cell.styles.textColor = [202, 138, 4];
+            else if (v === "Vermelho") data.cell.styles.textColor = [220, 38, 38];
           }
         },
       });
 
-      // LAST PAGE — ALERTS
-      if (alerts.length > 0) {
+      // ALERTAS
+      const alertsToShow = alerts.filter((a) => a.severity !== "info");
+      if (alertsToShow.length > 0) {
         doc.addPage();
-        doc.setTextColor(30, 30, 30);
-        doc.setFontSize(14);
-        doc.text("Alertas", 14, 20);
-
-        const criticalAlerts = alerts.filter((a) => a.severity === "critical" || a.severity === "warning");
-        const alertBody = criticalAlerts.map((a) => [
-          a.severity === "critical" ? "CRÍTICO" : "ATENÇÃO",
-          a.message,
-        ]);
-
+        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(13);
+        doc.setFont("helvetica", "bold");
+        doc.text("Alertas do Portfólio", 14, 16);
         autoTable(doc, {
-          startY: 28,
-          head: [["Severidade", "Descrição"]],
-          body: alertBody,
-          styles: { fontSize: 8, cellPadding: 3 },
-          headStyles: { fillColor: [24, 24, 27], textColor: [255, 255, 255] },
-          columnStyles: { 0: { cellWidth: 28 } },
+          startY: 22,
+          head: [["Severidade", "Mensagem"]],
+          body: alertsToShow.map((a) => [a.severity === "critical" ? "CRÍTICO" : "ATENÇÃO", a.message]),
+          styles: { fontSize: 9 },
+          headStyles: { fillColor: [15, 23, 42], textColor: 255 },
           didParseCell: (data: any) => {
             if (data.section === "body" && data.column.index === 0) {
               data.cell.styles.textColor = data.cell.raw === "CRÍTICO" ? [220, 38, 38] : [202, 138, 4];
-              data.cell.styles.fontStyle = "bold";
             }
           },
         });
       }
 
       doc.save(`portfolio-holding-${format(new Date(), "yyyy-MM-dd")}.pdf`);
-      toast.success("PDF exportado com sucesso!");
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro ao gerar PDF.");
-    } finally {
-      setIsPrinting(false);
+      toast.success("PDF gerado com sucesso!");
+    } catch (e) {
+      toast.error("Erro ao gerar PDF. Tente novamente.");
+      console.error(e);
     }
+    setIsPrinting(false);
   };
 
   const resetNewObraForm = () => setNewObraForm({
