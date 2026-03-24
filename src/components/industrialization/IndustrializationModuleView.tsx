@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Factory, Plus, Package, Truck, Wrench } from "lucide-react";
 import { toast } from "sonner";
+import { FactoriesTabContent } from "./FactoriesTabContent";
 
 interface OperationContext {
   id: string;
@@ -207,17 +208,13 @@ export default function IndustrializationModuleView() {
         </TabsContent>
 
         <TabsContent value="factories" className="mt-4">
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <Factory className="h-10 w-10 mx-auto mb-3 opacity-50" />
-              <p className="font-medium">Cadastro de Fábricas</p>
-              <p className="text-sm">Cadastre fábricas, capacidades e modelos de produção.</p>
-              <Button className="mt-4" variant="outline" size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Adicionar Fábrica
-              </Button>
-            </CardContent>
-          </Card>
+          {activeContext && companyId && (
+            <FactoriesTabContent
+              companyId={companyId}
+              contextId={activeContext.id}
+              contextType={activeContext.context_type}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="batches" className="mt-4">
