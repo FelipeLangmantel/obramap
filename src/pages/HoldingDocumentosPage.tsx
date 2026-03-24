@@ -221,7 +221,10 @@ export default function HoldingDocumentosPage() {
           </h1>
           <p className="text-xs text-muted-foreground">Controle consolidado de documentos — todas as obras</p>
         </div>
-        <Button variant="outline" size="sm" onClick={exportCSV}><Download className="h-4 w-4 mr-1" /> Exportar CSV</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-documentos"] })}><RefreshCw className="h-4 w-4 mr-1" /> Atualizar</Button>
+          <Button variant="outline" size="sm" onClick={exportCSV}><Download className="h-4 w-4 mr-1" /> Exportar CSV</Button>
+        </div>
       </div>
 
       {/* KPIs */}
