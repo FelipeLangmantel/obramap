@@ -230,7 +230,7 @@ export default function HoldingReceitasPage() {
     }), []);
 
   const previsaoData = useMemo(() => {
-    return next12Months.map(month => {
+    return previsaoMonths.map(month => {
       const porMesRef = medicoes.filter(m => {
         if (!m.ano_referencia) return false;
         const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0, 3).toLowerCase());
@@ -255,7 +255,7 @@ export default function HoldingReceitasPage() {
         countPrevistas: porPrevisao.length,
       };
     });
-  }, [medicoes, next12Months]);
+  }, [medicoes, previsaoMonths]);
 
   // ─── Programação Financeira (Semanal / Quinzenal / Mensal) ───
   const programacaoData = useMemo(() => {
