@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -83,7 +83,7 @@ export default function HoldingReceitasPage() {
   const [agrupamento, setAgrupamento] = useState<"semanal" | "quinzenal" | "mensal">("mensal");
 
   // ─── Data Fetching ───
-  const { data, isLoading } = useQuery({
+  const { data } = useQuery({
     queryKey: ["holding-receitas", company?.id],
     queryFn: async () => {
       // 1. Fetch obras for this company
@@ -137,8 +137,19 @@ export default function HoldingReceitasPage() {
     },
     enabled: !!company?.id,
     refetchOnWindowFocus: true,
-    staleTime: 30000,
+    staleTime: 10000,
   });
+
+  // ─── Realtime: auto-update when medicoes_ple changes ───
+  useEffect(() => {
+    const channel = supabase
+      .channel("holding-receitas-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["holding-receitas"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient]);
 
   const obras = data?.obras || [];
   const medicoes = data?.medicoes || [];
@@ -211,15 +222,15 @@ export default function HoldingReceitasPage() {
       .map(o => ({ ...o, nome: o.nome.length > 20 ? o.nome.slice(0, 20) + "…" : o.nome }));
   }, [medicoes]);
 
-  // ─── Previsão 12 meses ───
-  const next12Months = useMemo(() =>
-    Array.from({ length: 12 }, (_, i) => {
-      const d = addMonths(startOfMonth(new Date()), i);
+  // ─── Previsão: 3 meses passados + 12 futuros ───
+  const previsaoMonths = useMemo(() =>
+    Array.from({ length: 15 }, (_, i) => {
+      const d = addMonths(startOfMonth(new Date()), i - 3);
       return { date: d, key: format(d, "yyyy-MM"), label: format(d, "MMM/yy"), monthIdx: d.getMonth(), year: d.getFullYear() };
     }), []);
 
   const previsaoData = useMemo(() => {
-    return next12Months.map(month => {
+    return previsaoMonths.map(month => {
       const porMesRef = medicoes.filter(m => {
         if (!m.ano_referencia) return false;
         const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0, 3).toLowerCase());
@@ -244,7 +255,7 @@ export default function HoldingReceitasPage() {
         countPrevistas: porPrevisao.length,
       };
     });
-  }, [medicoes, next12Months]);
+  }, [medicoes, previsaoMonths]);
 
   // ─── Programação Financeira (Semanal / Quinzenal / Mensal) ───
   const programacaoData = useMemo(() => {
@@ -354,7 +365,7 @@ export default function HoldingReceitasPage() {
   const insights = useMemo(() => {
     const enviadas = medicoes.filter(m => m.status_medicao === "enviada" || m.status_medicao === "pendente");
     const first = enviadas.sort((a, b) => (a.data_envio || "z").localeCompare(b.data_envio || "z"))[0];
-    const next3 = previsaoData.slice(0, 3).reduce((s, p) => s + p.total, 0);
+    const next3 = previsaoData.slice(3, 6).reduce((s, p) => s + p.total, 0);
     const obraIds = new Set(medicoes.map(m => m.obra_id));
     const obrasSem = obras.filter(o => !obraIds.has(o.id));
     return { proximaEntrada: first, totalProx3Meses: next3, obrasSemMedicao: obrasSem };
@@ -666,7 +677,7 @@ export default function HoldingReceitasPage() {
                     <div className="flex items-center gap-2">
                       <Calendar className="h-5 w-5 text-primary" />
                       <div>
-                        <CardTitle className="text-sm">Previsão de Caixa — Próximos 12 Meses</CardTitle>
+                        <CardTitle className="text-sm">Previsão de Caixa — Últimos 3 + Próximos 12 Meses</CardTitle>
                         <p className="text-xs text-muted-foreground">Projeção das entradas futuras baseada no calendário de medições</p>
                       </div>
                     </div>
@@ -751,7 +762,7 @@ export default function HoldingReceitasPage() {
                   <Card className="border-l-4 border-l-primary">
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground mb-1">Valor previsto próx. 3 meses</p>
-                      <p className="text-sm font-semibold text-primary">{BRL_SHORT(previsaoData.slice(0, 3).reduce((s, p) => s + p.previsto, 0))}</p>
+                      <p className="text-sm font-semibold text-primary">{BRL_SHORT(previsaoData.slice(3, 6).reduce((s, p) => s + p.previsto, 0))}</p>
                       <p className="text-[10px] text-muted-foreground">baseado nas datas de previsão cadastradas</p>
                     </CardContent>
                   </Card>
