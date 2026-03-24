@@ -2383,6 +2383,7 @@ export type Database = {
           location: string | null
           name: string
           obramap_project_id: string | null
+          obras_portfolio_id: string | null
           status: string
           total_units: number
           updated_at: string
@@ -2397,6 +2398,7 @@ export type Database = {
           location?: string | null
           name: string
           obramap_project_id?: string | null
+          obras_portfolio_id?: string | null
           status?: string
           total_units?: number
           updated_at?: string
@@ -2411,6 +2413,7 @@ export type Database = {
           location?: string | null
           name?: string
           obramap_project_id?: string | null
+          obras_portfolio_id?: string | null
           status?: string
           total_units?: number
           updated_at?: string
@@ -2428,6 +2431,13 @@ export type Database = {
             columns: ["obramap_project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_operation_contexts_obras_portfolio_id_fkey"
+            columns: ["obras_portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
             referencedColumns: ["id"]
           },
         ]
