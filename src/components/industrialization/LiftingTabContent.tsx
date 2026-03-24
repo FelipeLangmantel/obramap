@@ -21,7 +21,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CraneIcon, Plus, Pencil, Trash2, CalendarDays, AlertTriangle, CheckCircle2, Wrench } from "lucide-react";
+import { Plus, Pencil, Trash2, CalendarDays, AlertTriangle, CheckCircle2, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
