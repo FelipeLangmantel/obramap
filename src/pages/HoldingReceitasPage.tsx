@@ -475,10 +475,12 @@ export default function HoldingReceitasPage() {
                          <TableHead className="text-xs">Nº Med.</TableHead>
                         <TableHead className="text-xs">Mês</TableHead>
                         <TableHead className="text-xs">Ano</TableHead>
-                        <TableHead className="text-xs">Envio</TableHead>
-                        <TableHead className="text-xs">Aprovação</TableHead>
-                        <TableHead className="text-xs">Status Med.</TableHead>
-                        <TableHead className="text-xs border-r text-right">Valor</TableHead>
+                         <TableHead className="text-xs">Prev. Envio</TableHead>
+                         <TableHead className="text-xs text-right">Val. Previsto</TableHead>
+                         <TableHead className="text-xs">Envio</TableHead>
+                         <TableHead className="text-xs">Aprovação</TableHead>
+                         <TableHead className="text-xs">Status Med.</TableHead>
+                         <TableHead className="text-xs border-r text-right">Valor</TableHead>
                         <TableHead className="text-xs">Nº NF</TableHead>
                         <TableHead className="text-xs">Pagamento</TableHead>
                         <TableHead className="text-xs">Status NF</TableHead>
