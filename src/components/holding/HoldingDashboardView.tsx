@@ -1336,6 +1336,8 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">SCP</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-right">Valor Contrato</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-right">Receitas</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-right">Saldo</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-center">% Financ.</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">Data Início</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-center">Prazo</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">Prev. Fim</TableHead>
