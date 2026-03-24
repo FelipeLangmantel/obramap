@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical, CalendarClock } from "lucide-react";
+import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical } from "lucide-react";
 import { CurrencyInput } from "./CurrencyInput";
 import { useAuth } from "@/contexts/AuthContext";
 import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart } from "recharts";
