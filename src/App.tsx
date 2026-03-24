@@ -22,6 +22,7 @@ import LongTermPlanningPage from "./pages/LongTermPlanningPage";
 import ProjectContractPage from "./pages/ProjectContractPage";
 import PleMeasurementsPage from "./pages/PleMeasurementsPage";
 import HoldingReceitasPage from "./pages/HoldingReceitasPage";
+import HoldingDespesasPage from "./pages/HoldingDespesasPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
