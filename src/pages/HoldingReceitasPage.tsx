@@ -167,10 +167,11 @@ export default function HoldingReceitasPage() {
       if (filterEmpresa !== "all" && m.obra_empresa !== filterEmpresa) return false;
       if (filterStatusMed !== "all" && m.status_medicao !== filterStatusMed) return false;
       if (filterStatusNF !== "all" && m.status_nf !== filterStatusNF) return false;
+      if (filterTipoContrato !== "all" && m.obra_tipo_contrato !== filterTipoContrato) return false;
       if (searchText && !m.obra_nome.toLowerCase().includes(searchText.toLowerCase()) && !m.num_medicao?.includes(searchText)) return false;
       return true;
     });
-  }, [medicoes, filterObra, filterEmpresa, filterStatusMed, filterStatusNF, searchText]);
+  }, [medicoes, filterObra, filterEmpresa, filterStatusMed, filterStatusNF, filterTipoContrato, searchText]);
 
   const uniqueEmpresas = useMemo(() => [...new Set(obras.map(o => o.empresa).filter(Boolean))], [obras]);
   const hasActiveFilter = filterObra !== "all" || filterEmpresa !== "all" || filterStatusMed !== "all" || filterStatusNF !== "all" || searchText !== "";
