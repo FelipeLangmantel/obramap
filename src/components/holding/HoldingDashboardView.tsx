@@ -171,8 +171,58 @@ function calcHealth(docsCount: number, docsTotal: number, latestMedicao: Medicao
 
 export default function HoldingDashboardView() {
   const { company } = useAuth();
+  const queryClient = useQueryClient();
   const [selectedObra, setSelectedObra] = useState<ObraEnriched | null>(null);
   const [viewMode, setViewMode] = useState<"cards" | "gantt">("cards");
+  const [showNewObraDialog, setShowNewObraDialog] = useState(false);
+  const [newObraForm, setNewObraForm] = useState({
+    nome: "", empresa: "", num_contrato: "", parceria_scp: "",
+    valor_contrato: "", data_inicio: "", prazo_dias: "",
+    status: "nao_iniciada" as string, percentual_andamento: 0,
+    periodo_medicao: "", prazo_pagamento: "",
+  });
+  const [savingObra, setSavingObra] = useState(false);
+
+  const resetNewObraForm = () => setNewObraForm({
+    nome: "", empresa: "", num_contrato: "", parceria_scp: "",
+    valor_contrato: "", data_inicio: "", prazo_dias: "",
+    status: "nao_iniciada", percentual_andamento: 0,
+    periodo_medicao: "", prazo_pagamento: "",
+  });
+
+  const handleSaveNewObra = async () => {
+    if (!newObraForm.nome.trim() || !company?.id) {
+      toast.error("Nome da obra é obrigatório.");
+      return;
+    }
+    setSavingObra(true);
+    const { data, error } = await supabase.from("obras_portfolio").insert({
+      company_id: company.id,
+      nome: newObraForm.nome.trim(),
+      empresa: newObraForm.empresa || null,
+      num_contrato: newObraForm.num_contrato || null,
+      parceria_scp: newObraForm.parceria_scp || null,
+      valor_contrato: Number(newObraForm.valor_contrato) || 0,
+      data_inicio: newObraForm.data_inicio || null,
+      prazo_dias: Number(newObraForm.prazo_dias) || 0,
+      status: newObraForm.status as any,
+      percentual_andamento: newObraForm.percentual_andamento,
+      periodo_medicao: newObraForm.periodo_medicao || null,
+      prazo_pagamento: newObraForm.prazo_pagamento || null,
+    }).select("id").single();
+
+    if (error || !data) {
+      toast.error("Erro ao cadastrar obra.");
+      setSavingObra(false);
+      return;
+    }
+    await supabase.from("documentos_obra").insert({ obra_id: data.id });
+    queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+    toast.success("Obra cadastrada com sucesso!");
+    setShowNewObraDialog(false);
+    resetNewObraForm();
+    setSavingObra(false);
+  };
 
   const { data: obras = [], isLoading } = useQuery({
     queryKey: ["holding-portfolio", company?.id],
