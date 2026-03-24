@@ -479,5 +479,8 @@ export default function HoldingDocumentosPage() {
         </DialogContent>
       </Dialog>
     </div>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }

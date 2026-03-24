@@ -404,5 +404,8 @@ export default function HoldingInsightsPage() {
         Desenvolvido por Felipe Langmantel — ObraMap Módulo Holding · IA Insights · 2026
       </p>
     </div>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }

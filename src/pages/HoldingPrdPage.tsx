@@ -442,5 +442,8 @@ export default function HoldingPrdPage() {
         </TabsContent>
       </Tabs>
     </div>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }

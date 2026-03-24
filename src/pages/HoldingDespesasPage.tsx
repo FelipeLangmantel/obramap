@@ -544,5 +544,8 @@ export default function HoldingDespesasPage() {
         </TabsContent>
       </Tabs>
     </div>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }
