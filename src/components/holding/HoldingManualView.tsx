@@ -249,7 +249,7 @@ export default function HoldingManualView() {
             <ul className="list-disc pl-5 space-y-1">
               <li>5 KPIs: Total Obras, Documentação Completa, Parcial, Crítica, Pendências Abertas.</li>
               <li>Barras de progresso: documentação média e acompanhamento médio do portfólio.</li>
-              <li>Tabela resumo: Doc_Obra (X/6), Acomp_Obra (X/5), Saúde, Pendências por obra.</li>
+              <li>Tabela resumo: Doc_Obra (X/6), Ensaios e Projetos (X/5), Saúde, Pendências por obra.</li>
             </ul>
             <p><strong>Aba Doc_Obra:</strong></p>
             <ul className="list-disc pl-5 space-y-1">
