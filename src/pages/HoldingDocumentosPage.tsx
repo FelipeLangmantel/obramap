@@ -20,7 +20,7 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 
 // ─── Constants ───
-const DOC_OBRA_FIELDS = [
+const PRE_OBRA_FIELDS = [
   { key: "ata", label: "Ata" },
   { key: "ois", label: "OIS" },
   { key: "art", label: "ART" },
