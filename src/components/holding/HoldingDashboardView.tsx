@@ -81,6 +81,9 @@ interface ObraPortfolio {
   prazo_pagamento: string | null;
   municipio: string | null;
   estado: string | null;
+  uh: number | null;
+  responsavel: string | null;
+  tipo_contrato: string | null;
   created_at: string;
 }
 
