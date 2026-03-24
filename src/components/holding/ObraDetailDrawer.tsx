@@ -146,7 +146,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
   if (loading || !docs) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
 
   const docObraCount = DOC_OBRA_FIELDS.filter((f) => docs[f.key]).length;
-  const acompCount = ACOMP_OBRA_FIELDS.filter((f) => docs[f.key]).length;
+  const ensaiosCount = ENSAIOS_PROJETOS_FIELDS.filter((f) => docs[f.key]).length;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
