@@ -967,11 +967,6 @@ export default function HoldingReceitasPage() {
                         </CardContent>
                       </Card>
                     )}
-                            ))}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
 
                     {/* Financial planning tip */}
                     <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
