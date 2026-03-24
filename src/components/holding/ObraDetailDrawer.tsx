@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical } from "lucide-react";
+import { CurrencyInput } from "./CurrencyInput";
 import { useAuth } from "@/contexts/AuthContext";
 import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart } from "recharts";
 import { format } from "date-fns";
@@ -43,7 +44,7 @@ interface ObraDetailDrawerProps {
 export default function ObraDetailDrawer({ obraId, obraNome, obraUH, obraResponsavel, obraTipoContrato, onClose }: ObraDetailDrawerProps) {
   return (
     <Sheet open={!!obraId} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full sm:max-w-[60vw] overflow-y-auto p-0">
+      <SheetContent className="w-full sm:max-w-[75vw] lg:max-w-[70vw] overflow-y-auto p-0">
         {obraId && <ObraDetailContent obraId={obraId} obraNome={obraNome} obraUH={obraUH} obraResponsavel={obraResponsavel} obraTipoContrato={obraTipoContrato} />}
       </SheetContent>
     </Sheet>
@@ -281,6 +282,7 @@ const MEDICAO_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   enviada: { label: "Enviada", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
   pendente: { label: "Pendente", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
   nao_iniciada: { label: "Não Iniciada", cls: "bg-muted text-muted-foreground" },
+  previsao: { label: "Previsão", cls: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300" },
 };
 
 const NF_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
@@ -288,6 +290,45 @@ const NF_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   aguardando_aprovacao: { label: "Aguardando", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
   pendente: { label: "Pendente", cls: "bg-muted text-muted-foreground" },
 };
+
+/** Determines the display status badge based on measurement state */
+function getMedicaoDisplayStatus(m: any): { label: string; cls: string } {
+  // If already sent/approved, use real status
+  if (m.status_medicao === "aprovada" || m.status_medicao === "enviada" || m.status_medicao === "pendente") {
+    return MEDICAO_STATUS_BADGE[m.status_medicao];
+  }
+  // If has previsao date and no envio, treat as "Previsão"
+  if (m.data_previsao_medicao && !m.data_envio && m.status_medicao === "nao_iniciada") {
+    return MEDICAO_STATUS_BADGE.previsao;
+  }
+  return MEDICAO_STATUS_BADGE.nao_iniciada;
+}
+
+/** Whether NF columns should be shown for this measurement */
+function shouldShowNF(m: any): boolean {
+  return m.status_medicao === "enviada" || m.status_medicao === "aprovada";
+}
+
+function ClearableDateInput({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+  return (
+    <div>
+      <label className="text-xs text-muted-foreground">{label}</label>
+      <div className="relative">
+        <Input type="date" value={value} onChange={(e) => onChange(e.target.value)} className="pr-7" />
+        {value && (
+          <button
+            type="button"
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            onClick={() => onChange("")}
+            title="Limpar data"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function MedicoesTab({ obraId }: { obraId: string }) {
   const invalidateHolding = useInvalidateHolding();
@@ -300,7 +341,14 @@ function MedicoesTab({ obraId }: { obraId: string }) {
     num_medicao: "", mes_referencia: "", ano_referencia: new Date().getFullYear(),
     data_previsao_medicao: "", data_envio: "", data_aprovacao: "",
     status_medicao: "nao_iniciada",
-    valor_previsto_medicao: 0, valor_medicao: 0,
+    valor_previsto_medicao: 0, valor_medicao: 0, valor_acatado: 0,
+    num_nf: "", data_pagamento: "", status_nf: "pendente",
+  });
+
+  const resetForm = () => setForm({
+    num_medicao: "", mes_referencia: "", ano_referencia: new Date().getFullYear(),
+    data_previsao_medicao: "", data_envio: "", data_aprovacao: "",
+    status_medicao: "nao_iniciada", valor_previsto_medicao: 0, valor_medicao: 0, valor_acatado: 0,
     num_nf: "", data_pagamento: "", status_nf: "pendente",
   });
 
@@ -338,10 +386,7 @@ function MedicoesTab({ obraId }: { obraId: string }) {
     toast.success("Medição adicionada");
     invalidateHolding();
     setShowForm(false);
-    setForm({ num_medicao: "", mes_referencia: "", ano_referencia: new Date().getFullYear(),
-      data_previsao_medicao: "", data_envio: "", data_aprovacao: "",
-      status_medicao: "nao_iniciada", valor_previsto_medicao: 0, valor_medicao: 0,
-      num_nf: "", data_pagamento: "", status_nf: "pendente" });
+    resetForm();
     load();
   };
 
@@ -349,10 +394,11 @@ function MedicoesTab({ obraId }: { obraId: string }) {
     if (!editingMedicao) return;
     const payload: any = { ...editForm };
     delete payload.id; delete payload.obra_id; delete payload.created_at;
-    if (!payload.data_previsao_medicao) delete payload.data_previsao_medicao;
-    if (!payload.data_envio) delete payload.data_envio;
-    if (!payload.data_aprovacao) delete payload.data_aprovacao;
-    if (!payload.data_pagamento) delete payload.data_pagamento;
+    // Allow clearing dates by setting to null
+    if (payload.data_previsao_medicao === "") payload.data_previsao_medicao = null;
+    if (payload.data_envio === "") payload.data_envio = null;
+    if (payload.data_aprovacao === "") payload.data_aprovacao = null;
+    if (payload.data_pagamento === "") payload.data_pagamento = null;
     const { error } = await supabase.from("medicoes_ple").update(payload).eq("id", editingMedicao.id);
     if (error) { toast.error("Erro ao atualizar medição"); return; }
     toast.success("Medição atualizada!");
@@ -371,7 +417,131 @@ function MedicoesTab({ obraId }: { obraId: string }) {
     load();
   };
 
+  const startEdit = (m: any) => {
+    setEditingMedicao(m);
+    setEditForm({
+      ...m,
+      data_previsao_medicao: m.data_previsao_medicao || "",
+      data_envio: m.data_envio || "",
+      data_aprovacao: m.data_aprovacao || "",
+      data_pagamento: m.data_pagamento || "",
+      valor_previsto_medicao: Number(m.valor_previsto_medicao) || 0,
+      valor_medicao: Number(m.valor_medicao) || 0,
+      valor_acatado: Number(m.valor_acatado) || 0,
+    });
+    setShowForm(false);
+  };
+
   if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
+
+  const renderMedicaoForm = (
+    data: any,
+    setData: (d: any) => void,
+    onSave: () => void,
+    title: string,
+    onClose?: () => void,
+  ) => (
+    <Card className={onClose ? "border-primary" : ""}>
+      <CardContent className="p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <h4 className="font-semibold text-sm">{title}</h4>
+          {onClose && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+
+        {/* IDENTIFICAÇÃO */}
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Identificação</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div><label className="text-xs text-muted-foreground">Nº Medição</label><Input value={data.num_medicao || ""} onChange={(e) => setData({ ...data, num_medicao: e.target.value })} /></div>
+            <div><label className="text-xs text-muted-foreground">Mês Ref.</label>
+              <Select value={data.mes_referencia || ""} onValueChange={(v) => setData({ ...data, mes_referencia: v })}>
+                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map(m => (
+                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><label className="text-xs text-muted-foreground">Ano Ref.</label><Input type="number" value={data.ano_referencia || ""} onChange={(e) => setData({ ...data, ano_referencia: Number(e.target.value) })} /></div>
+            <div>
+              <label className="text-xs text-muted-foreground">Status Medição</label>
+              <Select value={data.status_medicao || "nao_iniciada"} onValueChange={(v) => setData({ ...data, status_medicao: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nao_iniciada">Não Iniciada</SelectItem>
+                  <SelectItem value="pendente">Pendente</SelectItem>
+                  <SelectItem value="enviada">Enviada</SelectItem>
+                  <SelectItem value="aprovada">Aprovada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* ENGENHARIA */}
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Engenharia — Datas e Valores</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <ClearableDateInput label="Previsão Envio" value={data.data_previsao_medicao || ""} onChange={(v) => setData({ ...data, data_previsao_medicao: v })} />
+            <ClearableDateInput label="Data Envio" value={data.data_envio || ""} onChange={(v) => setData({ ...data, data_envio: v })} />
+            <ClearableDateInput label="Data Aprovação" value={data.data_aprovacao || ""} onChange={(v) => setData({ ...data, data_aprovacao: v })} />
+            <div>
+              <label className="text-xs text-muted-foreground">Valor Previsto (R$)</label>
+              <CurrencyInput value={data.valor_previsto_medicao || 0} onChange={(v) => setData({ ...data, valor_previsto_medicao: v })} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Valor Realizado (R$)</label>
+              <CurrencyInput value={data.valor_medicao || 0} onChange={(v) => setData({ ...data, valor_medicao: v })} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Valor Acatado (R$)</label>
+              <CurrencyInput value={data.valor_acatado || 0} onChange={(v) => setData({ ...data, valor_acatado: v })} />
+              {data.valor_acatado > 0 && data.valor_medicao > 0 && data.valor_acatado !== data.valor_medicao && (
+                <p className="text-[10px] text-amber-600 mt-0.5">
+                  Glosa: {BRL.format(Math.abs(data.valor_medicao - data.valor_acatado))}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* FINANCEIRO */}
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Financeiro — NF e Pagamento</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div><label className="text-xs text-muted-foreground">Nº NF</label><Input value={data.num_nf || ""} onChange={(e) => setData({ ...data, num_nf: e.target.value })} /></div>
+            <ClearableDateInput label="Data Pagamento" value={data.data_pagamento || ""} onChange={(v) => setData({ ...data, data_pagamento: v })} />
+            <div>
+              <label className="text-xs text-muted-foreground">Status NF</label>
+              <Select value={data.status_nf || "pendente"} onValueChange={(v) => setData({ ...data, status_nf: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pendente">Pendente</SelectItem>
+                  <SelectItem value="aguardando_aprovacao">Aguardando</SelectItem>
+                  <SelectItem value="recebido">Recebido</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end pt-2">
+          <Button size="sm" onClick={onSave}>
+            {onClose ? "Salvar Edição" : "Salvar"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="space-y-4">
@@ -382,116 +552,14 @@ function MedicoesTab({ obraId }: { obraId: string }) {
         </Button>
       </div>
 
-      {showForm && (
-        <Card>
-          <CardContent className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div><label className="text-xs text-muted-foreground">Nº Medição</label><Input value={form.num_medicao} onChange={(e) => setForm({ ...form, num_medicao: e.target.value })} /></div>
-            <div><label className="text-xs text-muted-foreground">Mês Ref.</label>
-              <Select value={form.mes_referencia} onValueChange={(v) => setForm({ ...form, mes_referencia: v })}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                <SelectContent>
-                  {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map(m => (
-                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div><label className="text-xs text-muted-foreground">Ano Ref.</label><Input type="number" value={form.ano_referencia} onChange={(e) => setForm({ ...form, ano_referencia: Number(e.target.value) })} /></div>
-            <div><label className="text-xs text-muted-foreground">Previsão Envio</label><Input type="date" value={form.data_previsao_medicao} onChange={(e) => setForm({ ...form, data_previsao_medicao: e.target.value })} /></div>
-            <div><label className="text-xs text-muted-foreground">Valor Previsto (R$)</label><Input type="number" value={form.valor_previsto_medicao} onChange={(e) => setForm({ ...form, valor_previsto_medicao: Number(e.target.value) })} /></div>
-            <div><label className="text-xs text-muted-foreground">Data Envio</label><Input type="date" value={form.data_envio} onChange={(e) => setForm({ ...form, data_envio: e.target.value })} /></div>
-            <div><label className="text-xs text-muted-foreground">Data Aprovação</label><Input type="date" value={form.data_aprovacao} onChange={(e) => setForm({ ...form, data_aprovacao: e.target.value })} /></div>
-            <div>
-              <label className="text-xs text-muted-foreground">Status Medição</label>
-              <Select value={form.status_medicao} onValueChange={(v) => setForm({ ...form, status_medicao: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="nao_iniciada">Não Iniciada</SelectItem>
-                  <SelectItem value="pendente">Pendente</SelectItem>
-                  <SelectItem value="enviada">Enviada</SelectItem>
-                  <SelectItem value="aprovada">Aprovada</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div><label className="text-xs text-muted-foreground">Valor Realizado (R$)</label><Input type="number" value={form.valor_medicao} onChange={(e) => setForm({ ...form, valor_medicao: Number(e.target.value) })} /></div>
-            <div><label className="text-xs text-muted-foreground">Nº NF</label><Input value={form.num_nf} onChange={(e) => setForm({ ...form, num_nf: e.target.value })} /></div>
-            <div><label className="text-xs text-muted-foreground">Data Pagamento</label><Input type="date" value={form.data_pagamento} onChange={(e) => setForm({ ...form, data_pagamento: e.target.value })} /></div>
-            <div>
-              <label className="text-xs text-muted-foreground">Status NF</label>
-              <Select value={form.status_nf} onValueChange={(v) => setForm({ ...form, status_nf: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pendente">Pendente</SelectItem>
-                  <SelectItem value="aguardando_aprovacao">Aguardando</SelectItem>
-                  <SelectItem value="recebido">Recebido</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-end">
-              <Button size="sm" onClick={addMedicao}>Salvar</Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {showForm && renderMedicaoForm(form, setForm, addMedicao, "Nova Medição")}
 
-      {editingMedicao && (
-        <Card className="border-primary">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="font-semibold text-sm">Editando Medição Nº {editingMedicao.num_medicao || "—"}</h4>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingMedicao(null); setEditForm({}); }}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div><label className="text-xs text-muted-foreground">Nº Medição</label><Input value={editForm.num_medicao || ""} onChange={(e) => setEditForm({...editForm, num_medicao: e.target.value})} /></div>
-              <div><label className="text-xs text-muted-foreground">Mês Ref.</label>
-                <Select value={editForm.mes_referencia || ""} onValueChange={(v) => setEditForm({...editForm, mes_referencia: v})}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>
-                    {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map(m => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><label className="text-xs text-muted-foreground">Ano Ref.</label><Input type="number" value={editForm.ano_referencia || ""} onChange={(e) => setEditForm({...editForm, ano_referencia: Number(e.target.value)})} /></div>
-              <div><label className="text-xs text-muted-foreground">Previsão Envio</label><Input type="date" value={editForm.data_previsao_medicao || ""} onChange={(e) => setEditForm({...editForm, data_previsao_medicao: e.target.value})} /></div>
-              <div><label className="text-xs text-muted-foreground">Valor Previsto (R$)</label><Input type="number" value={editForm.valor_previsto_medicao || 0} onChange={(e) => setEditForm({...editForm, valor_previsto_medicao: Number(e.target.value)})} /></div>
-              <div><label className="text-xs text-muted-foreground">Data Envio</label><Input type="date" value={editForm.data_envio || ""} onChange={(e) => setEditForm({...editForm, data_envio: e.target.value})} /></div>
-              <div><label className="text-xs text-muted-foreground">Data Aprovação</label><Input type="date" value={editForm.data_aprovacao || ""} onChange={(e) => setEditForm({...editForm, data_aprovacao: e.target.value})} /></div>
-              <div>
-                <label className="text-xs text-muted-foreground">Status Medição</label>
-                <Select value={editForm.status_medicao || "nao_iniciada"} onValueChange={(v) => setEditForm({...editForm, status_medicao: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="nao_iniciada">Não Iniciada</SelectItem>
-                    <SelectItem value="pendente">Pendente</SelectItem>
-                    <SelectItem value="enviada">Enviada</SelectItem>
-                    <SelectItem value="aprovada">Aprovada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><label className="text-xs text-muted-foreground">Valor Realizado (R$)</label><Input type="number" value={editForm.valor_medicao || 0} onChange={(e) => setEditForm({...editForm, valor_medicao: Number(e.target.value)})} /></div>
-              <div><label className="text-xs text-muted-foreground">Nº NF</label><Input value={editForm.num_nf || ""} onChange={(e) => setEditForm({...editForm, num_nf: e.target.value})} /></div>
-              <div><label className="text-xs text-muted-foreground">Data Pagamento</label><Input type="date" value={editForm.data_pagamento || ""} onChange={(e) => setEditForm({...editForm, data_pagamento: e.target.value})} /></div>
-              <div>
-                <label className="text-xs text-muted-foreground">Status NF</label>
-                <Select value={editForm.status_nf || "pendente"} onValueChange={(v) => setEditForm({...editForm, status_nf: v})}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pendente">Pendente</SelectItem>
-                    <SelectItem value="aguardando_aprovacao">Aguardando</SelectItem>
-                    <SelectItem value="recebido">Recebido</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-end">
-                <Button size="sm" onClick={updateMedicao}>Salvar Edição</Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {editingMedicao && renderMedicaoForm(
+        editForm,
+        setEditForm,
+        updateMedicao,
+        `Editando Medição Nº ${editingMedicao.num_medicao || "—"}`,
+        () => { setEditingMedicao(null); setEditForm({}); }
       )}
 
       <div className="overflow-x-auto">
@@ -506,6 +574,7 @@ function MedicoesTab({ obraId }: { obraId: string }) {
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Previsto</TableHead>
               <TableHead className="text-right">Realizado</TableHead>
+              <TableHead className="text-right">Acatado</TableHead>
               <TableHead className="text-right">Desvio</TableHead>
               <TableHead>NF</TableHead>
               <TableHead>Status NF</TableHead>
@@ -514,36 +583,45 @@ function MedicoesTab({ obraId }: { obraId: string }) {
           </TableHeader>
           <TableBody>
             {medicoes.map((m) => {
-              const ms = MEDICAO_STATUS_BADGE[m.status_medicao] || MEDICAO_STATUS_BADGE.nao_iniciada;
+              const displayStatus = getMedicaoDisplayStatus(m);
               const ns = NF_STATUS_BADGE[m.status_nf] || NF_STATUS_BADGE.pendente;
               const previsto = Number(m.valor_previsto_medicao) || 0;
               const realizado = Number(m.valor_medicao) || 0;
+              const acatado = Number(m.valor_acatado) || 0;
+              const showNF = shouldShowNF(m);
+              const hasGlosa = acatado > 0 && acatado !== realizado;
+
               return (
                 <TableRow key={m.id}>
                   <TableCell className="font-medium">{m.num_medicao || "—"}</TableCell>
                   <TableCell>{m.mes_referencia}/{m.ano_referencia}</TableCell>
                   <TableCell>{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
-                  <TableCell>{m.data_envio ? format(new Date(m.data_envio), "dd/MM/yy") : "—"}</TableCell>
-                  <TableCell>{m.data_aprovacao ? format(new Date(m.data_aprovacao), "dd/MM/yy") : "—"}</TableCell>
-                  <TableCell><Badge variant="secondary" className={`text-[10px] ${ms.cls}`}>{ms.label}</Badge></TableCell>
+                  <TableCell>{m.data_envio ? format(new Date(m.data_envio + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                  <TableCell>{m.data_aprovacao ? format(new Date(m.data_aprovacao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                  <TableCell><Badge variant="secondary" className={`text-[10px] ${displayStatus.cls}`}>{displayStatus.label}</Badge></TableCell>
                   <TableCell className="text-right font-mono">{previsto > 0 ? BRL.format(previsto) : "—"}</TableCell>
-                  <TableCell className="text-right font-mono">{BRL.format(realizado)}</TableCell>
+                  <TableCell className="text-right font-mono">{realizado > 0 ? BRL.format(realizado) : "—"}</TableCell>
                   <TableCell className="text-right font-mono">
-                    {previsto > 0 ? (() => {
+                    {acatado > 0 ? (
+                      <span className={hasGlosa ? "text-amber-600" : ""}>
+                        {BRL.format(acatado)}
+                        {hasGlosa && <span className="block text-[9px]">Glosa</span>}
+                      </span>
+                    ) : "—"}
+                  </TableCell>
+                  <TableCell className="text-right font-mono">
+                    {/* Desvio only when realizado > 0 */}
+                    {realizado > 0 && previsto > 0 ? (() => {
                       const desvio = realizado - previsto;
                       const pct = ((desvio / previsto) * 100).toFixed(1);
                       return <span className={desvio >= 0 ? "text-emerald-600" : "text-red-500"}>{desvio >= 0 ? "+" : ""}{pct}%</span>;
                     })() : "—"}
                   </TableCell>
-                  <TableCell>{m.num_nf || "—"}</TableCell>
-                  <TableCell><Badge variant="secondary" className={`text-[10px] ${ns.cls}`}>{ns.label}</Badge></TableCell>
+                  <TableCell>{showNF ? (m.num_nf || "—") : ""}</TableCell>
+                  <TableCell>{showNF ? <Badge variant="secondary" className={`text-[10px] ${ns.cls}`}>{ns.label}</Badge> : ""}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
-                        setEditingMedicao(m);
-                        setEditForm({ ...m, data_previsao_medicao: m.data_previsao_medicao || "", data_envio: m.data_envio || "", data_aprovacao: m.data_aprovacao || "", data_pagamento: m.data_pagamento || "" });
-                        setShowForm(false);
-                      }}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(m)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMedicao(m.id)}>
@@ -555,7 +633,7 @@ function MedicoesTab({ obraId }: { obraId: string }) {
               );
             })}
             {medicoes.length === 0 && (
-              <TableRow><TableCell colSpan={12} className="text-center text-muted-foreground py-8">Nenhuma medição.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={13} className="text-center text-muted-foreground py-8">Nenhuma medição.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -563,7 +641,6 @@ function MedicoesTab({ obraId }: { obraId: string }) {
     </div>
   );
 }
-
 /* ══════════════════════════════════════════════
    TAB 3 — FINANCEIRO
    ══════════════════════════════════════════════ */
