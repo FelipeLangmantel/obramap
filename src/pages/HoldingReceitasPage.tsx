@@ -245,10 +245,11 @@ export default function HoldingReceitasPage() {
 
   // ─── CSV Export ───
   const exportarCSV = () => {
-    const headers = ["#", "Obra", "Empresa", "Contrato", "Nº Medição", "Mês Ref", "Ano Ref", "Data Envio", "Data Aprovação", "Status Medição", "Valor Medição", "Nº NF", "Data Pagamento", "Status NF"];
+    const headers = ["#", "Obra", "Empresa", "Contrato", "Nº Medição", "Mês Ref", "Ano Ref", "Prev. Envio", "Val. Previsto", "Data Envio", "Data Aprovação", "Status Medição", "Valor Medição", "Nº NF", "Data Pagamento", "Status NF"];
     const rows = medicoesFiltradas.map((m, i) => [
       i + 1, m.obra_nome, m.obra_empresa || "", m.obra_contrato || "",
       m.num_medicao || "", m.mes_referencia || "", m.ano_referencia || "",
+      m.data_previsao_medicao || "", m.valor_previsto_medicao.toFixed(2),
       m.data_envio || "", m.data_aprovacao || "",
       m.status_medicao, m.valor_medicao.toFixed(2),
       m.num_nf || "", m.data_pagamento || "", m.status_nf
