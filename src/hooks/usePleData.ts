@@ -48,6 +48,7 @@ export interface PleProject {
   updated_by: string | null;
   obramap_project_id: string | null;
   mode: 'standalone' | 'integrated';
+  obras_portfolio_id: string | null;
 }
 
 export interface PleEventGroup {

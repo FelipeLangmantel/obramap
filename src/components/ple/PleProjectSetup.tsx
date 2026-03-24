@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Sparkles, Link2 } from "lucide-react";
+import { Plus, Trash2, Sparkles, Link2, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { PleImportAIDialog } from "./PleImportAIDialog";
 import type { usePleData } from "@/hooks/usePleData";
 
@@ -27,11 +28,24 @@ interface ObraMapProject {
   total_houses: number;
 }
 
+interface HoldingObra {
+  id: string;
+  nome: string;
+  num_contrato: string | null;
+  empresa: string | null;
+  valor_contrato: number;
+  total_houses: number;
+  data_inicio: string | null;
+  obramap_project_id: string | null;
+}
+
 function SetupContent({ onCreated, ...props }: Props) {
   const { currentProject, groups, events, createProject, createGroup, deleteGroup, createEvent, deleteEvent, updateProject } = props;
+  const { company } = useAuth();
 
   const [showAIImport, setShowAIImport] = useState(false);
   const [obraMapProjects, setObraMapProjects] = useState<ObraMapProject[]>([]);
+  const [holdingObras, setHoldingObras] = useState<HoldingObra[]>([]);
   const [isIntegrated, setIsIntegrated] = useState(currentProject?.mode === "integrated");
 
   const [projectForm, setProjectForm] = useState({
@@ -44,10 +58,25 @@ function SetupContent({ onCreated, ...props }: Props) {
     contract_value: currentProject?.contract_value || 0,
     obramap_project_id: currentProject?.obramap_project_id || null as string | null,
     mode: currentProject?.mode || "standalone" as "standalone" | "integrated",
+    obras_portfolio_id: currentProject?.obras_portfolio_id || null as string | null,
   });
 
   const [newGroup, setNewGroup] = useState({ code: "", name: "" });
   const [newEvent, setNewEvent] = useState({ group_id: "", item_code: "", description: "", discrimination: "", sinapi_code: "", unit: "UN", quantity: 0, unit_value: 0 });
+
+  // Load Holding obras
+  useEffect(() => {
+    const load = async () => {
+      if (!company?.id) return;
+      const { data } = await supabase
+        .from("obras_portfolio")
+        .select("id, nome, num_contrato, empresa, valor_contrato, total_houses, data_inicio, obramap_project_id")
+        .eq("company_id", company.id)
+        .order("nome");
+      if (data) setHoldingObras(data as HoldingObra[]);
+    };
+    load();
+  }, [company?.id]);
 
   // Load ObraMap projects
   useEffect(() => {
@@ -68,6 +97,36 @@ function SetupContent({ onCreated, ...props }: Props) {
     } else {
       setProjectForm(p => ({ ...p, mode: "integrated" }));
     }
+  };
+
+  const handleSelectHoldingObra = async (obraId: string) => {
+    if (obraId === "__none__") {
+      setProjectForm(p => ({ ...p, obras_portfolio_id: null }));
+      return;
+    }
+    const obra = holdingObras.find(o => o.id === obraId);
+    if (!obra) return;
+
+    setProjectForm(p => ({
+      ...p,
+      obras_portfolio_id: obraId,
+      name: obra.nome || p.name,
+      contract_number: obra.num_contrato || p.contract_number,
+      contractor: obra.empresa || p.contractor,
+      contract_value: obra.valor_contrato || p.contract_value,
+      total_houses: obra.total_houses || p.total_houses,
+      // Auto-enable integrated mode if Holding obra links to ObraMap
+      ...(obra.obramap_project_id ? {
+        obramap_project_id: obra.obramap_project_id,
+        mode: "integrated" as const,
+      } : {}),
+    }));
+
+    if (obra.obramap_project_id) {
+      setIsIntegrated(true);
+    }
+
+    toast.success("Dados importados da Holding!");
   };
 
   const handleSelectObraMap = (projectId: string) => {
@@ -93,7 +152,6 @@ function SetupContent({ onCreated, ...props }: Props) {
     toast.success("Projeto atualizado!");
   };
 
-  // Link existing project to ObraMap
   const handleLinkExisting = async () => {
     if (!currentProject || !projectForm.obramap_project_id) return;
     await updateProject(currentProject.id, {
@@ -137,9 +195,55 @@ function SetupContent({ onCreated, ...props }: Props) {
   };
 
   const selectedObraName = obraMapProjects.find(p => p.id === projectForm.obramap_project_id)?.name;
+  const selectedHoldingObra = holdingObras.find(o => o.id === projectForm.obras_portfolio_id);
 
   return (
     <div className="space-y-6 max-h-[70vh] overflow-y-auto pb-4">
+      {/* Step 0: Link to Holding */}
+      {!currentProject && holdingObras.length > 0 && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-primary" />
+              Vincular à Holding (opcional)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-[10px] text-muted-foreground">
+              Selecione uma obra da Holding para importar automaticamente os dados do contrato.
+            </p>
+            <Select
+              value={projectForm.obras_portfolio_id || "__none__"}
+              onValueChange={handleSelectHoldingObra}
+            >
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Selecione uma obra da Holding..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Nenhuma (criar independente)</SelectItem>
+                {holdingObras.map(o => (
+                  <SelectItem key={o.id} value={o.id}>
+                    {o.nome} {o.num_contrato ? `— ${o.num_contrato}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedHoldingObra && (
+              <div className="flex flex-wrap gap-1.5">
+                <Badge variant="outline" className="text-[10px] border-primary/40 text-primary">
+                  <Building2 className="h-2.5 w-2.5 mr-1" /> {selectedHoldingObra.nome}
+                </Badge>
+                {selectedHoldingObra.obramap_project_id && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    <Link2 className="h-2.5 w-2.5 mr-1" /> Integrado ao ObraMap
+                  </Badge>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Project Info */}
       <Card>
         <CardHeader><CardTitle className="text-sm">Dados do Projeto</CardTitle></CardHeader>
@@ -204,7 +308,7 @@ function SetupContent({ onCreated, ...props }: Props) {
             </div>
             <div><Label className="text-xs">Valor do Contrato (R$)</Label><Input type="number" step="0.01" value={projectForm.contract_value} onChange={e => setProjectForm(p => ({ ...p, contract_value: parseFloat(e.target.value) || 0 }))} className="h-8 text-xs" /></div>
           </div>
-          <div className="flex items-center gap-2 pt-2 col-span-2">
+          <div className="flex items-center gap-2 pt-2">
             <Button size="sm" onClick={currentProject ? handleSaveProject : handleCreateProject} className="w-full sm:w-auto">
               {currentProject ? "Salvar" : "Criar Projeto"}
             </Button>
@@ -322,6 +426,7 @@ export function PleProjectSetup(props: Props) {
               <Button key={p.id} variant="outline" className="w-full justify-start gap-2" onClick={() => props.setCurrentProjectId(p.id)}>
                 {p.name} — {p.total_houses} casas
                 {p.mode === "integrated" && <Badge variant="secondary" className="text-[9px]">Integrado</Badge>}
+                {(p as any).obras_portfolio_id && <Badge className="text-[9px] bg-amber-500/90 hover:bg-amber-500">Holding</Badge>}
               </Button>
             ))}
           </div>

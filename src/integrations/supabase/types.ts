@@ -4216,6 +4216,7 @@ export type Database = {
           municipio: string | null
           nome: string
           num_contrato: string | null
+          obramap_project_id: string | null
           parceria_scp: string | null
           percentual_andamento: number
           periodo_medicao: string | null
@@ -4226,6 +4227,7 @@ export type Database = {
           responsavel_telefone: string | null
           status: Database["public"]["Enums"]["obra_status"]
           tipo_contrato: string | null
+          total_houses: number
           uh: number | null
           valor_contrato: number
         }
@@ -4242,6 +4244,7 @@ export type Database = {
           municipio?: string | null
           nome: string
           num_contrato?: string | null
+          obramap_project_id?: string | null
           parceria_scp?: string | null
           percentual_andamento?: number
           periodo_medicao?: string | null
@@ -4252,6 +4255,7 @@ export type Database = {
           responsavel_telefone?: string | null
           status?: Database["public"]["Enums"]["obra_status"]
           tipo_contrato?: string | null
+          total_houses?: number
           uh?: number | null
           valor_contrato?: number
         }
@@ -4268,6 +4272,7 @@ export type Database = {
           municipio?: string | null
           nome?: string
           num_contrato?: string | null
+          obramap_project_id?: string | null
           parceria_scp?: string | null
           percentual_andamento?: number
           periodo_medicao?: string | null
@@ -4278,6 +4283,7 @@ export type Database = {
           responsavel_telefone?: string | null
           status?: Database["public"]["Enums"]["obra_status"]
           tipo_contrato?: string | null
+          total_houses?: number
           uh?: number | null
           valor_contrato?: number
         }
@@ -4287,6 +4293,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "obras_portfolio_obramap_project_id_fkey"
+            columns: ["obramap_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -5436,6 +5449,7 @@ export type Database = {
           name: string
           notes: string | null
           obramap_project_id: string | null
+          obras_portfolio_id: string | null
           program: string | null
           responsible_engineer: string | null
           start_date: string | null
@@ -5472,6 +5486,7 @@ export type Database = {
           name: string
           notes?: string | null
           obramap_project_id?: string | null
+          obras_portfolio_id?: string | null
           program?: string | null
           responsible_engineer?: string | null
           start_date?: string | null
@@ -5508,6 +5523,7 @@ export type Database = {
           name?: string
           notes?: string | null
           obramap_project_id?: string | null
+          obras_portfolio_id?: string | null
           program?: string | null
           responsible_engineer?: string | null
           start_date?: string | null
@@ -5529,6 +5545,13 @@ export type Database = {
             columns: ["obramap_project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ple_projects_obras_portfolio_id_fkey"
+            columns: ["obras_portfolio_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
             referencedColumns: ["id"]
           },
         ]
@@ -8839,6 +8862,20 @@ export type Database = {
       get_planning_version_summary: {
         Args: { p_version_id: string }
         Returns: Json
+      }
+      get_ple_from_holding: {
+        Args: { p_obras_portfolio_id: string }
+        Returns: {
+          data_inicio: string
+          empresa: string
+          nome: string
+          num_contrato: string
+          obramap_project_id: string
+          obramap_project_name: string
+          obramap_total_houses: number
+          total_houses: number
+          valor_contrato: number
+        }[]
       }
       get_project_contract_value: {
         Args: { p_project_id: string }
