@@ -41,6 +41,7 @@ import {
   Pencil,
   Trash2,
   Upload,
+  BookOpen,
 } from "lucide-react";
 import { addDays, format, differenceInDays, differenceInMonths } from "date-fns";
 
