@@ -87,6 +87,8 @@ interface ObraPortfolio {
   estado: string | null;
   uh: number | null;
   responsavel: string | null;
+  responsavel_nome: string | null;
+  responsavel_telefone: string | null;
   tipo_contrato: string | null;
   created_at: string;
 }
