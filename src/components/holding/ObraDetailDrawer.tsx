@@ -395,6 +395,7 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
     setSavingDespesa(false);
     if (error) { toast.error("Erro ao salvar despesa."); return; }
     toast.success("Despesa adicionada!");
+    invalidateHolding();
     setNewDespesa({ mes_referencia: "", ano_referencia: String(new Date().getFullYear()), valor: "", status: "nao_iniciado" });
     setShowNewDespesa(false);
     loadData();
