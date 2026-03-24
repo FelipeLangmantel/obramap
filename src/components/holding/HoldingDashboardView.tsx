@@ -419,6 +419,7 @@ export default function HoldingDashboardView() {
     setImporting(false);
   };
 
+  const { data: obras = [], isLoading } = useQuery({
     queryKey: ["holding-portfolio", company?.id],
     queryFn: async () => {
       if (!company?.id) return [];
