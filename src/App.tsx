@@ -46,6 +46,7 @@ const ROUTE_PERMISSION_MAP: Record<string, string> = {
   "/holding-receitas": "holding",
   "/holding-despesas": "holding",
   "/holding-documentos": "holding",
+  "/holding-prd": "holding",
 };
 
 /** Layout para rotas de System Admin */
