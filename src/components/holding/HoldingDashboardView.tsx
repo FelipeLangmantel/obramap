@@ -317,6 +317,7 @@ export default function HoldingDashboardView() {
     valor_contrato: "", data_inicio: "", prazo_dias: "",
     status: "nao_iniciada", percentual_andamento: 0,
     periodo_medicao: "", prazo_pagamento: "",
+    municipio: "", estado: "RS",
   });
 
   const handleSaveObra = async () => {
