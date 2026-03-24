@@ -43,7 +43,7 @@ interface ObraDetailDrawerProps {
 export default function ObraDetailDrawer({ obraId, obraNome, obraUH, obraResponsavel, obraTipoContrato, onClose }: ObraDetailDrawerProps) {
   return (
     <Sheet open={!!obraId} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full sm:max-w-[60vw] overflow-y-auto p-0">
+      <SheetContent className="w-full sm:max-w-[75vw] lg:max-w-[70vw] overflow-y-auto p-0">
         {obraId && <ObraDetailContent obraId={obraId} obraNome={obraNome} obraUH={obraUH} obraResponsavel={obraResponsavel} obraTipoContrato={obraTipoContrato} />}
       </SheetContent>
     </Sheet>
