@@ -624,12 +624,13 @@ export default function HoldingDashboardView() {
     });
   }, [obras, filterEmpresa, filterStatus, filterSaude, filterTipo, searchNome]);
 
-  const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || searchNome !== "";
+  const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || filterTipo !== "all" || searchNome !== "";
 
   const clearFilters = () => {
     setFilterEmpresa("all");
     setFilterStatus("all");
     setFilterSaude("all");
+    setFilterTipo("all");
     setSearchNome("");
   };
 
