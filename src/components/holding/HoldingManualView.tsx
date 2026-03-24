@@ -130,7 +130,7 @@ export default function HoldingManualView() {
             <p>Clique em qualquer obra para abrir o drawer lateral com 5 abas:</p>
             <p><strong>A — Documentos:</strong></p>
             <ul className="list-disc pl-5 space-y-1">
-              <li><strong>Doc_Obra (6 itens):</strong> Ata, OIS, ART, CNO, Implantação, SCP — toggles on/off.</li>
+              <li><strong>Pré Obra (6 itens):</strong> Ata, OIS, ART, CNO, Implantação, SCP — toggles on/off.</li>
               <li><strong>Ensaios e Projetos (5 itens):</strong> Sondagem SPT, Planta Localização, Plano Altimétrico, Painel Bordo, Checklist Segurança.</li>
               <li>Progresso atualiza automaticamente o semáforo de saúde.</li>
             </ul>

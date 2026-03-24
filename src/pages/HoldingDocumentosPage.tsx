@@ -39,7 +39,7 @@ const ENSAIOS_FIELDS = [
 
 function countDocObra(docs: any): number {
   if (!docs) return 0;
-  return DOC_OBRA_FIELDS.reduce((s, f) => s + (docs[f.key] ? 1 : 0), 0);
+  return PRE_OBRA_FIELDS.reduce((s, f) => s + (docs[f.key] ? 1 : 0), 0);
 }
 
 function countEnsaios(docs: any): number {
