@@ -544,13 +544,15 @@ export default function HoldingReceitasPage() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="text-xs">Mês</TableHead>
-                            <TableHead className="text-xs text-center">Obras</TableHead>
-                            <TableHead className="text-xs text-right">Pendente</TableHead>
-                            <TableHead className="text-xs text-right">Enviada</TableHead>
-                            <TableHead className="text-xs text-right">Aprovada</TableHead>
-                            <TableHead className="text-xs text-right">NF Recebida</TableHead>
-                            <TableHead className="text-xs text-right font-bold">Total Mês</TableHead>
+                             <TableHead className="text-xs">Mês</TableHead>
+                             <TableHead className="text-xs text-center">Obras</TableHead>
+                             <TableHead className="text-xs text-right">Previsto</TableHead>
+                             <TableHead className="text-xs text-right">Pendente</TableHead>
+                             <TableHead className="text-xs text-right">Enviada</TableHead>
+                             <TableHead className="text-xs text-right">Aprovada</TableHead>
+                             <TableHead className="text-xs text-right">NF Recebida</TableHead>
+                             <TableHead className="text-xs text-right font-bold">Total Mês</TableHead>
+                             <TableHead className="text-xs text-right">Desvio</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
