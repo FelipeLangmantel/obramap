@@ -306,7 +306,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
               {obrasOnMap.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-lg">
                   <p className="text-xs text-muted-foreground text-center px-4">
-                    Cadastre o município nas obras para visualizá-las no mapa.
+                    Informe o município ao cadastrar cada obra para visualizá-la no mapa do RS
                   </p>
                 </div>
               )}
