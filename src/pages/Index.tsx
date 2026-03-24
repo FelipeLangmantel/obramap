@@ -26,6 +26,7 @@ import SmartPlanningView from "@/components/smart-planning/SmartPlanningView";
 import { ServiceProductivityView } from "@/components/productivity/ServiceProductivityView";
 import ContractorsModuleView from "@/components/contractors/ContractorsModuleView";
 import IndustrializationModuleView from "@/components/industrialization/IndustrializationModuleView";
+import HoldingDashboardView from "@/components/holding/HoldingDashboardView";
 import { Loader2, Menu, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
