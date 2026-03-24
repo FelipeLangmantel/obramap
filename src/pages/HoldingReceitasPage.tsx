@@ -18,9 +18,10 @@ import {
 } from "recharts";
 import {
   TrendingUp, DollarSign, Clock, CheckCircle2, AlertCircle, Download, RefreshCw,
-  Search, Calendar, FileText, X
+  Search, Calendar, FileText, X, Wallet
 } from "lucide-react";
-import { format, addMonths, startOfMonth } from "date-fns";
+import { format, addMonths, startOfMonth, startOfWeek, endOfWeek, addWeeks, addDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 
 // ─── Types ───
@@ -50,7 +51,7 @@ interface MedicaoCompleta {
 
 // ─── Formatters ───
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-const BRL_SHORT = (v: number) => v >= 1e6 ? `R$ ${(v / 1e6).toFixed(1)}M` : `R$ ${(v / 1000).toFixed(0)}k`;
+const BRL_SHORT = (v: number) => v >= 1e6 ? `R$ ${(v / 1e6).toFixed(1)}M` : v >= 1000 ? `R$ ${(v / 1000).toFixed(0)}k` : BRL.format(v);
 
 const STATUS_MED_CONFIG: Record<string, { label: string; cls: string }> = {
   aprovada: { label: "Medição Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
@@ -79,52 +80,64 @@ export default function HoldingReceitasPage() {
   const [filterStatusNF, setFilterStatusNF] = useState("all");
   const [searchText, setSearchText] = useState("");
   const [filterTipoContrato, setFilterTipoContrato] = useState("all");
+  const [agrupamento, setAgrupamento] = useState<"semanal" | "quinzenal" | "mensal">("mensal");
 
   // ─── Data Fetching ───
   const { data, isLoading } = useQuery({
     queryKey: ["holding-receitas", company?.id],
     queryFn: async () => {
-      const { data: obras } = await supabase
+      // 1. Fetch obras for this company
+      const { data: obras, error: obrasError } = await supabase
         .from("obras_portfolio")
         .select("id, nome, empresa, num_contrato, valor_contrato, parceria_scp, uh, responsavel, tipo_contrato")
         .eq("company_id", company!.id);
 
-      const { data: medicoes } = await supabase
-        .from("medicoes_ple")
-        .select("*");
+      if (obrasError) throw obrasError;
+      const obrasList = obras || [];
+      const obraIds = obrasList.map(o => o.id);
 
-      const obrasMap = new Map((obras || []).map(o => [o.id, o]));
-      const joined: MedicaoCompleta[] = (medicoes || [])
-        .filter((m: any) => obrasMap.has(m.obra_id))
-        .map((m: any) => {
-          const o = obrasMap.get(m.obra_id)!;
-          return {
-            id: m.id,
-            obra_id: m.obra_id,
-            obra_nome: o.nome,
-            obra_empresa: o.empresa,
-            obra_contrato: o.num_contrato,
-            obra_scp: o.parceria_scp,
-            obra_uh: (o as any).uh || null,
-            obra_responsavel: (o as any).responsavel || null,
-            obra_tipo_contrato: (o as any).tipo_contrato || null,
-            num_medicao: m.num_medicao,
-            mes_referencia: m.mes_referencia,
-            ano_referencia: m.ano_referencia,
-            data_previsao_medicao: m.data_previsao_medicao || null,
-            data_envio: m.data_envio,
-            data_aprovacao: m.data_aprovacao,
-            status_medicao: m.status_medicao,
-            valor_previsto_medicao: Number(m.valor_previsto_medicao) || 0,
-            valor_medicao: Number(m.valor_medicao) || 0,
-            num_nf: m.num_nf,
-            data_pagamento: m.data_pagamento,
-            status_nf: m.status_nf,
-          };
-        });
-      return { obras: obras || [], medicoes: joined };
+      if (obraIds.length === 0) return { obras: obrasList, medicoes: [] };
+
+      // 2. Fetch medicoes filtered by obra_ids (server-side filter)
+      const { data: medicoes, error: medError } = await supabase
+        .from("medicoes_ple")
+        .select("*")
+        .in("obra_id", obraIds);
+
+      if (medError) throw medError;
+
+      const obrasMap = new Map(obrasList.map(o => [o.id, o]));
+      const joined: MedicaoCompleta[] = (medicoes || []).map((m: any) => {
+        const o = obrasMap.get(m.obra_id)!;
+        return {
+          id: m.id,
+          obra_id: m.obra_id,
+          obra_nome: o.nome,
+          obra_empresa: o.empresa,
+          obra_contrato: o.num_contrato,
+          obra_scp: o.parceria_scp,
+          obra_uh: (o as any).uh || null,
+          obra_responsavel: (o as any).responsavel || null,
+          obra_tipo_contrato: (o as any).tipo_contrato || null,
+          num_medicao: m.num_medicao,
+          mes_referencia: m.mes_referencia,
+          ano_referencia: m.ano_referencia,
+          data_previsao_medicao: m.data_previsao_medicao || null,
+          data_envio: m.data_envio,
+          data_aprovacao: m.data_aprovacao,
+          status_medicao: m.status_medicao,
+          valor_previsto_medicao: Number(m.valor_previsto_medicao) || 0,
+          valor_medicao: Number(m.valor_medicao) || 0,
+          num_nf: m.num_nf,
+          data_pagamento: m.data_pagamento,
+          status_nf: m.status_nf,
+        };
+      });
+      return { obras: obrasList, medicoes: joined };
     },
     enabled: !!company?.id,
+    refetchOnWindowFocus: true,
+    staleTime: 30000,
   });
 
   const obras = data?.obras || [];
@@ -233,6 +246,110 @@ export default function HoldingReceitasPage() {
     });
   }, [medicoes, next12Months]);
 
+  // ─── Programação Financeira (Semanal / Quinzenal / Mensal) ───
+  const programacaoData = useMemo(() => {
+    const now = new Date();
+    // Use data_envio, data_aprovacao, or data_previsao_medicao to determine when money arrives
+    // Group by: expected receipt date based on status flow
+    const medicoesComData = medicoes.map(m => {
+      // Best date to estimate when this money enters: 
+      // If NF recebido → data_pagamento
+      // If aprovada → data_aprovacao (money coming soon)
+      // If enviada → data_envio (waiting approval)
+      // If pendente → data_previsao_medicao or mes/ano reference
+      let dataRef: Date | null = null;
+      let statusEntrada = "pendente";
+
+      if (m.status_nf === "recebido" && m.data_pagamento) {
+        dataRef = new Date(m.data_pagamento + "T12:00:00");
+        statusEntrada = "recebido";
+      } else if (m.status_medicao === "aprovada" && m.data_aprovacao) {
+        dataRef = new Date(m.data_aprovacao + "T12:00:00");
+        statusEntrada = "aprovado";
+      } else if (m.status_medicao === "enviada" && m.data_envio) {
+        dataRef = new Date(m.data_envio + "T12:00:00");
+        statusEntrada = "enviado";
+      } else if (m.data_previsao_medicao) {
+        dataRef = new Date(m.data_previsao_medicao + "T12:00:00");
+        statusEntrada = "previsto";
+      } else if (m.mes_referencia && m.ano_referencia) {
+        const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === m.mes_referencia!.substring(0, 3).toLowerCase());
+        if (mesIdx >= 0) {
+          dataRef = new Date(m.ano_referencia, mesIdx, 15);
+          statusEntrada = "estimado";
+        }
+      }
+
+      return { ...m, dataRef, statusEntrada };
+    }).filter(m => m.dataRef !== null);
+
+    if (agrupamento === "semanal") {
+      // Next 12 weeks
+      const weeks: { label: string; start: Date; end: Date; recebido: number; aprovado: number; enviado: number; pendente: number; total: number; medicoes: typeof medicoesComData }[] = [];
+      for (let i = 0; i < 12; i++) {
+        const weekStart = startOfWeek(addWeeks(now, i), { locale: ptBR });
+        const weekEnd = endOfWeek(addWeeks(now, i), { locale: ptBR });
+        const medsInWeek = medicoesComData.filter(m =>
+          m.dataRef! >= weekStart && m.dataRef! <= weekEnd
+        );
+        weeks.push({
+          label: `${format(weekStart, "dd/MM")} - ${format(weekEnd, "dd/MM")}`,
+          start: weekStart,
+          end: weekEnd,
+          recebido: medsInWeek.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + m.valor_medicao, 0),
+          aprovado: medsInWeek.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + m.valor_medicao, 0),
+          enviado: medsInWeek.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + m.valor_medicao, 0),
+          pendente: medsInWeek.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + m.valor_medicao, 0),
+          total: medsInWeek.reduce((s, m) => s + m.valor_medicao, 0),
+          medicoes: medsInWeek,
+        });
+      }
+      return weeks;
+    } else if (agrupamento === "quinzenal") {
+      // Next 6 fortnights (12 weeks)
+      const fortnights: { label: string; start: Date; end: Date; recebido: number; aprovado: number; enviado: number; pendente: number; total: number; medicoes: typeof medicoesComData }[] = [];
+      for (let i = 0; i < 6; i++) {
+        const fStart = addDays(now, i * 14);
+        const fEnd = addDays(now, (i + 1) * 14 - 1);
+        const medsInPeriod = medicoesComData.filter(m =>
+          m.dataRef! >= fStart && m.dataRef! <= fEnd
+        );
+        fortnights.push({
+          label: `${format(fStart, "dd/MM")} - ${format(fEnd, "dd/MM")}`,
+          start: fStart,
+          end: fEnd,
+          recebido: medsInPeriod.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + m.valor_medicao, 0),
+          aprovado: medsInPeriod.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + m.valor_medicao, 0),
+          enviado: medsInPeriod.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + m.valor_medicao, 0),
+          pendente: medsInPeriod.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + m.valor_medicao, 0),
+          total: medsInPeriod.reduce((s, m) => s + m.valor_medicao, 0),
+          medicoes: medsInPeriod,
+        });
+      }
+      return fortnights;
+    } else {
+      // Next 6 months
+      return Array.from({ length: 6 }, (_, i) => {
+        const monthStart = startOfMonth(addMonths(now, i));
+        const monthEnd = startOfMonth(addMonths(now, i + 1));
+        const medsInMonth = medicoesComData.filter(m =>
+          m.dataRef! >= monthStart && m.dataRef! < monthEnd
+        );
+        return {
+          label: format(monthStart, "MMM/yy", { locale: ptBR }),
+          start: monthStart,
+          end: monthEnd,
+          recebido: medsInMonth.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + m.valor_medicao, 0),
+          aprovado: medsInMonth.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + m.valor_medicao, 0),
+          enviado: medsInMonth.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + m.valor_medicao, 0),
+          pendente: medsInMonth.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + m.valor_medicao, 0),
+          total: medsInMonth.reduce((s, m) => s + m.valor_medicao, 0),
+          medicoes: medsInMonth,
+        };
+      });
+    }
+  }, [medicoes, agrupamento]);
+
   // ─── Insights ───
   const insights = useMemo(() => {
     const enviadas = medicoes.filter(m => m.status_medicao === "enviada" || m.status_medicao === "pendente");
@@ -266,6 +383,16 @@ export default function HoldingReceitasPage() {
   const clearFilters = () => {
     setFilterObra("all"); setFilterEmpresa("all"); setFilterStatusMed("all"); setFilterStatusNF("all"); setFilterTipoContrato("all"); setSearchText("");
   };
+
+  // ─── Programação summary KPIs ───
+  const progSummary = useMemo(() => {
+    const totalRecebido = programacaoData.reduce((s, p) => s + p.recebido, 0);
+    const totalAprovado = programacaoData.reduce((s, p) => s + p.aprovado, 0);
+    const totalEnviado = programacaoData.reduce((s, p) => s + p.enviado, 0);
+    const totalPendente = programacaoData.reduce((s, p) => s + p.pendente, 0);
+    const totalGeral = programacaoData.reduce((s, p) => s + p.total, 0);
+    return { totalRecebido, totalAprovado, totalEnviado, totalPendente, totalGeral };
+  }, [programacaoData]);
 
   return (
     <SidebarProvider defaultOpen={true}>
@@ -327,10 +454,11 @@ export default function HoldingReceitasPage() {
 
             {/* TABS */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-3 max-w-md">
+              <TabsList className="grid w-full grid-cols-4 max-w-lg">
                 <TabsTrigger value="resumo">📊 Resumo</TabsTrigger>
                 <TabsTrigger value="tabela">📋 Tabela</TabsTrigger>
                 <TabsTrigger value="previsao">📅 Previsão</TabsTrigger>
+                <TabsTrigger value="programacao">💰 Programação</TabsTrigger>
               </TabsList>
 
               {/* ═══ TAB RESUMO ═══ */}
@@ -637,6 +765,174 @@ export default function HoldingReceitasPage() {
                     </CardContent>
                   </Card>
                 </div>
+              </TabsContent>
+
+              {/* ═══ TAB PROGRAMAÇÃO FINANCEIRA ═══ */}
+              <TabsContent value="programacao" className="space-y-4 mt-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Wallet className="h-5 w-5 text-primary" />
+                        <div>
+                          <CardTitle className="text-sm">Programação de Entradas — Visão Financeira</CardTitle>
+                          <p className="text-xs text-muted-foreground">Entradas previstas por período para planejamento de pagamentos</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant={agrupamento === "semanal" ? "default" : "outline"}
+                          className="h-7 text-xs"
+                          onClick={() => setAgrupamento("semanal")}
+                        >
+                          Semanal
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={agrupamento === "quinzenal" ? "default" : "outline"}
+                          className="h-7 text-xs"
+                          onClick={() => setAgrupamento("quinzenal")}
+                        >
+                          Quinzenal
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={agrupamento === "mensal" ? "default" : "outline"}
+                          className="h-7 text-xs"
+                          onClick={() => setAgrupamento("mensal")}
+                        >
+                          Mensal
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Summary KPIs */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                      <div className="rounded-lg border p-3 text-center">
+                        <p className="text-[10px] text-muted-foreground">💚 Recebido (NF)</p>
+                        <p className="text-sm font-bold text-emerald-600">{BRL_SHORT(progSummary.totalRecebido)}</p>
+                      </div>
+                      <div className="rounded-lg border p-3 text-center">
+                        <p className="text-[10px] text-muted-foreground">✅ Aprovado</p>
+                        <p className="text-sm font-bold text-emerald-500">{BRL_SHORT(progSummary.totalAprovado)}</p>
+                      </div>
+                      <div className="rounded-lg border p-3 text-center">
+                        <p className="text-[10px] text-muted-foreground">📤 Enviado</p>
+                        <p className="text-sm font-bold text-blue-600">{BRL_SHORT(progSummary.totalEnviado)}</p>
+                      </div>
+                      <div className="rounded-lg border p-3 text-center">
+                        <p className="text-[10px] text-muted-foreground">⏳ Previsto/Estimado</p>
+                        <p className="text-sm font-bold text-amber-600">{BRL_SHORT(progSummary.totalPendente)}</p>
+                      </div>
+                      <div className="rounded-lg border p-3 text-center bg-primary/5">
+                        <p className="text-[10px] text-muted-foreground font-semibold">Total Período</p>
+                        <p className="text-sm font-bold">{BRL_SHORT(progSummary.totalGeral)}</p>
+                      </div>
+                    </div>
+
+                    {/* Chart */}
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={programacaoData}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                        <XAxis dataKey="label" fontSize={9} />
+                        <YAxis tickFormatter={(v) => BRL_SHORT(v)} fontSize={9} />
+                        <Tooltip formatter={(v: number) => BRL.format(v)} />
+                        <Legend wrapperStyle={{ fontSize: 10 }} />
+                        <Bar dataKey="recebido" name="NF Recebida" fill="#22c55e" stackId="a" />
+                        <Bar dataKey="aprovado" name="Aprovado" fill="#10b981" stackId="a" />
+                        <Bar dataKey="enviado" name="Enviado" fill="#3b82f6" stackId="a" />
+                        <Bar dataKey="pendente" name="Previsto" fill="#f59e0b" stackId="a" />
+                      </BarChart>
+                    </ResponsiveContainer>
+
+                    {/* Detail Table */}
+                    <div className="overflow-x-auto border rounded-lg">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">Período</TableHead>
+                            <TableHead className="text-xs text-right text-emerald-600">Recebido</TableHead>
+                            <TableHead className="text-xs text-right text-emerald-500">Aprovado</TableHead>
+                            <TableHead className="text-xs text-right text-blue-600">Enviado</TableHead>
+                            <TableHead className="text-xs text-right text-amber-600">Previsto</TableHead>
+                            <TableHead className="text-xs text-right font-bold">Total</TableHead>
+                            <TableHead className="text-xs text-right font-bold">Acumulado</TableHead>
+                            <TableHead className="text-xs text-center">Medições</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {(() => {
+                            let acumulado = 0;
+                            return programacaoData.map((p, i) => {
+                              acumulado += p.total;
+                              const hasData = p.total > 0;
+                              return (
+                                <TableRow key={i} className={`text-xs ${hasData ? "" : "bg-muted/20"}`}>
+                                  <TableCell className="py-2 font-medium">{p.label}</TableCell>
+                                  <TableCell className="py-2 text-right text-emerald-600">{p.recebido > 0 ? BRL.format(p.recebido) : "—"}</TableCell>
+                                  <TableCell className="py-2 text-right text-emerald-500">{p.aprovado > 0 ? BRL.format(p.aprovado) : "—"}</TableCell>
+                                  <TableCell className="py-2 text-right text-blue-600">{p.enviado > 0 ? BRL.format(p.enviado) : "—"}</TableCell>
+                                  <TableCell className="py-2 text-right text-amber-600">{p.pendente > 0 ? BRL.format(p.pendente) : "—"}</TableCell>
+                                  <TableCell className="py-2 text-right font-bold">{p.total > 0 ? BRL.format(p.total) : "—"}</TableCell>
+                                  <TableCell className="py-2 text-right font-semibold">{acumulado > 0 ? BRL.format(acumulado) : "—"}</TableCell>
+                                  <TableCell className="py-2 text-center">
+                                    {p.medicoes.length > 0 ? (
+                                      <Badge variant="secondary" className="text-[10px]">{p.medicoes.length}</Badge>
+                                    ) : "—"}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            });
+                          })()}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Detail: Medições por período */}
+                    {programacaoData.some(p => p.medicoes.length > 0) && (
+                      <Card className="border-dashed">
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-xs text-muted-foreground">Detalhamento — Medições por Período</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-2">
+                            {programacaoData.filter(p => p.medicoes.length > 0).map((p, i) => (
+                              <div key={i}>
+                                <p className="text-xs font-semibold mb-1">{p.label} — {BRL.format(p.total)}</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
+                                  {p.medicoes.map((m: any) => {
+                                    const statusCfg = STATUS_MED_CONFIG[m.status_medicao] || STATUS_MED_CONFIG.nao_iniciada;
+                                    return (
+                                      <div key={m.id} className="flex items-center justify-between gap-2 rounded border px-2 py-1 text-xs">
+                                        <span className="font-medium truncate">{m.obra_nome}</span>
+                                        <span className="text-muted-foreground">Med {m.num_medicao || "—"}</span>
+                                        <Badge className={`text-[9px] ${statusCfg.cls}`} variant="secondary">{statusCfg.label}</Badge>
+                                        <span className="font-semibold whitespace-nowrap">{BRL.format(m.valor_medicao)}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Financial planning tip */}
+                    <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                      <p className="text-xs font-semibold text-primary mb-1">💡 Dica para o Financeiro</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Use a visão <strong>Semanal</strong> para programar pagamentos de curto prazo. 
+                        A <strong>Quinzenal</strong> para ciclos de pagamento a fornecedores. 
+                        E a <strong>Mensal</strong> para planejamento de fluxo de caixa geral.
+                        O <strong>Acumulado</strong> mostra o valor disponível total para decisões de pagamento.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
               </TabsContent>
             </Tabs>
           </div>
