@@ -95,7 +95,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
 
     if (data) {
       setDocId(data.id);
-      const { id, obra_id, ...fields } = data as any;
+      const { id: _id, obra_id: _oid, ...fields } = data as any;
       setDocs(fields);
     } else {
       // Create doc row
