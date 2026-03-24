@@ -677,7 +677,7 @@ export default function HoldingReceitasPage() {
                     <div className="flex items-center gap-2">
                       <Calendar className="h-5 w-5 text-primary" />
                       <div>
-                        <CardTitle className="text-sm">Previsão de Caixa — Próximos 12 Meses</CardTitle>
+                        <CardTitle className="text-sm">Previsão de Caixa — Últimos 3 + Próximos 12 Meses</CardTitle>
                         <p className="text-xs text-muted-foreground">Projeção das entradas futuras baseada no calendário de medições</p>
                       </div>
                     </div>
