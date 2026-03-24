@@ -1,5 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,16 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer
 } from "recharts";
 import {
   TrendingUp, DollarSign, Clock, CheckCircle2, AlertCircle, Download, RefreshCw,
-  Search, Calendar, FileText, Menu, ArrowLeft, X
+  Search, Calendar, FileText, X
 } from "lucide-react";
 import { format, addMonths, startOfMonth } from "date-fns";
 import { toast } from "sonner";
@@ -64,9 +60,8 @@ const STATUS_NF_CONFIG: Record<string, { label: string; cls: string }> = {
 const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 export default function HoldingReceitasPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { user, company, isLoading: authLoading } = useAuth();
+  const { company } = useAuth();
 
   const [activeTab, setActiveTab] = useState("resumo");
   const [filterObra, setFilterObra] = useState("all");
@@ -74,10 +69,6 @@ export default function HoldingReceitasPage() {
   const [filterStatusMed, setFilterStatusMed] = useState("all");
   const [filterStatusNF, setFilterStatusNF] = useState("all");
   const [searchText, setSearchText] = useState("");
-
-  useEffect(() => {
-    if (!authLoading && !user) navigate("/auth");
-  }, [user, authLoading, navigate]);
 
   // ─── Data Fetching ───
   const { data, isLoading } = useQuery({
@@ -251,34 +242,21 @@ export default function HoldingReceitasPage() {
     setFilterObra("all"); setFilterEmpresa("all"); setFilterStatusMed("all"); setFilterStatusNF("all"); setSearchText("");
   };
 
-  if (authLoading || !user) {
-    return <div className="flex items-center justify-center min-h-screen"><Skeleton className="h-12 w-48" /></div>;
-  }
-
   return (
-    <SidebarProvider defaultOpen={true}>
-      <div className="flex min-h-screen w-full bg-background">
-        <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
-        <main className="flex-1 overflow-auto">
-          {/* HEADER */}
-          <div className="sticky top-0 z-10 flex items-center justify-between bg-background/95 backdrop-blur border-b px-4 py-3">
-            <div className="flex items-center gap-3">
-              <SidebarTrigger className="p-2 -ml-1"><Menu className="h-5 w-5" /></SidebarTrigger>
-              <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}><ArrowLeft className="h-5 w-5" /></Button>
-              <div>
-                <h1 className="text-lg font-semibold flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-primary" />Receitas & Medições PLE
-                </h1>
-                <p className="text-xs text-muted-foreground">Gestão financeira de entradas — todas as obras do portfólio</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={exportarCSV}><Download className="h-4 w-4" /> Exportar CSV</Button>
-              <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-receitas"] })}><RefreshCw className="h-4 w-4" /> Atualizar</Button>
-            </div>
-          </div>
-
-          <div className="p-4 md:p-6 space-y-4">
+    <div className="space-y-4 p-4 md:p-6">
+      {/* HEADER */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-semibold flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" />Receitas & Medições PLE
+          </h1>
+          <p className="text-xs text-muted-foreground">Gestão financeira de entradas — todas as obras do portfólio</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={exportarCSV}><Download className="h-4 w-4" /> Exportar CSV</Button>
+          <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-receitas"] })}><RefreshCw className="h-4 w-4" /> Atualizar</Button>
+        </div>
+      </div>
             {/* 5 KPI Cards */}
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
               <Card className="border-b-2 border-b-muted-foreground/30">
@@ -595,8 +573,5 @@ export default function HoldingReceitasPage() {
               </TabsContent>
             </Tabs>
           </div>
-        </main>
-      </div>
-    </SidebarProvider>
   );
 }
