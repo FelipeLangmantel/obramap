@@ -21,24 +21,32 @@ const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" 
 interface ObraDetailDrawerProps {
   obraId: string | null;
   obraNome: string;
+  obraUH?: number | null;
+  obraResponsavel?: string | null;
+  obraTipoContrato?: string | null;
   onClose: () => void;
 }
 
-export default function ObraDetailDrawer({ obraId, obraNome, onClose }: ObraDetailDrawerProps) {
+export default function ObraDetailDrawer({ obraId, obraNome, obraUH, obraResponsavel, obraTipoContrato, onClose }: ObraDetailDrawerProps) {
   return (
     <Sheet open={!!obraId} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="w-full sm:max-w-[60vw] overflow-y-auto p-0">
-        {obraId && <ObraDetailContent obraId={obraId} obraNome={obraNome} />}
+        {obraId && <ObraDetailContent obraId={obraId} obraNome={obraNome} obraUH={obraUH} obraResponsavel={obraResponsavel} obraTipoContrato={obraTipoContrato} />}
       </SheetContent>
     </Sheet>
   );
 }
 
-function ObraDetailContent({ obraId, obraNome }: { obraId: string; obraNome: string }) {
+function ObraDetailContent({ obraId, obraNome, obraUH, obraResponsavel, obraTipoContrato }: { obraId: string; obraNome: string; obraUH?: number | null; obraResponsavel?: string | null; obraTipoContrato?: string | null }) {
   return (
     <div className="flex flex-col h-full">
       <SheetHeader className="px-6 pt-6 pb-4">
         <SheetTitle className="text-lg">{obraNome}</SheetTitle>
+        <div className="flex items-center gap-2 flex-wrap">
+          {obraTipoContrato && <Badge variant="outline" className="text-[10px]">{obraTipoContrato}</Badge>}
+          {obraUH && <Badge variant="secondary" className="text-[10px]">{obraUH} UH</Badge>}
+          {obraResponsavel && <span className="text-[10px] text-muted-foreground">👤 {obraResponsavel}</span>}
+        </div>
       </SheetHeader>
       <Tabs defaultValue="documentos" className="flex-1 flex flex-col">
         <TabsList className="mx-6 w-fit">

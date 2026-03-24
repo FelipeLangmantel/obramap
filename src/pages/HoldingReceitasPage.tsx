@@ -28,6 +28,9 @@ interface MedicaoCompleta {
   obra_empresa: string | null;
   obra_contrato: string | null;
   obra_scp: string | null;
+  obra_uh: number | null;
+  obra_responsavel: string | null;
+  obra_tipo_contrato: string | null;
   num_medicao: string | null;
   mes_referencia: string | null;
   ano_referencia: number | null;
@@ -69,6 +72,7 @@ export default function HoldingReceitasPage() {
   const [filterStatusMed, setFilterStatusMed] = useState("all");
   const [filterStatusNF, setFilterStatusNF] = useState("all");
   const [searchText, setSearchText] = useState("");
+  const [filterTipoContrato, setFilterTipoContrato] = useState("all");
 
   // ─── Data Fetching ───
   const { data, isLoading } = useQuery({
@@ -76,7 +80,7 @@ export default function HoldingReceitasPage() {
     queryFn: async () => {
       const { data: obras } = await supabase
         .from("obras_portfolio")
-        .select("id, nome, empresa, num_contrato, valor_contrato, parceria_scp")
+        .select("id, nome, empresa, num_contrato, valor_contrato, parceria_scp, uh, responsavel, tipo_contrato")
         .eq("company_id", company!.id);
 
       const { data: medicoes } = await supabase
@@ -95,6 +99,9 @@ export default function HoldingReceitasPage() {
             obra_empresa: o.empresa,
             obra_contrato: o.num_contrato,
             obra_scp: o.parceria_scp,
+            obra_uh: (o as any).uh || null,
+            obra_responsavel: (o as any).responsavel || null,
+            obra_tipo_contrato: (o as any).tipo_contrato || null,
             num_medicao: m.num_medicao,
             mes_referencia: m.mes_referencia,
             ano_referencia: m.ano_referencia,
@@ -160,13 +167,14 @@ export default function HoldingReceitasPage() {
       if (filterEmpresa !== "all" && m.obra_empresa !== filterEmpresa) return false;
       if (filterStatusMed !== "all" && m.status_medicao !== filterStatusMed) return false;
       if (filterStatusNF !== "all" && m.status_nf !== filterStatusNF) return false;
+      if (filterTipoContrato !== "all" && m.obra_tipo_contrato !== filterTipoContrato) return false;
       if (searchText && !m.obra_nome.toLowerCase().includes(searchText.toLowerCase()) && !m.num_medicao?.includes(searchText)) return false;
       return true;
     });
-  }, [medicoes, filterObra, filterEmpresa, filterStatusMed, filterStatusNF, searchText]);
+  }, [medicoes, filterObra, filterEmpresa, filterStatusMed, filterStatusNF, filterTipoContrato, searchText]);
 
   const uniqueEmpresas = useMemo(() => [...new Set(obras.map(o => o.empresa).filter(Boolean))], [obras]);
-  const hasActiveFilter = filterObra !== "all" || filterEmpresa !== "all" || filterStatusMed !== "all" || filterStatusNF !== "all" || searchText !== "";
+  const hasActiveFilter = filterObra !== "all" || filterEmpresa !== "all" || filterStatusMed !== "all" || filterStatusNF !== "all" || filterTipoContrato !== "all" || searchText !== "";
 
   // ─── Top obras by medicao ───
   const topObrasByMedicao = useMemo(() => {
@@ -239,7 +247,7 @@ export default function HoldingReceitasPage() {
   };
 
   const clearFilters = () => {
-    setFilterObra("all"); setFilterEmpresa("all"); setFilterStatusMed("all"); setFilterStatusNF("all"); setSearchText("");
+    setFilterObra("all"); setFilterEmpresa("all"); setFilterStatusMed("all"); setFilterStatusNF("all"); setFilterTipoContrato("all"); setSearchText("");
   };
 
   return (
@@ -407,6 +415,20 @@ export default function HoldingReceitasPage() {
                       <SelectItem value="pendente">Pendente</SelectItem>
                     </SelectContent>
                   </Select>
+                  <Select value={filterTipoContrato} onValueChange={setFilterTipoContrato}>
+                    <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="Tipo Contrato" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos Tipos</SelectItem>
+                      <SelectItem value="Ata Estado RS">Ata Estado RS</SelectItem>
+                      <SelectItem value="Licitação">Licitação</SelectItem>
+                      <SelectItem value="Adesão">Adesão</SelectItem>
+                      <SelectItem value="Moradia Popular">Moradia Popular</SelectItem>
+                      <SelectItem value="Moradia Faixa I">Moradia Faixa I</SelectItem>
+                      <SelectItem value="Moradia Faixa II">Moradia Faixa II</SelectItem>
+                      <SelectItem value="Alto Padrão">Alto Padrão</SelectItem>
+                      <SelectItem value="Projeto de Obra">Projeto de Obra</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Badge variant="secondary" className="text-xs">{medicoesFiltradas.length} medições</Badge>
                   {hasActiveFilter && (
                     <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 px-2"><X className="h-3.5 w-3.5" /></Button>
@@ -418,16 +440,18 @@ export default function HoldingReceitasPage() {
                   <Table>
                     <TableHeader className="sticky top-0 z-10 bg-background">
                       <TableRow className="bg-muted/50">
-                        <TableHead colSpan={4} className="text-center text-xs font-bold border-r">IDENTIFICAÇÃO</TableHead>
-                        <TableHead colSpan={7} className="text-center text-xs font-bold border-r text-blue-600">ENGENHARIA</TableHead>
-                        <TableHead colSpan={3} className="text-center text-xs font-bold text-emerald-600">FINANCEIRO</TableHead>
+                         <TableHead colSpan={6} className="text-center text-xs font-bold border-r">IDENTIFICAÇÃO</TableHead>
+                         <TableHead colSpan={7} className="text-center text-xs font-bold border-r text-blue-600">ENGENHARIA</TableHead>
+                         <TableHead colSpan={3} className="text-center text-xs font-bold text-emerald-600">FINANCEIRO</TableHead>
                       </TableRow>
                       <TableRow>
                         <TableHead className="text-xs w-8">#</TableHead>
                         <TableHead className="text-xs">Obra</TableHead>
                         <TableHead className="text-xs">Empresa</TableHead>
-                        <TableHead className="text-xs border-r">Contrato</TableHead>
-                        <TableHead className="text-xs">Nº Med.</TableHead>
+                         <TableHead className="text-xs border-r">Contrato</TableHead>
+                         <TableHead className="text-xs text-center">UH</TableHead>
+                         <TableHead className="text-xs">Tipo</TableHead>
+                         <TableHead className="text-xs">Nº Med.</TableHead>
                         <TableHead className="text-xs">Mês</TableHead>
                         <TableHead className="text-xs">Ano</TableHead>
                         <TableHead className="text-xs">Envio</TableHead>
@@ -448,8 +472,10 @@ export default function HoldingReceitasPage() {
                             <TableCell className="py-2">{idx + 1}</TableCell>
                             <TableCell className="py-2 font-medium">{m.obra_nome}</TableCell>
                             <TableCell className="py-2">{m.obra_empresa || "—"}</TableCell>
-                            <TableCell className="py-2 border-r">{m.obra_contrato || "—"}</TableCell>
-                            <TableCell className="py-2">{m.num_medicao || "—"}</TableCell>
+                             <TableCell className="py-2 border-r">{m.obra_contrato || "—"}</TableCell>
+                             <TableCell className="py-2 text-center">{m.obra_uh || "—"}</TableCell>
+                             <TableCell className="py-2">{m.obra_tipo_contrato || "—"}</TableCell>
+                             <TableCell className="py-2">{m.num_medicao || "—"}</TableCell>
                             <TableCell className="py-2">{m.mes_referencia || "—"}</TableCell>
                             <TableCell className="py-2">{m.ano_referencia || "—"}</TableCell>
                             <TableCell className="py-2">{m.data_envio ? format(new Date(m.data_envio + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
@@ -463,7 +489,7 @@ export default function HoldingReceitasPage() {
                         );
                       })}
                       {medicoesFiltradas.length === 0 && (
-                        <TableRow><TableCell colSpan={14} className="text-center py-8 text-muted-foreground">Nenhuma medição encontrada.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={16} className="text-center py-8 text-muted-foreground">Nenhuma medição encontrada.</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
