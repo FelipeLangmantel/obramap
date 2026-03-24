@@ -28,6 +28,7 @@ import {
   Loader2,
   LayoutGrid,
   GanttChart,
+  BarChart3,
   Eye,
   FileWarning,
   Clock,
