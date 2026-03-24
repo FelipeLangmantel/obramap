@@ -374,7 +374,7 @@ export default function HoldingDocumentosPage() {
                     {ENSAIOS_FIELDS.map(f => (
                       <TableCell key={f.key} className="text-center"><CheckMark ok={!!o.docs?.[f.key]} /></TableCell>
                     ))}
-                    <TableCell className={`text-xs text-center font-semibold ${scoreColor(o.acompCount, 5)}`}>{o.acompCount}/5</TableCell>
+                    <TableCell className={`text-xs text-center font-semibold ${scoreColor(o.ensaiosCount, 5)}`}>{o.ensaiosCount}/5</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

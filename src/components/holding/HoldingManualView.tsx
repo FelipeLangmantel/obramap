@@ -360,7 +360,7 @@ export default function HoldingManualView() {
                 <TableRow><TableCell>Receitas</TableCell><TableCell>CSV</TableCell><TableCell>Todas as medições (ENGENHARIA + FINANCEIRO)</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
                 <TableRow><TableCell>Despesas</TableCell><TableCell>CSV</TableCell><TableCell>Todos os gastos mensais por obra</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
                 <TableRow><TableCell>Despesas</TableCell><TableCell>CSV PRD</TableCell><TableCell>Previsto × Realizado × Despesas por obra + ROI</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
-                <TableRow><TableCell>Documentos</TableCell><TableCell>CSV</TableCell><TableCell>Checklist completo Doc_Obra + Acomp_Obra</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
+                <TableRow><TableCell>Documentos</TableCell><TableCell>CSV</TableCell><TableCell>Checklist completo Doc_Obra + Ensaios e Projetos</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
                 <TableRow><TableCell>PRD</TableCell><TableCell>CSV</TableCell><TableCell>Matriz mensal com Previsto/Realizado/Despesas</TableCell><TableCell>UTF-8 BOM</TableCell></TableRow>
               </TableBody>
             </Table>

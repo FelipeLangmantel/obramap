@@ -178,7 +178,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
               {ensaiosCount}/5
             </Badge>
           </div>
-          {ACOMP_OBRA_FIELDS.map((f) => (
+          {ENSAIOS_PROJETOS_FIELDS.map((f) => (
             <div key={f.key} className="flex items-center justify-between">
               <span className="text-sm">{f.label}</span>
               <Switch checked={!!docs[f.key]} onCheckedChange={(v) => toggle(f.key, v)} />
