@@ -579,6 +579,8 @@ export default function HoldingDashboardView() {
           <Crown className="h-12 w-12 text-muted-foreground" />
           <p className="text-muted-foreground">Nenhuma obra cadastrada no portfólio.</p>
         </div>
+      ) : viewMode === "analytics" ? (
+        <HoldingAnalyticsView obras={obras} alerts={alerts} onObraClick={openObra} />
       ) : viewMode === "cards" ? (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {obras.map((obra) => (
