@@ -93,7 +93,7 @@ const DOC_OBRA_FIELDS: { key: string; label: string }[] = [
   { key: "scp", label: "SCP" },
 ];
 
-const ACOMP_OBRA_FIELDS: { key: string; label: string }[] = [
+const ENSAIOS_PROJETOS_FIELDS: { key: string; label: string }[] = [
   { key: "sondagem_spt", label: "Sondagem e SPT" },
   { key: "planta_localizacao", label: "Planta Localização" },
   { key: "plano_altimetrico", label: "Plano Altimétrico" },
