@@ -347,7 +347,7 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
 
   const handleSaveDespesa = async () => {
     if (!newDespesa.mes_referencia || !newDespesa.valor) {
-      toast("Preencha mês e valor.");
+      toast.warning("Preencha mês e valor.");
       return;
     }
     setSavingDespesa(true);
