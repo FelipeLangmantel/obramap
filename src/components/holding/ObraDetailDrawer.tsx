@@ -106,7 +106,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
         .single();
       if (created) {
         setDocId(created.id);
-        const { id, obra_id, ...fields } = created as any;
+        const { id: _id2, obra_id: _oid2, ...fields } = created as any;
         setDocs(fields);
       }
     }
