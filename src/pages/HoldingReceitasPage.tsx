@@ -501,10 +501,12 @@ export default function HoldingReceitasPage() {
                              <TableCell className="py-2">{m.num_medicao || "—"}</TableCell>
                             <TableCell className="py-2">{m.mes_referencia || "—"}</TableCell>
                             <TableCell className="py-2">{m.ano_referencia || "—"}</TableCell>
-                            <TableCell className="py-2">{m.data_envio ? format(new Date(m.data_envio + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
-                            <TableCell className="py-2">{m.data_aprovacao ? format(new Date(m.data_aprovacao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
-                            <TableCell className="py-2"><Badge className={`text-[10px] ${ms.cls}`} variant="secondary">{ms.label}</Badge></TableCell>
-                            <TableCell className="py-2 border-r text-right font-medium">{BRL.format(m.valor_medicao)}</TableCell>
+                             <TableCell className="py-2">{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                             <TableCell className="py-2 text-right">{m.valor_previsto_medicao > 0 ? BRL.format(m.valor_previsto_medicao) : "—"}</TableCell>
+                             <TableCell className="py-2">{m.data_envio ? format(new Date(m.data_envio + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                             <TableCell className="py-2">{m.data_aprovacao ? format(new Date(m.data_aprovacao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                             <TableCell className="py-2"><Badge className={`text-[10px] ${ms.cls}`} variant="secondary">{ms.label}</Badge></TableCell>
+                             <TableCell className="py-2 border-r text-right font-medium">{BRL.format(m.valor_medicao)}</TableCell>
                             <TableCell className="py-2">{m.num_nf || "—"}</TableCell>
                             <TableCell className="py-2">{m.data_pagamento ? format(new Date(m.data_pagamento + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                             <TableCell className="py-2"><Badge className={`text-[10px] ${ns.cls}`} variant="secondary">{ns.label}</Badge></TableCell>
