@@ -339,6 +339,8 @@ export default function HoldingDashboardView() {
       percentual_andamento: newObraForm.percentual_andamento,
       periodo_medicao: newObraForm.periodo_medicao || null,
       prazo_pagamento: newObraForm.prazo_pagamento || null,
+      municipio: newObraForm.municipio || null,
+      estado: newObraForm.estado || "RS",
     };
 
     if (editingObra) {
