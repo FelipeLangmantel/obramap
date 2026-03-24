@@ -127,6 +127,7 @@ const App = () => {
                   <Route path="/holding-receitas" element={<HoldingReceitasPage />} />
                   <Route path="/holding-despesas" element={<HoldingDespesasPage />} />
                   <Route path="/holding-documentos" element={<HoldingDocumentosPage />} />
+                  <Route path="/holding-prd" element={<HoldingPrdPage />} />
                   <Route path="/dashboard" element={<Index />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>
