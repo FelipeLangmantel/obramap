@@ -377,6 +377,9 @@ export default function HoldingDashboardView() {
       prazo_pagamento: newObraForm.prazo_pagamento || null,
       municipio: newObraForm.municipio || null,
       estado: newObraForm.estado || "RS",
+      uh: Number(newObraForm.uh) || null,
+      responsavel: newObraForm.responsavel || null,
+      tipo_contrato: newObraForm.tipo_contrato || null,
     };
 
     if (editingObra) {
