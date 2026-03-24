@@ -24,6 +24,7 @@ interface InsightItem {
 }
 
 export default function HoldingInsightsPage() {
+  const navigate = useNavigate();
   const { company } = useAuth();
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insights, setInsights] = useState<InsightItem[]>([]);

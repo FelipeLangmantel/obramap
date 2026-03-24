@@ -34,6 +34,7 @@ interface MonthEntry {
 }
 
 export default function HoldingPrdPage() {
+  const navigate = useNavigate();
   const { company } = useAuth();
   const [activeTab, setActiveTab] = useState("portfolio");
   const [filterObra, setFilterObra] = useState("all");

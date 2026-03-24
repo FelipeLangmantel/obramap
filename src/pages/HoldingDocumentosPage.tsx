@@ -74,6 +74,7 @@ interface ObraDoc {
 }
 
 export default function HoldingDocumentosPage() {
+  const navigate = useNavigate();
   const { company } = useAuth();
   const [activeTab, setActiveTab] = useState("geral");
   const [filterEmpresa, setFilterEmpresa] = useState("all");

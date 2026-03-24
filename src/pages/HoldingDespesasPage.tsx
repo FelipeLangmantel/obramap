@@ -58,6 +58,7 @@ const STATUS_DESP: Record<string, { label: string; cls: string }> = {
 };
 
 export default function HoldingDespesasPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { company } = useAuth();
 
