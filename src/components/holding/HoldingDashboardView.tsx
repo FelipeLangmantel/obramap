@@ -376,7 +376,49 @@ export default function HoldingDashboardView() {
     setDeletingObraId(null);
   };
 
-  const { data: obras = [], isLoading } = useQuery({
+  const handleImportObras = async () => {
+    if (!company?.id || !importText.trim()) return;
+    setImporting(true);
+    try {
+      const lines = importText.trim().split("\n").filter(l => l.trim());
+      const obrasToInsert = lines.map((line, idx) => {
+        const parts = line.split(",").map(s => s.trim());
+        const [nome, empresa, num_contrato, parceria_scp, valor_contrato, data_inicio, prazo_dias, status, percentual_andamento, municipio, estado] = parts;
+        return {
+          company_id: company.id,
+          nome: nome || `Obra ${idx + 1}`,
+          empresa: empresa || null,
+          num_contrato: num_contrato || null,
+          parceria_scp: parceria_scp || null,
+          valor_contrato: Number(valor_contrato) || 0,
+          data_inicio: data_inicio || null,
+          prazo_dias: Number(prazo_dias) || 0,
+          status: (["em_andamento", "nao_iniciada", "concluida", "paralisada"].includes(status) ? status : "nao_iniciada") as "em_andamento" | "nao_iniciada" | "concluida" | "paralisada",
+          percentual_andamento: Number(percentual_andamento) || 0,
+          municipio: municipio || null,
+          estado: estado || "RS",
+        };
+      });
+
+      const { data: inserted, error } = await supabase.from("obras_portfolio").insert(obrasToInsert).select("id");
+      if (error) throw error;
+
+      if (inserted && inserted.length > 0) {
+        const docsRows = inserted.map(o => ({ obra_id: o.id }));
+        await supabase.from("documentos_obra").insert(docsRows);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+      toast.success(`${inserted?.length || 0} obras importadas com sucesso!`);
+      setShowImportDialog(false);
+      setImportText("");
+    } catch (e: any) {
+      toast.error(`Erro na importação: ${e.message || "Verifique os dados"}`);
+      console.error(e);
+    }
+    setImporting(false);
+  };
+
     queryKey: ["holding-portfolio", company?.id],
     queryFn: async () => {
       if (!company?.id) return [];
