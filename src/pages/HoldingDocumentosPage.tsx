@@ -118,11 +118,11 @@ export default function HoldingDocumentosPage() {
     return obras.map(o => {
       const docs = docsMap.get(o.id) || null;
       const dc = countDocObra(docs);
-      const ac = countAcomp(docs);
+      const ac = countEnsaios(docs);
       return {
         id: o.id, nome: o.nome, empresa: o.empresa, uh: o.uh,
         tipo_contrato: o.tipo_contrato, status: o.status,
-        docs, docCount: dc, acompCount: ac,
+        docs, docCount: dc, ensaiosCount: ac,
         health: healthDocs(dc, ac),
         pendenciasAbertas: pendMap.get(o.id) || 0,
       };
