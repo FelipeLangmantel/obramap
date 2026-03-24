@@ -4082,7 +4082,10 @@ export type Database = {
           periodo_medicao: string | null
           prazo_dias: number
           prazo_pagamento: string | null
+          responsavel: string | null
           status: Database["public"]["Enums"]["obra_status"]
+          tipo_contrato: string | null
+          uh: number | null
           valor_contrato: number
         }
         Insert: {
@@ -4103,7 +4106,10 @@ export type Database = {
           periodo_medicao?: string | null
           prazo_dias?: number
           prazo_pagamento?: string | null
+          responsavel?: string | null
           status?: Database["public"]["Enums"]["obra_status"]
+          tipo_contrato?: string | null
+          uh?: number | null
           valor_contrato?: number
         }
         Update: {
@@ -4124,7 +4130,10 @@ export type Database = {
           periodo_medicao?: string | null
           prazo_dias?: number
           prazo_pagamento?: string | null
+          responsavel?: string | null
           status?: Database["public"]["Enums"]["obra_status"]
+          tipo_contrato?: string | null
+          uh?: number | null
           valor_contrato?: number
         }
         Relationships: [
