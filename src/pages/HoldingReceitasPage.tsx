@@ -222,10 +222,10 @@ export default function HoldingReceitasPage() {
       .map(o => ({ ...o, nome: o.nome.length > 20 ? o.nome.slice(0, 20) + "…" : o.nome }));
   }, [medicoes]);
 
-  // ─── Previsão 12 meses ───
-  const next12Months = useMemo(() =>
-    Array.from({ length: 12 }, (_, i) => {
-      const d = addMonths(startOfMonth(new Date()), i);
+  // ─── Previsão: 3 meses passados + 12 futuros ───
+  const previsaoMonths = useMemo(() =>
+    Array.from({ length: 15 }, (_, i) => {
+      const d = addMonths(startOfMonth(new Date()), i - 3);
       return { date: d, key: format(d, "yyyy-MM"), label: format(d, "MMM/yy"), monthIdx: d.getMonth(), year: d.getFullYear() };
     }), []);
 
