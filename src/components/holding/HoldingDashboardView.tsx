@@ -620,6 +620,7 @@ export default function HoldingDashboardView() {
 
   const obrasFiltradas = useMemo(() => {
     return obras.filter(o => {
+      if (globalEmpresa !== "all" && o.empresa !== globalEmpresa) return false;
       if (filterEmpresa !== "all" && o.empresa !== filterEmpresa) return false;
       if (filterStatus !== "all" && o.status !== filterStatus) return false;
       if (filterSaude !== "all" && o.health !== filterSaude) return false;
@@ -627,7 +628,7 @@ export default function HoldingDashboardView() {
       if (searchNome && !o.nome.toLowerCase().includes(searchNome.toLowerCase())) return false;
       return true;
     });
-  }, [obras, filterEmpresa, filterStatus, filterSaude, filterTipo, searchNome]);
+  }, [obras, globalEmpresa, filterEmpresa, filterStatus, filterSaude, filterTipo, searchNome]);
 
   const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || filterTipo !== "all" || searchNome !== "";
 
