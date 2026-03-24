@@ -81,6 +81,9 @@ interface ObraPortfolio {
   prazo_pagamento: string | null;
   municipio: string | null;
   estado: string | null;
+  uh: number | null;
+  responsavel: string | null;
+  tipo_contrato: string | null;
   created_at: string;
 }
 
@@ -218,6 +221,7 @@ export default function HoldingDashboardView() {
     percentual_andamento: 0,
     periodo_medicao: "", prazo_pagamento: "",
     municipio: "", estado: "RS",
+    uh: "", responsavel: "", tipo_contrato: "",
   });
   const [savingObra, setSavingObra] = useState(false);
   const [editingObra, setEditingObra] = useState<ObraEnriched | null>(null);
@@ -232,6 +236,7 @@ export default function HoldingDashboardView() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterSaude, setFilterSaude] = useState("all");
   const [searchNome, setSearchNome] = useState("");
+  const [filterTipo, setFilterTipo] = useState("all");
 
   const exportarPDF = async () => {
     setIsPrinting(true);
@@ -349,6 +354,7 @@ export default function HoldingDashboardView() {
     status: "nao_iniciada", percentual_andamento: 0,
     periodo_medicao: "", prazo_pagamento: "",
     municipio: "", estado: "RS",
+    uh: "", responsavel: "", tipo_contrato: "",
   });
 
   const handleSaveObra = async () => {
@@ -372,6 +378,9 @@ export default function HoldingDashboardView() {
       prazo_pagamento: newObraForm.prazo_pagamento || null,
       municipio: newObraForm.municipio || null,
       estado: newObraForm.estado || "RS",
+      uh: Number(newObraForm.uh) || null,
+      responsavel: newObraForm.responsavel || null,
+      tipo_contrato: newObraForm.tipo_contrato || null,
     };
 
     if (editingObra) {
@@ -406,7 +415,7 @@ export default function HoldingDashboardView() {
       const lines = importText.trim().split("\n").filter(l => l.trim());
       const obrasToInsert = lines.map((line, idx) => {
         const parts = line.split(",").map(s => s.trim());
-        const [nome, empresa, num_contrato, parceria_scp, valor_contrato, data_inicio, prazo_dias, status, percentual_andamento, municipio, estado] = parts;
+        const [nome, empresa, num_contrato, parceria_scp, valor_contrato, data_inicio, prazo_dias, status, percentual_andamento, municipio, estado, uh, responsavel, tipo_contrato] = parts;
         return {
           company_id: company.id,
           nome: nome || `Obra ${idx + 1}`,
@@ -420,6 +429,9 @@ export default function HoldingDashboardView() {
           percentual_andamento: Number(percentual_andamento) || 0,
           municipio: municipio || null,
           estado: estado || "RS",
+          uh: Number(uh?.trim()) || null,
+          responsavel: responsavel?.trim() || null,
+          tipo_contrato: tipo_contrato?.trim() || null,
         };
       });
 
@@ -454,12 +466,12 @@ export default function HoldingDashboardView() {
   };
 
   const exportarCSV = () => {
-    const header = "Obra;Empresa;Contrato;SCP;Valor Contrato;Data Início;Prazo;Previsão Fim;Status;% And.;Docs;Saúde";
+    const header = "Obra;Empresa;Contrato;SCP;UH;Tipo Contrato;Responsável;Valor Contrato;Data Início;Prazo;Previsão Fim;Status;% And.;Docs;Saúde";
     const rows = obrasFiltradas.map((o) => {
       const fim = o.data_inicio ? format(addDays(new Date(o.data_inicio), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
       const statusLbl = STATUS_CONFIG[o.status]?.label || o.status;
       const healthLbl = o.health === "green" ? "Verde" : o.health === "yellow" ? "Amarelo" : "Vermelho";
-      return `${o.nome};${o.empresa || "—"};${o.num_contrato || "—"};${o.parceria_scp || "—"};${o.valor_contrato};${o.data_inicio || "—"};${o.prazo_dias || "—"};${fim};${statusLbl};${o.percentual_andamento}%;${o.docsCount}/${o.docsTotal};${healthLbl}`;
+      return `${o.nome};${o.empresa || "—"};${o.num_contrato || "—"};${o.parceria_scp || "—"};${o.uh || "—"};${o.tipo_contrato || "—"};${o.responsavel || "—"};${o.valor_contrato};${o.data_inicio || "—"};${o.prazo_dias || "—"};${fim};${statusLbl};${o.percentual_andamento}%;${o.docsCount}/${o.docsTotal};${healthLbl}`;
     });
     const csv = [header, ...rows].join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
@@ -607,17 +619,19 @@ export default function HoldingDashboardView() {
       if (filterEmpresa !== "all" && o.empresa !== filterEmpresa) return false;
       if (filterStatus !== "all" && o.status !== filterStatus) return false;
       if (filterSaude !== "all" && o.health !== filterSaude) return false;
+      if (filterTipo !== "all" && o.tipo_contrato !== filterTipo) return false;
       if (searchNome && !o.nome.toLowerCase().includes(searchNome.toLowerCase())) return false;
       return true;
     });
-  }, [obras, filterEmpresa, filterStatus, filterSaude, searchNome]);
+  }, [obras, filterEmpresa, filterStatus, filterSaude, filterTipo, searchNome]);
 
-  const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || searchNome !== "";
+  const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || filterTipo !== "all" || searchNome !== "";
 
   const clearFilters = () => {
     setFilterEmpresa("all");
     setFilterStatus("all");
     setFilterSaude("all");
+    setFilterTipo("all");
     setSearchNome("");
   };
 
@@ -729,6 +743,20 @@ export default function HoldingDashboardView() {
               <SelectItem value="red">🔴 Vermelho</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={filterTipo} onValueChange={setFilterTipo}>
+            <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder="Tipo Contrato" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos Tipos</SelectItem>
+              <SelectItem value="Ata Estado RS">Ata Estado RS</SelectItem>
+              <SelectItem value="Licitação">Licitação</SelectItem>
+              <SelectItem value="Adesão">Adesão</SelectItem>
+              <SelectItem value="Moradia Popular">Moradia Popular</SelectItem>
+              <SelectItem value="Moradia Faixa I">Moradia Faixa I</SelectItem>
+              <SelectItem value="Moradia Faixa II">Moradia Faixa II</SelectItem>
+              <SelectItem value="Alto Padrão">Alto Padrão</SelectItem>
+              <SelectItem value="Projeto de Obra">Projeto de Obra</SelectItem>
+            </SelectContent>
+          </Select>
           <Badge variant="secondary" className="text-xs h-6">{obrasFiltradas.length} obras</Badge>
           {hasActiveFilter && (
             <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={clearFilters}>
@@ -779,6 +807,7 @@ export default function HoldingDashboardView() {
                       status: obra.status, percentual_andamento: obra.percentual_andamento,
                       periodo_medicao: obra.periodo_medicao || "", prazo_pagamento: obra.prazo_pagamento || "",
                       municipio: obra.municipio || "", estado: obra.estado || "RS",
+                      uh: String(obra.uh || ""), responsavel: obra.responsavel || "", tipo_contrato: obra.tipo_contrato || "",
                     });
                     setEditingObra(obra);
                     setShowNewObraDialog(true);
@@ -890,6 +919,26 @@ export default function HoldingDashboardView() {
               <div><Label className="text-xs">Município</Label><Input value={newObraForm.municipio} onChange={(e) => setNewObraForm(p => ({ ...p, municipio: e.target.value }))} placeholder="Ex: Taquara, Esteio..." /></div>
               <div><Label className="text-xs">Estado</Label><Input value={newObraForm.estado} onChange={(e) => setNewObraForm(p => ({ ...p, estado: e.target.value }))} placeholder="RS" /></div>
             </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div><Label className="text-xs">UH (Unidades Hab.)</Label><Input type="number" value={newObraForm.uh} onChange={(e) => setNewObraForm(p => ({ ...p, uh: e.target.value }))} placeholder="Ex: 20, 70, 246" /></div>
+              <div><Label className="text-xs">Responsável</Label><Input value={newObraForm.responsavel} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel: e.target.value }))} placeholder="Ex: Frederico - 51 990049501" /></div>
+              <div>
+                <Label className="text-xs">Tipo de Contrato</Label>
+                <Select value={newObraForm.tipo_contrato} onValueChange={(v) => setNewObraForm(p => ({ ...p, tipo_contrato: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Ata Estado RS">Ata Estado RS</SelectItem>
+                    <SelectItem value="Licitação">Licitação</SelectItem>
+                    <SelectItem value="Adesão">Adesão</SelectItem>
+                    <SelectItem value="Moradia Popular">Moradia Popular</SelectItem>
+                    <SelectItem value="Moradia Faixa I">Moradia Faixa I</SelectItem>
+                    <SelectItem value="Moradia Faixa II">Moradia Faixa II</SelectItem>
+                    <SelectItem value="Alto Padrão">Alto Padrão</SelectItem>
+                    <SelectItem value="Projeto de Obra">Projeto de Obra</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowNewObraDialog(false); setEditingObra(null); resetNewObraForm(); }}>Cancelar</Button>
@@ -921,7 +970,7 @@ export default function HoldingDashboardView() {
           <DialogHeader><DialogTitle>Importar Obras em Lote</DialogTitle></DialogHeader>
           <p className="text-xs text-muted-foreground">
             Uma obra por linha, separada por vírgulas:<br />
-            <code className="text-[10px] bg-muted px-1 rounded">nome, empresa, num_contrato, parceria_scp, valor_contrato, data_inicio, prazo_dias, status, percentual_andamento, municipio, estado</code>
+            <code className="text-[10px] bg-muted px-1 rounded">nome, empresa, num_contrato, parceria_scp, valor_contrato, data_inicio, prazo_dias, status, percentual_andamento, municipio, estado, uh, responsavel, tipo_contrato</code>
           </p>
           <textarea className="w-full h-64 text-xs font-mono border rounded-md p-2 bg-muted/30 focus:outline-none focus:ring-1 focus:ring-ring" value={importText} onChange={(e) => setImportText(e.target.value)} />
           <DialogFooter>
@@ -1059,7 +1108,10 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
               <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${HEALTH_COLORS[obra.health]}`} />
               <h3 className="font-semibold text-sm text-foreground truncate">{obra.nome}</h3>
             </div>
-            {obra.empresa && <p className="text-xs text-muted-foreground mt-0.5 truncate">{obra.empresa}</p>}
+            <div className="flex items-center gap-1.5 mt-0.5">
+              {obra.empresa && <p className="text-xs text-muted-foreground truncate">{obra.empresa}</p>}
+              {obra.tipo_contrato && <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0">{obra.tipo_contrato}</Badge>}
+            </div>
             {obra.municipio && <p className="text-[10px] text-muted-foreground truncate">📍 {obra.municipio} / {obra.estado || "RS"}</p>}
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -1086,12 +1138,16 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
 
         <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 text-xs">
           <div><span className="text-muted-foreground">Contrato</span><p className="font-medium text-foreground truncate">{obra.num_contrato || "—"}</p></div>
-          <div><span className="text-muted-foreground">Empresa</span><p className="font-medium text-foreground truncate">{obra.empresa || "—"}</p></div>
+          <div><span className="text-muted-foreground">UH</span><p className="font-medium text-foreground truncate">{obra.uh || "—"}</p></div>
           <div><span className="text-muted-foreground">SCP</span><p className="font-medium text-foreground truncate">{obra.parceria_scp || "—"}</p></div>
           <div><span className="text-muted-foreground">Valor</span><p className="font-medium text-foreground truncate">{BRL_SHORT(obra.valor_contrato)}</p></div>
           <div><span className="text-muted-foreground">Início</span><p className="font-medium text-foreground">{obra.data_inicio ? format(new Date(obra.data_inicio), "dd/MM/yy") : "—"}</p></div>
           <div><span className="text-muted-foreground">Prev. Fim</span><p className="font-medium text-foreground">{previsaoFim}</p></div>
         </div>
+
+        {obra.responsavel && (
+          <p className="text-[10px] text-muted-foreground truncate">👤 {obra.responsavel}</p>
+        )}
 
         {receitas > 0 && (
           <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">✓ {BRL_SHORT(receitas)} recebido</p>
@@ -1117,6 +1173,9 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 min-w-[160px]">Obra</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">Empresa</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">Contrato</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-center">UH</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">Tipo</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">Responsável</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">SCP</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-right">Valor Contrato</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-right">Receitas</TableHead>
@@ -1144,6 +1203,9 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
                     <TableCell className="text-xs font-medium py-2 text-primary hover:underline">{obra.nome}</TableCell>
                     <TableCell className="text-[10px] py-2">{obra.empresa || "—"}</TableCell>
                     <TableCell className="text-[10px] py-2">{obra.num_contrato || "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2 text-center">{obra.uh || "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2">{obra.tipo_contrato || "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2 truncate max-w-[120px]">{obra.responsavel || "—"}</TableCell>
                     <TableCell className="text-[10px] py-2">{obra.parceria_scp || "—"}</TableCell>
                     <TableCell className="text-[10px] py-2 text-right font-mono">{BRL.format(obra.valor_contrato)}</TableCell>
                     <TableCell className="text-[10px] py-2 text-right font-mono">{receitas > 0 ? BRL.format(receitas) : "—"}</TableCell>
