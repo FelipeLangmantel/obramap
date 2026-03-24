@@ -16,6 +16,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import ObraDetailDrawer from "./ObraDetailDrawer";
 import HoldingAnalyticsView from "./HoldingAnalyticsView";
+import HoldingManualView from "./HoldingManualView";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
@@ -40,6 +41,7 @@ import {
   Pencil,
   Trash2,
   Upload,
+  BookOpen,
 } from "lucide-react";
 import { addDays, format, differenceInDays, differenceInMonths } from "date-fns";
 
@@ -188,7 +190,7 @@ export default function HoldingDashboardView() {
   const { company } = useAuth();
   const queryClient = useQueryClient();
   const [selectedObra, setSelectedObra] = useState<ObraEnriched | null>(null);
-  const [mainView, setMainView] = useState<"portfolio" | "analytics">("portfolio");
+  const [mainView, setMainView] = useState<"portfolio" | "analytics" | "manual">("portfolio");
   const [viewMode, setViewMode] = useState<"cards" | "gantt">("cards");
   const [showNewObraDialog, setShowNewObraDialog] = useState(false);
   const [newObraForm, setNewObraForm] = useState({
@@ -618,19 +620,27 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
           >
             <BarChart3 className="h-4 w-4" /> Analytics
           </button>
+          <button
+            onClick={() => setMainView("manual")}
+            className={`px-4 py-2 text-sm rounded-md transition-all flex items-center gap-2 ${mainView === "manual" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            <BookOpen className="h-4 w-4" /> Manual
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowNewObraDialog(true)}>
-            <Plus className="h-3.5 w-3.5 mr-1" /> Nova Obra
-          </Button>
-          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowImportDialog(true)}>
-            <Upload className="h-3.5 w-3.5 mr-1" /> Importar
-          </Button>
-          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={exportarPDF} disabled={isPrinting || obras.length === 0}>
-            {isPrinting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <FileDown className="h-3.5 w-3.5 mr-1" />}
-            Exportar PDF
-          </Button>
-        </div>
+        {mainView !== "manual" && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowNewObraDialog(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1" /> Nova Obra
+            </Button>
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowImportDialog(true)}>
+              <Upload className="h-3.5 w-3.5 mr-1" /> Importar
+            </Button>
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={exportarPDF} disabled={isPrinting || obras.length === 0}>
+              {isPrinting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <FileDown className="h-3.5 w-3.5 mr-1" />}
+              Exportar PDF
+            </Button>
+          </div>
+        )}
       </div>
 
       {mainView === "portfolio" ? (
@@ -689,6 +699,8 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
             <GanttTimeline obras={obras} onObraClick={openObra} />
           )}
         </>
+      ) : mainView === "manual" ? (
+        <HoldingManualView />
       ) : (
         <HoldingAnalyticsView obras={obras} alerts={alerts} onObraClick={openObra} />
       )}
