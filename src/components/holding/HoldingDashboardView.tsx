@@ -443,6 +443,13 @@ export default function HoldingDashboardView() {
       const existingNames = obras.map(o => o.nome.toLowerCase().trim());
       const newObras = obrasToInsert.filter(o => !existingNames.includes(o.nome.toLowerCase().trim()));
       const skipped = obrasToInsert.length - newObras.length;
+      if (skipped > 0 && newObras.length > 0) {
+        const duplicateNames = obrasToInsert
+          .filter(o => existingNames.includes(o.nome.toLowerCase().trim()))
+          .map(o => o.nome)
+          .join(", ");
+        toast.info(`Ignorando duplicadas: ${duplicateNames}`);
+      }
       if (newObras.length === 0) {
         toast.warning("Todas as obras já estão cadastradas.");
         setImporting(false);
@@ -1007,6 +1014,15 @@ export default function HoldingDashboardView() {
             <FileText className="h-3.5 w-3.5 mr-1" /> Carregar modelo
           </Button>
           <textarea className="w-full h-64 text-xs font-mono border rounded-md p-2 bg-muted/30 focus:outline-none focus:ring-1 focus:ring-ring" value={importText} onChange={(e) => setImportText(e.target.value)} />
+          {importText.trim() && (
+            <p className="text-xs text-muted-foreground mt-1">
+              {importText.trim().split("\n").filter(l => l.trim()).length} linhas detectadas
+              {obras.length > 0 && ` · ${importText.trim().split("\n").filter(l => {
+                const nome = l.split(",")[0]?.trim().toLowerCase();
+                return nome && obras.some(o => o.nome.toLowerCase() === nome);
+              }).length} já cadastradas (serão ignoradas)`}
+            </p>
+          )}
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setShowImportDialog(false)}>Cancelar</Button>
             <Button size="sm" onClick={handleImportObras} disabled={importing || !importText.trim()}>
