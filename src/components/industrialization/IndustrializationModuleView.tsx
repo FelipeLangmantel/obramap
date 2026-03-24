@@ -10,6 +10,7 @@ import { Factory, Plus, Package, Truck, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { FactoriesTabContent } from "./FactoriesTabContent";
 import { LiftingTabContent } from "./LiftingTabContent";
+import { OverviewTabContent } from "./OverviewTabContent";
 
 interface OperationContext {
   id: string;
@@ -164,48 +165,15 @@ export default function IndustrializationModuleView() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4 mt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Fábricas</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-foreground">0</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Lotes Ativos</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-foreground">0</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Viagens Pendentes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-foreground">0</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Kits Completos</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-2xl font-bold text-foreground">0 / {activeContext?.total_units || 0}</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <Package className="h-10 w-10 mx-auto mb-3 opacity-50" />
-              <p className="font-medium">Pipeline Industrial</p>
-              <p className="text-sm">Configure fábricas e crie lotes de produção para visualizar o pipeline completo.</p>
-            </CardContent>
-          </Card>
+          {activeContext && companyId && (
+            <OverviewTabContent
+              companyId={companyId}
+              contextId={activeContext.id}
+              contextName={activeContext.name}
+              contextType={activeContext.context_type}
+              totalUnits={activeContext.total_units}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="factories" className="mt-4">
