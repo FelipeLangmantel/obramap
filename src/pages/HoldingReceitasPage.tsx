@@ -60,9 +60,8 @@ const STATUS_NF_CONFIG: Record<string, { label: string; cls: string }> = {
 const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 export default function HoldingReceitasPage() {
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { user, company, isLoading: authLoading } = useAuth();
+  const { company } = useAuth();
 
   const [activeTab, setActiveTab] = useState("resumo");
   const [filterObra, setFilterObra] = useState("all");
@@ -70,10 +69,6 @@ export default function HoldingReceitasPage() {
   const [filterStatusMed, setFilterStatusMed] = useState("all");
   const [filterStatusNF, setFilterStatusNF] = useState("all");
   const [searchText, setSearchText] = useState("");
-
-  useEffect(() => {
-    if (!authLoading && !user) navigate("/auth");
-  }, [user, authLoading, navigate]);
 
   // ─── Data Fetching ───
   const { data, isLoading } = useQuery({
