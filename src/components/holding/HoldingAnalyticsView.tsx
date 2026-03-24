@@ -130,12 +130,14 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
       const despesas = despesasData
         .filter(d => d.obra_id === o.id)
         .reduce((s: number, d: any) => s + (d.valor || 0), 0);
+      const roi = medAprovadas > 0 && despesas > 0 ? ((medAprovadas - despesas) / despesas) * 100 : 0;
       return {
         nome: o.nome.length > 14 ? o.nome.slice(0, 12) + "…" : o.nome,
         fullNome: o.nome,
         previsto: o.valor_contrato || 0,
         realizado: medAprovadas,
         despesas,
+        roi: Math.round(roi * 10) / 10,
       };
     });
   }, [obras, medicoesData, despesasData]);
