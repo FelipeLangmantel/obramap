@@ -193,6 +193,7 @@ export default function HoldingDashboardView() {
     status: "nao_iniciada" as "nao_iniciada" | "em_andamento" | "concluida" | "paralisada",
     percentual_andamento: 0,
     periodo_medicao: "", prazo_pagamento: "",
+    municipio: "", estado: "RS",
   });
   const [savingObra, setSavingObra] = useState(false);
   const [editingObra, setEditingObra] = useState<ObraEnriched | null>(null);
