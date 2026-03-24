@@ -55,7 +55,7 @@ interface ObraPortfolioItem {
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 export default function IndustrializationModuleView() {
-  const { currentProject, projects } = useConstruction();
+  const { projects } = useConstruction();
   const { profile } = useAuth();
   const companyId = profile?.company_id;
 
