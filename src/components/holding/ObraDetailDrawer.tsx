@@ -21,14 +21,17 @@ const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" 
 interface ObraDetailDrawerProps {
   obraId: string | null;
   obraNome: string;
+  obraUH?: number | null;
+  obraResponsavel?: string | null;
+  obraTipoContrato?: string | null;
   onClose: () => void;
 }
 
-export default function ObraDetailDrawer({ obraId, obraNome, onClose }: ObraDetailDrawerProps) {
+export default function ObraDetailDrawer({ obraId, obraNome, obraUH, obraResponsavel, obraTipoContrato, onClose }: ObraDetailDrawerProps) {
   return (
     <Sheet open={!!obraId} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="w-full sm:max-w-[60vw] overflow-y-auto p-0">
-        {obraId && <ObraDetailContent obraId={obraId} obraNome={obraNome} />}
+        {obraId && <ObraDetailContent obraId={obraId} obraNome={obraNome} obraUH={obraUH} obraResponsavel={obraResponsavel} obraTipoContrato={obraTipoContrato} />}
       </SheetContent>
     </Sheet>
   );
