@@ -37,9 +37,11 @@ interface MedicaoCompleta {
   num_medicao: string | null;
   mes_referencia: string | null;
   ano_referencia: number | null;
+  data_previsao_medicao: string | null;
   data_envio: string | null;
   data_aprovacao: string | null;
   status_medicao: "aprovada" | "enviada" | "pendente" | "nao_iniciada";
+  valor_previsto_medicao: number;
   valor_medicao: number;
   num_nf: string | null;
   data_pagamento: string | null;
@@ -109,9 +111,11 @@ export default function HoldingReceitasPage() {
             num_medicao: m.num_medicao,
             mes_referencia: m.mes_referencia,
             ano_referencia: m.ano_referencia,
+            data_previsao_medicao: m.data_previsao_medicao || null,
             data_envio: m.data_envio,
             data_aprovacao: m.data_aprovacao,
             status_medicao: m.status_medicao,
+            valor_previsto_medicao: Number(m.valor_previsto_medicao) || 0,
             valor_medicao: Number(m.valor_medicao) || 0,
             num_nf: m.num_nf,
             data_pagamento: m.data_pagamento,
@@ -203,20 +207,28 @@ export default function HoldingReceitasPage() {
 
   const previsaoData = useMemo(() => {
     return next12Months.map(month => {
-      const matching = medicoes.filter(m => {
+      const porMesRef = medicoes.filter(m => {
         if (!m.ano_referencia) return false;
         const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0, 3).toLowerCase());
         return mesIdx === month.monthIdx && m.ano_referencia === month.year;
       });
-      const obrasCount = new Set(matching.map(m => m.obra_id)).size;
+      const porPrevisao = medicoes.filter(m => {
+        if (!m.data_previsao_medicao) return false;
+        const d = new Date(m.data_previsao_medicao + "T12:00:00");
+        return d.getMonth() === month.monthIdx && d.getFullYear() === month.year;
+      });
+      const obrasCount = new Set([...porMesRef, ...porPrevisao].map(m => m.obra_id)).size;
       return {
         mes: month.label,
+        key: month.key,
         obrasCount,
-        aprovado: matching.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0),
-        enviado: matching.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + m.valor_medicao, 0),
-        pendente: matching.filter(m => m.status_medicao === "pendente").reduce((s, m) => s + m.valor_medicao, 0),
-        nfRecebido: matching.filter(m => m.status_nf === "recebido").reduce((s, m) => s + m.valor_medicao, 0),
-        total: matching.reduce((s, m) => s + m.valor_medicao, 0),
+        aprovado: porMesRef.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0),
+        enviado: porMesRef.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + m.valor_medicao, 0),
+        pendente: porMesRef.filter(m => m.status_medicao === "pendente").reduce((s, m) => s + m.valor_medicao, 0),
+        nfRecebido: porMesRef.filter(m => m.status_nf === "recebido").reduce((s, m) => s + m.valor_medicao, 0),
+        total: porMesRef.reduce((s, m) => s + m.valor_medicao, 0),
+        previsto: porPrevisao.reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0),
+        countPrevistas: porPrevisao.length,
       };
     });
   }, [medicoes, next12Months]);
@@ -233,10 +245,11 @@ export default function HoldingReceitasPage() {
 
   // ─── CSV Export ───
   const exportarCSV = () => {
-    const headers = ["#", "Obra", "Empresa", "Contrato", "Nº Medição", "Mês Ref", "Ano Ref", "Data Envio", "Data Aprovação", "Status Medição", "Valor Medição", "Nº NF", "Data Pagamento", "Status NF"];
+    const headers = ["#", "Obra", "Empresa", "Contrato", "Nº Medição", "Mês Ref", "Ano Ref", "Prev. Envio", "Val. Previsto", "Data Envio", "Data Aprovação", "Status Medição", "Valor Medição", "Nº NF", "Data Pagamento", "Status NF"];
     const rows = medicoesFiltradas.map((m, i) => [
       i + 1, m.obra_nome, m.obra_empresa || "", m.obra_contrato || "",
       m.num_medicao || "", m.mes_referencia || "", m.ano_referencia || "",
+      m.data_previsao_medicao || "", m.valor_previsto_medicao.toFixed(2),
       m.data_envio || "", m.data_aprovacao || "",
       m.status_medicao, m.valor_medicao.toFixed(2),
       m.num_nf || "", m.data_pagamento || "", m.status_nf
@@ -449,8 +462,8 @@ export default function HoldingReceitasPage() {
                     <TableHeader className="sticky top-0 z-10 bg-background">
                       <TableRow className="bg-muted/50">
                          <TableHead colSpan={6} className="text-center text-xs font-bold border-r">IDENTIFICAÇÃO</TableHead>
-                         <TableHead colSpan={7} className="text-center text-xs font-bold border-r text-blue-600">ENGENHARIA</TableHead>
-                         <TableHead colSpan={3} className="text-center text-xs font-bold text-emerald-600">FINANCEIRO</TableHead>
+                          <TableHead colSpan={9} className="text-center text-xs font-bold border-r text-blue-600">ENGENHARIA</TableHead>
+                          <TableHead colSpan={3} className="text-center text-xs font-bold text-emerald-600">FINANCEIRO</TableHead>
                       </TableRow>
                       <TableRow>
                         <TableHead className="text-xs w-8">#</TableHead>
@@ -462,10 +475,12 @@ export default function HoldingReceitasPage() {
                          <TableHead className="text-xs">Nº Med.</TableHead>
                         <TableHead className="text-xs">Mês</TableHead>
                         <TableHead className="text-xs">Ano</TableHead>
-                        <TableHead className="text-xs">Envio</TableHead>
-                        <TableHead className="text-xs">Aprovação</TableHead>
-                        <TableHead className="text-xs">Status Med.</TableHead>
-                        <TableHead className="text-xs border-r text-right">Valor</TableHead>
+                         <TableHead className="text-xs">Prev. Envio</TableHead>
+                         <TableHead className="text-xs text-right">Val. Previsto</TableHead>
+                         <TableHead className="text-xs">Envio</TableHead>
+                         <TableHead className="text-xs">Aprovação</TableHead>
+                         <TableHead className="text-xs">Status Med.</TableHead>
+                         <TableHead className="text-xs border-r text-right">Valor</TableHead>
                         <TableHead className="text-xs">Nº NF</TableHead>
                         <TableHead className="text-xs">Pagamento</TableHead>
                         <TableHead className="text-xs">Status NF</TableHead>
@@ -486,10 +501,12 @@ export default function HoldingReceitasPage() {
                              <TableCell className="py-2">{m.num_medicao || "—"}</TableCell>
                             <TableCell className="py-2">{m.mes_referencia || "—"}</TableCell>
                             <TableCell className="py-2">{m.ano_referencia || "—"}</TableCell>
-                            <TableCell className="py-2">{m.data_envio ? format(new Date(m.data_envio + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
-                            <TableCell className="py-2">{m.data_aprovacao ? format(new Date(m.data_aprovacao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
-                            <TableCell className="py-2"><Badge className={`text-[10px] ${ms.cls}`} variant="secondary">{ms.label}</Badge></TableCell>
-                            <TableCell className="py-2 border-r text-right font-medium">{BRL.format(m.valor_medicao)}</TableCell>
+                             <TableCell className="py-2">{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                             <TableCell className="py-2 text-right">{m.valor_previsto_medicao > 0 ? BRL.format(m.valor_previsto_medicao) : "—"}</TableCell>
+                             <TableCell className="py-2">{m.data_envio ? format(new Date(m.data_envio + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                             <TableCell className="py-2">{m.data_aprovacao ? format(new Date(m.data_aprovacao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                             <TableCell className="py-2"><Badge className={`text-[10px] ${ms.cls}`} variant="secondary">{ms.label}</Badge></TableCell>
+                             <TableCell className="py-2 border-r text-right font-medium">{BRL.format(m.valor_medicao)}</TableCell>
                             <TableCell className="py-2">{m.num_nf || "—"}</TableCell>
                             <TableCell className="py-2">{m.data_pagamento ? format(new Date(m.data_pagamento + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                             <TableCell className="py-2"><Badge className={`text-[10px] ${ns.cls}`} variant="secondary">{ns.label}</Badge></TableCell>
@@ -497,7 +514,7 @@ export default function HoldingReceitasPage() {
                         );
                       })}
                       {medicoesFiltradas.length === 0 && (
-                        <TableRow><TableCell colSpan={16} className="text-center py-8 text-muted-foreground">Nenhuma medição encontrada.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={18} className="text-center py-8 text-muted-foreground">Nenhuma medição encontrada.</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
@@ -531,13 +548,15 @@ export default function HoldingReceitasPage() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="text-xs">Mês</TableHead>
-                            <TableHead className="text-xs text-center">Obras</TableHead>
-                            <TableHead className="text-xs text-right">Pendente</TableHead>
-                            <TableHead className="text-xs text-right">Enviada</TableHead>
-                            <TableHead className="text-xs text-right">Aprovada</TableHead>
-                            <TableHead className="text-xs text-right">NF Recebida</TableHead>
-                            <TableHead className="text-xs text-right font-bold">Total Mês</TableHead>
+                             <TableHead className="text-xs">Mês</TableHead>
+                             <TableHead className="text-xs text-center">Obras</TableHead>
+                             <TableHead className="text-xs text-right">Previsto</TableHead>
+                             <TableHead className="text-xs text-right">Pendente</TableHead>
+                             <TableHead className="text-xs text-right">Enviada</TableHead>
+                             <TableHead className="text-xs text-right">Aprovada</TableHead>
+                             <TableHead className="text-xs text-right">NF Recebida</TableHead>
+                             <TableHead className="text-xs text-right font-bold">Total Mês</TableHead>
+                             <TableHead className="text-xs text-right">Desvio</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -545,15 +564,22 @@ export default function HoldingReceitasPage() {
                             const isCurrentMonth = i === 0;
                             const hasData = p.total > 0;
                             return (
-                              <TableRow key={p.mes} className={`text-xs ${isCurrentMonth ? "bg-primary/5 border-l-2 border-l-primary" : hasData ? "bg-emerald-500/5" : "bg-muted/20"}`}>
-                                <TableCell className="py-2 font-medium">{p.mes}</TableCell>
-                                <TableCell className="py-2 text-center">{p.obrasCount || "—"}</TableCell>
-                                <TableCell className="py-2 text-right text-amber-600">{p.pendente > 0 ? BRL.format(p.pendente) : "—"}</TableCell>
-                                <TableCell className="py-2 text-right text-blue-600">{p.enviado > 0 ? BRL.format(p.enviado) : "—"}</TableCell>
-                                <TableCell className="py-2 text-right text-emerald-600">{p.aprovado > 0 ? BRL.format(p.aprovado) : "—"}</TableCell>
-                                <TableCell className="py-2 text-right text-emerald-500">{p.nfRecebido > 0 ? BRL.format(p.nfRecebido) : "—"}</TableCell>
-                                <TableCell className="py-2 text-right font-bold">{p.total > 0 ? BRL.format(p.total) : "—"}</TableCell>
-                              </TableRow>
+                               <TableRow key={p.mes} className={`text-xs ${isCurrentMonth ? "bg-primary/5 border-l-2 border-l-primary" : hasData ? "bg-emerald-500/5" : "bg-muted/20"}`}>
+                                 <TableCell className="py-2 font-medium">{p.mes}</TableCell>
+                                 <TableCell className="py-2 text-center">{p.obrasCount || "—"}</TableCell>
+                                 <TableCell className="py-2 text-right text-primary">{p.previsto > 0 ? BRL_SHORT(p.previsto) : "—"}</TableCell>
+                                 <TableCell className="py-2 text-right text-amber-600">{p.pendente > 0 ? BRL.format(p.pendente) : "—"}</TableCell>
+                                 <TableCell className="py-2 text-right text-blue-600">{p.enviado > 0 ? BRL.format(p.enviado) : "—"}</TableCell>
+                                 <TableCell className="py-2 text-right text-emerald-600">{p.aprovado > 0 ? BRL.format(p.aprovado) : "—"}</TableCell>
+                                 <TableCell className="py-2 text-right text-emerald-500">{p.nfRecebido > 0 ? BRL.format(p.nfRecebido) : "—"}</TableCell>
+                                 <TableCell className="py-2 text-right font-bold">{p.total > 0 ? BRL.format(p.total) : "—"}</TableCell>
+                                 <TableCell className="py-2 text-right">
+                                   {p.previsto > 0 && p.total > 0 ? (() => {
+                                     const desvio = p.total - p.previsto;
+                                     return <span className={desvio >= 0 ? "text-emerald-600" : "text-amber-600"}>{desvio >= 0 ? "+" : ""}{BRL_SHORT(Math.abs(desvio))}</span>;
+                                   })() : "—"}
+                                 </TableCell>
+                               </TableRow>
                             );
                           })}
                         </TableBody>
@@ -579,7 +605,7 @@ export default function HoldingReceitasPage() {
                 </Card>
 
                 {/* Insight cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                   <Card className="border-l-4 border-l-blue-500">
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground mb-1">Próxima entrada esperada</p>
@@ -592,6 +618,13 @@ export default function HoldingReceitasPage() {
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground mb-1">Total previsto próx. 3 meses</p>
                       <p className="text-sm font-semibold text-emerald-600">{BRL.format(insights.totalProx3Meses)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-primary">
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Valor previsto próx. 3 meses</p>
+                      <p className="text-sm font-semibold text-primary">{BRL_SHORT(previsaoData.slice(0, 3).reduce((s, p) => s + p.previsto, 0))}</p>
+                      <p className="text-[10px] text-muted-foreground">baseado nas datas de previsão cadastradas</p>
                     </CardContent>
                   </Card>
                   <Card className="border-l-4 border-l-amber-500">
