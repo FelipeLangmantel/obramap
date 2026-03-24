@@ -10,6 +10,7 @@ import { Factory, Plus, Package, Truck, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { FactoriesTabContent } from "./FactoriesTabContent";
 import { LiftingTabContent } from "./LiftingTabContent";
+import { OverviewTabContent } from "./OverviewTabContent";
 
 interface OperationContext {
   id: string;

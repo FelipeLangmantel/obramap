@@ -27,11 +27,10 @@ import {
 } from "recharts";
 import {
   Factory, AlertTriangle, TrendingUp, DollarSign, Package,
-  CalendarDays, Plus, Pencil, Trash2, Settings,
+  CalendarDays, Plus, Pencil, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format, differenceInDays, addDays, isWithinInterval } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { format, differenceInDays, addDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
