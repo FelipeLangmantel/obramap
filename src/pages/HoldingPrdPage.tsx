@@ -84,6 +84,14 @@ export default function HoldingPrdPage() {
           })
           .reduce((s: number, m: any) => s + (Number(m.valor_medicao) || 0), 0);
 
+        const previstoCadastrado = medicoes
+          .filter((m: any) => {
+            if (!m.data_previsao_medicao) return false;
+            const pd = new Date(m.data_previsao_medicao + "T12:00:00");
+            return m.obra_id === o.id && pd.getMonth() === mes && pd.getFullYear() === ano;
+          })
+          .reduce((s: number, m: any) => s + (Number(m.valor_previsto_medicao) || 0), 0);
+
         const desp = despesas
           .filter((d: any) => {
             const mi = MONTHS.findIndex(mn => mn.toLowerCase() === (d.mes_referencia || "").substring(0,3).toLowerCase());
@@ -91,7 +99,7 @@ export default function HoldingPrdPage() {
           })
           .reduce((s: number, d: any) => s + (Number(d.valor) || 0), 0);
 
-        months.push({ key, label: `${MONTHS[mes]}/${String(ano).slice(2)}`, mes: mes + 1, ano, previsto: monthlyPrevisto, realizado, despesas: desp });
+        months.push({ key, label: `${MONTHS[mes]}/${String(ano).slice(2)}`, mes: mes + 1, ano, previsto: monthlyPrevisto, previstoCadastrado, realizado, despesas: desp });
       }
 
       result.set(o.id, { obra: o, months });
