@@ -560,15 +560,22 @@ export default function HoldingReceitasPage() {
                             const isCurrentMonth = i === 0;
                             const hasData = p.total > 0;
                             return (
-                              <TableRow key={p.mes} className={`text-xs ${isCurrentMonth ? "bg-primary/5 border-l-2 border-l-primary" : hasData ? "bg-emerald-500/5" : "bg-muted/20"}`}>
-                                <TableCell className="py-2 font-medium">{p.mes}</TableCell>
-                                <TableCell className="py-2 text-center">{p.obrasCount || "—"}</TableCell>
-                                <TableCell className="py-2 text-right text-amber-600">{p.pendente > 0 ? BRL.format(p.pendente) : "—"}</TableCell>
-                                <TableCell className="py-2 text-right text-blue-600">{p.enviado > 0 ? BRL.format(p.enviado) : "—"}</TableCell>
-                                <TableCell className="py-2 text-right text-emerald-600">{p.aprovado > 0 ? BRL.format(p.aprovado) : "—"}</TableCell>
-                                <TableCell className="py-2 text-right text-emerald-500">{p.nfRecebido > 0 ? BRL.format(p.nfRecebido) : "—"}</TableCell>
-                                <TableCell className="py-2 text-right font-bold">{p.total > 0 ? BRL.format(p.total) : "—"}</TableCell>
-                              </TableRow>
+                               <TableRow key={p.mes} className={`text-xs ${isCurrentMonth ? "bg-primary/5 border-l-2 border-l-primary" : hasData ? "bg-emerald-500/5" : "bg-muted/20"}`}>
+                                 <TableCell className="py-2 font-medium">{p.mes}</TableCell>
+                                 <TableCell className="py-2 text-center">{p.obrasCount || "—"}</TableCell>
+                                 <TableCell className="py-2 text-right text-primary">{p.previsto > 0 ? BRL_SHORT(p.previsto) : "—"}</TableCell>
+                                 <TableCell className="py-2 text-right text-amber-600">{p.pendente > 0 ? BRL.format(p.pendente) : "—"}</TableCell>
+                                 <TableCell className="py-2 text-right text-blue-600">{p.enviado > 0 ? BRL.format(p.enviado) : "—"}</TableCell>
+                                 <TableCell className="py-2 text-right text-emerald-600">{p.aprovado > 0 ? BRL.format(p.aprovado) : "—"}</TableCell>
+                                 <TableCell className="py-2 text-right text-emerald-500">{p.nfRecebido > 0 ? BRL.format(p.nfRecebido) : "—"}</TableCell>
+                                 <TableCell className="py-2 text-right font-bold">{p.total > 0 ? BRL.format(p.total) : "—"}</TableCell>
+                                 <TableCell className="py-2 text-right">
+                                   {p.previsto > 0 && p.total > 0 ? (() => {
+                                     const desvio = p.total - p.previsto;
+                                     return <span className={desvio >= 0 ? "text-emerald-600" : "text-amber-600"}>{desvio >= 0 ? "+" : ""}{BRL_SHORT(Math.abs(desvio))}</span>;
+                                   })() : "—"}
+                                 </TableCell>
+                               </TableRow>
                             );
                           })}
                         </TableBody>
