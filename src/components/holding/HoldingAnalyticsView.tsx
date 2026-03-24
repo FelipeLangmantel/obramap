@@ -60,25 +60,25 @@ const BRL_SHORT = (v: number) => {
    RS State SVG Path (approximate)
    ═══════════════════════════════════════ */
 
-const RS_PATH = "M100,60 L140,55 L170,60 L200,55 L230,65 L260,80 L275,100 L280,130 L270,160 L260,180 L240,200 L220,215 L200,225 L180,220 L160,210 L140,195 L120,180 L105,160 L95,140 L90,120 L85,100 L90,80 Z";
+const RS_PATH = "M208.9,4.1 L253.3,2.4 L297.8,3.7 L342.2,8.1 L355.6,17.9 L355.6,48.7 L354.7,81.2 L337.8,109.6 L337.8,125.8 L333.3,142.0 L315.6,162.3 L297.8,182.6 L275.6,202.9 L253.3,223.2 L231.1,243.5 L208.9,263.8 L191.1,273.9 L177.8,273.5 L173.3,267.8 L142.2,263.8 L120.0,251.6 L75.6,235.4 L31.1,215.1 L4.4,186.7 L4.4,154.2 L22.2,129.9 L53.3,105.5 L84.4,73.0 L106.7,40.6 L137.8,16.2 L164.4,8.1 L186.7,4.1 L208.9,4.1 Z";
 
 const MUNICIPIO_COORDS: Record<string, { x: number; y: number }> = {
-  "Taquara": { x: 195, y: 142 },
-  "Estrela": { x: 235, y: 148 },
-  "Lajeado": { x: 225, y: 152 },
-  "Encruzilhada do Sul": { x: 212, y: 192 },
-  "São João do Polêsine": { x: 205, y: 160 },
-  "São Sebastião do Caí": { x: 200, y: 143 },
-  "São Francisco de Paula": { x: 210, y: 132 },
-  "Arroio do Meio": { x: 238, y: 152 },
-  "Esteio": { x: 193, y: 148 },
-  "Tapejara": { x: 185, y: 108 },
-  "Santa Rosa": { x: 115, y: 100 },
-  "Tupanciretã": { x: 152, y: 135 },
-  "Viamão": { x: 198, y: 155 },
-  "Porto Alegre": { x: 197, y: 152 },
-  "Muçum": { x: 232, y: 148 },
-  "Eldorado do Sul": { x: 196, y: 157 },
+  "Eldorado do Sul":         { x: 272.3, y: 125.2 },
+  "Taquara":                 { x: 307.6, y: 107.6 },
+  "Estrela":                 { x: 255.1, y: 101.6 },
+  "Lajeado":                 { x: 255.1, y: 100.1 },
+  "Encruzilhada do Sul":     { x: 230.1, y: 143.8 },
+  "São João do Polêsine":    { x: 191.2, y: 106.2 },
+  "São Sebastião do Caí":    { x: 281.5, y: 105.1 },
+  "São Francisco de Paula":  { x: 316.4, y:  99.1 },
+  "Arroio do Meio":          { x: 255.6, y:  97.4 },
+  "Esteio":                  { x: 289.8, y: 115.9 },
+  "Tapejara":                { x: 252.9, y:  43.1 },
+  "Santa Rosa":              { x: 143.1, y:  35.3 },
+  "Tupanciretã":             { x: 171.7, y:  84.4 },
+  "Viamão":                  { x: 296.8, y: 125.0 },
+  "Porto Alegre":            { x: 287.6, y: 123.1 },
+  "Muçum":                   { x: 259.0, y:  87.9 },
 };
 
 const HEALTH_PIN: Record<string, string> = {
@@ -265,7 +265,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
               Localização das Obras
             </h3>
             <div className="relative bg-muted/30 rounded-lg p-2">
-              <svg viewBox="60 40 240 200" className="w-full h-auto max-h-[320px]">
+               <svg viewBox="0 0 360 280" className="w-full h-auto max-h-[320px]">
                 {/* RS outline */}
                 <path
                   d={RS_PATH}
@@ -273,10 +273,18 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
                   stroke="hsl(var(--border))"
                   strokeWidth="1.5"
                 />
+                {/* Geographic references */}
+                <text x="287" y="137" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.5">Porto Alegre</text>
+                <text x="15" y="215" textAnchor="start" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.4">Uruguaiana</text>
+                <text x="330" y="70" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.4">Caxias do Sul</text>
                 {/* State label */}
-                <text x="175" y="150" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="16" fontWeight="700" opacity="0.2">
+                <text x="180" y="170" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="28" fontWeight="700" opacity="0.08">
                   RS
                 </text>
+                {/* North indicator */}
+                <text x="345" y="18" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="7" opacity="0.4">N↑</text>
+                {/* Ocean label */}
+                <text x="340" y="200" textAnchor="end" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.3" fontStyle="italic">Oceano Atlântico</text>
 
                 {/* Obra pins */}
                 {obrasOnMap.map(obra => {
@@ -290,7 +298,6 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
                       onMouseLeave={() => setHoveredObra(null)}
                       onClick={() => onObraClick(obra.id)}
                     >
-                      {/* Pulse ring on hover */}
                       {isHovered && (
                         <circle
                           cx={obra.coords.x} cy={obra.coords.y} r="14"
@@ -300,15 +307,18 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
                           <animate attributeName="opacity" from="0.6" to="0" dur="1s" repeatCount="indefinite" />
                         </circle>
                       )}
-                      {/* Pin shadow */}
                       <circle cx={obra.coords.x + 0.5} cy={obra.coords.y + 0.5} r={isHovered ? 7 : 5} fill="rgba(0,0,0,0.15)" />
-                      {/* Pin */}
                       <circle
                         cx={obra.coords.x} cy={obra.coords.y}
                         r={isHovered ? 7 : 5}
                         fill={color} stroke="white" strokeWidth="1.5"
                       />
-                      {/* Tooltip on hover */}
+                      {/* City label */}
+                      {!isHovered && (
+                        <text x={obra.coords.x} y={obra.coords.y + 11} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="4" opacity="0.7">
+                          {obra.municipio?.split(" ")[0]}
+                        </text>
+                      )}
                       {isHovered && (
                         <g>
                           <rect
@@ -329,12 +339,19 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
                 })}
               </svg>
 
-              {/* Legend */}
-              <div className="flex items-center justify-center gap-4 mt-2 text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#22c55e" }} /> Sob controle</span>
-                <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#f59e0b" }} /> Atenção</span>
-                <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#ef4444" }} /> Crítico</span>
+              {/* Title + Legend */}
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-[10px] font-medium text-muted-foreground">Obras no Rio Grande do Sul</p>
+                <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                  <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#22c55e" }} /> Sob controle</span>
+                  <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#f59e0b" }} /> Atenção</span>
+                  <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#ef4444" }} /> Crítico</span>
+                </div>
               </div>
+
+              <p className="text-[9px] text-muted-foreground text-center mt-1">
+                {obrasOnMap.length} obra{obrasOnMap.length !== 1 ? "s" : ""} mapeada{obrasOnMap.length !== 1 ? "s" : ""} · clique nos pins para abrir a ficha
+              </p>
 
               {obrasOnMap.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-lg">
