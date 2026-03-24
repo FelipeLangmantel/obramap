@@ -1217,6 +1217,9 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
   const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
   const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
   const receitas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
+  const valorContrato = obra.valor_contrato || 0;
+  const percentualFinanceiro = valorContrato > 0 && receitas > 0 ? Math.min(100, (receitas / valorContrato) * 100) : 0;
+  const saldoContrato = valorContrato - receitas;
 
   return (
     <Card className={`border-border/60 border-l-4 ${HEALTH_BORDER[obra.health]} hover:border-primary/40 hover:shadow-md transition-all cursor-pointer`} onClick={onClick}>
