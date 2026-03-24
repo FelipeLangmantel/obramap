@@ -79,7 +79,7 @@ export default function HoldingReceitasPage() {
     queryFn: async () => {
       const { data: obras } = await supabase
         .from("obras_portfolio")
-        .select("id, nome, empresa, num_contrato, valor_contrato, parceria_scp")
+        .select("id, nome, empresa, num_contrato, valor_contrato, parceria_scp, uh, responsavel, tipo_contrato")
         .eq("company_id", company!.id);
 
       const { data: medicoes } = await supabase
