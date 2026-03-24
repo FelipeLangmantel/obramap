@@ -365,7 +365,7 @@ export default function HoldingReceitasPage() {
   const insights = useMemo(() => {
     const enviadas = medicoes.filter(m => m.status_medicao === "enviada" || m.status_medicao === "pendente");
     const first = enviadas.sort((a, b) => (a.data_envio || "z").localeCompare(b.data_envio || "z"))[0];
-    const next3 = previsaoData.slice(0, 3).reduce((s, p) => s + p.total, 0);
+    const next3 = previsaoData.slice(3, 6).reduce((s, p) => s + p.total, 0);
     const obraIds = new Set(medicoes.map(m => m.obra_id));
     const obrasSem = obras.filter(o => !obraIds.has(o.id));
     return { proximaEntrada: first, totalProx3Meses: next3, obrasSemMedicao: obrasSem };
