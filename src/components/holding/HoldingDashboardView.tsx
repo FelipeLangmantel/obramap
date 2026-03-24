@@ -988,8 +988,33 @@ export default function HoldingDashboardView() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs">Andamento: {newObraForm.percentual_andamento}%</Label>
-              <Slider value={[newObraForm.percentual_andamento]} onValueChange={([v]) => setNewObraForm(p => ({ ...p, percentual_andamento: v }))} max={100} step={1} className="mt-2" />
+              <Label className="text-xs">% Andamento Físico</Label>
+              <div className="flex items-center gap-3 mt-2">
+                <Slider value={[newObraForm.percentual_andamento]} onValueChange={([v]) => setNewObraForm(p => ({ ...p, percentual_andamento: v }))} max={100} step={0.5} className="flex-1" />
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    min={0} max={100} step={0.5}
+                    value={newObraForm.percentual_andamento}
+                    onChange={(e) => {
+                      const v = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0));
+                      setNewObraForm(p => ({ ...p, percentual_andamento: v }));
+                    }}
+                    className="w-20 text-sm text-right"
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                </div>
+              </div>
+              {newObraForm.valor_contrato && Number(newObraForm.valor_contrato) > 0 && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Valor executado estimado:{" "}
+                  <span className="font-medium text-foreground">
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                      Number(newObraForm.valor_contrato) * newObraForm.percentual_andamento / 100
+                    )}
+                  </span>
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">Período Medição</Label><Input value={newObraForm.periodo_medicao} onChange={(e) => setNewObraForm(p => ({ ...p, periodo_medicao: e.target.value }))} placeholder="Mensal, Bimestral..." /></div>
