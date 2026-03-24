@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import ObraDetailDrawer from "./ObraDetailDrawer";
 
 import {
@@ -14,9 +15,26 @@ import {
   Building2,
   AlertTriangle,
   Loader2,
+  LayoutGrid,
+  GanttChart,
+  Eye,
+  FileWarning,
+  Clock,
+  CalendarClock,
+  FileCheck2,
 } from "lucide-react";
-import { addDays, format, differenceInDays } from "date-fns";
-
+import { addDays, format, differenceInDays, differenceInMonths, startOfMonth } from "date-fns";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as ReTooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+  Cell,
+} from "recharts";
 
 interface ObraPortfolio {
   id: string;
@@ -76,6 +94,15 @@ interface ObraEnriched extends ObraPortfolio {
   health: "green" | "yellow" | "red";
 }
 
+interface HoldingAlert {
+  id: string;
+  obraId: string;
+  obraNome: string;
+  severity: "critical" | "warning" | "info";
+  icon: any;
+  message: string;
+}
+
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
@@ -91,6 +118,19 @@ const HEALTH_COLORS: Record<string, string> = {
   red: "bg-red-500",
 };
 
+const STATUS_BAR_COLORS: Record<string, string> = {
+  em_andamento: "hsl(217, 91%, 60%)",
+  nao_iniciada: "hsl(220, 9%, 70%)",
+  concluida: "hsl(142, 71%, 45%)",
+  paralisada: "hsl(0, 72%, 50%)",
+};
+
+const SEVERITY_CONFIG: Record<string, { label: string; cls: string }> = {
+  critical: { label: "Crítico", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
+  warning: { label: "Atenção", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  info: { label: "Info", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+};
+
 function countDocs(docs: DocumentosObra | null): { count: number; total: number } {
   if (!docs) return { count: 0, total: 11 };
   const fields: (keyof DocumentosObra)[] = [
@@ -98,20 +138,13 @@ function countDocs(docs: DocumentosObra | null): { count: number; total: number 
     "sondagem_spt", "planta_localizacao", "plano_altimetrico",
     "painel_bordo", "checklist_seguranca",
   ];
-  const total = fields.length;
-  const count = fields.filter((f) => docs[f] === true).length;
-  return { count, total };
+  return { count: fields.filter((f) => docs[f] === true).length, total: fields.length };
 }
 
-function calcHealth(
-  docsCount: number,
-  docsTotal: number,
-  latestMedicao: MedicaoPle | null
-): "green" | "yellow" | "red" {
+function calcHealth(docsCount: number, docsTotal: number, latestMedicao: MedicaoPle | null): "green" | "yellow" | "red" {
   const docsRatio = docsCount / docsTotal;
   const medicaoStatus = latestMedicao?.status_medicao;
 
-  // Red conditions
   if (docsRatio < 3 / 11) return "red";
   if (medicaoStatus === "pendente") {
     if (latestMedicao?.data_envio) {
@@ -120,32 +153,30 @@ function calcHealth(
     }
     return "red";
   }
-
-  // Yellow conditions
   if (docsRatio < 5 / 11) return "yellow";
   if (medicaoStatus === "enviada") return "yellow";
-
-  // Green
   if (docsRatio >= 5 / 11 && (!medicaoStatus || medicaoStatus === "aprovada")) return "green";
-
   return "yellow";
 }
+
+/* ══════════════════════════════════════════════════════════════
+   MAIN COMPONENT
+   ══════════════════════════════════════════════════════════════ */
 
 export default function HoldingDashboardView() {
   const { company } = useAuth();
   const [selectedObra, setSelectedObra] = useState<ObraEnriched | null>(null);
+  const [viewMode, setViewMode] = useState<"cards" | "gantt">("cards");
 
   const { data: obras = [], isLoading } = useQuery({
     queryKey: ["holding-portfolio", company?.id],
     queryFn: async () => {
       if (!company?.id) return [];
-
       const [obrasRes, docsRes, medicoesRes] = await Promise.all([
         supabase.from("obras_portfolio").select("*").eq("company_id", company.id).order("nome"),
         supabase.from("documentos_obra").select("*"),
         supabase.from("medicoes_ple").select("*").order("ano_referencia", { ascending: false }),
       ]);
-
       const obrasData = (obrasRes.data || []) as ObraPortfolio[];
       const docsData = (docsRes.data || []) as DocumentosObra[];
       const medicoesData = (medicoesRes.data || []) as MedicaoPle[];
@@ -166,23 +197,123 @@ export default function HoldingDashboardView() {
         const latestMedicao = allMedicoes[0] || null;
         const { count: docsCount, total: docsTotal } = countDocs(docs);
         const health = calcHealth(docsCount, docsTotal, latestMedicao);
-
         return { ...obra, docs, latestMedicao, allMedicoes, docsCount, docsTotal, health };
       });
     },
     enabled: !!company?.id,
   });
 
+  // Fetch aditivos for alerts
+  const { data: aditivosPendentes = [] } = useQuery({
+    queryKey: ["holding-aditivos-pendentes", company?.id],
+    queryFn: async () => {
+      if (!company?.id) return [];
+      const obraIds = obras.map((o) => o.id);
+      if (obraIds.length === 0) return [];
+      const { data } = await supabase
+        .from("aditivos_contratos")
+        .select("id, obra_id, num_aditivo")
+        .in("obra_id", obraIds)
+        .eq("status", "pendente");
+      return data || [];
+    },
+    enabled: !!company?.id && obras.length > 0,
+  });
+
   const kpis = useMemo(() => {
     const totalContratos = obras.reduce((s, o) => s + (o.valor_contrato || 0), 0);
     const totalMedicoesAprovadas = obras.reduce(
-      (s, o) => s + o.allMedicoes.filter((m) => m.status_medicao === "aprovada").reduce((ss, m) => ss + m.valor_medicao, 0),
-      0
+      (s, o) => s + o.allMedicoes.filter((m) => m.status_medicao === "aprovada").reduce((ss, m) => ss + m.valor_medicao, 0), 0
     );
     const obrasAtivas = obras.filter((o) => o.status === "em_andamento").length;
     const alertasCriticos = obras.filter((o) => o.health === "red").length;
-
     return { totalContratos, totalMedicoesAprovadas, obrasAtivas, alertasCriticos };
+  }, [obras]);
+
+  // Generate alerts
+  const alerts = useMemo((): HoldingAlert[] => {
+    const result: HoldingAlert[] = [];
+    const now = new Date();
+
+    for (const obra of obras) {
+      // 1. Docs incompletas (<4/6 doc_obra)
+      const docObraFields = ["ata", "ois", "art", "cno", "impl", "scp"];
+      const docObraCount = obra.docs ? docObraFields.filter((f) => (obra.docs as any)?.[f]).length : 0;
+      if (docObraCount < 4) {
+        result.push({
+          id: `doc-${obra.id}`,
+          obraId: obra.id,
+          obraNome: obra.nome,
+          severity: docObraCount < 2 ? "critical" : "warning",
+          icon: FileWarning,
+          message: `${obra.nome} — faltam ${6 - docObraCount} documentos obrigatórios`,
+        });
+      }
+
+      // 2. Medição pendente >30 dias
+      if (obra.latestMedicao?.status_medicao === "pendente" && obra.latestMedicao.data_envio) {
+        const days = differenceInDays(now, new Date(obra.latestMedicao.data_envio));
+        if (days > 30) {
+          result.push({
+            id: `med-${obra.id}`,
+            obraId: obra.id,
+            obraNome: obra.nome,
+            severity: days > 60 ? "critical" : "warning",
+            icon: Clock,
+            message: `${obra.nome} — medição pendente há ${days} dias`,
+          });
+        }
+      }
+
+      // 3. Prazo vencendo em <30 dias
+      if (obra.data_inicio && obra.status === "em_andamento") {
+        const fimPrevisto = addDays(new Date(obra.data_inicio), obra.prazo_dias + obra.aditivo_prazo_dias);
+        const diasRestantes = differenceInDays(fimPrevisto, now);
+        if (diasRestantes >= 0 && diasRestantes < 30) {
+          result.push({
+            id: `prazo-${obra.id}`,
+            obraId: obra.id,
+            obraNome: obra.nome,
+            severity: diasRestantes < 7 ? "critical" : "warning",
+            icon: CalendarClock,
+            message: `${obra.nome} — vence em ${diasRestantes} dias (${format(fimPrevisto, "dd/MM/yyyy")})`,
+          });
+        } else if (diasRestantes < 0) {
+          result.push({
+            id: `prazo-${obra.id}`,
+            obraId: obra.id,
+            obraNome: obra.nome,
+            severity: "critical",
+            icon: CalendarClock,
+            message: `${obra.nome} — prazo vencido há ${Math.abs(diasRestantes)} dias`,
+          });
+        }
+      }
+    }
+
+    // 4. Aditivos pendentes
+    for (const adit of aditivosPendentes) {
+      const obra = obras.find((o) => o.id === adit.obra_id);
+      if (obra) {
+        result.push({
+          id: `adit-${adit.id}`,
+          obraId: obra.id,
+          obraNome: obra.nome,
+          severity: "info",
+          icon: FileCheck2,
+          message: `${obra.nome} — aditivo ${adit.num_aditivo || ""} pendente de aprovação`,
+        });
+      }
+    }
+
+    // Sort: critical first
+    const order = { critical: 0, warning: 1, info: 2 };
+    return result.sort((a, b) => order[a.severity] - order[b.severity]);
+  }, [obras, aditivosPendentes]);
+
+  const openObra = useCallback((obraId: string) => {
+    const obra = obras.find((o) => o.id === obraId);
+    if (obra) setSelectedObra(obra);
   }, [obras]);
 
   if (isLoading) {
@@ -197,48 +328,78 @@ export default function HoldingDashboardView() {
     <div className="space-y-6">
       {/* KPI Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
-          icon={DollarSign}
-          label="Total em Contratos"
-          value={BRL.format(kpis.totalContratos)}
-          color="text-emerald-600 dark:text-emerald-400"
-          bgColor="bg-emerald-100 dark:bg-emerald-900/30"
-        />
-        <KpiCard
-          icon={ClipboardCheck}
-          label="Medições Aprovadas"
-          value={BRL.format(kpis.totalMedicoesAprovadas)}
-          color="text-blue-600 dark:text-blue-400"
-          bgColor="bg-blue-100 dark:bg-blue-900/30"
-        />
-        <KpiCard
-          icon={Building2}
-          label="Obras Ativas"
-          value={String(kpis.obrasAtivas)}
-          color="text-primary"
-          bgColor="bg-primary/10"
-        />
-        <KpiCard
-          icon={AlertTriangle}
-          label="Alertas Críticos"
-          value={String(kpis.alertasCriticos)}
-          color={kpis.alertasCriticos > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}
-          bgColor={kpis.alertasCriticos > 0 ? "bg-red-100 dark:bg-red-900/30" : "bg-muted/50"}
-        />
+        <KpiCard icon={DollarSign} label="Total em Contratos" value={BRL.format(kpis.totalContratos)} color="text-emerald-600 dark:text-emerald-400" bgColor="bg-emerald-100 dark:bg-emerald-900/30" />
+        <KpiCard icon={ClipboardCheck} label="Medições Aprovadas" value={BRL.format(kpis.totalMedicoesAprovadas)} color="text-blue-600 dark:text-blue-400" bgColor="bg-blue-100 dark:bg-blue-900/30" />
+        <KpiCard icon={Building2} label="Obras Ativas" value={String(kpis.obrasAtivas)} color="text-primary" bgColor="bg-primary/10" />
+        <KpiCard icon={AlertTriangle} label="Alertas Críticos" value={String(kpis.alertasCriticos)} color={kpis.alertasCriticos > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"} bgColor={kpis.alertasCriticos > 0 ? "bg-red-100 dark:bg-red-900/30" : "bg-muted/50"} />
       </div>
 
-      {/* Obras Grid */}
+      {/* View Toggle */}
+      {obras.length > 0 && (
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-foreground">Obras do Portfólio ({obras.length})</h3>
+          <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
+            <button
+              onClick={() => setViewMode("cards")}
+              className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${viewMode === "cards" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Cards
+            </button>
+            <button
+              onClick={() => setViewMode("gantt")}
+              className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${viewMode === "gantt" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <GanttChart className="h-3.5 w-3.5" /> Gantt
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Obras View */}
       {obras.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <Crown className="h-12 w-12 text-muted-foreground" />
           <p className="text-muted-foreground">Nenhuma obra cadastrada no portfólio.</p>
         </div>
-      ) : (
+      ) : viewMode === "cards" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {obras.map((obra) => (
             <ObraCard key={obra.id} obra={obra} onClick={() => setSelectedObra(obra)} />
           ))}
         </div>
+      ) : (
+        <GanttTimeline obras={obras} onObraClick={openObra} />
+      )}
+
+      {/* Central de Alertas */}
+      {alerts.length > 0 && (
+        <Card className="border-border/60">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                Alertas que precisam de atenção
+              </h3>
+              <Badge variant="destructive" className="text-xs">{alerts.length}</Badge>
+            </div>
+            <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+              {alerts.map((alert) => {
+                const sev = SEVERITY_CONFIG[alert.severity];
+                const Icon = alert.icon;
+                return (
+                  <div key={alert.id} className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
+                    <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="text-sm flex-1 min-w-0">{alert.message}</span>
+                    <Badge variant="secondary" className={`text-[10px] shrink-0 ${sev.cls}`}>{sev.label}</Badge>
+                    <Button size="sm" variant="ghost" className="text-xs shrink-0 h-7 px-2" onClick={() => openObra(alert.obraId)}>
+                      <Eye className="h-3.5 w-3.5 mr-1" /> Ver
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Detail Drawer */}
@@ -251,21 +412,130 @@ export default function HoldingDashboardView() {
   );
 }
 
-/* ────────── KPI Card ────────── */
+/* ══════════════════════════════════════════════
+   GANTT TIMELINE
+   ══════════════════════════════════════════════ */
 
-function KpiCard({
-  icon: Icon,
-  label,
-  value,
-  color,
-  bgColor,
-}: {
-  icon: any;
-  label: string;
-  value: string;
-  color: string;
-  bgColor: string;
-}) {
+const GANTT_START = new Date(2025, 0, 1); // Jan 2025
+const GANTT_END = new Date(2026, 11, 31); // Dec 2026
+const TOTAL_MONTHS = differenceInMonths(GANTT_END, GANTT_START) + 1; // 24
+
+function dateToMonthIndex(date: Date): number {
+  return Math.max(0, Math.min(TOTAL_MONTHS, differenceInMonths(date, GANTT_START)));
+}
+
+function GanttTimeline({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick: (id: string) => void }) {
+  const obrasWithDates = obras.filter((o) => o.data_inicio);
+  const todayIndex = dateToMonthIndex(new Date());
+
+  const chartData = obrasWithDates.map((obra) => {
+    const start = new Date(obra.data_inicio!);
+    const end = addDays(start, obra.prazo_dias + obra.aditivo_prazo_dias);
+    const startIdx = dateToMonthIndex(start);
+    const endIdx = dateToMonthIndex(end);
+    const duration = Math.max(endIdx - startIdx, 0.5);
+
+    return {
+      nome: obra.nome.length > 25 ? obra.nome.slice(0, 23) + "…" : obra.nome,
+      fullNome: obra.nome,
+      obraId: obra.id,
+      start: startIdx,
+      duration,
+      status: obra.status,
+      andamento: obra.percentual_andamento,
+      inicio: format(start, "dd/MM/yyyy"),
+      fim: format(end, "dd/MM/yyyy"),
+    };
+  });
+
+  const monthLabels = Array.from({ length: TOTAL_MONTHS }, (_, i) => {
+    const d = new Date(2025, i, 1);
+    return format(d, "MMM/yy");
+  });
+
+  const ticks = Array.from({ length: TOTAL_MONTHS }, (_, i) => i);
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.[0]) return null;
+    const d = payload[0].payload;
+    return (
+      <div className="bg-popover border border-border rounded-lg shadow-lg p-3 text-xs space-y-1">
+        <p className="font-semibold">{d.fullNome}</p>
+        <p>Início: {d.inicio}</p>
+        <p>Fim previsto: {d.fim}</p>
+        <p>Andamento: {d.andamento}%</p>
+      </div>
+    );
+  };
+
+  const barHeight = Math.max(32 * chartData.length + 60, 200);
+
+  return (
+    <Card className="border-border/60">
+      <CardContent className="p-4">
+        <div className="overflow-x-auto">
+          <div style={{ minWidth: 800 }}>
+            <ResponsiveContainer width="100%" height={barHeight}>
+              <BarChart
+                data={chartData}
+                layout="vertical"
+                margin={{ left: 10, right: 20, top: 10, bottom: 10 }}
+                onClick={(e: any) => {
+                  if (e?.activePayload?.[0]?.payload?.obraId) {
+                    onObraClick(e.activePayload[0].payload.obraId);
+                  }
+                }}
+              >
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-border/40" />
+                <XAxis
+                  type="number"
+                  domain={[0, TOTAL_MONTHS]}
+                  ticks={ticks}
+                  tickFormatter={(v) => monthLabels[v] || ""}
+                  tick={{ fontSize: 9 }}
+                  interval={1}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="nome"
+                  width={160}
+                  tick={{ fontSize: 11 }}
+                />
+                <ReTooltip content={<CustomTooltip />} />
+                <ReferenceLine
+                  x={todayIndex}
+                  stroke="hsl(var(--destructive))"
+                  strokeWidth={2}
+                  strokeDasharray="4 4"
+                  label={{ value: "Hoje", position: "top", fontSize: 10, fill: "hsl(var(--destructive))" }}
+                />
+                {/* Invisible spacer bar for start offset */}
+                <Bar dataKey="start" stackId="gantt" fill="transparent" radius={0} />
+                <Bar dataKey="duration" stackId="gantt" radius={[4, 4, 4, 4]} cursor="pointer">
+                  {chartData.map((entry, idx) => (
+                    <Cell key={idx} fill={STATUS_BAR_COLORS[entry.status] || STATUS_BAR_COLORS.nao_iniciada} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 mt-2 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: STATUS_BAR_COLORS.em_andamento }} /> Em Andamento</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: STATUS_BAR_COLORS.concluida }} /> Concluída</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: STATUS_BAR_COLORS.nao_iniciada }} /> Não Iniciada</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: STATUS_BAR_COLORS.paralisada }} /> Paralisada</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   KPI Card
+   ══════════════════════════════════════════════ */
+
+function KpiCard({ icon: Icon, label, value, color, bgColor }: { icon: any; label: string; value: string; color: string; bgColor: string }) {
   return (
     <Card className="border-border/60">
       <CardContent className="p-4 flex items-center gap-3">
@@ -281,7 +551,9 @@ function KpiCard({
   );
 }
 
-/* ────────── Obra Card ────────── */
+/* ══════════════════════════════════════════════
+   Obra Card
+   ══════════════════════════════════════════════ */
 
 function ObraCard({ obra, onClick }: { obra: ObraEnriched; onClick: () => void }) {
   const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
@@ -291,28 +563,19 @@ function ObraCard({ obra, onClick }: { obra: ObraEnriched; onClick: () => void }
       : "—";
 
   return (
-    <Card
-      className="border-border/60 hover:border-primary/40 hover:shadow-md transition-all cursor-pointer"
-      onClick={onClick}
-    >
+    <Card className="border-border/60 hover:border-primary/40 hover:shadow-md transition-all cursor-pointer" onClick={onClick}>
       <CardContent className="p-4 space-y-3">
-        {/* Header */}
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${HEALTH_COLORS[obra.health]}`} />
               <h3 className="font-semibold text-sm text-foreground truncate">{obra.nome}</h3>
             </div>
-            {obra.empresa && (
-              <p className="text-xs text-muted-foreground mt-0.5 truncate">{obra.empresa}</p>
-            )}
+            {obra.empresa && <p className="text-xs text-muted-foreground mt-0.5 truncate">{obra.empresa}</p>}
           </div>
-          <Badge className={`text-[10px] shrink-0 ${statusCfg.className}`} variant="secondary">
-            {statusCfg.label}
-          </Badge>
+          <Badge className={`text-[10px] shrink-0 ${statusCfg.className}`} variant="secondary">{statusCfg.label}</Badge>
         </div>
 
-        {/* Progress */}
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">Andamento</span>
@@ -321,35 +584,17 @@ function ObraCard({ obra, onClick }: { obra: ObraEnriched; onClick: () => void }
           <Progress value={obra.percentual_andamento} className="h-2" />
         </div>
 
-        {/* Info row */}
         <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-          <div>
-            <span className="text-muted-foreground">Contrato</span>
-            <p className="font-medium text-foreground truncate">{obra.num_contrato || "—"}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Valor</span>
-            <p className="font-medium text-foreground truncate">{BRL.format(obra.valor_contrato)}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Previsão Fim</span>
-            <p className="font-medium text-foreground">{previsaoFim}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Docs</span>
-            <p className="font-medium text-foreground">{obra.docsCount}/{obra.docsTotal}</p>
-          </div>
+          <div><span className="text-muted-foreground">Contrato</span><p className="font-medium text-foreground truncate">{obra.num_contrato || "—"}</p></div>
+          <div><span className="text-muted-foreground">Valor</span><p className="font-medium text-foreground truncate">{BRL.format(obra.valor_contrato)}</p></div>
+          <div><span className="text-muted-foreground">Previsão Fim</span><p className="font-medium text-foreground">{previsaoFim}</p></div>
+          <div><span className="text-muted-foreground">Docs</span><p className="font-medium text-foreground">{obra.docsCount}/{obra.docsTotal}</p></div>
         </div>
 
-        {/* Bottom badges */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          {obra.parceria_scp && (
-            <Badge variant="outline" className="text-[10px]">SCP: {obra.parceria_scp}</Badge>
-          )}
+          {obra.parceria_scp && <Badge variant="outline" className="text-[10px]">SCP: {obra.parceria_scp}</Badge>}
           {obra.latestMedicao && (
-            <Badge variant="outline" className="text-[10px]">
-              Última: {obra.latestMedicao.mes_referencia}/{obra.latestMedicao.ano_referencia}
-            </Badge>
+            <Badge variant="outline" className="text-[10px]">Última: {obra.latestMedicao.mes_referencia}/{obra.latestMedicao.ano_referencia}</Badge>
           )}
         </div>
       </CardContent>
