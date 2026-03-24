@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Sparkles, TrendingUp, AlertTriangle, DollarSign, Building2, RefreshCw, Copy, FileDown, Clock, ShieldAlert, FileWarning, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays, differenceInDays } from "date-fns";
+const parseLocalDate = (d: string) => { const [y, m, day] = d.split("-").map(Number); return new Date(y, m - 1, day); };
 import jsPDF from "jspdf";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -68,7 +69,7 @@ export default function HoldingInsightsPage() {
       const totalReceitas = obraMeds.filter((m: any) => m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (m.valor_medicao || 0), 0);
       const totalDesp = obraDesps.reduce((s: number, d: any) => s + (d.valor || 0), 0);
       const diasRestantes = o.data_inicio && o.prazo_dias
-        ? differenceInDays(addDays(new Date(o.data_inicio), o.prazo_dias), new Date())
+        ? differenceInDays(addDays(parseLocalDate(o.data_inicio!), o.prazo_dias), new Date())
         : null;
       const health = docsCount < 3 || (diasRestantes !== null && diasRestantes < 0) ? "red"
         : docsCount < 5 || (diasRestantes !== null && diasRestantes < 30) ? "yellow" : "green";

@@ -51,7 +51,7 @@ import {
   Pause,
   FileText,
 } from "lucide-react";
-import { addDays, format, differenceInDays, differenceInMonths, parseISO } from "date-fns";
+import { addDays, format, differenceInDays, differenceInMonths } from "date-fns";
 
 /** Parse YYYY-MM-DD as local date (avoids UTC offset shifting the day) */
 const parseLocalDate = (d: string) => { const [y, m, day] = d.split("-").map(Number); return new Date(y, m - 1, day); };

@@ -17,6 +17,7 @@ import {
 } from "recharts";
 import { BarChart2, TrendingUp, DollarSign, AlertTriangle, Download, RefreshCw } from "lucide-react";
 import { format, addMonths, differenceInMonths } from "date-fns";
+const parseLocalDate = (d: string) => { const [y, m, day] = d.split("-").map(Number); return new Date(y, m - 1, day); };
 import { toast } from "sonner";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -65,7 +66,7 @@ export default function HoldingPrdPage() {
 
     obras.forEach(o => {
       if (!o.data_inicio) return;
-      const start = new Date(o.data_inicio);
+      const start = parseLocalDate(o.data_inicio!);
       const prazoMeses = Math.max(1, Math.ceil(o.prazo_dias / 30));
       const monthlyPrevisto = o.valor_contrato / prazoMeses;
       const months: MonthEntry[] = [];
