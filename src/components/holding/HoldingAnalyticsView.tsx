@@ -265,7 +265,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
               Localização das Obras
             </h3>
             <div className="relative bg-muted/30 rounded-lg p-2">
-              <svg viewBox="60 40 240 200" className="w-full h-auto max-h-[320px]">
+               <svg viewBox="0 0 360 280" className="w-full h-auto max-h-[320px]">
                 {/* RS outline */}
                 <path
                   d={RS_PATH}
@@ -273,10 +273,18 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
                   stroke="hsl(var(--border))"
                   strokeWidth="1.5"
                 />
+                {/* Geographic references */}
+                <text x="287" y="137" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.5">Porto Alegre</text>
+                <text x="15" y="215" textAnchor="start" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.4">Uruguaiana</text>
+                <text x="330" y="70" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.4">Caxias do Sul</text>
                 {/* State label */}
-                <text x="175" y="150" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="16" fontWeight="700" opacity="0.2">
+                <text x="180" y="170" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="28" fontWeight="700" opacity="0.08">
                   RS
                 </text>
+                {/* North indicator */}
+                <text x="345" y="18" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="7" opacity="0.4">N↑</text>
+                {/* Ocean label */}
+                <text x="340" y="200" textAnchor="end" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.3" fontStyle="italic">Oceano Atlântico</text>
 
                 {/* Obra pins */}
                 {obrasOnMap.map(obra => {
@@ -290,7 +298,6 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
                       onMouseLeave={() => setHoveredObra(null)}
                       onClick={() => onObraClick(obra.id)}
                     >
-                      {/* Pulse ring on hover */}
                       {isHovered && (
                         <circle
                           cx={obra.coords.x} cy={obra.coords.y} r="14"
@@ -300,15 +307,18 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
                           <animate attributeName="opacity" from="0.6" to="0" dur="1s" repeatCount="indefinite" />
                         </circle>
                       )}
-                      {/* Pin shadow */}
                       <circle cx={obra.coords.x + 0.5} cy={obra.coords.y + 0.5} r={isHovered ? 7 : 5} fill="rgba(0,0,0,0.15)" />
-                      {/* Pin */}
                       <circle
                         cx={obra.coords.x} cy={obra.coords.y}
                         r={isHovered ? 7 : 5}
                         fill={color} stroke="white" strokeWidth="1.5"
                       />
-                      {/* Tooltip on hover */}
+                      {/* City label */}
+                      {!isHovered && (
+                        <text x={obra.coords.x} y={obra.coords.y + 11} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="4" opacity="0.7">
+                          {obra.municipio?.split(" ")[0]}
+                        </text>
+                      )}
                       {isHovered && (
                         <g>
                           <rect
@@ -329,12 +339,19 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
                 })}
               </svg>
 
-              {/* Legend */}
-              <div className="flex items-center justify-center gap-4 mt-2 text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#22c55e" }} /> Sob controle</span>
-                <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#f59e0b" }} /> Atenção</span>
-                <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#ef4444" }} /> Crítico</span>
+              {/* Title + Legend */}
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-[10px] font-medium text-muted-foreground">Obras no Rio Grande do Sul</p>
+                <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                  <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#22c55e" }} /> Sob controle</span>
+                  <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#f59e0b" }} /> Atenção</span>
+                  <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#ef4444" }} /> Crítico</span>
+                </div>
               </div>
+
+              <p className="text-[9px] text-muted-foreground text-center mt-1">
+                {obrasOnMap.length} obra{obrasOnMap.length !== 1 ? "s" : ""} mapeada{obrasOnMap.length !== 1 ? "s" : ""} · clique nos pins para abrir a ficha
+              </p>
 
               {obrasOnMap.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-lg">
