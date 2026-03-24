@@ -247,7 +247,7 @@ export default function HoldingDocumentosPage() {
         <TabsList>
           <TabsTrigger value="geral">Visão Geral</TabsTrigger>
           <TabsTrigger value="doc_obra">Doc_Obra</TabsTrigger>
-          <TabsTrigger value="acomp">Acomp_Obra</TabsTrigger>
+          <TabsTrigger value="ensaios">Ensaios e Projetos</TabsTrigger>
           <TabsTrigger value="pendencias">Pendências</TabsTrigger>
         </TabsList>
 
