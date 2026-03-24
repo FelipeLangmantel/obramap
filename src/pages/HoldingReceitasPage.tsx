@@ -970,12 +970,13 @@ export default function HoldingReceitasPage() {
 
                     {/* Financial planning tip */}
                     <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
-                      <p className="text-xs font-semibold text-primary mb-1">💡 Dica para o Financeiro</p>
+                      <p className="text-xs font-semibold text-primary mb-1">💡 Como o sistema calcula as projeções</p>
                       <p className="text-[11px] text-muted-foreground">
-                        Use a visão <strong>Semanal</strong> para programar pagamentos de curto prazo. 
-                        A <strong>Quinzenal</strong> para ciclos de pagamento a fornecedores. 
-                        E a <strong>Mensal</strong> para planejamento de fluxo de caixa geral.
-                        O <strong>Acumulado</strong> mostra o valor disponível total para decisões de pagamento.
+                        <strong>Recebido:</strong> data real de pagamento. {" "}
+                        <strong>Aprovada:</strong> data aprovação + prazo de pagamento da obra. {" "}
+                        <strong>Enviada:</strong> data envio + ~15 dias (aprovação estimada) + prazo pgto. {" "}
+                        <strong>Prevista:</strong> data previsão + ~15d + prazo pgto. {" "}
+                        O prazo de pagamento vem do cadastro de cada obra (padrão: 30 dias se não informado).
                       </p>
                     </div>
                   </CardContent>
