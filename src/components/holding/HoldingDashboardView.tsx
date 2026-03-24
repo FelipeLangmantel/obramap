@@ -232,6 +232,9 @@ export default function HoldingDashboardView() {
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
 
+  // Global company filter (persists across all views)
+  const [globalEmpresa, setGlobalEmpresa] = useState("all");
+
   // Filters
   const [filterEmpresa, setFilterEmpresa] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -617,6 +620,7 @@ export default function HoldingDashboardView() {
 
   const obrasFiltradas = useMemo(() => {
     return obras.filter(o => {
+      if (globalEmpresa !== "all" && o.empresa !== globalEmpresa) return false;
       if (filterEmpresa !== "all" && o.empresa !== filterEmpresa) return false;
       if (filterStatus !== "all" && o.status !== filterStatus) return false;
       if (filterSaude !== "all" && o.health !== filterSaude) return false;
@@ -624,7 +628,7 @@ export default function HoldingDashboardView() {
       if (searchNome && !o.nome.toLowerCase().includes(searchNome.toLowerCase())) return false;
       return true;
     });
-  }, [obras, filterEmpresa, filterStatus, filterSaude, filterTipo, searchNome]);
+  }, [obras, globalEmpresa, filterEmpresa, filterStatus, filterSaude, filterTipo, searchNome]);
 
   const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || filterTipo !== "all" || searchNome !== "";
 
@@ -662,6 +666,31 @@ export default function HoldingDashboardView() {
 
   return (
     <div className="space-y-4">
+    {/* Global Company Filter */}
+      {empresas.length > 1 && (
+        <div className="flex items-center gap-3 pb-2 border-b border-border mb-2 flex-wrap">
+          <span className="text-xs text-muted-foreground font-medium">Visualizando:</span>
+          {empresas.map(emp => (
+            <button
+              key={emp}
+              onClick={() => setGlobalEmpresa(globalEmpresa === emp ? "all" : emp)}
+              className={`px-3 py-1 text-xs rounded-full border transition-all ${
+                globalEmpresa === emp
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border text-muted-foreground hover:border-primary/50"
+              }`}
+            >
+              {emp}
+            </button>
+          ))}
+          {globalEmpresa !== "all" && (
+            <button onClick={() => setGlobalEmpresa("all")} className="text-xs text-muted-foreground hover:text-foreground">
+              × Limpar
+            </button>
+          )}
+        </div>
+      )}
+
       {/* KPI Row — 6 cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <KpiCard icon={DollarSign} label="Total em Contratos" value={BRL.format(kpis.totalContratos)} borderColor="border-b-emerald-500" valueColor="text-emerald-600 dark:text-emerald-400" />
@@ -836,7 +865,7 @@ export default function HoldingDashboardView() {
       ) : mainView === "manual" ? (
         <HoldingManualView />
       ) : (
-        <HoldingAnalyticsView obras={obras} alerts={alerts} onObraClick={openObra} />
+        <HoldingAnalyticsView obras={globalEmpresa !== "all" ? obras.filter(o => o.empresa === globalEmpresa) : obras} alerts={alerts} onObraClick={openObra} />
       )}
 
       {/* Central de Alertas */}
