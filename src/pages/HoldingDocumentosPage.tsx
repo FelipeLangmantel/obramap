@@ -163,11 +163,11 @@ export default function HoldingDocumentosPage() {
   }, [pendencias, filterPendObra, filterPendStatus, obras]);
 
   const exportCSV = () => {
-    const h = ["Obra", "Empresa", "Doc_Obra", "Ensaios e Projetos", "Saúde", "Pendências Abertas",
-      ...DOC_OBRA_FIELDS.map(f => f.label), ...ENSAIOS_FIELDS.map(f => f.label)];
+    const h = ["Obra", "Empresa", "Pré Obra", "Ensaios e Projetos", "Saúde", "Pendências Abertas",
+      ...PRE_OBRA_FIELDS.map(f => f.label), ...ENSAIOS_FIELDS.map(f => f.label)];
     const rows = obrasFiltradas.map(o => [
       o.nome, o.empresa || "", `${o.docCount}/6`, `${o.ensaiosCount}/5`, o.health, o.pendenciasAbertas,
-      ...DOC_OBRA_FIELDS.map(f => o.docs?.[f.key] ? "Sim" : "Não"),
+      ...PRE_OBRA_FIELDS.map(f => o.docs?.[f.key] ? "Sim" : "Não"),
       ...ENSAIOS_FIELDS.map(f => o.docs?.[f.key] ? "Sim" : "Não"),
     ]);
     const csv = [h, ...rows].map(r => r.join(";")).join("\n");
@@ -246,7 +246,7 @@ export default function HoldingDocumentosPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="geral">Visão Geral</TabsTrigger>
-          <TabsTrigger value="doc_obra">Doc_Obra</TabsTrigger>
+          <TabsTrigger value="doc_obra">Pré Obra</TabsTrigger>
           <TabsTrigger value="ensaios">Ensaios e Projetos</TabsTrigger>
           <TabsTrigger value="pendencias">Pendências</TabsTrigger>
         </TabsList>
@@ -298,7 +298,7 @@ export default function HoldingDocumentosPage() {
                 <TableRow>
                   <TableHead className="text-xs">Obra</TableHead>
                   <TableHead className="text-xs">Empresa</TableHead>
-                  <TableHead className="text-xs text-center">Doc_Obra</TableHead>
+                  <TableHead className="text-xs text-center">Pré Obra</TableHead>
                   <TableHead className="text-xs text-center">Ensaios e Projetos</TableHead>
                   <TableHead className="text-xs text-center">Saúde</TableHead>
                   <TableHead className="text-xs">Status Obra</TableHead>
@@ -336,7 +336,7 @@ export default function HoldingDocumentosPage() {
                 <TableRow>
                   <TableHead className="text-xs">Obra</TableHead>
                   <TableHead className="text-xs">Empresa</TableHead>
-                  {DOC_OBRA_FIELDS.map(f => <TableHead key={f.key} className="text-xs text-center">{f.label}</TableHead>)}
+                  {PRE_OBRA_FIELDS.map(f => <TableHead key={f.key} className="text-xs text-center">{f.label}</TableHead>)}
                   <TableHead className="text-xs text-center">Total</TableHead>
                 </TableRow>
               </TableHeader>
@@ -345,7 +345,7 @@ export default function HoldingDocumentosPage() {
                   <TableRow key={o.id} className={i % 2 ? "bg-muted/20" : ""}>
                     <TableCell className="text-xs font-medium">{o.nome}</TableCell>
                     <TableCell className="text-xs">{o.empresa || "—"}</TableCell>
-                    {DOC_OBRA_FIELDS.map(f => (
+                    {PRE_OBRA_FIELDS.map(f => (
                       <TableCell key={f.key} className="text-center"><CheckMark ok={!!o.docs?.[f.key]} /></TableCell>
                     ))}
                     <TableCell className={`text-xs text-center font-semibold ${scoreColor(o.docCount, 6)}`}>{o.docCount}/6</TableCell>
@@ -452,7 +452,7 @@ export default function HoldingDocumentosPage() {
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-2">Documentos Base ({detailObra.docCount}/6)</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {DOC_OBRA_FIELDS.map(f => (
+                  {PRE_OBRA_FIELDS.map(f => (
                     <div key={f.key} className="flex items-center gap-2 text-xs">
                       <CheckMark ok={!!detailObra.docs?.[f.key]} />
                       <span>{f.label}</span>
