@@ -267,7 +267,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {renderDocCard("Doc_Obra", <FileText className="h-4 w-4" />, docObraTipos, DOC_OBRA_FIELDS)}
+      {renderDocCard("Pré Obra", <FileText className="h-4 w-4" />, docObraTipos, PRE_OBRA_FIELDS)}
       {renderDocCard("Ensaios e Projetos", <FlaskConical className="h-4 w-4" />, ensaiosTipos, ENSAIOS_PROJETOS_FIELDS)}
     </div>
   );
