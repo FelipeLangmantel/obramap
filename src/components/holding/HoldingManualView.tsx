@@ -1,6 +1,5 @@
-import { BookOpen, Building2, ClipboardList, BarChart3, AlertTriangle, FileDown, Info, TrendingUp, Receipt, FolderOpen, Sparkles, FileText, Shield, Map, Users, Zap, CheckCircle2, XCircle } from "lucide-react";
+import { BookOpen, Building2, ClipboardList, BarChart3, AlertTriangle, FileDown, TrendingUp, Receipt, FolderOpen, Sparkles, FileText, Shield, Map, Zap } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
