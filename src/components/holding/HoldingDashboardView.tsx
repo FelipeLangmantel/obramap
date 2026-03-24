@@ -807,6 +807,7 @@ export default function HoldingDashboardView() {
                       status: obra.status, percentual_andamento: obra.percentual_andamento,
                       periodo_medicao: obra.periodo_medicao || "", prazo_pagamento: obra.prazo_pagamento || "",
                       municipio: obra.municipio || "", estado: obra.estado || "RS",
+                      uh: String(obra.uh || ""), responsavel: obra.responsavel || "", tipo_contrato: obra.tipo_contrato || "",
                     });
                     setEditingObra(obra);
                     setShowNewObraDialog(true);
