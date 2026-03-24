@@ -187,7 +187,8 @@ export default function HoldingDashboardView() {
   const { company } = useAuth();
   const queryClient = useQueryClient();
   const [selectedObra, setSelectedObra] = useState<ObraEnriched | null>(null);
-  const [viewMode, setViewMode] = useState<"cards" | "gantt" | "analytics">("cards");
+  const [mainView, setMainView] = useState<"portfolio" | "analytics">("portfolio");
+  const [viewMode, setViewMode] = useState<"cards" | "gantt">("cards");
   const [showNewObraDialog, setShowNewObraDialog] = useState(false);
   const [newObraForm, setNewObraForm] = useState({
     nome: "", empresa: "", num_contrato: "", parceria_scp: "",
@@ -537,10 +538,23 @@ export default function HoldingDashboardView() {
         <KpiCard icon={AlertTriangle} label="Alertas Críticos" value={String(kpis.alertasCriticos)} color={kpis.alertasCriticos > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"} bgColor={kpis.alertasCriticos > 0 ? "bg-red-100 dark:bg-red-900/30" : "bg-muted/50"} />
       </div>
 
-      {/* View Toggle + Nova Obra */}
+      {/* Main View Tabs + Actions */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h3 className="text-sm font-semibold text-foreground">Obras do Portfólio ({obras.length})</h3>
+        <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
+          <button
+            onClick={() => setMainView("portfolio")}
+            className={`px-4 py-2 text-sm rounded-md transition-all flex items-center gap-2 ${mainView === "portfolio" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            <Crown className="h-4 w-4" /> Portfólio
+          </button>
+          <button
+            onClick={() => setMainView("analytics")}
+            className={`px-4 py-2 text-sm rounded-md transition-all flex items-center gap-2 ${mainView === "analytics" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            <BarChart3 className="h-4 w-4" /> Analytics
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowNewObraDialog(true)}>
             <Plus className="h-3.5 w-3.5 mr-1" /> Nova Obra
           </Button>
@@ -549,63 +563,66 @@ export default function HoldingDashboardView() {
             Exportar PDF
           </Button>
         </div>
-        {obras.length > 0 && (
-          <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
-            <button
-              onClick={() => setViewMode("cards")}
-              className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${viewMode === "cards" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" /> Cards
-            </button>
-            <button
-              onClick={() => setViewMode("gantt")}
-              className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${viewMode === "gantt" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              <GanttChart className="h-3.5 w-3.5" /> Gantt
-            </button>
-            <button
-              onClick={() => setViewMode("analytics")}
-              className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${viewMode === "analytics" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              <BarChart3 className="h-3.5 w-3.5" /> Analytics
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* Obras View */}
-      {obras.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <Crown className="h-12 w-12 text-muted-foreground" />
-          <p className="text-muted-foreground">Nenhuma obra cadastrada no portfólio.</p>
-        </div>
-      ) : viewMode === "analytics" ? (
-        <HoldingAnalyticsView obras={obras} alerts={alerts} onObraClick={openObra} />
-      ) : viewMode === "cards" ? (
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {obras.map((obra) => (
-            <ObraCard
-              key={obra.id}
-              obra={obra}
-              onClick={() => setSelectedObra(obra)}
-              onEdit={() => {
-                setNewObraForm({
-                  nome: obra.nome, empresa: obra.empresa || "", num_contrato: obra.num_contrato || "",
-                  parceria_scp: obra.parceria_scp || "", valor_contrato: String(obra.valor_contrato || ""),
-                  data_inicio: obra.data_inicio || "", prazo_dias: String(obra.prazo_dias || ""),
-                  status: obra.status, percentual_andamento: obra.percentual_andamento,
-                  periodo_medicao: obra.periodo_medicao || "", prazo_pagamento: obra.prazo_pagamento || "",
-                  municipio: obra.municipio || "", estado: obra.estado || "RS",
-                });
-                setEditingObra(obra);
-                setShowNewObraDialog(true);
-              }}
-              onDelete={() => setDeletingObraId(obra.id)}
-            />
-          ))}
-        </div>
+      {mainView === "portfolio" ? (
+        <>
+          {/* Portfolio Sub-Toggle (Cards/Gantt) */}
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">Obras do Portfólio ({obras.length})</h3>
+            {obras.length > 0 && (
+              <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
+                <button
+                  onClick={() => setViewMode("cards")}
+                  className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${viewMode === "cards" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" /> Cards
+                </button>
+                <button
+                  onClick={() => setViewMode("gantt")}
+                  className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center gap-1.5 ${viewMode === "gantt" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <GanttChart className="h-3.5 w-3.5" /> Gantt
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Obras View */}
+          {obras.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <Crown className="h-12 w-12 text-muted-foreground" />
+              <p className="text-muted-foreground">Nenhuma obra cadastrada no portfólio.</p>
+            </div>
+          ) : viewMode === "cards" ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {obras.map((obra) => (
+                <ObraCard
+                  key={obra.id}
+                  obra={obra}
+                  onClick={() => setSelectedObra(obra)}
+                  onEdit={() => {
+                    setNewObraForm({
+                      nome: obra.nome, empresa: obra.empresa || "", num_contrato: obra.num_contrato || "",
+                      parceria_scp: obra.parceria_scp || "", valor_contrato: String(obra.valor_contrato || ""),
+                      data_inicio: obra.data_inicio || "", prazo_dias: String(obra.prazo_dias || ""),
+                      status: obra.status, percentual_andamento: obra.percentual_andamento,
+                      periodo_medicao: obra.periodo_medicao || "", prazo_pagamento: obra.prazo_pagamento || "",
+                      municipio: obra.municipio || "", estado: obra.estado || "RS",
+                    });
+                    setEditingObra(obra);
+                    setShowNewObraDialog(true);
+                  }}
+                  onDelete={() => setDeletingObraId(obra.id)}
+                />
+              ))}
+            </div>
+          ) : (
+            <GanttTimeline obras={obras} onObraClick={openObra} />
+          )}
+        </>
       ) : (
-        <GanttTimeline obras={obras} onObraClick={openObra} />
+        <HoldingAnalyticsView obras={obras} alerts={alerts} onObraClick={openObra} />
       )}
 
       {/* Central de Alertas */}
