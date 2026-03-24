@@ -357,6 +357,7 @@ const DESPESA_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 };
 
 function FinanceiroTab({ obraId }: { obraId: string }) {
+  const invalidateHolding = useInvalidateHolding();
   const [despesas, setDespesas] = useState<any[]>([]);
   const [medicoes, setMedicoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
