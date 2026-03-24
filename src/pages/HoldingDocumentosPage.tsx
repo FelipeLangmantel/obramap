@@ -461,9 +461,9 @@ export default function HoldingDocumentosPage() {
                 </div>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground mb-2">Acompanhamento ({detailObra.acompCount}/5)</p>
+                <p className="text-xs font-medium text-muted-foreground mb-2">Ensaios e Projetos ({detailObra.ensaiosCount}/5)</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {ACOMP_FIELDS.map(f => (
+                  {ENSAIOS_FIELDS.map(f => (
                     <div key={f.key} className="flex items-center gap-2 text-xs">
                       <CheckMark ok={!!detailObra.docs?.[f.key]} />
                       <span>{f.label}</span>
