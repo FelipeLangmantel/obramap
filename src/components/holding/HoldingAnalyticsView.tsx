@@ -415,6 +415,40 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
         <DonutKpi label="Medições OK" value={donutData.medicoes} color="#22c55e" subtitle="obras com medição aprovada" />
         <DonutKpi label="No Prazo" value={donutData.prazo} color="#f59e0b" subtitle="obras em andamento no prazo" />
       </div>
+
+      {/* Row 4: Ranking */}
+      {rankingData.length > 0 && (
+        <Card className="border-border/60">
+          <CardContent className="p-4">
+            <h3 className="font-semibold text-sm mb-3">Top Obras por Valor de Contrato</h3>
+            <ResponsiveContainer width="100%" height={Math.max(200, rankingData.length * 36)}>
+              <BarChart data={rankingData} layout="vertical" margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.4)" horizontal={false} />
+                <XAxis type="number" fontSize={10} tickFormatter={(v) => BRL_SHORT(v)} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                <YAxis type="category" dataKey="nome" width={180} fontSize={10} tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                <Tooltip
+                  content={({ active, payload }: any) => {
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+                    return (
+                      <div className="bg-popover border border-border rounded-lg shadow-lg p-3 text-xs space-y-1">
+                        <p className="font-semibold text-foreground">{d.fullNome}</p>
+                        <p>{BRL.format(d.valor)}</p>
+                        <p className="text-muted-foreground">{STATUS_LABELS[d.status] || d.status}</p>
+                      </div>
+                    );
+                  }}
+                />
+                <Bar dataKey="valor" name="Valor Contrato" radius={[0, 4, 4, 0]} cursor="pointer" onClick={(data: any) => onObraClick(data.id)}>
+                  {rankingData.map((entry, index) => (
+                    <Cell key={index} fill={HEALTH_COLORS[entry.health] || "#3b82f6"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
