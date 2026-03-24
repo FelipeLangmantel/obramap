@@ -363,7 +363,7 @@ export default function HoldingDocumentosPage() {
               <TableHeader className="sticky top-0 bg-background z-10">
                 <TableRow>
                   <TableHead className="text-xs">Obra</TableHead>
-                  {ACOMP_FIELDS.map(f => <TableHead key={f.key} className="text-xs text-center">{f.label}</TableHead>)}
+                  {ENSAIOS_FIELDS.map(f => <TableHead key={f.key} className="text-xs text-center">{f.label}</TableHead>)}
                   <TableHead className="text-xs text-center">Total</TableHead>
                 </TableRow>
               </TableHeader>
