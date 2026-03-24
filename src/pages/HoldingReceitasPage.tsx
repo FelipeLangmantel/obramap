@@ -918,31 +918,55 @@ export default function HoldingReceitasPage() {
                       </Table>
                     </div>
 
-                    {/* Detail: Medições por período */}
+                    {/* Detail: Medições por período com explicação de cálculo */}
                     {programacaoData.some(p => p.medicoes.length > 0) && (
                       <Card className="border-dashed">
                         <CardHeader className="pb-2">
-                          <CardTitle className="text-xs text-muted-foreground">Detalhamento — Medições por Período</CardTitle>
+                          <CardTitle className="text-xs text-muted-foreground">Detalhamento — Previsão de Pagamento por Medição</CardTitle>
+                          <p className="text-[10px] text-muted-foreground">Datas projetadas com base no prazo de pagamento cadastrado em cada obra</p>
                         </CardHeader>
                         <CardContent>
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             {programacaoData.filter(p => p.medicoes.length > 0).map((p, i) => (
                               <div key={i}>
                                 <p className="text-xs font-semibold mb-1">{p.label} — {BRL.format(p.total)}</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
+                                <div className="space-y-1">
                                   {p.medicoes.map((m: any) => {
                                     const statusCfg = STATUS_MED_CONFIG[m.status_medicao] || STATUS_MED_CONFIG.nao_iniciada;
+                                    const statusColors: Record<string, string> = {
+                                      recebido: "border-l-emerald-500",
+                                      aprovado: "border-l-emerald-400",
+                                      enviado: "border-l-blue-500",
+                                      previsto: "border-l-amber-500",
+                                      estimado: "border-l-muted",
+                                    };
                                     return (
-                                      <div key={m.id} className="flex items-center justify-between gap-2 rounded border px-2 py-1 text-xs">
-                                        <span className="font-medium truncate">{m.obra_nome}</span>
-                                        <span className="text-muted-foreground">Med {m.num_medicao || "—"}</span>
-                                        <Badge className={`text-[9px] ${statusCfg.cls}`} variant="secondary">{statusCfg.label}</Badge>
-                                        <span className="font-semibold whitespace-nowrap">{BRL.format(m.valor_medicao)}</span>
+                                      <div key={m.id} className={`rounded border border-l-4 ${statusColors[m.statusEntrada] || ""} px-3 py-2`}>
+                                        <div className="flex items-center justify-between gap-2 text-xs">
+                                          <span className="font-medium truncate flex-1">{m.obra_nome}</span>
+                                          <span className="text-muted-foreground">Med {m.num_medicao || "—"}</span>
+                                          <Badge className={`text-[9px] ${statusCfg.cls}`} variant="secondary">{statusCfg.label}</Badge>
+                                          <span className="font-semibold whitespace-nowrap">{BRL.format(m.valor_medicao)}</span>
+                                        </div>
+                                        {m.calculo && (
+                                          <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+                                            <Calendar className="h-3 w-3" />
+                                            {m.calculo}
+                                            {m.obra_prazo_pagamento && (
+                                              <Badge variant="outline" className="text-[8px] ml-1">Prazo: {m.obra_prazo_pagamento}d</Badge>
+                                            )}
+                                          </p>
+                                        )}
                                       </div>
                                     );
                                   })}
                                 </div>
                               </div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
                             ))}
                           </div>
                         </CardContent>
