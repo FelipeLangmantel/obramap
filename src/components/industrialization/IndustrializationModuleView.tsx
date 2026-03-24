@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { FactoriesTabContent } from "./FactoriesTabContent";
 import { LiftingTabContent } from "./LiftingTabContent";
 import { OverviewTabContent } from "./OverviewTabContent";
+import { InstallationTabContent } from "./InstallationTabContent";
 
 interface OperationContext {
   id: string;
@@ -216,13 +217,13 @@ export default function IndustrializationModuleView() {
         </TabsContent>
 
         <TabsContent value="installation" className="mt-4">
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <Wrench className="h-10 w-10 mx-auto mb-3 opacity-50" />
-              <p className="font-medium">Montagem</p>
-              <p className="text-sm">Agenda de equipes, acompanhamento de instalação por unidade.</p>
-            </CardContent>
-          </Card>
+          {activeContext && companyId && (
+            <InstallationTabContent
+              companyId={companyId}
+              contextId={activeContext.id}
+              contextType={activeContext.context_type}
+            />
+          )}
         </TabsContent>
       </Tabs>
     </div>
