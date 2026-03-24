@@ -970,7 +970,7 @@ export default function HoldingDashboardView() {
           <DialogHeader><DialogTitle>Importar Obras em Lote</DialogTitle></DialogHeader>
           <p className="text-xs text-muted-foreground">
             Uma obra por linha, separada por vírgulas:<br />
-            <code className="text-[10px] bg-muted px-1 rounded">nome, empresa, num_contrato, parceria_scp, valor_contrato, data_inicio, prazo_dias, status, percentual_andamento, municipio, estado</code>
+            <code className="text-[10px] bg-muted px-1 rounded">nome, empresa, num_contrato, parceria_scp, valor_contrato, data_inicio, prazo_dias, status, percentual_andamento, municipio, estado, uh, responsavel, tipo_contrato</code>
           </p>
           <textarea className="w-full h-64 text-xs font-mono border rounded-md p-2 bg-muted/30 focus:outline-none focus:ring-1 focus:ring-ring" value={importText} onChange={(e) => setImportText(e.target.value)} />
           <DialogFooter>
