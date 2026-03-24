@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, ReactNode } from "react";
+import { useState, useEffect, useCallback, useMemo, ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -10,16 +10,22 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical } from "lucide-react";
+import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical, CalendarDays, TrendingUp, DollarSign, Clock, BarChart3, Target, AlertTriangle } from "lucide-react";
 import { CurrencyInput } from "./CurrencyInput";
 import { useAuth } from "@/contexts/AuthContext";
 import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart } from "recharts";
-import { format } from "date-fns";
+import { format, differenceInDays, addDays } from "date-fns";
+import { Progress } from "@/components/ui/progress";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const BRL_SHORT = (v: number) => {
+  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`;
+  return BRL.format(v);
+};
 
 function useInvalidateHolding() {
   const qc = useQueryClient();
@@ -33,38 +39,299 @@ function useInvalidateHolding() {
   };
 }
 
+export interface ObraDrawerData {
+  id: string;
+  nome: string;
+  uh?: number | null;
+  responsavel?: string | null;
+  tipo_contrato?: string | null;
+  valor_contrato?: number;
+  data_inicio?: string | null;
+  prazo_dias?: number;
+  aditivo_prazo_dias?: number;
+  percentual_andamento?: number;
+  status?: string;
+  prazo_pagamento?: string | null;
+  empresa?: string | null;
+}
+
 interface ObraDetailDrawerProps {
-  obraId: string | null;
-  obraNome: string;
-  obraUH?: number | null;
-  obraResponsavel?: string | null;
-  obraTipoContrato?: string | null;
+  obra: ObraDrawerData | null;
   onClose: () => void;
 }
 
-export default function ObraDetailDrawer({ obraId, obraNome, obraUH, obraResponsavel, obraTipoContrato, onClose }: ObraDetailDrawerProps) {
+export default function ObraDetailDrawer({ obra, onClose }: ObraDetailDrawerProps) {
   return (
-    <Sheet open={!!obraId} onOpenChange={(open) => !open && onClose()}>
+    <Sheet open={!!obra} onOpenChange={(open) => !open && onClose()}>
       <SheetContent className="w-full sm:max-w-[75vw] lg:max-w-[70vw] overflow-y-auto p-0">
-        {obraId && <ObraDetailContent obraId={obraId} obraNome={obraNome} obraUH={obraUH} obraResponsavel={obraResponsavel} obraTipoContrato={obraTipoContrato} />}
+        {obra && <ObraDetailContent obra={obra} />}
       </SheetContent>
     </Sheet>
   );
 }
 
-function ObraDetailContent({ obraId, obraNome, obraUH, obraResponsavel, obraTipoContrato }: { obraId: string; obraNome: string; obraUH?: number | null; obraResponsavel?: string | null; obraTipoContrato?: string | null }) {
+/* ══════════════════════════════════════════════
+   RESUMO TAB — Mini Dashboard
+   ══════════════════════════════════════════════ */
+
+function ResumoTab({ obra }: { obra: ObraDrawerData }) {
+  const [medicoes, setMedicoes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("medicoes_ple")
+        .select("*")
+        .eq("obra_id", obra.id)
+        .order("ano_referencia", { ascending: true });
+      setMedicoes(data || []);
+      setLoading(false);
+    })();
+  }, [obra.id]);
+
+  const kpis = useMemo(() => {
+    const valorContrato = obra.valor_contrato || 0;
+    const totalMedido = medicoes.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+    const totalAcatado = medicoes.filter(m => Number(m.valor_acatado) > 0).reduce((s, m) => s + Number(m.valor_acatado), 0);
+    const totalRecebido = medicoes.filter(m => m.status_nf === "recebido").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+    const totalPrevisto = medicoes.reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0);
+    const pctMedido = valorContrato > 0 ? (totalMedido / valorContrato) * 100 : 0;
+    const saldoMedir = valorContrato - totalMedido;
+    const totalGlosa = totalAcatado > 0 ? totalMedido - totalAcatado : 0;
+    const medicoesEnviadas = medicoes.filter(m => m.status_medicao === "enviada").length;
+    const medicoesAprovadas = medicoes.filter(m => m.status_medicao === "aprovada").length;
+    const medicoesPrevistas = medicoes.filter(m => m.data_previsao_medicao && !m.data_envio).length;
+
+    // Contract timeline
+    let diasRestantes: number | null = null;
+    let previsaoFim: string | null = null;
+    let pctPrazo = 0;
+    if (obra.data_inicio) {
+      const inicio = new Date(obra.data_inicio + "T12:00:00");
+      const prazoTotal = (obra.prazo_dias || 0) + (obra.aditivo_prazo_dias || 0);
+      const fim = addDays(inicio, prazoTotal);
+      previsaoFim = format(fim, "dd/MM/yyyy");
+      diasRestantes = differenceInDays(fim, new Date());
+      const diasDecorridos = differenceInDays(new Date(), inicio);
+      pctPrazo = prazoTotal > 0 ? Math.min(100, (diasDecorridos / prazoTotal) * 100) : 0;
+    }
+
+    return {
+      valorContrato, totalMedido, totalRecebido, totalPrevisto,
+      pctMedido, saldoMedir, totalGlosa, totalAcatado,
+      medicoesEnviadas, medicoesAprovadas, medicoesPrevistas,
+      diasRestantes, previsaoFim, pctPrazo,
+      totalMedicoes: medicoes.length,
+    };
+  }, [medicoes, obra]);
+
+  const chartData = useMemo(() => {
+    if (medicoes.length === 0) return [];
+    const MONTHS_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+    return medicoes
+      .filter(m => m.mes_referencia)
+      .sort((a, b) => {
+        const aIdx = MONTHS_SHORT.findIndex(x => x.toLowerCase() === (a.mes_referencia || "").toLowerCase());
+        const bIdx = MONTHS_SHORT.findIndex(x => x.toLowerCase() === (b.mes_referencia || "").toLowerCase());
+        return (a.ano_referencia - b.ano_referencia) || (aIdx - bIdx);
+      })
+      .map(m => ({
+        name: `${m.mes_referencia}/${String(m.ano_referencia).slice(-2)}`,
+        previsto: Number(m.valor_previsto_medicao) || 0,
+        realizado: Number(m.valor_medicao) || 0,
+        acatado: Number(m.valor_acatado) || 0,
+      }));
+  }, [medicoes]);
+
+  // Próximas medições previstas
+  const proximasMedicoes = useMemo(() => {
+    return medicoes
+      .filter(m => m.data_previsao_medicao && !m.data_envio)
+      .sort((a, b) => a.data_previsao_medicao.localeCompare(b.data_previsao_medicao))
+      .slice(0, 4);
+  }, [medicoes]);
+
+  if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
+
+  return (
+    <div className="space-y-4">
+      {/* KPI Row 1 — Financeiro */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MiniKpi icon={<DollarSign className="h-4 w-4" />} label="Valor Contrato" value={BRL.format(kpis.valorContrato)} color="text-primary" />
+        <MiniKpi icon={<TrendingUp className="h-4 w-4" />} label="Total Medido" value={BRL.format(kpis.totalMedido)} sub={`${kpis.pctMedido.toFixed(1)}% do contrato`} color="text-blue-600" />
+        <MiniKpi icon={<Target className="h-4 w-4" />} label="Saldo a Medir" value={BRL.format(kpis.saldoMedir)} color="text-amber-600" />
+        <MiniKpi icon={<DollarSign className="h-4 w-4" />} label="Total Recebido" value={BRL.format(kpis.totalRecebido)} color="text-emerald-600" />
+      </div>
+
+      {/* Contract Timeline */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Prazo do Contrato</span>
+            </div>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              {obra.data_inicio && <span>Início: {format(new Date(obra.data_inicio + "T12:00:00"), "dd/MM/yyyy")}</span>}
+              {kpis.previsaoFim && <span>Fim: {kpis.previsaoFim}</span>}
+              {(obra.aditivo_prazo_dias || 0) > 0 && <Badge variant="outline" className="text-[10px]">+{obra.aditivo_prazo_dias}d aditivo</Badge>}
+            </div>
+          </div>
+          <Progress value={kpis.pctPrazo} className="h-2.5" />
+          <div className="flex items-center justify-between mt-1.5">
+            <span className="text-xs text-muted-foreground">{kpis.pctPrazo.toFixed(0)}% do prazo decorrido</span>
+            {kpis.diasRestantes !== null && (
+              <span className={`text-xs font-semibold ${kpis.diasRestantes > 0 ? "text-emerald-600" : "text-destructive"}`}>
+                {kpis.diasRestantes > 0 ? `${kpis.diasRestantes} dias restantes` : "Prazo encerrado"}
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* KPI Row 2 — Medições */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MiniKpi icon={<BarChart3 className="h-4 w-4" />} label="Total Medições" value={String(kpis.totalMedicoes)} color="text-foreground" />
+        <MiniKpi icon={<Clock className="h-4 w-4" />} label="Enviadas" value={String(kpis.medicoesEnviadas)} sub="aguardando aprovação" color="text-blue-600" />
+        <MiniKpi icon={<Target className="h-4 w-4" />} label="Aprovadas" value={String(kpis.medicoesAprovadas)} color="text-emerald-600" />
+        <MiniKpi icon={<CalendarDays className="h-4 w-4" />} label="Previstas" value={String(kpis.medicoesPrevistas)} sub="a enviar" color="text-indigo-600" />
+      </div>
+
+      {/* Chart — Previsto vs Realizado */}
+      {chartData.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm">Medições — Previsto × Realizado</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => BRL_SHORT(v)} />
+                <Tooltip formatter={(v: number) => BRL.format(v)} />
+                <Bar dataKey="previsto" name="Previsto" fill="hsl(var(--primary) / 0.3)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="realizado" name="Realizado" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                <Line dataKey="acatado" name="Acatado" stroke="#f59e0b" strokeWidth={2} dot={{ r: 3 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Próximas medições & Glosa */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Próximas Previsões */}
+        <Card>
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm flex items-center gap-1.5">
+              <CalendarDays className="h-4 w-4" /> Próximas Medições Previstas
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            {proximasMedicoes.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-2">Nenhuma previsão cadastrada</p>
+            ) : (
+              <div className="space-y-2">
+                {proximasMedicoes.map(m => (
+                  <div key={m.id} className="flex items-center justify-between text-sm border rounded-lg p-2">
+                    <div>
+                      <span className="font-medium">Nº {m.num_medicao || "—"}</span>
+                      <span className="text-muted-foreground ml-2 text-xs">{m.mes_referencia}/{m.ano_referencia}</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-muted-foreground">
+                        {format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yyyy")}
+                      </div>
+                      {Number(m.valor_previsto_medicao) > 0 && (
+                        <div className="text-xs font-medium text-primary">{BRL.format(Number(m.valor_previsto_medicao))}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Indicadores de Saúde */}
+        <Card>
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-sm flex items-center gap-1.5">
+              <AlertTriangle className="h-4 w-4" /> Indicadores
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 pt-0 space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Andamento físico</span>
+              <span className="font-semibold">{obra.percentual_andamento || 0}%</span>
+            </div>
+            <Progress value={obra.percentual_andamento || 0} className="h-2" />
+
+            {kpis.totalGlosa > 0 && (
+              <div className="flex items-center justify-between text-sm pt-2">
+                <span className="text-amber-600">Glosa acumulada</span>
+                <span className="font-semibold text-amber-600">{BRL.format(kpis.totalGlosa)}</span>
+              </div>
+            )}
+
+            <Separator />
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Previsto total</span>
+              <span className="font-medium">{BRL.format(kpis.totalPrevisto)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Medido total</span>
+              <span className="font-medium">{BRL.format(kpis.totalMedido)}</span>
+            </div>
+            {kpis.totalPrevisto > 0 && kpis.totalMedido > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Desvio prev. × medido</span>
+                <span className={`font-semibold ${kpis.totalMedido >= kpis.totalPrevisto ? "text-emerald-600" : "text-amber-600"}`}>
+                  {((kpis.totalMedido - kpis.totalPrevisto) / kpis.totalPrevisto * 100).toFixed(1)}%
+                </span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function MiniKpi({ icon, label, value, sub, color }: { icon: ReactNode; label: string; value: string; sub?: string; color: string }) {
+  return (
+    <Card>
+      <CardContent className="p-3">
+        <div className="flex items-start gap-2">
+          <div className={`${color} mt-0.5`}>{icon}</div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+            <p className={`text-sm font-bold ${color} break-words`}>{value}</p>
+            {sub && <p className="text-[10px] text-muted-foreground">{sub}</p>}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
   return (
     <div className="flex flex-col h-full">
       <SheetHeader className="px-6 pt-6 pb-4">
-        <SheetTitle className="text-lg">{obraNome}</SheetTitle>
+        <SheetTitle className="text-lg">{obra.nome}</SheetTitle>
         <div className="flex items-center gap-2 flex-wrap">
-          {obraTipoContrato && <Badge variant="outline" className="text-[10px]">{obraTipoContrato}</Badge>}
-          {obraUH && <Badge variant="secondary" className="text-[10px]">{obraUH} UH</Badge>}
-          {obraResponsavel && <span className="text-[10px] text-muted-foreground">👤 {obraResponsavel}</span>}
+          {obra.tipo_contrato && <Badge variant="outline" className="text-[10px]">{obra.tipo_contrato}</Badge>}
+          {obra.uh && <Badge variant="secondary" className="text-[10px]">{obra.uh} UH</Badge>}
+          {obra.empresa && <Badge variant="outline" className="text-[10px]">{obra.empresa}</Badge>}
+          {obra.responsavel && <span className="text-[10px] text-muted-foreground">👤 {obra.responsavel}</span>}
         </div>
       </SheetHeader>
-      <Tabs defaultValue="documentos" className="flex-1 flex flex-col">
+      <Tabs defaultValue="resumo" className="flex-1 flex flex-col">
         <TabsList className="mx-6 w-fit">
+          <TabsTrigger value="resumo">Resumo</TabsTrigger>
           <TabsTrigger value="documentos">Documentos</TabsTrigger>
           <TabsTrigger value="medicoes">Medições</TabsTrigger>
           <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
@@ -72,11 +339,12 @@ function ObraDetailContent({ obraId, obraNome, obraUH, obraResponsavel, obraTipo
           <TabsTrigger value="pendencias">Pendências</TabsTrigger>
         </TabsList>
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <TabsContent value="documentos" className="mt-0"><DocumentosTab obraId={obraId} /></TabsContent>
-          <TabsContent value="medicoes" className="mt-0"><MedicoesTab obraId={obraId} /></TabsContent>
-          <TabsContent value="financeiro" className="mt-0"><FinanceiroTab obraId={obraId} /></TabsContent>
-          <TabsContent value="aditivos" className="mt-0"><AditivosTab obraId={obraId} /></TabsContent>
-          <TabsContent value="pendencias" className="mt-0"><PendenciasTab obraId={obraId} /></TabsContent>
+          <TabsContent value="resumo" className="mt-0"><ResumoTab obra={obra} /></TabsContent>
+          <TabsContent value="documentos" className="mt-0"><DocumentosTab obraId={obra.id} /></TabsContent>
+          <TabsContent value="medicoes" className="mt-0"><MedicoesTab obraId={obra.id} /></TabsContent>
+          <TabsContent value="financeiro" className="mt-0"><FinanceiroTab obraId={obra.id} /></TabsContent>
+          <TabsContent value="aditivos" className="mt-0"><AditivosTab obraId={obra.id} /></TabsContent>
+          <TabsContent value="pendencias" className="mt-0"><PendenciasTab obraId={obra.id} /></TabsContent>
         </div>
       </Tabs>
     </div>
