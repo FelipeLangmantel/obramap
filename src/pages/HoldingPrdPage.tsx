@@ -179,7 +179,17 @@ export default function HoldingPrdPage() {
   };
 
   if (isLoading) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+    return (
+      <SidebarProvider defaultOpen={true}>
+        <div className="h-screen flex w-full overflow-hidden">
+          <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
+          <main className="flex-1 min-w-0 h-full overflow-auto flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+          </main>
+        </div>
+      </SidebarProvider>
+    );
+  }
   }
 
   const desvioColor = kpis.desvio >= 90 ? "border-b-emerald-500" : kpis.desvio >= 70 ? "border-b-amber-500" : "border-b-red-500";
