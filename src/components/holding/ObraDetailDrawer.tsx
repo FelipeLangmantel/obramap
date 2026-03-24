@@ -16,9 +16,8 @@ import { toast } from "sonner";
 import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical, CalendarDays, TrendingUp, DollarSign, Clock, BarChart3, Target, AlertTriangle } from "lucide-react";
 import { CurrencyInput } from "./CurrencyInput";
 import { useAuth } from "@/contexts/AuthContext";
-import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart, Cell, ReferenceLine } from "recharts";
+import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart } from "recharts";
 import { format, differenceInDays, addDays } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { Progress } from "@/components/ui/progress";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
