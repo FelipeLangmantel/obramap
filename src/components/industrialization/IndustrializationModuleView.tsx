@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Factory, Plus, Package, Truck, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { FactoriesTabContent } from "./FactoriesTabContent";
+import { LiftingTabContent } from "./LiftingTabContent";
 
 interface OperationContext {
   id: string;
