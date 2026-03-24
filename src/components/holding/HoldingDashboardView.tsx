@@ -1237,9 +1237,23 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
           <div><span className="text-muted-foreground">Prev. Fim</span><p className="font-medium text-foreground">{previsaoFim}</p></div>
         </div>
 
-        {obra.responsavel && (
-          <p className="text-[10px] text-muted-foreground truncate">👤 {obra.responsavel}</p>
-        )}
+        {(() => {
+          const nome = obra.responsavel_nome || obra.responsavel?.split(" - ")[0] || "";
+          const tel = obra.responsavel_telefone || obra.responsavel?.split(" - ")[1] || "";
+          const telLimpo = tel.replace(/\D/g, "");
+          const waNumber = telLimpo.startsWith("55") ? telLimpo : `55${telLimpo}`;
+          if (!nome) return null;
+          return (
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <span>👤 {nome}</span>
+              {telLimpo && (
+                <a href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Olá ${nome}, tudo bem? Preciso falar sobre a obra ${obra.nome}.`)}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="flex items-center gap-0.5 text-emerald-600 hover:text-emerald-500 font-medium transition-colors">
+                  📱 {tel}
+                </a>
+              )}
+            </div>
+          );
+        })()}
 
         {receitas > 0 && (
           <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">✓ {BRL_SHORT(receitas)} recebido</p>
