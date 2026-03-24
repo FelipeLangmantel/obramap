@@ -867,7 +867,10 @@ export default function HoldingDashboardView() {
                       status: obra.status, percentual_andamento: obra.percentual_andamento,
                       periodo_medicao: obra.periodo_medicao || "", prazo_pagamento: obra.prazo_pagamento || "",
                       municipio: obra.municipio || "", estado: obra.estado || "RS",
-                      uh: String(obra.uh || ""), responsavel: obra.responsavel || "", tipo_contrato: obra.tipo_contrato || "",
+                      uh: String(obra.uh || ""), responsavel: obra.responsavel || "",
+                      responsavel_nome: obra.responsavel_nome || (obra.responsavel?.split(" - ")[0] || ""),
+                      responsavel_telefone: obra.responsavel_telefone || (obra.responsavel?.split(" - ")[1] || ""),
+                      tipo_contrato: obra.tipo_contrato || "",
                     });
                     setEditingObra(obra);
                     setShowNewObraDialog(true);
