@@ -257,7 +257,7 @@ export default function HoldingReceitasPage() {
   return (
     <SidebarProvider defaultOpen={true}>
       <div className="h-screen flex w-full overflow-hidden">
-        <AppSidebar activeView="holding-receitas" onViewChange={() => navigate("/dashboard")} />
+        <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
         <main className="flex-1 min-w-0 h-full overflow-auto">
     <div className="space-y-4 p-4 md:p-6">
       {/* HEADER */}
