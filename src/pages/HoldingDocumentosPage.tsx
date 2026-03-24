@@ -68,7 +68,7 @@ interface ObraDoc {
   status: string;
   docs: any;
   docCount: number;
-  acompCount: number;
+  ensaiosCount: number;
   health: "verde" | "amarelo" | "vermelho";
   pendenciasAbertas: number;
 }
