@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  BarChart, Bar, AreaChart, Area, RadialBarChart, RadialBar,
+  ComposedChart, BarChart, Bar, Line, AreaChart, Area, RadialBarChart, RadialBar,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell,
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
