@@ -15,6 +15,8 @@ import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import ObraDetailDrawer from "./ObraDetailDrawer";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 import {
   Crown,
@@ -32,9 +34,12 @@ import {
   FileCheck2,
   Plus,
   FileDown,
+  MoreVertical,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { addDays, format, differenceInDays, differenceInMonths } from "date-fns";
-import { ptBR } from "date-fns/locale";
+
 import {
   BarChart,
   Bar,
@@ -183,144 +188,126 @@ export default function HoldingDashboardView() {
   const [newObraForm, setNewObraForm] = useState({
     nome: "", empresa: "", num_contrato: "", parceria_scp: "",
     valor_contrato: "", data_inicio: "", prazo_dias: "",
-    status: "nao_iniciada" as string, percentual_andamento: 0,
+    status: "nao_iniciada" as "nao_iniciada" | "em_andamento" | "concluida" | "paralisada",
+    percentual_andamento: 0,
     periodo_medicao: "", prazo_pagamento: "",
   });
   const [savingObra, setSavingObra] = useState(false);
+  const [editingObra, setEditingObra] = useState<ObraEnriched | null>(null);
+  const [deletingObraId, setDeletingObraId] = useState<string | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
 
-  const generateHoldingPDF = async () => {
+  const exportarPDF = async () => {
     setIsPrinting(true);
     try {
-      const doc = new jsPDF("p", "mm", "a4");
-      const pw = doc.internal.pageSize.getWidth();
-      const ph = doc.internal.pageSize.getHeight();
-      const companyName = company?.name || "Empresa";
-      const dateStr = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+      const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const today = format(new Date(), "dd/MM/yyyy");
+      const companyName = (company as any)?.name || "Holding";
 
-      // PAGE 1 — COVER
-      doc.setFillColor(24, 24, 27);
-      doc.rect(0, 0, pw, ph, "F");
+      // CAPA
+      doc.setFillColor(15, 23, 42);
+      doc.rect(0, 0, 297, 210, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(28);
-      doc.text("Relatório de Portfólio", pw / 2, 80, { align: "center" });
-      doc.setFontSize(16);
-      doc.setTextColor(180, 180, 180);
-      doc.text(companyName, pw / 2, 95, { align: "center" });
+      doc.setFont("helvetica", "bold");
+      doc.text("Relatório de Portfólio", 148, 55, { align: "center" });
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "normal");
+      doc.text(companyName, 148, 70, { align: "center" });
       doc.setFontSize(11);
-      doc.text(dateStr, pw / 2, 108, { align: "center" });
-
-      // KPI boxes
-      const kpiItems = [
-        { label: "Total em Contratos", value: BRL.format(kpis.totalContratos) },
+      doc.setTextColor(160, 160, 160);
+      doc.text(`Gerado em ${today}`, 148, 82, { align: "center" });
+      const kpiBoxes = [
+        { label: "Total Contratos", value: BRL.format(kpis.totalContratos) },
         { label: "Medições Aprovadas", value: BRL.format(kpis.totalMedicoesAprovadas) },
         { label: "Obras Ativas", value: String(kpis.obrasAtivas) },
         { label: "Alertas Críticos", value: String(kpis.alertasCriticos) },
       ];
-      const boxW = 42;
-      const boxH = 28;
-      const startX = (pw - (boxW * 4 + 6 * 3)) / 2;
-      const boxY = 130;
-      kpiItems.forEach((kpi, i) => {
-        const x = startX + i * (boxW + 6);
-        doc.setFillColor(40, 40, 45);
-        doc.roundedRect(x, boxY, boxW, boxH, 3, 3, "F");
-        doc.setTextColor(160, 160, 160);
-        doc.setFontSize(7);
-        doc.text(kpi.label, x + boxW / 2, boxY + 10, { align: "center" });
+      kpiBoxes.forEach((k, i) => {
+        const x = 18 + i * 66;
+        doc.setFillColor(30, 41, 59);
+        doc.roundedRect(x, 108, 60, 28, 3, 3, "F");
+        doc.setTextColor(120, 160, 255);
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.text(k.label, x + 30, 118, { align: "center" });
         doc.setTextColor(255, 255, 255);
-        doc.setFontSize(10);
-        doc.text(kpi.value, x + boxW / 2, boxY + 20, { align: "center" });
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text(k.value, x + 30, 129, { align: "center" });
       });
 
-      // PAGE 2 — OBRAS TABLE
+      // TABELA DE OBRAS
       doc.addPage();
-      doc.setTextColor(30, 30, 30);
-      doc.setFontSize(14);
-      doc.text("Obras do Portfólio", 14, 20);
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(13);
+      doc.setFont("helvetica", "bold");
+      doc.text("Portfólio Detalhado", 14, 16);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(120, 120, 120);
+      doc.text(today, 283, 16, { align: "right" });
 
-      const statusOrder = { em_andamento: 0, nao_iniciada: 1, paralisada: 2, concluida: 3 };
-      const sorted = [...obras].sort((a, b) => (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9));
-      const statusLabels: Record<string, string> = { em_andamento: "Em Andamento", nao_iniciada: "Não Iniciada", concluida: "Concluída", paralisada: "Paralisada" };
-      const statusColors: Record<string, [number, number, number]> = {
-        em_andamento: [37, 99, 235], nao_iniciada: [120, 120, 120], concluida: [22, 163, 74], paralisada: [220, 38, 38],
-      };
-      const healthLabels: Record<string, string> = { green: "● Verde", yellow: "● Amarelo", red: "● Vermelho" };
-      const healthColors: Record<string, [number, number, number]> = { green: [22, 163, 74], yellow: [202, 138, 4], red: [220, 38, 38] };
-
-      const tableBody = sorted.map((o) => {
-        const fimPrevisto = o.data_inicio ? format(addDays(new Date(o.data_inicio), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
-        return [
-          o.nome,
-          o.num_contrato || "—",
-          o.empresa || "—",
-          BRL.format(o.valor_contrato),
-          statusLabels[o.status] || o.status,
-          `${o.percentual_andamento}%`,
-          fimPrevisto,
-          `${o.docsCount}/${o.docsTotal}`,
-          healthLabels[o.health] || o.health,
-        ];
-      });
+      const statusLbl: Record<string, string> = { em_andamento: "Em Andamento", nao_iniciada: "Não Iniciada", concluida: "Concluída", paralisada: "Paralisada" };
+      const healthLbl: Record<string, string> = { green: "Verde", yellow: "Amarelo", red: "Vermelho" };
+      const sorted = [...obras].sort((a, b) => ({ em_andamento: 0, nao_iniciada: 1, concluida: 2, paralisada: 3 }[a.status] ?? 9) - ({ em_andamento: 0, nao_iniciada: 1, concluida: 2, paralisada: 3 }[b.status] ?? 9));
 
       autoTable(doc, {
-        startY: 28,
+        startY: 22,
         head: [["Obra", "Contrato", "Empresa", "Valor", "Status", "%", "Prev. Fim", "Docs", "Saúde"]],
-        body: tableBody,
-        styles: { fontSize: 7, cellPadding: 2 },
-        headStyles: { fillColor: [24, 24, 27], textColor: [255, 255, 255], fontSize: 7 },
+        body: sorted.map((o) => {
+          const fim = o.data_inicio ? format(addDays(new Date(o.data_inicio), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yy") : "—";
+          return [o.nome, o.num_contrato || "—", o.empresa || "—", BRL.format(o.valor_contrato), statusLbl[o.status], `${o.percentual_andamento}%`, fim, `${o.docsCount}/${o.docsTotal}`, healthLbl[o.health]];
+        }),
+        styles: { fontSize: 8, cellPadding: 2.5 },
+        headStyles: { fillColor: [15, 23, 42], textColor: 255, fontStyle: "bold" },
         columnStyles: { 3: { halign: "right" }, 5: { halign: "center" }, 7: { halign: "center" } },
         didParseCell: (data: any) => {
-          if (data.section === "body") {
-            if (data.column.index === 4) {
-              const status = sorted[data.row.index]?.status;
-              if (status && statusColors[status]) data.cell.styles.textColor = statusColors[status];
-            }
-            if (data.column.index === 8) {
-              const health = sorted[data.row.index]?.health;
-              if (health && healthColors[health]) data.cell.styles.textColor = healthColors[health];
-            }
+          if (data.section !== "body") return;
+          if (data.column.index === 4) {
+            const v = data.cell.raw;
+            if (v === "Em Andamento") data.cell.styles.textColor = [37, 99, 235];
+            else if (v === "Concluída") data.cell.styles.textColor = [22, 163, 74];
+            else if (v === "Paralisada") data.cell.styles.textColor = [220, 38, 38];
+          }
+          if (data.column.index === 8) {
+            const v = data.cell.raw;
+            if (v === "Verde") data.cell.styles.textColor = [22, 163, 74];
+            else if (v === "Amarelo") data.cell.styles.textColor = [202, 138, 4];
+            else if (v === "Vermelho") data.cell.styles.textColor = [220, 38, 38];
           }
         },
       });
 
-      // LAST PAGE — ALERTS
-      if (alerts.length > 0) {
+      // ALERTAS
+      const alertsToShow = alerts.filter((a) => a.severity !== "info");
+      if (alertsToShow.length > 0) {
         doc.addPage();
-        doc.setTextColor(30, 30, 30);
-        doc.setFontSize(14);
-        doc.text("Alertas", 14, 20);
-
-        const criticalAlerts = alerts.filter((a) => a.severity === "critical" || a.severity === "warning");
-        const alertBody = criticalAlerts.map((a) => [
-          a.severity === "critical" ? "CRÍTICO" : "ATENÇÃO",
-          a.message,
-        ]);
-
+        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(13);
+        doc.setFont("helvetica", "bold");
+        doc.text("Alertas do Portfólio", 14, 16);
         autoTable(doc, {
-          startY: 28,
-          head: [["Severidade", "Descrição"]],
-          body: alertBody,
-          styles: { fontSize: 8, cellPadding: 3 },
-          headStyles: { fillColor: [24, 24, 27], textColor: [255, 255, 255] },
-          columnStyles: { 0: { cellWidth: 28 } },
+          startY: 22,
+          head: [["Severidade", "Mensagem"]],
+          body: alertsToShow.map((a) => [a.severity === "critical" ? "CRÍTICO" : "ATENÇÃO", a.message]),
+          styles: { fontSize: 9 },
+          headStyles: { fillColor: [15, 23, 42], textColor: 255 },
           didParseCell: (data: any) => {
             if (data.section === "body" && data.column.index === 0) {
               data.cell.styles.textColor = data.cell.raw === "CRÍTICO" ? [220, 38, 38] : [202, 138, 4];
-              data.cell.styles.fontStyle = "bold";
             }
           },
         });
       }
 
       doc.save(`portfolio-holding-${format(new Date(), "yyyy-MM-dd")}.pdf`);
-      toast.success("PDF exportado com sucesso!");
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro ao gerar PDF.");
-    } finally {
-      setIsPrinting(false);
+      toast.success("PDF gerado com sucesso!");
+    } catch (e) {
+      toast.error("Erro ao gerar PDF. Tente novamente.");
+      console.error(e);
     }
+    setIsPrinting(false);
   };
 
   const resetNewObraForm = () => setNewObraForm({
@@ -330,13 +317,13 @@ export default function HoldingDashboardView() {
     periodo_medicao: "", prazo_pagamento: "",
   });
 
-  const handleSaveNewObra = async () => {
+  const handleSaveObra = async () => {
     if (!newObraForm.nome.trim() || !company?.id) {
       toast.error("Nome da obra é obrigatório.");
       return;
     }
     setSavingObra(true);
-    const { data, error } = await supabase.from("obras_portfolio").insert({
+    const payload = {
       company_id: company.id,
       nome: newObraForm.nome.trim(),
       empresa: newObraForm.empresa || null,
@@ -345,23 +332,35 @@ export default function HoldingDashboardView() {
       valor_contrato: Number(newObraForm.valor_contrato) || 0,
       data_inicio: newObraForm.data_inicio || null,
       prazo_dias: Number(newObraForm.prazo_dias) || 0,
-      status: newObraForm.status as any,
+      status: newObraForm.status,
       percentual_andamento: newObraForm.percentual_andamento,
       periodo_medicao: newObraForm.periodo_medicao || null,
       prazo_pagamento: newObraForm.prazo_pagamento || null,
-    }).select("id").single();
+    };
 
-    if (error || !data) {
-      toast.error("Erro ao cadastrar obra.");
-      setSavingObra(false);
-      return;
+    if (editingObra) {
+      const { error } = await supabase.from("obras_portfolio").update(payload).eq("id", editingObra.id);
+      if (error) { toast.error("Erro ao atualizar obra."); setSavingObra(false); return; }
+      toast.success("Obra atualizada!");
+    } else {
+      const { data, error } = await supabase.from("obras_portfolio").insert(payload).select("id").single();
+      if (error || !data) { toast.error("Erro ao cadastrar obra."); setSavingObra(false); return; }
+      await supabase.from("documentos_obra").insert({ obra_id: data.id });
+      toast.success("Obra cadastrada com sucesso!");
     }
-    await supabase.from("documentos_obra").insert({ obra_id: data.id });
     queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
-    toast.success("Obra cadastrada com sucesso!");
     setShowNewObraDialog(false);
+    setEditingObra(null);
     resetNewObraForm();
     setSavingObra(false);
+  };
+
+  const handleDeleteObra = async () => {
+    if (!deletingObraId || !company?.id) return;
+    await supabase.from("obras_portfolio").delete().eq("id", deletingObraId);
+    queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+    toast.success("Obra excluída.");
+    setDeletingObraId(null);
   };
 
   const { data: obras = [], isLoading } = useQuery({
@@ -537,7 +536,7 @@ export default function HoldingDashboardView() {
           <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowNewObraDialog(true)}>
             <Plus className="h-3.5 w-3.5 mr-1" /> Nova Obra
           </Button>
-          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={generateHoldingPDF} disabled={isPrinting || obras.length === 0}>
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={exportarPDF} disabled={isPrinting || obras.length === 0}>
             {isPrinting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <FileDown className="h-3.5 w-3.5 mr-1" />}
             Exportar PDF
           </Button>
@@ -567,9 +566,25 @@ export default function HoldingDashboardView() {
           <p className="text-muted-foreground">Nenhuma obra cadastrada no portfólio.</p>
         </div>
       ) : viewMode === "cards" ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {obras.map((obra) => (
-            <ObraCard key={obra.id} obra={obra} onClick={() => setSelectedObra(obra)} />
+            <ObraCard
+              key={obra.id}
+              obra={obra}
+              onClick={() => setSelectedObra(obra)}
+              onEdit={() => {
+                setNewObraForm({
+                  nome: obra.nome, empresa: obra.empresa || "", num_contrato: obra.num_contrato || "",
+                  parceria_scp: obra.parceria_scp || "", valor_contrato: String(obra.valor_contrato || ""),
+                  data_inicio: obra.data_inicio || "", prazo_dias: String(obra.prazo_dias || ""),
+                  status: obra.status, percentual_andamento: obra.percentual_andamento,
+                  periodo_medicao: obra.periodo_medicao || "", prazo_pagamento: obra.prazo_pagamento || "",
+                });
+                setEditingObra(obra);
+                setShowNewObraDialog(true);
+              }}
+              onDelete={() => setDeletingObraId(obra.id)}
+            />
           ))}
         </div>
       ) : (
@@ -615,10 +630,10 @@ export default function HoldingDashboardView() {
       />
 
       {/* Nova Obra Dialog */}
-      <Dialog open={showNewObraDialog} onOpenChange={setShowNewObraDialog}>
+      <Dialog open={showNewObraDialog} onOpenChange={(o) => { if (!o) { setShowNewObraDialog(false); setEditingObra(null); resetNewObraForm(); } }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Cadastrar Nova Obra</DialogTitle>
+            <DialogTitle>{editingObra ? "Editar Obra" : "Cadastrar Nova Obra"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3">
             <div>
@@ -657,7 +672,7 @@ export default function HoldingDashboardView() {
             </div>
             <div>
               <Label className="text-xs">Status</Label>
-              <Select value={newObraForm.status} onValueChange={(v) => setNewObraForm(p => ({ ...p, status: v }))}>
+              <Select value={newObraForm.status} onValueChange={(v) => setNewObraForm(p => ({ ...p, status: v as typeof p.status }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="nao_iniciada">Não Iniciada</SelectItem>
@@ -683,14 +698,32 @@ export default function HoldingDashboardView() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewObraDialog(false)}>Cancelar</Button>
-            <Button onClick={handleSaveNewObra} disabled={savingObra}>
+            <Button variant="outline" onClick={() => { setShowNewObraDialog(false); setEditingObra(null); resetNewObraForm(); }}>Cancelar</Button>
+            <Button onClick={handleSaveObra} disabled={savingObra}>
               {savingObra ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              Salvar
+              {editingObra ? "Atualizar" : "Salvar"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deletingObraId} onOpenChange={(o) => !o && setDeletingObraId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir obra?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. Todos os dados (documentos, medições, despesas) serão removidos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteObra} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -709,6 +742,15 @@ function dateToMonthIndex(date: Date): number {
 
 function GanttTimeline({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick: (id: string) => void }) {
   const obrasWithDates = obras.filter((o) => o.data_inicio);
+  if (obrasWithDates.length === 0) {
+    return (
+      <Card className="border-border/60">
+        <CardContent className="p-8 text-center">
+          <p className="text-sm text-muted-foreground">Nenhuma obra com data de início cadastrada. Edite as obras para definir as datas.</p>
+        </CardContent>
+      </Card>
+    );
+  }
   const todayIndex = dateToMonthIndex(new Date());
 
   const chartData = obrasWithDates.map((obra) => {
@@ -838,7 +880,7 @@ function KpiCard({ icon: Icon, label, value, color, bgColor }: { icon: any; labe
    Obra Card
    ══════════════════════════════════════════════ */
 
-function ObraCard({ obra, onClick }: { obra: ObraEnriched; onClick: () => void }) {
+function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onClick: () => void; onEdit: () => void; onDelete: () => void }) {
   const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
   const previsaoFim =
     obra.data_inicio
@@ -856,7 +898,24 @@ function ObraCard({ obra, onClick }: { obra: ObraEnriched; onClick: () => void }
             </div>
             {obra.empresa && <p className="text-xs text-muted-foreground mt-0.5 truncate">{obra.empresa}</p>}
           </div>
-          <Badge className={`text-[10px] shrink-0 ${statusCfg.className}`} variant="secondary">{statusCfg.label}</Badge>
+          <div className="flex items-center gap-1 shrink-0">
+            <Badge className={`text-[10px] ${statusCfg.className}`} variant="secondary">{statusCfg.label}</Badge>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="p-1 rounded-md hover:bg-muted" onClick={(e) => e.stopPropagation()}>
+                  <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
+                  <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive">
+                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         <div className="space-y-1">

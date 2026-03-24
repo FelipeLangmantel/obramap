@@ -347,7 +347,7 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
 
   const handleSaveDespesa = async () => {
     if (!newDespesa.mes_referencia || !newDespesa.valor) {
-      toast("Preencha mês e valor.");
+      toast.warning("Preencha mês e valor.");
       return;
     }
     setSavingDespesa(true);
@@ -359,8 +359,8 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
       status: newDespesa.status as any,
     });
     setSavingDespesa(false);
-    if (error) { toast("Erro ao salvar despesa."); return; }
-    toast("Despesa adicionada.");
+    if (error) { toast.error("Erro ao salvar despesa."); return; }
+    toast.success("Despesa adicionada!");
     setNewDespesa({ mes_referencia: "", ano_referencia: String(new Date().getFullYear()), valor: "", status: "nao_iniciado" });
     setShowNewDespesa(false);
     loadData();
