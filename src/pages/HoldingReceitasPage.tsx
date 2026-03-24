@@ -72,6 +72,7 @@ export default function HoldingReceitasPage() {
   const [filterStatusMed, setFilterStatusMed] = useState("all");
   const [filterStatusNF, setFilterStatusNF] = useState("all");
   const [searchText, setSearchText] = useState("");
+  const [filterTipoContrato, setFilterTipoContrato] = useState("all");
 
   // ─── Data Fetching ───
   const { data, isLoading } = useQuery({
