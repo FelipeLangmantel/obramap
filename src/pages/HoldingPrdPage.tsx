@@ -36,6 +36,7 @@ interface MonthEntry {
 export default function HoldingPrdPage() {
   const navigate = useNavigate();
   const { company } = useAuth();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("portfolio");
   const [filterObra, setFilterObra] = useState("all");
   const [selectedObra, setSelectedObra] = useState("all");

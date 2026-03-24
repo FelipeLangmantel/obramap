@@ -614,6 +614,7 @@ function PendenciasTab({ obraId }: { obraId: string }) {
     await supabase.from("pendencias_projeto").insert({ obra_id: obraId, tipo: newTipo || null, descricao: newDesc } as any);
     setNewTipo(""); setNewDesc("");
     toast.success("Pendência adicionada");
+    invalidateHolding();
     load();
   };
 
