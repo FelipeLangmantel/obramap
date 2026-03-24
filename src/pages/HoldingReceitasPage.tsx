@@ -83,7 +83,7 @@ export default function HoldingReceitasPage() {
   const [agrupamento, setAgrupamento] = useState<"semanal" | "quinzenal" | "mensal">("mensal");
 
   // ─── Data Fetching ───
-  const { data, isLoading } = useQuery({
+  const { data } = useQuery({
     queryKey: ["holding-receitas", company?.id],
     queryFn: async () => {
       // 1. Fetch obras for this company
@@ -137,8 +137,19 @@ export default function HoldingReceitasPage() {
     },
     enabled: !!company?.id,
     refetchOnWindowFocus: true,
-    staleTime: 30000,
+    staleTime: 10000,
   });
+
+  // ─── Realtime: auto-update when medicoes_ple changes ───
+  useEffect(() => {
+    const channel = supabase
+      .channel("holding-receitas-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["holding-receitas"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient]);
 
   const obras = data?.obras || [];
   const medicoes = data?.medicoes || [];
