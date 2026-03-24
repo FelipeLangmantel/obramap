@@ -49,6 +49,7 @@ import {
   X,
   TrendingUp,
   Pause,
+  FileText,
 } from "lucide-react";
 import { addDays, format, differenceInDays, differenceInMonths } from "date-fns";
 
