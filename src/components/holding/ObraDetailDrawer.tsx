@@ -208,6 +208,7 @@ const NF_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 };
 
 function MedicoesTab({ obraId }: { obraId: string }) {
+  const invalidateHolding = useInvalidateHolding();
   const [medicoes, setMedicoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
