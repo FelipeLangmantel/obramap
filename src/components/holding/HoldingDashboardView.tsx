@@ -187,7 +187,8 @@ export default function HoldingDashboardView() {
   const { company } = useAuth();
   const queryClient = useQueryClient();
   const [selectedObra, setSelectedObra] = useState<ObraEnriched | null>(null);
-  const [viewMode, setViewMode] = useState<"cards" | "gantt" | "analytics">("cards");
+  const [mainView, setMainView] = useState<"portfolio" | "analytics">("portfolio");
+  const [viewMode, setViewMode] = useState<"cards" | "gantt">("cards");
   const [showNewObraDialog, setShowNewObraDialog] = useState(false);
   const [newObraForm, setNewObraForm] = useState({
     nome: "", empresa: "", num_contrato: "", parceria_scp: "",
