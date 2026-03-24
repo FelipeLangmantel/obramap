@@ -49,6 +49,7 @@ import {
   X,
   TrendingUp,
   Pause,
+  FileText,
 } from "lucide-react";
 import { addDays, format, differenceInDays, differenceInMonths } from "date-fns";
 
@@ -972,6 +973,10 @@ export default function HoldingDashboardView() {
             Uma obra por linha, separada por vírgulas:<br />
             <code className="text-[10px] bg-muted px-1 rounded">nome, empresa, num_contrato, parceria_scp, valor_contrato, data_inicio, prazo_dias, status, percentual_andamento, municipio, estado, uh, responsavel, tipo_contrato</code>
           </p>
+          <Button variant="ghost" size="sm" className="h-7 text-xs mt-1 mb-2"
+            onClick={() => setImportText("Nome da Obra,Empresa,Nº Contrato,SCP Parceria,Valor,Data Início (YYYY-MM-DD),Prazo dias,Status,% Andamento,Município,Estado,UH,Responsável,Tipo Contrato\n,PreviBras,,SCP Nome,0,,120,nao_iniciada,0,Cidade,RS,0,Nome - 51 99999-9999,Ata Estado RS")}>
+            <FileText className="h-3.5 w-3.5 mr-1" /> Carregar modelo
+          </Button>
           <textarea className="w-full h-64 text-xs font-mono border rounded-md p-2 bg-muted/30 focus:outline-none focus:ring-1 focus:ring-ring" value={importText} onChange={(e) => setImportText(e.target.value)} />
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setShowImportDialog(false)}>Cancelar</Button>
