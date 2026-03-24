@@ -1,0 +1,4 @@
+ALTER TABLE public.obras_portfolio
+  ADD COLUMN IF NOT EXISTS uh INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS responsavel TEXT,
+  ADD COLUMN IF NOT EXISTS tipo_contrato TEXT;
