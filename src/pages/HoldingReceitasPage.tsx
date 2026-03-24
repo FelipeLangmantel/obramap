@@ -607,5 +607,8 @@ export default function HoldingReceitasPage() {
               </TabsContent>
             </Tabs>
           </div>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }
