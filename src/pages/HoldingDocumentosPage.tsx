@@ -42,9 +42,9 @@ function countDocObra(docs: any): number {
   return DOC_OBRA_FIELDS.reduce((s, f) => s + (docs[f.key] ? 1 : 0), 0);
 }
 
-function countAcomp(docs: any): number {
+function countEnsaios(docs: any): number {
   if (!docs) return 0;
-  return ACOMP_FIELDS.reduce((s, f) => s + (docs[f.key] ? 1 : 0), 0);
+  return ENSAIOS_FIELDS.reduce((s, f) => s + (docs[f.key] ? 1 : 0), 0);
 }
 
 function healthDocs(docCount: number, acompCount: number): "verde" | "amarelo" | "vermelho" {
