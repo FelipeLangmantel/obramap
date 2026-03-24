@@ -919,6 +919,26 @@ export default function HoldingDashboardView() {
               <div><Label className="text-xs">Município</Label><Input value={newObraForm.municipio} onChange={(e) => setNewObraForm(p => ({ ...p, municipio: e.target.value }))} placeholder="Ex: Taquara, Esteio..." /></div>
               <div><Label className="text-xs">Estado</Label><Input value={newObraForm.estado} onChange={(e) => setNewObraForm(p => ({ ...p, estado: e.target.value }))} placeholder="RS" /></div>
             </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div><Label className="text-xs">UH (Unidades Hab.)</Label><Input type="number" value={newObraForm.uh} onChange={(e) => setNewObraForm(p => ({ ...p, uh: e.target.value }))} placeholder="Ex: 20, 70, 246" /></div>
+              <div><Label className="text-xs">Responsável</Label><Input value={newObraForm.responsavel} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel: e.target.value }))} placeholder="Ex: Frederico - 51 990049501" /></div>
+              <div>
+                <Label className="text-xs">Tipo de Contrato</Label>
+                <Select value={newObraForm.tipo_contrato} onValueChange={(v) => setNewObraForm(p => ({ ...p, tipo_contrato: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Ata Estado RS">Ata Estado RS</SelectItem>
+                    <SelectItem value="Licitação">Licitação</SelectItem>
+                    <SelectItem value="Adesão">Adesão</SelectItem>
+                    <SelectItem value="Moradia Popular">Moradia Popular</SelectItem>
+                    <SelectItem value="Moradia Faixa I">Moradia Faixa I</SelectItem>
+                    <SelectItem value="Moradia Faixa II">Moradia Faixa II</SelectItem>
+                    <SelectItem value="Alto Padrão">Alto Padrão</SelectItem>
+                    <SelectItem value="Projeto de Obra">Projeto de Obra</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowNewObraDialog(false); setEditingObra(null); resetNewObraForm(); }}>Cancelar</Button>
