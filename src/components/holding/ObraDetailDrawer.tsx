@@ -238,6 +238,7 @@ function MedicoesTab({ obraId }: { obraId: string }) {
     const { error } = await supabase.from("medicoes_ple").insert(payload);
     if (error) { toast.error("Erro ao salvar medição"); return; }
     toast.success("Medição adicionada");
+    invalidateHolding();
     setShowForm(false);
     setForm({ num_medicao: "", mes_referencia: "", ano_referencia: new Date().getFullYear(), data_envio: "", data_aprovacao: "", status_medicao: "nao_iniciada", valor_medicao: 0, num_nf: "", data_pagamento: "", status_nf: "pendente" });
     load();
