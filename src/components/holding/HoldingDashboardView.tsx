@@ -188,10 +188,13 @@ export default function HoldingDashboardView() {
   const [newObraForm, setNewObraForm] = useState({
     nome: "", empresa: "", num_contrato: "", parceria_scp: "",
     valor_contrato: "", data_inicio: "", prazo_dias: "",
-    status: "nao_iniciada" as string, percentual_andamento: 0,
+    status: "nao_iniciada" as "nao_iniciada" | "em_andamento" | "concluida" | "paralisada",
+    percentual_andamento: 0,
     periodo_medicao: "", prazo_pagamento: "",
   });
   const [savingObra, setSavingObra] = useState(false);
+  const [editingObra, setEditingObra] = useState<ObraEnriched | null>(null);
+  const [deletingObraId, setDeletingObraId] = useState<string | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
 
   const generateHoldingPDF = async () => {
