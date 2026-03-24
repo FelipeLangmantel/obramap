@@ -1167,9 +1167,9 @@ function KpiCard({ icon: Icon, label, value, borderColor, valueColor }: { icon: 
     <Card className={`border-border/60 border-b-2 ${borderColor}`}>
       <CardContent className="p-4 flex items-center gap-3">
         <Icon className={`h-4 w-4 shrink-0 ${valueColor}`} />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-[10px] text-muted-foreground truncate">{label}</p>
-          <p className={`text-xl font-bold ${valueColor} truncate`}>{value}</p>
+          <p className={`text-xl font-bold ${valueColor} leading-tight break-words`}>{value}</p>
         </div>
       </CardContent>
     </Card>
