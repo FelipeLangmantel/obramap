@@ -448,8 +448,10 @@ export default function HoldingReceitasPage() {
                         <TableHead className="text-xs w-8">#</TableHead>
                         <TableHead className="text-xs">Obra</TableHead>
                         <TableHead className="text-xs">Empresa</TableHead>
-                        <TableHead className="text-xs border-r">Contrato</TableHead>
-                        <TableHead className="text-xs">Nº Med.</TableHead>
+                         <TableHead className="text-xs border-r">Contrato</TableHead>
+                         <TableHead className="text-xs text-center">UH</TableHead>
+                         <TableHead className="text-xs">Tipo</TableHead>
+                         <TableHead className="text-xs">Nº Med.</TableHead>
                         <TableHead className="text-xs">Mês</TableHead>
                         <TableHead className="text-xs">Ano</TableHead>
                         <TableHead className="text-xs">Envio</TableHead>
