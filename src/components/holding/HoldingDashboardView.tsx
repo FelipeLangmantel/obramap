@@ -332,7 +332,7 @@ export default function HoldingDashboardView() {
       valor_contrato: Number(newObraForm.valor_contrato) || 0,
       data_inicio: newObraForm.data_inicio || null,
       prazo_dias: Number(newObraForm.prazo_dias) || 0,
-      status: newObraForm.status as any,
+      status: newObraForm.status,
       percentual_andamento: newObraForm.percentual_andamento,
       periodo_medicao: newObraForm.periodo_medicao || null,
       prazo_pagamento: newObraForm.prazo_pagamento || null,
