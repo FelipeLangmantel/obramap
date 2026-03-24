@@ -97,7 +97,7 @@ export default function HoldingReceitasPage() {
       // 1. Fetch obras for this company
       const { data: obras, error: obrasError } = await supabase
         .from("obras_portfolio")
-        .select("id, nome, empresa, num_contrato, valor_contrato, parceria_scp, uh, responsavel, tipo_contrato")
+        .select("id, nome, empresa, num_contrato, valor_contrato, parceria_scp, uh, responsavel, tipo_contrato, prazo_pagamento")
         .eq("company_id", company!.id);
 
       if (obrasError) throw obrasError;
