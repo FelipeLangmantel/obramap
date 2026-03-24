@@ -202,6 +202,21 @@ export default function IndustrializationModuleView() {
             </SelectContent>
           </Select>
         )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Settings2 className="h-4 w-4 mr-2" /> Novo Contexto
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={createStandaloneContext}>
+              Standalone (obra sem vínculo ObraMap)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={createIntegratedContext} disabled={!currentProject}>
+              Integrado com obra atual {currentProject ? `(${currentProject.name})` : "(selecione uma obra)"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Main Tabs */}
