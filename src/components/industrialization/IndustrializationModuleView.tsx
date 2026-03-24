@@ -239,13 +239,12 @@ export default function IndustrializationModuleView() {
         </TabsContent>
 
         <TabsContent value="lifting" className="mt-4">
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <Wrench className="h-10 w-10 mx-auto mb-3 opacity-50" />
-              <p className="font-medium">Içamento</p>
-              <p className="text-sm">Agenda de equipamentos, custos e vínculo com viagens.</p>
-            </CardContent>
-          </Card>
+          {activeContext && companyId && (
+            <LiftingTabContent
+              companyId={companyId}
+              contextId={activeContext.id}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="installation" className="mt-4">
