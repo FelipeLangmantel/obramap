@@ -207,6 +207,10 @@ export default function HoldingDocumentosPage() {
     count >= max ? "text-emerald-600" : count >= max * 0.5 ? "text-amber-600" : "text-red-600";
 
   return (
+    <SidebarProvider defaultOpen={true}>
+      <div className="h-screen flex w-full overflow-hidden">
+        <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
+        <main className="flex-1 min-w-0 h-full overflow-auto">
     <div className="space-y-6 p-6">
       {/* HEADER */}
       <div className="flex items-center justify-between">
