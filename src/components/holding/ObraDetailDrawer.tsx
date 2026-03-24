@@ -44,6 +44,8 @@ export interface ObraDrawerData {
   nome: string;
   uh?: number | null;
   responsavel?: string | null;
+  responsavel_nome?: string | null;
+  responsavel_telefone?: string | null;
   tipo_contrato?: string | null;
   valor_contrato?: number;
   data_inicio?: string | null;
@@ -326,7 +328,21 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
           {obra.tipo_contrato && <Badge variant="outline" className="text-[10px]">{obra.tipo_contrato}</Badge>}
           {obra.uh && <Badge variant="secondary" className="text-[10px]">{obra.uh} UH</Badge>}
           {obra.empresa && <Badge variant="outline" className="text-[10px]">{obra.empresa}</Badge>}
-          {obra.responsavel && <span className="text-[10px] text-muted-foreground">👤 {obra.responsavel}</span>}
+          {(() => {
+            const nome = obra.responsavel_nome || obra.responsavel?.split(" - ")[0] || "";
+            const tel = obra.responsavel_telefone || obra.responsavel?.split(" - ")[1] || "";
+            const telLimpo = tel.replace(/\D/g, "");
+            const waNumber = telLimpo.startsWith("55") ? telLimpo : `55${telLimpo}`;
+            if (!nome) return null;
+            return (
+              <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                👤 {nome}
+                {telLimpo && (
+                  <a href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Olá ${nome}, tudo bem?`)}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-emerald-600 hover:text-emerald-500 font-medium">📱 {tel}</a>
+                )}
+              </span>
+            );
+          })()}
         </div>
       </SheetHeader>
       <Tabs defaultValue="resumo" className="flex-1 flex flex-col">

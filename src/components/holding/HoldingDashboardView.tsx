@@ -87,6 +87,8 @@ interface ObraPortfolio {
   estado: string | null;
   uh: number | null;
   responsavel: string | null;
+  responsavel_nome: string | null;
+  responsavel_telefone: string | null;
   tipo_contrato: string | null;
   created_at: string;
 }
@@ -225,7 +227,7 @@ export default function HoldingDashboardView() {
     percentual_andamento: 0,
     periodo_medicao: "", prazo_pagamento: "",
     municipio: "", estado: "RS",
-    uh: "", responsavel: "", tipo_contrato: "",
+    uh: "", responsavel: "", responsavel_nome: "", responsavel_telefone: "", tipo_contrato: "",
   });
   const [savingObra, setSavingObra] = useState(false);
   const [editingObra, setEditingObra] = useState<ObraEnriched | null>(null);
@@ -377,7 +379,7 @@ export default function HoldingDashboardView() {
     status: "nao_iniciada", percentual_andamento: 0,
     periodo_medicao: "", prazo_pagamento: "",
     municipio: "", estado: "RS",
-    uh: "", responsavel: "", tipo_contrato: "",
+    uh: "", responsavel: "", responsavel_nome: "", responsavel_telefone: "", tipo_contrato: "",
   });
 
   const handleSaveObra = async () => {
@@ -402,7 +404,9 @@ export default function HoldingDashboardView() {
       municipio: newObraForm.municipio || null,
       estado: newObraForm.estado || "RS",
       uh: Number(newObraForm.uh) || null,
-      responsavel: newObraForm.responsavel || null,
+      responsavel_nome: newObraForm.responsavel_nome || null,
+      responsavel_telefone: newObraForm.responsavel_telefone?.replace(/\D/g, "") || null,
+      responsavel: [newObraForm.responsavel_nome, newObraForm.responsavel_telefone].filter(Boolean).join(" - ") || null,
       tipo_contrato: newObraForm.tipo_contrato || null,
     };
 
@@ -863,7 +867,10 @@ export default function HoldingDashboardView() {
                       status: obra.status, percentual_andamento: obra.percentual_andamento,
                       periodo_medicao: obra.periodo_medicao || "", prazo_pagamento: obra.prazo_pagamento || "",
                       municipio: obra.municipio || "", estado: obra.estado || "RS",
-                      uh: String(obra.uh || ""), responsavel: obra.responsavel || "", tipo_contrato: obra.tipo_contrato || "",
+                      uh: String(obra.uh || ""), responsavel: obra.responsavel || "",
+                      responsavel_nome: obra.responsavel_nome || (obra.responsavel?.split(" - ")[0] || ""),
+                      responsavel_telefone: obra.responsavel_telefone || (obra.responsavel?.split(" - ")[1] || ""),
+                      tipo_contrato: obra.tipo_contrato || "",
                     });
                     setEditingObra(obra);
                     setShowNewObraDialog(true);
@@ -926,7 +933,7 @@ export default function HoldingDashboardView() {
       )}
 
       {/* Detail Drawer */}
-      <ObraDetailDrawer obra={selectedObra ? { id: selectedObra.id, nome: selectedObra.nome, uh: selectedObra.uh, responsavel: selectedObra.responsavel, tipo_contrato: selectedObra.tipo_contrato, valor_contrato: selectedObra.valor_contrato, data_inicio: selectedObra.data_inicio, prazo_dias: selectedObra.prazo_dias, aditivo_prazo_dias: selectedObra.aditivo_prazo_dias, percentual_andamento: selectedObra.percentual_andamento, status: selectedObra.status, prazo_pagamento: selectedObra.prazo_pagamento, empresa: selectedObra.empresa } : null} onClose={() => setSelectedObra(null)} />
+      <ObraDetailDrawer obra={selectedObra ? { id: selectedObra.id, nome: selectedObra.nome, uh: selectedObra.uh, responsavel: selectedObra.responsavel, responsavel_nome: selectedObra.responsavel_nome, responsavel_telefone: selectedObra.responsavel_telefone, tipo_contrato: selectedObra.tipo_contrato, valor_contrato: selectedObra.valor_contrato, data_inicio: selectedObra.data_inicio, prazo_dias: selectedObra.prazo_dias, aditivo_prazo_dias: selectedObra.aditivo_prazo_dias, percentual_andamento: selectedObra.percentual_andamento, status: selectedObra.status, prazo_pagamento: selectedObra.prazo_pagamento, empresa: selectedObra.empresa } : null} onClose={() => setSelectedObra(null)} />
 
       {/* Nova Obra Dialog */}
       <Dialog open={showNewObraDialog} onOpenChange={(o) => { if (!o) { setShowNewObraDialog(false); setEditingObra(null); resetNewObraForm(); } }}>
@@ -992,9 +999,10 @@ export default function HoldingDashboardView() {
               <div><Label className="text-xs">Município</Label><Input value={newObraForm.municipio} onChange={(e) => setNewObraForm(p => ({ ...p, municipio: e.target.value }))} placeholder="Ex: Taquara, Esteio..." /></div>
               <div><Label className="text-xs">Estado</Label><Input value={newObraForm.estado} onChange={(e) => setNewObraForm(p => ({ ...p, estado: e.target.value }))} placeholder="RS" /></div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-3">
               <div><Label className="text-xs">UH (Unidades Hab.)</Label><Input type="number" value={newObraForm.uh} onChange={(e) => setNewObraForm(p => ({ ...p, uh: e.target.value }))} placeholder="Ex: 20, 70, 246" /></div>
-              <div><Label className="text-xs">Responsável</Label><Input value={newObraForm.responsavel} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel: e.target.value }))} placeholder="Ex: Frederico - 51 990049501" /></div>
+              <div><Label className="text-xs">Nome do Responsável</Label><Input value={newObraForm.responsavel_nome} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_nome: e.target.value }))} placeholder="Ex: Bruno" /></div>
+              <div><Label className="text-xs">Telefone (WhatsApp)</Label><Input type="tel" value={newObraForm.responsavel_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_telefone: e.target.value }))} placeholder="Ex: 51982637961" /></div>
               <div>
                 <Label className="text-xs">Tipo de Contrato</Label>
                 <Select value={newObraForm.tipo_contrato} onValueChange={(v) => setNewObraForm(p => ({ ...p, tipo_contrato: v }))}>
@@ -1230,9 +1238,23 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
           <div><span className="text-muted-foreground">Prev. Fim</span><p className="font-medium text-foreground">{previsaoFim}</p></div>
         </div>
 
-        {obra.responsavel && (
-          <p className="text-[10px] text-muted-foreground truncate">👤 {obra.responsavel}</p>
-        )}
+        {(() => {
+          const nome = obra.responsavel_nome || obra.responsavel?.split(" - ")[0] || "";
+          const tel = obra.responsavel_telefone || obra.responsavel?.split(" - ")[1] || "";
+          const telLimpo = tel.replace(/\D/g, "");
+          const waNumber = telLimpo.startsWith("55") ? telLimpo : `55${telLimpo}`;
+          if (!nome) return null;
+          return (
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <span>👤 {nome}</span>
+              {telLimpo && (
+                <a href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Olá ${nome}, tudo bem? Preciso falar sobre a obra ${obra.nome}.`)}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="flex items-center gap-0.5 text-emerald-600 hover:text-emerald-500 font-medium transition-colors">
+                  📱 {tel}
+                </a>
+              )}
+            </div>
+          );
+        })()}
 
         {receitas > 0 && (
           <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">✓ {BRL_SHORT(receitas)} recebido</p>
@@ -1261,6 +1283,7 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-center">UH</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">Tipo</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">Responsável</TableHead>
+                <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">WhatsApp</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10">SCP</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-right">Valor Contrato</TableHead>
                 <TableHead className="text-[10px] font-semibold sticky top-0 bg-muted/90 z-10 text-right">Receitas</TableHead>
@@ -1290,7 +1313,16 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
                     <TableCell className="text-[10px] py-2">{obra.num_contrato || "—"}</TableCell>
                     <TableCell className="text-[10px] py-2 text-center">{obra.uh || "—"}</TableCell>
                     <TableCell className="text-[10px] py-2">{obra.tipo_contrato || "—"}</TableCell>
-                    <TableCell className="text-[10px] py-2 truncate max-w-[120px]">{obra.responsavel || "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2">{obra.responsavel_nome || obra.responsavel?.split(" - ")[0] || "—"}</TableCell>
+                    <TableCell className="text-[10px] py-2">
+                      {(() => {
+                        const tel = obra.responsavel_telefone || obra.responsavel?.split(" - ")[1] || "";
+                        const telLimpo = tel.replace(/\D/g, "");
+                        if (!telLimpo) return "—";
+                        const waNumber = telLimpo.startsWith("55") ? telLimpo : `55${telLimpo}`;
+                        return <a href={`https://wa.me/${waNumber}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-emerald-600 hover:underline">{tel}</a>;
+                      })()}
+                    </TableCell>
                     <TableCell className="text-[10px] py-2">{obra.parceria_scp || "—"}</TableCell>
                     <TableCell className="text-[10px] py-2 text-right font-mono">{BRL.format(obra.valor_contrato)}</TableCell>
                     <TableCell className="text-[10px] py-2 text-right font-mono">{receitas > 0 ? BRL.format(receitas) : "—"}</TableCell>
