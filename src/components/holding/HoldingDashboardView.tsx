@@ -743,6 +743,20 @@ export default function HoldingDashboardView() {
               <SelectItem value="red">🔴 Vermelho</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={filterTipo} onValueChange={setFilterTipo}>
+            <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder="Tipo Contrato" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos Tipos</SelectItem>
+              <SelectItem value="Ata Estado RS">Ata Estado RS</SelectItem>
+              <SelectItem value="Licitação">Licitação</SelectItem>
+              <SelectItem value="Adesão">Adesão</SelectItem>
+              <SelectItem value="Moradia Popular">Moradia Popular</SelectItem>
+              <SelectItem value="Moradia Faixa I">Moradia Faixa I</SelectItem>
+              <SelectItem value="Moradia Faixa II">Moradia Faixa II</SelectItem>
+              <SelectItem value="Alto Padrão">Alto Padrão</SelectItem>
+              <SelectItem value="Projeto de Obra">Projeto de Obra</SelectItem>
+            </SelectContent>
+          </Select>
           <Badge variant="secondary" className="text-xs h-6">{obrasFiltradas.length} obras</Badge>
           {hasActiveFilter && (
             <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={clearFilters}>
