@@ -1,0 +1,602 @@
+import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/AppSidebar";
+import {
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer
+} from "recharts";
+import {
+  TrendingUp, DollarSign, Clock, CheckCircle2, AlertCircle, Download, RefreshCw,
+  Search, Calendar, FileText, Menu, ArrowLeft, X
+} from "lucide-react";
+import { format, addMonths, startOfMonth } from "date-fns";
+import { toast } from "sonner";
+
+// ─── Types ───
+interface MedicaoCompleta {
+  id: string;
+  obra_id: string;
+  obra_nome: string;
+  obra_empresa: string | null;
+  obra_contrato: string | null;
+  obra_scp: string | null;
+  num_medicao: string | null;
+  mes_referencia: string | null;
+  ano_referencia: number | null;
+  data_envio: string | null;
+  data_aprovacao: string | null;
+  status_medicao: "aprovada" | "enviada" | "pendente" | "nao_iniciada";
+  valor_medicao: number;
+  num_nf: string | null;
+  data_pagamento: string | null;
+  status_nf: "recebido" | "aguardando_aprovacao" | "pendente";
+}
+
+// ─── Formatters ───
+const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const BRL_SHORT = (v: number) => v >= 1e6 ? `R$ ${(v / 1e6).toFixed(1)}M` : `R$ ${(v / 1000).toFixed(0)}k`;
+
+const STATUS_MED_CONFIG: Record<string, { label: string; cls: string }> = {
+  aprovada: { label: "Medição Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  enviada: { label: "Medição Enviada", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+  pendente: { label: "Medição Pendente", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  nao_iniciada: { label: "Não Iniciada", cls: "bg-muted text-muted-foreground" },
+};
+
+const STATUS_NF_CONFIG: Record<string, { label: string; cls: string }> = {
+  recebido: { label: "Recebido NF", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  aguardando_aprovacao: { label: "Aguardando Aprov.", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  pendente: { label: "Pendente", cls: "bg-muted text-muted-foreground" },
+};
+
+const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+export default function HoldingReceitasPage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { user, company, isLoading: authLoading } = useAuth();
+
+  const [activeTab, setActiveTab] = useState("resumo");
+  const [filterObra, setFilterObra] = useState("all");
+  const [filterEmpresa, setFilterEmpresa] = useState("all");
+  const [filterStatusMed, setFilterStatusMed] = useState("all");
+  const [filterStatusNF, setFilterStatusNF] = useState("all");
+  const [searchText, setSearchText] = useState("");
+
+  useEffect(() => {
+    if (!authLoading && !user) navigate("/auth");
+  }, [user, authLoading, navigate]);
+
+  // ─── Data Fetching ───
+  const { data, isLoading } = useQuery({
+    queryKey: ["holding-receitas", company?.id],
+    queryFn: async () => {
+      const { data: obras } = await supabase
+        .from("obras_portfolio")
+        .select("id, nome, empresa, num_contrato, valor_contrato, parceria_scp")
+        .eq("company_id", company!.id);
+
+      const { data: medicoes } = await supabase
+        .from("medicoes_ple")
+        .select("*");
+
+      const obrasMap = new Map((obras || []).map(o => [o.id, o]));
+      const joined: MedicaoCompleta[] = (medicoes || [])
+        .filter((m: any) => obrasMap.has(m.obra_id))
+        .map((m: any) => {
+          const o = obrasMap.get(m.obra_id)!;
+          return {
+            id: m.id,
+            obra_id: m.obra_id,
+            obra_nome: o.nome,
+            obra_empresa: o.empresa,
+            obra_contrato: o.num_contrato,
+            obra_scp: o.parceria_scp,
+            num_medicao: m.num_medicao,
+            mes_referencia: m.mes_referencia,
+            ano_referencia: m.ano_referencia,
+            data_envio: m.data_envio,
+            data_aprovacao: m.data_aprovacao,
+            status_medicao: m.status_medicao,
+            valor_medicao: Number(m.valor_medicao) || 0,
+            num_nf: m.num_nf,
+            data_pagamento: m.data_pagamento,
+            status_nf: m.status_nf,
+          };
+        });
+      return { obras: obras || [], medicoes: joined };
+    },
+    enabled: !!company?.id,
+  });
+
+  const obras = data?.obras || [];
+  const medicoes = data?.medicoes || [];
+
+  // ─── KPIs ───
+  const kpis = useMemo(() => {
+    const aprovadas = medicoes.filter(m => m.status_medicao === "aprovada");
+    const enviadas = medicoes.filter(m => m.status_medicao === "enviada");
+    const pendentes = medicoes.filter(m => m.status_medicao === "pendente");
+    const nfRecebida = medicoes.filter(m => m.status_nf === "recebido");
+
+    return {
+      totalGeral: medicoes.reduce((s, m) => s + m.valor_medicao, 0),
+      totalAprovado: aprovadas.reduce((s, m) => s + m.valor_medicao, 0),
+      totalEnviado: enviadas.reduce((s, m) => s + m.valor_medicao, 0),
+      totalPendente: pendentes.reduce((s, m) => s + m.valor_medicao, 0),
+      totalNFRecebida: nfRecebida.reduce((s, m) => s + m.valor_medicao, 0),
+      totalAguardandoNF: medicoes.filter(m => m.status_nf === "aguardando_aprovacao").reduce((s, m) => s + m.valor_medicao, 0),
+      countAprovadas: aprovadas.length,
+      countEnviadas: enviadas.length,
+      countPendentes: pendentes.length,
+    };
+  }, [medicoes]);
+
+  // ─── Fluxo Mensal ───
+  const fluxoData = useMemo(() => {
+    const monthMap: Record<string, { mes: string; aprovado: number; enviado: number; pendente: number; nf_recebido: number }> = {};
+    medicoes.forEach(m => {
+      if (!m.mes_referencia || !m.ano_referencia) return;
+      const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === m.mes_referencia!.substring(0, 3).toLowerCase());
+      if (mesIdx < 0) return;
+      const key = `${m.ano_referencia}-${String(mesIdx + 1).padStart(2, "0")}`;
+      const label = `${MONTHS[mesIdx]}/${String(m.ano_referencia).slice(2)}`;
+      if (!monthMap[key]) monthMap[key] = { mes: label, aprovado: 0, enviado: 0, pendente: 0, nf_recebido: 0 };
+      if (m.status_medicao === "aprovada") monthMap[key].aprovado += m.valor_medicao;
+      if (m.status_medicao === "enviada") monthMap[key].enviado += m.valor_medicao;
+      if (m.status_medicao === "pendente") monthMap[key].pendente += m.valor_medicao;
+      if (m.status_nf === "recebido") monthMap[key].nf_recebido += m.valor_medicao;
+    });
+    return Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
+  }, [medicoes]);
+
+  // ─── Filters ───
+  const medicoesFiltradas = useMemo(() => {
+    return medicoes.filter(m => {
+      if (filterObra !== "all" && m.obra_id !== filterObra) return false;
+      if (filterEmpresa !== "all" && m.obra_empresa !== filterEmpresa) return false;
+      if (filterStatusMed !== "all" && m.status_medicao !== filterStatusMed) return false;
+      if (filterStatusNF !== "all" && m.status_nf !== filterStatusNF) return false;
+      if (searchText && !m.obra_nome.toLowerCase().includes(searchText.toLowerCase()) && !m.num_medicao?.includes(searchText)) return false;
+      return true;
+    });
+  }, [medicoes, filterObra, filterEmpresa, filterStatusMed, filterStatusNF, searchText]);
+
+  const uniqueEmpresas = useMemo(() => [...new Set(obras.map(o => o.empresa).filter(Boolean))], [obras]);
+  const hasActiveFilter = filterObra !== "all" || filterEmpresa !== "all" || filterStatusMed !== "all" || filterStatusNF !== "all" || searchText !== "";
+
+  // ─── Top obras by medicao ───
+  const topObrasByMedicao = useMemo(() => {
+    const obraMap: Record<string, { nome: string; aprovado: number; pendente: number }> = {};
+    medicoes.forEach(m => {
+      if (!obraMap[m.obra_id]) obraMap[m.obra_id] = { nome: m.obra_nome, aprovado: 0, pendente: 0 };
+      if (m.status_medicao === "aprovada") obraMap[m.obra_id].aprovado += m.valor_medicao;
+      if (m.status_medicao === "pendente") obraMap[m.obra_id].pendente += m.valor_medicao;
+    });
+    return Object.values(obraMap)
+      .sort((a, b) => (b.aprovado + b.pendente) - (a.aprovado + a.pendente))
+      .slice(0, 8)
+      .map(o => ({ ...o, nome: o.nome.length > 20 ? o.nome.slice(0, 20) + "…" : o.nome }));
+  }, [medicoes]);
+
+  // ─── Previsão 12 meses ───
+  const next12Months = useMemo(() =>
+    Array.from({ length: 12 }, (_, i) => {
+      const d = addMonths(startOfMonth(new Date()), i);
+      return { date: d, key: format(d, "yyyy-MM"), label: format(d, "MMM/yy"), monthIdx: d.getMonth(), year: d.getFullYear() };
+    }), []);
+
+  const previsaoData = useMemo(() => {
+    return next12Months.map(month => {
+      const matching = medicoes.filter(m => {
+        if (!m.ano_referencia) return false;
+        const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0, 3).toLowerCase());
+        return mesIdx === month.monthIdx && m.ano_referencia === month.year;
+      });
+      const obrasCount = new Set(matching.map(m => m.obra_id)).size;
+      return {
+        mes: month.label,
+        obrasCount,
+        aprovado: matching.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0),
+        enviado: matching.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + m.valor_medicao, 0),
+        pendente: matching.filter(m => m.status_medicao === "pendente").reduce((s, m) => s + m.valor_medicao, 0),
+        nfRecebido: matching.filter(m => m.status_nf === "recebido").reduce((s, m) => s + m.valor_medicao, 0),
+        total: matching.reduce((s, m) => s + m.valor_medicao, 0),
+      };
+    });
+  }, [medicoes, next12Months]);
+
+  // ─── Insights ───
+  const insights = useMemo(() => {
+    const enviadas = medicoes.filter(m => m.status_medicao === "enviada" || m.status_medicao === "pendente");
+    const first = enviadas.sort((a, b) => (a.data_envio || "z").localeCompare(b.data_envio || "z"))[0];
+    const next3 = previsaoData.slice(0, 3).reduce((s, p) => s + p.total, 0);
+    const obraIds = new Set(medicoes.map(m => m.obra_id));
+    const obrasSem = obras.filter(o => !obraIds.has(o.id));
+    return { proximaEntrada: first, totalProx3Meses: next3, obrasSemMedicao: obrasSem };
+  }, [medicoes, obras, previsaoData]);
+
+  // ─── CSV Export ───
+  const exportarCSV = () => {
+    const headers = ["#", "Obra", "Empresa", "Contrato", "Nº Medição", "Mês Ref", "Ano Ref", "Data Envio", "Data Aprovação", "Status Medição", "Valor Medição", "Nº NF", "Data Pagamento", "Status NF"];
+    const rows = medicoesFiltradas.map((m, i) => [
+      i + 1, m.obra_nome, m.obra_empresa || "", m.obra_contrato || "",
+      m.num_medicao || "", m.mes_referencia || "", m.ano_referencia || "",
+      m.data_envio || "", m.data_aprovacao || "",
+      m.status_medicao, m.valor_medicao.toFixed(2),
+      m.num_nf || "", m.data_pagamento || "", m.status_nf
+    ]);
+    const csv = [headers, ...rows].map(r => r.join(";")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `receitas-holding-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+    toast.success("CSV exportado!");
+  };
+
+  const clearFilters = () => {
+    setFilterObra("all"); setFilterEmpresa("all"); setFilterStatusMed("all"); setFilterStatusNF("all"); setSearchText("");
+  };
+
+  if (authLoading || !user) {
+    return <div className="flex items-center justify-center min-h-screen"><Skeleton className="h-12 w-48" /></div>;
+  }
+
+  return (
+    <SidebarProvider defaultOpen={true}>
+      <div className="flex min-h-screen w-full bg-background">
+        <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
+        <main className="flex-1 overflow-auto">
+          {/* HEADER */}
+          <div className="sticky top-0 z-10 flex items-center justify-between bg-background/95 backdrop-blur border-b px-4 py-3">
+            <div className="flex items-center gap-3">
+              <SidebarTrigger className="p-2 -ml-1"><Menu className="h-5 w-5" /></SidebarTrigger>
+              <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}><ArrowLeft className="h-5 w-5" /></Button>
+              <div>
+                <h1 className="text-lg font-semibold flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-primary" />Receitas & Medições PLE
+                </h1>
+                <p className="text-xs text-muted-foreground">Gestão financeira de entradas — todas as obras do portfólio</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={exportarCSV}><Download className="h-4 w-4" /> Exportar CSV</Button>
+              <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-receitas"] })}><RefreshCw className="h-4 w-4" /> Atualizar</Button>
+            </div>
+          </div>
+
+          <div className="p-4 md:p-6 space-y-4">
+            {/* 5 KPI Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+              <Card className="border-b-2 border-b-muted-foreground/30">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><DollarSign className="h-3.5 w-3.5" />Total Geral</div>
+                  <p className="text-xl font-bold">{BRL.format(kpis.totalGeral)}</p>
+                  <p className="text-[10px] text-muted-foreground">{medicoes.length} medições</p>
+                </CardContent>
+              </Card>
+              <Card className="border-b-2 border-b-emerald-500">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />Medições Aprovadas</div>
+                  <p className="text-xl font-bold text-emerald-600">{BRL.format(kpis.totalAprovado)}</p>
+                  <p className="text-[10px] text-muted-foreground">{kpis.countAprovadas} medições</p>
+                </CardContent>
+              </Card>
+              <Card className="border-b-2 border-b-blue-500">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Clock className="h-3.5 w-3.5 text-blue-500" />Aguardando Aprovação</div>
+                  <p className="text-xl font-bold text-blue-600">{BRL.format(kpis.totalEnviado)}</p>
+                  <p className="text-[10px] text-muted-foreground">{kpis.countEnviadas} medições</p>
+                </CardContent>
+              </Card>
+              <Card className="border-b-2 border-b-amber-500">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><AlertCircle className="h-3.5 w-3.5 text-amber-500" />Medições Pendentes</div>
+                  <p className="text-xl font-bold text-amber-600">{BRL.format(kpis.totalPendente)}</p>
+                  <p className="text-[10px] text-muted-foreground">{kpis.countPendentes} medições</p>
+                </CardContent>
+              </Card>
+              <Card className="border-b-2 border-b-emerald-400">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><FileText className="h-3.5 w-3.5 text-emerald-400" />NF Recebida</div>
+                  <p className="text-xl font-bold text-emerald-500">{BRL.format(kpis.totalNFRecebida)}</p>
+                  <p className="text-[10px] text-muted-foreground">Receita confirmada</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* TABS */}
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+              <TabsList className="grid w-full grid-cols-3 max-w-md">
+                <TabsTrigger value="resumo">📊 Resumo</TabsTrigger>
+                <TabsTrigger value="tabela">📋 Tabela</TabsTrigger>
+                <TabsTrigger value="previsao">📅 Previsão</TabsTrigger>
+              </TabsList>
+
+              {/* ═══ TAB RESUMO ═══ */}
+              <TabsContent value="resumo" className="space-y-4 mt-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm">Fluxo Mensal de Medições</CardTitle></CardHeader>
+                    <CardContent>
+                      {fluxoData.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={280}>
+                          <AreaChart data={fluxoData}>
+                            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                            <XAxis dataKey="mes" fontSize={10} />
+                            <YAxis tickFormatter={(v) => BRL_SHORT(v)} fontSize={10} />
+                            <Tooltip formatter={(v: number) => BRL.format(v)} />
+                            <Legend />
+                            <Area type="monotone" dataKey="aprovado" name="Aprovado" stroke="#22c55e" fill="#22c55e" fillOpacity={0.3} />
+                            <Area type="monotone" dataKey="nf_recebido" name="NF Recebida" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.2} />
+                            <Area type="monotone" dataKey="enviado" name="Enviada" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.2} />
+                            <Area type="monotone" dataKey="pendente" name="Pendente" stroke="#ef4444" fill="#ef4444" fillOpacity={0.1} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center py-12">Nenhuma medição com mês/ano de referência.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader className="pb-2"><CardTitle className="text-sm">Top Obras por Medição</CardTitle></CardHeader>
+                    <CardContent>
+                      {topObrasByMedicao.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={280}>
+                          <BarChart layout="vertical" data={topObrasByMedicao}>
+                            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                            <YAxis type="category" dataKey="nome" width={160} fontSize={10} />
+                            <XAxis type="number" tickFormatter={(v) => BRL_SHORT(v)} fontSize={10} />
+                            <Tooltip formatter={(v: number) => BRL.format(v)} />
+                            <Legend />
+                            <Bar dataKey="aprovado" name="Aprovado" fill="#22c55e" stackId="a" />
+                            <Bar dataKey="pendente" name="Pendente" fill="#f59e0b" stackId="a" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center py-12">Sem dados.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Card><CardContent className="p-4 text-center">
+                    <p className="text-xs text-muted-foreground">Obras com medição aprovada</p>
+                    <p className="text-2xl font-bold">{new Set(medicoes.filter(m => m.status_medicao === "aprovada").map(m => m.obra_id)).size} / {obras.length}</p>
+                  </CardContent></Card>
+                  <Card><CardContent className="p-4 text-center">
+                    <p className="text-xs text-muted-foreground">Valor médio por medição</p>
+                    <p className="text-2xl font-bold">{kpis.countAprovadas > 0 ? BRL.format(kpis.totalAprovado / kpis.countAprovadas) : "—"}</p>
+                  </CardContent></Card>
+                  <Card><CardContent className="p-4 text-center">
+                    <p className="text-xs text-muted-foreground">Aguardando pagamento NF</p>
+                    <p className="text-2xl font-bold text-amber-600">{BRL.format(kpis.totalAguardandoNF)}</p>
+                  </CardContent></Card>
+                </div>
+              </TabsContent>
+
+              {/* ═══ TAB TABELA ═══ */}
+              <TabsContent value="tabela" className="space-y-3 mt-4">
+                {/* Filter bar */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input className="h-8 w-48 text-xs pl-7" placeholder="Buscar obra ou medição..." value={searchText} onChange={e => setSearchText(e.target.value)} />
+                  </div>
+                  <Select value={filterObra} onValueChange={setFilterObra}>
+                    <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="Todas Obras" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Obras</SelectItem>
+                      {obras.map(o => <SelectItem key={o.id} value={o.id}>{o.nome}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={filterEmpresa} onValueChange={setFilterEmpresa}>
+                    <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Todas Empresas" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Empresas</SelectItem>
+                      {uniqueEmpresas.map(e => <SelectItem key={e!} value={e!}>{e}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={filterStatusMed} onValueChange={setFilterStatusMed}>
+                    <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="Status Medição" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Status Medição</SelectItem>
+                      <SelectItem value="aprovada">Aprovada</SelectItem>
+                      <SelectItem value="enviada">Enviada</SelectItem>
+                      <SelectItem value="pendente">Pendente</SelectItem>
+                      <SelectItem value="nao_iniciada">Não Iniciada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={filterStatusNF} onValueChange={setFilterStatusNF}>
+                    <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Status NF" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Status NF</SelectItem>
+                      <SelectItem value="recebido">Recebido</SelectItem>
+                      <SelectItem value="aguardando_aprovacao">Aguardando Aprov.</SelectItem>
+                      <SelectItem value="pendente">Pendente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Badge variant="secondary" className="text-xs">{medicoesFiltradas.length} medições</Badge>
+                  {hasActiveFilter && (
+                    <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 px-2"><X className="h-3.5 w-3.5" /></Button>
+                  )}
+                </div>
+
+                {/* Table */}
+                <div className="overflow-x-auto max-h-[600px] overflow-y-auto border rounded-lg">
+                  <Table>
+                    <TableHeader className="sticky top-0 z-10 bg-background">
+                      <TableRow className="bg-muted/50">
+                        <TableHead colSpan={4} className="text-center text-xs font-bold border-r">IDENTIFICAÇÃO</TableHead>
+                        <TableHead colSpan={7} className="text-center text-xs font-bold border-r text-blue-600">ENGENHARIA</TableHead>
+                        <TableHead colSpan={3} className="text-center text-xs font-bold text-emerald-600">FINANCEIRO</TableHead>
+                      </TableRow>
+                      <TableRow>
+                        <TableHead className="text-xs w-8">#</TableHead>
+                        <TableHead className="text-xs">Obra</TableHead>
+                        <TableHead className="text-xs">Empresa</TableHead>
+                        <TableHead className="text-xs border-r">Contrato</TableHead>
+                        <TableHead className="text-xs">Nº Med.</TableHead>
+                        <TableHead className="text-xs">Mês</TableHead>
+                        <TableHead className="text-xs">Ano</TableHead>
+                        <TableHead className="text-xs">Envio</TableHead>
+                        <TableHead className="text-xs">Aprovação</TableHead>
+                        <TableHead className="text-xs">Status Med.</TableHead>
+                        <TableHead className="text-xs border-r text-right">Valor</TableHead>
+                        <TableHead className="text-xs">Nº NF</TableHead>
+                        <TableHead className="text-xs">Pagamento</TableHead>
+                        <TableHead className="text-xs">Status NF</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {medicoesFiltradas.map((m, idx) => {
+                        const ms = STATUS_MED_CONFIG[m.status_medicao] || STATUS_MED_CONFIG.nao_iniciada;
+                        const ns = STATUS_NF_CONFIG[m.status_nf] || STATUS_NF_CONFIG.pendente;
+                        return (
+                          <TableRow key={m.id} className={`text-xs ${idx % 2 === 0 ? "" : "bg-muted/20"}`}>
+                            <TableCell className="py-2">{idx + 1}</TableCell>
+                            <TableCell className="py-2 font-medium">{m.obra_nome}</TableCell>
+                            <TableCell className="py-2">{m.obra_empresa || "—"}</TableCell>
+                            <TableCell className="py-2 border-r">{m.obra_contrato || "—"}</TableCell>
+                            <TableCell className="py-2">{m.num_medicao || "—"}</TableCell>
+                            <TableCell className="py-2">{m.mes_referencia || "—"}</TableCell>
+                            <TableCell className="py-2">{m.ano_referencia || "—"}</TableCell>
+                            <TableCell className="py-2">{m.data_envio ? format(new Date(m.data_envio + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                            <TableCell className="py-2">{m.data_aprovacao ? format(new Date(m.data_aprovacao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                            <TableCell className="py-2"><Badge className={`text-[10px] ${ms.cls}`} variant="secondary">{ms.label}</Badge></TableCell>
+                            <TableCell className="py-2 border-r text-right font-medium">{BRL.format(m.valor_medicao)}</TableCell>
+                            <TableCell className="py-2">{m.num_nf || "—"}</TableCell>
+                            <TableCell className="py-2">{m.data_pagamento ? format(new Date(m.data_pagamento + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                            <TableCell className="py-2"><Badge className={`text-[10px] ${ns.cls}`} variant="secondary">{ns.label}</Badge></TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {medicoesFiltradas.length === 0 && (
+                        <TableRow><TableCell colSpan={14} className="text-center py-8 text-muted-foreground">Nenhuma medição encontrada.</TableCell></TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Footer totals */}
+                <div className="flex items-center justify-between text-xs text-muted-foreground px-2">
+                  <span>{medicoesFiltradas.length} medições encontradas</span>
+                  <span>
+                    <strong>Total:</strong> {BRL.format(medicoesFiltradas.reduce((s, m) => s + m.valor_medicao, 0))}
+                    {" | "}
+                    <strong>Aprovado:</strong> {BRL.format(medicoesFiltradas.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0))}
+                  </span>
+                </div>
+              </TabsContent>
+
+              {/* ═══ TAB PREVISÃO ═══ */}
+              <TabsContent value="previsao" className="space-y-4 mt-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-5 w-5 text-primary" />
+                      <div>
+                        <CardTitle className="text-sm">Previsão de Caixa — Próximos 12 Meses</CardTitle>
+                        <p className="text-xs text-muted-foreground">Projeção das entradas futuras baseada no calendário de medições</p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto border rounded-lg">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-xs">Mês</TableHead>
+                            <TableHead className="text-xs text-center">Obras</TableHead>
+                            <TableHead className="text-xs text-right">Pendente</TableHead>
+                            <TableHead className="text-xs text-right">Enviada</TableHead>
+                            <TableHead className="text-xs text-right">Aprovada</TableHead>
+                            <TableHead className="text-xs text-right">NF Recebida</TableHead>
+                            <TableHead className="text-xs text-right font-bold">Total Mês</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {previsaoData.map((p, i) => {
+                            const isCurrentMonth = i === 0;
+                            const hasData = p.total > 0;
+                            return (
+                              <TableRow key={p.mes} className={`text-xs ${isCurrentMonth ? "bg-primary/5 border-l-2 border-l-primary" : hasData ? "bg-emerald-500/5" : "bg-muted/20"}`}>
+                                <TableCell className="py-2 font-medium">{p.mes}</TableCell>
+                                <TableCell className="py-2 text-center">{p.obrasCount || "—"}</TableCell>
+                                <TableCell className="py-2 text-right text-amber-600">{p.pendente > 0 ? BRL.format(p.pendente) : "—"}</TableCell>
+                                <TableCell className="py-2 text-right text-blue-600">{p.enviado > 0 ? BRL.format(p.enviado) : "—"}</TableCell>
+                                <TableCell className="py-2 text-right text-emerald-600">{p.aprovado > 0 ? BRL.format(p.aprovado) : "—"}</TableCell>
+                                <TableCell className="py-2 text-right text-emerald-500">{p.nfRecebido > 0 ? BRL.format(p.nfRecebido) : "—"}</TableCell>
+                                <TableCell className="py-2 text-right font-bold">{p.total > 0 ? BRL.format(p.total) : "—"}</TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Chart */}
+                    <div className="mt-4">
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={previsaoData}>
+                          <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                          <XAxis dataKey="mes" fontSize={10} />
+                          <YAxis tickFormatter={(v) => BRL_SHORT(v)} fontSize={10} />
+                          <Tooltip formatter={(v: number) => BRL.format(v)} />
+                          <Legend />
+                          <Bar dataKey="aprovado" name="Aprovado" fill="#22c55e" />
+                          <Bar dataKey="enviado" name="Enviado" fill="#3b82f6" />
+                          <Bar dataKey="pendente" name="Pendente" fill="#f59e0b" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Insight cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Card className="border-l-4 border-l-blue-500">
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Próxima entrada esperada</p>
+                      <p className="text-sm font-semibold">
+                        {insights.proximaEntrada ? `${insights.proximaEntrada.obra_nome} — ${BRL.format(insights.proximaEntrada.valor_medicao)}` : "Nenhuma medição pendente"}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-emerald-500">
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Total previsto próx. 3 meses</p>
+                      <p className="text-sm font-semibold text-emerald-600">{BRL.format(insights.totalProx3Meses)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="border-l-4 border-l-amber-500">
+                    <CardContent className="p-4">
+                      <p className="text-xs text-muted-foreground mb-1">Obras sem medição lançada</p>
+                      <p className="text-sm font-semibold">{insights.obrasSemMedicao.length} obra{insights.obrasSemMedicao.length !== 1 ? "s" : ""}</p>
+                      {insights.obrasSemMedicao.length > 0 && (
+                        <p className="text-[10px] text-muted-foreground mt-1 truncate">{insights.obrasSemMedicao.map(o => o.nome).join(", ")}</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </main>
+      </div>
+    </SidebarProvider>
+  );
+}
