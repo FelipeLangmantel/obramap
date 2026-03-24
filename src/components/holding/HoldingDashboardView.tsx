@@ -404,7 +404,9 @@ export default function HoldingDashboardView() {
       municipio: newObraForm.municipio || null,
       estado: newObraForm.estado || "RS",
       uh: Number(newObraForm.uh) || null,
-      responsavel: newObraForm.responsavel || null,
+      responsavel_nome: newObraForm.responsavel_nome || null,
+      responsavel_telefone: newObraForm.responsavel_telefone?.replace(/\D/g, "") || null,
+      responsavel: [newObraForm.responsavel_nome, newObraForm.responsavel_telefone].filter(Boolean).join(" - ") || null,
       tipo_contrato: newObraForm.tipo_contrato || null,
     };
 
