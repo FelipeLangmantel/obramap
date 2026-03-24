@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Factory, Plus, Package, Truck, Wrench } from "lucide-react";
 import { toast } from "sonner";
+import { FactoriesTabContent } from "./FactoriesTabContent";
 
 interface OperationContext {
   id: string;
