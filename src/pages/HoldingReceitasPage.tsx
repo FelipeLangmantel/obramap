@@ -66,6 +66,7 @@ const STATUS_NF_CONFIG: Record<string, { label: string; cls: string }> = {
 const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 export default function HoldingReceitasPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { company } = useAuth();
 
