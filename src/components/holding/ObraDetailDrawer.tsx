@@ -589,6 +589,7 @@ function AditivosTab({ obraId }: { obraId: string }) {
    ══════════════════════════════════════════════ */
 
 function PendenciasTab({ obraId }: { obraId: string }) {
+  const invalidateHolding = useInvalidateHolding();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [newTipo, setNewTipo] = useState("");
