@@ -249,6 +249,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         { title: "Despesas & Custos", view: "holding-despesas" as any, icon: Receipt, permissionId: "holding" },
         { title: "Documentação", view: "holding-documentos" as any, icon: FolderOpen, permissionId: "holding" },
         { title: "PRD — Cronograma", view: "holding-prd" as any, icon: BarChart3, permissionId: "holding" },
+        { title: "IA — Insights", view: "holding-insights" as any, icon: Sparkles, permissionId: "holding", badge: "BETA" },
       ],
     },
     {
