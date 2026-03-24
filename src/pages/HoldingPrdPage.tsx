@@ -31,7 +31,7 @@ interface ObraFull {
 
 interface MonthEntry {
   key: string; label: string; mes: number; ano: number;
-  previsto: number; realizado: number; despesas: number;
+  previsto: number; previstoCadastrado: number; realizado: number; despesas: number;
 }
 
 export default function HoldingPrdPage() {
@@ -84,6 +84,14 @@ export default function HoldingPrdPage() {
           })
           .reduce((s: number, m: any) => s + (Number(m.valor_medicao) || 0), 0);
 
+        const previstoCadastrado = medicoes
+          .filter((m: any) => {
+            if (!m.data_previsao_medicao) return false;
+            const pd = new Date(m.data_previsao_medicao + "T12:00:00");
+            return m.obra_id === o.id && pd.getMonth() === mes && pd.getFullYear() === ano;
+          })
+          .reduce((s: number, m: any) => s + (Number(m.valor_previsto_medicao) || 0), 0);
+
         const desp = despesas
           .filter((d: any) => {
             const mi = MONTHS.findIndex(mn => mn.toLowerCase() === (d.mes_referencia || "").substring(0,3).toLowerCase());
@@ -91,7 +99,7 @@ export default function HoldingPrdPage() {
           })
           .reduce((s: number, d: any) => s + (Number(d.valor) || 0), 0);
 
-        months.push({ key, label: `${MONTHS[mes]}/${String(ano).slice(2)}`, mes: mes + 1, ano, previsto: monthlyPrevisto, realizado, despesas: desp });
+        months.push({ key, label: `${MONTHS[mes]}/${String(ano).slice(2)}`, mes: mes + 1, ano, previsto: monthlyPrevisto, previstoCadastrado, realizado, despesas: desp });
       }
 
       result.set(o.id, { obra: o, months });
@@ -366,6 +374,71 @@ export default function HoldingPrdPage() {
                       <Area type="monotone" dataKey="cumRealizado" name="Realizado Acum." stroke="#22c55e" fill="#22c55e" fillOpacity={0.15} />
                     </AreaChart>
                   </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              {/* Medições individuais — Previsto vs Realizado */}
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-sm font-medium mb-3">Medições — Previsto × Realizado</p>
+                  {(() => {
+                    const obraData = (data?.medicoes || []).filter((m: any) => m.obra_id === selectedObra);
+                    if (obraData.length === 0) return (
+                      <p className="text-sm text-muted-foreground text-center py-6">Nenhuma medição cadastrada para esta obra.</p>
+                    );
+                    return (
+                      <div className="border rounded-lg overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="text-xs">Nº</TableHead>
+                              <TableHead className="text-xs">Mês/Ano</TableHead>
+                              <TableHead className="text-xs">Prev. Envio</TableHead>
+                              <TableHead className="text-xs">Envio Real</TableHead>
+                              <TableHead className="text-xs text-right">Val. Previsto</TableHead>
+                              <TableHead className="text-xs text-right">Val. Realizado</TableHead>
+                              <TableHead className="text-xs text-right">Desvio</TableHead>
+                              <TableHead className="text-xs">Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {obraData.map((m: any) => {
+                              const prevVal = Number(m.valor_previsto_medicao) || 0;
+                              const realVal = Number(m.valor_medicao) || 0;
+                              const desvio = prevVal > 0 ? realVal - prevVal : null;
+                              const pct = desvio !== null && prevVal > 0 ? ((desvio / prevVal) * 100).toFixed(1) : null;
+                              const statusCls: Record<string, string> = {
+                                aprovada: "text-emerald-600", enviada: "text-blue-600",
+                                pendente: "text-amber-600", nao_iniciada: "text-muted-foreground"
+                              };
+                              const statusLabel: Record<string, string> = {
+                                aprovada: "Aprovada", enviada: "Enviada",
+                                pendente: "Pendente", nao_iniciada: "Não Iniciada"
+                              };
+                              return (
+                                <TableRow key={m.id} className="text-xs">
+                                  <TableCell>{m.num_medicao || "—"}</TableCell>
+                                  <TableCell>{m.mes_referencia}/{m.ano_referencia}</TableCell>
+                                  <TableCell>{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                                  <TableCell>{m.data_envio ? format(new Date(m.data_envio + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                                  <TableCell className="text-right font-mono">{prevVal > 0 ? BRL.format(prevVal) : "—"}</TableCell>
+                                  <TableCell className="text-right font-mono">{BRL.format(realVal)}</TableCell>
+                                  <TableCell className="text-right font-mono">
+                                    {pct !== null ? (
+                                      <span className={Number(desvio) >= 0 ? "text-emerald-600" : "text-red-500"}>
+                                        {Number(desvio) >= 0 ? "+" : ""}{pct}%
+                                      </span>
+                                    ) : "—"}
+                                  </TableCell>
+                                  <TableCell className={statusCls[m.status_medicao] || ""}>{statusLabel[m.status_medicao] || m.status_medicao}</TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </>
