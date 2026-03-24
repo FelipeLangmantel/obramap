@@ -50,6 +50,7 @@ import {
   TrendingUp,
   Receipt,
   FolderOpen,
+  Sparkles,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -78,7 +79,7 @@ import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard";
 
 // Views com rotas separadas (navegam para página diferente)
-type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements" | "holding-receitas" | "holding-despesas" | "holding-documentos" | "holding-prd";
+type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements" | "holding-receitas" | "holding-despesas" | "holding-documentos" | "holding-prd" | "holding-insights";
 type MenuViewType = ViewType | RouteViewType;
 
 // Rotas dedicadas (navegam para páginas separadas)
@@ -91,6 +92,7 @@ const DEDICATED_ROUTE_MAP: Record<RouteViewType, string> = {
   "holding-despesas": "/holding-despesas",
   "holding-documentos": "/holding-documentos",
   "holding-prd": "/holding-prd",
+  "holding-insights": "/holding-insights",
 };
 
 interface AppSidebarProps {
@@ -123,6 +125,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     if (pathname === "/holding-despesas") return "holding-despesas";
     if (pathname === "/holding-documentos") return "holding-documentos";
     if (pathname === "/holding-prd") return "holding-prd";
+    if (pathname === "/holding-insights") return "holding-insights";
     
     return activeView;
   };
@@ -202,7 +205,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   };
 
   // ✅ Menu items organizados por contexto de uso
-  type MenuItem = { title: string; view: MenuViewType; icon: any; permissionId: string };
+  type MenuItem = { title: string; view: MenuViewType; icon: any; permissionId: string; badge?: string };
   
   const menuGroups: { label: string; items: MenuItem[]; highlight?: boolean; badge?: string }[] = [
     {
@@ -246,6 +249,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         { title: "Despesas & Custos", view: "holding-despesas" as any, icon: Receipt, permissionId: "holding" },
         { title: "Documentação", view: "holding-documentos" as any, icon: FolderOpen, permissionId: "holding" },
         { title: "PRD — Cronograma", view: "holding-prd" as any, icon: BarChart3, permissionId: "holding" },
+        { title: "IA — Insights", view: "holding-insights" as any, icon: Sparkles, permissionId: "holding", badge: "BETA" },
       ],
     },
     {
@@ -324,6 +328,11 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
             {item.view === 'supplies' && supplyOverdueCount > 0 && (
               <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4 min-w-[16px] justify-center">
                 {supplyOverdueCount}
+              </Badge>
+            )}
+            {item.badge && (
+              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-purple-500/10 text-purple-600 border-purple-500/30">
+                {item.badge}
               </Badge>
             )}
             {isSystemAdmin && isBeta && (
