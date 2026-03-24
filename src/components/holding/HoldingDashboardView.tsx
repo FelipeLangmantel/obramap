@@ -221,6 +221,7 @@ export default function HoldingDashboardView() {
     percentual_andamento: 0,
     periodo_medicao: "", prazo_pagamento: "",
     municipio: "", estado: "RS",
+    uh: "", responsavel: "", tipo_contrato: "",
   });
   const [savingObra, setSavingObra] = useState(false);
   const [editingObra, setEditingObra] = useState<ObraEnriched | null>(null);
