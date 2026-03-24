@@ -390,10 +390,15 @@ export default function HoldingDashboardView() {
         <KpiCard icon={AlertTriangle} label="Alertas Críticos" value={String(kpis.alertasCriticos)} color={kpis.alertasCriticos > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"} bgColor={kpis.alertasCriticos > 0 ? "bg-red-100 dark:bg-red-900/30" : "bg-muted/50"} />
       </div>
 
-      {/* View Toggle */}
-      {obras.length > 0 && (
-        <div className="flex items-center justify-between">
+      {/* View Toggle + Nova Obra */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
           <h3 className="text-sm font-semibold text-foreground">Obras do Portfólio ({obras.length})</h3>
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowNewObraDialog(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1" /> Nova Obra
+          </Button>
+        </div>
+        {obras.length > 0 && (
           <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
             <button
               onClick={() => setViewMode("cards")}
@@ -408,8 +413,8 @@ export default function HoldingDashboardView() {
               <GanttChart className="h-3.5 w-3.5" /> Gantt
             </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Obras View */}
       {obras.length === 0 ? (
