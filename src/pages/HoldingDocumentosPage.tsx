@@ -264,9 +264,9 @@ export default function HoldingDocumentosPage() {
             </Card>
             <Card>
               <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground mb-2">Acompanhamento médio</p>
-                <Progress value={(avgAcomp / 5) * 100} className="h-3" />
-                <p className="text-xs text-right mt-1 text-muted-foreground">{avgAcomp.toFixed(1)}/5 ({((avgAcomp / 5) * 100).toFixed(0)}%)</p>
+                <p className="text-xs text-muted-foreground mb-2">Ensaios e Projetos médio</p>
+                <Progress value={(avgEnsaios / 5) * 100} className="h-3" />
+                <p className="text-xs text-right mt-1 text-muted-foreground">{avgEnsaios.toFixed(1)}/5 ({((avgEnsaios / 5) * 100).toFixed(0)}%)</p>
               </CardContent>
             </Card>
           </div>
