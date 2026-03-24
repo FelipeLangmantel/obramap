@@ -440,9 +440,9 @@ export default function HoldingReceitasPage() {
                   <Table>
                     <TableHeader className="sticky top-0 z-10 bg-background">
                       <TableRow className="bg-muted/50">
-                        <TableHead colSpan={4} className="text-center text-xs font-bold border-r">IDENTIFICAÇÃO</TableHead>
-                        <TableHead colSpan={7} className="text-center text-xs font-bold border-r text-blue-600">ENGENHARIA</TableHead>
-                        <TableHead colSpan={3} className="text-center text-xs font-bold text-emerald-600">FINANCEIRO</TableHead>
+                         <TableHead colSpan={6} className="text-center text-xs font-bold border-r">IDENTIFICAÇÃO</TableHead>
+                         <TableHead colSpan={7} className="text-center text-xs font-bold border-r text-blue-600">ENGENHARIA</TableHead>
+                         <TableHead colSpan={3} className="text-center text-xs font-bold text-emerald-600">FINANCEIRO</TableHead>
                       </TableRow>
                       <TableRow>
                         <TableHead className="text-xs w-8">#</TableHead>
