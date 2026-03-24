@@ -15,7 +15,7 @@ import {
 } from "recharts";
 import {
   TrendingUp, DollarSign, Clock, CheckCircle2, AlertCircle, Download, RefreshCw,
-  Search, Calendar, FileText, Menu, ArrowLeft, X
+  Search, Calendar, FileText, X
 } from "lucide-react";
 import { format, addMonths, startOfMonth } from "date-fns";
 import { toast } from "sonner";
