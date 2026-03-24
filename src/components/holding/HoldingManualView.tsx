@@ -1,4 +1,4 @@
-import { BookOpen, Building2, FileCheck2, ClipboardList, DollarSign, BarChart3, AlertTriangle, FileDown, MapPin, Info } from "lucide-react";
+import { BookOpen, Building2, ClipboardList, BarChart3, AlertTriangle, FileDown, Info } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

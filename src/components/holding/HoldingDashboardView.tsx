@@ -699,6 +699,8 @@ Muçum,Binotto,,,561609.44,,,em_andamento,0,Muçum,RS`);
             <GanttTimeline obras={obras} onObraClick={openObra} />
           )}
         </>
+      ) : mainView === "manual" ? (
+        <HoldingManualView />
       ) : (
         <HoldingAnalyticsView obras={obras} alerts={alerts} onObraClick={openObra} />
       )}
