@@ -196,6 +196,7 @@ function Index() {
     "productivity": "Produtividade e Equipes",
     "contractors": "Empreiteiros",
     "industrialization": "Industrialização & Logística",
+    "holding-dashboard": "Painel da Holding",
   };
 
   return (
