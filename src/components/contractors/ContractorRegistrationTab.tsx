@@ -92,7 +92,7 @@ export function ContractorRegistrationTab({ contractors, onCreateContractor, onU
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(c)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(c)} disabled={!canEdit}>
                       <Edit2 className="h-3.5 w-3.5" />
                     </Button>
                   </TableCell>
