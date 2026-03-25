@@ -30,6 +30,7 @@ import {
 import { toast } from "sonner";
 import { format, differenceInDays, addDays } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
