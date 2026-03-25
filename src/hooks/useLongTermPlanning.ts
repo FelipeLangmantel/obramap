@@ -434,6 +434,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
   // Salvar alterações
   const savePlanning = useCallback(async () => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return false; }
     if (!projectId || !company?.id) {
       toast.error("Projeto ou empresa não identificados");
       return false;
