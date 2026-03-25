@@ -795,6 +795,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const saveFamily = async () => {
+    if (!canEdit) return;
     if (!projectId || !newFamily.name.trim()) return;
     
     // Check for duplicate family name
