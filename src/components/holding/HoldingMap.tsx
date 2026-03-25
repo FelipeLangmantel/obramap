@@ -34,15 +34,15 @@ const obraIcon = (health: string) => {
   return L.divIcon({
     html: `<div style="
       background:${color};
-      border:2.5px solid ${border};
+      border:2px solid ${border};
       border-radius:50%;
-      width:20px;height:20px;
-      box-shadow:0 2px 6px rgba(0,0,0,0.4);
+      width:14px;height:14px;
+      box-shadow:0 1px 4px rgba(0,0,0,0.35);
       transition:transform 0.1s;
     "></div>`,
     className: "",
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
   });
 };
 
