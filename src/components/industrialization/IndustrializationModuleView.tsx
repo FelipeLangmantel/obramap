@@ -29,6 +29,7 @@ import { OverviewTabContent } from "./OverviewTabContent";
 import { InstallationTabContent } from "./InstallationTabContent";
 import { BatchesTabContent } from "./BatchesTabContent";
 import { LogisticsTabContent } from "./LogisticsTabContent";
+import PlanningGridTab from "./PlanningGridTab";
 
 interface OperationContext {
   id: string;
@@ -728,7 +729,7 @@ export default function IndustrializationModuleView() {
         <Tabs defaultValue="overview" className="w-full">
           <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="overview" className="gap-1.5">🏗️ Visão Geral</TabsTrigger>
-            <TabsTrigger value="factories" className="gap-1.5">📅 Períodos & Serviços</TabsTrigger>
+            <TabsTrigger value="planning" className="gap-1.5">📅 Planejamento</TabsTrigger>
             <TabsTrigger value="batches" className="gap-1.5">📦 Lotes</TabsTrigger>
             <TabsTrigger value="logistics" className="gap-1.5">🚛 Logística</TabsTrigger>
             <TabsTrigger value="lifting" className="gap-1.5">🏗 Içamento</TabsTrigger>
@@ -744,8 +745,8 @@ export default function IndustrializationModuleView() {
               totalUnits={activeContext.total_units}
             />
           </TabsContent>
-          <TabsContent value="factories" className="mt-4">
-            <FactoriesTabContent companyId={companyId} contextId={activeContext.id} contextType={activeContext.context_type} />
+          <TabsContent value="planning" className="mt-4">
+            <PlanningGridTab companyId={companyId} contextId={activeContext.id} totalUnits={activeContext.total_units} />
           </TabsContent>
           <TabsContent value="batches" className="mt-4">
             <BatchesTabContent companyId={companyId} contextId={activeContext.id} />
