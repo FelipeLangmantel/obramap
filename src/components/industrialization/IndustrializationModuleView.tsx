@@ -238,7 +238,8 @@ export default function IndustrializationModuleView() {
         { context_id: ctx.id, company_id: companyId, name: "Quadra B", code: "QB", color: "#10b981", display_order: 2 },
         { context_id: ctx.id, company_id: companyId, name: "Quadra C", code: "QC", color: "#f59e0b", display_order: 3 },
       ]).select("id, name");
-      const [zA, zB, zC] = zonas || [];
+      if (!zonas || zonas.length < 3) throw new Error("Erro ao criar zonas — verifique permissões do banco");
+      const [zA, zB, zC] = zonas;
 
       // 5. PERÍODOS
       const { data: periodos, error: periodError } = await supabase.from("ind_periods").insert([
