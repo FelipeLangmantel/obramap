@@ -487,8 +487,8 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         {/* Footer with User Info */}
         <SidebarFooter className="p-3 border-t border-border mt-auto bg-background">
           {profile && (
-            <div className="flex items-center gap-3 p-2 rounded-lg">
-              <Avatar className="h-9 w-9 shrink-0">
+            <div className="flex items-center gap-2 p-2 rounded-lg">
+              <Avatar className="h-8 w-8 shrink-0">
                 <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
                   {getInitials(profile.display_name)}
                 </AvatarFallback>
@@ -502,8 +502,29 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                 </p>
               </div>
               <button
+                onClick={() => {
+                  const root = document.documentElement;
+                  if (root.classList.contains("dark")) {
+                    root.classList.remove("dark");
+                    localStorage.setItem("theme", "light");
+                    setIsDark(false);
+                  } else {
+                    root.classList.add("dark");
+                    localStorage.setItem("theme", "dark");
+                    setIsDark(true);
+                  }
+                }}
+                className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+                title={isDark ? "Mudar para tema claro" : "Mudar para tema escuro"}
+              >
+                {isDark
+                  ? <Sun className="h-4 w-4" />
+                  : <Moon className="h-4 w-4" />
+                }
+              </button>
+              <button
                 onClick={() => signOut()}
-                className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
                 title="Sair"
               >
                 <LogOut className="h-4 w-4" />
