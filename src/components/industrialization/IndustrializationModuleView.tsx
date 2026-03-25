@@ -180,6 +180,38 @@ export default function IndustrializationModuleView() {
     fetchAll();
   };
 
+  // ── Factory CRUD ──
+  const openEditFactoryDashboard = (f: any) => {
+    setEditingFactory(f);
+    setFactoryForm({
+      name: f.name || "", city: f.city || "", state: f.state || "RS",
+      contact_name: f.contact_name || "", contact_phone: f.contact_phone || "",
+      avg_lead_time_days: f.avg_lead_time_days || 21, advance_payment_pct: f.advance_payment_pct || 30,
+      payment_terms: f.payment_terms || "", capacity_houses_month: f.capacity_houses_month || 0,
+      price_per_house: f.price_per_house || 0, is_active: f.is_active ?? true, notes: f.notes || "",
+    });
+    setFactoryDialog(true);
+  };
+
+  const saveFactory = async () => {
+    if (!requireEdit()) return;
+    if (!factoryForm.name.trim()) { toast.error("Nome obrigatório"); return; }
+    const payload = { ...factoryForm, company_id: companyId };
+    if (editingFactory?.id) {
+      const { error } = await supabase.from("ind_factories").update(payload as any).eq("id", editingFactory.id);
+      if (error) { toast.error("Erro: " + error.message); return; }
+      toast.success("Fábrica atualizada!");
+    } else {
+      const { error } = await supabase.from("ind_factories").insert(payload as any);
+      if (error) { toast.error("Erro: " + error.message); return; }
+      toast.success("Fábrica cadastrada!");
+    }
+    setFactoryDialog(false);
+    setEditingFactory(null);
+    setFactoryForm(defaultFactoryForm);
+    fetchAll();
+  };
+
   // ══════════════════════════════════════════
   // DEMONSTRAÇÃO COMPLETA
   // ══════════════════════════════════════════
