@@ -58,7 +58,7 @@ export interface PeriodSummary {
 }
 
 export function useLongTermPlanning(projectId: string | undefined) {
-  const { company } = useAuth();
+  const { company, canEdit } = useAuth();
   const { currentStep, advanceToStep } = useProjectSetupFlow();
   const [activeVersion, setActiveVersion] = useState<PlanningVersion | null>(null);
   const [periods, setPeriods] = useState<PlanningPeriod[]>([]);
