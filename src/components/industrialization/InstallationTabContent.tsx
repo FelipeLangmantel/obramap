@@ -337,17 +337,24 @@ export function InstallationTabContent({ companyId, contextId, contextType }: In
 
   return (
     <div className="space-y-4">
-      {/* Status summary */}
-      <div className="flex flex-wrap gap-2">
-        {Object.entries(statusCounts).map(([status, count]) => {
-          const cfg = STATUS_CONFIG[status] || { label: status, color: "bg-muted text-muted-foreground" };
-          return (
-            <Badge key={status} variant="outline" className={cn("text-[10px]", cfg.color)}>
-              {cfg.label}: {count}
-            </Badge>
-          );
-        })}
-        <Badge variant="outline" className="text-[10px]">Total: {units.length}</Badge>
+      {/* Status summary — compact card row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+        {Object.entries(statusCounts)
+          .sort(([,a], [,b]) => b - a)
+          .map(([status, count]) => {
+            const cfg = STATUS_CONFIG[status] || { label: status, color: "bg-muted text-muted-foreground" };
+            const pct = units.length > 0 ? Math.round((count / units.length) * 100) : 0;
+            return (
+              <div key={status} className={cn("rounded-lg border px-3 py-2 text-center", CELL_BG[status] || "bg-muted/40")}>
+                <div className="text-lg font-bold text-foreground">{count}</div>
+                <div className="text-[10px] text-muted-foreground">{cfg.label} ({pct}%)</div>
+              </div>
+            );
+          })}
+        <div className="rounded-lg border px-3 py-2 text-center bg-card">
+          <div className="text-lg font-bold text-foreground">{units.length}</div>
+          <div className="text-[10px] text-muted-foreground">Total</div>
+        </div>
       </div>
 
       {/* Filters + Action */}
@@ -393,7 +400,10 @@ export function InstallationTabContent({ companyId, contextId, contextType }: In
         </Card>
       ) : (
         <div className="space-y-4">
-          {groupedByZone.map(({ zone, units: zUnits }) => (
+          {groupedByZone.map(({ zone, units: zUnits }) => {
+            const zInstalled = zUnits.filter(u => u.status === "installed" || u.status === "completed").length;
+            const zPct = zUnits.length > 0 ? Math.round((zInstalled / zUnits.length) * 100) : 0;
+            return (
             <Card key={zone?.id || "no-zone"}>
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
@@ -402,6 +412,7 @@ export function InstallationTabContent({ companyId, contextId, contextType }: In
                   )}
                   <CardTitle className="text-sm">{zone?.name || "Sem Zona"}</CardTitle>
                   <Badge variant="outline" className="text-[10px]">{zUnits.length} un</Badge>
+                  <span className="text-[10px] text-muted-foreground ml-auto">{zInstalled} instaladas · {zPct}%</span>
                 </div>
               </CardHeader>
               <CardContent>
@@ -431,16 +442,23 @@ export function InstallationTabContent({ companyId, contextId, contextType }: In
                 </div>
               </CardContent>
             </Card>
-          ))}
+          );
+          })}
         </div>
       )}
 
-      {/* Legend */}
+      {/* Legend — simplified */}
       <div className="flex flex-wrap gap-3 text-[10px] text-muted-foreground pt-1">
-        {Object.entries(STATUS_CONFIG).map(([k, v]) => (
-          <div key={k} className="flex items-center gap-1">
-            <div className={cn("w-3 h-3 rounded", CELL_BG[k] || "bg-muted")} />
-            <span>{v.label}</span>
+        {[
+          { key: "pending", label: "Pendente" },
+          { key: "in_production", label: "Produzindo" },
+          { key: "in_transit", label: "Em Trânsito" },
+          { key: "delivered", label: "Entregue" },
+          { key: "installed", label: "Instalado" },
+        ].map(item => (
+          <div key={item.key} className="flex items-center gap-1">
+            <div className={cn("w-3 h-3 rounded", CELL_BG[item.key] || "bg-muted")} />
+            <span>{item.label}</span>
           </div>
         ))}
       </div>

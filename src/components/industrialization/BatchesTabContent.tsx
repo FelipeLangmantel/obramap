@@ -360,7 +360,7 @@ export function BatchesTabContent({ companyId, contextId }: BatchesTabProps) {
       ) : (
         <Card>
           <CardContent className="p-0">
-            <Table>
+             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-xs">Código</TableHead>
@@ -368,13 +368,17 @@ export function BatchesTabContent({ companyId, contextId }: BatchesTabProps) {
                   <TableHead className="text-xs">Serviço</TableHead>
                   <TableHead className="text-xs">Quinzena</TableHead>
                   <TableHead className="text-xs text-center">Plan./Prod.</TableHead>
+                  <TableHead className="text-xs text-center">Progresso</TableHead>
                   <TableHead className="text-xs text-right">Valor Total</TableHead>
                   <TableHead className="text-xs text-center">Status</TableHead>
+                  <TableHead className="text-xs w-24">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map(b => {
                   const st = STATUS_MAP[b.status] || { label: b.status, color: "" };
+                  const pct = b.planned_quantity > 0 ? Math.round((b.actual_quantity / b.planned_quantity) * 100) : 0;
+                  const flow = STATUS_FLOW[b.status];
                   return (
                     <TableRow key={b.id} className="cursor-pointer hover:bg-accent/50" onClick={() => setSelectedBatch(b)}>
                       <TableCell className="text-xs font-bold text-foreground">{b.batch_code}</TableCell>
@@ -384,11 +388,31 @@ export function BatchesTabContent({ companyId, contextId }: BatchesTabProps) {
                       <TableCell className="text-xs text-center font-medium text-foreground">
                         {b.actual_quantity > 0 ? `${b.actual_quantity}/${b.planned_quantity}` : b.planned_quantity}
                       </TableCell>
+                      <TableCell className="text-center">
+                        {b.actual_quantity > 0 ? (
+                          <Badge variant="outline" className={cn("text-[9px]",
+                            pct >= 100 ? "bg-emerald-500/15 text-emerald-700" :
+                            pct >= 50 ? "bg-amber-500/15 text-amber-700" :
+                            "bg-muted text-muted-foreground"
+                          )}>
+                            {pct}%
+                          </Badge>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-xs text-right text-foreground">
                         {BRL.format(b.planned_quantity * b.unit_value)}
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline" className={cn("text-[10px]", st.color)}>{st.label}</Badge>
+                      </TableCell>
+                      <TableCell onClick={e => e.stopPropagation()}>
+                        {flow && (
+                          <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => advanceStatus(b)} disabled={!canEdit}>
+                            <ArrowRight className="h-3 w-3 mr-1" /> {flow.label.split(' ')[0]}
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

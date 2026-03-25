@@ -435,12 +435,14 @@ export function LogisticsTabContent({ companyId, contextId }: LogisticsTabProps)
                       <TableHead className="text-xs text-center">Peças</TableHead>
                       <TableHead className="text-xs text-right">Frete</TableHead>
                       <TableHead className="text-xs text-center">Status</TableHead>
+                      <TableHead className="text-xs w-36">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredShipments.map(s => {
                       const st = SHIP_STATUS[s.status] || { label: s.status, color: "" };
                       const pieceCount = batchUnits.filter(bu => bu.batch_id === s.batch_id).length;
+                      const flow = SHIP_FLOW[s.status];
                       return (
                         <TableRow key={s.id} className="cursor-pointer hover:bg-accent/50" onClick={() => setSelectedShipment(s)}>
                           <TableCell className="text-xs font-bold text-foreground">{s.shipment_number}</TableCell>
@@ -451,6 +453,23 @@ export function LogisticsTabContent({ companyId, contextId }: LogisticsTabProps)
                           <TableCell className="text-xs text-right text-foreground">{BRL.format(s.freight_value)}</TableCell>
                           <TableCell className="text-center">
                             <Badge variant="outline" className={cn("text-[10px]", st.color)}>{st.label}</Badge>
+                          </TableCell>
+                          <TableCell onClick={e => e.stopPropagation()}>
+                            <div className="flex gap-1">
+                              <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => printRomaneio(s)}>
+                                <FileText className="h-3 w-3 mr-0.5" /> Romaneio
+                              </Button>
+                              {s.status === "in_transit" && (
+                                <Button variant="default" size="sm" className="h-6 text-[10px] px-2" onClick={() => { setSelectedShipment(s); openDeliveryDialog(); }} disabled={!canEdit}>
+                                  <CheckCircle2 className="h-3 w-3 mr-0.5" /> Entrega
+                                </Button>
+                              )}
+                              {flow && s.status !== "in_transit" && (
+                                <Button variant="outline" size="sm" className="h-6 text-[10px] px-2" onClick={() => advanceShipment(s)} disabled={!canEdit}>
+                                  <ArrowRight className="h-3 w-3 mr-0.5" /> {flow.label}
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );
