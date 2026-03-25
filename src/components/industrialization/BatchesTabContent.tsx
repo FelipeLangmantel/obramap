@@ -19,9 +19,10 @@ import {
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
-import { Package, Plus, Filter, ArrowRight, DollarSign, Calendar } from "lucide-react";
+import { Package, Plus, Filter, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -287,7 +288,7 @@ export function BatchesTabContent({ companyId, contextId }: BatchesTabProps) {
     return { units: unitsList, totalValue: tv, advance: adv };
   }, [selectedBatch, batchUnits, units, factories]);
 
-  const fmtDate = (d: string | null) => d ? format(new Date(d + "T12:00:00"), "dd/MM/yy") : "—";
+  
 
   // Group units by zone for new dialog
   const unitsByZone = useMemo(() => {
@@ -546,47 +547,33 @@ export function BatchesTabContent({ companyId, contextId }: BatchesTabProps) {
                 </SheetTitle>
               </SheetHeader>
 
-              <div className="mt-4 space-y-4">
+              {/* Summary bar */}
+              {(() => {
+                const detail = batchDetail;
+                const saldo = detail.totalValue - detail.advance;
+                return (
+                  <div className='flex border rounded-lg overflow-hidden mb-4 mt-4'>
+                    {[
+                      { label: 'Valor Total', value: BRL.format(detail.totalValue), color: 'text-foreground' },
+                      { label: `Entrada (${factories.find(f=>f.id===selectedBatch.factory_id)?.advance_payment_pct||0}%)`, value: BRL.format(detail.advance), color: 'text-amber-600' },
+                      { label: 'Saldo Restante', value: BRL.format(saldo), color: 'text-foreground' },
+                    ].map((item, i) => (
+                      <div key={i} className='flex-1 text-center p-3 border-r last:border-r-0'>
+                        <p className='text-[10px] text-muted-foreground'>{item.label}</p>
+                        <p className={`text-sm font-bold mt-1 ${item.color}`}>{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              <div className="space-y-4">
                 {/* Info */}
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div><span className="text-muted-foreground">Empresa:</span> <span className="font-medium text-foreground">{selectedBatch.ind_factories?.name}</span></div>
                   <div><span className="text-muted-foreground">Quinzena:</span> <span className="font-medium text-foreground">{selectedBatch.ind_periods?.name}</span></div>
                   <div><span className="text-muted-foreground">Serviço:</span> <span className="font-medium text-foreground">{selectedBatch.ind_services?.name || "—"}</span></div>
                   <div><span className="text-muted-foreground">Qtd:</span> <span className="font-medium text-foreground">{selectedBatch.actual_quantity > 0 ? `${selectedBatch.actual_quantity}/` : ""}{selectedBatch.planned_quantity}</span></div>
-                </div>
-
-                {/* Financial */}
-                <Card className="bg-accent/30">
-                  <CardContent className="p-3 space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground flex items-center gap-1"><DollarSign className="h-3 w-3" /> Valor Total</span>
-                      <span className="font-bold text-foreground">{BRL.format(batchDetail.totalValue)}</span>
-                    </div>
-                    {batchDetail.advance > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Entrada</span>
-                        <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-700">{BRL.format(batchDetail.advance)}</Badge>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Saldo</span>
-                      <span className="font-medium text-foreground">{BRL.format(batchDetail.totalValue - batchDetail.advance)}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Timeline */}
-                <div className="space-y-1 text-xs">
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <Calendar className="h-3 w-3" /> Histórico
-                  </div>
-                  <div className="pl-4 space-y-0.5">
-                    <div>Criado: {format(new Date(selectedBatch.created_at), "dd/MM/yy HH:mm")}</div>
-                    {selectedBatch.planned_start && <div>Início plan.: {fmtDate(selectedBatch.planned_start)}</div>}
-                    {selectedBatch.actual_start && <div>Início real: {fmtDate(selectedBatch.actual_start)}</div>}
-                    {selectedBatch.planned_finish && <div>Fim plan.: {fmtDate(selectedBatch.planned_finish)}</div>}
-                    {selectedBatch.actual_finish && <div>Fim real: {fmtDate(selectedBatch.actual_finish)}</div>}
-                  </div>
                 </div>
 
                 {/* Units */}
@@ -608,6 +595,35 @@ export function BatchesTabContent({ companyId, contextId }: BatchesTabProps) {
                     {STATUS_FLOW[selectedBatch.status].label}
                   </Button>
                 )}
+
+                {/* Status timeline */}
+                <div className='mt-4 pt-4 border-t'>
+                  <p className='text-xs font-semibold text-muted-foreground mb-3'>Histórico de Status</p>
+                  <div className='relative pl-4'>
+                    <div className='absolute left-[7px] top-0 bottom-0 w-[2px] bg-border' />
+                    {[
+                      { status:'Planejado', date:selectedBatch.created_at, done:true },
+                      { status:'Liberado para Fábrica', date:selectedBatch.actual_start, done:!!selectedBatch.actual_start },
+                      { status:'Em Produção', date:selectedBatch.actual_start, done:['in_production','ready','awaiting_transport','in_transit','delivered','installed'].includes(selectedBatch.status) },
+                      { status:'Pronto para Transporte', date:selectedBatch.actual_finish, done:['ready','awaiting_transport','in_transit','delivered','installed'].includes(selectedBatch.status) },
+                      { status:'Entregue na Obra', date:selectedBatch.actual_finish, done:['delivered','installed'].includes(selectedBatch.status) },
+                      { status:'Instalado', date:null, done:selectedBatch.status==='installed' },
+                    ].map((item,i) => (
+                      <div key={i} className='relative flex items-start gap-3 pb-4'>
+                        <div className={`absolute left-[-9px] top-[3px] w-[10px] h-[10px] rounded-full border-2 border-background
+                          ${item.done ? 'bg-emerald-500' : 'bg-muted'}`} />
+                        <div>
+                          <p className={`text-xs font-medium ${item.done ? 'text-foreground' : 'text-muted-foreground'}`}>
+                            {item.status}
+                          </p>
+                          {item.date && <p className='text-[10px] text-muted-foreground'>
+                            {format(new Date(item.date+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR})}
+                          </p>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </>
           )}
