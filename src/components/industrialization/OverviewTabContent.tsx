@@ -279,23 +279,7 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
     fetchAll();
   };
 
-  // ─── Chart data ───
-  const chartData = useMemo(() => {
-    return uniquePeriods.map(period => {
-      const entry: Record<string, any> = { name: period.label };
-      activeFactories.forEach(f => {
-        const cost = getCostCell(period.id, f.id);
-        entry[f.name] = cost ? Number(cost.batch_value) : 0;
-      });
-      // Sum freight and lifting across all factories for this period
-      const periodCosts = costData.filter(r => r.period_id === period.id);
-      entry["Frete"] = periodCosts.reduce((s, r) => s + Number(r.freight_value || 0), 0);
-      entry["Içamento"] = periodCosts.reduce((s, r) => s + Number(r.lifting_value || 0), 0);
-      return entry;
-    });
-  }, [uniquePeriods, activeFactories, costData]);
-
-  const chartColors = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))"];
+  // Chart data removed — now using side-by-side tables
 
   // ─── Alerts ───
   const alerts = useMemo(() => {
