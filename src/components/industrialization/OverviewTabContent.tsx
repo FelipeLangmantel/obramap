@@ -147,7 +147,7 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
       .reduce((s, r) => s + Number(r.advance_value || 0), 0);
   }, [cashData]);
 
-  const urgentAdvance = useMemo(() => {
+  const _urgentAdvance = useMemo(() => {
     const now = new Date();
     return cashData.some(r => {
       if (!r.advance_due_date) return false;
