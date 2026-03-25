@@ -288,7 +288,7 @@ export function BatchesTabContent({ companyId, contextId }: BatchesTabProps) {
     return { units: unitsList, totalValue: tv, advance: adv };
   }, [selectedBatch, batchUnits, units, factories]);
 
-  const fmtDate = (d: string | null) => d ? format(new Date(d + "T12:00:00"), "dd/MM/yy") : "—";
+  
 
   // Group units by zone for new dialog
   const unitsByZone = useMemo(() => {
