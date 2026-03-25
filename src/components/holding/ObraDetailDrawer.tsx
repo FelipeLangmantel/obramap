@@ -39,6 +39,34 @@ function useInvalidateHolding() {
   };
 }
 
+async function registrarLog(
+  obraId: string,
+  tabela: string,
+  registroId: string | null,
+  acao: string,
+  descricao: string,
+  userId: string | null,
+  userName: string,
+  dadosAnteriores?: Record<string, unknown>,
+  dadosNovos?: Record<string, unknown>
+) {
+  try {
+    await supabase.from("holding_audit_log").insert([{
+      obra_id: obraId,
+      tabela,
+      registro_id: registroId,
+      acao,
+      descricao,
+      dados_anteriores: (dadosAnteriores || {}) as any,
+      dados_novos: (dadosNovos || {}) as any,
+      realizado_por: userId,
+      realizado_por_nome: userName,
+    }]);
+  } catch (e) {
+    console.error("[AuditLog] Erro ao registrar:", e);
+  }
+}
+
 export interface ObraDrawerData {
   id: string;
   nome: string;
@@ -628,6 +656,9 @@ function ClearableDateInput({ value, onChange, label }: { value: string; onChang
 }
 
 function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato: number }) {
+  const { user, profile } = useAuth();
+  const userName = profile?.display_name || user?.email || "Usuário";
+  const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
   const [medicoes, setMedicoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -711,6 +742,27 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
     if (!payload.data_pagamento) delete payload.data_pagamento;
     const { error } = await supabase.from("medicoes_ple").insert(payload);
     if (error) { toast.error("Erro ao salvar medição"); return; }
+
+    // Audit: gravar log
+    const { data: inserted } = await supabase
+      .from("medicoes_ple").select("id")
+      .eq("obra_id", obraId).order("created_at", { ascending: false }).limit(1).single();
+
+    if (inserted?.id) {
+      await supabase.from("medicoes_ple").update({
+        created_by_user_id: userId,
+        created_by_name: userName,
+      }).eq("id", inserted.id);
+    }
+
+    await registrarLog(
+      obraId, "medicoes_ple", inserted?.id || null,
+      "criou",
+      `Adicionou medição ${form.num_medicao ? `Nº ${form.num_medicao}` : ""} — ${form.mes_referencia}/${form.ano_referencia} — ${BRL.format(Number(form.valor_medicao) || 0)}`,
+      userId, userName,
+      {}, { ...form }
+    );
+
     toast.success("Medição adicionada");
     invalidateHolding();
     setShowForm(false);
@@ -744,6 +796,22 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
     if (payload.data_pagamento === "") payload.data_pagamento = null;
     const { error } = await supabase.from("medicoes_ple").update(payload).eq("id", editingMedicao.id);
     if (error) { toast.error("Erro ao atualizar medição"); return; }
+
+    // Audit
+    await supabase.from("medicoes_ple").update({
+      updated_by_user_id: userId,
+      updated_by_name: userName,
+      updated_at: new Date().toISOString(),
+    }).eq("id", editingMedicao.id);
+
+    await registrarLog(
+      obraId, "medicoes_ple", editingMedicao.id,
+      "editou",
+      `Editou medição ${editingMedicao.num_medicao ? `Nº ${editingMedicao.num_medicao}` : ""} — ${editingMedicao.mes_referencia}/${editingMedicao.ano_referencia}`,
+      userId, userName,
+      { ...editingMedicao }, { ...editForm }
+    );
+
     toast.success("Medição atualizada!");
     invalidateHolding();
     setEditingMedicao(null);
@@ -753,8 +821,18 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
 
   const deleteMedicao = async (id: string) => {
     if (!confirm("Excluir esta medição? Esta ação não pode ser desfeita.")) return;
+    const medicaoSnap = medicoes.find(m => m.id === id);
     const { error } = await supabase.from("medicoes_ple").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir medição"); return; }
+
+    await registrarLog(
+      obraId, "medicoes_ple", id,
+      "excluiu",
+      `Excluiu medição ${medicaoSnap?.num_medicao ? `Nº ${medicaoSnap.num_medicao}` : ""} — ${medicaoSnap?.mes_referencia}/${medicaoSnap?.ano_referencia}`,
+      userId, userName,
+      { ...medicaoSnap }, {}
+    );
+
     toast.success("Medição excluída.");
     invalidateHolding();
     load();
@@ -1010,6 +1088,9 @@ const DESPESA_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 };
 
 function FinanceiroTab({ obraId }: { obraId: string }) {
+  const { user, profile } = useAuth();
+  const userName = profile?.display_name || user?.email || "Usuário";
+  const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
   const [despesas, setDespesas] = useState<any[]>([]);
   const [medicoes, setMedicoes] = useState<any[]>([]);
@@ -1047,6 +1128,26 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
     });
     setSavingDespesa(false);
     if (error) { toast.error("Erro ao salvar despesa."); return; }
+
+    // Audit
+    const { data: ins } = await supabase
+      .from("despesas_mensais").select("id")
+      .eq("obra_id", obraId).order("created_at", { ascending: false }).limit(1).single();
+
+    if (ins?.id) {
+      await supabase.from("despesas_mensais").update({
+        created_by_user_id: userId,
+        created_by_name: userName,
+      }).eq("id", ins.id);
+    }
+
+    await registrarLog(
+      obraId, "despesas_mensais", ins?.id || null,
+      "criou",
+      `Adicionou despesa — ${newDespesa.mes_referencia}/${newDespesa.ano_referencia} — ${BRL.format(Number(newDespesa.valor))}`,
+      userId, userName
+    );
+
     toast.success("Despesa adicionada!");
     invalidateHolding();
     setNewDespesa({ mes_referencia: "", ano_referencia: String(new Date().getFullYear()), valor: "", status: "nao_iniciado" });
@@ -1178,6 +1279,9 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
    ══════════════════════════════════════════════ */
 
 function AditivosTab({ obraId }: { obraId: string }) {
+  const { user, profile } = useAuth();
+  const userName = profile?.display_name || user?.email || "Usuário";
+  const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
   const [aditivos, setAditivos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1207,6 +1311,19 @@ function AditivosTab({ obraId }: { obraId: string }) {
     if (form.data) payload.data = form.data;
     const { error } = await supabase.from("aditivos_contratos").insert(payload);
     if (error) { toast.error("Erro ao salvar aditivo"); return; }
+
+    // Audit
+    const { data: ins } = await supabase
+      .from("aditivos_contratos").select("id")
+      .eq("obra_id", obraId).order("created_at", { ascending: false }).limit(1).single();
+
+    await registrarLog(
+      obraId, "aditivos_contratos", ins?.id || null,
+      "criou",
+      `Adicionou aditivo ${form.num_aditivo || ""} — ${BRL.format(form.aditivo_valor)} — prazo +${form.aditivo_prazo_dias} dias`,
+      userId, userName
+    );
+
     toast.success("Aditivo adicionado!");
     invalidateHolding();
     setShowForm(false);
@@ -1216,8 +1333,18 @@ function AditivosTab({ obraId }: { obraId: string }) {
 
   const deleteAditivo = async (id: string) => {
     if (!confirm("Excluir este aditivo?")) return;
+    const aditivoSnap = aditivos.find(a => a.id === id);
     const { error } = await supabase.from("aditivos_contratos").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir"); return; }
+
+    await registrarLog(
+      obraId, "aditivos_contratos", id,
+      "excluiu",
+      `Excluiu aditivo ${aditivoSnap?.num_aditivo || ""} — ${BRL.format(aditivoSnap?.aditivo_valor || 0)}`,
+      userId, userName,
+      { ...aditivoSnap }, {}
+    );
+
     toast.success("Aditivo excluído.");
     invalidateHolding();
     load();
