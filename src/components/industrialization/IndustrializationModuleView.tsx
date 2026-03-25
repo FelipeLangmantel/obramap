@@ -71,6 +71,34 @@ export default function IndustrializationModuleView() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadingDemo, setLoadingDemo] = useState(false);
 
+  // Limpar automaticamente se houver demos duplicadas (proteção contra cliques múltiplos)
+  useEffect(() => {
+    const demos = contexts.filter(c => c.name.includes("— DEMO"));
+    if (demos.length <= 1) return;
+    const limpar = async () => {
+      for (const ctx of demos) {
+        await supabase.from("ind_installation_schedule").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_unit_kits").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_lifting_schedule").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_shipment_units").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_shipments").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_batch_units").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_production_batches").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_periods").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_units").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_zones").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_services").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_operation_contexts").delete().eq("id", ctx.id);
+      }
+      await supabase.from("ind_factories").delete().eq("company_id", companyId!).ilike("name", "%— DEMO%");
+      await supabase.from("ind_lifting_equipment").delete().eq("company_id", companyId!).ilike("name", "%— DEMO%");
+      await supabase.from("ind_trucks").delete().eq("company_id", companyId!).in("plate", ["ABC-1D23", "XYZ-4E56"]);
+      toast.info("Demonstrações duplicadas removidas automaticamente.");
+      fetchAll();
+    };
+    limpar();
+  }, [contexts.length]);
+
   // Dialog
   const [newContextDialog, setNewContextDialog] = useState(false);
   const [newContextForm, setNewContextForm] = useState({
