@@ -751,6 +751,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const saveUnit = async () => {
+    if (!canEdit) return;
     if (!projectId || !newUnit.name.trim() || !newUnit.abbreviation.trim()) return;
     
     // Check for duplicate abbreviation
