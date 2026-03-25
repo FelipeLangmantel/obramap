@@ -236,10 +236,23 @@ export function UserPermissionsPanel() {
         }
       }
 
+      const deptPermMap: Record<string, DepartmentPermission> = {};
+      (deptPermRes.data || []).forEach((dp: any) => {
+        deptPermMap[dp.department_name] = {
+          id: dp.id,
+          department_name: dp.department_name,
+          visible_menus: dp.visible_menus || [],
+          visible_management_sections: dp.visible_management_sections || [],
+          can_edit: dp.can_edit ?? true,
+          allowed_project_ids: dp.allowed_project_ids,
+        };
+      });
+
       setUsers(usersWithRoles);
       setPermissions(permissionsMap);
       setDepartments(departmentsRes.data || []);
       setSessions((sessionsRes.data || []) as UserSession[]);
+      setDeptPermissions(deptPermMap);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("Erro ao carregar dados");
