@@ -19,7 +19,7 @@ import {
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Factory, Plus, ChevronLeft, AlertTriangle, Loader2, Trash2 } from "lucide-react";
+import { Factory, Plus, ChevronLeft, AlertTriangle, Loader2, Trash2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { FactoriesTabContent } from "./FactoriesTabContent";
 import { LiftingTabContent } from "./LiftingTabContent";
@@ -667,48 +667,27 @@ export default function IndustrializationModuleView() {
             <Factory className="h-6 w-6 text-primary" />
             <div>
               <h2 className="text-lg font-bold text-foreground">{activeContext.name}</h2>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className={statusColor(activeContext.status || "active")}>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="outline" className={`text-xs ${activeContext.context_type === "integrated" ? "bg-blue-500/10 text-blue-600 border-blue-200" : "bg-amber-500/10 text-amber-600 border-amber-200"}`}>
                   {activeContext.context_type === "integrated" ? "Integrado" : "Standalone"}
                 </Badge>
                 <span className="text-sm text-muted-foreground">
-                  {activeContext.total_units} unidades
+                  {activeContext.total_units} unidades · {batches.filter(b => b.context_id === activeContext.id).reduce((s, b) => s + (b.planned_quantity || 0), 0)} planejadas · {batches.filter(b => b.context_id === activeContext.id && (b.status === 'installed' || b.status === 'completed')).reduce((s, b) => s + (b.actual_quantity || 0), 0)} instaladas
                 </span>
               </div>
             </div>
           </div>
-
-          {contexts.length > 1 && (
-            <Select
-              value={activeContext.id}
-              onValueChange={id => {
-                const c = contexts.find(x => x.id === id);
-                if (c) setActiveContext(c);
-              }}
-            >
-              <SelectTrigger className="h-8 text-xs w-52">
-                <SelectValue placeholder="Selecionar contexto" />
-              </SelectTrigger>
-              <SelectContent>
-                {contexts.map(c => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name} — {c.context_type === "integrated" ? "Integrado" : "Standalone"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
         </div>
 
         {/* Tabs */}
         <Tabs defaultValue="overview" className="w-full">
           <TabsList className="w-full justify-start overflow-x-auto">
-            <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-            <TabsTrigger value="factories">Fábricas</TabsTrigger>
-            <TabsTrigger value="batches">Lotes</TabsTrigger>
-            <TabsTrigger value="logistics">Logística</TabsTrigger>
-            <TabsTrigger value="lifting">Içamento</TabsTrigger>
-            <TabsTrigger value="installation">Montagem</TabsTrigger>
+            <TabsTrigger value="overview" className="gap-1.5">🏗️ Visão Geral</TabsTrigger>
+            <TabsTrigger value="factories" className="gap-1.5">🏭 Fábricas</TabsTrigger>
+            <TabsTrigger value="batches" className="gap-1.5">📦 Lotes</TabsTrigger>
+            <TabsTrigger value="logistics" className="gap-1.5">🚛 Logística</TabsTrigger>
+            <TabsTrigger value="lifting" className="gap-1.5">🏗 Içamento</TabsTrigger>
+            <TabsTrigger value="installation" className="gap-1.5">🔧 Montagem</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4 mt-4">
@@ -782,10 +761,37 @@ export default function IndustrializationModuleView() {
               </Button>
             </div>
           )}
+
+          {/* ── Alertas globais (acima da tabela) ── */}
+          {alerts.length > 0 && (
+            <div className="space-y-2">
+              {alerts.map((a, i) => (
+                <div key={i} className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm ${
+                  a.type === 'danger'
+                    ? 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
+                    : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                }`}>
+                  <AlertTriangle className='h-4 w-4 shrink-0' />
+                  <span className='flex-1 text-xs font-medium'>{a.msg}</span>
+                  {a.contextId && (
+                    <Button variant='ghost' size='sm' className='h-6 text-[10px] px-2 shrink-0'
+                      onClick={() => {
+                        const ctx = contexts.find(c => c.id === a.contextId);
+                        if (ctx) { setActiveContext(ctx); setView('detail'); }
+                      }}>
+                      Ver obra →
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* ── Bloco 1: Multi-obra table ── */}
           <div className="rounded-lg border bg-card">
-            <div className="p-3 border-b">
+            <div className="p-3 border-b flex items-center justify-between">
               <h3 className="text-sm font-semibold text-foreground">Obras Industriais</h3>
+              <span className="text-[10px] text-muted-foreground italic">Clique em qualquer obra para ver detalhes</span>
             </div>
             <div className="overflow-x-auto">
               <Table>
@@ -824,10 +830,15 @@ export default function IndustrializationModuleView() {
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => { setActiveContext(ctx); setView("detail"); }}
                       >
-                        <TableCell className="text-xs font-medium">{ctx.name}</TableCell>
-                        <TableCell className="text-xs text-center">{ctx.total_units}</TableCell>
+                        <TableCell className="text-xs">
+                          <div className="font-bold text-foreground">{ctx.name}</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {ctx.context_type === "integrated" ? "Integrado — ObraMap" : `Standalone — ${ctx.total_units.toLocaleString("pt-BR")} un`}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-center font-medium">{ctx.total_units.toLocaleString("pt-BR")}</TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge variant="outline" className={`text-[10px] ${ctx.context_type === "integrated" ? "bg-blue-500/10 text-blue-600 border-blue-200" : "bg-amber-500/10 text-amber-600 border-amber-200"}`}>
                             {ctx.context_type === "integrated" ? "Integrado" : "Standalone"}
                           </Badge>
                         </TableCell>
@@ -890,14 +901,18 @@ export default function IndustrializationModuleView() {
           {capacityData.activeFactories.length > 0 && (
             <div className="rounded-lg border bg-card">
               <div className="p-3 border-b">
-                <h3 className="text-sm font-semibold text-foreground">Capacidade Fábricas × Demanda Consolidada</h3>
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-amber-500" />
+                  Capacidade Fábricas × Demanda Consolidada — Próximas 8 Semanas
+                </h3>
               </div>
               <div className="overflow-x-auto p-3">
                 <TooltipProvider>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-xs min-w-[120px]">Fábrica</TableHead>
+                        <TableHead className="text-xs min-w-[140px]">FÁBRICA</TableHead>
+                        <TableHead className="text-xs text-center w-20">CAP/SEM</TableHead>
                         {capacityData.weeks.map((w, i) => (
                           <TableHead key={i} className="text-xs text-center w-20">{w.label}</TableHead>
                         ))}
@@ -908,10 +923,13 @@ export default function IndustrializationModuleView() {
                         const cap = getFactoryCapacity(fac.id);
                         return (
                           <TableRow key={fac.id}>
-                            <TableCell className="text-xs font-medium">
-                              {fac.name}
-                              <span className="text-muted-foreground ml-1">({cap}/sem)</span>
+                            <TableCell className="text-xs">
+                              <div className="font-bold text-foreground">{fac.name}</div>
+                              <div className="text-[10px] text-muted-foreground">
+                                Lead: {fac.avg_lead_time_days || 0}d | Entrada: {fac.advance_payment_pct || 0}%
+                              </div>
                             </TableCell>
+                            <TableCell className="text-xs text-center text-muted-foreground">{cap} un</TableCell>
                             {capacityData.weeks.map((w, i) => {
                               const load = getWeekLoad(fac.id, w.start, w.end);
                               const pct = cap > 0 ? (load / cap) * 100 : 0;
@@ -934,8 +952,8 @@ export default function IndustrializationModuleView() {
                                 <TableCell key={i} className="p-1">
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <div className={`rounded px-2 py-1 text-center text-xs font-medium ${bg}`}>
-                                        {pct > 0 ? `${Math.round(pct)}%` : "—"}
+                                      <div className={`rounded px-2 py-1.5 text-center text-xs font-bold ${bg}`}>
+                                        {load > 0 ? load : "—"}
                                       </div>
                                     </TooltipTrigger>
                                     <TooltipContent>
@@ -954,48 +972,20 @@ export default function IndustrializationModuleView() {
                 </TooltipProvider>
                 <div className='flex items-center gap-4 mt-2 text-[10px] text-muted-foreground'>
                   <span className='flex items-center gap-1.5'>
-                    <span className='w-3 h-3 rounded bg-emerald-500/20 inline-block' /> Abaixo de 70%
+                    <span className='w-3 h-3 rounded bg-emerald-500/20 inline-block' /> {"<70% — OK"}
                   </span>
                   <span className='flex items-center gap-1.5'>
-                    <span className='w-3 h-3 rounded bg-amber-500/20 inline-block' /> 70 a 90%
+                    <span className='w-3 h-3 rounded bg-amber-500/20 inline-block' /> 70–90% — Atenção
                   </span>
                   <span className='flex items-center gap-1.5'>
-                    <span className='w-3 h-3 rounded bg-destructive/20 inline-block' /> Acima de 90%
+                    <span className='w-3 h-3 rounded bg-destructive/20 inline-block' /> {">90% — Sobrecarga"}
                   </span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* ── Bloco 3: Global alerts ── */}
-          {alerts.length > 0 && (
-            <div className="rounded-lg border bg-card p-3 space-y-2">
-              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-500" /> Alertas
-              </h3>
-              {alerts.map((a, i) => (
-                <div key={i} className={`flex items-start gap-3 rounded-lg p-3 border-l-4 ${
-                  a.type === 'danger'
-                    ? 'bg-destructive/5 border-destructive text-destructive'
-                    : 'bg-amber-500/5 border-amber-500 text-amber-700 dark:text-amber-400'
-                }`}>
-                  <AlertTriangle className='h-4 w-4 shrink-0 mt-0.5' />
-                  <div className='flex-1 min-w-0'>
-                    <p className='text-xs'>{a.msg}</p>
-                  </div>
-                  {a.contextId && (
-                    <Button variant='ghost' size='sm' className='h-6 text-[10px] px-2 shrink-0'
-                      onClick={() => {
-                        const ctx = contexts.find(c => c.id === a.contextId);
-                        if (ctx) { setActiveContext(ctx); setView('detail'); }
-                      }}>
-                      Ver obra →
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+          {/* alerts already shown above */}
         </>
       )}
 
