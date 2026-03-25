@@ -111,8 +111,15 @@ interface UserSession {
   login_at: string;
   logout_at: string | null;
   ip_address: string | null;
+  city: string | null;
+  region: string | null;
+  browser: string | null;
+  device_type: string | null;
   user_agent: string | null;
   is_active: boolean;
+  last_active_at: string | null;
+  inactivity_timeout_min: number | null;
+  termination_reason: string | null;
 }
 
 // ✅ Importado da fonte única de verdade – novos módulos aparecem automaticamente
