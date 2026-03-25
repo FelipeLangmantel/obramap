@@ -322,29 +322,6 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
     return batches.filter(b => b.factory_id === pipelineFilter);
   }, [batches, pipelineFilter]);
 
-  const batchStatusColor = (status: string) => {
-    const m: Record<string, string> = {
-      planned: "bg-muted text-muted-foreground",
-      in_production: "bg-amber-500/20 text-amber-700",
-      produced: "bg-blue-500/20 text-blue-700",
-      shipped: "bg-violet-500/20 text-violet-700",
-      delivered: "bg-emerald-500/20 text-emerald-700",
-      installed: "bg-primary/20 text-primary",
-      completed: "bg-primary/30 text-primary",
-      cancelled: "bg-destructive/20 text-destructive",
-    };
-    return m[status] || "bg-muted text-muted-foreground";
-  };
-
-  const batchStatusLabel = (status: string) => {
-    const m: Record<string, string> = {
-      planned: "Planejado", in_production: "Produzindo", produced: "Produzido",
-      shipped: "Enviado", delivered: "Entregue", installed: "Instalado",
-      completed: "Concluído", cancelled: "Cancelado",
-    };
-    return m[status] || status;
-  };
-
   // ─── Cost totals ───
   const costTotals = useMemo(() => {
     const totals: Record<string, number> = {};
