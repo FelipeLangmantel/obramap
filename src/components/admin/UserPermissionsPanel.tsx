@@ -231,34 +231,27 @@ export function UserPermissionsPanel() {
 
     setIsCreating(true);
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: { display_name: displayName },
-        },
+      const { data, error } = await supabase.rpc('create_company_user', {
+        p_email: email,
+        p_display_name: displayName,
+        p_temp_password: password,
+        p_role: role,
+        p_company_id: company!.id,
       });
 
-      if (authError) throw authError;
+      if (error) throw error;
 
-      if (authData.user) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        
-        if (role !== "viewer") {
-          await supabase.from("user_roles").update({ role }).eq("user_id", authData.user.id);
-        }
-
-        toast.success("Usuário criado com sucesso!");
-        setIsCreateDialogOpen(false);
-        resetForm();
-        fetchData();
-      }
+      toast.success(`Usuário criado! Senha temporária definida. O usuário deverá trocar no primeiro login.`);
+      setIsCreateDialogOpen(false);
+      resetForm();
+      fetchData();
     } catch (error: any) {
-      if (error.message?.includes("already registered")) {
-        toast.error("Este email já está cadastrado");
+      if (error.message?.includes('ja cadastrado')) {
+        toast.error('Este email já está cadastrado');
+      } else if (error.message?.includes('Sem permissao')) {
+        toast.error('Sem permissão para criar usuários nesta empresa');
       } else {
-        toast.error(error.message || "Erro ao criar usuário");
+        toast.error(error.message || 'Erro ao criar usuário');
       }
     }
     setIsCreating(false);
