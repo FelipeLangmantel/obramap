@@ -107,6 +107,7 @@ export function usePlanningData(projectId: string | undefined) {
     stage: Omit<PlanningStage, 'id' | 'created_at' | 'updated_at'>,
     teamComposition: TeamComposition
   ) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     const { data, error } = await supabase
       .from('planning_stages')
       .insert(stage)
