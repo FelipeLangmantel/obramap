@@ -189,6 +189,7 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
   };
 
   const saveSchedule = async () => {
+    if (!requireEdit()) return;
     if (!scheduleForm.equipment_id || !scheduleForm.booking_date) {
       toast.error("Equipamento e data são obrigatórios");
       return;
