@@ -275,7 +275,7 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const applySimulation = async (simulationId: string) => {
-    const { error } = await supabase
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
       .from('planning_simulations')
       .update({ 
         is_applied: true, 
