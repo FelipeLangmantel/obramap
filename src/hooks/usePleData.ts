@@ -245,6 +245,7 @@ export function usePleData() {
 
   // Toggle gloss on a cell
   const toggleGloss = useCallback(async (eventId: string, houseNumber: number, measurementId: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     if (!currentProjectId) return;
     const existing = glosses.find(g => g.measurement_id === measurementId && g.event_id === eventId && g.house_number === houseNumber && !g.resolved);
     if (existing) {
