@@ -1,0 +1,1 @@
+ALTER TABLE public.ind_lifting_schedule ADD COLUMN IF NOT EXISTS unit_ids UUID[] DEFAULT '{}';

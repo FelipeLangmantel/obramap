@@ -2187,6 +2187,7 @@ export type Database = {
           start_time: string | null
           status: string
           supplier_name: string | null
+          unit_ids: string[] | null
           updated_at: string
         }
         Insert: {
@@ -2206,6 +2207,7 @@ export type Database = {
           start_time?: string | null
           status?: string
           supplier_name?: string | null
+          unit_ids?: string[] | null
           updated_at?: string
         }
         Update: {
@@ -2225,6 +2227,7 @@ export type Database = {
           start_time?: string | null
           status?: string
           supplier_name?: string | null
+          unit_ids?: string[] | null
           updated_at?: string
         }
         Relationships: [

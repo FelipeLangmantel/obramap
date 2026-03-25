@@ -40,7 +40,7 @@ interface Schedule {
   id: string; context_id: string; equipment_id: string; linked_shipment_id: string | null;
   booking_date: string; start_time: string | null; end_time: string | null;
   daily_cost: number; status: string; notes: string | null; ind_period_id: string | null;
-  batch_id: string | null;
+  batch_id: string | null; unit_ids?: string[] | null;
 }
 
 interface Shipment {
@@ -215,6 +215,7 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
       ind_period_id: scheduleForm.ind_period_id || null,
       status: "scheduled",
       notes: scheduleForm.notes || null,
+      unit_ids: scheduleForm.selectedUnitIds,
     } as any);
 
     if (error) { toast.error("Erro ao agendar: " + error.message); return; }
@@ -233,17 +234,24 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
       .eq("id", completeTarget.id);
     if (schErr) { toast.error("Erro ao concluir"); return; }
 
-    // Update linked batch_units, units, unit_kits to 'installed'
-    if (completeTarget.batch_id) {
-      await supabase
-        .from("ind_batch_units")
-        .update({ status: "installed" } as any)
-        .eq("batch_id", completeTarget.batch_id)
-        .eq("context_id", contextId);
-    }
+    // Update linked batch_units and units to 'installed'
+    const unitIds = completeTarget.unit_ids && completeTarget.unit_ids.length > 0
+      ? completeTarget.unit_ids : null;
 
-    // Note: In a full implementation, we'd update specific units from the schedule.
-    // For now, we update batch-level.
+    if (unitIds) {
+      await supabase.from('ind_units')
+        .update({ status: 'installed' } as any)
+        .in('id', unitIds);
+      await supabase.from('ind_batch_units')
+        .update({ status: 'installed' } as any)
+        .in('unit_id', unitIds)
+        .eq('context_id', contextId);
+    } else if (completeTarget.batch_id) {
+      await supabase.from('ind_batch_units')
+        .update({ status: 'installed' } as any)
+        .eq('batch_id', completeTarget.batch_id)
+        .eq('context_id', contextId);
+    }
 
     toast.success("Içamento concluído! Status atualizado.");
     setCompleteTarget(null);
