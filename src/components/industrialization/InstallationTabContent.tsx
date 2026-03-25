@@ -337,17 +337,24 @@ export function InstallationTabContent({ companyId, contextId, contextType }: In
 
   return (
     <div className="space-y-4">
-      {/* Status summary */}
-      <div className="flex flex-wrap gap-2">
-        {Object.entries(statusCounts).map(([status, count]) => {
-          const cfg = STATUS_CONFIG[status] || { label: status, color: "bg-muted text-muted-foreground" };
-          return (
-            <Badge key={status} variant="outline" className={cn("text-[10px]", cfg.color)}>
-              {cfg.label}: {count}
-            </Badge>
-          );
-        })}
-        <Badge variant="outline" className="text-[10px]">Total: {units.length}</Badge>
+      {/* Status summary — compact card row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+        {Object.entries(statusCounts)
+          .sort(([,a], [,b]) => b - a)
+          .map(([status, count]) => {
+            const cfg = STATUS_CONFIG[status] || { label: status, color: "bg-muted text-muted-foreground" };
+            const pct = units.length > 0 ? Math.round((count / units.length) * 100) : 0;
+            return (
+              <div key={status} className={cn("rounded-lg border px-3 py-2 text-center", CELL_BG[status] || "bg-muted/40")}>
+                <div className="text-lg font-bold text-foreground">{count}</div>
+                <div className="text-[10px] text-muted-foreground">{cfg.label} ({pct}%)</div>
+              </div>
+            );
+          })}
+        <div className="rounded-lg border px-3 py-2 text-center bg-card">
+          <div className="text-lg font-bold text-foreground">{units.length}</div>
+          <div className="text-[10px] text-muted-foreground">Total</div>
+        </div>
       </div>
 
       {/* Filters + Action */}
