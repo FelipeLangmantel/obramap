@@ -1192,6 +1192,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const updateOrder = async (orderId: string, updates: Partial<PurchaseOrder>) => {
+    if (!canEdit) return;
     try {
       await supabase.from('purchase_orders').update(updates).eq('id', orderId);
       toast.success('Pedido atualizado!');
