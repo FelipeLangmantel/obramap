@@ -194,6 +194,7 @@ export function usePleData() {
 
   // Create measurement
   const createMeasurement = useCallback(async (data: { measurement_number: number; period_label: string; start_date?: string; end_date?: string }) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     if (!currentProjectId) return null;
     const { data: userData } = await supabase.auth.getUser();
     const userName = getUserName();
