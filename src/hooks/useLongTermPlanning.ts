@@ -586,6 +586,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
   const deletePeriod = useCallback(async (periodId: string) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
+    try {
       const { data, error } = await supabase.rpc("delete_planning_period", {
         p_period_id: periodId,
       });
@@ -608,7 +609,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
       console.error("Erro ao excluir período:", error);
       toast.error("Erro ao excluir período");
     }
-  }, [loadPeriods]);
+  }, [canEdit, loadPeriods]);
 
   const updatePeriodDates = useCallback(async (periodId: string, startDate: string, endDate: string) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return false; }
