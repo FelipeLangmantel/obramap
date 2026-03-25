@@ -362,6 +362,24 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
     return totals;
   }, [costData, activeFactories]);
 
+  const PIPELINE_STYLE: Record<string, {bg:string, border:string, badge:string}> = {
+    planned:            { bg:'bg-muted/40',          border:'border-border',       badge:'bg-muted text-muted-foreground' },
+    released:           { bg:'bg-blue-500/10',       border:'border-blue-300',     badge:'bg-blue-100 text-blue-700' },
+    in_production:      { bg:'bg-amber-500/10',      border:'border-amber-300',    badge:'bg-amber-100 text-amber-700' },
+    ready:              { bg:'bg-emerald-500/10',    border:'border-emerald-300',  badge:'bg-emerald-100 text-emerald-700' },
+    awaiting_transport: { bg:'bg-orange-500/10',     border:'border-orange-300',   badge:'bg-orange-100 text-orange-700' },
+    in_transit:         { bg:'bg-purple-500/10',     border:'border-purple-300',   badge:'bg-purple-100 text-purple-700' },
+    delivered:          { bg:'bg-green-500/10',      border:'border-green-300',    badge:'bg-green-100 text-green-800' },
+    installed:          { bg:'bg-emerald-600/15',    border:'border-emerald-500',  badge:'bg-emerald-200 text-emerald-900' },
+    cancelled:          { bg:'bg-destructive/10',    border:'border-destructive',  badge:'bg-destructive/20 text-destructive' },
+  };
+
+  const STATUS_LABEL: Record<string, string> = {
+    planned:'Planejado', released:'Liberado', in_production:'Em Produção',
+    ready:'Pronto', awaiting_transport:'Aguard. Transporte', in_transit:'Em Trânsito',
+    delivered:'Entregue', installed:'Instalado', cancelled:'Cancelado',
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-40">
