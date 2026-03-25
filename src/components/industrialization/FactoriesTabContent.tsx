@@ -192,6 +192,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
     setPeriodDialog(true);
   };
   const savePeriod = async () => {
+    if (!requireEdit()) return;
     if (!periodForm.name.trim() || !periodForm.start_date || !periodForm.end_date) { toast.error("Preencha todos os campos"); return; }
     const payload = { ...periodForm, context_id: contextId, company_id: companyId };
     if (editingPeriodId) {
