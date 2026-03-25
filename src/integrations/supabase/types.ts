@@ -7766,6 +7766,53 @@ export type Database = {
           },
         ]
       }
+      session_security_rules: {
+        Row: {
+          alert_on_new_ip: boolean
+          allow_multiple_devices: boolean
+          company_id: string
+          created_at: string
+          force_logout_on_new_login: boolean
+          id: string
+          inactivity_timeout_min: number
+          max_concurrent_sessions: number
+          session_duration_hours: number
+          updated_at: string
+        }
+        Insert: {
+          alert_on_new_ip?: boolean
+          allow_multiple_devices?: boolean
+          company_id: string
+          created_at?: string
+          force_logout_on_new_login?: boolean
+          id?: string
+          inactivity_timeout_min?: number
+          max_concurrent_sessions?: number
+          session_duration_hours?: number
+          updated_at?: string
+        }
+        Update: {
+          alert_on_new_ip?: boolean
+          allow_multiple_devices?: boolean
+          company_id?: string
+          created_at?: string
+          force_logout_on_new_login?: boolean
+          id?: string
+          inactivity_timeout_min?: number
+          max_concurrent_sessions?: number
+          session_duration_hours?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_security_rules_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supplier_quotes: {
         Row: {
           created_at: string
@@ -8367,32 +8414,59 @@ export type Database = {
       }
       user_sessions: {
         Row: {
+          browser: string | null
+          city: string | null
+          country: string | null
           created_at: string
+          device_type: string | null
           id: string
+          inactivity_timeout_min: number | null
           ip_address: string | null
           is_active: boolean
+          last_active_at: string | null
           login_at: string
           logout_at: string | null
+          region: string | null
+          terminated_by: string | null
+          termination_reason: string | null
           user_agent: string | null
           user_id: string
         }
         Insert: {
+          browser?: string | null
+          city?: string | null
+          country?: string | null
           created_at?: string
+          device_type?: string | null
           id?: string
+          inactivity_timeout_min?: number | null
           ip_address?: string | null
           is_active?: boolean
+          last_active_at?: string | null
           login_at?: string
           logout_at?: string | null
+          region?: string | null
+          terminated_by?: string | null
+          termination_reason?: string | null
           user_agent?: string | null
           user_id: string
         }
         Update: {
+          browser?: string | null
+          city?: string | null
+          country?: string | null
           created_at?: string
+          device_type?: string | null
           id?: string
+          inactivity_timeout_min?: number | null
           ip_address?: string | null
           is_active?: boolean
+          last_active_at?: string | null
           login_at?: string
           logout_at?: string | null
+          region?: string | null
+          terminated_by?: string | null
+          termination_reason?: string | null
           user_agent?: string | null
           user_id?: string
         }
