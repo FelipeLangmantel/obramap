@@ -109,6 +109,17 @@ export default function IndustrializationModuleView() {
     obras_portfolio_id: "", obramap_project_id: "",
   });
 
+  // Factory dialog states
+  const [factoryDialog, setFactoryDialog] = useState(false);
+  const [editingFactory, setEditingFactory] = useState<any>(null);
+  const defaultFactoryForm = {
+    name: "", city: "", state: "RS", contact_name: "", contact_phone: "",
+    avg_lead_time_days: 21, advance_payment_pct: 30,
+    payment_terms: "", capacity_houses_month: 0, price_per_house: 0,
+    is_active: true, notes: "",
+  };
+  const [factoryForm, setFactoryForm] = useState(defaultFactoryForm);
+
   useEffect(() => {
     if (!companyId) return;
     fetchAll();
