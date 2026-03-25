@@ -20,9 +20,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 // tooltip removed – pipeline cards no longer use it
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend as RechartsLegend,
-} from "recharts";
+// recharts imports removed — costs/cash now in side-by-side tables
 import {
   Factory, AlertTriangle, TrendingUp, DollarSign, Package,
   CalendarDays, Plus, Pencil, Trash2, Zap,
