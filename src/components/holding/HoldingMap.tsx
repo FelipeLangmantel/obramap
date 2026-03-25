@@ -139,7 +139,7 @@ export default function HoldingMap({ obras, onObraClick }: HoldingMapProps) {
       marker.on("click", () => onObraClick(obra.id));
     });
 
-    (window as any).__holdingObraClick = onObraClick;
+    
   }, [obras, onObraClick]);
 
   return (
