@@ -96,7 +96,7 @@ const CELL_BG: Record<string, string> = {
   completed: "bg-emerald-500/15",
 };
 
-export function InstallationTabContent({ companyId, contextId }: InstallationTabProps) {
+export function InstallationTabContent({ companyId, contextId, contextType }: InstallationTabProps) {
   const [units, setUnits] = useState<IndUnit[]>([]);
   const [zones, setZones] = useState<IndZone[]>([]);
   const [batchUnits, setBatchUnits] = useState<BatchUnit[]>([]);
