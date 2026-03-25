@@ -79,6 +79,7 @@ export default function HoldingConfigPage() {
   };
 
   const saveEmpresa = async () => {
+    if (!isCompanyAdmin) return;
     if (!empresaForm.nome.trim()) { toast.error("Nome é obrigatório"); return; }
     if (editingEmpresa) {
       const { error } = await supabase.from("holding_empresas").update(empresaForm as any).eq("id", editingEmpresa.id);
