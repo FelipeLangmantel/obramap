@@ -596,6 +596,13 @@ export default function HoldingDashboardView() {
     enabled: !!company?.id,
   });
 
+  // Manter selectedObra sincronizada quando obras re-fetcha após invalidate
+  useEffect(() => {
+    if (!selectedObra) return;
+    const updated = obras.find(o => o.id === selectedObra.id);
+    if (updated) setSelectedObra(updated);
+  }, [obras]);
+
   const { data: aditivosPendentes = [] } = useQuery({
     queryKey: ["holding-aditivos-pendentes", company?.id],
     queryFn: async () => {
