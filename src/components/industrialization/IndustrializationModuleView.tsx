@@ -749,7 +749,7 @@ export default function IndustrializationModuleView() {
           <Factory className="h-6 w-6 text-primary" />
           <h1 className="text-xl font-bold text-foreground">Industrialização & Logística</h1>
         </div>
-        <Button size="sm" onClick={() => setNewContextDialog(true)}>
+        <Button size="sm" onClick={() => setNewContextDialog(true)} disabled={!canEdit}>
           <Plus className="h-4 w-4 mr-2" /> Nova Obra Industrial
         </Button>
       </div>
