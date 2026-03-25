@@ -139,6 +139,7 @@ export const InspectionChecklistDialog: React.FC<InspectionChecklistDialogProps>
   const allItemsChecked = checklistItems.every(item => item.is_conforming !== null);
 
   const handleSave = async () => {
+    if (!requireEdit()) return;
     // Validate: non-conforming items must have photo
     const invalidItems = checklistItems.filter(
       item => item.is_conforming === false && !item.photo_url
