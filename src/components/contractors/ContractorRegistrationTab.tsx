@@ -35,6 +35,7 @@ export function ContractorRegistrationTab({ contractors, onCreateContractor, onU
   const openEdit = (c: Contractor) => { setForm(c); setEditingId(c.id); setDialogOpen(true); };
 
   const handleSave = async () => {
+    if (!requireEdit()) return;
     if (!form.name?.trim()) return;
     setSaving(true);
     if (editingId) {
