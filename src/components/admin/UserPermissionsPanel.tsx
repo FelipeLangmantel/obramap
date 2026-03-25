@@ -53,7 +53,11 @@ import {
   Clock,
   Globe,
   LogOut,
-  Key
+  ChevronDown,
+  ChevronUp,
+  MapPin,
+  Monitor,
+  Smartphone,
 } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
