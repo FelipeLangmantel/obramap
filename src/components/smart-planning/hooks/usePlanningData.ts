@@ -234,7 +234,7 @@ export function usePlanningData(projectId: string | undefined) {
 
   // Alerts
   const resolveAlert = async (alertId: string) => {
-    const { error } = await supabase
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
       .from('planning_alerts')
       .update({ 
         is_resolved: true, 
