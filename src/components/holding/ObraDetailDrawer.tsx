@@ -742,6 +742,27 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
     if (!payload.data_pagamento) delete payload.data_pagamento;
     const { error } = await supabase.from("medicoes_ple").insert(payload);
     if (error) { toast.error("Erro ao salvar medição"); return; }
+
+    // Audit: gravar log
+    const { data: inserted } = await supabase
+      .from("medicoes_ple").select("id")
+      .eq("obra_id", obraId).order("created_at", { ascending: false }).limit(1).single();
+
+    if (inserted?.id) {
+      await supabase.from("medicoes_ple").update({
+        created_by_user_id: userId,
+        created_by_name: userName,
+      }).eq("id", inserted.id);
+    }
+
+    await registrarLog(
+      obraId, "medicoes_ple", inserted?.id || null,
+      "criou",
+      `Adicionou medição ${form.num_medicao ? `Nº ${form.num_medicao}` : ""} — ${form.mes_referencia}/${form.ano_referencia} — ${BRL.format(Number(form.valor_medicao) || 0)}`,
+      userId, userName,
+      {}, { ...form }
+    );
+
     toast.success("Medição adicionada");
     invalidateHolding();
     setShowForm(false);
