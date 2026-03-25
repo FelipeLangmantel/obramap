@@ -19,9 +19,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Tooltip, TooltipContent, TooltipTrigger,
-} from "@/components/ui/tooltip";
+// tooltip removed – pipeline cards no longer use it
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend as RechartsLegend,
 } from "recharts";
