@@ -539,6 +539,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         canAccessMenu,
         canAccessManagement,
         canAccessProject,
+        requireEdit,
         refreshPermissions,
         signIn,
         signUp,
