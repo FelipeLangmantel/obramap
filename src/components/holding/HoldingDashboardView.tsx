@@ -1278,8 +1278,15 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
   const { isCompanyAdmin } = useAuth();
   const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
   const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
-  const receitas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
+  const receitasAprovadas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
   const valorContrato = obra.valor_contrato || 0;
+  // Se não há medições aprovadas mas há andamento físico, estimar valor medido pelo percentual
+  const receitasEstimadas = receitasAprovadas > 0
+    ? receitasAprovadas
+    : (valorContrato > 0 && obra.percentual_andamento > 0
+      ? (obra.percentual_andamento / 100) * valorContrato
+      : 0);
+  const receitas = receitasEstimadas;
   const percentualFinanceiro = valorContrato > 0 && receitas > 0 ? Math.min(100, (receitas / valorContrato) * 100) : 0;
   const saldoContrato = valorContrato - receitas;
 
