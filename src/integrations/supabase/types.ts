@@ -18,32 +18,47 @@ export type Database = {
         Row: {
           aditivo_prazo_dias: number
           aditivo_valor: number
+          created_by_name: string | null
+          created_by_user_id: string | null
           data: string | null
           id: string
           num_aditivo: string | null
           obra_id: string
           status: Database["public"]["Enums"]["aditivo_status"]
           supressao_valor: number
+          updated_at: string | null
+          updated_by_name: string | null
+          updated_by_user_id: string | null
         }
         Insert: {
           aditivo_prazo_dias?: number
           aditivo_valor?: number
+          created_by_name?: string | null
+          created_by_user_id?: string | null
           data?: string | null
           id?: string
           num_aditivo?: string | null
           obra_id: string
           status?: Database["public"]["Enums"]["aditivo_status"]
           supressao_valor?: number
+          updated_at?: string | null
+          updated_by_name?: string | null
+          updated_by_user_id?: string | null
         }
         Update: {
           aditivo_prazo_dias?: number
           aditivo_valor?: number
+          created_by_name?: string | null
+          created_by_user_id?: string | null
           data?: string | null
           id?: string
           num_aditivo?: string | null
           obra_id?: string
           status?: Database["public"]["Enums"]["aditivo_status"]
           supressao_valor?: number
+          updated_at?: string | null
+          updated_by_name?: string | null
+          updated_by_user_id?: string | null
         }
         Relationships: [
           {
@@ -1242,26 +1257,41 @@ export type Database = {
       despesas_mensais: {
         Row: {
           ano_referencia: number | null
+          created_by_name: string | null
+          created_by_user_id: string | null
           id: string
           mes_referencia: string | null
           obra_id: string
           status: Database["public"]["Enums"]["despesa_status"]
+          updated_at: string | null
+          updated_by_name: string | null
+          updated_by_user_id: string | null
           valor: number
         }
         Insert: {
           ano_referencia?: number | null
+          created_by_name?: string | null
+          created_by_user_id?: string | null
           id?: string
           mes_referencia?: string | null
           obra_id: string
           status?: Database["public"]["Enums"]["despesa_status"]
+          updated_at?: string | null
+          updated_by_name?: string | null
+          updated_by_user_id?: string | null
           valor?: number
         }
         Update: {
           ano_referencia?: number | null
+          created_by_name?: string | null
+          created_by_user_id?: string | null
           id?: string
           mes_referencia?: string | null
           obra_id?: string
           status?: Database["public"]["Enums"]["despesa_status"]
+          updated_at?: string | null
+          updated_by_name?: string | null
+          updated_by_user_id?: string | null
           valor?: number
         }
         Relationships: [
@@ -1395,6 +1425,56 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      holding_audit_log: {
+        Row: {
+          acao: string
+          dados_anteriores: Json | null
+          dados_novos: Json | null
+          descricao: string
+          id: string
+          obra_id: string
+          realizado_em: string
+          realizado_por: string | null
+          realizado_por_nome: string
+          registro_id: string | null
+          tabela: string
+        }
+        Insert: {
+          acao: string
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          descricao: string
+          id?: string
+          obra_id: string
+          realizado_em?: string
+          realizado_por?: string | null
+          realizado_por_nome?: string
+          registro_id?: string | null
+          tabela: string
+        }
+        Update: {
+          acao?: string
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          descricao?: string
+          id?: string
+          obra_id?: string
+          realizado_em?: string
+          realizado_por?: string | null
+          realizado_por_nome?: string
+          registro_id?: string | null
+          tabela?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holding_audit_log_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
             referencedColumns: ["id"]
           },
         ]
@@ -4286,6 +4366,8 @@ export type Database = {
       medicoes_ple: {
         Row: {
           ano_referencia: number | null
+          created_by_name: string | null
+          created_by_user_id: string | null
           data_aprovacao: string | null
           data_envio: string | null
           data_pagamento: string | null
@@ -4297,12 +4379,17 @@ export type Database = {
           obra_id: string
           status_medicao: Database["public"]["Enums"]["medicao_status"]
           status_nf: Database["public"]["Enums"]["nf_status"]
+          updated_at: string | null
+          updated_by_name: string | null
+          updated_by_user_id: string | null
           valor_acatado: number | null
           valor_medicao: number
           valor_previsto_medicao: number | null
         }
         Insert: {
           ano_referencia?: number | null
+          created_by_name?: string | null
+          created_by_user_id?: string | null
           data_aprovacao?: string | null
           data_envio?: string | null
           data_pagamento?: string | null
@@ -4314,12 +4401,17 @@ export type Database = {
           obra_id: string
           status_medicao?: Database["public"]["Enums"]["medicao_status"]
           status_nf?: Database["public"]["Enums"]["nf_status"]
+          updated_at?: string | null
+          updated_by_name?: string | null
+          updated_by_user_id?: string | null
           valor_acatado?: number | null
           valor_medicao?: number
           valor_previsto_medicao?: number | null
         }
         Update: {
           ano_referencia?: number | null
+          created_by_name?: string | null
+          created_by_user_id?: string | null
           data_aprovacao?: string | null
           data_envio?: string | null
           data_pagamento?: string | null
@@ -4331,6 +4423,9 @@ export type Database = {
           obra_id?: string
           status_medicao?: Database["public"]["Enums"]["medicao_status"]
           status_nf?: Database["public"]["Enums"]["nf_status"]
+          updated_at?: string | null
+          updated_by_name?: string | null
+          updated_by_user_id?: string | null
           valor_acatado?: number | null
           valor_medicao?: number
           valor_previsto_medicao?: number | null
