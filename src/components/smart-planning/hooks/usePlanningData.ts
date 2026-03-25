@@ -139,7 +139,7 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const addStage = async (stage: Omit<PlanningStage, 'id' | 'created_at' | 'updated_at'>) => {
-    const { data, error } = await supabase
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
       .from('planning_stages')
       .insert(stage)
       .select()
