@@ -61,8 +61,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const DEFAULT_MENUS = ["mapa", "planejamento", "smart-planning", "producao", "custos", "suprimentos", "financeiro", "entrega", "diretoria", "graficos"];
-const DEFAULT_MANAGEMENT = ["projetos", "quadras", "macros", "escopos", "insumos", "fornecedores", "mao_de_obra", "usuarios"];
+// DEFAULT restritivo: sem permissão cadastrada = só vê o painel inicial
+const DEFAULT_MENUS = ["painel_inicial"];
+// DEFAULT restritivo: sem permissão cadastrada = sem acesso a gerenciamento
+const DEFAULT_MANAGEMENT: string[] = [];
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -498,18 +500,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [canEdit, showToast]);
 
   const canAccessMenu = useCallback((menuId: string): boolean => {
-    if (isSystemAdmin) return false; // System admin não acessa menus da empresa
+    if (isSystemAdmin) return false;
     if (isCompanyAdmin) return true;
-    if (!permissions) return true;
+    // painel_inicial sempre visível para qualquer usuário autenticado
+    if (menuId === "painel_inicial") return true;
+    // Sem permissão cadastrada: admin vê tudo, outros só o painel inicial
+    if (!permissions) return isAdmin;
     return permissions.visible_menus.includes(menuId);
-  }, [isSystemAdmin, isCompanyAdmin, permissions]);
+  }, [isSystemAdmin, isCompanyAdmin, isAdmin, permissions]);
 
   const canAccessManagement = useCallback((sectionId: string): boolean => {
     if (isSystemAdmin) return false;
     if (isCompanyAdmin) return true;
-    if (!permissions) return true;
+    // Sem permissão cadastrada: admin vê tudo, outros não veem nada
+    if (!permissions) return isAdmin;
     return permissions.visible_management_sections.includes(sectionId);
-  }, [isSystemAdmin, isCompanyAdmin, permissions]);
+  }, [isSystemAdmin, isCompanyAdmin, isAdmin, permissions]);
 
   const canAccessProject = useCallback((projectId: string): boolean => {
     if (isSystemAdmin) return false;
