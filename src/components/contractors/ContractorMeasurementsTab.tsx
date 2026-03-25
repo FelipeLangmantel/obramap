@@ -384,7 +384,7 @@ export function ContractorMeasurementsTab({
                   </Badge>
                 </div>
                 {selectedMeasurement.status === "draft" && (
-                  <Button size="sm" className="gap-1.5 text-xs h-7 bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove}>
+                  <Button size="sm" className="gap-1.5 text-xs h-7 bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove} disabled={!canEdit}>
                     <CheckCircle className="h-3.5 w-3.5" /> Aprovar
                   </Button>
                 )}
