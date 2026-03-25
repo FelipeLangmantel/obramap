@@ -209,7 +209,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   // ✅ Menu items organizados por contexto de uso
   type MenuItem = { title: string; view: MenuViewType; icon: any; permissionId: string; badge?: string };
   
-  const menuGroups: { label: string; items: MenuItem[]; highlight?: boolean; badge?: string }[] = [
+  const menuGroups: { label: string; items: MenuItem[] }[] = [
     {
       label: "Painel & Mapas",
       items: [
@@ -234,13 +234,14 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       ],
     },
     {
-      label: "Financeiro & Contratos",
+      label: "Financeiro & Operações",
       items: [
         { title: "Contrato da Obra", view: "project-contract", icon: FileText, permissionId: "contrato" },
         { title: "Custos da Obra", view: "costs", icon: DollarSign, permissionId: "custos" },
         { title: "Fluxo Financeiro", view: "financial-flow", icon: Wallet, permissionId: "financeiro" },
         { title: "Suprimentos", view: "supplies", icon: Package, permissionId: "suprimentos" },
         { title: "Empreiteiros", view: "contractors", icon: Truck, permissionId: "empreiteiros" },
+        { title: "Industrialização", view: "industrialization", icon: Factory, permissionId: "industrializacao", badge: "BETA" },
       ],
     },
     {
@@ -248,27 +249,12 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       items: [
         { title: "Painel da Holding", view: "holding-dashboard", icon: Crown, permissionId: "holding" },
         { title: "Receitas & Medições", view: "holding-receitas", icon: TrendingUp, permissionId: "holding_receitas" },
+        { title: "Medições PLE", view: "ple-measurements", icon: ClipboardList, permissionId: "ple_medicoes" },
         { title: "Despesas & Custos", view: "holding-despesas", icon: Receipt, permissionId: "holding_despesas" },
         { title: "Documentação", view: "holding-documentos", icon: FolderOpen, permissionId: "holding_documentos" },
         { title: "PRD — Cronograma", view: "holding-prd", icon: BarChart3, permissionId: "holding_prd" },
         { title: "IA — Insights", view: "holding-insights", icon: Sparkles, permissionId: "holding_insights", badge: "BETA" },
         { title: "Configurações", view: "holding-config", icon: Settings, permissionId: "holding" },
-      ],
-    },
-    {
-      label: "Industrialização",
-      highlight: true,
-      badge: "Beta",
-      items: [
-        { title: "Industrialização & Logística", view: "industrialization", icon: Factory, permissionId: "industrializacao" },
-      ],
-    },
-    {
-      label: "Medições PLE",
-      highlight: true,
-      badge: "Módulo à parte",
-      items: [
-        { title: "Medições PLE", view: "ple-measurements", icon: ClipboardList, permissionId: "ple_medicoes" },
       ],
     },
   ];
@@ -334,9 +320,9 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
               </Badge>
             )}
             {item.badge && (
-              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-purple-500/10 text-purple-600 border-purple-500/30">
+              <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
                 {item.badge}
-              </Badge>
+              </span>
             )}
             {isSystemAdmin && isBeta && (
               <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-amber-500/10 text-amber-600 border-amber-500/30">
@@ -384,19 +370,9 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
             if (visibleItems.length === 0) return null;
 
             return (
-              <SidebarGroup key={group.label} className={cn(
-                group.highlight && "mt-2 mb-2 mx-1 rounded-lg border-2 border-primary/30 bg-primary/5 p-2"
-              )}>
-                <SidebarGroupLabel className={cn(
-                  "text-xs font-bold uppercase tracking-wider px-3 mb-2 mt-3",
-                  group.highlight ? "text-primary" : "text-primary"
-                )}>
-                  <span>{group.label}</span>
-                  {group.badge && (
-                    <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0 h-4 border-primary/40 text-primary">
-                      {group.badge}
-                    </Badge>
-                  )}
+              <SidebarGroup key={group.label}>
+                <SidebarGroupLabel className="text-xs font-bold uppercase tracking-wider px-3 mb-2 mt-3 text-primary">
+                  {group.label}
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu className="space-y-1">
