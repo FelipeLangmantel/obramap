@@ -847,6 +847,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const deleteUnit = async (id: string) => {
+    if (!canEdit) return;
     try {
       await supabase.from('units').delete().eq('id', id);
       toast.success('Unidade removida');
