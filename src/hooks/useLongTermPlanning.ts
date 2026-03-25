@@ -359,6 +359,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
     periodId: string,
     newValue: number
   ) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     setServiceRows(prev => prev.map(row => {
       if (row.macro_id === macroId && row.scope_id === scopeId) {
         // Block completed services
