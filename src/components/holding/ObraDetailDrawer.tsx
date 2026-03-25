@@ -1304,7 +1304,7 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
    ══════════════════════════════════════════════ */
 
 function AditivosTab({ obraId }: { obraId: string }) {
-  const { user, profile } = useAuth();
+  const { user, profile, requireEdit } = useAuth();
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
