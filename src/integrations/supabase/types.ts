@@ -1163,26 +1163,81 @@ export type Database = {
           },
         ]
       }
+      department_permissions: {
+        Row: {
+          allowed_project_ids: string[] | null
+          can_edit: boolean
+          company_id: string
+          created_at: string
+          department_name: string
+          id: string
+          updated_at: string
+          visible_management_sections: string[]
+          visible_menus: string[]
+        }
+        Insert: {
+          allowed_project_ids?: string[] | null
+          can_edit?: boolean
+          company_id: string
+          created_at?: string
+          department_name: string
+          id?: string
+          updated_at?: string
+          visible_management_sections?: string[]
+          visible_menus?: string[]
+        }
+        Update: {
+          allowed_project_ids?: string[] | null
+          can_edit?: boolean
+          company_id?: string
+          created_at?: string
+          department_name?: string
+          id?: string
+          updated_at?: string
+          visible_management_sections?: string[]
+          visible_menus?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "department_permissions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
+          company_id: string | null
           created_at: string
           display_order: number | null
           id: string
           name: string
         }
         Insert: {
+          company_id?: string | null
           created_at?: string
           display_order?: number | null
           id?: string
           name: string
         }
         Update: {
+          company_id?: string | null
           created_at?: string
           display_order?: number | null
           id?: string
           name?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "departments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       despesas_mensais: {
         Row: {
@@ -8076,6 +8131,7 @@ export type Database = {
       user_permissions: {
         Row: {
           allowed_project_ids: string[] | null
+          can_edit: boolean | null
           created_at: string
           department: string | null
           id: string
@@ -8086,6 +8142,7 @@ export type Database = {
         }
         Insert: {
           allowed_project_ids?: string[] | null
+          can_edit?: boolean | null
           created_at?: string
           department?: string | null
           id?: string
@@ -8096,6 +8153,7 @@ export type Database = {
         }
         Update: {
           allowed_project_ids?: string[] | null
+          can_edit?: boolean | null
           created_at?: string
           department?: string | null
           id?: string
