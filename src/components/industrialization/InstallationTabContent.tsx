@@ -400,7 +400,10 @@ export function InstallationTabContent({ companyId, contextId, contextType }: In
         </Card>
       ) : (
         <div className="space-y-4">
-          {groupedByZone.map(({ zone, units: zUnits }) => (
+          {groupedByZone.map(({ zone, units: zUnits }) => {
+            const zInstalled = zUnits.filter(u => u.status === "installed" || u.status === "completed").length;
+            const zPct = zUnits.length > 0 ? Math.round((zInstalled / zUnits.length) * 100) : 0;
+            return (
             <Card key={zone?.id || "no-zone"}>
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
@@ -409,6 +412,7 @@ export function InstallationTabContent({ companyId, contextId, contextType }: In
                   )}
                   <CardTitle className="text-sm">{zone?.name || "Sem Zona"}</CardTitle>
                   <Badge variant="outline" className="text-[10px]">{zUnits.length} un</Badge>
+                  <span className="text-[10px] text-muted-foreground ml-auto">{zInstalled} instaladas · {zPct}%</span>
                 </div>
               </CardHeader>
               <CardContent>
