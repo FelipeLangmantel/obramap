@@ -56,7 +56,7 @@ const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" 
 
 export default function IndustrializationModuleView() {
   const { projects } = useConstruction();
-  const { profile } = useAuth();
+  const { profile, isCompanyAdmin } = useAuth();
   const companyId = profile?.company_id;
 
   const [view, setView] = useState<"dashboard" | "detail">("dashboard");
