@@ -965,6 +965,15 @@ export function UserPermissionsPanel() {
             <Button variant="outline" onClick={() => setIsPermissionDialogOpen(false)}>
               Cancelar
             </Button>
+            <Button variant="outline" size="sm" onClick={() => {
+              const user = users.find(u => u.user_id === selectedUserId);
+              if (!user) return;
+              const defaults = getDefaultPermissions(user.role as 'admin' | 'editor' | 'viewer');
+              setEditingPermission(prev => prev ? { ...prev, ...defaults } : prev);
+              toast.success('Permissões padrão carregadas. Salve para confirmar.');
+            }}>
+              Restaurar Padrão do Perfil
+            </Button>
             <Button onClick={handleSavePermission}>
               <Save className="h-4 w-4 mr-2" />
               Salvar Permissões
