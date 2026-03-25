@@ -735,6 +735,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const executeDeleteInput = async () => {
+    if (!canEdit) return;
     if (!inputToDelete) return;
     try {
       await supabase.from('inputs').delete().eq('id', inputToDelete.id);
