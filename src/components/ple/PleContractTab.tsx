@@ -23,6 +23,7 @@ interface ObraMapService {
 }
 
 export function PleContractTab(props: PleDataReturn) {
+  const { canEdit, requireEdit } = useAuth();
   const {
     currentProject, groups, events,
     createGroup, deleteGroup,
