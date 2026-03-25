@@ -616,7 +616,7 @@ export default function IndustrializationModuleView() {
                   <SelectItem value="__none__">Nenhuma</SelectItem>
                   {obrasPortfolio.map(o => (
                     <SelectItem key={o.id} value={o.id}>
-                      {o.nome} {o.total_houses ? `— ${o.total_houses} casas` : ""}
+                      {o.nome} {o.uh ? `— ${o.uh} casas` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
