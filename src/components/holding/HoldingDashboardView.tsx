@@ -413,7 +413,31 @@ export default function HoldingDashboardView() {
     if (editingObra) {
       const { error } = await supabase.from("obras_portfolio").update(payload).eq("id", editingObra.id);
       if (error) { toast.error("Erro ao atualizar obra."); setSavingObra(false); return; }
-      toast.success("Obra atualizada!");
+
+      // Se admin alterou percentual de obra com saldo inicial, recalcular medição inicial
+      if (
+        isCompanyAdmin &&
+        editingObra.has_initial_balance &&
+        newObraForm.percentual_andamento !== editingObra.percentual_andamento &&
+        Number(newObraForm.valor_contrato) > 0
+      ) {
+        const novoValorInicial = Number(newObraForm.valor_contrato) * newObraForm.percentual_andamento / 100;
+
+        // Atualizar a medição de saldo inicial existente
+        await supabase.from("medicoes_ple")
+          .update({ valor_medicao: novoValorInicial })
+          .eq("obra_id", editingObra.id)
+          .eq("num_medicao", "Saldo Inicial");
+
+        // Atualizar o valor_medido_inicial na obra
+        await supabase.from("obras_portfolio").update({
+          valor_medido_inicial: novoValorInicial,
+        }).eq("id", editingObra.id);
+
+        toast.success(`Obra atualizada! Saldo inicial recalculado para ${BRL.format(novoValorInicial)}.`);
+      } else {
+        toast.success("Obra atualizada!");
+      }
     } else {
       const { data, error } = await supabase.from("obras_portfolio").insert(payload).select("id").single();
       if (error || !data) { toast.error("Erro ao cadastrar obra."); setSavingObra(false); return; }
