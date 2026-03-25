@@ -628,10 +628,18 @@ export default function IndustrializationModuleView() {
               <Label className="text-xs">Nome da Obra *</Label>
               <Input
                 value={newContextForm.name}
-                onChange={e => setNewContextForm(f => ({ ...f, name: e.target.value }))}
-                className="h-8 text-xs"
+                onChange={e => {
+                  if (!newContextForm.obras_portfolio_id && !newContextForm.obramap_project_id) {
+                    setNewContextForm(f => ({ ...f, name: e.target.value }));
+                  }
+                }}
+                readOnly={!!(newContextForm.obras_portfolio_id || newContextForm.obramap_project_id)}
+                className={`h-8 text-xs ${newContextForm.obras_portfolio_id || newContextForm.obramap_project_id ? "bg-muted text-muted-foreground cursor-not-allowed" : ""}`}
                 placeholder="Ex: El Dorado"
               />
+              {(newContextForm.obras_portfolio_id || newContextForm.obramap_project_id) && (
+                <p className="text-[10px] text-muted-foreground mt-0.5">🔒 Preenchido automaticamente pelo cadastro da obra</p>
+              )}
             </div>
 
             <div>
@@ -639,9 +647,17 @@ export default function IndustrializationModuleView() {
               <Input
                 type="number"
                 value={newContextForm.total_units}
-                onChange={e => setNewContextForm(f => ({ ...f, total_units: parseInt(e.target.value) || 0 }))}
-                className="h-8 text-xs"
+                onChange={e => {
+                  if (!newContextForm.obras_portfolio_id && !newContextForm.obramap_project_id) {
+                    setNewContextForm(f => ({ ...f, total_units: parseInt(e.target.value) || 0 }));
+                  }
+                }}
+                readOnly={!!(newContextForm.obras_portfolio_id || newContextForm.obramap_project_id)}
+                className={`h-8 text-xs ${newContextForm.obras_portfolio_id || newContextForm.obramap_project_id ? "bg-muted text-muted-foreground cursor-not-allowed" : ""}`}
               />
+              {(newContextForm.obras_portfolio_id || newContextForm.obramap_project_id) && (
+                <p className="text-[10px] text-muted-foreground mt-0.5">🔒 Definido pelo cadastro da obra</p>
+              )}
             </div>
 
             {newContextForm.context_type === "integrated" && (
