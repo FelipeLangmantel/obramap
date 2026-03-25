@@ -90,6 +90,8 @@ interface ObraPortfolio {
   responsavel_nome: string | null;
   responsavel_telefone: string | null;
   tipo_contrato: string | null;
+  has_initial_balance: boolean;
+  valor_medido_inicial: number;
   created_at: string;
 }
 
