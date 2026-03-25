@@ -78,6 +78,7 @@ const EMPTY_PERIOD = {
 const EMPTY_SERVICE = { name: "", category: "", display_order: 0 };
 
 export function FactoriesTabContent({ companyId, contextId, contextType }: FactoriesTabProps) {
+  const { canEdit, requireEdit } = useAuth();
   const [factories, setFactories] = useState<IndFactory[]>([]);
   const [models, setModels] = useState<IndFactoryModel[]>([]);
   const [periods, setPeriods] = useState<IndPeriod[]>([]);

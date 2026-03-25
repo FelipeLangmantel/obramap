@@ -73,6 +73,7 @@ const EMPTY_EQUIPMENT = {
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
+  const { canEdit, requireEdit } = useAuth();
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);

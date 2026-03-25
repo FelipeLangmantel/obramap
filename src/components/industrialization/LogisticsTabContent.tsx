@@ -86,6 +86,7 @@ const EMPTY_TRUCK = {
 };
 
 export function LogisticsTabContent({ companyId, contextId }: LogisticsTabProps) {
+  const { canEdit, requireEdit } = useAuth();
   const [trucks, setTrucks] = useState<IndTruck[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);

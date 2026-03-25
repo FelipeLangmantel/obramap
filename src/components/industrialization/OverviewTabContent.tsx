@@ -78,6 +78,7 @@ interface IndPeriod {
 }
 
 export function OverviewTabContent({ companyId, contextId, contextName, contextType, totalUnits }: OverviewTabProps) {
+  const { canEdit, requireEdit } = useAuth();
   const [longTermData, setLongTermData] = useState<LongTermRow[]>([]);
   const [costData, setCostData] = useState<CostRow[]>([]);
   const [cashData, setCashData] = useState<CashRow[]>([]);

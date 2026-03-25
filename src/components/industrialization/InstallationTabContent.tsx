@@ -98,6 +98,7 @@ const CELL_BG: Record<string, string> = {
 };
 
 export function InstallationTabContent({ companyId, contextId, contextType }: InstallationTabProps) {
+  const { canEdit, requireEdit } = useAuth();
   const [units, setUnits] = useState<IndUnit[]>([]);
   const [zones, setZones] = useState<IndZone[]>([]);
   const [batchUnits, setBatchUnits] = useState<BatchUnit[]>([]);

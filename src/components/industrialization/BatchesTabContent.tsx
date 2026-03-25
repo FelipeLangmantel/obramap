@@ -90,6 +90,7 @@ const STATUS_FLOW: Record<string, { next: string; label: string; dateField?: str
 };
 
 export function BatchesTabContent({ companyId, contextId }: BatchesTabProps) {
+  const { canEdit, requireEdit } = useAuth();
   const [batches, setBatches] = useState<Batch[]>([]);
   const [factories, setFactories] = useState<IndFactory[]>([]);
   const [periods, setPeriods] = useState<IndPeriod[]>([]);
