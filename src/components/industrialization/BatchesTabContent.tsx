@@ -190,6 +190,7 @@ export function BatchesTabContent({ companyId, contextId }: BatchesTabProps) {
   };
 
   const saveBatch = async () => {
+    if (!requireEdit()) return;
     if (!form.factory_id || !form.period_id || form.selectedUnitIds.length === 0) {
       toast.error("Empresa, quinzena e unidades são obrigatórios");
       return;
