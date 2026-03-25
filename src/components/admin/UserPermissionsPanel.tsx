@@ -1083,6 +1083,92 @@ export function UserPermissionsPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Department Permission Dialog */}
+      <Dialog open={isDeptPermDialogOpen} onOpenChange={setIsDeptPermDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Permissões — {editingDeptPerm?.department_name}</DialogTitle>
+            <DialogDescription>
+              Defina o que usuários deste departamento podem ver e editar.
+              Cada usuário novo locado aqui herda estas permissões automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingDeptPerm && (
+            <div className="space-y-4">
+              {/* Toggle pode editar */}
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <div>
+                  <p className="text-sm font-medium">Modo de acesso padrão</p>
+                  <p className="text-xs text-muted-foreground">
+                    {editingDeptPerm.can_edit
+                      ? "Pode criar, editar e excluir registros"
+                      : "Somente visualização — não pode editar nada"}
+                  </p>
+                </div>
+                <Switch
+                  checked={editingDeptPerm.can_edit}
+                  onCheckedChange={v => setEditingDeptPerm(p => p ? { ...p, can_edit: v } : null)}
+                />
+              </div>
+
+              {/* Módulos visíveis */}
+              <div>
+                <Label className="text-sm font-semibold">Módulos visíveis no menu</Label>
+                <div className="grid grid-cols-2 gap-2 mt-2 max-h-64 overflow-y-auto">
+                  {MENU_MODULES.map(mod => (
+                    <div key={mod.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`dept-menu-${mod.id}`}
+                        checked={editingDeptPerm.visible_menus.includes(mod.id)}
+                        onCheckedChange={checked => {
+                          setEditingDeptPerm(p => !p ? null : {
+                            ...p,
+                            visible_menus: checked
+                              ? [...p.visible_menus, mod.id]
+                              : p.visible_menus.filter(m => m !== mod.id)
+                          });
+                        }}
+                      />
+                      <label htmlFor={`dept-menu-${mod.id}`} className="text-xs cursor-pointer">{mod.label}</label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Seções de gerenciamento */}
+              <div>
+                <Label className="text-sm font-semibold">Seções de gerenciamento</Label>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {MANAGEMENT_MODULES.map(mod => (
+                    <div key={mod.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`dept-mgmt-${mod.id}`}
+                        checked={editingDeptPerm.visible_management_sections.includes(mod.id)}
+                        onCheckedChange={checked => {
+                          setEditingDeptPerm(p => !p ? null : {
+                            ...p,
+                            visible_management_sections: checked
+                              ? [...p.visible_management_sections, mod.id]
+                              : p.visible_management_sections.filter(m => m !== mod.id)
+                          });
+                        }}
+                      />
+                      <label htmlFor={`dept-mgmt-${mod.id}`} className="text-xs cursor-pointer">{mod.label}</label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeptPermDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveDeptPermission}>Salvar Permissões</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
