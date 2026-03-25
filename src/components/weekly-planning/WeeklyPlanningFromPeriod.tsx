@@ -1707,7 +1707,7 @@ export function WeeklyPlanningFromPeriod() {
                 </>
               )}
             </div>
-            <Button onClick={saveWeeklyPlan} disabled={isSaving || validationErrors.length > 0 || overflowErrors.length > 0}>
+            <Button onClick={saveWeeklyPlan} disabled={isSaving || validationErrors.length > 0 || overflowErrors.length > 0 || !canEdit}>
               <Save className="h-4 w-4 mr-1" />
               {isSaving ? "Salvando..." : "Salvar"}
             </Button>
