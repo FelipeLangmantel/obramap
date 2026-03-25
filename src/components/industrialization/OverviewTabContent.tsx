@@ -19,9 +19,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Tooltip, TooltipContent, TooltipTrigger,
-} from "@/components/ui/tooltip";
+// tooltip removed – pipeline cards no longer use it
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend as RechartsLegend,
 } from "recharts";
@@ -324,29 +322,6 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
     return batches.filter(b => b.factory_id === pipelineFilter);
   }, [batches, pipelineFilter]);
 
-  const batchStatusColor = (status: string) => {
-    const m: Record<string, string> = {
-      planned: "bg-muted text-muted-foreground",
-      in_production: "bg-amber-500/20 text-amber-700",
-      produced: "bg-blue-500/20 text-blue-700",
-      shipped: "bg-violet-500/20 text-violet-700",
-      delivered: "bg-emerald-500/20 text-emerald-700",
-      installed: "bg-primary/20 text-primary",
-      completed: "bg-primary/30 text-primary",
-      cancelled: "bg-destructive/20 text-destructive",
-    };
-    return m[status] || "bg-muted text-muted-foreground";
-  };
-
-  const batchStatusLabel = (status: string) => {
-    const m: Record<string, string> = {
-      planned: "Planejado", in_production: "Produzindo", produced: "Produzido",
-      shipped: "Enviado", delivered: "Entregue", installed: "Instalado",
-      completed: "Concluído", cancelled: "Cancelado",
-    };
-    return m[status] || status;
-  };
-
   // ─── Cost totals ───
   const costTotals = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -361,6 +336,24 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
     });
     return totals;
   }, [costData, activeFactories]);
+
+  const PIPELINE_STYLE: Record<string, {bg:string, border:string, badge:string}> = {
+    planned:            { bg:'bg-muted/40',          border:'border-border',       badge:'bg-muted text-muted-foreground' },
+    released:           { bg:'bg-blue-500/10',       border:'border-blue-300',     badge:'bg-blue-100 text-blue-700' },
+    in_production:      { bg:'bg-amber-500/10',      border:'border-amber-300',    badge:'bg-amber-100 text-amber-700' },
+    ready:              { bg:'bg-emerald-500/10',    border:'border-emerald-300',  badge:'bg-emerald-100 text-emerald-700' },
+    awaiting_transport: { bg:'bg-orange-500/10',     border:'border-orange-300',   badge:'bg-orange-100 text-orange-700' },
+    in_transit:         { bg:'bg-purple-500/10',     border:'border-purple-300',   badge:'bg-purple-100 text-purple-700' },
+    delivered:          { bg:'bg-green-500/10',      border:'border-green-300',    badge:'bg-green-100 text-green-800' },
+    installed:          { bg:'bg-emerald-600/15',    border:'border-emerald-500',  badge:'bg-emerald-200 text-emerald-900' },
+    cancelled:          { bg:'bg-destructive/10',    border:'border-destructive',  badge:'bg-destructive/20 text-destructive' },
+  };
+
+  const STATUS_LABEL: Record<string, string> = {
+    planned:'Planejado', released:'Liberado', in_production:'Em Produção',
+    ready:'Pronto', awaiting_transport:'Aguard. Transporte', in_transit:'Em Trânsito',
+    delivered:'Entregue', installed:'Instalado', cancelled:'Cancelado',
+  };
 
   if (loading) {
     return (
@@ -712,27 +705,25 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
           ) : (
             <div className="flex gap-2 overflow-x-auto pb-2">
               {filteredBatches.map(b => {
-                const factory = factories.find(f => f.id === b.factory_id);
+                const style = PIPELINE_STYLE[b.status] || PIPELINE_STYLE.planned;
+                const isLate = b.planned_finish && new Date(b.planned_finish) < new Date()
+                  && !['delivered','installed','cancelled'].includes(b.status);
                 return (
-                  <Tooltip key={b.id}>
-                    <TooltipTrigger asChild>
-                      <div className={cn(
-                        "shrink-0 rounded-lg p-2 min-w-[100px] text-center cursor-default border",
-                        batchStatusColor(b.status),
-                      )}>
-                        <div className="text-[10px] font-bold">{b.batch_code}</div>
-                        <div className="text-[9px] mt-0.5">{b.planned_quantity} un</div>
-                        <Badge variant="outline" className="text-[8px] mt-1 px-1">{batchStatusLabel(b.status)}</Badge>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs max-w-[200px]">
-                      <p><strong>Fábrica:</strong> {factory?.name || "—"}</p>
-                      <p><strong>Qtd:</strong> {b.actual_quantity}/{b.planned_quantity}</p>
-                      <p><strong>Valor:</strong> {BRL.format(b.planned_quantity * b.unit_value)}</p>
-                      {b.planned_start && <p><strong>Início:</strong> {format(new Date(b.planned_start + "T12:00:00"), "dd/MM/yy")}</p>}
-                      {b.planned_finish && <p><strong>Fim:</strong> {format(new Date(b.planned_finish + "T12:00:00"), "dd/MM/yy")}</p>}
-                    </TooltipContent>
-                  </Tooltip>
+                  <div key={b.id}
+                    className={`shrink-0 rounded-lg border-2 p-3 min-w-[120px] cursor-pointer transition-all hover:-translate-y-1
+                      ${style.bg} ${isLate ? 'border-destructive' : style.border}`}
+                    onClick={() => setCellDialog(null)}>
+                    <div className='text-[10px] font-bold text-foreground'>{b.batch_code}{isLate ? ' ⚠️' : ''}</div>
+                    <div className='text-[10px] text-muted-foreground mt-0.5'>
+                      {factories.find(f => f.id === b.factory_id)?.name || '—'}
+                    </div>
+                    <div className='text-xs font-semibold text-foreground mt-1'>
+                      {b.actual_quantity || 0}/{b.planned_quantity} un
+                    </div>
+                    <span className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-[9px] font-semibold ${style.badge}`}>
+                      {STATUS_LABEL[b.status] || b.status}
+                    </span>
+                  </div>
                 );
               })}
             </div>
