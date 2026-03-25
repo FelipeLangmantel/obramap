@@ -22,6 +22,7 @@ import {
 import { Package, Plus, Filter, ArrowRight, DollarSign, Calendar } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
