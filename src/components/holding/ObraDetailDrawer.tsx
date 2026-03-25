@@ -1311,6 +1311,19 @@ function AditivosTab({ obraId }: { obraId: string }) {
     if (form.data) payload.data = form.data;
     const { error } = await supabase.from("aditivos_contratos").insert(payload);
     if (error) { toast.error("Erro ao salvar aditivo"); return; }
+
+    // Audit
+    const { data: ins } = await supabase
+      .from("aditivos_contratos").select("id")
+      .eq("obra_id", obraId).order("created_at", { ascending: false }).limit(1).single();
+
+    await registrarLog(
+      obraId, "aditivos_contratos", ins?.id || null,
+      "criou",
+      `Adicionou aditivo ${form.num_aditivo || ""} — ${BRL.format(form.aditivo_valor)} — prazo +${form.aditivo_prazo_dias} dias`,
+      userId, userName
+    );
+
     toast.success("Aditivo adicionado!");
     invalidateHolding();
     setShowForm(false);
