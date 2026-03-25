@@ -91,6 +91,15 @@ interface Department {
   display_order: number;
 }
 
+interface DepartmentPermission {
+  id?: string;
+  department_name: string;
+  visible_menus: string[];
+  visible_management_sections: string[];
+  can_edit: boolean;
+  allowed_project_ids: string[] | null;
+}
+
 interface Project {
   id: string;
   name: string;
@@ -149,16 +158,20 @@ export function UserPermissionsPanel() {
   
   // Permission editing state
   const [editingPermission, setEditingPermission] = useState<UserPermission | null>(null);
+  const [deptPermissions, setDeptPermissions] = useState<Record<string, DepartmentPermission>>({});
+  const [editingDeptPerm, setEditingDeptPerm] = useState<DepartmentPermission | null>(null);
+  const [isDeptPermDialogOpen, setIsDeptPermDialogOpen] = useState(false);
 
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [profilesRes, rolesRes, permissionsRes, departmentsRes, sessionsRes] = await Promise.all([
+      const [profilesRes, rolesRes, permissionsRes, departmentsRes, sessionsRes, deptPermRes] = await Promise.all([
         supabase.from("profiles").select("*").order("created_at", { ascending: false }),
         supabase.from("user_roles").select("*"),
         supabase.from("user_permissions").select("*"),
         supabase.from("departments").select("*").order("display_order"),
         supabase.from("user_sessions").select("*").order("login_at", { ascending: false }).limit(100),
+        supabase.from("department_permissions").select("*").eq("company_id", company!.id),
       ]);
 
       if (profilesRes.error) throw profilesRes.error;
@@ -223,10 +236,23 @@ export function UserPermissionsPanel() {
         }
       }
 
+      const deptPermMap: Record<string, DepartmentPermission> = {};
+      (deptPermRes.data || []).forEach((dp: any) => {
+        deptPermMap[dp.department_name] = {
+          id: dp.id,
+          department_name: dp.department_name,
+          visible_menus: dp.visible_menus || [],
+          visible_management_sections: dp.visible_management_sections || [],
+          can_edit: dp.can_edit ?? true,
+          allowed_project_ids: dp.allowed_project_ids,
+        };
+      });
+
       setUsers(usersWithRoles);
       setPermissions(permissionsMap);
       setDepartments(departmentsRes.data || []);
       setSessions((sessionsRes.data || []) as UserSession[]);
+      setDeptPermissions(deptPermMap);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("Erro ao carregar dados");
@@ -372,6 +398,7 @@ export function UserPermissionsPanel() {
       const { error } = await supabase.from("departments").insert({
         name: newDepartment.trim(),
         display_order: departments.length,
+        company_id: company!.id,
       });
       if (error) throw error;
       toast.success("Departamento adicionado!");
@@ -395,6 +422,31 @@ export function UserPermissionsPanel() {
     } catch (error) {
       console.error("Error deleting department:", error);
       toast.error("Erro ao remover departamento");
+    }
+  };
+
+  const handleSaveDeptPermission = async () => {
+    if (!editingDeptPerm || !company) return;
+    try {
+      const payload = {
+        company_id: company.id,
+        department_name: editingDeptPerm.department_name,
+        visible_menus: editingDeptPerm.visible_menus,
+        visible_management_sections: editingDeptPerm.visible_management_sections,
+        can_edit: editingDeptPerm.can_edit,
+        allowed_project_ids: editingDeptPerm.allowed_project_ids,
+        updated_at: new Date().toISOString(),
+      };
+      if (editingDeptPerm.id) {
+        await supabase.from("department_permissions").update(payload).eq("id", editingDeptPerm.id);
+      } else {
+        await supabase.from("department_permissions").insert(payload);
+      }
+      toast.success(`Permissões de "${editingDeptPerm.department_name}" salvas!`);
+      setIsDeptPermDialogOpen(false);
+      fetchData();
+    } catch (e: any) {
+      toast.error("Erro: " + e.message);
     }
   };
 
@@ -656,24 +708,49 @@ export function UserPermissionsPanel() {
                 </Button>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                {departments.map((dept) => (
-                  <div
-                    key={dept.id}
-                    className="flex items-center justify-between p-3 bg-muted rounded-lg"
-                  >
-                    <span>{dept.name}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 text-destructive hover:bg-destructive/10"
-                      onClick={() => handleDeleteDepartment(dept.id)}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {departments.map((dept) => {
+                  const perm = deptPermissions[dept.name];
+                  return (
+                    <div key={dept.id}
+                      className="flex items-center justify-between p-3 bg-muted rounded-lg border border-border/40">
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-medium truncate">{dept.name}</span>
+                        <span className={`text-[10px] mt-0.5 ${perm ? "text-emerald-600" : "text-amber-600"}`}>
+                          {perm
+                            ? `${perm.visible_menus.length} módulos · ${perm.can_edit ? "Editor" : "Visualizador"}`
+                            : "Sem permissões definidas"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          title="Configurar permissões do departamento"
+                          onClick={() => {
+                            const defaults = getDefaultPermissions('editor');
+                            setEditingDeptPerm(perm || {
+                              department_name: dept.name,
+                              visible_menus: defaults.visible_menus,
+                              visible_management_sections: defaults.visible_management_sections,
+                              can_edit: true,
+                              allowed_project_ids: null,
+                            });
+                            setIsDeptPermDialogOpen(true);
+                          }}>
+                          <Settings className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDeleteDepartment(dept.id)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                Clique em ⚙️ para configurar quais módulos cada departamento pode acessar.
+                Usuários novos herdam automaticamente as permissões do departamento em que estão locados.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1003,6 +1080,92 @@ export function UserPermissionsPanel() {
               <Save className="h-4 w-4 mr-2" />
               Salvar Permissões
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Department Permission Dialog */}
+      <Dialog open={isDeptPermDialogOpen} onOpenChange={setIsDeptPermDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Permissões — {editingDeptPerm?.department_name}</DialogTitle>
+            <DialogDescription>
+              Defina o que usuários deste departamento podem ver e editar.
+              Cada usuário novo locado aqui herda estas permissões automaticamente.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingDeptPerm && (
+            <div className="space-y-4">
+              {/* Toggle pode editar */}
+              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                <div>
+                  <p className="text-sm font-medium">Modo de acesso padrão</p>
+                  <p className="text-xs text-muted-foreground">
+                    {editingDeptPerm.can_edit
+                      ? "Pode criar, editar e excluir registros"
+                      : "Somente visualização — não pode editar nada"}
+                  </p>
+                </div>
+                <Switch
+                  checked={editingDeptPerm.can_edit}
+                  onCheckedChange={v => setEditingDeptPerm(p => p ? { ...p, can_edit: v } : null)}
+                />
+              </div>
+
+              {/* Módulos visíveis */}
+              <div>
+                <Label className="text-sm font-semibold">Módulos visíveis no menu</Label>
+                <div className="grid grid-cols-2 gap-2 mt-2 max-h-64 overflow-y-auto">
+                  {MENU_MODULES.map(mod => (
+                    <div key={mod.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`dept-menu-${mod.id}`}
+                        checked={editingDeptPerm.visible_menus.includes(mod.id)}
+                        onCheckedChange={checked => {
+                          setEditingDeptPerm(p => !p ? null : {
+                            ...p,
+                            visible_menus: checked
+                              ? [...p.visible_menus, mod.id]
+                              : p.visible_menus.filter(m => m !== mod.id)
+                          });
+                        }}
+                      />
+                      <label htmlFor={`dept-menu-${mod.id}`} className="text-xs cursor-pointer">{mod.label}</label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Seções de gerenciamento */}
+              <div>
+                <Label className="text-sm font-semibold">Seções de gerenciamento</Label>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {MANAGEMENT_MODULES.map(mod => (
+                    <div key={mod.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`dept-mgmt-${mod.id}`}
+                        checked={editingDeptPerm.visible_management_sections.includes(mod.id)}
+                        onCheckedChange={checked => {
+                          setEditingDeptPerm(p => !p ? null : {
+                            ...p,
+                            visible_management_sections: checked
+                              ? [...p.visible_management_sections, mod.id]
+                              : p.visible_management_sections.filter(m => m !== mod.id)
+                          });
+                        }}
+                      />
+                      <label htmlFor={`dept-mgmt-${mod.id}`} className="text-xs cursor-pointer">{mod.label}</label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeptPermDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveDeptPermission}>Salvar Permissões</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
