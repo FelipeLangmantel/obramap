@@ -29,6 +29,7 @@ interface UserPermission {
   allowed_project_ids: string[] | null;
   visible_menus: string[];
   visible_management_sections: string[];
+  can_edit: boolean | null; // null = herda do departamento
 }
 
 interface AuthContextType {
