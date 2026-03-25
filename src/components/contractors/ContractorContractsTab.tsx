@@ -245,7 +245,7 @@ export function ContractorContractsTab({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Contratos de Empreiteiros</h3>
-        <Button size="sm" onClick={() => setNewContractOpen(true)} className="gap-1.5" disabled={availableContractors.length === 0}>
+        <Button size="sm" onClick={() => setNewContractOpen(true)} className="gap-1.5" disabled={availableContractors.length === 0 || !canEdit}>
           <Plus className="h-3.5 w-3.5" /> Novo Contrato
         </Button>
       </div>
