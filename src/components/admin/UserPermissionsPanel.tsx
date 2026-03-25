@@ -107,7 +107,7 @@ interface UserSession {
 }
 
 // ✅ Importado da fonte única de verdade – novos módulos aparecem automaticamente
-import { MENU_MODULES, MANAGEMENT_MODULES, MENU_TO_MODULE_KEY } from "@/constants/modulePermissions";
+import { MENU_MODULES, MANAGEMENT_MODULES, MENU_TO_MODULE_KEY, getDefaultPermissions } from "@/constants/modulePermissions";
 
 // Aliases para compatibilidade interna
 const MENU_OPTIONS = MENU_MODULES;
@@ -231,34 +231,27 @@ export function UserPermissionsPanel() {
 
     setIsCreating(true);
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: { display_name: displayName },
-        },
+      const { data, error } = await supabase.rpc('create_company_user', {
+        p_email: email,
+        p_display_name: displayName,
+        p_temp_password: password,
+        p_role: role,
+        p_company_id: company!.id,
       });
 
-      if (authError) throw authError;
+      if (error) throw error;
 
-      if (authData.user) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        
-        if (role !== "viewer") {
-          await supabase.from("user_roles").update({ role }).eq("user_id", authData.user.id);
-        }
-
-        toast.success("Usuário criado com sucesso!");
-        setIsCreateDialogOpen(false);
-        resetForm();
-        fetchData();
-      }
+      toast.success(`Usuário criado! Senha temporária definida. O usuário deverá trocar no primeiro login.`);
+      setIsCreateDialogOpen(false);
+      resetForm();
+      fetchData();
     } catch (error: any) {
-      if (error.message?.includes("already registered")) {
-        toast.error("Este email já está cadastrado");
+      if (error.message?.includes('ja cadastrado')) {
+        toast.error('Este email já está cadastrado');
+      } else if (error.message?.includes('Sem permissao')) {
+        toast.error('Sem permissão para criar usuários nesta empresa');
       } else {
-        toast.error(error.message || "Erro ao criar usuário");
+        toast.error(error.message || 'Erro ao criar usuário');
       }
     }
     setIsCreating(false);
@@ -298,15 +291,9 @@ export function UserPermissionsPanel() {
   const openPermissionDialog = (userId: string) => {
     setSelectedUserId(userId);
     const existingPermission = permissions[userId];
-    // New users get empty permissions (all deselected)
-    setEditingPermission(existingPermission || {
-      id: "",
-      user_id: userId,
-      department: "geral",
-      allowed_project_ids: null,
-      visible_menus: [],
-      visible_management_sections: [],
-    });
+    const user = users.find(u => u.user_id === userId);
+    const defaults = user ? getDefaultPermissions(user.role as 'admin' | 'editor' | 'viewer') : { visible_menus: [], visible_management_sections: [] };
+    setEditingPermission(existingPermission || { id: '', user_id: userId, department: 'geral', allowed_project_ids: null, ...defaults });
     setIsPermissionDialogOpen(true);
   };
 
@@ -977,6 +964,15 @@ export function UserPermissionsPanel() {
           <DialogFooter className="border-t pt-4">
             <Button variant="outline" onClick={() => setIsPermissionDialogOpen(false)}>
               Cancelar
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => {
+              const user = users.find(u => u.user_id === selectedUserId);
+              if (!user) return;
+              const defaults = getDefaultPermissions(user.role as 'admin' | 'editor' | 'viewer');
+              setEditingPermission(prev => prev ? { ...prev, ...defaults } : prev);
+              toast.success('Permissões padrão carregadas. Salve para confirmar.');
+            }}>
+              Restaurar Padrão do Perfil
             </Button>
             <Button onClick={handleSavePermission}>
               <Save className="h-4 w-4 mr-2" />
