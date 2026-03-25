@@ -319,6 +319,7 @@ export function usePleData() {
 
   // Set PLE entry
   const setEntry = useCallback(async (eventId: string, houseNumber: number, measurementId: string | null) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     if (!currentProjectId) return;
     setIsSaving(true);
     try {
