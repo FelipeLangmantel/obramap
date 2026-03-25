@@ -621,7 +621,7 @@ export default function HoldingDashboardView() {
     const result: HoldingAlert[] = [];
     const now = new Date();
 
-    for (const obra of obras) {
+    for (const obra of obrasFiltradas) {
       const docObraFields = ["ata", "ois", "art", "cno", "impl", "scp"];
       const docObraCount = obra.docs ? docObraFields.filter((f) => (obra.docs as any)?.[f]).length : 0;
       if (docObraCount < 4) {
