@@ -43,6 +43,7 @@ export const IssueManagementDialog: React.FC<IssueManagementDialogProps> = ({
   issue,
   onSave
 }) => {
+  const { canEdit, requireEdit } = useAuth();
   const [status, setStatus] = useState(issue?.status || 'aberta');
   const [responsibleName, setResponsibleName] = useState(issue?.responsible_name || '');
   const [photoAfterUrl, setPhotoAfterUrl] = useState(issue?.photo_after_url || '');
