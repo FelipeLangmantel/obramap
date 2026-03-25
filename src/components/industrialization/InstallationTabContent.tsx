@@ -23,6 +23,7 @@ import { Wrench, Filter, CheckCircle2, Package, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface InstallationTabProps {
   companyId: string;
