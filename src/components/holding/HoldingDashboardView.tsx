@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -221,6 +221,7 @@ export default function HoldingDashboardView() {
   const { company, isCompanyAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [selectedObra, setSelectedObra] = useState<ObraEnriched | null>(null);
+
   const [mainView, setMainView] = useState<"portfolio" | "analytics" | "manual">("portfolio");
   const [viewMode, setViewMode] = useState<"cards" | "gantt" | "tabela">("cards");
   const [showNewObraDialog, setShowNewObraDialog] = useState(false);
@@ -563,7 +564,11 @@ export default function HoldingDashboardView() {
       const [obrasRes, docsRes, medicoesRes] = await Promise.all([
         supabase.from("obras_portfolio").select("*").eq("company_id", company.id).order("nome"),
         supabase.from("documentos_obra").select("*"),
-        supabase.from("medicoes_ple").select("*").order("ano_referencia", { ascending: false }),
+        supabase
+          .from("medicoes_ple")
+          .select("*")
+          .in("obra_id", (await supabase.from("obras_portfolio").select("id").eq("company_id", company.id)).data?.map(o => o.id) || [])
+          .order("ano_referencia", { ascending: false }),
       ]);
       const obrasData = (obrasRes.data || []) as ObraPortfolio[];
       const docsData = (docsRes.data || []) as DocumentosObra[];
@@ -590,6 +595,13 @@ export default function HoldingDashboardView() {
     },
     enabled: !!company?.id,
   });
+
+  // Manter selectedObra sincronizada quando obras re-fetcha após invalidate
+  useEffect(() => {
+    if (!selectedObra) return;
+    const updated = obras.find(o => o.id === selectedObra.id);
+    if (updated) setSelectedObra(updated);
+  }, [obras]);
 
   const { data: aditivosPendentes = [] } = useQuery({
     queryKey: ["holding-aditivos-pendentes", company?.id],

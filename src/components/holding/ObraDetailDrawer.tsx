@@ -30,12 +30,15 @@ const BRL_SHORT = (v: number) => {
 function useInvalidateHolding() {
   const qc = useQueryClient();
   return () => {
-    qc.invalidateQueries({ queryKey: ["holding-portfolio"] });
-    qc.invalidateQueries({ queryKey: ["holding-receitas"] });
-    qc.invalidateQueries({ queryKey: ["holding-despesas"] });
-    qc.invalidateQueries({ queryKey: ["holding-prd"] });
-    qc.invalidateQueries({ queryKey: ["holding-documentos"] });
-    qc.invalidateQueries({ queryKey: ["holding-insights-data"] });
+    // exact: false garante que invalida qualquer variante da chave
+    // ex: ["holding-portfolio", company.id] é alcançado por ["holding-portfolio"]
+    qc.invalidateQueries({ queryKey: ["holding-portfolio"], exact: false });
+    qc.invalidateQueries({ queryKey: ["holding-receitas"], exact: false });
+    qc.invalidateQueries({ queryKey: ["holding-despesas"], exact: false });
+    qc.invalidateQueries({ queryKey: ["holding-prd"], exact: false });
+    qc.invalidateQueries({ queryKey: ["holding-documentos"], exact: false });
+    qc.invalidateQueries({ queryKey: ["holding-aditivos-pendentes"], exact: false });
+    qc.invalidateQueries({ queryKey: ["holding-insights-data"], exact: false });
   };
 }
 
