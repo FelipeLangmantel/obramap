@@ -14,6 +14,7 @@ import {
 import { toast } from 'sonner';
 
 export function usePlanningData(projectId: string | undefined) {
+  const { canEdit } = useAuth();
   const [stages, setStages] = useState<PlanningStage[]>([]);
   const [teams, setTeams] = useState<PlanningTeam[]>([]);
   const [templates, setTemplates] = useState<ProductivityTemplate[]>([]);
