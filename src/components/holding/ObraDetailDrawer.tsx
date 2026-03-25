@@ -1088,6 +1088,9 @@ const DESPESA_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 };
 
 function FinanceiroTab({ obraId }: { obraId: string }) {
+  const { user, profile } = useAuth();
+  const userName = profile?.display_name || user?.email || "Usuário";
+  const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
   const [despesas, setDespesas] = useState<any[]>([]);
   const [medicoes, setMedicoes] = useState<any[]>([]);
