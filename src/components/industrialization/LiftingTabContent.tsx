@@ -234,17 +234,24 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
       .eq("id", completeTarget.id);
     if (schErr) { toast.error("Erro ao concluir"); return; }
 
-    // Update linked batch_units, units, unit_kits to 'installed'
-    if (completeTarget.batch_id) {
-      await supabase
-        .from("ind_batch_units")
-        .update({ status: "installed" } as any)
-        .eq("batch_id", completeTarget.batch_id)
-        .eq("context_id", contextId);
-    }
+    // Update linked batch_units and units to 'installed'
+    const unitIds = completeTarget.unit_ids && completeTarget.unit_ids.length > 0
+      ? completeTarget.unit_ids : null;
 
-    // Note: In a full implementation, we'd update specific units from the schedule.
-    // For now, we update batch-level.
+    if (unitIds) {
+      await supabase.from('ind_units')
+        .update({ status: 'installed' } as any)
+        .in('id', unitIds);
+      await supabase.from('ind_batch_units')
+        .update({ status: 'installed' } as any)
+        .in('unit_id', unitIds)
+        .eq('context_id', contextId);
+    } else if (completeTarget.batch_id) {
+      await supabase.from('ind_batch_units')
+        .update({ status: 'installed' } as any)
+        .eq('batch_id', completeTarget.batch_id)
+        .eq('context_id', contextId);
+    }
 
     toast.success("Içamento concluído! Status atualizado.");
     setCompleteTarget(null);
