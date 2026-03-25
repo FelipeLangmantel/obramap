@@ -58,6 +58,10 @@ import {
   MapPin,
   Monitor,
   Smartphone,
+  RefreshCw,
+  AlertTriangle,
+  Activity,
+  Filter,
 } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
@@ -154,6 +158,7 @@ export function UserPermissionsPanel() {
   const [selectedUserForPassword, setSelectedUserForPassword] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [showAllSessions, setShowAllSessions] = useState(false);
+  const [sessionUserFilter, setSessionUserFilter] = useState<string>("all");
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
@@ -790,127 +795,235 @@ export function UserPermissionsPanel() {
         </TabsContent>
 
         <TabsContent value="sessions" className="space-y-4">
+          {/* ── Cards de resumo ── */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              {
+                label: "Sessões Ativas",
+                value: sessions.filter(s => s.is_active).length,
+                icon: <Activity className="h-4 w-4" />,
+                color: "text-emerald-600",
+                bg: "bg-emerald-500/10",
+              },
+              {
+                label: "Usuários Online",
+                value: new Set(sessions.filter(s => s.is_active).map(s => s.user_id)).size,
+                icon: <Users className="h-4 w-4" />,
+                color: "text-blue-600",
+                bg: "bg-blue-500/10",
+              },
+              {
+                label: "Total Hoje",
+                value: sessions.filter(s => new Date(s.login_at) > new Date(Date.now() - 86400000)).length,
+                icon: <Clock className="h-4 w-4" />,
+                color: "text-muted-foreground",
+                bg: "bg-muted",
+              },
+              {
+                label: "Encerradas",
+                value: sessions.filter(s => !s.is_active).length,
+                icon: <LogOut className="h-4 w-4" />,
+                color: "text-muted-foreground",
+                bg: "bg-muted",
+              },
+            ].map((card, i) => (
+              <div key={i} className="bg-card border rounded-lg p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-muted-foreground">{card.label}</span>
+                  <span className={`p-1 rounded ${card.bg} ${card.color}`}>{card.icon}</span>
+                </div>
+                <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Alerta de sessões duplicadas ── */}
+          {(() => {
+            const activeByUser: Record<string, number> = {};
+            sessions.filter(s => s.is_active).forEach(s => {
+              activeByUser[s.user_id] = (activeByUser[s.user_id] || 0) + 1;
+            });
+            const duplicados = Object.entries(activeByUser).filter(([, count]) => count > 1);
+            if (duplicados.length === 0) return null;
+            return (
+              <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-300/50 rounded-lg text-sm text-amber-700">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  <strong>Sessões duplicadas detectadas:</strong>{" "}
+                  {duplicados.map(([uid, count]) => `${getUserName(uid)} (${count} ativas)`).join(", ")}
+                  {" — "}isto ocorre quando o usuário fecha o navegador sem fazer logout. As sessões antigas serão encerradas automaticamente por inatividade em até 20 minutos.
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── Tabela principal ── */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5" />
-                Sessões Ativas e Histórico
-              </CardTitle>
-              <CardDescription>
-                Monitore logins, IPs, localização, duração e encerre sessões se necessário
-              </CardDescription>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Monitor className="h-4 w-4" /> Sessões Ativas e Histórico
+                </CardTitle>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Filtro por usuário */}
+                  <select
+                    value={sessionUserFilter}
+                    onChange={e => setSessionUserFilter(e.target.value)}
+                    className="h-7 text-xs border border-border rounded-md px-2 bg-background text-foreground"
+                  >
+                    <option value="all">Todos os usuários</option>
+                    {users.map(u => (
+                      <option key={u.user_id} value={u.user_id}>{u.display_name}</option>
+                    ))}
+                  </select>
+                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={fetchData}>
+                    <RefreshCw className="h-3 w-3" /> Atualizar
+                  </Button>
+                  <Button
+                    variant="destructive" size="sm" className="h-7 text-xs gap-1"
+                    disabled={sessions.filter(s => s.is_active && (sessionUserFilter === "all" || s.user_id === sessionUserFilter)).length === 0}
+                    onClick={() => {
+                      const toTerminate = sessions.filter(s => s.is_active && (sessionUserFilter === "all" || s.user_id === sessionUserFilter));
+                      if (!confirm(`Encerrar ${toTerminate.length} sessão(ões) ativa(s)?`)) return;
+                      toTerminate.forEach(s => handleTerminateSession(s.id));
+                    }}
+                  >
+                    <LogOut className="h-3 w-3" /> Encerrar{sessionUserFilter !== "all" ? " do usuário" : " Todas"}
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               {(() => {
                 const VISIBLE_LIMIT = 20;
-                const visibleSessions = showAllSessions ? sessions : sessions.slice(0, VISIBLE_LIMIT);
-                const hasMore = sessions.length > VISIBLE_LIMIT;
+                const filtered = sessionUserFilter === "all" ? sessions : sessions.filter(s => s.user_id === sessionUserFilter);
+                const visibleSessions = showAllSessions ? filtered : filtered.slice(0, VISIBLE_LIMIT);
+                const hasMore = filtered.length > VISIBLE_LIMIT;
 
                 return (
                   <>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Usuário</TableHead>
-                          <TableHead>Login</TableHead>
-                          <TableHead>IP / Localização</TableHead>
-                          <TableHead>Dispositivo</TableHead>
-                          <TableHead>Duração</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead className="text-right">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {visibleSessions.map((session) => {
-                          const locationParts = [session.city, session.region].filter(Boolean);
-                          const locationStr = locationParts.length > 0 ? locationParts.join(", ") : null;
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead className="text-xs pl-4">Usuário</TableHead>
+                            <TableHead className="text-xs">Login</TableHead>
+                            <TableHead className="text-xs">Última Atividade</TableHead>
+                            <TableHead className="text-xs">IP / Localização</TableHead>
+                            <TableHead className="text-xs">Dispositivo</TableHead>
+                            <TableHead className="text-xs">Duração</TableHead>
+                            <TableHead className="text-xs">Status</TableHead>
+                            <TableHead className="text-xs text-right pr-4">Ações</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {visibleSessions.map((session) => {
+                            const locationParts = [session.city, session.region].filter(Boolean);
+                            const locationStr = locationParts.length > 0 ? locationParts.join(", ") : null;
+                            const isInactive = session.is_active && session.last_active_at
+                              && (new Date().getTime() - new Date(session.last_active_at).getTime()) > 30 * 60 * 1000;
+                            const terminationLabel: Record<string, string> = {
+                              inatividade: "Inatividade",
+                              admin: "Encerrada pelo admin",
+                              novo_login: "Novo login",
+                            };
 
-                          return (
-                            <TableRow key={session.id}>
-                              <TableCell className="font-medium">{getUserName(session.user_id)}</TableCell>
-                              <TableCell className="text-sm">
-                                {new Date(session.login_at).toLocaleString('pt-BR')}
-                              </TableCell>
-                              <TableCell className="text-sm">
-                                <div className="flex flex-col gap-0.5">
-                                  <span className="flex items-center gap-1 text-muted-foreground">
-                                    <Globe className="h-3 w-3" />
-                                    {session.ip_address || "N/A"}
-                                  </span>
-                                  {locationStr && (
-                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                      <MapPin className="h-3 w-3" />
-                                      {locationStr}
+                            return (
+                              <TableRow key={session.id} className={!session.is_active ? "opacity-60" : ""}>
+                                <TableCell className="pl-4">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full shrink-0 ${
+                                      !session.is_active ? "bg-gray-300"
+                                      : isInactive ? "bg-amber-400"
+                                      : "bg-emerald-500"
+                                    }`} />
+                                    <span className="text-sm font-medium">{getUserName(session.user_id)}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {new Date(session.login_at).toLocaleString("pt-BR", {
+                                    day: "2-digit", month: "2-digit", year: "2-digit",
+                                    hour: "2-digit", minute: "2-digit",
+                                  })}
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  {session.last_active_at ? (() => {
+                                    const mins = Math.floor((new Date().getTime() - new Date(session.last_active_at).getTime()) / 60000);
+                                    if (mins < 1) return <span className="text-emerald-600 font-medium">Agora</span>;
+                                    if (mins < 60) return <span className={isInactive ? "text-amber-600" : "text-muted-foreground"}>{mins}min atrás{isInactive ? " ⚠️" : ""}</span>;
+                                    return <span className="text-muted-foreground">{Math.floor(mins / 60)}h atrás</span>;
+                                  })() : <span className="text-muted-foreground">—</span>}
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="flex items-center gap-1 font-mono text-muted-foreground">
+                                      <Globe className="h-3 w-3 shrink-0" />
+                                      {session.ip_address || "N/A"}
                                     </span>
-                                  )}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-sm text-muted-foreground">
-                                <div className="flex items-center gap-1">
-                                  {session.device_type === "mobile" ? (
-                                    <Smartphone className="h-3 w-3" />
+                                    {locationStr && (
+                                      <span className="flex items-center gap-1 text-muted-foreground">
+                                        <MapPin className="h-3 w-3 shrink-0" />
+                                        {locationStr}
+                                      </span>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  <div className="flex items-center gap-1">
+                                    {session.device_type === "mobile"
+                                      ? <Smartphone className="h-3 w-3" />
+                                      : <Monitor className="h-3 w-3" />}
+                                    <div>
+                                      <div>{session.browser || "—"}</div>
+                                      <div className="text-[10px] capitalize opacity-70">{session.device_type || "desktop"}</div>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {formatSessionDuration(session.login_at, session.logout_at)}
+                                </TableCell>
+                                <TableCell>
+                                  {session.is_active ? (
+                                    isInactive
+                                      ? <Badge className="bg-amber-500/20 text-amber-600 text-[10px]">Inativa +30min</Badge>
+                                      : <Badge className="bg-emerald-500/20 text-emerald-600 text-[10px]">● Online</Badge>
                                   ) : (
-                                    <Monitor className="h-3 w-3" />
+                                    <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                      {session.termination_reason ? terminationLabel[session.termination_reason] || "Encerrada" : "Encerrada"}
+                                    </Badge>
                                   )}
-                                  {session.browser || "—"}
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-sm">
-                                {formatSessionDuration(session.login_at, session.logout_at)}
-                              </TableCell>
-                              <TableCell>
-                                {session.is_active ? (
-                                  <Badge className="bg-green-500/20 text-green-600">Ativa</Badge>
-                                ) : session.termination_reason === "inatividade" ? (
-                                  <Badge variant="outline" className="text-amber-600 border-amber-300">Inatividade</Badge>
-                                ) : (
-                                  <Badge variant="outline">Encerrada</Badge>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {session.is_active && (
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={() => handleTerminateSession(session.id)}
-                                    title="Encerrar sessão"
-                                  >
-                                    <LogOut className="h-4 w-4 mr-1" />
-                                    Encerrar
-                                  </Button>
-                                )}
+                                </TableCell>
+                                <TableCell className="text-right pr-4">
+                                  {session.is_active && (
+                                    <Button
+                                      variant="destructive" size="sm" className="h-7 text-xs gap-1"
+                                      onClick={() => handleTerminateSession(session.id)}
+                                    >
+                                      <LogOut className="h-3 w-3" /> Encerrar
+                                    </Button>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                          {visibleSessions.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={8} className="text-center text-muted-foreground py-10 text-sm">
+                                {sessionUserFilter !== "all" ? `Nenhuma sessão para ${getUserName(sessionUserFilter)}` : "Nenhuma sessão registrada"}
                               </TableCell>
                             </TableRow>
-                          );
-                        })}
-                        {sessions.length === 0 && (
-                          <TableRow>
-                            <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                              Nenhuma sessão registrada
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
 
                     {hasMore && (
-                      <div className="flex justify-center mt-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowAllSessions(!showAllSessions)}
-                          className="gap-2"
-                        >
+                      <div className="flex justify-center py-3">
+                        <Button variant="outline" size="sm" onClick={() => setShowAllSessions(!showAllSessions)} className="gap-2 text-xs">
                           {showAllSessions ? (
-                            <>
-                              <ChevronUp className="h-4 w-4" />
-                              Mostrar apenas as últimas {VISIBLE_LIMIT}
-                            </>
+                            <><ChevronUp className="h-3.5 w-3.5" /> Mostrar menos</>
                           ) : (
-                            <>
-                              <ChevronDown className="h-4 w-4" />
-                              Ver todas ({sessions.length} sessões)
-                            </>
+                            <><ChevronDown className="h-3.5 w-3.5" /> Ver todas ({filtered.length} sessões)</>
                           )}
                         </Button>
                       </div>
@@ -921,23 +1034,13 @@ export function UserPermissionsPanel() {
             </CardContent>
           </Card>
 
-          <Card className="bg-muted/50">
-            <CardContent className="pt-6">
-              <div className="flex items-start gap-4">
-                <div className="p-3 bg-amber-500/10 rounded-full">
-                  <Shield className="h-6 w-6 text-amber-500" />
-                </div>
-                <div>
-                  <h4 className="font-semibold mb-1">Segurança de Sessões</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Use o botão "Encerrar" para desconectar sessões travadas ou suspeitas. 
-                    Sessões inativas por tempo prolongado são encerradas automaticamente.
-                    O usuário precisará fazer login novamente.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* ── Legenda de status ── */}
+          <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap px-1">
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"/> Online agora</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"/> Inativa há mais de 30min</span>
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block"/> Encerrada</span>
+            <span className="ml-auto">Sessões são encerradas automaticamente após 20min de inatividade</span>
+          </div>
         </TabsContent>
       </Tabs>
 

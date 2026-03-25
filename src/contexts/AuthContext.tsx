@@ -482,6 +482,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           : "Outro";
         const deviceType = /Mobi|Android|iPhone|iPad/i.test(ua) ? "mobile" : "desktop";
 
+        // Encerrar sessões anteriores ativas do mesmo usuário (mesmo dispositivo/browser)
+        // antes de criar nova — evita acúmulo de sessões "fantasma"
+        await supabase
+          .from("user_sessions")
+          .update({ is_active: false, logout_at: new Date().toISOString(), termination_reason: "novo_login" })
+          .eq("user_id", data.user.id)
+          .eq("is_active", true);
+
         await supabase.from("user_sessions").insert({
           user_id: data.user.id,
           ip_address: ipData.ip,
