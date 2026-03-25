@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Factory, Plus, Pencil, Trash2, ChevronDown, ChevronRight, Calendar, Wrench, Zap } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import { format, addWeeks, startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
