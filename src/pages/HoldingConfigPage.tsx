@@ -34,7 +34,7 @@ interface DocTipo {
 }
 
 export default function HoldingConfigPage() {
-  const { company } = useAuth();
+  const { company, isCompanyAdmin } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -79,6 +79,7 @@ export default function HoldingConfigPage() {
   };
 
   const saveEmpresa = async () => {
+    if (!isCompanyAdmin) return;
     if (!empresaForm.nome.trim()) { toast.error("Nome é obrigatório"); return; }
     if (editingEmpresa) {
       const { error } = await supabase.from("holding_empresas").update(empresaForm as any).eq("id", editingEmpresa.id);
@@ -94,6 +95,7 @@ export default function HoldingConfigPage() {
   };
 
   const deleteEmpresa = async () => {
+    if (!isCompanyAdmin) return;
     if (!deletingEmpresaId) return;
     const { error } = await supabase.from("holding_empresas").delete().eq("id", deletingEmpresaId);
     if (error) { toast.error("Erro: " + error.message); return; }
@@ -103,6 +105,7 @@ export default function HoldingConfigPage() {
   };
 
   const toggleEmpresaAtivo = async (e: HoldingEmpresa) => {
+    if (!isCompanyAdmin) return;
     await supabase.from("holding_empresas").update({ ativo: !e.ativo } as any).eq("id", e.id);
     invalidate();
   };
@@ -128,6 +131,7 @@ export default function HoldingConfigPage() {
   };
 
   const saveDocTipo = async () => {
+    if (!isCompanyAdmin) return;
     if (!docForm.nome.trim()) { toast.error("Nome é obrigatório"); return; }
     if (editingDoc) {
       const { error } = await supabase.from("holding_doc_tipos").update({ nome: docForm.nome, obrigatorio: docForm.obrigatorio } as any).eq("id", editingDoc.id);
@@ -147,6 +151,7 @@ export default function HoldingConfigPage() {
   };
 
   const deleteDocTipo = async () => {
+    if (!isCompanyAdmin) return;
     if (!deletingDocId) return;
     // First remove all obra_docs entries that reference this doc type
     await supabase.from("holding_obra_docs").delete().eq("doc_tipo_id", deletingDocId);
@@ -161,6 +166,7 @@ export default function HoldingConfigPage() {
   };
 
   const toggleDocAtivo = async (d: DocTipo) => {
+    if (!isCompanyAdmin) return;
     await supabase.from("holding_doc_tipos").update({ ativo: !d.ativo } as any).eq("id", d.id);
     invalidate();
   };

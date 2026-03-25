@@ -301,6 +301,7 @@ export function LaborContractsView({
 
   // Enhanced create contract
   const handleCreateContractEnhanced = async () => {
+    if (!canEdit) return;
     await handleCreateContract();
     if (showBudgetWarning) {
       await updateBudgetIfNeeded();
@@ -316,6 +317,7 @@ export function LaborContractsView({
 
   // Delete contract
   const handleDeleteContract = async (contract: LaborContract) => {
+    if (!canEdit) return;
     try {
       const { error } = await supabase.from('labor_contracts').delete().eq('id', contract.id);
       if (error) throw error;
@@ -332,6 +334,7 @@ export function LaborContractsView({
 
   // Update contract (auto-save)
   const handleUpdateContract = async (contract: LaborContract, updates: Partial<LaborContract>) => {
+    if (!canEdit) return;
     try {
       const newValues = { ...contract, ...updates };
       // Recalculate total if houses or value changed

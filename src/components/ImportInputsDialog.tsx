@@ -63,7 +63,7 @@ export function ImportInputsDialog({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { company } = useAuth();
+  const { company, canEdit } = useAuth();
   const companyId = company?.id;
   
   // New families and units to create
@@ -367,6 +367,7 @@ export function ImportInputsDialog({
   };
 
   const handleImport = async () => {
+    if (!canEdit) return;
     const selectedInputs = extractedInputs.filter(i => i.selected);
     if (selectedInputs.length === 0) {
       toast.error('Selecione pelo menos um insumo para importar');

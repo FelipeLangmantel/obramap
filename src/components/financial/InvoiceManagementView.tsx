@@ -387,6 +387,7 @@ export function InvoiceManagementView({ onInvoiceSaved }: InvoiceManagementViewP
   };
 
   const handleUpdateStatus = async (invoiceId: string, newStatus: string) => {
+    if (!canEdit) return;
     try {
       const updates: any = { status: newStatus };
       if (newStatus === "paid") updates.payment_date = format(new Date(), "yyyy-MM-dd");
@@ -410,6 +411,7 @@ export function InvoiceManagementView({ onInvoiceSaved }: InvoiceManagementViewP
   };
 
   const handleDeleteInvoice = async () => {
+    if (!canEdit) return;
     if (!deleteInvoiceId) return;
     try {
       const { error } = await supabase.from("invoices").delete().eq("id", deleteInvoiceId);

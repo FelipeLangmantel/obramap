@@ -93,6 +93,7 @@ export function SuppliersManagementView() {
   const globalSuppliers = filteredSuppliers.filter(s => s.supplier_scope === 'global');
 
   const saveSupplier = async () => {
+    if (!canEdit) return;
     if (!newSupplier.name) {
       toast.error('Preencha o nome do fornecedor');
       return;
@@ -142,6 +143,7 @@ export function SuppliersManagementView() {
   };
 
   const deleteSupplier = async (id: string) => {
+    if (!canEdit) return;
     try {
       await supabase.from('suppliers').delete().eq('id', id);
       toast.success('Fornecedor removido');

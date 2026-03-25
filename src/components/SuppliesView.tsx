@@ -669,6 +669,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
 
   // CRUD operations
   const saveInput = async () => {
+    if (!canEdit) return;
     if (!projectId || !newInput.name.trim()) return;
     
     // Check for duplicates
@@ -734,6 +735,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const executeDeleteInput = async () => {
+    if (!canEdit) return;
     if (!inputToDelete) return;
     try {
       await supabase.from('inputs').delete().eq('id', inputToDelete.id);
@@ -749,6 +751,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const saveUnit = async () => {
+    if (!canEdit) return;
     if (!projectId || !newUnit.name.trim() || !newUnit.abbreviation.trim()) return;
     
     // Check for duplicate abbreviation
@@ -792,6 +795,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const saveFamily = async () => {
+    if (!canEdit) return;
     if (!projectId || !newFamily.name.trim()) return;
     
     // Check for duplicate family name
@@ -843,6 +847,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const deleteUnit = async (id: string) => {
+    if (!canEdit) return;
     try {
       await supabase.from('units').delete().eq('id', id);
       toast.success('Unidade removida');
@@ -884,6 +889,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const deleteSupplier = async (id: string) => {
+    if (!canEdit) return;
     try {
       await supabase.from('suppliers').delete().eq('id', id);
       toast.success('Fornecedor removido');
@@ -1001,6 +1007,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const deleteQuotation = async (id: string, quotation?: QuotationRequest) => {
+    if (!canEdit) return;
     try {
       // If quotation has associated orders, delete them first (cascade delete)
       const { data: relatedOrders } = await supabase.from('purchase_orders').select('id').eq('quotation_id', id);
@@ -1061,6 +1068,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const deleteQuotationItem = async (quotationId: string, itemId: string) => {
+    if (!canEdit) return;
     try {
       await supabase.from('quotation_items').delete().eq('id', itemId);
       toast.success('Item removido!');
@@ -1073,6 +1081,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const deleteOrder = async (id: string) => {
+    if (!canEdit) return;
     try {
       await supabase.from('purchase_order_items').delete().eq('purchase_order_id', id);
       await supabase.from('delivery_tracking').delete().eq('purchase_order_id', id);
@@ -1086,6 +1095,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const selectQuote = async (quotationItemId: string, quoteId: string) => {
+    if (!canEdit) return;
     try {
       await supabase.from('supplier_quotes').update({ is_selected: false }).eq('quotation_item_id', quotationItemId);
       await supabase.from('supplier_quotes').update({ is_selected: true }).eq('id', quoteId);
@@ -1182,6 +1192,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const updateOrder = async (orderId: string, updates: Partial<PurchaseOrder>) => {
+    if (!canEdit) return;
     try {
       await supabase.from('purchase_orders').update(updates).eq('id', orderId);
       toast.success('Pedido atualizado!');
@@ -1194,6 +1205,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const addTrackingEvent = async () => {
+    if (!canEdit) return;
     if (!selectedOrder || !newTracking.status) return;
     try {
       await supabase.from('delivery_tracking').insert({

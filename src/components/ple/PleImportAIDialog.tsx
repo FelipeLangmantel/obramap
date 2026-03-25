@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Upload, Sparkles, Check, ChevronDown, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ExtractedItem {
   item_code: string;
@@ -46,6 +47,7 @@ interface Props {
 }
 
 export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: Props) {
+  const { canEdit, requireEdit } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [items, setItems] = useState<ExtractedItem[]>([]);
@@ -107,6 +109,7 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
   };
 
   const handleImport = async () => {
+    if (!requireEdit()) return;
     const selected = items.filter(it => it.selected);
     if (!selected.length) { toast.error("Selecione pelo menos um item"); return; }
 
@@ -349,7 +352,7 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
         {items.length > 0 && (
           <div className="flex justify-end gap-2 pt-3 border-t border-border">
             <Button variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button onClick={handleImport} disabled={isImporting || selectedCount === 0}>
+            <Button onClick={handleImport} disabled={!canEdit || isImporting || selectedCount === 0}>
               {isImporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
               Importar {selectedCount} itens
             </Button>

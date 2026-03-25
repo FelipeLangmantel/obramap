@@ -88,7 +88,7 @@ export function ImportBudgetItemsDialog({
   const [searchInputTerm, setSearchInputTerm] = useState("");
   const [activeMatchPopover, setActiveMatchPopover] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { company } = useAuth();
+  const { company, canEdit } = useAuth();
   const companyId = company?.id;
 
   // Normalize text for comparison
@@ -294,6 +294,7 @@ export function ImportBudgetItemsDialog({
   }, [existingInputs, searchInputTerm]);
 
   const handleImport = async () => {
+    if (!canEdit) return;
     const selectedItems = extractedItems.filter(i => i.selected);
     if (selectedItems.length === 0) {
       toast.error('Selecione pelo menos um item para importar');

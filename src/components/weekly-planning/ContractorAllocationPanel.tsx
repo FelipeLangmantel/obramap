@@ -63,7 +63,7 @@ export function ContractorAllocationPanel({
   currentAllocation, otherAllocationsThisWeek, assignedHouseIds,
   onAllocationChange,
 }: Props) {
-  const { user } = useAuth();
+  const { user, canEdit, requireEdit } = useAuth();
   const [contractors, setContractors] = useState<ContractorOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [showSelector, setShowSelector] = useState(false);
@@ -155,6 +155,7 @@ export function ContractorAllocationPanel({
   };
 
   const handleConfirmAllocation = async () => {
+    if (!requireEdit()) return;
     if (!selectedContractor) return;
     const outOfContract = selectedHouseIds.filter(
       id => !selectedContractor.contractHouseIds.includes(id)
