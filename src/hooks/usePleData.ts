@@ -352,7 +352,7 @@ export function usePleData() {
 
   // Delete group
   const deleteGroup = useCallback(async (id: string) => {
-    const { error } = await supabase.from("ple_event_groups").delete().eq("id", id);
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     if (error) { toast.error("Erro ao excluir grupo"); return; }
     setGroups(prev => prev.filter(g => g.id !== id));
   }, []);
