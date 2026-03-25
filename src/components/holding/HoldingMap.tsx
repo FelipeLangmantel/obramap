@@ -11,49 +11,54 @@ L.Icon.Default.mergeOptions({ iconUrl, shadowUrl: iconShadow });
 // Coordenadas reais (lat/lng) de Gravataí — sede da empresa
 const SEDE = { lat: -29.9441, lng: -50.9914, label: "Sede — Gravataí" };
 
-// Ícone da sede (estrela azul)
+// Ícone da sede
 const sedeIcon = L.divIcon({
-  html: `<div style="background:#3b82f6;border:2px solid white;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.3)">
-    <span style="color:white;font-size:9px;font-weight:bold;line-height:1">S</span>
-</div>`,
+  html: `<div style="
+    background:#1d4ed8;
+    border:3px solid white;
+    border-radius:50%;
+    width:26px;height:26px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 3px 8px rgba(0,0,0,0.4);
+    font-size:11px;font-weight:bold;color:white;line-height:1;
+  ">S</div>`,
   className: "",
-  iconSize: [16, 16],
-  iconAnchor: [8, 8],
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
 });
 
 // Ícone de obra por health
 const obraIcon = (health: string) => {
   const color = health === "green" ? "#22c55e" : health === "yellow" ? "#f59e0b" : "#ef4444";
+  const border = health === "green" ? "#15803d" : health === "yellow" ? "#b45309" : "#b91c1c";
   return L.divIcon({
-    html: `<div style="background:${color};border:2px solid white;border-radius:50%;width:12px;height:12px;box-shadow:0 2px 4px rgba(0,0,0,0.3)"></div>`,
+    html: `<div style="
+      background:${color};
+      border:2.5px solid ${border};
+      border-radius:50%;
+      width:20px;height:20px;
+      box-shadow:0 2px 6px rgba(0,0,0,0.4);
+      transition:transform 0.1s;
+    "></div>`,
     className: "",
-    iconSize: [12, 12],
-    iconAnchor: [6, 6],
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
   });
 };
 
-// Distância real de carro via OSRM (API gratuita, sem API key)
-async function distanciaRota(
-  lat1: number, lng1: number,
-  lat2: number, lng2: number
-): Promise<{ km: number; horas: string } | null> {
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data.code !== "Ok" || !data.routes?.[0]) return null;
-    const km = data.routes[0].distance / 1000;
-    const totalMin = Math.round(data.routes[0].duration / 60);
-    const h = Math.floor(totalMin / 60);
-    const min = totalMin % 60;
-    const horas = h > 0
-      ? `${h}h${min > 0 ? ` ${min}min` : ""}`
-      : `${min}min`;
-    return { km, horas };
-  } catch {
-    return null;
-  }
+// Distância em linha reta (Haversine) — sem API externa
+function distanciaLinhaReta(lat1: number, lng1: number, lat2: number, lng2: number): string {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng/2)**2;
+  const km = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const minutos = Math.round((km / 80) * 60);
+  const h = Math.floor(minutos / 60);
+  const min = minutos % 60;
+  const tempo = h > 0 ? `${h}h${min > 0 ? ` ${min}min` : ""}` : `${min}min`;
+  return `📏 ${km.toFixed(0)} km · ~${tempo} (linha reta)`;
 }
 
 export interface MapObra {
@@ -119,35 +124,25 @@ export default function HoldingMap({ obras, onObraClick }: HoldingMapProps) {
       const marker = L.marker([obra.lat, obra.lng], { icon: obraIcon(obra.health) }).addTo(map);
       (marker as any)._isObra = true;
 
-      const distId = `dist-${obra.id}`;
+      const distStr = distanciaLinhaReta(SEDE.lat, SEDE.lng, obra.lat, obra.lng);
 
       marker.bindPopup(`
-        <div style="min-width:190px;font-family:sans-serif;line-height:1.6">
+        <div style="min-width:200px;font-family:sans-serif;line-height:1.7">
           <b style="font-size:13px">${obra.nome}</b><br/>
           <span style="color:#666;font-size:11px">📍 ${obra.municipio}</span><br/>
-          <span style="font-size:11px">${BRL.format(obra.valor_contrato)}</span><br/>
+          <span style="font-size:12px;font-weight:600">${BRL.format(obra.valor_contrato)}</span><br/>
           <span style="font-size:11px">${statusLabel[obra.status] || obra.status}</span><br/>
-          <span id="${distId}" style="color:#1d4ed8;font-size:11px">🚗 Calculando rota...</span><br/>
+          <span style="color:#1d4ed8;font-size:11px">${distStr}</span><br/>
           <a href="#"
             onclick="window.__holdingObraClick && window.__holdingObraClick('${obra.id}'); return false;"
-            style="color:#3b82f6;text-decoration:underline;font-size:12px">
+            style="color:#3b82f6;text-decoration:underline;font-size:12px;margin-top:2px;display:inline-block">
             Abrir obra →
           </a>
         </div>
       `);
 
-      marker.on("popupopen", async () => {
-        const el = document.getElementById(distId);
-        if (!el) return;
-        const rota = await distanciaRota(SEDE.lat, SEDE.lng, obra.lat, obra.lng);
-        const elAtual = document.getElementById(distId);
-        if (!elAtual) return;
-        elAtual.innerHTML = rota
-          ? `🚗 ${rota.km.toFixed(0)} km de carro · ~${rota.horas}`
-          : `📏 Distância indisponível`;
-      });
-
       marker.on("mouseover", () => marker.openPopup());
+      marker.on("click", () => onObraClick(obra.id));
     });
 
     (window as any).__holdingObraClick = onObraClick;
@@ -156,12 +151,16 @@ export default function HoldingMap({ obras, onObraClick }: HoldingMapProps) {
   return (
     <div className="relative w-full">
       <div ref={containerRef} style={{ height: 420, width: "100%" }} className="rounded-lg z-0" />
-      <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-2">
-        <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full inline-block" style={{ background: "#3b82f6" }} /> S = Sede Gravataí</span>
-        <span>|</span>
-        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#22c55e" }} /> Sob controle</span>
-        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#f59e0b" }} /> Atenção</span>
-        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#ef4444" }} /> Crítico</span>
+      <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-2 flex-wrap">
+        <span className="flex items-center gap-1.5">
+          <span className="h-4 w-4 rounded-full inline-block border-2 border-blue-700" style={{ background: "#1d4ed8" }} />
+          Sede — Gravataí
+        </span>
+        <span>·</span>
+        <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-full inline-block border border-green-700" style={{ background: "#22c55e" }} /> Sob controle</span>
+        <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-full inline-block border border-amber-700" style={{ background: "#f59e0b" }} /> Atenção</span>
+        <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-full inline-block border border-red-700" style={{ background: "#ef4444" }} /> Crítico</span>
+        <span className="ml-auto opacity-60">Distâncias estimadas em linha reta a partir da sede</span>
       </div>
     </div>
   );
