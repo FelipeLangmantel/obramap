@@ -393,6 +393,7 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
           <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
           <TabsTrigger value="aditivos">Aditivos</TabsTrigger>
           <TabsTrigger value="pendencias">Pendências</TabsTrigger>
+          <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <TabsContent value="resumo" className="mt-0"><ResumoTab obra={obra} /></TabsContent>
@@ -401,6 +402,7 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
           <TabsContent value="financeiro" className="mt-0"><FinanceiroTab obraId={obra.id} /></TabsContent>
           <TabsContent value="aditivos" className="mt-0"><AditivosTab obraId={obra.id} /></TabsContent>
           <TabsContent value="pendencias" className="mt-0"><PendenciasTab obraId={obra.id} /></TabsContent>
+          <TabsContent value="historico" className="mt-0"><HistoricoTab obraId={obra.id} /></TabsContent>
         </div>
       </Tabs>
     </div>
