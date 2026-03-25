@@ -23,6 +23,7 @@ import { Truck, Plus, Pencil, Filter, ArrowRight, FileText, CheckCircle2 } from 
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
