@@ -1849,6 +1849,7 @@ export type Database = {
         Row: {
           advance_payment_pct: number
           avg_lead_time_days: number
+          capacity_houses_month: number
           city: string | null
           cnpj: string | null
           company_id: string
@@ -1861,6 +1862,7 @@ export type Database = {
           name: string
           notes: string | null
           payment_terms: string | null
+          price_per_house: number
           radius_km: number | null
           state: string | null
           supplier_id: string | null
@@ -1869,6 +1871,7 @@ export type Database = {
         Insert: {
           advance_payment_pct?: number
           avg_lead_time_days?: number
+          capacity_houses_month?: number
           city?: string | null
           cnpj?: string | null
           company_id: string
@@ -1881,6 +1884,7 @@ export type Database = {
           name: string
           notes?: string | null
           payment_terms?: string | null
+          price_per_house?: number
           radius_km?: number | null
           state?: string | null
           supplier_id?: string | null
@@ -1889,6 +1893,7 @@ export type Database = {
         Update: {
           advance_payment_pct?: number
           avg_lead_time_days?: number
+          capacity_houses_month?: number
           city?: string | null
           cnpj?: string | null
           company_id?: string
@@ -1901,6 +1906,7 @@ export type Database = {
           name?: string
           notes?: string | null
           payment_terms?: string | null
+          price_per_house?: number
           radius_km?: number | null
           state?: string | null
           supplier_id?: string | null
@@ -2627,6 +2633,79 @@ export type Database = {
             columns: ["context_id"]
             isOneToOne: false
             referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ind_planning_grid: {
+        Row: {
+          actual_houses: number
+          company_id: string
+          context_id: string
+          created_at: string
+          end_date: string
+          factory_id: string
+          fortnight: number
+          id: string
+          month: number
+          notes: string | null
+          planned_houses: number
+          start_date: string
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          actual_houses?: number
+          company_id: string
+          context_id: string
+          created_at?: string
+          end_date: string
+          factory_id: string
+          fortnight: number
+          id?: string
+          month: number
+          notes?: string | null
+          planned_houses?: number
+          start_date: string
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          actual_houses?: number
+          company_id?: string
+          context_id?: string
+          created_at?: string
+          end_date?: string
+          factory_id?: string
+          fortnight?: number
+          id?: string
+          month?: number
+          notes?: string | null
+          planned_houses?: number
+          start_date?: string
+          updated_at?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ind_planning_grid_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_planning_grid_context_id_fkey"
+            columns: ["context_id"]
+            isOneToOne: false
+            referencedRelation: "ind_operation_contexts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ind_planning_grid_factory_id_fkey"
+            columns: ["factory_id"]
+            isOneToOne: false
+            referencedRelation: "ind_factories"
             referencedColumns: ["id"]
           },
         ]
@@ -9045,6 +9124,23 @@ export type Database = {
           period_start: string
           planned_units: number
           target_units: number
+        }[]
+      }
+      get_ind_planning_grid: {
+        Args: { p_context_id: string }
+        Returns: {
+          actual_houses: number
+          advance_pct: number
+          capacity_month: number
+          end_date: string
+          factory_id: string
+          factory_name: string
+          fortnight: number
+          month: number
+          planned_houses: number
+          price_per_house: number
+          start_date: string
+          year: number
         }[]
       }
       get_measurement_cost_summary: {
