@@ -129,7 +129,7 @@ export function InstallationTabContent({ companyId, contextId }: InstallationTab
       supabase.from("ind_units").select("*").eq("context_id", contextId).order("unit_number"),
       supabase.from("ind_zones").select("*").eq("context_id", contextId).order("display_order"),
       supabase.from("ind_batch_units").select("id,batch_id,unit_id,status").eq("context_id", contextId),
-      supabase.from("ind_production_batches").select("id,factory_id,batch_code,status,planned_start,actual_start,planned_finish,actual_finish").eq("context_id", contextId),
+      supabase.from("ind_production_batches").select("id,factory_id,batch_code,status,planned_start,actual_start,planned_finish,actual_finish,macro_id,scope_id").eq("context_id", contextId),
       supabase.from("ind_factories").select("id,name").eq("company_id", companyId),
       supabase.from("ind_shipments").select("id,shipment_number,truck_plate,driver_name,planned_date,actual_date,status").eq("context_id", contextId),
       supabase.from("ind_shipment_units").select("id,shipment_id,unit_id,status").eq("context_id", contextId),
