@@ -198,7 +198,7 @@ export function usePlanningData(projectId: string | undefined) {
 
   // Work Log CRUD
   const addWorkLog = async (log: Omit<DailyWorkLog, 'id' | 'created_at' | 'updated_at'>) => {
-    const { data, error } = await supabase
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
       .from('daily_work_logs')
       .insert(log)
       .select()
