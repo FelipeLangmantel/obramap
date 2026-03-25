@@ -1128,6 +1128,26 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
     });
     setSavingDespesa(false);
     if (error) { toast.error("Erro ao salvar despesa."); return; }
+
+    // Audit
+    const { data: ins } = await supabase
+      .from("despesas_mensais").select("id")
+      .eq("obra_id", obraId).order("created_at", { ascending: false }).limit(1).single();
+
+    if (ins?.id) {
+      await supabase.from("despesas_mensais").update({
+        created_by_user_id: userId,
+        created_by_name: userName,
+      }).eq("id", ins.id);
+    }
+
+    await registrarLog(
+      obraId, "despesas_mensais", ins?.id || null,
+      "criou",
+      `Adicionou despesa — ${newDespesa.mes_referencia}/${newDespesa.ano_referencia} — ${BRL.format(Number(newDespesa.valor))}`,
+      userId, userName
+    );
+
     toast.success("Despesa adicionada!");
     invalidateHolding();
     setNewDespesa({ mes_referencia: "", ano_referencia: String(new Date().getFullYear()), valor: "", status: "nao_iniciado" });
