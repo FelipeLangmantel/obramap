@@ -51,6 +51,7 @@ interface AuthContextType {
   canAccessMenu: (menuId: string) => boolean;
   canAccessManagement: (sectionId: string) => boolean;
   canAccessProject: (projectId: string) => boolean;
+  requireEdit: () => boolean;
   refreshPermissions: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: Error | null }>;
