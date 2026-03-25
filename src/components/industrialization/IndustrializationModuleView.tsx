@@ -409,7 +409,7 @@ export default function IndustrializationModuleView() {
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{linkedFactoryNames || "—"}</TableCell>
                         {allPeriodsSorted.map(period => {
-                          const periodBatches = ctxBatches.filter(b => b.ind_period_id === period.id);
+                          const periodBatches = ctxBatches.filter(b => (period.period_type==='ind' ? b.ind_period_id===period.id : b.obramap_period_id===period.id));
                           const planned = periodBatches.reduce((s, b) => s + (b.planned_quantity || 0), 0);
                           const actual = periodBatches.reduce((s, b) => s + (b.actual_quantity || 0), 0);
                           const hasPeriod = ctxPeriods.some(p => p.id === period.id);
