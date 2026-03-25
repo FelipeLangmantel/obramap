@@ -1235,17 +1235,19 @@ function GanttTimeline({ obras, onObraClick }: { obras: ObraEnriched[]; onObraCl
    KPI Card (compact with bottom border)
    ══════════════════════════════════════════════ */
 
-function KpiCard({ icon: Icon, label, value, borderColor, valueColor }: { icon: any; label: string; value: string; borderColor: string; valueColor: string }) {
+function KpiCard({ icon: Icon, label, value, sub, borderColor, valueColor }: {
+  icon: any; label: string; value: string; sub?: string;
+  borderColor: string; valueColor: string
+}) {
   return (
-    <Card className={`border-border/60 border-b-2 ${borderColor}`}>
-      <CardContent className="p-4 flex items-center gap-3">
-        <Icon className={`h-4 w-4 shrink-0 ${valueColor}`} />
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] text-muted-foreground truncate">{label}</p>
-          <p className={`text-xl font-bold ${valueColor} leading-tight break-words`}>{value}</p>
-        </div>
-      </CardContent>
-    </Card>
+    <div className={`bg-card rounded-xl border border-border/60 border-b-4 ${borderColor} p-4 space-y-1`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</span>
+        <Icon className="h-4 w-4 text-muted-foreground/60" />
+      </div>
+      <p className={`text-xl font-bold ${valueColor}`}>{value}</p>
+      {sub && <p className="text-[10px] text-muted-foreground">{sub}</p>}
+    </div>
   );
 }
 
