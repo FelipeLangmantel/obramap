@@ -194,6 +194,7 @@ export function ContractorMeasurementsTab({
   };
 
   const handleDeleteService = async (svc: ContractorContractService) => {
+    if (!requireEdit()) return;
     if (!confirm(`Remover o serviço "${svc.scope_name}" deste contrato?`)) return;
     setSaving(true);
     const ok = await deleteContractService(svc.id, contract.id);
