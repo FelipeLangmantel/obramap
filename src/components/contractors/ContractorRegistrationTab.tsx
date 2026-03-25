@@ -53,7 +53,7 @@ export function ContractorRegistrationTab({ contractors, onCreateContractor, onU
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Empreiteiros Cadastrados</h3>
-        <Button size="sm" onClick={openNew} className="gap-1.5">
+        <Button size="sm" onClick={openNew} className="gap-1.5" disabled={!canEdit}>
           <Plus className="h-3.5 w-3.5" /> Novo Empreiteiro
         </Button>
       </div>
