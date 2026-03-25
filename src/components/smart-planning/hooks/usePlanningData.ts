@@ -183,7 +183,7 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const deleteStage = async (stageId: string) => {
-    const { error } = await supabase
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
       .from('planning_stages')
       .delete()
       .eq('id', stageId);
