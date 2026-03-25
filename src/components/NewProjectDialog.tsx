@@ -26,6 +26,7 @@ const PROJECT_TYPES = [
 
 export function NewProjectDialog({ open, onOpenChange, onProjectCreated }: NewProjectDialogProps) {
   const { addProject, setCurrentProject } = useConstruction();
+  const { canEdit, requireEdit } = useAuth();
   
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
