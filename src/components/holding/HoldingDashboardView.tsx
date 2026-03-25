@@ -221,6 +221,13 @@ export default function HoldingDashboardView() {
   const { company, isCompanyAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [selectedObra, setSelectedObra] = useState<ObraEnriched | null>(null);
+
+  // Manter selectedObra sincronizada quando obras re-fetcha após invalidate
+  useEffect(() => {
+    if (!selectedObra) return;
+    const updated = obras.find(o => o.id === selectedObra.id);
+    if (updated) setSelectedObra(updated);
+  }, [obras]);
   const [mainView, setMainView] = useState<"portfolio" | "analytics" | "manual">("portfolio");
   const [viewMode, setViewMode] = useState<"cards" | "gantt" | "tabela">("cards");
   const [showNewObraDialog, setShowNewObraDialog] = useState(false);
