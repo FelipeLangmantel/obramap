@@ -749,7 +749,7 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
             <CardTitle className="text-sm flex items-center gap-2">
               <CalendarDays className="h-4 w-4" /> Períodos
             </CardTitle>
-            <Button size="sm" variant="outline" onClick={openNewPeriod} className="gap-1.5 h-7 text-xs">
+            <Button size="sm" variant="outline" onClick={openNewPeriod} className="gap-1.5 h-7 text-xs" disabled={!canEdit}>
               <Plus className="h-3.5 w-3.5" /> Novo Período
             </Button>
           </div>

@@ -377,7 +377,7 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
                 <Button variant="ghost" size="sm" className="text-xs" onClick={() => setWeekOffset(0)}>Hoje</Button>
               )}
             </div>
-            <Button size="sm" onClick={openNewSchedule} className="gap-1.5">
+            <Button size="sm" onClick={openNewSchedule} className="gap-1.5" disabled={!canEdit}>
               <Plus className="h-4 w-4" /> Agendar Içamento
             </Button>
           </div>

@@ -508,6 +508,7 @@ export default function IndustrializationModuleView() {
   };
 
   const excluirDemonstracao = async () => {
+    if (!requireEdit()) return;
     if (!companyId) return;
     const demoContexts = contexts.filter(c => c.name.includes("— DEMO"));
     if (demoContexts.length === 0) { toast.info("Nenhuma demonstração encontrada."); return; }

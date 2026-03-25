@@ -409,7 +409,7 @@ export function LogisticsTabContent({ companyId, contextId }: LogisticsTabProps)
               </SelectContent>
             </Select>
             <div className="flex-1" />
-            <Button size="sm" onClick={openNewShipment} className="gap-1.5 h-7 text-xs" disabled={readyBatches.length === 0}>
+            <Button size="sm" onClick={openNewShipment} className="gap-1.5 h-7 text-xs" disabled={!canEdit || readyBatches.length === 0}>
               <Plus className="h-3.5 w-3.5" /> Nova Viagem
             </Button>
           </div>

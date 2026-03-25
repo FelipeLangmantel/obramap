@@ -343,7 +343,7 @@ export function BatchesTabContent({ companyId, contextId }: BatchesTabProps) {
           </SelectContent>
         </Select>
         <div className="flex-1" />
-        <Button size="sm" onClick={openNewDialog} className="gap-1.5 h-7 text-xs">
+        <Button size="sm" onClick={openNewDialog} className="gap-1.5 h-7 text-xs" disabled={!canEdit}>
           <Plus className="h-3.5 w-3.5" /> Novo Lote
         </Button>
       </div>

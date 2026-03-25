@@ -376,7 +376,7 @@ export function InstallationTabContent({ companyId, contextId, contextType }: In
           </SelectContent>
         </Select>
         <div className="flex-1" />
-        <Button size="sm" onClick={openAssemblyDialog} disabled={installableUnits.length === 0} className="gap-1.5 h-7 text-xs">
+        <Button size="sm" onClick={openAssemblyDialog} disabled={!canEdit || installableUnits.length === 0} className="gap-1.5 h-7 text-xs">
           <CheckCircle2 className="h-3.5 w-3.5" /> Registrar Montagem ({installableUnits.length})
         </Button>
       </div>
