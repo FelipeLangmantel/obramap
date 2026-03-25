@@ -51,7 +51,7 @@ async function registrarLog(
   dadosNovos?: object
 ) {
   try {
-    await supabase.from("holding_audit_log").insert({
+    await supabase.from("holding_audit_log").insert([{
       obra_id: obraId,
       tabela,
       registro_id: registroId,
@@ -61,7 +61,7 @@ async function registrarLog(
       dados_novos: dadosNovos || {},
       realizado_por: userId,
       realizado_por_nome: userName,
-    });
+    }]);
   } catch (e) {
     console.error("[AuditLog] Erro ao registrar:", e);
   }
