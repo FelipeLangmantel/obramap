@@ -88,6 +88,7 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
   // Cell editing
   const [cellDialog, setCellDialog] = useState<{ periodId: string; factoryId: string; periodLabel: string; factoryName: string } | null>(null);
   const [cellValue, setCellValue] = useState(0);
+  const [selectedCellFactoryId, setSelectedCellFactoryId] = useState('');
 
   // Period CRUD
   const [periodDialog, setPeriodDialog] = useState(false);
