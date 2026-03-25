@@ -94,12 +94,24 @@ function ResumoTab({ obra }: { obra: ObraDrawerData }) {
 
   const kpis = useMemo(() => {
     const valorContrato = obra.valor_contrato || 0;
-    const totalMedido = medicoes.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+    // Medido/Faturado = aprovadas (igual ao card do painel e à tabela de obras)
+    const totalMedido = medicoes
+      .filter(m => m.status_medicao === "aprovada")
+      .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+
+    // Enviado (aguardando aprovação) — separado
+    const totalEnviado = medicoes
+      .filter(m => m.status_medicao === "enviada")
+      .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+
+    // Total em aberto (aprovado + enviado) — para o saldo a medir
+    const totalEmAberto = totalMedido + totalEnviado;
+
     const totalAcatado = medicoes.filter(m => Number(m.valor_acatado) > 0).reduce((s, m) => s + Number(m.valor_acatado), 0);
     const totalRecebido = medicoes.filter(m => m.status_nf === "recebido").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
     const totalPrevisto = medicoes.reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0);
     const pctMedido = valorContrato > 0 ? (totalMedido / valorContrato) * 100 : 0;
-    const saldoMedir = valorContrato - totalMedido;
+    const saldoMedir = valorContrato - totalEmAberto;
     const totalGlosa = totalAcatado > 0 ? totalMedido - totalAcatado : 0;
     const medicoesEnviadas = medicoes.filter(m => m.status_medicao === "enviada").length;
     const medicoesAprovadas = medicoes.filter(m => m.status_medicao === "aprovada").length;
