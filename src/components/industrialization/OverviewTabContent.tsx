@@ -199,6 +199,7 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
   };
 
   const saveCellEdit = async () => {
+    if (!requireEdit()) return;
     if (!cellDialog) return;
     const { periodId, factoryId } = cellDialog;
     const resolvedFactoryId = factoryId || selectedCellFactoryId;
