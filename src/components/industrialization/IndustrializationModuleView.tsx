@@ -745,8 +745,8 @@ export default function IndustrializationModuleView() {
               totalUnits={activeContext.total_units}
             />
           </TabsContent>
-          <TabsContent value="factories" className="mt-4">
-            <FactoriesTabContent companyId={companyId} contextId={activeContext.id} contextType={activeContext.context_type} />
+          <TabsContent value="planning" className="mt-4">
+            <PlanningGridTab companyId={companyId} contextId={activeContext.id} totalUnits={activeContext.total_units} />
           </TabsContent>
           <TabsContent value="batches" className="mt-4">
             <BatchesTabContent companyId={companyId} contextId={activeContext.id} />
