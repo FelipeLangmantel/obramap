@@ -246,6 +246,7 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
     setPeriodDialog(true);
   };
   const savePeriod = async () => {
+    if (!requireEdit()) return;
     if (!periodForm.name || !periodForm.start_date || !periodForm.end_date) {
       toast.error("Nome e datas são obrigatórios");
       return;
