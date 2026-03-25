@@ -518,6 +518,7 @@ export default function HoldingDashboardView() {
       }
 
       queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+      queryClient.invalidateQueries({ queryKey: ["holding-aditivos-pendentes", company?.id] });
       if (skipped > 0) toast.success(`${inserted?.length || 0} obras importadas. ${skipped} já existiam e foram ignoradas.`);
       else toast.success(`${inserted?.length || 0} obras importadas com sucesso!`);
       setShowImportDialog(false);
