@@ -365,9 +365,10 @@ export function usePleData() {
   // Update group
   const updateGroup = useCallback(async (id: string, data: Partial<PleEventGroup>) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
+    const { error } = await supabase.from("ple_event_groups").update(data as any).eq("id", id);
     if (error) { toast.error("Erro ao atualizar grupo"); return; }
     setGroups(prev => prev.map(g => g.id === id ? { ...g, ...data } : g));
-  }, []);
+  }, [canEdit]);
 
   // Update project
   const updateProject = useCallback(async (id: string, data: Partial<PleProject>) => {
