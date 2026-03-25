@@ -774,6 +774,7 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
   };
 
   const updateMedicao = async () => {
+    if (!requireEdit()) return;
     if (!editingMedicao) return;
 
     // Validar limite do contrato
