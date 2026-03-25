@@ -1081,6 +1081,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const deleteOrder = async (id: string) => {
+    if (!canEdit) return;
     try {
       await supabase.from('purchase_order_items').delete().eq('purchase_order_id', id);
       await supabase.from('delivery_tracking').delete().eq('purchase_order_id', id);
