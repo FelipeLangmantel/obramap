@@ -307,9 +307,10 @@ export function usePleData() {
   // Update event
   const updateEvent = useCallback(async (id: string, data: Partial<PleEvent>) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
+    const { error } = await supabase.from("ple_events").update(data as any).eq("id", id);
     if (error) { toast.error("Erro ao atualizar evento"); return; }
     setEvents(prev => prev.map(e => e.id === id ? { ...e, ...data } : e));
-  }, []);
+  }, [canEdit]);
 
   // Delete event
   const deleteEvent = useCallback(async (id: string) => {
