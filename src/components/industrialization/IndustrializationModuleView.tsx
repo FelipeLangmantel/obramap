@@ -46,7 +46,7 @@ interface OperationContext {
 interface ObraPortfolioItem {
   id: string;
   nome: string;
-  total_houses: number;
+  uh: number | null;
   empresa: string | null;
   num_contrato: string | null;
   obramap_project_id: string | null;
