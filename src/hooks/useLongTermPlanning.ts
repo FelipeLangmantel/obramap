@@ -611,7 +611,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
   }, [loadPeriods]);
 
   const updatePeriodDates = useCallback(async (periodId: string, startDate: string, endDate: string) => {
-    try {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return false; }
       const period = periods.find(p => p.id === periodId);
       if (!period) {
         toast.error("Período não encontrado");

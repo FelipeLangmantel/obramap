@@ -396,7 +396,7 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const updateTeam = async (teamId: string, updates: Partial<PlanningTeam>) => {
-    const { error } = await supabase
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
       .from('planning_teams')
       .update(updates)
       .eq('id', teamId);

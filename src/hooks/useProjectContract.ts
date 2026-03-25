@@ -300,6 +300,7 @@ export function useProjectContract() {
 
   // Save contract
   const saveContract = async (): Promise<boolean> => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return false; }
     if (!currentProject?.id || !company?.id || !contract) {
       toast.error("Dados do projeto não disponíveis");
       return false;

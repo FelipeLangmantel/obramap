@@ -366,7 +366,7 @@ export function usePleData() {
 
   // Update project
   const updateProject = useCallback(async (id: string, data: Partial<PleProject>) => {
-    const { error } = await supabase.from("ple_projects").update(data as any).eq("id", id);
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     if (error) { toast.error("Erro ao atualizar projeto"); return; }
     setProjects(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
   }, []);

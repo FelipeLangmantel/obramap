@@ -91,7 +91,7 @@ export interface ContractorMeasurementItem {
 }
 
 export function useContractors() {
-  const { company } = useAuth();
+  const { company, canEdit } = useAuth();
   const { currentProject } = useConstruction();
   const companyId = company?.id;
   const projectId = currentProject?.id;
@@ -119,7 +119,6 @@ export function useContractors() {
       .eq("project_id", projectId)
       .order("created_at", { ascending: false });
     if (data) {
-      // Enrich with contractor data
       const enriched = data.map((c: any) => ({
         ...c,
         contractor: contractors.find(ct => ct.id === c.contractor_id),
@@ -138,6 +137,7 @@ export function useContractors() {
   }, [fetchContracts, contractors]);
 
   const createContractor = async (data: Partial<Contractor>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     if (!companyId) return null;
     const { data: result, error } = await supabase
       .from("contractors")
@@ -154,6 +154,7 @@ export function useContractors() {
   };
 
   const updateContractor = async (id: string, data: Partial<Contractor>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return false; }
     const { error } = await supabase
       .from("contractors")
       .update({ ...data, updated_at: new Date().toISOString() } as any)
@@ -168,6 +169,7 @@ export function useContractors() {
   };
 
   const createContract = async (contractorId: string, data: Partial<ContractorContract>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     if (!companyId || !projectId) return null;
     const { data: result, error } = await supabase
       .from("contractor_contracts")
@@ -198,6 +200,7 @@ export function useContractors() {
   };
 
   const addContractService = async (contractId: string, service: Partial<ContractorContractService>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     if (!companyId || !projectId) return null;
     const totalValue = (service.negotiated_unit_value || 0) * (service.total_houses || 0);
     const { data: result, error } = await supabase
@@ -220,6 +223,7 @@ export function useContractors() {
   };
 
   const updateContractService = async (serviceId: string, updates: Partial<ContractorContractService>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return false; }
     const houseCount = updates.house_ids?.length ?? updates.total_houses ?? 0;
     const unitValue = updates.negotiated_unit_value ?? 0;
     const totalValue = unitValue * houseCount;
@@ -241,6 +245,7 @@ export function useContractors() {
   };
 
   const deleteContractService = async (serviceId: string, contractId: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return false; }
     const { error } = await supabase
       .from("contractor_contract_services")
       .delete()
@@ -255,6 +260,7 @@ export function useContractors() {
   };
 
   const recalcContractTotal = async (contractId: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const services = await fetchContractServices(contractId);
     const total = services.reduce((s, sv) => s + sv.total_value, 0);
     await supabase
@@ -274,6 +280,7 @@ export function useContractors() {
   };
 
   const createMeasurement = async (contractId: string, data: Partial<ContractorMeasurement>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     if (!companyId || !projectId) return null;
     const { data: result, error } = await supabase
       .from("contractor_measurements")
@@ -302,6 +309,7 @@ export function useContractors() {
   };
 
   const saveMeasurementItem = async (item: Partial<ContractorMeasurementItem> & { measurement_id: string; contract_service_id: string }) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     if (!companyId || !projectId) return null;
     const totalValue = (item.unit_value || 0) * (item.houses_measured || 0);
     const { data: result, error } = await supabase
@@ -322,6 +330,7 @@ export function useContractors() {
   };
 
   const approveMeasurement = async (measurementId: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return false; }
     const { error } = await supabase
       .from("contractor_measurements")
       .update({
