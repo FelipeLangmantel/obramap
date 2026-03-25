@@ -198,7 +198,7 @@ export default function IndustrializationModuleView() {
       if (b.planned_finish && !["delivered", "installed", "cancelled"].includes(b.status)) {
         if (new Date(b.planned_finish) < today) {
           const ctx = contexts.find(c => c.id === b.context_id);
-          items.push({ type: "danger", msg: `Lote atrasado em "${ctx?.name || "?"}" — previsto até ${new Date(b.planned_finish).toLocaleDateString("pt-BR")}` });
+          items.push({ type: "danger", msg: `Lote atrasado em "${ctx?.name || "?"}" — previsto até ${new Date(b.planned_finish).toLocaleDateString("pt-BR")}`, contextId: b.context_id });
         }
       }
     });
