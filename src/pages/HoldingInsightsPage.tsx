@@ -69,7 +69,7 @@ export default function HoldingInsightsPage() {
       const totalReceitas = obraMeds.filter((m: any) => m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (m.valor_medicao || 0), 0);
       const totalDesp = obraDesps.reduce((s: number, d: any) => s + (d.valor || 0), 0);
       const diasRestantes = o.data_inicio && o.prazo_dias
-        ? differenceInDays(addDays(parseLocalDate(o.data_inicio!), o.prazo_dias), new Date())
+        ? differenceInDays(addDays(parseLocalDate(o.data_inicio!), o.prazo_dias + (o.aditivo_prazo_dias || 0)), new Date())
         : null;
       const health = docsCount < 3 || (diasRestantes !== null && diasRestantes < 0) ? "red"
         : docsCount < 5 || (diasRestantes !== null && diasRestantes < 30) ? "yellow" : "green";

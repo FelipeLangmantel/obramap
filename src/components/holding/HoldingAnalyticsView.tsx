@@ -288,7 +288,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
   const mapStats = useMemo(() => ({
     total: filteredObras.length,
     mapeadas: obrasOnMap.length,
-    valorTotal: filteredObras.reduce((s, o) => s + o.valor_contrato, 0),
+    valorTotal: filteredObras.reduce((s, o) => s + (o.valor_contrato || 0) + (o.aditivo_valor_total || 0), 0),
     criticas: filteredObras.filter(o => o.health === "red").length,
   }), [filteredObras, obrasOnMap]);
 
@@ -317,7 +317,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
   };
 
   const summaryStats = useMemo(() => {
-    const totalPortfolio = filteredObras.reduce((s, o) => s + (o.valor_contrato || 0), 0);
+    const totalPortfolio = filteredObras.reduce((s, o) => s + (o.valor_contrato || 0) + (o.aditivo_valor_total || 0), 0);
     const totalRecebido = prdData.reduce((s, d) => s + d.realizado, 0);
     const totalDespesas = prdData.reduce((s, d) => s + d.despesas, 0);
     const saldo = totalRecebido - totalDespesas;

@@ -82,6 +82,7 @@ export interface ObraDrawerData {
   data_inicio?: string | null;
   prazo_dias?: number;
   aditivo_prazo_dias?: number;
+  aditivo_valor_total?: number;
   percentual_andamento?: number;
   status?: string;
   prazo_pagamento?: string | null;
@@ -124,7 +125,7 @@ function ResumoTab({ obra }: { obra: ObraDrawerData }) {
   }, [obra.id]);
 
   const kpis = useMemo(() => {
-    const valorContrato = obra.valor_contrato || 0;
+    const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
     // Medido/Faturado = aprovadas (igual ao card do painel e à tabela de obras)
     const totalMedido = medicoes
       .filter(m => m.status_medicao === "aprovada")
@@ -401,7 +402,7 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <TabsContent value="resumo" className="mt-0"><ResumoTab obra={obra} /></TabsContent>
           <TabsContent value="documentos" className="mt-0"><DocumentosTab obraId={obra.id} /></TabsContent>
-          <TabsContent value="medicoes" className="mt-0"><MedicoesTab obraId={obra.id} valorContrato={obra.valor_contrato || 0} /></TabsContent>
+          <TabsContent value="medicoes" className="mt-0"><MedicoesTab obraId={obra.id} valorContrato={(obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0)} /></TabsContent>
           <TabsContent value="financeiro" className="mt-0"><FinanceiroTab obraId={obra.id} /></TabsContent>
           <TabsContent value="aditivos" className="mt-0"><AditivosTab obraId={obra.id} /></TabsContent>
           <TabsContent value="pendencias" className="mt-0"><PendenciasTab obraId={obra.id} /></TabsContent>

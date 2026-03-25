@@ -72,14 +72,24 @@ export default function HoldingDespesasPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["holding-despesas", company?.id],
     queryFn: async () => {
-      const [obrasRes, despesasRes, medicoesRes] = await Promise.all([
-        supabase.from("obras_portfolio").select("id, nome, empresa, num_contrato, valor_contrato, uh").eq("company_id", company!.id),
-        supabase.from("despesas_mensais").select("*"),
-        supabase.from("medicoes_ple").select("*"),
-      ]);
+      // Buscar obras primeiro para ter os IDs (evita buscar dados de outras empresas)
+      const { data: obrasRaw } = await supabase
+        .from("obras_portfolio")
+        .select("id, nome, empresa, num_contrato, valor_contrato, uh")
+        .eq("company_id", company!.id);
 
-      const obras: ObraBasic[] = obrasRes.data || [];
+      const obras: ObraBasic[] = obrasRaw || [];
       const obrasMap = new Map(obras.map(o => [o.id, o]));
+      const obraIds = obras.map(o => o.id);
+
+      const [despesasRes, medicoesRes] = await Promise.all([
+        obraIds.length > 0
+          ? supabase.from("despesas_mensais").select("*").in("obra_id", obraIds)
+          : Promise.resolve({ data: [] as any[], error: null }),
+        obraIds.length > 0
+          ? supabase.from("medicoes_ple").select("*").in("obra_id", obraIds)
+          : Promise.resolve({ data: [] as any[], error: null }),
+      ]);
 
       const despesas: DespesaCompleta[] = (despesasRes.data || [])
         .filter((d: any) => obrasMap.has(d.obra_id))
@@ -155,7 +165,7 @@ export default function HoldingDespesasPage() {
   // ─── PRD Data ───
   const prdData = useMemo(() => {
     return obras.map(o => {
-      const previsto = o.valor_contrato || 0;
+      const previsto = (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
       const realizado = medicoes.filter((m: any) => m.obra_id === o.id && m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_medicao) || 0), 0);
       const desp = despesas.filter(d => d.obra_id === o.id).reduce((s, d) => s + d.valor, 0);
       const saldo = realizado - desp;

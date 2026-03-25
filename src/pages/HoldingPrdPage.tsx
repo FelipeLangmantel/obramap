@@ -67,8 +67,8 @@ export default function HoldingPrdPage() {
     obras.forEach(o => {
       if (!o.data_inicio) return;
       const start = parseLocalDate(o.data_inicio!);
-      const prazoMeses = Math.max(1, Math.ceil(o.prazo_dias / 30));
-      const monthlyPrevisto = o.valor_contrato / prazoMeses;
+      const prazoMeses = Math.max(1, Math.ceil(o.prazo_dias / 30.44)); // 30.44 = média real de dias/mês
+      const monthlyPrevisto = ((o.valor_contrato || 0) + (o.aditivo_valor_total || 0)) / prazoMeses;
       const months: MonthEntry[] = [];
 
       for (let i = 0; i < prazoMeses; i++) {
@@ -151,7 +151,7 @@ export default function HoldingPrdPage() {
   const obraSummary = useMemo(() => {
     return obras.map(o => {
       const entry = obraMonthData.get(o.id);
-      const previsto = entry ? entry.months.reduce((s, m) => s + m.previsto, 0) : o.valor_contrato;
+      const previsto = entry ? entry.months.reduce((s, m) => s + m.previsto, 0) : (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
       const realizado = medicoes.filter((m: any) => m.obra_id === o.id && m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_medicao) || 0), 0);
       const desp = despesas.filter((d: any) => d.obra_id === o.id).reduce((s: number, d: any) => s + (Number(d.valor) || 0), 0);
       const exec = previsto > 0 ? (realizado / previsto) * 100 : 0;

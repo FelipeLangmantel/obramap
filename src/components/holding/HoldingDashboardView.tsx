@@ -94,6 +94,7 @@ interface ObraPortfolio {
   tipo_contrato: string | null;
   has_initial_balance: boolean;
   valor_medido_inicial: number;
+  aditivo_valor_total: number;
   created_at: string;
 }
 
@@ -199,7 +200,10 @@ function calcHealth(docsCount: number, docsTotal: number, latestMedicao: Medicao
   const docsRatio = docsCount / docsTotal;
   const medicaoStatus = latestMedicao?.status_medicao;
 
+  // Crítico: poucos documentos
   if (docsRatio < 3 / 11) return "red";
+
+  // Crítico: medição pendente há muito tempo
   if (medicaoStatus === "pendente") {
     if (latestMedicao?.data_envio) {
       const days = differenceInDays(new Date(), new Date(latestMedicao.data_envio));
@@ -207,9 +211,20 @@ function calcHealth(docsCount: number, docsTotal: number, latestMedicao: Medicao
     }
     return "red";
   }
+
+  // Atenção: documentos insuficientes
   if (docsRatio < 5 / 11) return "yellow";
+
+  // Atenção: medição enviada aguardando aprovação
   if (medicaoStatus === "enviada") return "yellow";
-  if (docsRatio >= 5 / 11 && (!medicaoStatus || medicaoStatus === "aprovada")) return "green";
+
+  // Atenção: obra sem NENHUMA medição (nunca iniciou o processo de medição)
+  // Só verde se já tem ao menos uma medição aprovada
+  if (!medicaoStatus) return "yellow";
+
+  // Verde: docs ok + última medição aprovada
+  if (docsRatio >= 5 / 11 && medicaoStatus === "aprovada") return "green";
+
   return "yellow";
 }
 
@@ -542,7 +557,7 @@ export default function HoldingDashboardView() {
       const statusLbl = STATUS_CONFIG[o.status]?.label || o.status;
       const healthLbl = o.health === "green" ? "Verde" : o.health === "yellow" ? "Amarelo" : "Vermelho";
       const recAprov = o.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
-      const vc = o.valor_contrato || 0;
+      const vc = (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
       const receitas = recAprov > 0 ? recAprov : (vc > 0 && o.percentual_andamento > 0 ? (o.percentual_andamento / 100) * vc : 0);
       const saldo = vc - receitas;
       const pctFin = o.valor_contrato > 0 && receitas > 0 ? (receitas / o.valor_contrato * 100).toFixed(1) + "%" : "—";
@@ -651,13 +666,12 @@ export default function HoldingDashboardView() {
 
   const kpis = useMemo(() => {
     const base = obrasFiltradas;
-    const totalContratos = base.reduce((s, o) => s + (o.valor_contrato || 0), 0);
+    const totalContratos = base.reduce((s, o) => s + (o.valor_contrato || 0) + (o.aditivo_valor_total || 0), 0);
     const totalMedido = base.reduce((s, o) => {
-      const aprovadas = o.allMedicoes.filter((m) => m.status_medicao === "aprovada").reduce((ss, m) => ss + (Number(m.valor_medicao) || 0), 0);
-      // Se não há medições aprovadas mas há andamento físico, estimar pelo percentual
-      if (aprovadas > 0) return s + aprovadas;
-      const vc = o.valor_contrato || 0;
-      return s + (vc > 0 && o.percentual_andamento > 0 ? (o.percentual_andamento / 100) * vc : 0);
+      // Consistente com ObraCard: usar só medições aprovadas
+      return s + o.allMedicoes
+        .filter((m) => m.status_medicao === "aprovada")
+        .reduce((ss, m) => ss + (Number(m.valor_medicao) || 0), 0);
     }, 0);
     const saldoFaturar = totalContratos - totalMedido;
     const totalMedicoesAprovadas = totalMedido;
@@ -740,7 +754,7 @@ export default function HoldingDashboardView() {
 
   // Summary stats for filtered obras
   const summaryStats = useMemo(() => {
-    const valorTotal = obrasFiltradas.reduce((s, o) => s + (o.valor_contrato || 0), 0);
+    const valorTotal = obrasFiltradas.reduce((s, o) => s + (o.valor_contrato || 0) + (o.aditivo_valor_total || 0), 0);
     const emDia = obrasFiltradas.filter(o => o.health === "green").length;
     const emAtencao = obrasFiltradas.filter(o => o.health === "yellow").length;
     const totalDocs = obrasFiltradas.reduce((s, o) => s + o.docsCount, 0);
@@ -1001,7 +1015,7 @@ export default function HoldingDashboardView() {
       )}
 
       {/* Detail Drawer */}
-      <ObraDetailDrawer obra={selectedObra ? { id: selectedObra.id, nome: selectedObra.nome, uh: selectedObra.uh, responsavel: selectedObra.responsavel, responsavel_nome: selectedObra.responsavel_nome, responsavel_telefone: selectedObra.responsavel_telefone, tipo_contrato: selectedObra.tipo_contrato, valor_contrato: selectedObra.valor_contrato, data_inicio: selectedObra.data_inicio, prazo_dias: selectedObra.prazo_dias, aditivo_prazo_dias: selectedObra.aditivo_prazo_dias, percentual_andamento: selectedObra.percentual_andamento, status: selectedObra.status, prazo_pagamento: selectedObra.prazo_pagamento, empresa: selectedObra.empresa } : null} onClose={() => setSelectedObra(null)} />
+      <ObraDetailDrawer obra={selectedObra ? { id: selectedObra.id, nome: selectedObra.nome, uh: selectedObra.uh, responsavel: selectedObra.responsavel, responsavel_nome: selectedObra.responsavel_nome, responsavel_telefone: selectedObra.responsavel_telefone, tipo_contrato: selectedObra.tipo_contrato, valor_contrato: selectedObra.valor_contrato, data_inicio: selectedObra.data_inicio, prazo_dias: selectedObra.prazo_dias, aditivo_prazo_dias: selectedObra.aditivo_prazo_dias, aditivo_valor_total: selectedObra.aditivo_valor_total, percentual_andamento: selectedObra.percentual_andamento, status: selectedObra.status, prazo_pagamento: selectedObra.prazo_pagamento, empresa: selectedObra.empresa } : null} onClose={() => setSelectedObra(null)} />
 
       {/* Nova Obra Dialog */}
       <Dialog open={showNewObraDialog} onOpenChange={(o) => { if (!o) { setShowNewObraDialog(false); setEditingObra(null); resetNewObraForm(); } }}>
@@ -1288,7 +1302,7 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
   const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
   const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
   const receitasAprovadas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
-  const valorContrato = obra.valor_contrato || 0;
+  const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
   // Se não há medições aprovadas mas há andamento físico, estimar valor medido pelo percentual
   const receitasEstimadas = receitasAprovadas > 0
     ? receitasAprovadas
@@ -1439,7 +1453,7 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
                 const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
                 const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yy") : "—";
                 const recAprov = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
-                const vc = obra.valor_contrato || 0;
+                const vc = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
                 const receitas = recAprov > 0 ? recAprov : (vc > 0 && obra.percentual_andamento > 0 ? (obra.percentual_andamento / 100) * vc : 0);
                 return (
                   <TableRow
