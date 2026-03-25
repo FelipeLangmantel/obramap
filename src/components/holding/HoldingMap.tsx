@@ -151,12 +151,16 @@ export default function HoldingMap({ obras, onObraClick }: HoldingMapProps) {
   return (
     <div className="relative w-full">
       <div ref={containerRef} style={{ height: 420, width: "100%" }} className="rounded-lg z-0" />
-      <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-2">
-        <span className="flex items-center gap-1"><span className="h-3 w-3 rounded-full inline-block" style={{ background: "#3b82f6" }} /> S = Sede Gravataí</span>
-        <span>|</span>
-        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#22c55e" }} /> Sob controle</span>
-        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#f59e0b" }} /> Atenção</span>
-        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#ef4444" }} /> Crítico</span>
+      <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-2 flex-wrap">
+        <span className="flex items-center gap-1.5">
+          <span className="h-4 w-4 rounded-full inline-block border-2 border-blue-700" style={{ background: "#1d4ed8" }} />
+          Sede — Gravataí
+        </span>
+        <span>·</span>
+        <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-full inline-block border border-green-700" style={{ background: "#22c55e" }} /> Sob controle</span>
+        <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-full inline-block border border-amber-700" style={{ background: "#f59e0b" }} /> Atenção</span>
+        <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 rounded-full inline-block border border-red-700" style={{ background: "#ef4444" }} /> Crítico</span>
+        <span className="ml-auto opacity-60">Distâncias estimadas em linha reta a partir da sede</span>
       </div>
     </div>
   );
