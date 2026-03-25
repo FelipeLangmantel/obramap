@@ -762,7 +762,7 @@ export default function IndustrializationModuleView() {
             Gerencie o fluxo completo de componentes industrializados: fábrica → lote → transporte → içamento → montagem.
           </p>
           <div className="flex items-center justify-center gap-3">
-            <Button onClick={() => setNewContextDialog(true)}>
+             <Button onClick={() => setNewContextDialog(true)} disabled={!canEdit}>
               <Plus className="h-4 w-4 mr-2" /> Nova Obra Industrial
             </Button>
             <Button variant="outline" onClick={criarDemonstracao} disabled={loadingDemo}>
