@@ -333,6 +333,7 @@ export function LaborContractsView({
 
   // Update contract (auto-save)
   const handleUpdateContract = async (contract: LaborContract, updates: Partial<LaborContract>) => {
+    if (!canEdit) return;
     try {
       const newValues = { ...contract, ...updates };
       // Recalculate total if houses or value changed
