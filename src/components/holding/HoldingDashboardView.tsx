@@ -541,8 +541,10 @@ export default function HoldingDashboardView() {
       const fim = o.data_inicio ? format(addDays(parseLocalDate(o.data_inicio!), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
       const statusLbl = STATUS_CONFIG[o.status]?.label || o.status;
       const healthLbl = o.health === "green" ? "Verde" : o.health === "yellow" ? "Amarelo" : "Vermelho";
-      const receitas = o.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
-      const saldo = o.valor_contrato - receitas;
+      const recAprov = o.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
+      const vc = o.valor_contrato || 0;
+      const receitas = recAprov > 0 ? recAprov : (vc > 0 && o.percentual_andamento > 0 ? (o.percentual_andamento / 100) * vc : 0);
+      const saldo = vc - receitas;
       const pctFin = o.valor_contrato > 0 && receitas > 0 ? (receitas / o.valor_contrato * 100).toFixed(1) + "%" : "—";
       return `${o.nome};${o.empresa || "—"};${o.num_contrato || "—"};${o.parceria_scp || "—"};${o.uh || "—"};${o.tipo_contrato || "—"};${o.responsavel_nome || o.responsavel || "—"};${o.responsavel_telefone || "—"};${o.valor_contrato};${receitas};${saldo};${pctFin};${o.data_inicio || "—"};${o.prazo_dias || "—"};${fim};${statusLbl};${o.percentual_andamento}%;${o.docsCount}/${o.docsTotal};${healthLbl}`;
     });
