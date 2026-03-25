@@ -67,6 +67,7 @@ export default function IndustrializationModuleView() {
   const [batches, setBatches] = useState<any[]>([]);
   const [periods, setPeriods] = useState<any[]>([]);
   const [obrasPortfolio, setObrasPortfolio] = useState<ObraPortfolioItem[]>([]);
+  const [planningPeriods, setPlanningPeriods] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Dialog
