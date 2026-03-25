@@ -131,6 +131,7 @@ export default function HoldingConfigPage() {
   };
 
   const saveDocTipo = async () => {
+    if (!isCompanyAdmin) return;
     if (!docForm.nome.trim()) { toast.error("Nome é obrigatório"); return; }
     if (editingDoc) {
       const { error } = await supabase.from("holding_doc_tipos").update({ nome: docForm.nome, obrigatorio: docForm.obrigatorio } as any).eq("id", editingDoc.id);
