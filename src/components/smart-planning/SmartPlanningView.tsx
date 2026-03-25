@@ -30,7 +30,7 @@ import { PlanningStage, TeamComposition } from './types';
 
 export function SmartPlanningView() {
   const { currentProject } = useConstruction();
-  const { company, canEdit } = useAuth();
+  const { company, canEdit, requireEdit } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [productivityService, setProductivityService] = useState<{
     macro_id: string; scope_id: string; macro_name: string; scope_name: string;
