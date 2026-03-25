@@ -821,8 +821,18 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
 
   const deleteMedicao = async (id: string) => {
     if (!confirm("Excluir esta medição? Esta ação não pode ser desfeita.")) return;
+    const medicaoSnap = medicoes.find(m => m.id === id);
     const { error } = await supabase.from("medicoes_ple").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir medição"); return; }
+
+    await registrarLog(
+      obraId, "medicoes_ple", id,
+      "excluiu",
+      `Excluiu medição ${medicaoSnap?.num_medicao ? `Nº ${medicaoSnap.num_medicao}` : ""} — ${medicaoSnap?.mes_referencia}/${medicaoSnap?.ano_referencia}`,
+      userId, userName,
+      { ...medicaoSnap }, {}
+    );
+
     toast.success("Medição excluída.");
     invalidateHolding();
     load();
