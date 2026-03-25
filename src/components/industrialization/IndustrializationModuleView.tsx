@@ -972,13 +972,13 @@ export default function IndustrializationModuleView() {
                 </TooltipProvider>
                 <div className='flex items-center gap-4 mt-2 text-[10px] text-muted-foreground'>
                   <span className='flex items-center gap-1.5'>
-                    <span className='w-3 h-3 rounded bg-emerald-500/20 inline-block' /> Abaixo de 70%
+                    <span className='w-3 h-3 rounded bg-emerald-500/20 inline-block' /> {"<70% — OK"}
                   </span>
                   <span className='flex items-center gap-1.5'>
-                    <span className='w-3 h-3 rounded bg-amber-500/20 inline-block' /> 70 a 90%
+                    <span className='w-3 h-3 rounded bg-amber-500/20 inline-block' /> 70–90% — Atenção
                   </span>
                   <span className='flex items-center gap-1.5'>
-                    <span className='w-3 h-3 rounded bg-destructive/20 inline-block' /> Acima de 90%
+                    <span className='w-3 h-3 rounded bg-destructive/20 inline-block' /> {">90% — Sobrecarga"}
                   </span>
                 </div>
               </div>
