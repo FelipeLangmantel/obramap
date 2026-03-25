@@ -317,7 +317,7 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
         {/* ═══ EQUIPAMENTOS ═══ */}
         <TabsContent value="equipamentos" className="space-y-3 mt-3">
           <div className="flex justify-end">
-            <Button size="sm" onClick={openNewEquip} className="gap-1.5">
+            <Button size="sm" onClick={openNewEquip} className="gap-1.5" disabled={!canEdit}>
               <Plus className="h-4 w-4" /> Novo Equipamento
             </Button>
           </div>
