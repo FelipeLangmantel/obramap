@@ -322,7 +322,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
         {/* ═══ EMPRESAS FABRIS ═══ */}
         <TabsContent value="empresas" className="space-y-3 mt-3">
           <div className="flex justify-end">
-            <Button size="sm" onClick={openNewFactory} className="gap-1.5">
+            <Button size="sm" onClick={openNewFactory} className="gap-1.5" disabled={!canEdit}>
               <Plus className="h-4 w-4" /> Nova Fábrica
             </Button>
           </div>
