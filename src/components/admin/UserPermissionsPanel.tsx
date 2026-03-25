@@ -165,12 +165,13 @@ export function UserPermissionsPanel() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [profilesRes, rolesRes, permissionsRes, departmentsRes, sessionsRes] = await Promise.all([
+      const [profilesRes, rolesRes, permissionsRes, departmentsRes, sessionsRes, deptPermRes] = await Promise.all([
         supabase.from("profiles").select("*").order("created_at", { ascending: false }),
         supabase.from("user_roles").select("*"),
         supabase.from("user_permissions").select("*"),
         supabase.from("departments").select("*").order("display_order"),
         supabase.from("user_sessions").select("*").order("login_at", { ascending: false }).limit(100),
+        supabase.from("department_permissions").select("*").eq("company_id", company!.id),
       ]);
 
       if (profilesRes.error) throw profilesRes.error;
