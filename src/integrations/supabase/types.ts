@@ -8661,6 +8661,16 @@ export type Database = {
         Returns: Json
       }
       count_orphan_projects: { Args: never; Returns: number }
+      create_company_user: {
+        Args: {
+          p_company_id: string
+          p_display_name: string
+          p_email: string
+          p_role: string
+          p_temp_password: string
+        }
+        Returns: Json
+      }
       create_measurement_service_with_cost: {
         Args: {
           p_company_id: string
