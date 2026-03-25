@@ -32,7 +32,7 @@ export function ContractorContractsTab({
   addContractService, recalcContractTotal, onSelectContract,
 }: Props) {
   const { currentProject } = useConstruction();
-  const { company } = useAuth();
+  const { company, canEdit, requireEdit } = useAuth();
   const [newContractOpen, setNewContractOpen] = useState(false);
   const [selectedContractorId, setSelectedContractorId] = useState("");
   const [retentionPercent, setRetentionPercent] = useState("5");
