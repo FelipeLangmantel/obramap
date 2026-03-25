@@ -1030,11 +1030,101 @@ export default function IndustrializationModuleView() {
             </div>
           )}
 
-          {/* alerts already shown above */}
+          {/* ── Bloco 3: Fábricas Parceiras ── */}
+          <div className="rounded-lg border bg-card">
+            <div className="p-3 border-b flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Factory className="h-4 w-4 text-primary" /> Fábricas Parceiras
+              </h3>
+              {canEdit && (
+                <Button size="sm" className="h-7 text-xs gap-1" onClick={() => { setEditingFactory(null); setFactoryForm(defaultFactoryForm); setFactoryDialog(true); }}>
+                  <Plus className="h-3.5 w-3.5" /> Nova Fábrica
+                </Button>
+              )}
+            </div>
+            {factories.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground text-sm">
+                Nenhuma fábrica cadastrada. Adicione as fábricas parceiras para iniciar o planejamento.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs">Fábrica</TableHead>
+                      <TableHead className="text-xs">Cidade/UF</TableHead>
+                      <TableHead className="text-xs text-center">Cap. Mensal</TableHead>
+                      <TableHead className="text-xs text-right">Preço/Casa</TableHead>
+                      <TableHead className="text-xs text-center">Entrada</TableHead>
+                      <TableHead className="text-xs">Lead Time</TableHead>
+                      <TableHead className="text-xs">Contato</TableHead>
+                      <TableHead className="text-xs text-center">Status</TableHead>
+                      {canEdit && <TableHead className="text-xs w-10" />}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {factories.map(f => (
+                      <TableRow key={f.id}>
+                        <TableCell className="text-xs font-medium">{f.name}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{f.city && f.state ? `${f.city}/${f.state}` : "—"}</TableCell>
+                        <TableCell className="text-xs text-center font-semibold">
+                          {f.capacity_houses_month > 0 ? `${f.capacity_houses_month} casas/mês` : "—"}
+                        </TableCell>
+                        <TableCell className="text-xs text-right">{f.price_per_house > 0 ? BRL.format(f.price_per_house) : "—"}</TableCell>
+                        <TableCell className="text-xs text-center text-amber-600">{f.advance_payment_pct > 0 ? `${f.advance_payment_pct}%` : "—"}</TableCell>
+                        <TableCell className="text-xs">{f.avg_lead_time_days}d</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{f.contact_name || "—"}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline" className={`text-[10px] ${f.is_active ? "text-emerald-600 border-emerald-300" : "text-muted-foreground"}`}>
+                            {f.is_active ? "Ativa" : "Inativa"}
+                          </Badge>
+                        </TableCell>
+                        {canEdit && (
+                          <TableCell>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEditFactoryDashboard(f)}>
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
         </>
       )}
 
-      {/* ── Dialog: Nova Obra Industrial ── */}
+      {/* ── Dialog: Fábrica ── */}
+      <Dialog open={factoryDialog} onOpenChange={v => { setFactoryDialog(v); if (!v) { setEditingFactory(null); setFactoryForm(defaultFactoryForm); } }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingFactory ? "Editar Fábrica" : "Nova Fábrica"}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2"><Label className="text-xs">Nome *</Label><Input value={factoryForm.name} onChange={e => setFactoryForm(f => ({ ...f, name: e.target.value }))} className="h-8 text-xs" /></div>
+            <div><Label className="text-xs">Cidade</Label><Input value={factoryForm.city} onChange={e => setFactoryForm(f => ({ ...f, city: e.target.value }))} className="h-8 text-xs" /></div>
+            <div><Label className="text-xs">UF</Label><Input value={factoryForm.state} onChange={e => setFactoryForm(f => ({ ...f, state: e.target.value }))} className="h-8 text-xs" maxLength={2} /></div>
+            <div><Label className="text-xs">Cap. Casas/Mês *</Label><Input type="number" value={factoryForm.capacity_houses_month} onChange={e => setFactoryForm(f => ({ ...f, capacity_houses_month: parseInt(e.target.value) || 0 }))} className="h-8 text-xs" /></div>
+            <div><Label className="text-xs">Preço por Casa (R$)</Label><Input type="number" step="0.01" value={factoryForm.price_per_house} onChange={e => setFactoryForm(f => ({ ...f, price_per_house: parseFloat(e.target.value) || 0 }))} className="h-8 text-xs" /></div>
+            <div><Label className="text-xs">% Entrada</Label><Input type="number" step="0.1" value={factoryForm.advance_payment_pct} onChange={e => setFactoryForm(f => ({ ...f, advance_payment_pct: parseFloat(e.target.value) || 0 }))} className="h-8 text-xs" /></div>
+            <div><Label className="text-xs">Lead Time (dias)</Label><Input type="number" value={factoryForm.avg_lead_time_days} onChange={e => setFactoryForm(f => ({ ...f, avg_lead_time_days: parseInt(e.target.value) || 0 }))} className="h-8 text-xs" /></div>
+            <div className="col-span-2"><Label className="text-xs">Condições de Pagamento</Label><Input value={factoryForm.payment_terms} onChange={e => setFactoryForm(f => ({ ...f, payment_terms: e.target.value }))} className="h-8 text-xs" placeholder="Ex: 30% entrada + 70% na entrega" /></div>
+            <div><Label className="text-xs">Contato</Label><Input value={factoryForm.contact_name} onChange={e => setFactoryForm(f => ({ ...f, contact_name: e.target.value }))} className="h-8 text-xs" /></div>
+            <div><Label className="text-xs">Telefone</Label><Input value={factoryForm.contact_phone} onChange={e => setFactoryForm(f => ({ ...f, contact_phone: e.target.value }))} className="h-8 text-xs" /></div>
+            <div className="col-span-2"><Label className="text-xs">Observações</Label><Input value={factoryForm.notes} onChange={e => setFactoryForm(f => ({ ...f, notes: e.target.value }))} className="h-8 text-xs" /></div>
+            <div className="col-span-2 flex items-center gap-2">
+              <Switch checked={factoryForm.is_active} onCheckedChange={v => setFactoryForm(f => ({ ...f, is_active: v }))} />
+              <Label className="text-xs">Fábrica Ativa</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setFactoryDialog(false)}>Cancelar</Button>
+            <Button size="sm" onClick={saveFactory}>{editingFactory ? "Salvar" : "Criar"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={newContextDialog} onOpenChange={setNewContextDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
