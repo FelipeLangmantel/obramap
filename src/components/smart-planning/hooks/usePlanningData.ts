@@ -219,7 +219,7 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const updateWorkLog = async (logId: string, updates: Partial<DailyWorkLog>) => {
-    const { error } = await supabase
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
       .from('daily_work_logs')
       .update(updates)
       .eq('id', logId);
