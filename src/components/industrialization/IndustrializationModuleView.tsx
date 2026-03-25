@@ -306,7 +306,8 @@ export default function IndustrializationModuleView() {
       ]).select("id, batch_code, status, planned_quantity");
       if (batchError) throw new Error("Erro ao criar lotes: " + batchError.message);
       if (!lotes || lotes.length < 4) throw new Error("Erro ao criar lotes de produção — dados insuficientes retornados");
-      const [l1, l2, l3, l4] = lotes;
+      const [l1, l2, l3, l4, l5, l6] = lotes;
+      if (!l1?.id || !l2?.id || !l3?.id || !l4?.id) throw new Error("IDs dos lotes inválidos");
 
       // 7. UNIDADES — 120 UH
       const unidades: any[] = [];
