@@ -720,6 +720,21 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
 
   const updateMedicao = async () => {
     if (!editingMedicao) return;
+
+    // Validar limite do contrato
+    if (valorContrato > 0) {
+      const novoValor = (Number(editForm.valor_medicao) || 0) + (Number(editForm.valor_previsto_medicao) || 0);
+      const totalSemEsta = medicoes
+        .filter(m => m.id !== editingMedicao.id && m.num_medicao !== "Saldo Inicial")
+        .reduce((s, m) => s + (Number(m.valor_medicao) || 0) + (Number(m.valor_previsto_medicao) || 0), 0);
+
+      if (novoValor > 0 && totalSemEsta + novoValor > valorContrato) {
+        const disponivel = valorContrato - totalSemEsta;
+        toast.error(`❌ Valor excede o saldo disponível. Saldo restante para esta medição: ${BRL.format(Math.max(0, disponivel))}.`);
+        return;
+      }
+    }
+
     const payload: any = { ...editForm };
     delete payload.id; delete payload.obra_id; delete payload.created_at;
     // Allow clearing dates by setting to null
