@@ -552,144 +552,130 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
         </Card>
       )}
 
-      {/* ═══ Costs Table ═══ */}
-      {costData.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Custos por Período</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs min-w-[120px]">Período</TableHead>
-                  {activeFactories.map(f => (
-                    <TableHead key={f.id} className="text-xs text-right min-w-[100px]">{f.name}</TableHead>
-                  ))}
-                  <TableHead className="text-xs text-right">Entrada</TableHead>
-                  <TableHead className="text-xs text-right">Frete</TableHead>
-                  <TableHead className="text-xs text-right">Içamento</TableHead>
-                  <TableHead className="text-xs text-right font-bold">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {uniquePeriods.map(period => {
-                  const periodCosts = costData.filter(r => r.period_id === period.id);
-                  const periodAdvance = periodCosts.reduce((s, r) => s + Number(r.advance_value || 0), 0);
-                  const periodFreight = periodCosts.reduce((s, r) => s + Number(r.freight_value || 0), 0);
-                  const periodLifting = periodCosts.reduce((s, r) => s + Number(r.lifting_value || 0), 0);
-                  const periodTotal = periodCosts.reduce((s, r) => s + Number(r.total_value || 0), 0);
-
-                  return (
-                    <TableRow key={period.id}>
-                      <TableCell className="text-xs font-medium text-foreground">{period.label}</TableCell>
-                      {activeFactories.map(f => {
-                        const cost = getCostCell(period.id, f.id);
-                        return (
-                          <TableCell key={f.id} className="text-xs text-right text-foreground">
-                            {cost ? BRL.format(Number(cost.batch_value)) : "—"}
+      {/* ═══ Costs & Cash — Side by Side ═══ */}
+      {(costData.length > 0 || cashData.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Costs Table */}
+          {costData.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  Custos por Período
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs min-w-[120px]">Período</TableHead>
+                      {activeFactories.map(f => (
+                        <TableHead key={f.id} className="text-xs text-right min-w-[100px]">{f.name}</TableHead>
+                      ))}
+                      <TableHead className="text-xs text-right">Entrada</TableHead>
+                      <TableHead className="text-xs text-right">Frete</TableHead>
+                      <TableHead className="text-xs text-right">Içamento</TableHead>
+                      <TableHead className="text-xs text-right font-bold">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {uniquePeriods.map(period => {
+                      const periodCosts = costData.filter(r => r.period_id === period.id);
+                      const periodAdvance = periodCosts.reduce((s, r) => s + Number(r.advance_value || 0), 0);
+                      const periodFreight = periodCosts.reduce((s, r) => s + Number(r.freight_value || 0), 0);
+                      const periodLifting = periodCosts.reduce((s, r) => s + Number(r.lifting_value || 0), 0);
+                      const periodTotal = periodCosts.reduce((s, r) => s + Number(r.total_value || 0), 0);
+                      return (
+                        <TableRow key={period.id}>
+                          <TableCell className="text-xs font-medium text-foreground">{period.label}</TableCell>
+                          {activeFactories.map(f => {
+                            const cost = getCostCell(period.id, f.id);
+                            return (
+                              <TableCell key={f.id} className="text-xs text-right text-foreground">
+                                {cost ? BRL.format(Number(cost.batch_value)) : "—"}
+                              </TableCell>
+                            );
+                          })}
+                          <TableCell className="text-xs text-right text-amber-600 font-medium">
+                            {periodAdvance > 0 ? BRL.format(periodAdvance) : "—"}
                           </TableCell>
-                        );
-                      })}
-                      <TableCell className="text-xs text-right text-amber-600 font-medium">
-                        {periodAdvance > 0 ? BRL.format(periodAdvance) : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-right text-foreground">{periodFreight > 0 ? BRL.format(periodFreight) : "—"}</TableCell>
-                      <TableCell className="text-xs text-right text-foreground">{periodLifting > 0 ? BRL.format(periodLifting) : "—"}</TableCell>
-                      <TableCell className="text-xs text-right font-bold text-foreground">{BRL.format(periodTotal)}</TableCell>
+                          <TableCell className="text-xs text-right text-foreground">{periodFreight > 0 ? BRL.format(periodFreight) : "—"}</TableCell>
+                          <TableCell className="text-xs text-right text-foreground">{periodLifting > 0 ? BRL.format(periodLifting) : "—"}</TableCell>
+                          <TableCell className="text-xs text-right font-bold text-foreground">{BRL.format(periodTotal)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    <TableRow className="bg-accent/30 font-bold">
+                      <TableCell className="text-xs font-bold text-foreground">Totais</TableCell>
+                      {activeFactories.map(f => (
+                        <TableCell key={f.id} className="text-xs text-right font-bold text-foreground">
+                          {BRL.format(costTotals[f.id] || 0)}
+                        </TableCell>
+                      ))}
+                      <TableCell className="text-xs text-right font-bold text-amber-600">{BRL.format(costTotals.advance)}</TableCell>
+                      <TableCell className="text-xs text-right font-bold text-foreground">{BRL.format(costTotals.freight)}</TableCell>
+                      <TableCell className="text-xs text-right font-bold text-foreground">{BRL.format(costTotals.lifting)}</TableCell>
+                      <TableCell className="text-xs text-right font-bold text-foreground">{BRL.format(costTotals.total)}</TableCell>
                     </TableRow>
-                  );
-                })}
-                <TableRow className="bg-accent/30 font-bold">
-                  <TableCell className="text-xs font-bold text-foreground">Totais</TableCell>
-                  {activeFactories.map(f => (
-                    <TableCell key={f.id} className="text-xs text-right font-bold text-foreground">
-                      {BRL.format(costTotals[f.id] || 0)}
-                    </TableCell>
-                  ))}
-                  <TableCell className="text-xs text-right font-bold text-amber-600">{BRL.format(costTotals.advance)}</TableCell>
-                  <TableCell className="text-xs text-right font-bold text-foreground">{BRL.format(costTotals.freight)}</TableCell>
-                  <TableCell className="text-xs text-right font-bold text-foreground">{BRL.format(costTotals.lifting)}</TableCell>
-                  <TableCell className="text-xs text-right font-bold text-foreground">{BRL.format(costTotals.total)}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
 
-      {/* ═══ Stacked Bar Chart ═══ */}
-      {chartData.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Custos por Período (Gráfico)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={280}>
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                <RechartsLegend wrapperStyle={{ fontSize: 10 }} />
-                {activeFactories.map((f, i) => (
-                  <Bar key={f.id} dataKey={f.name} stackId="a" fill={chartColors[i % chartColors.length]} />
-                ))}
-                <Bar dataKey="Frete" stackId="a" fill="hsl(var(--chart-4))" />
-                <Bar dataKey="Içamento" stackId="a" fill="hsl(var(--chart-5))" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ═══ Cash Projection ═══ */}
-      {cashData.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Projeção de Caixa</CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Empresa</TableHead>
-                  <TableHead className="text-xs">Quinzena</TableHead>
-                  <TableHead className="text-xs text-right">Valor Total</TableHead>
-                  <TableHead className="text-xs text-right">Entrada (R$)</TableHead>
-                  <TableHead className="text-xs text-center">Data Limite</TableHead>
-                  <TableHead className="text-xs text-center">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {cashData.map((r, i) => {
-                  const daysUntil = r.advance_due_date ? differenceInDays(new Date(r.advance_due_date + "T12:00:00"), new Date()) : 999;
-                  return (
-                    <TableRow key={i}>
-                      <TableCell className="text-xs font-medium text-foreground">{r.factory_name}</TableCell>
-                      <TableCell className="text-xs text-foreground">{r.period_label}</TableCell>
-                      <TableCell className="text-xs text-right text-foreground">{BRL.format(Number(r.total_outflow))}</TableCell>
-                      <TableCell className="text-xs text-right font-medium text-amber-600">{BRL.format(Number(r.advance_value))}</TableCell>
-                      <TableCell className="text-center">
-                        <span className="text-xs text-foreground">
-                          {r.advance_due_date ? format(new Date(r.advance_due_date + "T12:00:00"), "dd/MM/yy") : "—"}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {daysUntil < 7 ? (
-                          <Badge variant="destructive" className="text-[9px]">Urgente ({daysUntil}d)</Badge>
-                        ) : daysUntil < 15 ? (
-                          <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-700 border-amber-300">Atenção ({daysUntil}d)</Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-[9px]">{daysUntil}d</Badge>
-                        )}
-                      </TableCell>
+          {/* Cash Projection */}
+          {cashData.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-amber-500" />
+                  Projeção de Caixa
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs">Empresa</TableHead>
+                      <TableHead className="text-xs">Quinzena</TableHead>
+                      <TableHead className="text-xs text-right">Valor Total</TableHead>
+                      <TableHead className="text-xs text-right">Entrada (R$)</TableHead>
+                      <TableHead className="text-xs text-center">Data Limite</TableHead>
+                      <TableHead className="text-xs text-center">Status</TableHead>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {cashData.map((r, i) => {
+                      const daysUntil = r.advance_due_date ? differenceInDays(new Date(r.advance_due_date + "T12:00:00"), new Date()) : 999;
+                      return (
+                        <TableRow key={i}>
+                          <TableCell className="text-xs font-medium text-foreground">{r.factory_name}</TableCell>
+                          <TableCell className="text-xs text-foreground">{r.period_label}</TableCell>
+                          <TableCell className="text-xs text-right text-foreground">{BRL.format(Number(r.total_outflow))}</TableCell>
+                          <TableCell className="text-xs text-right font-medium text-amber-600">{BRL.format(Number(r.advance_value))}</TableCell>
+                          <TableCell className="text-center">
+                            <span className="text-xs text-foreground">
+                              {r.advance_due_date ? format(new Date(r.advance_due_date + "T12:00:00"), "dd/MM/yy") : "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {daysUntil < 7 ? (
+                              <Badge variant="destructive" className="text-[9px]">Urgente ({daysUntil}d)</Badge>
+                            ) : daysUntil < 15 ? (
+                              <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-700 border-amber-300">Atenção ({daysUntil}d)</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[9px]">{daysUntil}d</Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
 
       {/* ═══ Pipeline Visual ═══ */}
