@@ -486,6 +486,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           : true;  // editor sem restrição: pode editar
   const mustChangePassword = profile?.must_change_password || false;
 
+  const { toast: showToast } = useToast();
+  const requireEdit = useCallback((): boolean => {
+    if (canEdit) return true;
+    showToast({
+      title: "Sem permissão",
+      description: "Você tem acesso de visualização apenas. Contate o administrador para solicitar permissão de edição.",
+      variant: "destructive",
+    });
+    return false;
+  }, [canEdit, showToast]);
+
   const canAccessMenu = useCallback((menuId: string): boolean => {
     if (isSystemAdmin) return false; // System admin não acessa menus da empresa
     if (isCompanyAdmin) return true;
