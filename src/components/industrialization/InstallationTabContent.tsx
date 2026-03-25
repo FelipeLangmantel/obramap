@@ -47,6 +47,7 @@ interface Batch {
   id: string; factory_id: string; batch_code: string; status: string;
   planned_start: string | null; actual_start: string | null;
   planned_finish: string | null; actual_finish: string | null;
+  macro_id: string | null; scope_id: string | null;
 }
 
 interface Factory {
