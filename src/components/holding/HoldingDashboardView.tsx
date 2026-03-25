@@ -1293,8 +1293,17 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
                 <button className="p-1 rounded-md hover:bg-muted" onClick={(e) => e.stopPropagation()}><MoreVertical className="h-4 w-4 text-muted-foreground" /></button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}><Pencil className="h-3.5 w-3.5 mr-2" /> Editar</DropdownMenuItem>
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive"><Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir</DropdownMenuItem>
+                {isCompanyAdmin && (
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}><Pencil className="h-3.5 w-3.5 mr-2" /> Editar</DropdownMenuItem>
+                )}
+                {isCompanyAdmin && (
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive"><Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir</DropdownMenuItem>
+                )}
+                {!isCompanyAdmin && (
+                  <DropdownMenuItem disabled className="text-muted-foreground text-xs">
+                    Somente visualização
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
