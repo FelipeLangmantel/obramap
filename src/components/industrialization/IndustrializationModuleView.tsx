@@ -296,7 +296,8 @@ export default function IndustrializationModuleView() {
           notes: "Planejado. Contrato de fornecimento a ser assinado.",
         },
       ]).select("id, batch_code, status, planned_quantity");
-      if (!lotes || lotes.length < 4) throw new Error("Erro ao criar lotes de produção — verifique as colunas da tabela");
+      if (batchError) throw new Error("Erro ao criar lotes: " + batchError.message);
+      if (!lotes || lotes.length < 4) throw new Error("Erro ao criar lotes de produção — dados insuficientes retornados");
       const [l1, l2, l3, l4] = lotes;
 
       // 7. UNIDADES — 120 UH
