@@ -265,6 +265,7 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
     fetchAll();
   };
   const deletePeriod = async () => {
+    if (!requireEdit()) return;
     if (!deletePeriodTarget) return;
     const hasBatches = batches.some(b => b.ind_period_id === deletePeriodTarget.id);
     if (hasBatches) {
