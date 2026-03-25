@@ -131,7 +131,7 @@ export default function IndustrializationModuleView() {
     try {
       const [ctxRes, facRes, modRes, batRes, perRes, obrasRes, planPeriRes] = await Promise.all([
         supabase.from("ind_operation_contexts").select("*").order("created_at"),
-        supabase.from("ind_factories").select("id,name,is_active,advance_payment_pct,avg_lead_time_days").eq("company_id", companyId),
+        supabase.from("ind_factories").select("id,name,is_active,advance_payment_pct,avg_lead_time_days,city,state,contact_name,contact_phone,capacity_houses_month,price_per_house,payment_terms,notes").eq("company_id", companyId),
         supabase.from("ind_factory_models").select("id,factory_id,units_per_week,is_active").eq("company_id", companyId),
         supabase.from("ind_production_batches").select("id,context_id,factory_id,planned_quantity,actual_quantity,unit_value,status,planned_start,planned_finish,ind_period_id,obramap_period_id"),
         supabase.from("ind_periods").select("id,context_id,name,start_date,end_date,target_units").order("start_date"),
