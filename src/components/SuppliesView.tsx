@@ -669,6 +669,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
 
   // CRUD operations
   const saveInput = async () => {
+    if (!canEdit) return;
     if (!projectId || !newInput.name.trim()) return;
     
     // Check for duplicates
