@@ -311,7 +311,7 @@ export function usePleData() {
 
   // Delete event
   const deleteEvent = useCallback(async (id: string) => {
-    const { error } = await supabase.from("ple_events").delete().eq("id", id);
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     if (error) { toast.error("Erro ao excluir evento"); return; }
     setEvents(prev => prev.filter(e => e.id !== id));
     setEntries(prev => prev.filter(e => e.event_id !== id));
