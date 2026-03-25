@@ -264,6 +264,7 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
 
   // ─── Delete ───
   const handleDelete = async () => {
+    if (!requireEdit()) return;
     if (!deleteTarget) return;
     const { error } = await supabase.from("ind_lifting_schedule").delete().eq("id", deleteTarget.id);
     if (error) { toast.error("Erro ao excluir"); setDeleteTarget(null); return; }
