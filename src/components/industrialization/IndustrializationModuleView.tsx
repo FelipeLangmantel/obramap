@@ -171,6 +171,7 @@ export default function IndustrializationModuleView() {
   // DEMONSTRAÇÃO COMPLETA
   // ══════════════════════════════════════════
   const criarDemonstracao = async () => {
+    if (!requireEdit()) return;
     if (!companyId) return;
     setLoadingDemo(true);
 
