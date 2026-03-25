@@ -144,6 +144,13 @@ export default function IndustrializationModuleView() {
   const criarDemonstracao = async () => {
     if (!companyId) return;
     setLoadingDemo(true);
+
+    // Impedir criação se já existe demo
+    if (contexts.some(c => c.name.includes("— DEMO"))) {
+      toast.warning("Demonstração já existe. Use o botão 'Excluir Demonstração' antes de criar nova.");
+      setLoadingDemo(false);
+      return;
+    }
     try {
       const hoje = new Date();
       const fmt = (d: Date) => d.toISOString().split("T")[0];
