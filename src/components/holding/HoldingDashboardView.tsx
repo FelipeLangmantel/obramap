@@ -601,17 +601,21 @@ export default function HoldingDashboardView() {
   });
 
   const kpis = useMemo(() => {
-    const totalContratos = obras.reduce((s, o) => s + (o.valor_contrato || 0), 0);
-    const totalMedicoesAprovadas = obras.reduce(
+    const base = obrasFiltradas;
+    const totalContratos = base.reduce((s, o) => s + (o.valor_contrato || 0), 0);
+    const totalMedido = base.reduce(
       (s, o) => s + o.allMedicoes.filter((m) => m.status_medicao === "aprovada").reduce((ss, m) => ss + m.valor_medicao, 0), 0
     );
-    const obrasAtivas = obras.filter((o) => o.status === "em_andamento").length;
-    const obrasNaoIniciadas = obras.filter((o) => o.status === "nao_iniciada").length;
-    const alertasCriticos = obras.filter((o) => o.health === "red").length;
-    const emAndamento = obras.filter((o) => o.status === "em_andamento");
+    const saldoFaturar = totalContratos - totalMedido;
+    const totalMedicoesAprovadas = totalMedido;
+    const obrasAtivas = base.filter((o) => o.status === "em_andamento").length;
+    const obrasNaoIniciadas = base.filter((o) => o.status === "nao_iniciada").length;
+    const alertasCriticos = base.filter((o) => o.health === "red").length;
+    const emAndamento = base.filter((o) => o.status === "em_andamento");
     const andamentoMedio = emAndamento.length > 0 ? Math.round(emAndamento.reduce((s, o) => s + o.percentual_andamento, 0) / emAndamento.length) : 0;
-    return { totalContratos, totalMedicoesAprovadas, obrasAtivas, obrasNaoIniciadas, alertasCriticos, andamentoMedio };
-  }, [obras]);
+    const totalUH = base.reduce((s, o) => s + (o.uh || 0), 0);
+    return { totalContratos, totalMedido, saldoFaturar, totalMedicoesAprovadas, obrasAtivas, obrasNaoIniciadas, alertasCriticos, andamentoMedio, totalUH };
+  }, [obrasFiltradas]);
 
   const alerts = useMemo((): HoldingAlert[] => {
     const result: HoldingAlert[] = [];
