@@ -216,6 +216,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
     setServiceDialog(true);
   };
   const saveService = async () => {
+    if (!requireEdit()) return;
     if (!serviceForm.name.trim()) { toast.error("Nome obrigatório"); return; }
     const payload = { ...serviceForm, context_id: contextId, company_id: companyId, category: serviceForm.category || null };
     if (editingServiceId) {
