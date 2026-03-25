@@ -408,16 +408,29 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground font-medium">Entrada (30 dias)</span>
-              {urgentAdvance && <Badge variant="destructive" className="text-[9px] h-4 px-1">Urgente</Badge>}
+        <Card className={advanceNext30 > 0 && cashData.some(r => {
+          const d = r.advance_due_date ? differenceInDays(new Date(r.advance_due_date+'T12:00:00'), new Date()) : 999;
+          return d < 7;
+        }) ? 'border-destructive' : ''}>
+          <CardContent className='p-4 space-y-2'>
+            <div className='flex items-center justify-between'>
+              <span className='text-xs text-muted-foreground font-medium'>Entrada (30 dias)</span>
+              <Zap className='h-4 w-4 text-amber-500' />
             </div>
-            <div className={cn("text-2xl font-bold", urgentAdvance ? "text-destructive" : "text-foreground")}>
-              {BRL.format(advanceNext30)}
-            </div>
-            <span className="text-[10px] text-muted-foreground">Entradas devidas nos próximos 30 dias</span>
+            <div className='text-2xl font-bold text-amber-600'>{BRL.format(advanceNext30)}</div>
+            {cashData.length > 0 && (() => {
+              const next = [...cashData].filter(r => r.advance_due_date).sort((a,b) =>
+                new Date(a.advance_due_date).getTime() - new Date(b.advance_due_date).getTime())[0];
+              if (!next) return null;
+              const days = differenceInDays(new Date(next.advance_due_date+'T12:00:00'), new Date());
+              return (
+                <div className='text-[10px] space-y-0.5'>
+                  <p className={days < 7 ? 'text-destructive font-semibold' : 'text-muted-foreground'}>
+                    Vence em {days} dias — {next.factory_name}
+                  </p>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
 
