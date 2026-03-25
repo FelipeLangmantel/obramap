@@ -454,7 +454,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // isAdmin legacy: considera tanto system_role quanto role da tabela user_roles
   const isAdmin = role === "admin" || systemRole === "admin" || isSystemAdmin;
   const isEditor = role === "editor";
-  const canEdit = isAdmin || isEditor || isCompanyAdmin;
+  const canEdit =
+    isAdmin ||
+    isCompanyAdmin ||
+    (permissions?.can_edit === true) ||
+    (permissions?.can_edit === null && isEditor);
+  // Regra: admin e company admin sempre podem editar
+  // Se tem can_edit definido explicitamente, respeita
+  // Se can_edit é null (sem config individual), usa isEditor como padrão
   const mustChangePassword = profile?.must_change_password || false;
 
   const canAccessMenu = useCallback((menuId: string): boolean => {
