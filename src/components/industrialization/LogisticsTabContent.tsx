@@ -337,7 +337,7 @@ export function LogisticsTabContent({ companyId, contextId }: LogisticsTabProps)
         {/* ═══ TRUCKS ═══ */}
         <TabsContent value="trucks" className="space-y-3 mt-3">
           <div className="flex justify-end">
-            <Button size="sm" onClick={openNewTruck} className="gap-1.5">
+            <Button size="sm" onClick={openNewTruck} className="gap-1.5" disabled={!canEdit}>
               <Plus className="h-4 w-4" /> Novo Caminhão
             </Button>
           </div>
