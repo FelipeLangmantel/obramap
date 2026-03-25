@@ -80,3 +80,44 @@ export const MENU_TO_MODULE_KEY: Record<string, string> = MENU_MODULES.reduce((a
   if (m.moduleKey) acc[m.id] = m.moduleKey;
   return acc;
 }, {} as Record<string, string>);
+
+/**
+ * Permissoes padrao por perfil.
+ * Usadas ao criar novo usuario e ao resetar permissoes.
+ */
+export const DEFAULT_MENUS_BY_ROLE: Record<string, string[]> = {
+  admin: [
+    'painel_inicial','mapa','mapa_interativo','mapa_3d','graficos','diretoria',
+    'producao','planejamento_semanal','planejamento_periodo','planejamento_estrategico',
+    'smart_planning','productivity','entrega',
+    'contrato','ple_medicoes','custos','suprimentos','financeiro','empreiteiros',
+    'industrializacao',
+    'holding','holding_receitas','holding_despesas','holding_documentos',
+    'holding_prd','holding_insights','holding_config',
+  ],
+  editor: [
+    'painel_inicial','mapa','mapa_interativo','graficos',
+    'producao','planejamento_semanal','planejamento_periodo',
+    'contrato','custos','suprimentos','empreiteiros','industrializacao',
+  ],
+  viewer: [
+    'painel_inicial','graficos','mapa',
+  ],
+};
+
+export const DEFAULT_MANAGEMENT_BY_ROLE: Record<string, string[]> = {
+  admin: ['projetos','quadras','macros','insumos','fornecedores','usuarios','configuracoes'],
+  editor: ['projetos','quadras','macros','insumos','fornecedores'],
+  viewer: [],
+};
+
+/**
+ * Retorna as permissoes padrao para um perfil.
+ * Usar ao criar usuario ou ao clicar em 'Restaurar Padrao' no painel.
+ */
+export function getDefaultPermissions(role: 'admin' | 'editor' | 'viewer') {
+  return {
+    visible_menus: DEFAULT_MENUS_BY_ROLE[role] || DEFAULT_MENUS_BY_ROLE.viewer,
+    visible_management_sections: DEFAULT_MANAGEMENT_BY_ROLE[role] || [],
+  };
+}
