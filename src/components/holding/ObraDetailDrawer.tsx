@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical, CalendarDays, TrendingUp, DollarSign, Clock, BarChart3, Target, AlertTriangle } from "lucide-react";
+import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical, CalendarDays, TrendingUp, Clock, BarChart3, Target, AlertTriangle } from "lucide-react";
 import { CurrencyInput } from "./CurrencyInput";
 import { useAuth } from "@/contexts/AuthContext";
 import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart } from "recharts";
@@ -94,12 +94,24 @@ function ResumoTab({ obra }: { obra: ObraDrawerData }) {
 
   const kpis = useMemo(() => {
     const valorContrato = obra.valor_contrato || 0;
-    const totalMedido = medicoes.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+    // Medido/Faturado = aprovadas (igual ao card do painel e à tabela de obras)
+    const totalMedido = medicoes
+      .filter(m => m.status_medicao === "aprovada")
+      .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+
+    // Enviado (aguardando aprovação) — separado
+    const totalEnviado = medicoes
+      .filter(m => m.status_medicao === "enviada")
+      .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+
+    // Total em aberto (aprovado + enviado) — para o saldo a medir
+    const totalEmAberto = totalMedido + totalEnviado;
+
     const totalAcatado = medicoes.filter(m => Number(m.valor_acatado) > 0).reduce((s, m) => s + Number(m.valor_acatado), 0);
     const totalRecebido = medicoes.filter(m => m.status_nf === "recebido").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
     const totalPrevisto = medicoes.reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0);
     const pctMedido = valorContrato > 0 ? (totalMedido / valorContrato) * 100 : 0;
-    const saldoMedir = valorContrato - totalMedido;
+    const saldoMedir = valorContrato - totalEmAberto;
     const totalGlosa = totalAcatado > 0 ? totalMedido - totalAcatado : 0;
     const medicoesEnviadas = medicoes.filter(m => m.status_medicao === "enviada").length;
     const medicoesAprovadas = medicoes.filter(m => m.status_medicao === "aprovada").length;
@@ -120,7 +132,7 @@ function ResumoTab({ obra }: { obra: ObraDrawerData }) {
     }
 
     return {
-      valorContrato, totalMedido, totalRecebido, totalPrevisto,
+      valorContrato, totalMedido, totalEnviado, totalEmAberto, totalRecebido, totalPrevisto,
       pctMedido, saldoMedir, totalGlosa, totalAcatado,
       medicoesEnviadas, medicoesAprovadas, medicoesPrevistas,
       diasRestantes, previsaoFim, pctPrazo,
@@ -160,10 +172,10 @@ function ResumoTab({ obra }: { obra: ObraDrawerData }) {
     <div className="space-y-4">
       {/* KPI Row 1 — Financeiro */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <MiniKpi icon={<DollarSign className="h-4 w-4" />} label="Valor Contrato" value={BRL.format(kpis.valorContrato)} color="text-primary" />
-        <MiniKpi icon={<TrendingUp className="h-4 w-4" />} label="Total Medido" value={BRL.format(kpis.totalMedido)} sub={`${kpis.pctMedido.toFixed(1)}% do contrato`} color="text-blue-600" />
-        <MiniKpi icon={<Target className="h-4 w-4" />} label="Saldo a Medir" value={BRL.format(kpis.saldoMedir)} color="text-amber-600" />
-        <MiniKpi icon={<DollarSign className="h-4 w-4" />} label="Total Recebido" value={BRL.format(kpis.totalRecebido)} color="text-emerald-600" />
+        <MiniKpi icon={<TrendingUp className="h-4 w-4" />} label="Total Medido" value={BRL.format(kpis.totalMedido)} sub={`${kpis.pctMedido.toFixed(1)}% do contrato`} color="text-emerald-600" />
+        <MiniKpi icon={<Clock className="h-4 w-4" />} label="Enviado/Pendente" value={BRL.format(kpis.totalEnviado)} sub="aguardando aprovação" color="text-amber-600" />
+        <MiniKpi icon={<Target className="h-4 w-4" />} label="Saldo a Medir" value={BRL.format(kpis.saldoMedir)} color="text-blue-600" />
+        <MiniKpi icon={<BarChart3 className="h-4 w-4" />} label="% Financeiro" value={`${kpis.pctMedido.toFixed(1)}%`} color="text-primary" />
       </div>
 
       {/* Contract Timeline */}
