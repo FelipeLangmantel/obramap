@@ -606,7 +606,7 @@ export default function IndustrializationModuleView() {
                     ...f,
                     obras_portfolio_id: v === "__none__" ? "" : v,
                     name: obra ? obra.nome : f.name,
-                    total_units: obra?.total_houses || f.total_units,
+                    total_units: obra?.uh || f.total_units,
                     obramap_project_id: obra?.obramap_project_id || f.obramap_project_id,
                   }));
                 }}
