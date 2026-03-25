@@ -88,7 +88,7 @@ export function ImportBudgetItemsDialog({
   const [searchInputTerm, setSearchInputTerm] = useState("");
   const [activeMatchPopover, setActiveMatchPopover] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { company } = useAuth();
+  const { company, canEdit } = useAuth();
   const companyId = company?.id;
 
   // Normalize text for comparison
