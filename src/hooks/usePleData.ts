@@ -315,10 +315,11 @@ export function usePleData() {
   // Delete event
   const deleteEvent = useCallback(async (id: string) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
+    const { error } = await supabase.from("ple_events").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir evento"); return; }
     setEvents(prev => prev.filter(e => e.id !== id));
     setEntries(prev => prev.filter(e => e.event_id !== id));
-  }, []);
+  }, [canEdit]);
 
   // Set PLE entry
   const setEntry = useCallback(async (eventId: string, houseNumber: number, measurementId: string | null) => {
