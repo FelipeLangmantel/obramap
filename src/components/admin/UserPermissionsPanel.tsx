@@ -177,12 +177,11 @@ export function UserPermissionsPanel() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [profilesRes, rolesRes, permissionsRes, departmentsRes, sessionsRes, deptPermRes] = await Promise.all([
-        supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+      const [profilesRes, rolesRes, permissionsRes, departmentsRes, deptPermRes] = await Promise.all([
+        supabase.from("profiles").select("*").eq("company_id", company!.id).order("created_at", { ascending: false }),
         supabase.from("user_roles").select("*"),
         supabase.from("user_permissions").select("*"),
         supabase.from("departments").select("*").order("display_order"),
-        supabase.from("user_sessions").select("*").order("login_at", { ascending: false }).limit(100),
         supabase.from("department_permissions").select("*").eq("company_id", company!.id),
       ]);
 
@@ -260,10 +259,23 @@ export function UserPermissionsPanel() {
         };
       });
 
+      // Fetch sessions only for users in this company
+      const companyUserIds = usersWithRoles.map(u => u.user_id);
+      let companySessions: UserSession[] = [];
+      if (companyUserIds.length > 0) {
+        const { data: sessionsData } = await supabase
+          .from("user_sessions")
+          .select("*")
+          .in("user_id", companyUserIds)
+          .order("login_at", { ascending: false })
+          .limit(100);
+        companySessions = (sessionsData || []) as UserSession[];
+      }
+
       setUsers(usersWithRoles);
       setPermissions(permissionsMap);
       setDepartments(departmentsRes.data || []);
-      setSessions((sessionsRes.data || []) as UserSession[]);
+      setSessions(companySessions);
       setDeptPermissions(deptPermMap);
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -502,12 +514,22 @@ export function UserPermissionsPanel() {
 
   const handleTerminateSession = async (sessionId: string) => {
     try {
+      // Check if this is the current user's session
+      const targetSession = sessions.find(s => s.id === sessionId);
+      
       const { error } = await supabase
         .from("user_sessions")
-        .update({ is_active: false, logout_at: new Date().toISOString() })
+        .update({ is_active: false, logout_at: new Date().toISOString(), termination_reason: "admin" } as any)
         .eq("id", sessionId);
       if (error) throw error;
       toast.success("Sessão encerrada!");
+      
+      // If admin terminated their own session, force logout
+      if (targetSession && targetSession.user_id === user?.id) {
+        await supabase.auth.signOut();
+        return;
+      }
+      
       fetchData();
     } catch (error) {
       console.error("Error terminating session:", error);
