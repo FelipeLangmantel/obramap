@@ -1079,6 +1079,7 @@ export function WeeklyPlanningFromPeriod() {
 
   // ── Save ────────────────────────────────────────────────
   const saveWeeklyPlan = async () => {
+    if (!requireEdit()) return;
     if (!projectId || !companyId || !selectedPeriodId) return;
     setIsSaving(true);
     try {
