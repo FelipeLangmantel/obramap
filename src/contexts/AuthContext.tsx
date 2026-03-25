@@ -500,11 +500,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [canEdit, showToast]);
 
   const canAccessMenu = useCallback((menuId: string): boolean => {
-    if (isSystemAdmin) return false; // System admin não acessa menus da empresa
+    if (isSystemAdmin) return false;
     if (isCompanyAdmin) return true;
-    if (!permissions) return true;
+    // painel_inicial sempre visível para qualquer usuário autenticado
+    if (menuId === "painel_inicial") return true;
+    // Sem permissão cadastrada: admin vê tudo, outros só o painel inicial
+    if (!permissions) return isAdmin;
     return permissions.visible_menus.includes(menuId);
-  }, [isSystemAdmin, isCompanyAdmin, permissions]);
+  }, [isSystemAdmin, isCompanyAdmin, isAdmin, permissions]);
 
   const canAccessManagement = useCallback((sectionId: string): boolean => {
     if (isSystemAdmin) return false;
