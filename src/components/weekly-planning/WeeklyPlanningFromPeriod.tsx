@@ -1172,6 +1172,7 @@ export function WeeklyPlanningFromPeriod() {
 
   // ── Revert to draft (unlock for re-editing) ─────────
   const revertToDraft = async () => {
+    if (!requireEdit()) return;
     if (!selectedPeriodId) return;
     setIsReverting(true);
     try {
