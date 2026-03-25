@@ -355,7 +355,7 @@ export const InspectionChecklistDialog: React.FC<InspectionChecklistDialogProps>
               </Button>
               <Button 
                 onClick={handleSave} 
-                disabled={saving || !allItemsChecked}
+                disabled={saving || !allItemsChecked || !canEdit}
               >
                 <Save className="w-4 h-4 mr-2" />
                 {saving ? 'Salvando...' : 'Finalizar Vistoria'}

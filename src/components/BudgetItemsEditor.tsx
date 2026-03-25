@@ -348,6 +348,7 @@ export function BudgetItemsEditor({
 
   // Handle imported items from file - AUTO SAVE
   const handleImportedItems = async (importedItems: {
+    // guard will be applied after parameter list
     name: string;
     category: 'material' | 'labor' | 'equipment';
     quantity: number;

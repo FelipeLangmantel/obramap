@@ -168,7 +168,7 @@ export function ContractorRegistrationTab({ contractors, onCreateContractor, onU
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={saving || !form.name?.trim()}>
+            <Button onClick={handleSave} disabled={saving || !form.name?.trim() || !canEdit}>
               {saving ? "Salvando..." : editingId ? "Salvar" : "Cadastrar"}
             </Button>
           </DialogFooter>

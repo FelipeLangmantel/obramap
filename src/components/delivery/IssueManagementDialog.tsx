@@ -231,7 +231,7 @@ export const IssueManagementDialog: React.FC<IssueManagementDialogProps> = ({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving || !canEdit}>
             <Save className="w-4 h-4 mr-2" />
             {saving ? 'Salvando...' : 'Salvar'}
           </Button>

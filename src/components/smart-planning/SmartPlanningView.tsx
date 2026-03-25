@@ -77,6 +77,7 @@ export function SmartPlanningView() {
     stagesData: Omit<PlanningStage, 'id' | 'created_at' | 'updated_at'>[],
     teamCompositions: Record<string, TeamComposition>
   ) => {
+    if (!requireEdit()) return;
     for (const stage of stagesData) {
       const macroId = (stage as any).macro_id;
       const composition = teamCompositions[macroId] || { professionals: 1, helpers: 1 };

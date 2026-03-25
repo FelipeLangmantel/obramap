@@ -508,7 +508,7 @@ export function ContractorMeasurementsTab({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewMeasOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreateMeasurement} disabled={saving || !periodStart || !periodEnd}>
+            <Button onClick={handleCreateMeasurement} disabled={saving || !periodStart || !periodEnd || !canEdit}>
               {saving ? "Criando..." : "Criar Medição"}
             </Button>
           </DialogFooter>

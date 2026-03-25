@@ -485,6 +485,7 @@ export function FinancialFlowView() {
   };
 
   const handleDeleteEntry = async () => {
+    if (!canEdit) return;
     if (!deleteEntryId) return;
     
     try {

@@ -417,7 +417,7 @@ export function ContractorContractsTab({
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignOpen(false)}>Cancelar</Button>
-            <Button onClick={handleAddServices} disabled={saving || selectedServiceIds.size === 0}>
+            <Button onClick={handleAddServices} disabled={saving || selectedServiceIds.size === 0 || !canEdit}>
               {saving ? "Adicionando..." : `Adicionar ${selectedServiceIds.size} serviço(s)`}
             </Button>
           </DialogFooter>
