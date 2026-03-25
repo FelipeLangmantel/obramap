@@ -373,9 +373,10 @@ export function usePleData() {
   // Update project
   const updateProject = useCallback(async (id: string, data: Partial<PleProject>) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
+    const { error } = await supabase.from("ple_projects").update(data as any).eq("id", id);
     if (error) { toast.error("Erro ao atualizar projeto"); return; }
     setProjects(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
-  }, []);
+  }, [canEdit]);
 
   // Computed: get measurement number for an entry
   const getMeasurementNumber = useCallback((eventId: string, houseNumber: number): number | null => {
