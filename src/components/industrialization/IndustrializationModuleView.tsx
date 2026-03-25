@@ -718,12 +718,27 @@ export default function IndustrializationModuleView() {
           <p className="text-muted-foreground max-w-md mx-auto">
             Gerencie o fluxo completo de componentes industrializados: fábrica → lote → transporte → içamento → montagem.
           </p>
-          <Button onClick={() => setNewContextDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" /> Nova Obra Industrial
-          </Button>
+          <div className="flex items-center justify-center gap-3">
+            <Button onClick={() => setNewContextDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" /> Nova Obra Industrial
+            </Button>
+            <Button variant="outline" onClick={criarDemonstracao} disabled={loadingDemo}>
+              {loadingDemo ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              {loadingDemo ? "Criando..." : "Criar Demonstração"}
+            </Button>
+          </div>
         </div>
       ) : (
         <>
+          {/* Demo action buttons */}
+          {isCompanyAdmin && contexts.some(c => c.name.includes("— DEMO")) && (
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={excluirDemonstracao} disabled={loadingDemo}>
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                {loadingDemo ? "Excluindo..." : "Excluir Demonstração"}
+              </Button>
+            </div>
+          )}
           {/* ── Bloco 1: Multi-obra table ── */}
           <div className="rounded-lg border bg-card">
             <div className="p-3 border-b">
