@@ -354,6 +354,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           refreshPermissions();
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'department_permissions',
+          filter: `company_id=eq.${profile?.company_id}`,
+        },
+        () => {
+          console.log("[AUTH EFFECT] Department permission change detected");
+          hasFetchedUserData.current = null;
+          if (user?.id) fetchUserData(user.id);
+        }
+      )
       .subscribe();
 
     return () => {
