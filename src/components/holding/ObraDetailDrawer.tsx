@@ -1131,6 +1131,7 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
   useEffect(() => { loadData(); }, [loadData]);
 
   const handleSaveDespesa = async () => {
+    if (!requireEdit()) return;
     if (!newDespesa.mes_referencia || !newDespesa.valor) {
       toast.warning("Preencha mês e valor.");
       return;
