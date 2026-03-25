@@ -32,17 +32,28 @@ const obraIcon = (health: string) => {
   });
 };
 
-// Distância em km em linha reta (Haversine)
-function distanciaKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+// Distância real de carro via OSRM (API gratuita, sem API key)
+async function distanciaRota(
+  lat1: number, lng1: number,
+  lat2: number, lng2: number
+): Promise<{ km: number; horas: string } | null> {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.code !== "Ok" || !data.routes?.[0]) return null;
+    const km = data.routes[0].distance / 1000;
+    const totalMin = Math.round(data.routes[0].duration / 60);
+    const h = Math.floor(totalMin / 60);
+    const min = totalMin % 60;
+    const horas = h > 0
+      ? `${h}h${min > 0 ? ` ${min}min` : ""}`
+      : `${min}min`;
+    return { km, horas };
+  } catch {
+    return null;
+  }
 }
 
 export interface MapObra {
