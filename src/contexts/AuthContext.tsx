@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 export type SystemRole = "system_admin" | "admin" | "editor" | "user";
 export type AppRole = "admin" | "editor" | "viewer"; // Legacy - para compatibilidade
