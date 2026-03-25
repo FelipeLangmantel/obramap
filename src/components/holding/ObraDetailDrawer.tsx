@@ -1325,6 +1325,7 @@ function AditivosTab({ obraId }: { obraId: string }) {
   useEffect(() => { load(); }, [load]);
 
   const addAditivo = async () => {
+    if (!requireEdit()) return;
     const payload: any = {
       obra_id: obraId,
       num_aditivo: form.num_aditivo || null,
