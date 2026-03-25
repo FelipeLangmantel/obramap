@@ -109,6 +109,7 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
   };
 
   const handleImport = async () => {
+    if (!requireEdit()) return;
     const selected = items.filter(it => it.selected);
     if (!selected.length) { toast.error("Selecione pelo menos um item"); return; }
 
