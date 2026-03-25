@@ -166,6 +166,7 @@ export default function HoldingConfigPage() {
   };
 
   const toggleDocAtivo = async (d: DocTipo) => {
+    if (!isCompanyAdmin) return;
     await supabase.from("holding_doc_tipos").update({ ativo: !d.ativo } as any).eq("id", d.id);
     invalidate();
   };

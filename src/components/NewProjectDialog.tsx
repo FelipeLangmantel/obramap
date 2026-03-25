@@ -194,7 +194,7 @@ export function NewProjectDialog({ open, onOpenChange, onProjectCreated }: NewPr
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleSubmit} disabled={!isValid || isSubmitting} className="gap-2">
+          <Button onClick={handleSubmit} disabled={!canEdit || !isValid || isSubmitting} className="gap-2">
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Criar Obra
             {!isSubmitting && <ArrowRight className="h-4 w-4" />}

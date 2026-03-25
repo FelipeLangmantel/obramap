@@ -155,6 +155,7 @@ export function ContractorAllocationPanel({
   };
 
   const handleConfirmAllocation = async () => {
+    if (!requireEdit()) return;
     if (!selectedContractor) return;
     const outOfContract = selectedHouseIds.filter(
       id => !selectedContractor.contractHouseIds.includes(id)

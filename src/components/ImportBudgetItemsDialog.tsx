@@ -294,6 +294,7 @@ export function ImportBudgetItemsDialog({
   }, [existingInputs, searchInputTerm]);
 
   const handleImport = async () => {
+    if (!canEdit) return;
     const selectedItems = extractedItems.filter(i => i.selected);
     if (selectedItems.length === 0) {
       toast.error('Selecione pelo menos um item para importar');

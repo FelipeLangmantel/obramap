@@ -411,6 +411,7 @@ export function InvoiceManagementView({ onInvoiceSaved }: InvoiceManagementViewP
   };
 
   const handleDeleteInvoice = async () => {
+    if (!canEdit) return;
     if (!deleteInvoiceId) return;
     try {
       const { error } = await supabase.from("invoices").delete().eq("id", deleteInvoiceId);

@@ -1205,6 +1205,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const addTrackingEvent = async () => {
+    if (!canEdit) return;
     if (!selectedOrder || !newTracking.status) return;
     try {
       await supabase.from('delivery_tracking').insert({

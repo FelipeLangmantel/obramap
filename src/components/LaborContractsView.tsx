@@ -317,6 +317,7 @@ export function LaborContractsView({
 
   // Delete contract
   const handleDeleteContract = async (contract: LaborContract) => {
+    if (!canEdit) return;
     try {
       const { error } = await supabase.from('labor_contracts').delete().eq('id', contract.id);
       if (error) throw error;

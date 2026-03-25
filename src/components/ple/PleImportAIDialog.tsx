@@ -352,7 +352,7 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
         {items.length > 0 && (
           <div className="flex justify-end gap-2 pt-3 border-t border-border">
             <Button variant="outline" onClick={onClose}>Cancelar</Button>
-            <Button onClick={handleImport} disabled={isImporting || selectedCount === 0}>
+            <Button onClick={handleImport} disabled={!canEdit || isImporting || selectedCount === 0}>
               {isImporting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Check className="h-4 w-4 mr-2" />}
               Importar {selectedCount} itens
             </Button>

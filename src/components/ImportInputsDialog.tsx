@@ -367,6 +367,7 @@ export function ImportInputsDialog({
   };
 
   const handleImport = async () => {
+    if (!canEdit) return;
     const selectedInputs = extractedInputs.filter(i => i.selected);
     if (selectedInputs.length === 0) {
       toast.error('Selecione pelo menos um insumo para importar');
