@@ -19,7 +19,7 @@ import {
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Factory, Plus, ChevronLeft, AlertTriangle } from "lucide-react";
+import { Factory, Plus, ChevronLeft, AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { FactoriesTabContent } from "./FactoriesTabContent";
 import { LiftingTabContent } from "./LiftingTabContent";
@@ -56,7 +56,7 @@ const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" 
 
 export default function IndustrializationModuleView() {
   const { projects } = useConstruction();
-  const { profile } = useAuth();
+  const { profile, isCompanyAdmin } = useAuth();
   const companyId = profile?.company_id;
 
   const [view, setView] = useState<"dashboard" | "detail">("dashboard");
@@ -69,6 +69,7 @@ export default function IndustrializationModuleView() {
   const [obrasPortfolio, setObrasPortfolio] = useState<ObraPortfolioItem[]>([]);
   const [planningPeriods, setPlanningPeriods] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingDemo, setLoadingDemo] = useState(false);
 
   // Dialog
   const [newContextDialog, setNewContextDialog] = useState(false);
@@ -135,6 +136,371 @@ export default function IndustrializationModuleView() {
     setNewContextDialog(false);
     setNewContextForm({ name: "", total_units: 0, context_type: "standalone", obras_portfolio_id: "", obramap_project_id: "" });
     fetchAll();
+  };
+
+  // ══════════════════════════════════════════
+  // DEMONSTRAÇÃO COMPLETA
+  // ══════════════════════════════════════════
+  const criarDemonstracao = async () => {
+    if (!companyId) return;
+    setLoadingDemo(true);
+    try {
+      const hoje = new Date();
+      const fmt = (d: Date) => d.toISOString().split("T")[0];
+      const addD = (d: Date, n: number) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+
+      // 1. FÁBRICAS
+      const { data: fab1 } = await supabase.from("ind_factories").insert({
+        company_id: companyId, name: "Previbras Pré-Fab — DEMO",
+        city: "Gravataí", state: "RS", contact_name: "Carlos Souza",
+        contact_phone: "(51) 99912-0001", contact_email: "carlos@previbras.com.br",
+        avg_lead_time_days: 21, advance_payment_pct: 30,
+        payment_terms: "30% entrada + 70% na entrega", radius_km: 150,
+        notes: "Fábrica principal — capacidade 60 painéis/semana", is_active: true,
+      }).select("id").single();
+
+      const { data: fab2 } = await supabase.from("ind_factories").insert({
+        company_id: companyId, name: "Sul Concreto Pré-Fab — DEMO",
+        city: "São Leopoldo", state: "RS", contact_name: "Ana Lima",
+        contact_phone: "(51) 98765-0002", contact_email: "ana@sulconcreto.com.br",
+        avg_lead_time_days: 28, advance_payment_pct: 40,
+        payment_terms: "40% entrada + 60% contra entrega", radius_km: 80,
+        notes: "Fábrica de apoio — capacidade 40 painéis/semana", is_active: true,
+      }).select("id").single();
+
+      if (!fab1 || !fab2) throw new Error("Erro ao criar fábricas");
+
+      const { data: mod1 } = await supabase.from("ind_factory_models").insert({
+        factory_id: fab1.id, company_id: companyId,
+        name: "Painel Estrutural 2T — Padrão",
+        description: "Painel de concreto pré-fabricado 2 toneladas, acabamento liso, vão 3,0m",
+      }).select("id").single();
+
+      const { data: mod2 } = await supabase.from("ind_factory_models").insert({
+        factory_id: fab2.id, company_id: companyId,
+        name: "Painel Vedação 1T — Leve",
+        description: "Painel de vedação 1 tonelada, acabamento texturizado",
+      }).select("id").single();
+
+      // Equipamentos de içamento
+      const { data: eq1 } = await supabase.from("ind_lifting_equipment").insert({
+        company_id: companyId, name: "Guindaste Liebherr LTM 1050 — DEMO",
+        equipment_type: "crane", supplier_name: "Guindastes RS Locações",
+        capacity_tons: 50, daily_cost: 4800, is_active: true,
+      }).select("id").single();
+
+      const { data: eq2 } = await supabase.from("ind_lifting_equipment").insert({
+        company_id: companyId, name: "Munck Volvo FH — DEMO",
+        equipment_type: "munck", supplier_name: "TransPainel Ltda",
+        capacity_tons: 12, daily_cost: 1800, is_active: true,
+      }).select("id").single();
+
+      // Caminhões
+      const { data: truck1 } = await supabase.from("ind_trucks").insert({
+        company_id: companyId, plate: "ABC-1D23", truck_type: "munck",
+        capacity_kg: 15000, carrier_name: "TransPainel Ltda",
+        driver_name: "João Silva", driver_phone: "(51) 99100-1111",
+      }).select("id").single();
+
+      const { data: truck2 } = await supabase.from("ind_trucks").insert({
+        company_id: companyId, plate: "XYZ-4E56", truck_type: "munck",
+        capacity_kg: 12000, carrier_name: "CargoRS Transportes",
+        driver_name: "Pedro Alves", driver_phone: "(51) 99200-2222",
+      }).select("id").single();
+
+      // 2. CONTEXTO
+      const { data: ctx } = await supabase.from("ind_operation_contexts").insert({
+        company_id: companyId, context_type: "standalone",
+        name: "El Dorado 01 — DEMO",
+        description: "Obra demonstração — 120 UH, padrão Moradia Popular MCMV. Paredes pré-fabricadas de concreto.",
+        location: "Eldorado do Sul / RS", client_name: "Prefeitura Municipal de Eldorado do Sul",
+        total_units: 120, status: "active",
+      }).select("id").single();
+      if (!ctx) throw new Error("Erro ao criar contexto");
+
+      // 3. SERVIÇOS
+      await supabase.from("ind_services").insert([
+        { context_id: ctx.id, company_id: companyId, name: "Montagem Estrutural", category: "Estrutural", display_order: 1, is_industrialized: true },
+        { context_id: ctx.id, company_id: companyId, name: "Painéis de Vedação", category: "Vedação", display_order: 2, is_industrialized: true },
+        { context_id: ctx.id, company_id: companyId, name: "Laje Pré-Fabricada", category: "Estrutural", display_order: 3, is_industrialized: true },
+      ]);
+
+      // 4. ZONAS
+      const { data: zonas } = await supabase.from("ind_zones").insert([
+        { context_id: ctx.id, company_id: companyId, name: "Quadra A", code: "QA", color: "#3b82f6", display_order: 1 },
+        { context_id: ctx.id, company_id: companyId, name: "Quadra B", code: "QB", color: "#10b981", display_order: 2 },
+        { context_id: ctx.id, company_id: companyId, name: "Quadra C", code: "QC", color: "#f59e0b", display_order: 3 },
+      ]).select("id, name");
+      const [zA, zB, zC] = zonas || [];
+
+      // 5. PERÍODOS
+      const { data: periodos } = await supabase.from("ind_periods").insert([
+        { context_id: ctx.id, company_id: companyId, name: "1ª Qnz Abr/26", start_date: fmt(addD(hoje, -75)), end_date: fmt(addD(hoje, -61)), target_units: 40, status: "closed" },
+        { context_id: ctx.id, company_id: companyId, name: "2ª Qnz Abr/26", start_date: fmt(addD(hoje, -60)), end_date: fmt(addD(hoje, -46)), target_units: 40, status: "closed" },
+        { context_id: ctx.id, company_id: companyId, name: "1ª Qnz Mai/26", start_date: fmt(addD(hoje, -45)), end_date: fmt(addD(hoje, -31)), target_units: 40, status: "active" },
+        { context_id: ctx.id, company_id: companyId, name: "2ª Qnz Mai/26", start_date: fmt(addD(hoje, -30)), end_date: fmt(addD(hoje, -16)), target_units: 40, status: "draft" },
+        { context_id: ctx.id, company_id: companyId, name: "1ª Qnz Jun/26", start_date: fmt(addD(hoje, -15)), end_date: fmt(addD(hoje, 0)),  target_units: 40, status: "draft" },
+        { context_id: ctx.id, company_id: companyId, name: "2ª Qnz Jun/26", start_date: fmt(addD(hoje, 1)),  end_date: fmt(addD(hoje, 15)), target_units: 40, status: "draft" },
+      ]).select("id");
+      const [p1, p2, p3, p4, p5, p6] = periodos || [];
+
+      // 6. LOTES
+      const { data: lotes } = await supabase.from("ind_production_batches").insert([
+        {
+          context_id: ctx.id, company_id: companyId, factory_id: fab1.id,
+          model_id: mod1?.id, ind_period_id: p1?.id, batch_code: "ELD-L01", status: "installed",
+          planned_quantity: 40, actual_quantity: 40, unit_value: 18500, actual_value: 740000,
+          planned_start: fmt(addD(hoje, -75)), planned_finish: fmt(addD(hoje, -61)),
+          actual_start: fmt(addD(hoje, -73)), actual_finish: fmt(addD(hoje, -62)),
+          notes: "Lote 1 concluído. 40 painéis instalados sem ocorrências.",
+        },
+        {
+          context_id: ctx.id, company_id: companyId, factory_id: fab1.id,
+          model_id: mod1?.id, ind_period_id: p2?.id, batch_code: "ELD-L02", status: "installed",
+          planned_quantity: 40, actual_quantity: 39, unit_value: 18500, actual_value: 721500,
+          planned_start: fmt(addD(hoje, -60)), planned_finish: fmt(addD(hoje, -46)),
+          actual_start: fmt(addD(hoje, -58)), actual_finish: fmt(addD(hoje, -44)),
+          notes: "1 painel com retrabalho — rejunte corrigido em campo. Concluído.",
+        },
+        {
+          context_id: ctx.id, company_id: companyId, factory_id: fab2.id,
+          model_id: mod2?.id, ind_period_id: p3?.id, batch_code: "ELD-L03", status: "in_production",
+          planned_quantity: 40, actual_quantity: 24, unit_value: 17200, actual_value: 0,
+          planned_start: fmt(addD(hoje, -45)), planned_finish: fmt(addD(hoje, -31)),
+          actual_start: fmt(addD(hoje, -43)), actual_finish: null,
+          notes: "24/40 painéis prontos. Previsão de conclusão: próximos 8 dias.",
+        },
+        {
+          context_id: ctx.id, company_id: companyId, factory_id: fab1.id,
+          model_id: mod1?.id, ind_period_id: p4?.id, batch_code: "ELD-L04", status: "awaiting_transport",
+          planned_quantity: 40, actual_quantity: 40, unit_value: 18500, actual_value: 0,
+          planned_start: fmt(addD(hoje, -30)), planned_finish: fmt(addD(hoje, -16)),
+          actual_start: fmt(addD(hoje, -29)), actual_finish: fmt(addD(hoje, -17)),
+          notes: "Lote pronto em fábrica. Aguardando agendamento de transporte.",
+        },
+        {
+          context_id: ctx.id, company_id: companyId, factory_id: fab1.id,
+          model_id: mod1?.id, ind_period_id: p5?.id, batch_code: "ELD-L05", status: "planned",
+          planned_quantity: 40, actual_quantity: 0, unit_value: 18500, actual_value: 0,
+          planned_start: fmt(addD(hoje, -10)), planned_finish: fmt(addD(hoje, 5)),
+          actual_start: null, actual_finish: null,
+          notes: "Aguardando liberação de 30% entrada para iniciar produção.",
+        },
+        {
+          context_id: ctx.id, company_id: companyId, factory_id: fab2.id,
+          model_id: mod2?.id, ind_period_id: p6?.id, batch_code: "ELD-L06", status: "planned",
+          planned_quantity: 40, actual_quantity: 0, unit_value: 17200, actual_value: 0,
+          planned_start: fmt(addD(hoje, 6)), planned_finish: fmt(addD(hoje, 20)),
+          actual_start: null, actual_finish: null,
+          notes: "Planejado. Contrato de fornecimento a ser assinado.",
+        },
+      ]).select("id, batch_code, status, planned_quantity");
+      const [l1, l2, l3, l4] = lotes || [];
+
+      // 7. UNIDADES — 120 UH
+      const unidades: any[] = [];
+      for (let i = 1; i <= 120; i++) {
+        const zona = i <= 40 ? zA : i <= 80 ? zB : zC;
+        let statusUnit = "pending";
+        if (i <= 40) statusUnit = "installed";
+        else if (i <= 79) statusUnit = "installed";
+        else if (i === 80) statusUnit = "delivered";
+        else if (i <= 104) statusUnit = "in_production";
+        else statusUnit = "pending";
+        unidades.push({
+          context_id: ctx.id, company_id: companyId,
+          zone_id: zona?.id || null,
+          code: `U-${String(i).padStart(3, "0")}`,
+          unit_number: i, unit_type: "residential", status: statusUnit,
+        });
+      }
+      for (let i = 0; i < unidades.length; i += 50) {
+        await supabase.from("ind_units").insert(unidades.slice(i, i + 50));
+      }
+
+      const { data: unidadesDB } = await supabase
+        .from("ind_units").select("id, unit_number")
+        .eq("context_id", ctx.id).order("unit_number");
+      const uMap = new Map((unidadesDB || []).map((u: any) => [u.unit_number, u.id]));
+
+      // 8. BATCH_UNITS
+      const batchUnitRows: any[] = [];
+      [[l1, 1, 40, "installed"], [l2, 41, 80, "installed"], [l3, 81, 104, "in_production"],
+       [l4, 105, 120, "planned"]].forEach(([lote, de, ate, st]: any) => {
+        if (!lote?.id) return;
+        for (let n = de; n <= ate; n++) {
+          const uid = uMap.get(n);
+          if (uid) batchUnitRows.push({ batch_id: lote.id, context_id: ctx.id, unit_id: uid, house_number: n, status: st });
+        }
+      });
+      for (let i = 0; i < batchUnitRows.length; i += 50) {
+        await supabase.from("ind_batch_units").insert(batchUnitRows.slice(i, i + 50));
+      }
+
+      // 9. REMESSAS
+      const { data: rem1 } = await supabase.from("ind_shipments").insert({
+        company_id: companyId, context_id: ctx.id, batch_id: l1.id,
+        truck_id: truck1?.id || null, shipment_number: "REM-ELD-001",
+        status: "delivered",
+        planned_date: fmt(addD(hoje, -63)), actual_date: fmt(addD(hoje, -62)),
+        truck_plate: "ABC-1D23", driver_name: "João Silva",
+        total_units: 40, notes: "Entrega realizada. 40 painéis. Sem ocorrências.",
+      }).select("id").single();
+
+      const { data: rem2 } = await supabase.from("ind_shipments").insert({
+        company_id: companyId, context_id: ctx.id, batch_id: l2.id,
+        truck_id: truck2?.id || null, shipment_number: "REM-ELD-002",
+        status: "delivered",
+        planned_date: fmt(addD(hoje, -45)), actual_date: fmt(addD(hoje, -44)),
+        truck_plate: "XYZ-4E56", driver_name: "Pedro Alves",
+        total_units: 39, notes: "39 painéis entregues. 1 painel com avaria — reparado em campo.",
+      }).select("id").single();
+
+      const { data: rem3 } = await supabase.from("ind_shipments").insert({
+        company_id: companyId, context_id: ctx.id, batch_id: l4.id,
+        truck_id: truck1?.id || null, shipment_number: "REM-ELD-003",
+        status: "planned",
+        planned_date: fmt(addD(hoje, 3)), actual_date: null,
+        truck_plate: "ABC-1D23", driver_name: "João Silva",
+        total_units: 40, notes: "Agendada para daqui 3 dias. Aguardando confirmação da obra.",
+      }).select("id").single();
+
+      // Vincular unidades às remessas
+      const shipUnitRows: any[] = [];
+      for (let n = 1; n <= 40; n++) {
+        const uid = uMap.get(n);
+        if (uid && rem1?.id) shipUnitRows.push({ shipment_id: rem1.id, context_id: ctx.id, unit_id: uid, house_number: n, status: "delivered" });
+      }
+      for (let n = 41; n <= 79; n++) {
+        const uid = uMap.get(n);
+        if (uid && rem2?.id) shipUnitRows.push({ shipment_id: rem2.id, context_id: ctx.id, unit_id: uid, house_number: n, status: "delivered" });
+      }
+      for (let i = 0; i < shipUnitRows.length; i += 50) {
+        await supabase.from("ind_shipment_units").insert(shipUnitRows.slice(i, i + 50));
+      }
+
+      // 10. IÇAMENTO
+      await supabase.from("ind_lifting_schedule").insert({
+        company_id: companyId, context_id: ctx.id,
+        batch_id: l1.id, linked_shipment_id: rem1?.id || null,
+        equipment_id: eq1?.id || null, supplier_name: "Guindastes RS Locações",
+        booking_date: fmt(addD(hoje, -62)), start_time: "07:00", end_time: "17:00",
+        daily_cost: 4800, status: "completed",
+        unit_ids: Array.from({ length: 40 }, (_, i) => uMap.get(i + 1)).filter(Boolean),
+        notes: "Içamento concluído. 40 painéis instalados. Equipe de 8 pessoas.",
+      });
+      await supabase.from("ind_lifting_schedule").insert({
+        company_id: companyId, context_id: ctx.id,
+        batch_id: l2.id, linked_shipment_id: rem2?.id || null,
+        equipment_id: eq2?.id || null, supplier_name: "TransPainel Ltda",
+        booking_date: fmt(addD(hoje, -44)), start_time: "07:00", end_time: "16:00",
+        daily_cost: 1800, status: "completed",
+        unit_ids: Array.from({ length: 39 }, (_, i) => uMap.get(i + 41)).filter(Boolean),
+        notes: "39 painéis içados. 1 com correção em campo. Concluído.",
+      });
+      await supabase.from("ind_lifting_schedule").insert({
+        company_id: companyId, context_id: ctx.id,
+        batch_id: l4.id, linked_shipment_id: rem3?.id || null,
+        equipment_id: eq1?.id || null, supplier_name: "Guindastes RS Locações",
+        booking_date: fmt(addD(hoje, 4)), start_time: "07:00", end_time: "17:00",
+        daily_cost: 4800, status: "scheduled",
+        notes: "Agendado. Aguardar confirmação 24h antes.",
+      });
+
+      // 11. KITS
+      const kitRows: any[] = [];
+      for (let n = 1; n <= 40; n++) {
+        const uid = uMap.get(n);
+        if (uid) kitRows.push({
+          company_id: companyId, context_id: ctx.id,
+          batch_id: l1.id, factory_id: fab1.id, model_id: mod1?.id || null,
+          house_number: n, unit_id: uid, needed_by_date: fmt(addD(hoje, -63)),
+          kit_status: "delivered", components_total: 8, components_delivered: 8,
+        });
+      }
+      for (let n = 41; n <= 80; n++) {
+        const uid = uMap.get(n);
+        if (uid) kitRows.push({
+          company_id: companyId, context_id: ctx.id,
+          batch_id: l2.id, factory_id: fab1.id, model_id: mod1?.id || null,
+          house_number: n, unit_id: uid, needed_by_date: fmt(addD(hoje, -45)),
+          kit_status: "delivered", components_total: 8, components_delivered: 8,
+        });
+      }
+      for (let i = 0; i < kitRows.length; i += 50) {
+        await supabase.from("ind_unit_kits").insert(kitRows.slice(i, i + 50));
+      }
+
+      // 12. INSTALAÇÃO
+      await supabase.from("ind_installation_schedule").insert([
+        {
+          company_id: companyId, context_id: ctx.id, batch_id: l1.id,
+          contractor_name: "Montagem Rápida Serviços",
+          scheduled_date: fmt(addD(hoje, -62)), start_time: "07:00", end_time: "17:00",
+          status: "completed", notes: "Quadra A — 40 UH montadas. Equipe de 12 montadores.",
+        },
+        {
+          company_id: companyId, context_id: ctx.id, batch_id: l2.id,
+          contractor_name: "Montagem Rápida Serviços",
+          scheduled_date: fmt(addD(hoje, -44)), start_time: "07:00", end_time: "16:30",
+          status: "completed", notes: "Quadra B — 39 UH montadas. 1 correção de esquadro.",
+        },
+        {
+          company_id: companyId, context_id: ctx.id, batch_id: l4.id,
+          contractor_name: "Montagem Rápida Serviços",
+          scheduled_date: fmt(addD(hoje, 4)), start_time: "07:00", end_time: "17:00",
+          status: "scheduled", notes: "Quadra C — 40 UH previstas. Aguardando entrega.",
+        },
+      ]);
+
+      toast.success(
+        "✅ Demonstração completa criada! 120 UH · 6 lotes · 2 fábricas · 3 remessas · 3 içamentos · 2 equipamentos · 2 caminhões. Explore todas as abas."
+      );
+      fetchAll();
+    } catch (e: any) {
+      console.error("[DEMO]", e);
+      toast.error("Erro ao criar demonstração: " + e.message);
+    } finally {
+      setLoadingDemo(false);
+    }
+  };
+
+  const excluirDemonstracao = async () => {
+    if (!companyId) return;
+    const demoContexts = contexts.filter(c => c.name.includes("— DEMO"));
+    if (demoContexts.length === 0) { toast.info("Nenhuma demonstração encontrada."); return; }
+    if (!confirm("Excluir todos os dados de demonstração? Esta ação é irreversível.")) return;
+    setLoadingDemo(true);
+    try {
+      for (const ctx of demoContexts) {
+        // Delete in dependency order
+        await supabase.from("ind_installation_schedule").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_unit_kits").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_lifting_schedule").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_shipment_units").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_shipments").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_batch_units").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_production_batches").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_periods").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_units").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_zones").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_services").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_operation_contexts").delete().eq("id", ctx.id);
+      }
+      // Delete demo factories/equipment/trucks
+      await supabase.from("ind_factory_models").delete().eq("company_id", companyId).like("name", "%— Padrão%");
+      await supabase.from("ind_factory_models").delete().eq("company_id", companyId).like("name", "%— Leve%");
+      await supabase.from("ind_factories").delete().eq("company_id", companyId).like("name", "%— DEMO%");
+      await supabase.from("ind_lifting_equipment").delete().eq("company_id", companyId).like("name", "%— DEMO%");
+      await supabase.from("ind_trucks").delete().eq("company_id", companyId).in("plate", ["ABC-1D23", "XYZ-4E56"]);
+      toast.success("Demonstração excluída com sucesso.");
+      fetchAll();
+    } catch (e: any) {
+      console.error("[DEMO]", e);
+      toast.error("Erro ao excluir demonstração: " + e.message);
+    } finally {
+      setLoadingDemo(false);
+    }
   };
 
   const statusColor = (status: string) => {
@@ -352,12 +718,27 @@ export default function IndustrializationModuleView() {
           <p className="text-muted-foreground max-w-md mx-auto">
             Gerencie o fluxo completo de componentes industrializados: fábrica → lote → transporte → içamento → montagem.
           </p>
-          <Button onClick={() => setNewContextDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" /> Nova Obra Industrial
-          </Button>
+          <div className="flex items-center justify-center gap-3">
+            <Button onClick={() => setNewContextDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" /> Nova Obra Industrial
+            </Button>
+            <Button variant="outline" onClick={criarDemonstracao} disabled={loadingDemo}>
+              {loadingDemo ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              {loadingDemo ? "Criando..." : "Criar Demonstração"}
+            </Button>
+          </div>
         </div>
       ) : (
         <>
+          {/* Demo action buttons */}
+          {isCompanyAdmin && contexts.some(c => c.name.includes("— DEMO")) && (
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={excluirDemonstracao} disabled={loadingDemo}>
+                <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                {loadingDemo ? "Excluindo..." : "Excluir Demonstração"}
+              </Button>
+            </div>
+          )}
           {/* ── Bloco 1: Multi-obra table ── */}
           <div className="rounded-lg border bg-card">
             <div className="p-3 border-b">
