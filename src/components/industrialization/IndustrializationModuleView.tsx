@@ -192,13 +192,13 @@ export default function IndustrializationModuleView() {
   // Global alerts
   const alerts = useMemo(() => {
     const today = new Date();
-    const items: { type: "danger" | "warning"; msg: string }[] = [];
+    const items: { type: "danger" | "warning"; msg: string; contextId?: string }[] = [];
     // Late batches
     batches.forEach(b => {
       if (b.planned_finish && !["delivered", "installed", "cancelled"].includes(b.status)) {
         if (new Date(b.planned_finish) < today) {
           const ctx = contexts.find(c => c.id === b.context_id);
-          items.push({ type: "danger", msg: `Lote atrasado em "${ctx?.name || "?"}" — previsto até ${new Date(b.planned_finish).toLocaleDateString("pt-BR")}` });
+          items.push({ type: "danger", msg: `Lote atrasado em "${ctx?.name || "?"}" — previsto até ${new Date(b.planned_finish).toLocaleDateString("pt-BR")}`, contextId: b.context_id });
         }
       }
     });
@@ -217,6 +217,7 @@ export default function IndustrializationModuleView() {
         items.push({
           type: daysUntil <= 7 ? "danger" : "warning",
           msg: `Entrada de ${BRL.format(val)} vence em ${daysUntil} dias (${factory.name})`,
+          contextId: b.context_id,
         });
       }
     });
@@ -529,8 +530,24 @@ export default function IndustrializationModuleView() {
                 <AlertTriangle className="h-4 w-4 text-amber-500" /> Alertas
               </h3>
               {alerts.map((a, i) => (
-                <div key={i} className={`text-xs rounded p-2 ${a.type === "danger" ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-700"}`}>
-                  {a.msg}
+                <div key={i} className={`flex items-start gap-3 rounded-lg p-3 border-l-4 ${
+                  a.type === 'danger'
+                    ? 'bg-destructive/5 border-destructive text-destructive'
+                    : 'bg-amber-500/5 border-amber-500 text-amber-700 dark:text-amber-400'
+                }`}>
+                  <AlertTriangle className='h-4 w-4 shrink-0 mt-0.5' />
+                  <div className='flex-1 min-w-0'>
+                    <p className='text-xs'>{a.msg}</p>
+                  </div>
+                  {a.contextId && (
+                    <Button variant='ghost' size='sm' className='h-6 text-[10px] px-2 shrink-0'
+                      onClick={() => {
+                        const ctx = contexts.find(c => c.id === a.contextId);
+                        if (ctx) { setActiveContext(ctx); setView('detail'); }
+                      }}>
+                      Ver obra →
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
