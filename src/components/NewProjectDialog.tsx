@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { ArrowRight, Building2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
