@@ -353,60 +353,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
               <p className="text-[10px] text-muted-foreground mb-2">
                 {obrasOnMap.length} obra{obrasOnMap.length !== 1 ? "s" : ""} mapeada{obrasOnMap.length !== 1 ? "s" : ""} · clique para abrir
               </p>
-              <svg viewBox="0 0 360 280" className="w-full h-auto">
-                <path d={RS_PATH} fill="hsl(var(--muted) / 0.5)" stroke="hsl(var(--border))" strokeWidth="1.5" />
-                <text x="287" y="137" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.5">Porto Alegre</text>
-                <text x="15" y="215" textAnchor="start" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.4">Uruguaiana</text>
-                <text x="330" y="70" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.4">Caxias do Sul</text>
-                <text x="180" y="170" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="28" fontWeight="700" opacity="0.08">RS</text>
-                <text x="345" y="18" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="7" opacity="0.4">N↑</text>
-                <text x="340" y="200" textAnchor="end" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.3" fontStyle="italic">Oceano Atlântico</text>
-                {obrasOnMap.map(obra => {
-                  const isHovered = hoveredObra === obra.id;
-                  const color = HEALTH_PIN[obra.health] || "#3b82f6";
-                  return (
-                    <g key={obra.id} style={{ cursor: "pointer" }}
-                      onMouseEnter={() => setHoveredObra(obra.id)}
-                      onMouseLeave={() => setHoveredObra(null)}
-                      onClick={() => onObraClick(obra.id)}
-                    >
-                      {isHovered && (
-                        <circle cx={obra.coords.x} cy={obra.coords.y} r="14" fill="none" stroke={color} strokeWidth="2" opacity="0.4">
-                          <animate attributeName="r" from="10" to="18" dur="1s" repeatCount="indefinite" />
-                          <animate attributeName="opacity" from="0.6" to="0" dur="1s" repeatCount="indefinite" />
-                        </circle>
-                      )}
-                      <circle cx={obra.coords.x + 0.5} cy={obra.coords.y + 0.5} r={isHovered ? 7 : 5} fill="rgba(0,0,0,0.15)" />
-                      <circle cx={obra.coords.x} cy={obra.coords.y} r={isHovered ? 7 : 5} fill={color} stroke="white" strokeWidth="1.5" />
-                      {!isHovered && (
-                        <text x={obra.coords.x} y={obra.coords.y + 11} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="4" opacity="0.7">
-                          {obra.municipio?.split(" ")[0]}
-                        </text>
-                      )}
-                      {isHovered && (
-                        <g>
-                          <rect x={obra.coords.x - 55} y={obra.coords.y - 42} width="110" height="32" rx="4"
-                            fill="hsl(var(--popover))" stroke="hsl(var(--border))" strokeWidth="0.5" />
-                          <text x={obra.coords.x} y={obra.coords.y - 28} textAnchor="middle" fill="hsl(var(--foreground))" fontSize="5.5" fontWeight="600">
-                            {obra.nome.slice(0, 20)}
-                          </text>
-                          <text x={obra.coords.x} y={obra.coords.y - 19} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="4.5">
-                            {BRL_SHORT(obra.valor_contrato)} • {obra.municipio}
-                          </text>
-                        </g>
-                      )}
-                    </g>
-                  );
-                })}
-              </svg>
-              <div className="flex items-center justify-between mt-2">
-                <p className="text-[10px] font-medium text-muted-foreground">{obrasOnMap.length} obra{obrasOnMap.length !== 1 ? "s" : ""} no mapa</p>
-                <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                  <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#22c55e" }} /> Sob controle</span>
-                  <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#f59e0b" }} /> Atenção</span>
-                  <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#ef4444" }} /> Crítico</span>
-                </div>
-              </div>
+              <HoldingMap obras={mapObras} onObraClick={onObraClick} />
               {obrasOnMap.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-lg">
                   <p className="text-xs text-muted-foreground text-center px-4">Informe o município ao cadastrar cada obra para visualizá-la no mapa do RS</p>
