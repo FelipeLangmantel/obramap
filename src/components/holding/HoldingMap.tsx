@@ -126,22 +126,16 @@ export default function HoldingMap({ obras, onObraClick }: HoldingMapProps) {
 
       const distStr = distanciaLinhaReta(SEDE.lat, SEDE.lng, obra.lat, obra.lng);
 
-      marker.bindPopup(`
+      marker.bindTooltip(`
         <div style="min-width:200px;font-family:sans-serif;line-height:1.7">
           <b style="font-size:13px">${obra.nome}</b><br/>
           <span style="color:#666;font-size:11px">📍 ${obra.municipio}</span><br/>
           <span style="font-size:12px;font-weight:600">${BRL.format(obra.valor_contrato)}</span><br/>
           <span style="font-size:11px">${statusLabel[obra.status] || obra.status}</span><br/>
-          <span style="color:#1d4ed8;font-size:11px">${distStr}</span><br/>
-          <a href="#"
-            onclick="window.__holdingObraClick && window.__holdingObraClick('${obra.id}'); return false;"
-            style="color:#3b82f6;text-decoration:underline;font-size:12px;margin-top:2px;display:inline-block">
-            Abrir obra →
-          </a>
+          <span style="color:#1d4ed8;font-size:11px">${distStr}</span>
         </div>
-      `);
+      `, { sticky: true, direction: "top", offset: [0, -8] });
 
-      marker.on("mouseover", () => marker.openPopup());
       marker.on("click", () => onObraClick(obra.id));
     });
 
