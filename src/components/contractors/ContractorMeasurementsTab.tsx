@@ -109,6 +109,7 @@ export function ContractorMeasurementsTab({
   };
 
   const handleCreateMeasurement = async () => {
+    if (!requireEdit()) return;
     if (!periodStart || !periodEnd) return;
     setSaving(true);
     const nextNumber = measurements.length > 0
