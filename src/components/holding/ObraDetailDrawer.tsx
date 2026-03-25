@@ -39,6 +39,34 @@ function useInvalidateHolding() {
   };
 }
 
+async function registrarLog(
+  obraId: string,
+  tabela: string,
+  registroId: string | null,
+  acao: string,
+  descricao: string,
+  userId: string | null,
+  userName: string,
+  dadosAnteriores?: object,
+  dadosNovos?: object
+) {
+  try {
+    await supabase.from("holding_audit_log").insert({
+      obra_id: obraId,
+      tabela,
+      registro_id: registroId,
+      acao,
+      descricao,
+      dados_anteriores: dadosAnteriores || {},
+      dados_novos: dadosNovos || {},
+      realizado_por: userId,
+      realizado_por_nome: userName,
+    });
+  } catch (e) {
+    console.error("[AuditLog] Erro ao registrar:", e);
+  }
+}
+
 export interface ObraDrawerData {
   id: string;
   nome: string;
