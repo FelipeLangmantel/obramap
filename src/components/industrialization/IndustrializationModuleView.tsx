@@ -140,6 +140,7 @@ export default function IndustrializationModuleView() {
   };
 
   const saveNewContext = async () => {
+    if (!requireEdit()) return;
     if (!newContextForm.name.trim() || !companyId) {
       toast.error("Nome obrigatório");
       return;
