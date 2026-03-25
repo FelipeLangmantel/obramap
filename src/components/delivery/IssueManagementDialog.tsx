@@ -64,6 +64,7 @@ export const IssueManagementDialog: React.FC<IssueManagementDialogProps> = ({
   };
 
   const handleSave = async () => {
+    if (!requireEdit()) return;
     if (status === 'encerrada' && !photoAfterUrl) {
       toast.error('Foto de resolução é obrigatória para encerrar a pendência');
       return;
