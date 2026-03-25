@@ -101,7 +101,7 @@ export function BudgetItemsEditor({
   scrollPositionKey
 }: BudgetItemsEditorProps) {
   const { currentStep, advanceToStep } = useProjectSetupFlow();
-  const { company } = useAuth();
+  const { company, canEdit, requireEdit } = useAuth();
   const companyId = company?.id;
 
   const [items, setItems] = useState<ScopeItem[]>([]);
