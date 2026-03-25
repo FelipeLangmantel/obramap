@@ -47,6 +47,7 @@ interface Batch {
   id: string; factory_id: string; batch_code: string; status: string;
   planned_start: string | null; actual_start: string | null;
   planned_finish: string | null; actual_finish: string | null;
+  macro_id: string | null; scope_id: string | null;
 }
 
 interface Factory {
@@ -95,7 +96,7 @@ const CELL_BG: Record<string, string> = {
   completed: "bg-emerald-500/15",
 };
 
-export function InstallationTabContent({ companyId, contextId }: InstallationTabProps) {
+export function InstallationTabContent({ companyId, contextId, contextType }: InstallationTabProps) {
   const [units, setUnits] = useState<IndUnit[]>([]);
   const [zones, setZones] = useState<IndZone[]>([]);
   const [batchUnits, setBatchUnits] = useState<BatchUnit[]>([]);
@@ -128,7 +129,7 @@ export function InstallationTabContent({ companyId, contextId }: InstallationTab
       supabase.from("ind_units").select("*").eq("context_id", contextId).order("unit_number"),
       supabase.from("ind_zones").select("*").eq("context_id", contextId).order("display_order"),
       supabase.from("ind_batch_units").select("id,batch_id,unit_id,status").eq("context_id", contextId),
-      supabase.from("ind_production_batches").select("id,factory_id,batch_code,status,planned_start,actual_start,planned_finish,actual_finish").eq("context_id", contextId),
+      supabase.from("ind_production_batches").select("id,factory_id,batch_code,status,planned_start,actual_start,planned_finish,actual_finish,macro_id,scope_id").eq("context_id", contextId),
       supabase.from("ind_factories").select("id,name").eq("company_id", companyId),
       supabase.from("ind_shipments").select("id,shipment_number,truck_plate,driver_name,planned_date,actual_date,status").eq("context_id", contextId),
       supabase.from("ind_shipment_units").select("id,shipment_id,unit_id,status").eq("context_id", contextId),
@@ -266,6 +267,50 @@ export function InstallationTabContent({ companyId, contextId }: InstallationTab
         .in("unit_id", assemblyForm.selectedUnitIds)
         .eq("context_id", contextId);
       if (buErr) throw buErr;
+
+      // Sync to weekly_productions for integrated contexts
+      if (contextType === 'integrated') {
+        try {
+          const { data: ctxData } = await supabase
+            .from('ind_operation_contexts')
+            .select('obramap_project_id')
+            .eq('id', contextId).single();
+          const projectId = ctxData?.obramap_project_id;
+
+          const houseNumbers = units
+            .filter(u => assemblyForm.selectedUnitIds.includes(u.id))
+            .map(u => u.unit_number).filter(Boolean);
+
+          const relatedBatches = batches.filter(b =>
+            batchUnits.some(bu =>
+              assemblyForm.selectedUnitIds.includes(bu.unit_id || '') &&
+              bu.batch_id === b.id
+            )
+          );
+
+          const today = new Date();
+          const weekStart = new Date(today);
+          const day = today.getDay();
+          weekStart.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
+          const weekStartStr = weekStart.toISOString().split('T')[0];
+
+          for (const batch of relatedBatches) {
+            if (!batch.macro_id || !batch.scope_id || !projectId) continue;
+            await supabase.from('weekly_productions').insert({
+              project_id: projectId,
+              scope_id: batch.scope_id,
+              macro_id: batch.macro_id,
+              week_start: weekStartStr,
+              house_ids: houseNumbers,
+              quantity: houseNumbers.length,
+              notes: assemblyForm.notes ||
+                'Lancado automaticamente pelo modulo de industrializacao',
+            } as any);
+          }
+        } catch (e) {
+          console.error('Erro ao criar weekly_productions:', e);
+        }
+      }
 
       toast.success(`${assemblyForm.selectedUnitIds.length} unidades registradas como montadas!`);
       setAssemblyDialog(false);
