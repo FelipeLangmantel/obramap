@@ -124,35 +124,25 @@ export default function HoldingMap({ obras, onObraClick }: HoldingMapProps) {
       const marker = L.marker([obra.lat, obra.lng], { icon: obraIcon(obra.health) }).addTo(map);
       (marker as any)._isObra = true;
 
-      const distId = `dist-${obra.id}`;
+      const distStr = distanciaLinhaReta(SEDE.lat, SEDE.lng, obra.lat, obra.lng);
 
       marker.bindPopup(`
-        <div style="min-width:190px;font-family:sans-serif;line-height:1.6">
+        <div style="min-width:200px;font-family:sans-serif;line-height:1.7">
           <b style="font-size:13px">${obra.nome}</b><br/>
           <span style="color:#666;font-size:11px">📍 ${obra.municipio}</span><br/>
-          <span style="font-size:11px">${BRL.format(obra.valor_contrato)}</span><br/>
+          <span style="font-size:12px;font-weight:600">${BRL.format(obra.valor_contrato)}</span><br/>
           <span style="font-size:11px">${statusLabel[obra.status] || obra.status}</span><br/>
-          <span id="${distId}" style="color:#1d4ed8;font-size:11px">🚗 Calculando rota...</span><br/>
+          <span style="color:#1d4ed8;font-size:11px">${distStr}</span><br/>
           <a href="#"
             onclick="window.__holdingObraClick && window.__holdingObraClick('${obra.id}'); return false;"
-            style="color:#3b82f6;text-decoration:underline;font-size:12px">
+            style="color:#3b82f6;text-decoration:underline;font-size:12px;margin-top:2px;display:inline-block">
             Abrir obra →
           </a>
         </div>
       `);
 
-      marker.on("popupopen", async () => {
-        const el = document.getElementById(distId);
-        if (!el) return;
-        const rota = await distanciaRota(SEDE.lat, SEDE.lng, obra.lat, obra.lng);
-        const elAtual = document.getElementById(distId);
-        if (!elAtual) return;
-        elAtual.innerHTML = rota
-          ? `🚗 ${rota.km.toFixed(0)} km de carro · ~${rota.horas}`
-          : `📏 Distância indisponível`;
-      });
-
       marker.on("mouseover", () => marker.openPopup());
+      marker.on("click", () => onObraClick(obra.id));
     });
 
     (window as any).__holdingObraClick = onObraClick;
