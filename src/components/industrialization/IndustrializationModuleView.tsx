@@ -728,7 +728,7 @@ export default function IndustrializationModuleView() {
         <Tabs defaultValue="overview" className="w-full">
           <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="overview" className="gap-1.5">🏗️ Visão Geral</TabsTrigger>
-            <TabsTrigger value="factories" className="gap-1.5">🏭 Fábricas</TabsTrigger>
+            <TabsTrigger value="factories" className="gap-1.5">📅 Períodos & Serviços</TabsTrigger>
             <TabsTrigger value="batches" className="gap-1.5">📦 Lotes</TabsTrigger>
             <TabsTrigger value="logistics" className="gap-1.5">🚛 Logística</TabsTrigger>
             <TabsTrigger value="lifting" className="gap-1.5">🏗 Içamento</TabsTrigger>
