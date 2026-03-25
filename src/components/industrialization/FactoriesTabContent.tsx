@@ -167,6 +167,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
   // ─── Model CRUD ───
   const openNewModel = (factoryId: string) => { setModelForm({ ...EMPTY_MODEL }); setModelFactoryId(factoryId); setModelDialog(true); };
   const saveModel = async () => {
+    if (!requireEdit()) return;
     if (!modelForm.name.trim() || !modelFactoryId) { toast.error("Nome obrigatório"); return; }
     const { error } = await supabase.from("ind_factory_models").insert({
       factory_id: modelFactoryId,
