@@ -19,7 +19,9 @@ import {
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Factory, Plus, ChevronLeft, AlertTriangle, Loader2, Trash2, Zap } from "lucide-react";
+import { Factory, Plus, ChevronLeft, AlertTriangle, Loader2, Trash2, Zap, Pencil } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { FactoriesTabContent } from "./FactoriesTabContent";
 import { LiftingTabContent } from "./LiftingTabContent";
