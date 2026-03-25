@@ -1433,7 +1433,9 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
               {obras.map((obra, idx) => {
                 const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
                 const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yy") : "—";
-                const receitas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
+                const recAprov = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
+                const vc = obra.valor_contrato || 0;
+                const receitas = recAprov > 0 ? recAprov : (vc > 0 && obra.percentual_andamento > 0 ? (obra.percentual_andamento / 100) * vc : 0);
                 return (
                   <TableRow
                     key={obra.id}
