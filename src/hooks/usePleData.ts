@@ -106,7 +106,7 @@ export interface PleEntry {
 }
 
 export function usePleData() {
-  const { company, profile } = useAuth();
+  const { company, profile, canEdit } = useAuth();
   const [projects, setProjects] = useState<PleProject[]>([]);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [groups, setGroups] = useState<PleEventGroup[]>([]);
