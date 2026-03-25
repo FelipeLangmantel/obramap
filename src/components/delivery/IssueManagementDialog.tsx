@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -42,6 +43,7 @@ export const IssueManagementDialog: React.FC<IssueManagementDialogProps> = ({
   issue,
   onSave
 }) => {
+  const { canEdit, requireEdit } = useAuth();
   const [status, setStatus] = useState(issue?.status || 'aberta');
   const [responsibleName, setResponsibleName] = useState(issue?.responsible_name || '');
   const [photoAfterUrl, setPhotoAfterUrl] = useState(issue?.photo_after_url || '');
@@ -62,6 +64,7 @@ export const IssueManagementDialog: React.FC<IssueManagementDialogProps> = ({
   };
 
   const handleSave = async () => {
+    if (!requireEdit()) return;
     if (status === 'encerrada' && !photoAfterUrl) {
       toast.error('Foto de resolução é obrigatória para encerrar a pendência');
       return;
@@ -228,7 +231,7 @@ export const IssueManagementDialog: React.FC<IssueManagementDialogProps> = ({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving || !canEdit}>
             <Save className="w-4 h-4 mr-2" />
             {saving ? 'Salvando...' : 'Salvar'}
           </Button>

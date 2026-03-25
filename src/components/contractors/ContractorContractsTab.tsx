@@ -32,7 +32,7 @@ export function ContractorContractsTab({
   addContractService, recalcContractTotal, onSelectContract,
 }: Props) {
   const { currentProject } = useConstruction();
-  const { company } = useAuth();
+  const { company, canEdit, requireEdit } = useAuth();
   const [newContractOpen, setNewContractOpen] = useState(false);
   const [selectedContractorId, setSelectedContractorId] = useState("");
   const [retentionPercent, setRetentionPercent] = useState("5");
@@ -161,6 +161,7 @@ export function ContractorContractsTab({
   }, [currentProject?.id, company?.id, assignOpen]);
 
   const handleCreateContract = async () => {
+    if (!requireEdit()) return;
     if (!selectedContractorId) return;
     setSaving(true);
     await onCreateContract(selectedContractorId, {
@@ -206,6 +207,7 @@ export function ContractorContractsTab({
   };
 
   const handleAddServices = async () => {
+    if (!requireEdit()) return;
     if (!assignContractId) return;
     setSaving(true);
     for (const svcId of selectedServiceIds) {
@@ -243,7 +245,7 @@ export function ContractorContractsTab({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Contratos de Empreiteiros</h3>
-        <Button size="sm" onClick={() => setNewContractOpen(true)} className="gap-1.5" disabled={availableContractors.length === 0}>
+        <Button size="sm" onClick={() => setNewContractOpen(true)} className="gap-1.5" disabled={availableContractors.length === 0 || !canEdit}>
           <Plus className="h-3.5 w-3.5" /> Novo Contrato
         </Button>
       </div>
@@ -319,7 +321,7 @@ export function ContractorContractsTab({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewContractOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreateContract} disabled={saving || !selectedContractorId}>{saving ? "Salvando..." : "Criar Contrato"}</Button>
+            <Button onClick={handleCreateContract} disabled={saving || !selectedContractorId || !canEdit}>{saving ? "Salvando..." : "Criar Contrato"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -415,7 +417,7 @@ export function ContractorContractsTab({
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignOpen(false)}>Cancelar</Button>
-            <Button onClick={handleAddServices} disabled={saving || selectedServiceIds.size === 0}>
+            <Button onClick={handleAddServices} disabled={saving || selectedServiceIds.size === 0 || !canEdit}>
               {saving ? "Adicionando..." : `Adicionar ${selectedServiceIds.size} serviço(s)`}
             </Button>
           </DialogFooter>

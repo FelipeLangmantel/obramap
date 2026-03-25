@@ -42,7 +42,7 @@ export function ContractorMeasurementsTab({
   recalcContractTotal, onBack,
 }: Props) {
   const { currentProject } = useConstruction();
-  const { company } = useAuth();
+  const { company, canEdit, requireEdit } = useAuth();
 
   const [services, setServices] = useState<ContractorContractService[]>([]);
   const [measurements, setMeasurements] = useState<ContractorMeasurement[]>([]);
@@ -109,6 +109,7 @@ export function ContractorMeasurementsTab({
   };
 
   const handleCreateMeasurement = async () => {
+    if (!requireEdit()) return;
     if (!periodStart || !periodEnd) return;
     setSaving(true);
     const nextNumber = measurements.length > 0
@@ -132,6 +133,7 @@ export function ContractorMeasurementsTab({
   };
 
   const handleUpdateItem = async (serviceId: string, housesCount: number) => {
+    if (!requireEdit()) return;
     if (!selectedMeasurement) return;
     const svc = services.find(s => s.id === serviceId);
     if (!svc) return;
@@ -149,6 +151,7 @@ export function ContractorMeasurementsTab({
   };
 
   const handleApprove = async () => {
+    if (!requireEdit()) return;
     if (!selectedMeasurement) return;
     const ok = await approveMeasurement(selectedMeasurement.id);
     if (ok) {
@@ -174,6 +177,7 @@ export function ContractorMeasurementsTab({
   };
 
   const handleSaveService = async (svc: ContractorContractService) => {
+    if (!requireEdit()) return;
     setSaving(true);
     const ok = await updateContractService(svc.id, {
       negotiated_unit_value: editNegotiatedValue,
@@ -190,6 +194,7 @@ export function ContractorMeasurementsTab({
   };
 
   const handleDeleteService = async (svc: ContractorContractService) => {
+    if (!requireEdit()) return;
     if (!confirm(`Remover o serviço "${svc.scope_name}" deste contrato?`)) return;
     setSaving(true);
     const ok = await deleteContractService(svc.id, contract.id);
@@ -361,7 +366,7 @@ export function ContractorMeasurementsTab({
         {/* Measurements Tab */}
         <TabsContent value="measurements" className="mt-3">
           <div className="flex justify-end mb-3">
-            <Button size="sm" onClick={() => setNewMeasOpen(true)} className="gap-1.5 text-xs h-7">
+            <Button size="sm" onClick={() => setNewMeasOpen(true)} className="gap-1.5 text-xs h-7" disabled={!canEdit}>
               <Plus className="h-3.5 w-3.5" /> Nova Medição
             </Button>
           </div>
@@ -379,7 +384,7 @@ export function ContractorMeasurementsTab({
                   </Badge>
                 </div>
                 {selectedMeasurement.status === "draft" && (
-                  <Button size="sm" className="gap-1.5 text-xs h-7 bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove}>
+                  <Button size="sm" className="gap-1.5 text-xs h-7 bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove} disabled={!canEdit}>
                     <CheckCircle className="h-3.5 w-3.5" /> Aprovar
                   </Button>
                 )}
@@ -503,7 +508,7 @@ export function ContractorMeasurementsTab({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewMeasOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreateMeasurement} disabled={saving || !periodStart || !periodEnd}>
+            <Button onClick={handleCreateMeasurement} disabled={saving || !periodStart || !periodEnd || !canEdit}>
               {saving ? "Criando..." : "Criar Medição"}
             </Button>
           </DialogFooter>

@@ -30,7 +30,7 @@ import { PlanningStage, TeamComposition } from './types';
 
 export function SmartPlanningView() {
   const { currentProject } = useConstruction();
-  const { company, canEdit } = useAuth();
+  const { company, canEdit, requireEdit } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [productivityService, setProductivityService] = useState<{
     macro_id: string; scope_id: string; macro_name: string; scope_name: string;
@@ -77,6 +77,7 @@ export function SmartPlanningView() {
     stagesData: Omit<PlanningStage, 'id' | 'created_at' | 'updated_at'>[],
     teamCompositions: Record<string, TeamComposition>
   ) => {
+    if (!requireEdit()) return;
     for (const stage of stagesData) {
       const macroId = (stage as any).macro_id;
       const composition = teamCompositions[macroId] || { professionals: 1, helpers: 1 };

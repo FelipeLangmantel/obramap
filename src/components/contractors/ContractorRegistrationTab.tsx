@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Edit2, Building2, Phone, Mail, Landmark } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Contractor } from "@/hooks/useContractors";
 
 interface Props {
@@ -24,6 +25,7 @@ const emptyForm = (): Partial<Contractor> => ({
 });
 
 export function ContractorRegistrationTab({ contractors, onCreateContractor, onUpdateContractor }: Props) {
+  const { canEdit, requireEdit } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<Contractor>>(emptyForm());
@@ -33,6 +35,7 @@ export function ContractorRegistrationTab({ contractors, onCreateContractor, onU
   const openEdit = (c: Contractor) => { setForm(c); setEditingId(c.id); setDialogOpen(true); };
 
   const handleSave = async () => {
+    if (!requireEdit()) return;
     if (!form.name?.trim()) return;
     setSaving(true);
     if (editingId) {
@@ -50,7 +53,7 @@ export function ContractorRegistrationTab({ contractors, onCreateContractor, onU
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Empreiteiros Cadastrados</h3>
-        <Button size="sm" onClick={openNew} className="gap-1.5">
+        <Button size="sm" onClick={openNew} className="gap-1.5" disabled={!canEdit}>
           <Plus className="h-3.5 w-3.5" /> Novo Empreiteiro
         </Button>
       </div>
@@ -89,7 +92,7 @@ export function ContractorRegistrationTab({ contractors, onCreateContractor, onU
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(c)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(c)} disabled={!canEdit}>
                       <Edit2 className="h-3.5 w-3.5" />
                     </Button>
                   </TableCell>
@@ -165,7 +168,7 @@ export function ContractorRegistrationTab({ contractors, onCreateContractor, onU
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={saving || !form.name?.trim()}>
+            <Button onClick={handleSave} disabled={saving || !form.name?.trim() || !canEdit}>
               {saving ? "Salvando..." : editingId ? "Salvar" : "Cadastrar"}
             </Button>
           </DialogFooter>

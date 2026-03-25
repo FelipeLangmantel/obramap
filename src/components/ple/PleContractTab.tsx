@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ interface ObraMapService {
 }
 
 export function PleContractTab(props: PleDataReturn) {
+  const { canEdit, requireEdit } = useAuth();
   const {
     currentProject, groups, events,
     createGroup, deleteGroup,
@@ -199,6 +201,7 @@ export function PleContractTab(props: PleDataReturn) {
   };
 
   const handleAddStage = async () => {
+    if (!requireEdit()) return;
     if (!newStage.code || !newStage.name) { toast.error("Código e nome obrigatórios"); return; }
     const result = await createGroup({ ...newStage, parent_id: null });
     if (result) {
@@ -208,6 +211,7 @@ export function PleContractTab(props: PleDataReturn) {
   };
 
   const handleAddSubstage = async (stageId: string) => {
+    if (!requireEdit()) return;
     if (!newSubstage.code || !newSubstage.name) { toast.error("Código e nome obrigatórios"); return; }
     const result = await createGroup({ ...newSubstage, parent_id: stageId });
     if (result) {
@@ -218,6 +222,7 @@ export function PleContractTab(props: PleDataReturn) {
   };
 
   const handleAddEvent = async (substageId: string) => {
+    if (!requireEdit()) return;
     if (!newEvent.item_code || !newEvent.description) { toast.error("Item e descrição obrigatórios"); return; }
     const computedUnitValue = newEvent.mat_unit_value + newEvent.mo_unit_value;
     const finalUnitValue = computedUnitValue > 0 ? computedUnitValue : newEvent.unit_value;

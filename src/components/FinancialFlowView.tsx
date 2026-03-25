@@ -295,6 +295,7 @@ export function FinancialFlowView() {
   };
 
   const handleCategoriesChange = async (newCategories: string[]) => {
+    if (!canEdit) return;
     if (!currentProject?.id) return;
     
     setCategories(newCategories);
@@ -324,6 +325,7 @@ export function FinancialFlowView() {
   };
 
   const handleCreateNewSupplier = async () => {
+    if (!canEdit) return;
     if (!currentProject?.id || !newSupplier.name) {
       toast.error("Preencha o nome do fornecedor");
       return;
@@ -375,6 +377,7 @@ export function FinancialFlowView() {
   };
 
   const handleAddEntry = async () => {
+    if (!canEdit) return;
     if (!currentProject?.id || !newEntry.description || !newEntry.category) {
       toast.error("Preencha os campos obrigatórios");
       return;
@@ -448,6 +451,7 @@ export function FinancialFlowView() {
   };
 
   const handleMarkAsPaid = async (entry: FinancialEntry) => {
+    if (!canEdit) return;
     try {
       const { error } = await supabase
         .from("financial_entries")
@@ -464,6 +468,7 @@ export function FinancialFlowView() {
   };
 
   const handleUndoPayment = async (entry: FinancialEntry) => {
+    if (!canEdit) return;
     try {
       const { error } = await supabase
         .from("financial_entries")
@@ -480,6 +485,7 @@ export function FinancialFlowView() {
   };
 
   const handleDeleteEntry = async () => {
+    if (!canEdit) return;
     if (!deleteEntryId) return;
     
     try {

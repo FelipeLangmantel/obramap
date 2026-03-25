@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ChecklistItem {
   id: string;
@@ -48,6 +49,7 @@ export const InspectionChecklistDialog: React.FC<InspectionChecklistDialogProps>
   templates,
   onSave
 }) => {
+  const { canEdit, requireEdit } = useAuth();
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>("");
@@ -137,6 +139,7 @@ export const InspectionChecklistDialog: React.FC<InspectionChecklistDialogProps>
   const allItemsChecked = checklistItems.every(item => item.is_conforming !== null);
 
   const handleSave = async () => {
+    if (!requireEdit()) return;
     // Validate: non-conforming items must have photo
     const invalidItems = checklistItems.filter(
       item => item.is_conforming === false && !item.photo_url
@@ -352,7 +355,7 @@ export const InspectionChecklistDialog: React.FC<InspectionChecklistDialogProps>
               </Button>
               <Button 
                 onClick={handleSave} 
-                disabled={saving || !allItemsChecked}
+                disabled={saving || !allItemsChecked || !canEdit}
               >
                 <Save className="w-4 h-4 mr-2" />
                 {saving ? 'Salvando...' : 'Finalizar Vistoria'}

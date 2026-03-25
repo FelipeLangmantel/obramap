@@ -644,7 +644,7 @@ function WeekCalendarConfigurator({
 // ══════════════════════════════════════════════════════════════
 export function WeeklyPlanningFromPeriod() {
   const { currentProject } = useConstruction();
-  const { company } = useAuth();
+  const { company, canEdit, requireEdit } = useAuth();
   const projectId = currentProject?.id;
   const companyId = company?.id;
   const macros = currentProject?.macrosTemplate || [];
@@ -1078,6 +1078,7 @@ export function WeeklyPlanningFromPeriod() {
 
   // ── Save ────────────────────────────────────────────────
   const saveWeeklyPlan = async () => {
+    if (!requireEdit()) return;
     if (!projectId || !companyId || !selectedPeriodId) return;
     setIsSaving(true);
     try {
@@ -1170,6 +1171,7 @@ export function WeeklyPlanningFromPeriod() {
 
   // ── Revert to draft (unlock for re-editing) ─────────
   const revertToDraft = async () => {
+    if (!requireEdit()) return;
     if (!selectedPeriodId) return;
     setIsReverting(true);
     try {
@@ -1704,7 +1706,7 @@ export function WeeklyPlanningFromPeriod() {
                 </>
               )}
             </div>
-            <Button onClick={saveWeeklyPlan} disabled={isSaving || validationErrors.length > 0 || overflowErrors.length > 0}>
+            <Button onClick={saveWeeklyPlan} disabled={isSaving || validationErrors.length > 0 || overflowErrors.length > 0 || !canEdit}>
               <Save className="h-4 w-4 mr-1" />
               {isSaving ? "Salvando..." : "Salvar"}
             </Button>

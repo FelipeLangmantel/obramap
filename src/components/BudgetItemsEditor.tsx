@@ -101,7 +101,7 @@ export function BudgetItemsEditor({
   scrollPositionKey
 }: BudgetItemsEditorProps) {
   const { currentStep, advanceToStep } = useProjectSetupFlow();
-  const { company } = useAuth();
+  const { company, canEdit, requireEdit } = useAuth();
   const companyId = company?.id;
 
   const [items, setItems] = useState<ScopeItem[]>([]);
@@ -356,6 +356,7 @@ export function BudgetItemsEditor({
     materialFamily: string;
     inputId?: string;
   }[]) => {
+    if (!requireEdit()) return;
     setIsSaving(true);
     
     try {
@@ -469,6 +470,7 @@ export function BudgetItemsEditor({
 
   // Save item
   const saveItem = async (index: number) => {
+    if (!requireEdit()) return;
     const item = items[index];
     if (!item.name.trim()) {
       toast.error('Nome é obrigatório');
@@ -537,6 +539,7 @@ export function BudgetItemsEditor({
 
   // Delete item after confirmation
   const executeDeleteItem = async () => {
+    if (!requireEdit()) return;
     if (!itemToDelete) return;
     
     const { index, item } = itemToDelete;
