@@ -985,35 +985,7 @@ export default function IndustrializationModuleView() {
             </div>
           )}
 
-          {/* ── Bloco 3: Global alerts ── */}
-          {alerts.length > 0 && (
-            <div className="rounded-lg border bg-card p-3 space-y-2">
-              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-500" /> Alertas
-              </h3>
-              {alerts.map((a, i) => (
-                <div key={i} className={`flex items-start gap-3 rounded-lg p-3 border-l-4 ${
-                  a.type === 'danger'
-                    ? 'bg-destructive/5 border-destructive text-destructive'
-                    : 'bg-amber-500/5 border-amber-500 text-amber-700 dark:text-amber-400'
-                }`}>
-                  <AlertTriangle className='h-4 w-4 shrink-0 mt-0.5' />
-                  <div className='flex-1 min-w-0'>
-                    <p className='text-xs'>{a.msg}</p>
-                  </div>
-                  {a.contextId && (
-                    <Button variant='ghost' size='sm' className='h-6 text-[10px] px-2 shrink-0'
-                      onClick={() => {
-                        const ctx = contexts.find(c => c.id === a.contextId);
-                        if (ctx) { setActiveContext(ctx); setView('detail'); }
-                      }}>
-                      Ver obra →
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+          {/* alerts already shown above */}
         </>
       )}
 
