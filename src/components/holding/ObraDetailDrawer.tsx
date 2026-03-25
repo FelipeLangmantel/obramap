@@ -796,6 +796,22 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
     if (payload.data_pagamento === "") payload.data_pagamento = null;
     const { error } = await supabase.from("medicoes_ple").update(payload).eq("id", editingMedicao.id);
     if (error) { toast.error("Erro ao atualizar medição"); return; }
+
+    // Audit
+    await supabase.from("medicoes_ple").update({
+      updated_by_user_id: userId,
+      updated_by_name: userName,
+      updated_at: new Date().toISOString(),
+    }).eq("id", editingMedicao.id);
+
+    await registrarLog(
+      obraId, "medicoes_ple", editingMedicao.id,
+      "editou",
+      `Editou medição ${editingMedicao.num_medicao ? `Nº ${editingMedicao.num_medicao}` : ""} — ${editingMedicao.mes_referencia}/${editingMedicao.ano_referencia}`,
+      userId, userName,
+      { ...editingMedicao }, { ...editForm }
+    );
+
     toast.success("Medição atualizada!");
     invalidateHolding();
     setEditingMedicao(null);
