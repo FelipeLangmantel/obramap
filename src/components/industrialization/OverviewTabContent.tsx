@@ -27,7 +27,7 @@ import {
 } from "recharts";
 import {
   Factory, AlertTriangle, TrendingUp, DollarSign, Package,
-  CalendarDays, Plus, Pencil, Trash2,
+  CalendarDays, Plus, Pencil, Trash2, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInDays, addDays } from "date-fns";
