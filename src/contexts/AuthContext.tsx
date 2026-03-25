@@ -512,9 +512,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canAccessManagement = useCallback((sectionId: string): boolean => {
     if (isSystemAdmin) return false;
     if (isCompanyAdmin) return true;
-    if (!permissions) return true;
+    // Sem permissão cadastrada: admin vê tudo, outros não veem nada
+    if (!permissions) return isAdmin;
     return permissions.visible_management_sections.includes(sectionId);
-  }, [isSystemAdmin, isCompanyAdmin, permissions]);
+  }, [isSystemAdmin, isCompanyAdmin, isAdmin, permissions]);
 
   const canAccessProject = useCallback((projectId: string): boolean => {
     if (isSystemAdmin) return false;
