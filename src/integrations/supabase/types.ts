@@ -4353,6 +4353,7 @@ export type Database = {
           data_inicio: string | null
           empresa: string | null
           estado: string | null
+          has_initial_balance: boolean
           id: string
           latitude: number | null
           longitude: number | null
@@ -4373,6 +4374,7 @@ export type Database = {
           total_houses: number
           uh: number | null
           valor_contrato: number
+          valor_medido_inicial: number
         }
         Insert: {
           aditivo_prazo_dias?: number
@@ -4381,6 +4383,7 @@ export type Database = {
           data_inicio?: string | null
           empresa?: string | null
           estado?: string | null
+          has_initial_balance?: boolean
           id?: string
           latitude?: number | null
           longitude?: number | null
@@ -4401,6 +4404,7 @@ export type Database = {
           total_houses?: number
           uh?: number | null
           valor_contrato?: number
+          valor_medido_inicial?: number
         }
         Update: {
           aditivo_prazo_dias?: number
@@ -4409,6 +4413,7 @@ export type Database = {
           data_inicio?: string | null
           empresa?: string | null
           estado?: string | null
+          has_initial_balance?: boolean
           id?: string
           latitude?: number | null
           longitude?: number | null
@@ -4429,6 +4434,7 @@ export type Database = {
           total_houses?: number
           uh?: number | null
           valor_contrato?: number
+          valor_medido_inicial?: number
         }
         Relationships: [
           {
