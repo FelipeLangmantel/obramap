@@ -228,6 +228,7 @@ export function LogisticsTabContent({ companyId, contextId }: LogisticsTabProps)
   };
 
   const confirmDelivery = async () => {
+    if (!requireEdit()) return;
     if (!selectedShipment) return;
     try {
       // Update shipment
