@@ -234,7 +234,7 @@ export default function IndustrializationModuleView() {
       const [zA, zB, zC] = zonas || [];
 
       // 5. PERÍODOS
-      const { data: periodos } = await supabase.from("ind_periods").insert([
+      const { data: periodos, error: periodError } = await supabase.from("ind_periods").insert([
         { context_id: ctx.id, company_id: companyId, name: "1ª Qnz Abr/26", start_date: fmt(addD(hoje, -75)), end_date: fmt(addD(hoje, -61)), target_units: 40, status: "closed" },
         { context_id: ctx.id, company_id: companyId, name: "2ª Qnz Abr/26", start_date: fmt(addD(hoje, -60)), end_date: fmt(addD(hoje, -46)), target_units: 40, status: "closed" },
         { context_id: ctx.id, company_id: companyId, name: "1ª Qnz Mai/26", start_date: fmt(addD(hoje, -45)), end_date: fmt(addD(hoje, -31)), target_units: 40, status: "active" },
@@ -242,6 +242,7 @@ export default function IndustrializationModuleView() {
         { context_id: ctx.id, company_id: companyId, name: "1ª Qnz Jun/26", start_date: fmt(addD(hoje, -15)), end_date: fmt(addD(hoje, 0)),  target_units: 40, status: "draft" },
         { context_id: ctx.id, company_id: companyId, name: "2ª Qnz Jun/26", start_date: fmt(addD(hoje, 1)),  end_date: fmt(addD(hoje, 15)), target_units: 40, status: "draft" },
       ]).select("id");
+      if (periodError) throw new Error("Erro ao criar períodos: " + periodError.message);
       const [p1, p2, p3, p4, p5, p6] = periodos || [];
 
       // 6. LOTES
