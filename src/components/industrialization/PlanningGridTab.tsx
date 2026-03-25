@@ -61,6 +61,7 @@ export default function PlanningGridTab({ companyId, contextId, totalUnits }: Pr
   const { canEdit, requireEdit } = useAuth();
   const [factories, setFactories] = useState<Factory[]>([]);
   const [grid, setGrid] = useState<Record<string, GridCell>>({});
+  const [hasPeriods, setHasPeriods] = useState(true);
   const [contextDates, setContextDates] = useState<{ start: Date; end: Date } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -83,9 +84,11 @@ export default function PlanningGridTab({ companyId, contextId, totalUnits }: Pr
           start: new Date(periods[0].start_date + "T12:00:00"),
           end: new Date(periods[periods.length - 1].end_date + "T12:00:00"),
         });
+        setHasPeriods(true);
       } else {
         const hoje = new Date();
         setContextDates({ start: hoje, end: addDays(hoje, 180) });
+        setHasPeriods(false);
       }
 
       const { data: facs } = await supabase
@@ -194,6 +197,15 @@ export default function PlanningGridTab({ companyId, contextId, totalUnits }: Pr
         )}
       </div>
 
+      {!hasPeriods && (
+        <div className="flex items-start gap-2 p-3 mb-3 bg-amber-500/10 border border-amber-300/50 rounded-lg text-sm text-amber-700">
+          <span className="text-base">⚠️</span>
+          <div>
+            <strong>Nenhum período cadastrado para esta obra.</strong>{" "}
+            Cadastre os períodos (quinzenas) na aba <strong>Lotes</strong> antes de usar o Planejamento.
+          </div>
+        </div>
+      )}
       {factories.length === 0 ? (
         <div className="text-center py-16 space-y-2">
           <CalendarRange className="h-10 w-10 mx-auto text-muted-foreground/50" />

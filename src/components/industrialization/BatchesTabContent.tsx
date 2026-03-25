@@ -196,6 +196,10 @@ export function BatchesTabContent({ companyId, contextId }: BatchesTabProps) {
       toast.error("Empresa, quinzena e unidades são obrigatórios");
       return;
     }
+    if (!form.unit_value || form.unit_value <= 0) {
+      toast.error("Valor unitário deve ser maior que zero");
+      return;
+    }
     try {
       const factory = factories.find(f => f.id === form.factory_id);
       const existingCount = batches.filter(b => b.status !== "cancelled").length;

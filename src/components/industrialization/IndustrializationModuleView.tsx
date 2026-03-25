@@ -23,7 +23,6 @@ import { Factory, Plus, ChevronLeft, AlertTriangle, Loader2, Trash2, Zap, Pencil
 import { Switch } from "@/components/ui/switch";
 
 import { toast } from "sonner";
-import { FactoriesTabContent } from "./FactoriesTabContent";
 import { LiftingTabContent } from "./LiftingTabContent";
 import { OverviewTabContent } from "./OverviewTabContent";
 import { InstallationTabContent } from "./InstallationTabContent";
@@ -239,7 +238,8 @@ export default function IndustrializationModuleView() {
         contact_phone: "(51) 99912-0001", contact_email: "carlos@previbras.com.br",
         avg_lead_time_days: 21, advance_payment_pct: 30,
         payment_terms: "30% entrada + 70% na entrega", radius_km: 150,
-        notes: "Fábrica principal — capacidade 60 painéis/semana", is_active: true,
+        capacity_houses_month: 60, price_per_house: 18500,
+        notes: "Fábrica principal — capacidade 60 casas/mês", is_active: true,
       }).select("id").single();
 
       const { data: fab2 } = await supabase.from("ind_factories").insert({
@@ -248,7 +248,8 @@ export default function IndustrializationModuleView() {
         contact_phone: "(51) 98765-0002", contact_email: "ana@sulconcreto.com.br",
         avg_lead_time_days: 28, advance_payment_pct: 40,
         payment_terms: "40% entrada + 60% contra entrega", radius_km: 80,
-        notes: "Fábrica de apoio — capacidade 40 painéis/semana", is_active: true,
+        capacity_houses_month: 40, price_per_house: 17200,
+        notes: "Fábrica de apoio — capacidade 40 casas/mês", is_active: true,
       }).select("id").single();
 
       if (!fab1 || !fab2) throw new Error("Erro ao criar fábricas");
@@ -541,8 +542,42 @@ export default function IndustrializationModuleView() {
         },
       ]);
 
+      // 13. PLANNING GRID — para a aba Planejamento não ficar vazia
+      const hoje2 = new Date();
+      const gridRows: any[] = [];
+      // fab1: 60 casas/mês → quinzenas de 30 cada
+      // fab2: 40 casas/mês → quinzenas de 20 cada
+      const gridDef = [
+        // [fábrica, meses_atrás, quinzena, planned, actual]
+        { fac: fab1.id, offset: -2, fn: 1, planned: 30, actual: 30 },
+        { fac: fab1.id, offset: -2, fn: 2, planned: 30, actual: 30 },
+        { fac: fab1.id, offset: -1, fn: 1, planned: 30, actual: 29 },
+        { fac: fab1.id, offset: -1, fn: 2, planned: 30, actual: 24 },
+        { fac: fab1.id, offset:  0, fn: 1, planned: 30, actual: 0 },
+        { fac: fab1.id, offset:  0, fn: 2, planned: 30, actual: 0 },
+        { fac: fab2.id, offset: -2, fn: 1, planned: 20, actual: 20 },
+        { fac: fab2.id, offset: -2, fn: 2, planned: 20, actual: 19 },
+        { fac: fab2.id, offset: -1, fn: 1, planned: 20, actual: 15 },
+        { fac: fab2.id, offset: -1, fn: 2, planned: 20, actual: 0 },
+        { fac: fab2.id, offset:  0, fn: 1, planned: 20, actual: 0 },
+        { fac: fab2.id, offset:  0, fn: 2, planned: 20, actual: 0 },
+      ];
+      gridDef.forEach(({ fac, offset, fn, planned, actual }) => {
+        const d = new Date(hoje2.getFullYear(), hoje2.getMonth() + offset, 1);
+        gridRows.push({
+          company_id: companyId, context_id: ctx.id,
+          factory_id: fac, year: d.getFullYear(), month: d.getMonth() + 1, fortnight: fn,
+          start_date: fmt(new Date(d.getFullYear(), d.getMonth(), fn === 1 ? 1 : 16)),
+          end_date: fmt(new Date(d.getFullYear(), d.getMonth(), fn === 1 ? 15 : new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())),
+          planned_houses: planned, actual_houses: actual,
+        });
+      });
+      for (let i = 0; i < gridRows.length; i += 25) {
+        await supabase.from("ind_planning_grid").insert(gridRows.slice(i, i + 25));
+      }
+
       toast.success(
-        "✅ Demonstração completa criada! 120 UH · 6 lotes · 2 fábricas · 3 remessas · 3 içamentos · 2 equipamentos · 2 caminhões. Explore todas as abas."
+        "✅ Demonstração completa criada! 120 UH · 6 lotes · 2 fábricas · 3 remessas · 3 içamentos · grade de planejamento. Explore todas as abas."
       );
       fetchAll();
     } catch (e: any) {
@@ -636,9 +671,9 @@ export default function IndustrializationModuleView() {
   }, [factories]);
 
   const getFactoryCapacity = (factoryId: string) => {
-    return factoryModels
-      .filter(m => m.factory_id === factoryId && m.is_active)
-      .reduce((s: number, m: any) => s + (m.units_per_week || 0), 0);
+    // Usa capacity_houses_month da fábrica dividido por 4 semanas/mês
+    const factory = factories.find(f => f.id === factoryId);
+    return factory ? Math.round((factory.capacity_houses_month || 0) / 4) : 0;
   };
 
   const getWeekLoad = (factoryId: string, weekStart: Date, weekEnd: Date) => {
@@ -668,6 +703,8 @@ export default function IndustrializationModuleView() {
     });
     // Advance payments due
     batches.forEach(b => {
+      // Não alertar para lotes cancelados ou já entregues/instalados (entrada já foi paga)
+      if (["cancelled", "delivered", "installed"].includes(b.status)) return;
       if (!b.ind_period_id) return;
       const period = periods.find(p => p.id === b.ind_period_id);
       if (!period) return;
@@ -863,9 +900,12 @@ export default function IndustrializationModuleView() {
                     const ctxPeriods = periods.filter(p => p.context_id === ctx.id);
                     const linkedFactoryIds = [...new Set(ctxBatches.map(b => b.factory_id))];
                     const linkedFactoryNames = linkedFactoryIds.map(id => factories.find(f => f.id === id)?.name).filter(Boolean).join(", ");
-                    const totalPlanned = ctxBatches.reduce((s, b) => s + (b.planned_quantity || 0), 0);
-                    const totalCost = ctxBatches.reduce((s, b) => s + ((b.planned_quantity || 0) * (b.unit_value || 0)), 0);
-                    const totalAdvance = ctxBatches.reduce((s, b) => {
+                    const activeBatches = ctxBatches.filter(b => b.status !== "cancelled");
+                    const pendingAdvance = ctxBatches.filter(b => !["cancelled","delivered","installed"].includes(b.status));
+                    const totalPlanned = activeBatches.reduce((s, b) => s + (b.planned_quantity || 0), 0);
+                    const totalCost = activeBatches.reduce((s, b) => s + ((b.planned_quantity || 0) * (b.unit_value || 0)), 0);
+                    // Entrada: só lotes que ainda NÃO foram entregues/instalados (entrada ainda não paga)
+                    const totalAdvance = pendingAdvance.reduce((s, b) => {
                       const fac = factories.find(f => f.id === b.factory_id);
                       return s + ((b.planned_quantity || 0) * (b.unit_value || 0) * ((fac?.advance_payment_pct || 0) / 100));
                     }, 0);
@@ -929,10 +969,10 @@ export default function IndustrializationModuleView() {
                         </TableCell>
                       );
                     })}
-                    <TableCell className="text-xs text-center">{batches.reduce((s, b) => s + (b.planned_quantity || 0), 0)}</TableCell>
-                    <TableCell className="text-xs text-right">{BRL.format(batches.reduce((s, b) => s + ((b.planned_quantity || 0) * (b.unit_value || 0)), 0))}</TableCell>
+                    <TableCell className="text-xs text-center">{batches.filter(b => b.status !== "cancelled").reduce((s, b) => s + (b.planned_quantity || 0), 0)}</TableCell>
+                    <TableCell className="text-xs text-right">{BRL.format(batches.filter(b => b.status !== "cancelled").reduce((s, b) => s + ((b.planned_quantity || 0) * (b.unit_value || 0)), 0))}</TableCell>
                     <TableCell className="text-xs text-right text-amber-600">
-                      {BRL.format(batches.reduce((s, b) => {
+                      {BRL.format(batches.filter(b => !["cancelled","delivered","installed"].includes(b.status)).reduce((s, b) => {
                         const fac = factories.find(f => f.id === b.factory_id);
                         return s + ((b.planned_quantity || 0) * (b.unit_value || 0) * ((fac?.advance_payment_pct || 0) / 100));
                       }, 0))}
