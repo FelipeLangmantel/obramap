@@ -137,38 +137,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(typedProfile);
       setSystemRole(typedProfile.system_role);
 
-      // Fetch company if user has company_id
-      if (typedProfile.company_id) {
-        const { data: companyData } = await supabase
-          .from("companies")
-          .select("id, name, slug")
-          .eq("id", typedProfile.company_id)
-          .single();
+      // ── Fase 2: Q2 + Q3 + Q4 em paralelo (todas independentes após profile) ──
+      const parallelResults = await Promise.all([
+        // Q2: company (precisa só de company_id do profile)
+        typedProfile.company_id
+          ? supabase.from("companies").select("id, name, slug").eq("id", typedProfile.company_id).single()
+          : Promise.resolve({ data: null, error: null }),
+        // Q3: role via RPC (precisa só de userId)
+        supabase.rpc("get_user_role", { _user_id: userId }),
+        // Q4: permissions (precisa só de userId)
+        supabase.from("user_permissions").select("*").eq("user_id", userId).maybeSingle(),
+      ]);
 
-        if (companyData) {
-          setCompany(companyData);
-        }
-      }
+      const companyData = parallelResults[0].data;
+      const roleData    = parallelResults[1].data;
+      const permData    = parallelResults[2].data;
 
-      // Fetch legacy role using RPC (para compatibilidade)
-      const { data: roleData } = await supabase.rpc("get_user_role", {
-        _user_id: userId,
-      });
+      if (companyData) setCompany(companyData as any);
+      if (roleData)    setRole(roleData as AppRole);
 
-      if (roleData) {
-        setRole(roleData as AppRole);
-      }
-
-      // Fetch permissions
-      const { data: permData } = await supabase
-        .from("user_permissions")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      // Fetch department permissions for inheritance
+      // ── Fase 3: Q5 condicional (depende de Q1.company_id + Q4.department) ──
       let deptPerm: any = null;
-      const userDept = permData?.department;
+      const userDept     = permData?.department;
       const userCompanyId = typedProfile.company_id;
 
       if (userCompanyId && userDept && userDept !== 'geral') {
@@ -379,12 +369,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.id, refreshPermissions]);
 
-  // Manter last_active_at atualizado a cada 2 minutos e verificar inatividade (20min)
+  // Manter last_active_at atualizado a cada 5 minutos e verificar inatividade (20min)
   useEffect(() => {
     if (!user) return;
 
     const INACTIVITY_LIMIT_MS = 20 * 60 * 1000; // 20 minutos
-    const HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000; // 2 minutos
+    const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos (era 2min — reduzido para diminuir tráfego Realtime)
     let lastActivity = Date.now();
 
     // Track user activity
