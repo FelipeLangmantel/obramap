@@ -213,6 +213,7 @@ export function usePleData() {
   // Approve measurement (with or without glosses)
   const approveMeasurement = useCallback(async (id: string, hasGlosses?: boolean) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
+    const newStatus = hasGlosses ? "approved_with_glosses" : "approved";
     const { data: userData } = await supabase.auth.getUser();
     const userName = getUserName();
     const { error } = await supabase.from("ple_measurements").update({ 
@@ -232,7 +233,7 @@ export function usePleData() {
     setMeasurements(prev => prev.map(m => m.id === id ? { ...m, status: newStatus } : m));
     logAudit("measurement_approved", { status: newStatus, glosses_count: hasGlosses ? glosses.filter(g => g.measurement_id === id && !g.resolved).length : 0 }, id);
     toast.success(hasGlosses ? "Medição aprovada com glossas!" : "Medição aprovada!");
-  }, [glosses, getUserName, logAudit]);
+  }, [canEdit, glosses, getUserName, logAudit]);
 
   // Undo measurement approval (temporary for testing)
   const undoMeasurementApproval = useCallback(async (id: string) => {
