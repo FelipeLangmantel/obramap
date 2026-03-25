@@ -177,6 +177,7 @@ export function usePleData() {
 
   // Create project
   const createProject = useCallback(async (data: Partial<PleProject>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     if (!company?.id) return null;
     const { data: userData } = await supabase.auth.getUser();
     const { data: result, error } = await supabase
