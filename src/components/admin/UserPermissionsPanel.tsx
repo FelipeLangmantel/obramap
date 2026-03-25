@@ -425,6 +425,31 @@ export function UserPermissionsPanel() {
     }
   };
 
+  const handleSaveDeptPermission = async () => {
+    if (!editingDeptPerm || !company) return;
+    try {
+      const payload = {
+        company_id: company.id,
+        department_name: editingDeptPerm.department_name,
+        visible_menus: editingDeptPerm.visible_menus,
+        visible_management_sections: editingDeptPerm.visible_management_sections,
+        can_edit: editingDeptPerm.can_edit,
+        allowed_project_ids: editingDeptPerm.allowed_project_ids,
+        updated_at: new Date().toISOString(),
+      };
+      if (editingDeptPerm.id) {
+        await supabase.from("department_permissions").update(payload).eq("id", editingDeptPerm.id);
+      } else {
+        await supabase.from("department_permissions").insert(payload);
+      }
+      toast.success(`Permissões de "${editingDeptPerm.department_name}" salvas!`);
+      setIsDeptPermDialogOpen(false);
+      fetchData();
+    } catch (e: any) {
+      toast.error("Erro: " + e.message);
+    }
+  };
+
   const resetForm = () => {
     setEmail("");
     setPassword("");
