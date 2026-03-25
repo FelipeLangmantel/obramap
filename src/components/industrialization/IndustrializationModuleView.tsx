@@ -29,6 +29,7 @@ import { OverviewTabContent } from "./OverviewTabContent";
 import { InstallationTabContent } from "./InstallationTabContent";
 import { BatchesTabContent } from "./BatchesTabContent";
 import { LogisticsTabContent } from "./LogisticsTabContent";
+import PlanningGridTab from "./PlanningGridTab";
 
 interface OperationContext {
   id: string;
