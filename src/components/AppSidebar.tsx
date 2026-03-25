@@ -320,9 +320,9 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
               </Badge>
             )}
             {item.badge && (
-              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-purple-500/10 text-purple-600 border-purple-500/30">
+              <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
                 {item.badge}
-              </Badge>
+              </span>
             )}
             {isSystemAdmin && isBeta && (
               <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 bg-amber-500/10 text-amber-600 border-amber-500/30">
