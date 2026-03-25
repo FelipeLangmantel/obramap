@@ -153,6 +153,7 @@ export function UserPermissionsPanel() {
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
   const [selectedUserForPassword, setSelectedUserForPassword] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
+  const [showAllSessions, setShowAllSessions] = useState(false);
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
