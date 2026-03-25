@@ -647,9 +647,13 @@ export default function HoldingDashboardView() {
   const kpis = useMemo(() => {
     const base = obrasFiltradas;
     const totalContratos = base.reduce((s, o) => s + (o.valor_contrato || 0), 0);
-    const totalMedido = base.reduce(
-      (s, o) => s + o.allMedicoes.filter((m) => m.status_medicao === "aprovada").reduce((ss, m) => ss + m.valor_medicao, 0), 0
-    );
+    const totalMedido = base.reduce((s, o) => {
+      const aprovadas = o.allMedicoes.filter((m) => m.status_medicao === "aprovada").reduce((ss, m) => ss + m.valor_medicao, 0);
+      // Se não há medições aprovadas mas há andamento físico, estimar pelo percentual
+      if (aprovadas > 0) return s + aprovadas;
+      const vc = o.valor_contrato || 0;
+      return s + (vc > 0 && o.percentual_andamento > 0 ? (o.percentual_andamento / 100) * vc : 0);
+    }, 0);
     const saldoFaturar = totalContratos - totalMedido;
     const totalMedicoesAprovadas = totalMedido;
     const obrasAtivas = base.filter((o) => o.status === "em_andamento").length;
