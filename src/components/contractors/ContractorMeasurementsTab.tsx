@@ -177,6 +177,7 @@ export function ContractorMeasurementsTab({
   };
 
   const handleSaveService = async (svc: ContractorContractService) => {
+    if (!requireEdit()) return;
     setSaving(true);
     const ok = await updateContractService(svc.id, {
       negotiated_unit_value: editNegotiatedValue,
