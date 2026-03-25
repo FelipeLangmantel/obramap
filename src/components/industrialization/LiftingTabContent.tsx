@@ -130,6 +130,7 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
   };
 
   const saveEquip = async () => {
+    if (!requireEdit()) return;
     if (!equipForm.name.trim()) { toast.error("Nome obrigatório"); return; }
     const payload = {
       ...equipForm, company_id: companyId,
