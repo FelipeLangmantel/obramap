@@ -209,7 +209,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   // ✅ Menu items organizados por contexto de uso
   type MenuItem = { title: string; view: MenuViewType; icon: any; permissionId: string; badge?: string };
   
-  const menuGroups: { label: string; items: MenuItem[]; highlight?: boolean; badge?: string }[] = [
+  const menuGroups: { label: string; items: MenuItem[] }[] = [
     {
       label: "Painel & Mapas",
       items: [
