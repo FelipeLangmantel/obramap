@@ -149,15 +149,21 @@ export default function IndustrializationModuleView() {
 
   // ── Computed data for dashboard ──
   const allPeriodsSorted = useMemo(() => {
-    const uniqueIds = new Set<string>();
-    return periods
-      .filter(p => {
-        const ctxIds = new Set(contexts.map(c => c.id));
-        return ctxIds.has(p.context_id);
-      })
-      .sort((a: any, b: any) => a.start_date?.localeCompare(b.start_date))
-      .filter(p => { if (uniqueIds.has(p.id)) return false; uniqueIds.add(p.id); return true; });
-  }, [periods, contexts]);
+    const integCtxProjectIds = new Set(
+      contexts.filter(c=>c.context_type==='integrated'&&c.obramap_project_id)
+             .map(c=>c.obramap_project_id)
+    );
+    const oPeriods = planningPeriods
+      .filter(pp => integCtxProjectIds.has(pp.project_id))
+      .map(pp => ({...pp, period_type:'obramap', target_units:pp.total_planned_houses||0}));
+    const iPeriods = periods
+      .filter(p => contexts.some(c=>c.id===p.context_id))
+      .map(p => ({...p, period_type:'ind'}));
+    const seen = new Set<string>();
+    return [...iPeriods, ...oPeriods]
+      .filter(p => { if(seen.has(p.id)) return false; seen.add(p.id); return true; })
+      .sort((a,b) => a.start_date.localeCompare(b.start_date));
+  }, [periods, planningPeriods, contexts]);
 
   // Capacity heatmap data
   const capacityData = useMemo(() => {
