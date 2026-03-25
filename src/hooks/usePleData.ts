@@ -289,6 +289,7 @@ export function usePleData() {
 
   // Create event
   const createEvent = useCallback(async (data: Partial<PleEvent>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     if (!currentProjectId) return null;
     const maxOrder = events.length > 0 ? Math.max(...events.map(e => e.display_order)) + 1 : 0;
     const { data: result, error } = await supabase
