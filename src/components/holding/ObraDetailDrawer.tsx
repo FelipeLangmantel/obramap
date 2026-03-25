@@ -1032,7 +1032,19 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
               return (
                 <TableRow key={m.id}>
                   <TableCell className="font-medium">{m.num_medicao || "—"}</TableCell>
-                  <TableCell>{m.mes_referencia}/{m.ano_referencia}</TableCell>
+                  <TableCell>
+                    <span>{m.mes_referencia}/{m.ano_referencia}</span>
+                    {m.created_by_name && (
+                      <span className="text-[10px] text-muted-foreground ml-1">
+                        por {m.created_by_name}
+                      </span>
+                    )}
+                    {m.updated_by_name && (
+                      <span className="text-[10px] text-amber-600 ml-1">
+                        · editado por {m.updated_by_name}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell>{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                   <TableCell>{m.data_envio ? format(new Date(m.data_envio + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                   <TableCell>{m.data_aprovacao ? format(new Date(m.data_aprovacao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
