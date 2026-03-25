@@ -469,6 +469,7 @@ export function BudgetItemsEditor({
 
   // Save item
   const saveItem = async (index: number) => {
+    if (!requireEdit()) return;
     const item = items[index];
     if (!item.name.trim()) {
       toast.error('Nome é obrigatório');
