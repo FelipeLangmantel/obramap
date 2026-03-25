@@ -451,6 +451,7 @@ export function FinancialFlowView() {
   };
 
   const handleMarkAsPaid = async (entry: FinancialEntry) => {
+    if (!canEdit) return;
     try {
       const { error } = await supabase
         .from("financial_entries")
