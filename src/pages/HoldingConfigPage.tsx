@@ -95,6 +95,7 @@ export default function HoldingConfigPage() {
   };
 
   const deleteEmpresa = async () => {
+    if (!isCompanyAdmin) return;
     if (!deletingEmpresaId) return;
     const { error } = await supabase.from("holding_empresas").delete().eq("id", deletingEmpresaId);
     if (error) { toast.error("Erro: " + error.message); return; }
