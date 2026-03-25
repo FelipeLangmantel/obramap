@@ -61,8 +61,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const DEFAULT_MENUS = ["mapa", "planejamento", "smart-planning", "producao", "custos", "suprimentos", "financeiro", "entrega", "diretoria", "graficos"];
-const DEFAULT_MANAGEMENT = ["projetos", "quadras", "macros", "escopos", "insumos", "fornecedores", "mao_de_obra", "usuarios"];
+// DEFAULT restritivo: sem permissão cadastrada = só vê o painel inicial
+const DEFAULT_MENUS = ["painel_inicial"];
+// DEFAULT restritivo: sem permissão cadastrada = sem acesso a gerenciamento
+const DEFAULT_MANAGEMENT: string[] = [];
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
