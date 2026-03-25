@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { MapPin, DollarSign, TrendingUp, TrendingDown, Wallet, Filter } from "lucide-react";
+import HoldingMap, { MapObra } from "./HoldingMap";
 
 const parseLocalDate = (d: string) => { const [y, m, day] = d.split("-").map(Number); return new Date(y, m - 1, day); };
 /* ═══════════════════════════════════════
@@ -65,43 +66,45 @@ const BRL_SHORT = (v: number) => {
    RS State SVG Path
    ═══════════════════════════════════════ */
 
-const RS_PATH = "M208.9,4.1 L253.3,2.4 L297.8,3.7 L342.2,8.1 L355.6,17.9 L355.6,48.7 L354.7,81.2 L337.8,109.6 L337.8,125.8 L333.3,142.0 L315.6,162.3 L297.8,182.6 L275.6,202.9 L253.3,223.2 L231.1,243.5 L208.9,263.8 L191.1,273.9 L177.8,273.5 L173.3,267.8 L142.2,263.8 L120.0,251.6 L75.6,235.4 L31.1,215.1 L4.4,186.7 L4.4,154.2 L22.2,129.9 L53.3,105.5 L84.4,73.0 L106.7,40.6 L137.8,16.2 L164.4,8.1 L186.7,4.1 L208.9,4.1 Z";
-
-const MUNICIPIO_COORDS: Record<string, { x: number; y: number }> = {
-  "Eldorado do Sul":         { x: 272.3, y: 125.2 },
-  "Taquara":                 { x: 307.6, y: 107.6 },
-  "Estrela":                 { x: 255.1, y: 101.6 },
-  "Lajeado":                 { x: 255.1, y: 100.1 },
-  "Encruzilhada do Sul":     { x: 230.1, y: 143.8 },
-  "São João do Polêsine":    { x: 191.2, y: 106.2 },
-  "São Sebastião do Caí":    { x: 281.5, y: 105.1 },
-  "São Francisco de Paula":  { x: 316.4, y:  99.1 },
-  "Arroio do Meio":          { x: 255.6, y:  97.4 },
-  "Esteio":                  { x: 289.8, y: 115.9 },
-  "Tapejara":                { x: 252.9, y:  43.1 },
-  "Santa Rosa":              { x: 143.1, y:  35.3 },
-  "Tupanciretã":             { x: 171.7, y:  84.4 },
-  "Viamão":                  { x: 296.8, y: 125.0 },
-  "Porto Alegre":            { x: 287.6, y: 123.1 },
-  "Muçum":                   { x: 259.0, y:  87.9 },
-  "Roca Sales":              { x: 260.4, y: 102.9 },
-  "Venâncio Aires":          { x: 245.0, y: 105.9 },
-  "São José do Norte":       { x: 252.0, y: 203.6 },
-  "Dona Francisca":          { x: 192.7, y: 106.7 },
-  "Parobé":                  { x: 305.2, y: 106.6 },
-  "Dois Irmãos":             { x: 294.0, y: 104.6 },
-  "Dom Pedrito":             { x: 134.6, y: 161.6 },
-  "Uruguaiana":              { x:  27.2, y: 111.8 },
-  "Pelotas":                 { x: 238.1, y: 193.6 },
-  "Rosário do Sul":          { x: 123.7, y: 132.0 },
-  "Rio Pardo":               { x: 236.7, y: 121.3 },
-  "Encantado":               { x: 259.1, y:  90.7 },
-  "São Leopoldo":            { x: 291.2, y: 112.0 },
-  "Novo Hamburgo":           { x: 292.0, y: 108.7 },
-  "Caxias do Sul":           { x: 289.8, y:  88.0 },
-  "Campo Bom":               { x: 295.4, y: 108.4 },
-  "Sapucaia do Sul":         { x: 291.0, y: 114.7 },
-  "São Lourenço do Sul":     { x: 254.2, y: 177.3 },
+const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
+  "Porto Alegre":            { lat: -30.0346, lng: -51.2177 },
+  "Gravataí":                { lat: -29.9441, lng: -50.9914 },
+  "Esteio":                  { lat: -29.8578, lng: -51.1775 },
+  "São Leopoldo":            { lat: -29.7597, lng: -51.1503 },
+  "Novo Hamburgo":           { lat: -29.6783, lng: -51.1306 },
+  "Dois Irmãos":             { lat: -29.5836, lng: -51.0906 },
+  "Viamão":                  { lat: -30.0811, lng: -51.0228 },
+  "Parobé":                  { lat: -29.6261, lng: -50.8322 },
+  "Tapejara":                { lat: -28.0667, lng: -52.0167 },
+  "Santa Rosa":              { lat: -27.8714, lng: -54.4806 },
+  "Tupanciretã":             { lat: -29.0839, lng: -53.8419 },
+  "Uruguaiana":              { lat: -29.7553, lng: -57.0883 },
+  "Dom Pedrito":             { lat: -30.9803, lng: -54.6681 },
+  "Pelotas":                 { lat: -31.7654, lng: -52.3376 },
+  "Encruzilhada do Sul":     { lat: -30.5425, lng: -52.5225 },
+  "Rosário do Sul":          { lat: -30.2569, lng: -54.9172 },
+  "Rio Pardo":               { lat: -29.9875, lng: -52.3708 },
+  "Venâncio Aires":          { lat: -29.6106, lng: -52.1906 },
+  "Arroio do Meio":          { lat: -29.3964, lng: -51.9483 },
+  "Muçum":                   { lat: -29.1667, lng: -51.8667 },
+  "Encantado":               { lat: -29.2333, lng: -51.8667 },
+  "Roca Sales":              { lat: -29.3333, lng: -51.8667 },
+  "São Francisco de Paula":  { lat: -29.4422, lng: -50.5833 },
+  "São Sebastião do Caí":    { lat: -29.5833, lng: -51.3667 },
+  "São João do Polêsine":    { lat: -29.6167, lng: -53.3 },
+  "Dona Francisca":          { lat: -29.6167, lng: -53.3583 },
+  "Caxias do Sul":           { lat: -29.1678, lng: -51.1794 },
+  "São José do Norte":       { lat: -32.0169, lng: -52.0322 },
+  "Eldorado do Sul":         { lat: -30.085,  lng: -51.5681 },
+  "Alvorada":                { lat: -29.9878, lng: -51.0822 },
+  "Canoas":                  { lat: -29.9178, lng: -51.1836 },
+  "Porto Alegre - Zona Norte":{ lat: -29.9,   lng: -51.1 },
+  "Taquara":                 { lat: -29.6506, lng: -50.7792 },
+  "Estrela":                 { lat: -29.5006, lng: -51.9611 },
+  "Lajeado":                 { lat: -29.4669, lng: -51.9614 },
+  "Campo Bom":               { lat: -29.6747, lng: -51.0603 },
+  "Sapucaia do Sul":         { lat: -29.8275, lng: -51.1492 },
+  "São Lourenço do Sul":     { lat: -31.3650, lng: -51.9778 },
 };
 
 const HEALTH_PIN: Record<string, string> = {
@@ -221,10 +224,27 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
 
   // Obras with map pins
   const obrasOnMap = useMemo(() => {
-    return filteredObras
-      .filter(o => o.municipio && MUNICIPIO_COORDS[o.municipio])
-      .map(o => ({ ...o, coords: MUNICIPIO_COORDS[o.municipio!] }));
+    return filteredObras.filter(o => o.municipio && CITY_COORDS[o.municipio]);
   }, [filteredObras]);
+
+  const mapObras: MapObra[] = useMemo(() => {
+    return obrasOnMap
+      .map(obra => {
+        const coords = CITY_COORDS[obra.municipio || ""];
+        if (!coords) return null;
+        return {
+          id: obra.id,
+          nome: obra.nome,
+          municipio: obra.municipio || "",
+          lat: coords.lat,
+          lng: coords.lng,
+          health: obra.health,
+          valor_contrato: obra.valor_contrato,
+          status: obra.status,
+        };
+      })
+      .filter(Boolean) as MapObra[];
+  }, [obrasOnMap]);
 
   // Map stats
   const mapStats = useMemo(() => ({
@@ -333,60 +353,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
               <p className="text-[10px] text-muted-foreground mb-2">
                 {obrasOnMap.length} obra{obrasOnMap.length !== 1 ? "s" : ""} mapeada{obrasOnMap.length !== 1 ? "s" : ""} · clique para abrir
               </p>
-              <svg viewBox="0 0 360 280" className="w-full h-auto">
-                <path d={RS_PATH} fill="hsl(var(--muted) / 0.5)" stroke="hsl(var(--border))" strokeWidth="1.5" />
-                <text x="287" y="137" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.5">Porto Alegre</text>
-                <text x="15" y="215" textAnchor="start" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.4">Uruguaiana</text>
-                <text x="330" y="70" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.4">Caxias do Sul</text>
-                <text x="180" y="170" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="28" fontWeight="700" opacity="0.08">RS</text>
-                <text x="345" y="18" textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="7" opacity="0.4">N↑</text>
-                <text x="340" y="200" textAnchor="end" fill="hsl(var(--muted-foreground))" fontSize="5" opacity="0.3" fontStyle="italic">Oceano Atlântico</text>
-                {obrasOnMap.map(obra => {
-                  const isHovered = hoveredObra === obra.id;
-                  const color = HEALTH_PIN[obra.health] || "#3b82f6";
-                  return (
-                    <g key={obra.id} style={{ cursor: "pointer" }}
-                      onMouseEnter={() => setHoveredObra(obra.id)}
-                      onMouseLeave={() => setHoveredObra(null)}
-                      onClick={() => onObraClick(obra.id)}
-                    >
-                      {isHovered && (
-                        <circle cx={obra.coords.x} cy={obra.coords.y} r="14" fill="none" stroke={color} strokeWidth="2" opacity="0.4">
-                          <animate attributeName="r" from="10" to="18" dur="1s" repeatCount="indefinite" />
-                          <animate attributeName="opacity" from="0.6" to="0" dur="1s" repeatCount="indefinite" />
-                        </circle>
-                      )}
-                      <circle cx={obra.coords.x + 0.5} cy={obra.coords.y + 0.5} r={isHovered ? 7 : 5} fill="rgba(0,0,0,0.15)" />
-                      <circle cx={obra.coords.x} cy={obra.coords.y} r={isHovered ? 7 : 5} fill={color} stroke="white" strokeWidth="1.5" />
-                      {!isHovered && (
-                        <text x={obra.coords.x} y={obra.coords.y + 11} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="4" opacity="0.7">
-                          {obra.municipio?.split(" ")[0]}
-                        </text>
-                      )}
-                      {isHovered && (
-                        <g>
-                          <rect x={obra.coords.x - 55} y={obra.coords.y - 42} width="110" height="32" rx="4"
-                            fill="hsl(var(--popover))" stroke="hsl(var(--border))" strokeWidth="0.5" />
-                          <text x={obra.coords.x} y={obra.coords.y - 28} textAnchor="middle" fill="hsl(var(--foreground))" fontSize="5.5" fontWeight="600">
-                            {obra.nome.slice(0, 20)}
-                          </text>
-                          <text x={obra.coords.x} y={obra.coords.y - 19} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="4.5">
-                            {BRL_SHORT(obra.valor_contrato)} • {obra.municipio}
-                          </text>
-                        </g>
-                      )}
-                    </g>
-                  );
-                })}
-              </svg>
-              <div className="flex items-center justify-between mt-2">
-                <p className="text-[10px] font-medium text-muted-foreground">{obrasOnMap.length} obra{obrasOnMap.length !== 1 ? "s" : ""} no mapa</p>
-                <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                  <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#22c55e" }} /> Sob controle</span>
-                  <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#f59e0b" }} /> Atenção</span>
-                  <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full inline-block" style={{ background: "#ef4444" }} /> Crítico</span>
-                </div>
-              </div>
+              <HoldingMap obras={mapObras} onObraClick={onObraClick} />
               {obrasOnMap.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-lg">
                   <p className="text-xs text-muted-foreground text-center px-4">Informe o município ao cadastrar cada obra para visualizá-la no mapa do RS</p>
@@ -405,7 +372,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
                   .map((obra) => {
                     const isHov = hoveredObra === obra.id;
                     const hc = HEALTH_PIN[obra.health] || "#3b82f6";
-                    const isOnMap = !!MUNICIPIO_COORDS[obra.municipio || ""];
+                    const isOnMap = !!CITY_COORDS[obra.municipio || ""];
                     return (
                       <button
                         key={obra.id}
