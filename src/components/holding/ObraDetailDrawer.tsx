@@ -47,8 +47,8 @@ async function registrarLog(
   descricao: string,
   userId: string | null,
   userName: string,
-  dadosAnteriores?: object,
-  dadosNovos?: object
+  dadosAnteriores?: Record<string, unknown>,
+  dadosNovos?: Record<string, unknown>
 ) {
   try {
     await supabase.from("holding_audit_log").insert([{
