@@ -31,7 +31,7 @@ export interface ProjectContract {
 }
 
 export function useProjectContract() {
-  const { company } = useAuth();
+  const { company, canEdit } = useAuth();
   const { currentProject } = useConstruction();
   const { currentStep, advanceToStep } = useProjectSetupFlow();
   
