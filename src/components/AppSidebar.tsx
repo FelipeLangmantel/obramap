@@ -72,7 +72,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ProjectsListDialog } from "@/components/ProjectsListDialog";
 import { NewProjectDialog } from "@/components/NewProjectDialog";
-import { SettingsDialog } from "@/components/SettingsDialog";
+import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import obraMapLogoDark from "@/assets/obramap-logo-new.png";
