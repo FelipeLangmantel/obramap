@@ -268,6 +268,50 @@ export function InstallationTabContent({ companyId, contextId }: InstallationTab
         .eq("context_id", contextId);
       if (buErr) throw buErr;
 
+      // Sync to weekly_productions for integrated contexts
+      if (contextType === 'integrated') {
+        try {
+          const { data: ctxData } = await supabase
+            .from('ind_operation_contexts')
+            .select('obramap_project_id')
+            .eq('id', contextId).single();
+          const projectId = ctxData?.obramap_project_id;
+
+          const houseNumbers = units
+            .filter(u => assemblyForm.selectedUnitIds.includes(u.id))
+            .map(u => u.unit_number).filter(Boolean);
+
+          const relatedBatches = batches.filter(b =>
+            batchUnits.some(bu =>
+              assemblyForm.selectedUnitIds.includes(bu.unit_id || '') &&
+              bu.batch_id === b.id
+            )
+          );
+
+          const today = new Date();
+          const weekStart = new Date(today);
+          const day = today.getDay();
+          weekStart.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
+          const weekStartStr = weekStart.toISOString().split('T')[0];
+
+          for (const batch of relatedBatches) {
+            if (!batch.macro_id || !batch.scope_id || !projectId) continue;
+            await supabase.from('weekly_productions').insert({
+              project_id: projectId,
+              scope_id: batch.scope_id,
+              macro_id: batch.macro_id,
+              week_start: weekStartStr,
+              house_ids: houseNumbers,
+              quantity: houseNumbers.length,
+              notes: assemblyForm.notes ||
+                'Lancado automaticamente pelo modulo de industrializacao',
+            } as any);
+          }
+        } catch (e) {
+          console.error('Erro ao criar weekly_productions:', e);
+        }
+      }
+
       toast.success(`${assemblyForm.selectedUnitIds.length} unidades registradas como montadas!`);
       setAssemblyDialog(false);
       fetchAll();
