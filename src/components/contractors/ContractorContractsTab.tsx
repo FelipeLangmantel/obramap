@@ -161,6 +161,7 @@ export function ContractorContractsTab({
   }, [currentProject?.id, company?.id, assignOpen]);
 
   const handleCreateContract = async () => {
+    if (!requireEdit()) return;
     if (!selectedContractorId) return;
     setSaving(true);
     await onCreateContract(selectedContractorId, {
