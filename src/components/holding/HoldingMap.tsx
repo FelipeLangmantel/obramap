@@ -11,24 +11,38 @@ L.Icon.Default.mergeOptions({ iconUrl, shadowUrl: iconShadow });
 // Coordenadas reais (lat/lng) de Gravataí — sede da empresa
 const SEDE = { lat: -29.9441, lng: -50.9914, label: "Sede — Gravataí" };
 
-// Ícone da sede (estrela azul)
+// Ícone da sede
 const sedeIcon = L.divIcon({
-  html: `<div style="background:#3b82f6;border:2px solid white;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.3)">
-    <span style="color:white;font-size:9px;font-weight:bold;line-height:1">S</span>
-</div>`,
+  html: `<div style="
+    background:#1d4ed8;
+    border:3px solid white;
+    border-radius:50%;
+    width:26px;height:26px;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 3px 8px rgba(0,0,0,0.4);
+    font-size:11px;font-weight:bold;color:white;line-height:1;
+  ">S</div>`,
   className: "",
-  iconSize: [16, 16],
-  iconAnchor: [8, 8],
+  iconSize: [26, 26],
+  iconAnchor: [13, 13],
 });
 
 // Ícone de obra por health
 const obraIcon = (health: string) => {
   const color = health === "green" ? "#22c55e" : health === "yellow" ? "#f59e0b" : "#ef4444";
+  const border = health === "green" ? "#15803d" : health === "yellow" ? "#b45309" : "#b91c1c";
   return L.divIcon({
-    html: `<div style="background:${color};border:2px solid white;border-radius:50%;width:12px;height:12px;box-shadow:0 2px 4px rgba(0,0,0,0.3)"></div>`,
+    html: `<div style="
+      background:${color};
+      border:2.5px solid ${border};
+      border-radius:50%;
+      width:20px;height:20px;
+      box-shadow:0 2px 6px rgba(0,0,0,0.4);
+      transition:transform 0.1s;
+    "></div>`,
     className: "",
-    iconSize: [12, 12],
-    iconAnchor: [6, 6],
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
   });
 };
 
