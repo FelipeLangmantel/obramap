@@ -301,6 +301,7 @@ export function LaborContractsView({
 
   // Enhanced create contract
   const handleCreateContractEnhanced = async () => {
+    if (!canEdit) return;
     await handleCreateContract();
     if (showBudgetWarning) {
       await updateBudgetIfNeeded();
