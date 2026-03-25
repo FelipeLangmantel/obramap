@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   PlanningStage, 
   PlanningTeam, 
@@ -13,6 +14,7 @@ import {
 import { toast } from 'sonner';
 
 export function usePlanningData(projectId: string | undefined) {
+  const { canEdit } = useAuth();
   const [stages, setStages] = useState<PlanningStage[]>([]);
   const [teams, setTeams] = useState<PlanningTeam[]>([]);
   const [templates, setTemplates] = useState<ProductivityTemplate[]>([]);
@@ -105,6 +107,7 @@ export function usePlanningData(projectId: string | undefined) {
     stage: Omit<PlanningStage, 'id' | 'created_at' | 'updated_at'>,
     teamComposition: TeamComposition
   ) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     const { data, error } = await supabase
       .from('planning_stages')
       .insert(stage)
@@ -136,6 +139,7 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const addStage = async (stage: Omit<PlanningStage, 'id' | 'created_at' | 'updated_at'>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     const { data, error } = await supabase
       .from('planning_stages')
       .insert(stage)
@@ -166,6 +170,7 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const updateStage = async (stageId: string, updates: Partial<PlanningStage>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const { error } = await supabase
       .from('planning_stages')
       .update(updates)
@@ -180,6 +185,7 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const deleteStage = async (stageId: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const { error } = await supabase
       .from('planning_stages')
       .delete()
@@ -195,6 +201,7 @@ export function usePlanningData(projectId: string | undefined) {
 
   // Work Log CRUD
   const addWorkLog = async (log: Omit<DailyWorkLog, 'id' | 'created_at' | 'updated_at'>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     const { data, error } = await supabase
       .from('daily_work_logs')
       .insert(log)
@@ -216,6 +223,7 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const updateWorkLog = async (logId: string, updates: Partial<DailyWorkLog>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const { error } = await supabase
       .from('daily_work_logs')
       .update(updates)
@@ -231,6 +239,7 @@ export function usePlanningData(projectId: string | undefined) {
 
   // Alerts
   const resolveAlert = async (alertId: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const { error } = await supabase
       .from('planning_alerts')
       .update({ 
@@ -249,6 +258,7 @@ export function usePlanningData(projectId: string | undefined) {
 
   // Simulations
   const createSimulation = async (simulation: Omit<PlanningSimulation, 'id' | 'created_at' | 'is_applied' | 'applied_at' | 'applied_by'>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     const { data, error } = await supabase
       .from('planning_simulations')
       .insert({
@@ -272,6 +282,7 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const applySimulation = async (simulationId: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const { error } = await supabase
       .from('planning_simulations')
       .update({ 
@@ -291,6 +302,7 @@ export function usePlanningData(projectId: string | undefined) {
 
   // Baseline (Freeze planning)
   const createBaseline = async (name: string = 'Planejamento Inicial') => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     const baselineData = {
       stages: stages,
       teams: teams,
@@ -330,6 +342,7 @@ export function usePlanningData(projectId: string | undefined) {
 
   // Team management
   const addTeamToStage = async (stageId: string, professionals: number = 1, helpers: number = 1) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const stage = stages.find(s => s.id === stageId);
     if (!stage) return;
 
@@ -362,6 +375,7 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const removeTeamFromStage = async (teamId: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const team = teams.find(t => t.id === teamId);
     if (!team) return;
 
@@ -391,6 +405,7 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const updateTeam = async (teamId: string, updates: Partial<PlanningTeam>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const { error } = await supabase
       .from('planning_teams')
       .update(updates)

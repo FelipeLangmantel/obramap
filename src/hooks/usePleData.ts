@@ -106,7 +106,7 @@ export interface PleEntry {
 }
 
 export function usePleData() {
-  const { company, profile } = useAuth();
+  const { company, profile, canEdit } = useAuth();
   const [projects, setProjects] = useState<PleProject[]>([]);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [groups, setGroups] = useState<PleEventGroup[]>([]);
@@ -177,6 +177,7 @@ export function usePleData() {
 
   // Create project
   const createProject = useCallback(async (data: Partial<PleProject>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     if (!company?.id) return null;
     const { data: userData } = await supabase.auth.getUser();
     const { data: result, error } = await supabase
@@ -193,6 +194,7 @@ export function usePleData() {
 
   // Create measurement
   const createMeasurement = useCallback(async (data: { measurement_number: number; period_label: string; start_date?: string; end_date?: string }) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     if (!currentProjectId) return null;
     const { data: userData } = await supabase.auth.getUser();
     const userName = getUserName();
@@ -210,6 +212,7 @@ export function usePleData() {
 
   // Approve measurement (with or without glosses)
   const approveMeasurement = useCallback(async (id: string, hasGlosses?: boolean) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const newStatus = hasGlosses ? "approved_with_glosses" : "approved";
     const { data: userData } = await supabase.auth.getUser();
     const userName = getUserName();
@@ -230,19 +233,21 @@ export function usePleData() {
     setMeasurements(prev => prev.map(m => m.id === id ? { ...m, status: newStatus } : m));
     logAudit("measurement_approved", { status: newStatus, glosses_count: hasGlosses ? glosses.filter(g => g.measurement_id === id && !g.resolved).length : 0 }, id);
     toast.success(hasGlosses ? "Medição aprovada com glossas!" : "Medição aprovada!");
-  }, [glosses, getUserName, logAudit]);
+  }, [canEdit, glosses, getUserName, logAudit]);
 
   // Undo measurement approval (temporary for testing)
   const undoMeasurementApproval = useCallback(async (id: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const { error } = await supabase.from("ple_measurements").update({ status: "draft", approved_at: null, approved_by: null, approved_by_name: null } as any).eq("id", id);
     if (error) { toast.error("Erro ao desfazer aprovação"); return; }
     setMeasurements(prev => prev.map(m => m.id === id ? { ...m, status: "draft" } : m));
     logAudit("measurement_undo_approval", {}, id);
     toast.success("Aprovação desfeita! Medição voltou ao status rascunho.");
-  }, [logAudit]);
+  }, [canEdit, logAudit]);
 
   // Toggle gloss on a cell
   const toggleGloss = useCallback(async (eventId: string, houseNumber: number, measurementId: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     if (!currentProjectId) return;
     const existing = glosses.find(g => g.measurement_id === measurementId && g.event_id === eventId && g.house_number === houseNumber && !g.resolved);
     if (existing) {
@@ -271,6 +276,7 @@ export function usePleData() {
 
   // Create event group
   const createGroup = useCallback(async (data: { code: string; name: string; parent_id?: string | null }) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     if (!currentProjectId) return null;
     const maxOrder = groups.length > 0 ? Math.max(...groups.map(g => g.display_order)) + 1 : 0;
     const { data: result, error } = await supabase
@@ -285,6 +291,7 @@ export function usePleData() {
 
   // Create event
   const createEvent = useCallback(async (data: Partial<PleEvent>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     if (!currentProjectId) return null;
     const maxOrder = events.length > 0 ? Math.max(...events.map(e => e.display_order)) + 1 : 0;
     const { data: result, error } = await supabase
@@ -299,21 +306,24 @@ export function usePleData() {
 
   // Update event
   const updateEvent = useCallback(async (id: string, data: Partial<PleEvent>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const { error } = await supabase.from("ple_events").update(data as any).eq("id", id);
     if (error) { toast.error("Erro ao atualizar evento"); return; }
     setEvents(prev => prev.map(e => e.id === id ? { ...e, ...data } : e));
-  }, []);
+  }, [canEdit]);
 
   // Delete event
   const deleteEvent = useCallback(async (id: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const { error } = await supabase.from("ple_events").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir evento"); return; }
     setEvents(prev => prev.filter(e => e.id !== id));
     setEntries(prev => prev.filter(e => e.event_id !== id));
-  }, []);
+  }, [canEdit]);
 
   // Set PLE entry
   const setEntry = useCallback(async (eventId: string, houseNumber: number, measurementId: string | null) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     if (!currentProjectId) return;
     setIsSaving(true);
     try {
@@ -346,24 +356,27 @@ export function usePleData() {
 
   // Delete group
   const deleteGroup = useCallback(async (id: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const { error } = await supabase.from("ple_event_groups").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir grupo"); return; }
     setGroups(prev => prev.filter(g => g.id !== id));
-  }, []);
+  }, [canEdit]);
 
   // Update group
   const updateGroup = useCallback(async (id: string, data: Partial<PleEventGroup>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const { error } = await supabase.from("ple_event_groups").update(data as any).eq("id", id);
     if (error) { toast.error("Erro ao atualizar grupo"); return; }
     setGroups(prev => prev.map(g => g.id === id ? { ...g, ...data } : g));
-  }, []);
+  }, [canEdit]);
 
   // Update project
   const updateProject = useCallback(async (id: string, data: Partial<PleProject>) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const { error } = await supabase.from("ple_projects").update(data as any).eq("id", id);
     if (error) { toast.error("Erro ao atualizar projeto"); return; }
     setProjects(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
-  }, []);
+  }, [canEdit]);
 
   // Computed: get measurement number for an entry
   const getMeasurementNumber = useCallback((eventId: string, houseNumber: number): number | null => {

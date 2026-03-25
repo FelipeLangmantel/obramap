@@ -47,7 +47,7 @@ export interface GanttService {
 }
 
 export function useStrategicGanttData(projectId: string | undefined) {
-  const { company } = useAuth();
+  const { company, canEdit } = useAuth();
   const [services, setServices] = useState<StrategicService[]>([]);
   const [productivities, setProductivities] = useState<ServiceProductivityConfig[]>([]);
   const [ganttServices, setGanttServices] = useState<GanttService[]>([]);
@@ -271,6 +271,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
     newProductivity: number,
     newTeams: number
   ) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     if (!company?.id) return;
 
     // Update service_productivities
@@ -314,6 +315,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
     serviceId: string,
     predecessorStageId: string | null
   ) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     if (!projectId) return;
 
     const service = ganttServices.find((s) => s.id === serviceId);
@@ -336,6 +338,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
     serviceId: string,
     newOrder: number
   ) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const service = ganttServices.find((s) => s.id === serviceId);
     if (!service?.stage_id) return;
 

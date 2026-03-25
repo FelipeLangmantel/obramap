@@ -58,7 +58,7 @@ export interface PeriodSummary {
 }
 
 export function useLongTermPlanning(projectId: string | undefined) {
-  const { company } = useAuth();
+  const { company, canEdit } = useAuth();
   const { currentStep, advanceToStep } = useProjectSetupFlow();
   const [activeVersion, setActiveVersion] = useState<PlanningVersion | null>(null);
   const [periods, setPeriods] = useState<PlanningPeriod[]>([]);
@@ -359,6 +359,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
     periodId: string,
     newValue: number
   ) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     setServiceRows(prev => prev.map(row => {
       if (row.macro_id === macroId && row.scope_id === scopeId) {
         // Block completed services
@@ -433,6 +434,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
   // Salvar alterações
   const savePlanning = useCallback(async () => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return false; }
     if (!projectId || !company?.id) {
       toast.error("Projeto ou empresa não identificados");
       return false;
@@ -556,6 +558,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
   }, [initializePlanning]);
 
   const addPeriod = useCallback(async () => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     if (!projectId || !company?.id || !activeVersion?.id) return;
 
     try {
@@ -582,6 +585,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
   }, [projectId, company?.id, activeVersion?.id, loadPeriods]);
 
   const deletePeriod = useCallback(async (periodId: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     try {
       const { data, error } = await supabase.rpc("delete_planning_period", {
         p_period_id: periodId,
@@ -605,9 +609,10 @@ export function useLongTermPlanning(projectId: string | undefined) {
       console.error("Erro ao excluir período:", error);
       toast.error("Erro ao excluir período");
     }
-  }, [loadPeriods]);
+  }, [canEdit, loadPeriods]);
 
   const updatePeriodDates = useCallback(async (periodId: string, startDate: string, endDate: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return false; }
     try {
       const period = periods.find(p => p.id === periodId);
       if (!period) {
@@ -619,7 +624,6 @@ export function useLongTermPlanning(projectId: string | undefined) {
         return false;
       }
 
-      // Update the edited period
       const { error } = await supabase
         .from("planning_periods")
         .update({ start_date: startDate, end_date: endDate, updated_at: new Date().toISOString() })
@@ -627,31 +631,24 @@ export function useLongTermPlanning(projectId: string | undefined) {
 
       if (error) throw error;
 
-      // Cascade: auto-update all subsequent periods
       const sortedPeriods = [...periods].sort((a, b) => a.period_number - b.period_number);
       const editedIndex = sortedPeriods.findIndex(p => p.id === periodId);
 
       if (editedIndex >= 0 && editedIndex < sortedPeriods.length - 1) {
-        // Calculate the duration of the edited period to use as reference for subsequent ones
-        const editedStart = new Date(startDate);
         const editedEnd = new Date(endDate);
-        
         let previousEnd = editedEnd;
 
         for (let i = editedIndex + 1; i < sortedPeriods.length; i++) {
           const nextPeriod = sortedPeriods[i];
 
-          // Skip locked periods
           if (nextPeriod.status === "executing" || nextPeriod.status === "closed") {
             break;
           }
 
-          // Calculate this period's own duration (preserve original duration)
           const origStart = new Date(nextPeriod.start_date);
           const origEnd = new Date(nextPeriod.end_date);
           const durationMs = origEnd.getTime() - origStart.getTime();
 
-          // New start = previous end + 1 day
           const newStart = new Date(previousEnd);
           newStart.setDate(newStart.getDate() + 1);
           
@@ -681,7 +678,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
       toast.error("Erro ao atualizar período");
       return false;
     }
-  }, [periods, loadPeriods]);
+  }, [canEdit, periods, loadPeriods]);
 
   useEffect(() => {
     if (!projectId || !company?.id) return;
