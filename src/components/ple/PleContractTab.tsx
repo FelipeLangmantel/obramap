@@ -222,6 +222,7 @@ export function PleContractTab(props: PleDataReturn) {
   };
 
   const handleAddEvent = async (substageId: string) => {
+    if (!requireEdit()) return;
     if (!newEvent.item_code || !newEvent.description) { toast.error("Item e descrição obrigatórios"); return; }
     const computedUnitValue = newEvent.mat_unit_value + newEvent.mo_unit_value;
     const finalUnitValue = computedUnitValue > 0 ? computedUnitValue : newEvent.unit_value;
