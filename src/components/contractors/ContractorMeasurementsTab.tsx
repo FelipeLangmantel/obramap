@@ -42,7 +42,7 @@ export function ContractorMeasurementsTab({
   recalcContractTotal, onBack,
 }: Props) {
   const { currentProject } = useConstruction();
-  const { company } = useAuth();
+  const { company, canEdit, requireEdit } = useAuth();
 
   const [services, setServices] = useState<ContractorContractService[]>([]);
   const [measurements, setMeasurements] = useState<ContractorMeasurement[]>([]);
