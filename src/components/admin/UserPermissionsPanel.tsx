@@ -259,10 +259,23 @@ export function UserPermissionsPanel() {
         };
       });
 
+      // Fetch sessions only for users in this company
+      const companyUserIds = usersWithRoles.map(u => u.user_id);
+      let companySessions: UserSession[] = [];
+      if (companyUserIds.length > 0) {
+        const { data: sessionsData } = await supabase
+          .from("user_sessions")
+          .select("*")
+          .in("user_id", companyUserIds)
+          .order("login_at", { ascending: false })
+          .limit(100);
+        companySessions = (sessionsData || []) as UserSession[];
+      }
+
       setUsers(usersWithRoles);
       setPermissions(permissionsMap);
       setDepartments(departmentsRes.data || []);
-      setSessions((sessionsRes.data || []) as UserSession[]);
+      setSessions(companySessions);
       setDeptPermissions(deptPermMap);
     } catch (error) {
       console.error("Error fetching data:", error);
