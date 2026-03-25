@@ -431,7 +431,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
         {/* ═══ PERÍODOS ═══ */}
         <TabsContent value="periodos" className="space-y-3 mt-3">
           <div className="flex justify-end">
-            <Button size="sm" onClick={openNewPeriod} className="gap-1.5">
+            <Button size="sm" onClick={openNewPeriod} className="gap-1.5" disabled={!canEdit}>
               <Plus className="h-4 w-4" /> Novo Período
             </Button>
           </div>
