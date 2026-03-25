@@ -19,7 +19,7 @@ import {
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
-import { Package, Plus, Filter, ArrowRight, DollarSign, Calendar } from "lucide-react";
+import { Package, Plus, Filter, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
