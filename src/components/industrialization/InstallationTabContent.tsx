@@ -442,16 +442,23 @@ export function InstallationTabContent({ companyId, contextId, contextType }: In
                 </div>
               </CardContent>
             </Card>
-          ))}
+          );
+          })}
         </div>
       )}
 
-      {/* Legend */}
+      {/* Legend — simplified */}
       <div className="flex flex-wrap gap-3 text-[10px] text-muted-foreground pt-1">
-        {Object.entries(STATUS_CONFIG).map(([k, v]) => (
-          <div key={k} className="flex items-center gap-1">
-            <div className={cn("w-3 h-3 rounded", CELL_BG[k] || "bg-muted")} />
-            <span>{v.label}</span>
+        {[
+          { key: "pending", label: "Pendente" },
+          { key: "in_production", label: "Produzindo" },
+          { key: "in_transit", label: "Em Trânsito" },
+          { key: "delivered", label: "Entregue" },
+          { key: "installed", label: "Instalado" },
+        ].map(item => (
+          <div key={item.key} className="flex items-center gap-1">
+            <div className={cn("w-3 h-3 rounded", CELL_BG[item.key] || "bg-muted")} />
+            <span>{item.label}</span>
           </div>
         ))}
       </div>

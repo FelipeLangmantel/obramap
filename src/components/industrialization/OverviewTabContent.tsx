@@ -682,7 +682,10 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-sm">Pipeline de Lotes</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Package className="h-4 w-4 text-muted-foreground" />
+              Pipeline de Lotes
+            </CardTitle>
             <Select value={pipelineFilter} onValueChange={setPipelineFilter}>
               <SelectTrigger className="h-7 w-40 text-xs"><SelectValue placeholder="Filtrar..." /></SelectTrigger>
               <SelectContent>
@@ -706,18 +709,24 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
                 const style = PIPELINE_STYLE[b.status] || PIPELINE_STYLE.planned;
                 const isLate = b.planned_finish && new Date(b.planned_finish) < new Date()
                   && !['delivered','installed','cancelled'].includes(b.status);
+                const batchValue = b.planned_quantity * b.unit_value;
+                const factory = factories.find(f => f.id === b.factory_id);
                 return (
                   <div key={b.id}
-                    className={`shrink-0 rounded-lg border-2 p-3 min-w-[120px] cursor-pointer transition-all hover:-translate-y-1
-                      ${style.bg} ${isLate ? 'border-destructive' : style.border}`}
-                    onClick={() => setCellDialog(null)}>
+                    className={`shrink-0 rounded-lg border-2 p-3 min-w-[140px] cursor-pointer transition-all hover:-translate-y-1
+                      ${style.bg} ${isLate ? 'border-destructive' : style.border}`}>
                     <div className='text-[10px] font-bold text-foreground'>{b.batch_code}{isLate ? ' ⚠️' : ''}</div>
                     <div className='text-[10px] text-muted-foreground mt-0.5'>
-                      {factories.find(f => f.id === b.factory_id)?.name || '—'}
+                      {factory?.name || '—'}
                     </div>
                     <div className='text-xs font-semibold text-foreground mt-1'>
                       {b.actual_quantity || 0}/{b.planned_quantity} un
                     </div>
+                    {batchValue > 0 && (
+                      <div className='text-[10px] text-muted-foreground mt-0.5'>
+                        {BRL.format(batchValue)}
+                      </div>
+                    )}
                     <span className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-[9px] font-semibold ${style.badge}`}>
                       {STATUS_LABEL[b.status] || b.status}
                     </span>

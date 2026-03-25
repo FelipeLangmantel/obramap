@@ -413,6 +413,7 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
                     {daySchedules.map(s => {
                       const eq = equipment.find(e => e.id === s.equipment_id);
                       const badge = getStatusBadge(s.status);
+                      const unitCount = s.unit_ids?.length || 0;
                       return (
                         <div
                           key={s.id}
@@ -428,7 +429,12 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
                           {s.start_time && s.end_time && (
                             <span className="text-muted-foreground">{s.start_time?.slice(0, 5)}–{s.end_time?.slice(0, 5)}</span>
                           )}
-                          <span className="text-muted-foreground">{BRL.format(s.daily_cost)}</span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-muted-foreground">{BRL.format(s.daily_cost)}</span>
+                            {unitCount > 0 && (
+                              <Badge variant="outline" className="text-[8px] px-1 py-0">{unitCount} un</Badge>
+                            )}
+                          </div>
                           {s.status === "scheduled" && (
                             <div className="flex gap-1 mt-0.5">
                               <Button
