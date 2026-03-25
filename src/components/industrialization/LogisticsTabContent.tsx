@@ -146,6 +146,7 @@ export function LogisticsTabContent({ companyId, contextId }: LogisticsTabProps)
     setTruckDialog(true);
   };
   const saveTruck = async () => {
+    if (!requireEdit()) return;
     if (!truckForm.plate.trim()) { toast.error("Placa obrigatória"); return; }
     const payload = {
       ...truckForm, company_id: companyId,
