@@ -369,7 +369,7 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <TabsContent value="resumo" className="mt-0"><ResumoTab obra={obra} /></TabsContent>
           <TabsContent value="documentos" className="mt-0"><DocumentosTab obraId={obra.id} /></TabsContent>
-          <TabsContent value="medicoes" className="mt-0"><MedicoesTab obraId={obra.id} /></TabsContent>
+          <TabsContent value="medicoes" className="mt-0"><MedicoesTab obraId={obra.id} valorContrato={obra.valor_contrato || 0} /></TabsContent>
           <TabsContent value="financeiro" className="mt-0"><FinanceiroTab obraId={obra.id} /></TabsContent>
           <TabsContent value="aditivos" className="mt-0"><AditivosTab obraId={obra.id} /></TabsContent>
           <TabsContent value="pendencias" className="mt-0"><PendenciasTab obraId={obra.id} /></TabsContent>
@@ -627,7 +627,7 @@ function ClearableDateInput({ value, onChange, label }: { value: string; onChang
   );
 }
 
-function MedicoesTab({ obraId }: { obraId: string }) {
+function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato: number }) {
   const invalidateHolding = useInvalidateHolding();
   const [medicoes, setMedicoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -661,6 +661,20 @@ function MedicoesTab({ obraId }: { obraId: string }) {
 
   useEffect(() => { load(); }, [load]);
 
+  const saldoDisponivel = useMemo(() => {
+    if (valorContrato === 0) return Infinity;
+    const totalLancado = medicoes
+      .filter(m => m.num_medicao !== "Saldo Inicial")
+      .reduce((s, m) => s + (Number(m.valor_medicao) || 0) + (Number(m.valor_previsto_medicao) || 0), 0);
+    return Math.max(0, valorContrato - totalLancado);
+  }, [medicoes, valorContrato]);
+
+  const totalJaLancado = useMemo(() => {
+    return medicoes
+      .filter(m => m.num_medicao !== "Saldo Inicial")
+      .reduce((s, m) => s + (Number(m.valor_medicao) || 0) + (Number(m.valor_previsto_medicao) || 0), 0);
+  }, [medicoes]);
+
   const addMedicao = async () => {
     if (form.num_medicao && form.mes_referencia) {
       const isDuplicate = medicoes.some(m =>
@@ -670,6 +684,23 @@ function MedicoesTab({ obraId }: { obraId: string }) {
       );
       if (isDuplicate) {
         toast.warning(`Já existe uma medição Nº ${form.num_medicao} para ${form.mes_referencia}/${form.ano_referencia} nesta obra.`);
+        return;
+      }
+    }
+
+    // Validar limite do contrato
+    if (valorContrato > 0) {
+      const novoValorMedicao = Number(form.valor_medicao) || 0;
+      const novoValorPrevisto = Number(form.valor_previsto_medicao) || 0;
+      const novoValorTotal = novoValorMedicao + novoValorPrevisto;
+
+      if (novoValorTotal > 0 && totalJaLancado + novoValorTotal > valorContrato) {
+        const disponivel = valorContrato - totalJaLancado;
+        toast.error(
+          disponivel <= 0
+            ? `❌ Limite atingido. O total de medições já alcançou o valor do contrato (${BRL.format(valorContrato)}).`
+            : `❌ Valor excede o saldo disponível. Saldo restante: ${BRL.format(disponivel)}. Valor lançado: ${BRL.format(novoValorTotal)}.`
+        );
         return;
       }
     }
@@ -689,6 +720,21 @@ function MedicoesTab({ obraId }: { obraId: string }) {
 
   const updateMedicao = async () => {
     if (!editingMedicao) return;
+
+    // Validar limite do contrato
+    if (valorContrato > 0) {
+      const novoValor = (Number(editForm.valor_medicao) || 0) + (Number(editForm.valor_previsto_medicao) || 0);
+      const totalSemEsta = medicoes
+        .filter(m => m.id !== editingMedicao.id && m.num_medicao !== "Saldo Inicial")
+        .reduce((s, m) => s + (Number(m.valor_medicao) || 0) + (Number(m.valor_previsto_medicao) || 0), 0);
+
+      if (novoValor > 0 && totalSemEsta + novoValor > valorContrato) {
+        const disponivel = valorContrato - totalSemEsta;
+        toast.error(`❌ Valor excede o saldo disponível. Saldo restante para esta medição: ${BRL.format(Math.max(0, disponivel))}.`);
+        return;
+      }
+    }
+
     const payload: any = { ...editForm };
     delete payload.id; delete payload.obra_id; delete payload.created_at;
     // Allow clearing dates by setting to null
@@ -779,6 +825,21 @@ function MedicoesTab({ obraId }: { obraId: string }) {
             </div>
           </div>
         </div>
+
+        {valorContrato > 0 && (
+          <div className={`flex items-center justify-between text-xs p-2 rounded-md ${
+            saldoDisponivel <= 0
+              ? "bg-destructive/10 text-destructive"
+              : saldoDisponivel < valorContrato * 0.1
+                ? "bg-amber-500/10 text-amber-700"
+                : "bg-emerald-500/10 text-emerald-700"
+          }`}>
+            <span>Saldo disponível para medições:</span>
+            <span className="font-semibold">
+              {saldoDisponivel <= 0 ? "Limite atingido" : BRL.format(saldoDisponivel)}
+            </span>
+          </div>
+        )}
 
         <Separator />
 
