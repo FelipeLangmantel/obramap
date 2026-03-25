@@ -377,6 +377,7 @@ export function FinancialFlowView() {
   };
 
   const handleAddEntry = async () => {
+    if (!canEdit) return;
     if (!currentProject?.id || !newEntry.description || !newEntry.category) {
       toast.error("Preencha os campos obrigatórios");
       return;
