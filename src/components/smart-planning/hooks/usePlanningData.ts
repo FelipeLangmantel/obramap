@@ -333,6 +333,7 @@ export function usePlanningData(projectId: string | undefined) {
 
   // Team management
   const addTeamToStage = async (stageId: string, professionals: number = 1, helpers: number = 1) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const stage = stages.find(s => s.id === stageId);
     if (!stage) return;
 
