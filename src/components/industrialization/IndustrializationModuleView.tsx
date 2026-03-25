@@ -56,7 +56,7 @@ const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" 
 
 export default function IndustrializationModuleView() {
   const { projects } = useConstruction();
-  const { profile, isCompanyAdmin } = useAuth();
+  const { profile, isCompanyAdmin, canEdit, requireEdit } = useAuth();
   const companyId = profile?.company_id;
 
   const [view, setView] = useState<"dashboard" | "detail">("dashboard");
@@ -140,6 +140,7 @@ export default function IndustrializationModuleView() {
   };
 
   const saveNewContext = async () => {
+    if (!requireEdit()) return;
     if (!newContextForm.name.trim() || !companyId) {
       toast.error("Nome obrigatório");
       return;
@@ -170,6 +171,7 @@ export default function IndustrializationModuleView() {
   // DEMONSTRAÇÃO COMPLETA
   // ══════════════════════════════════════════
   const criarDemonstracao = async () => {
+    if (!requireEdit()) return;
     if (!companyId) return;
     setLoadingDemo(true);
 
@@ -506,6 +508,7 @@ export default function IndustrializationModuleView() {
   };
 
   const excluirDemonstracao = async () => {
+    if (!requireEdit()) return;
     if (!companyId) return;
     const demoContexts = contexts.filter(c => c.name.includes("— DEMO"));
     if (demoContexts.length === 0) { toast.info("Nenhuma demonstração encontrada."); return; }
@@ -746,7 +749,7 @@ export default function IndustrializationModuleView() {
           <Factory className="h-6 w-6 text-primary" />
           <h1 className="text-xl font-bold text-foreground">Industrialização & Logística</h1>
         </div>
-        <Button size="sm" onClick={() => setNewContextDialog(true)}>
+        <Button size="sm" onClick={() => setNewContextDialog(true)} disabled={!canEdit}>
           <Plus className="h-4 w-4 mr-2" /> Nova Obra Industrial
         </Button>
       </div>
@@ -759,10 +762,10 @@ export default function IndustrializationModuleView() {
             Gerencie o fluxo completo de componentes industrializados: fábrica → lote → transporte → içamento → montagem.
           </p>
           <div className="flex items-center justify-center gap-3">
-            <Button onClick={() => setNewContextDialog(true)}>
+             <Button onClick={() => setNewContextDialog(true)} disabled={!canEdit}>
               <Plus className="h-4 w-4 mr-2" /> Nova Obra Industrial
             </Button>
-            <Button variant="outline" onClick={criarDemonstracao} disabled={loadingDemo}>
+            <Button variant="outline" onClick={criarDemonstracao} disabled={!canEdit || loadingDemo}>
               {loadingDemo ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               {loadingDemo ? "Criando..." : "Criar Demonstração"}
             </Button>

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Factory, Plus, Pencil, Trash2, ChevronDown, ChevronRight, Calendar, Wrench, Zap } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import { format, addWeeks, startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -77,6 +78,7 @@ const EMPTY_PERIOD = {
 const EMPTY_SERVICE = { name: "", category: "", display_order: 0 };
 
 export function FactoriesTabContent({ companyId, contextId, contextType }: FactoriesTabProps) {
+  const { canEdit, requireEdit } = useAuth();
   const [factories, setFactories] = useState<IndFactory[]>([]);
   const [models, setModels] = useState<IndFactoryModel[]>([]);
   const [periods, setPeriods] = useState<IndPeriod[]>([]);
@@ -135,6 +137,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
     setFactoryDialog(true);
   };
   const saveFactory = async () => {
+    if (!requireEdit()) return;
     if (!factoryForm.name.trim()) { toast.error("Nome obrigatório"); return; }
     const payload = {
       ...factoryForm,
@@ -165,6 +168,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
   // ─── Model CRUD ───
   const openNewModel = (factoryId: string) => { setModelForm({ ...EMPTY_MODEL }); setModelFactoryId(factoryId); setModelDialog(true); };
   const saveModel = async () => {
+    if (!requireEdit()) return;
     if (!modelForm.name.trim() || !modelFactoryId) { toast.error("Nome obrigatório"); return; }
     const { error } = await supabase.from("ind_factory_models").insert({
       factory_id: modelFactoryId,
@@ -189,6 +193,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
     setPeriodDialog(true);
   };
   const savePeriod = async () => {
+    if (!requireEdit()) return;
     if (!periodForm.name.trim() || !periodForm.start_date || !periodForm.end_date) { toast.error("Preencha todos os campos"); return; }
     const payload = { ...periodForm, context_id: contextId, company_id: companyId };
     if (editingPeriodId) {
@@ -212,6 +217,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
     setServiceDialog(true);
   };
   const saveService = async () => {
+    if (!requireEdit()) return;
     if (!serviceForm.name.trim()) { toast.error("Nome obrigatório"); return; }
     const payload = { ...serviceForm, context_id: contextId, company_id: companyId, category: serviceForm.category || null };
     if (editingServiceId) {
@@ -229,6 +235,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
 
   // ─── Delete handler ───
   const handleDelete = async () => {
+    if (!requireEdit()) return;
     if (!deleteTarget) return;
     const { type, id } = deleteTarget;
     if (type === "period") {
@@ -316,7 +323,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
         {/* ═══ EMPRESAS FABRIS ═══ */}
         <TabsContent value="empresas" className="space-y-3 mt-3">
           <div className="flex justify-end">
-            <Button size="sm" onClick={openNewFactory} className="gap-1.5">
+            <Button size="sm" onClick={openNewFactory} className="gap-1.5" disabled={!canEdit}>
               <Plus className="h-4 w-4" /> Nova Fábrica
             </Button>
           </div>
@@ -370,7 +377,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
                         <div className="mt-3 pt-3 border-t border-border space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-medium text-muted-foreground">Modelos de Produção</span>
-                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openNewModel(f.id)}>
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openNewModel(f.id)} disabled={!canEdit}>
                               <Plus className="h-3 w-3" /> Novo Modelo
                             </Button>
                           </div>
@@ -425,7 +432,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
         {/* ═══ PERÍODOS ═══ */}
         <TabsContent value="periodos" className="space-y-3 mt-3">
           <div className="flex justify-end">
-            <Button size="sm" onClick={openNewPeriod} className="gap-1.5">
+            <Button size="sm" onClick={openNewPeriod} className="gap-1.5" disabled={!canEdit}>
               <Plus className="h-4 w-4" /> Novo Período
             </Button>
           </div>
@@ -479,7 +486,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
         {/* ═══ SERVIÇOS ═══ */}
         <TabsContent value="servicos" className="space-y-3 mt-3">
           <div className="flex justify-end">
-            <Button size="sm" onClick={openNewService} className="gap-1.5">
+            <Button size="sm" onClick={openNewService} className="gap-1.5" disabled={!canEdit}>
               <Plus className="h-4 w-4" /> Novo Serviço
             </Button>
           </div>

@@ -23,6 +23,7 @@ import { Wrench, Filter, CheckCircle2, Package, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface InstallationTabProps {
   companyId: string;
@@ -97,6 +98,7 @@ const CELL_BG: Record<string, string> = {
 };
 
 export function InstallationTabContent({ companyId, contextId, contextType }: InstallationTabProps) {
+  const { canEdit, requireEdit } = useAuth();
   const [units, setUnits] = useState<IndUnit[]>([]);
   const [zones, setZones] = useState<IndZone[]>([]);
   const [batchUnits, setBatchUnits] = useState<BatchUnit[]>([]);
@@ -247,6 +249,7 @@ export function InstallationTabContent({ companyId, contextId, contextType }: In
   };
 
   const saveAssembly = async () => {
+    if (!requireEdit()) return;
     if (assemblyForm.selectedUnitIds.length === 0) {
       toast.error("Selecione ao menos uma unidade");
       return;
@@ -374,7 +377,7 @@ export function InstallationTabContent({ companyId, contextId, contextType }: In
           </SelectContent>
         </Select>
         <div className="flex-1" />
-        <Button size="sm" onClick={openAssemblyDialog} disabled={installableUnits.length === 0} className="gap-1.5 h-7 text-xs">
+        <Button size="sm" onClick={openAssemblyDialog} disabled={!canEdit || installableUnits.length === 0} className="gap-1.5 h-7 text-xs">
           <CheckCircle2 className="h-3.5 w-3.5" /> Registrar Montagem ({installableUnits.length})
         </Button>
       </div>

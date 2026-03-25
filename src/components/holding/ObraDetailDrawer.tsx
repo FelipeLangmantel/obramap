@@ -658,7 +658,7 @@ function ClearableDateInput({ value, onChange, label }: { value: string; onChang
 }
 
 function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato: number }) {
-  const { user, profile } = useAuth();
+  const { user, profile, requireEdit } = useAuth();
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
@@ -709,6 +709,7 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
   }, [medicoes]);
 
   const addMedicao = async () => {
+    if (!requireEdit()) return;
     if (form.num_medicao && form.mes_referencia) {
       const isDuplicate = medicoes.some(m =>
         m.num_medicao === form.num_medicao &&
@@ -773,6 +774,7 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
   };
 
   const updateMedicao = async () => {
+    if (!requireEdit()) return;
     if (!editingMedicao) return;
 
     // Validar limite do contrato
@@ -822,6 +824,7 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
   };
 
   const deleteMedicao = async (id: string) => {
+    if (!requireEdit()) return;
     if (!confirm("Excluir esta medição? Esta ação não pode ser desfeita.")) return;
     const medicaoSnap = medicoes.find(m => m.id === id);
     const { error } = await supabase.from("medicoes_ple").delete().eq("id", id);
@@ -1102,7 +1105,7 @@ const DESPESA_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 };
 
 function FinanceiroTab({ obraId }: { obraId: string }) {
-  const { user, profile } = useAuth();
+  const { user, profile, requireEdit } = useAuth();
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
@@ -1128,6 +1131,7 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
   useEffect(() => { loadData(); }, [loadData]);
 
   const handleSaveDespesa = async () => {
+    if (!requireEdit()) return;
     if (!newDespesa.mes_referencia || !newDespesa.valor) {
       toast.warning("Preencha mês e valor.");
       return;
@@ -1300,7 +1304,7 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
    ══════════════════════════════════════════════ */
 
 function AditivosTab({ obraId }: { obraId: string }) {
-  const { user, profile } = useAuth();
+  const { user, profile, requireEdit } = useAuth();
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
@@ -1321,6 +1325,7 @@ function AditivosTab({ obraId }: { obraId: string }) {
   useEffect(() => { load(); }, [load]);
 
   const addAditivo = async () => {
+    if (!requireEdit()) return;
     const payload: any = {
       obra_id: obraId,
       num_aditivo: form.num_aditivo || null,
@@ -1353,6 +1358,7 @@ function AditivosTab({ obraId }: { obraId: string }) {
   };
 
   const deleteAditivo = async (id: string) => {
+    if (!requireEdit()) return;
     if (!confirm("Excluir este aditivo?")) return;
     const aditivoSnap = aditivos.find(a => a.id === id);
     const { error } = await supabase.from("aditivos_contratos").delete().eq("id", id);

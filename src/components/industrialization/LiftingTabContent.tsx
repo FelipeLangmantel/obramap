@@ -23,6 +23,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Pencil, Trash2, CalendarDays, AlertTriangle, CheckCircle2, Wrench } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import { format, addDays, startOfWeek, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -72,6 +73,7 @@ const EMPTY_EQUIPMENT = {
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
+  const { canEdit, requireEdit } = useAuth();
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);
@@ -129,6 +131,7 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
   };
 
   const saveEquip = async () => {
+    if (!requireEdit()) return;
     if (!equipForm.name.trim()) { toast.error("Nome obrigatório"); return; }
     const payload = {
       ...equipForm, company_id: companyId,
@@ -187,6 +190,7 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
   };
 
   const saveSchedule = async () => {
+    if (!requireEdit()) return;
     if (!scheduleForm.equipment_id || !scheduleForm.booking_date) {
       toast.error("Equipamento e data são obrigatórios");
       return;
@@ -226,6 +230,7 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
 
   // ─── Complete schedule ───
   const handleComplete = async () => {
+    if (!requireEdit()) return;
     if (!completeTarget) return;
     // Update schedule status
     const { error: schErr } = await supabase
@@ -260,6 +265,7 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
 
   // ─── Delete ───
   const handleDelete = async () => {
+    if (!requireEdit()) return;
     if (!deleteTarget) return;
     const { error } = await supabase.from("ind_lifting_schedule").delete().eq("id", deleteTarget.id);
     if (error) { toast.error("Erro ao excluir"); setDeleteTarget(null); return; }
@@ -312,7 +318,7 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
         {/* ═══ EQUIPAMENTOS ═══ */}
         <TabsContent value="equipamentos" className="space-y-3 mt-3">
           <div className="flex justify-end">
-            <Button size="sm" onClick={openNewEquip} className="gap-1.5">
+            <Button size="sm" onClick={openNewEquip} className="gap-1.5" disabled={!canEdit}>
               <Plus className="h-4 w-4" /> Novo Equipamento
             </Button>
           </div>
@@ -372,7 +378,7 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
                 <Button variant="ghost" size="sm" className="text-xs" onClick={() => setWeekOffset(0)}>Hoje</Button>
               )}
             </div>
-            <Button size="sm" onClick={openNewSchedule} className="gap-1.5">
+            <Button size="sm" onClick={openNewSchedule} className="gap-1.5" disabled={!canEdit}>
               <Plus className="h-4 w-4" /> Agendar Içamento
             </Button>
           </div>

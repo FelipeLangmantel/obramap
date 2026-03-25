@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -89,6 +90,7 @@ const STATUS_FLOW: Record<string, { next: string; label: string; dateField?: str
 };
 
 export function BatchesTabContent({ companyId, contextId }: BatchesTabProps) {
+  const { canEdit, requireEdit } = useAuth();
   const [batches, setBatches] = useState<Batch[]>([]);
   const [factories, setFactories] = useState<IndFactory[]>([]);
   const [periods, setPeriods] = useState<IndPeriod[]>([]);
@@ -189,6 +191,7 @@ export function BatchesTabContent({ companyId, contextId }: BatchesTabProps) {
   };
 
   const saveBatch = async () => {
+    if (!requireEdit()) return;
     if (!form.factory_id || !form.period_id || form.selectedUnitIds.length === 0) {
       toast.error("Empresa, quinzena e unidades são obrigatórios");
       return;
@@ -341,7 +344,7 @@ export function BatchesTabContent({ companyId, contextId }: BatchesTabProps) {
           </SelectContent>
         </Select>
         <div className="flex-1" />
-        <Button size="sm" onClick={openNewDialog} className="gap-1.5 h-7 text-xs">
+        <Button size="sm" onClick={openNewDialog} className="gap-1.5 h-7 text-xs" disabled={!canEdit}>
           <Plus className="h-3.5 w-3.5" /> Novo Lote
         </Button>
       </div>

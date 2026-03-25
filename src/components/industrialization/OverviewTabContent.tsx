@@ -30,6 +30,7 @@ import {
 import { toast } from "sonner";
 import { format, differenceInDays, addDays } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -77,6 +78,7 @@ interface IndPeriod {
 }
 
 export function OverviewTabContent({ companyId, contextId, contextName, contextType, totalUnits }: OverviewTabProps) {
+  const { canEdit, requireEdit } = useAuth();
   const [longTermData, setLongTermData] = useState<LongTermRow[]>([]);
   const [costData, setCostData] = useState<CostRow[]>([]);
   const [cashData, setCashData] = useState<CashRow[]>([]);
@@ -198,6 +200,7 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
   };
 
   const saveCellEdit = async () => {
+    if (!requireEdit()) return;
     if (!cellDialog) return;
     const { periodId, factoryId } = cellDialog;
     const resolvedFactoryId = factoryId || selectedCellFactoryId;
@@ -244,6 +247,7 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
     setPeriodDialog(true);
   };
   const savePeriod = async () => {
+    if (!requireEdit()) return;
     if (!periodForm.name || !periodForm.start_date || !periodForm.end_date) {
       toast.error("Nome e datas são obrigatórios");
       return;
@@ -262,6 +266,7 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
     fetchAll();
   };
   const deletePeriod = async () => {
+    if (!requireEdit()) return;
     if (!deletePeriodTarget) return;
     const hasBatches = batches.some(b => b.ind_period_id === deletePeriodTarget.id);
     if (hasBatches) {
@@ -745,7 +750,7 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
             <CardTitle className="text-sm flex items-center gap-2">
               <CalendarDays className="h-4 w-4" /> Períodos
             </CardTitle>
-            <Button size="sm" variant="outline" onClick={openNewPeriod} className="gap-1.5 h-7 text-xs">
+            <Button size="sm" variant="outline" onClick={openNewPeriod} className="gap-1.5 h-7 text-xs" disabled={!canEdit}>
               <Plus className="h-3.5 w-3.5" /> Novo Período
             </Button>
           </div>

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 export type SystemRole = "system_admin" | "admin" | "editor" | "user";
 export type AppRole = "admin" | "editor" | "viewer"; // Legacy - para compatibilidade
@@ -50,6 +51,7 @@ interface AuthContextType {
   canAccessMenu: (menuId: string) => boolean;
   canAccessManagement: (sectionId: string) => boolean;
   canAccessProject: (projectId: string) => boolean;
+  requireEdit: () => boolean;
   refreshPermissions: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: Error | null }>;
@@ -484,6 +486,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           : true;  // editor sem restrição: pode editar
   const mustChangePassword = profile?.must_change_password || false;
 
+  const { toast: showToast } = useToast();
+  const requireEdit = useCallback((): boolean => {
+    if (canEdit) return true;
+    showToast({
+      title: "Sem permissão",
+      description: "Você tem acesso de visualização apenas. Contate o administrador para solicitar permissão de edição.",
+      variant: "destructive",
+    });
+    return false;
+  }, [canEdit, showToast]);
+
   const canAccessMenu = useCallback((menuId: string): boolean => {
     if (isSystemAdmin) return false; // System admin não acessa menus da empresa
     if (isCompanyAdmin) return true;
@@ -526,6 +539,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         canAccessMenu,
         canAccessManagement,
         canAccessProject,
+        requireEdit,
         refreshPermissions,
         signIn,
         signUp,

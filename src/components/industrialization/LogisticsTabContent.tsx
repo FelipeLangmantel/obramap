@@ -23,6 +23,7 @@ import { Truck, Plus, Pencil, Filter, ArrowRight, FileText, CheckCircle2 } from 
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -85,6 +86,7 @@ const EMPTY_TRUCK = {
 };
 
 export function LogisticsTabContent({ companyId, contextId }: LogisticsTabProps) {
+  const { canEdit, requireEdit } = useAuth();
   const [trucks, setTrucks] = useState<IndTruck[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -145,6 +147,7 @@ export function LogisticsTabContent({ companyId, contextId }: LogisticsTabProps)
     setTruckDialog(true);
   };
   const saveTruck = async () => {
+    if (!requireEdit()) return;
     if (!truckForm.plate.trim()) { toast.error("Placa obrigatória"); return; }
     const payload = {
       ...truckForm, company_id: companyId,
@@ -178,6 +181,7 @@ export function LogisticsTabContent({ companyId, contextId }: LogisticsTabProps)
   };
 
   const saveShipment = async () => {
+    if (!requireEdit()) return;
     if (!shipForm.batch_id || !shipForm.truck_id || !shipForm.planned_date) {
       toast.error("Lote, caminhão e data são obrigatórios");
       return;
@@ -225,6 +229,7 @@ export function LogisticsTabContent({ companyId, contextId }: LogisticsTabProps)
   };
 
   const confirmDelivery = async () => {
+    if (!requireEdit()) return;
     if (!selectedShipment) return;
     try {
       // Update shipment
@@ -333,7 +338,7 @@ export function LogisticsTabContent({ companyId, contextId }: LogisticsTabProps)
         {/* ═══ TRUCKS ═══ */}
         <TabsContent value="trucks" className="space-y-3 mt-3">
           <div className="flex justify-end">
-            <Button size="sm" onClick={openNewTruck} className="gap-1.5">
+            <Button size="sm" onClick={openNewTruck} className="gap-1.5" disabled={!canEdit}>
               <Plus className="h-4 w-4" /> Novo Caminhão
             </Button>
           </div>
@@ -405,7 +410,7 @@ export function LogisticsTabContent({ companyId, contextId }: LogisticsTabProps)
               </SelectContent>
             </Select>
             <div className="flex-1" />
-            <Button size="sm" onClick={openNewShipment} className="gap-1.5 h-7 text-xs" disabled={readyBatches.length === 0}>
+            <Button size="sm" onClick={openNewShipment} className="gap-1.5 h-7 text-xs" disabled={!canEdit || readyBatches.length === 0}>
               <Plus className="h-3.5 w-3.5" /> Nova Viagem
             </Button>
           </div>
