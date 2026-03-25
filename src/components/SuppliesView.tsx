@@ -1068,6 +1068,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const deleteQuotationItem = async (quotationId: string, itemId: string) => {
+    if (!canEdit) return;
     try {
       await supabase.from('quotation_items').delete().eq('id', itemId);
       toast.success('Item removido!');
