@@ -47,7 +47,7 @@ export interface GanttService {
 }
 
 export function useStrategicGanttData(projectId: string | undefined) {
-  const { company } = useAuth();
+  const { company, canEdit } = useAuth();
   const [services, setServices] = useState<StrategicService[]>([]);
   const [productivities, setProductivities] = useState<ServiceProductivityConfig[]>([]);
   const [ganttServices, setGanttServices] = useState<GanttService[]>([]);
