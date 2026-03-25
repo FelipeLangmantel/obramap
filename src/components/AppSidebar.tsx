@@ -370,19 +370,9 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
             if (visibleItems.length === 0) return null;
 
             return (
-              <SidebarGroup key={group.label} className={cn(
-                group.highlight && "mt-2 mb-2 mx-1 rounded-lg border-2 border-primary/30 bg-primary/5 p-2"
-              )}>
-                <SidebarGroupLabel className={cn(
-                  "text-xs font-bold uppercase tracking-wider px-3 mb-2 mt-3",
-                  group.highlight ? "text-primary" : "text-primary"
-                )}>
-                  <span>{group.label}</span>
-                  {group.badge && (
-                    <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0 h-4 border-primary/40 text-primary">
-                      {group.badge}
-                    </Badge>
-                  )}
+              <SidebarGroup key={group.label}>
+                <SidebarGroupLabel className="text-xs font-bold uppercase tracking-wider px-3 mb-2 mt-3 text-primary">
+                  {group.label}
                 </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu className="space-y-1">
