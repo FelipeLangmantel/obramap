@@ -140,6 +140,7 @@ export function usePlanningData(projectId: string | undefined) {
 
   const addStage = async (stage: Omit<PlanningStage, 'id' | 'created_at' | 'updated_at'>) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
+    const { data, error } = await supabase
       .from('planning_stages')
       .insert(stage)
       .select()
@@ -170,6 +171,7 @@ export function usePlanningData(projectId: string | undefined) {
 
   const updateStage = async (stageId: string, updates: Partial<PlanningStage>) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
+    const { error } = await supabase
       .from('planning_stages')
       .update(updates)
       .eq('id', stageId);
@@ -184,6 +186,7 @@ export function usePlanningData(projectId: string | undefined) {
 
   const deleteStage = async (stageId: string) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
+    const { error } = await supabase
       .from('planning_stages')
       .delete()
       .eq('id', stageId);
@@ -199,6 +202,7 @@ export function usePlanningData(projectId: string | undefined) {
   // Work Log CRUD
   const addWorkLog = async (log: Omit<DailyWorkLog, 'id' | 'created_at' | 'updated_at'>) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
+    const { data, error } = await supabase
       .from('daily_work_logs')
       .insert(log)
       .select()
@@ -220,6 +224,7 @@ export function usePlanningData(projectId: string | undefined) {
 
   const updateWorkLog = async (logId: string, updates: Partial<DailyWorkLog>) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
+    const { error } = await supabase
       .from('daily_work_logs')
       .update(updates)
       .eq('id', logId);
@@ -235,6 +240,7 @@ export function usePlanningData(projectId: string | undefined) {
   // Alerts
   const resolveAlert = async (alertId: string) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
+    const { error } = await supabase
       .from('planning_alerts')
       .update({ 
         is_resolved: true, 
@@ -253,6 +259,7 @@ export function usePlanningData(projectId: string | undefined) {
   // Simulations
   const createSimulation = async (simulation: Omit<PlanningSimulation, 'id' | 'created_at' | 'is_applied' | 'applied_at' | 'applied_by'>) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
+    const { data, error } = await supabase
       .from('planning_simulations')
       .insert({
         project_id: simulation.project_id,
@@ -276,6 +283,7 @@ export function usePlanningData(projectId: string | undefined) {
 
   const applySimulation = async (simulationId: string) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
+    const { error } = await supabase
       .from('planning_simulations')
       .update({ 
         is_applied: true, 
@@ -295,6 +303,7 @@ export function usePlanningData(projectId: string | undefined) {
   // Baseline (Freeze planning)
   const createBaseline = async (name: string = 'Planejamento Inicial') => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
+    const baselineData = {
       stages: stages,
       teams: teams,
       projected_end_date: new Date().toISOString(),
@@ -397,6 +406,7 @@ export function usePlanningData(projectId: string | undefined) {
 
   const updateTeam = async (teamId: string, updates: Partial<PlanningTeam>) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
+    const { error } = await supabase
       .from('planning_teams')
       .update(updates)
       .eq('id', teamId);
