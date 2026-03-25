@@ -379,18 +379,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.id, refreshPermissions]);
 
-  // Manter last_active_at atualizado a cada 5 minutos
+  // Manter last_active_at atualizado a cada 2 minutos e verificar inatividade (20min)
   useEffect(() => {
     if (!user) return;
+
+    const INACTIVITY_LIMIT_MS = 20 * 60 * 1000; // 20 minutos
+    const HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000; // 2 minutos
+    let lastActivity = Date.now();
+
+    // Track user activity
+    const trackActivity = () => { lastActivity = Date.now(); };
+    window.addEventListener("mousemove", trackActivity, { passive: true });
+    window.addEventListener("keydown", trackActivity, { passive: true });
+    window.addEventListener("click", trackActivity, { passive: true });
+    window.addEventListener("touchstart", trackActivity, { passive: true });
+
     const interval = setInterval(async () => {
+      const now = Date.now();
+      const inactiveDuration = now - lastActivity;
+
+      if (inactiveDuration >= INACTIVITY_LIMIT_MS) {
+        // Encerrar sessão por inatividade
+        console.log("[AUTH] Sessão encerrada por inatividade (20min)");
+        try {
+          await supabase
+            .from("user_sessions")
+            .update({ 
+              is_active: false, 
+              logout_at: new Date().toISOString(),
+              termination_reason: "inatividade",
+            } as any)
+            .eq("user_id", user.id)
+            .eq("is_active", true);
+        } catch { /* silencioso */ }
+        await supabase.auth.signOut();
+        return;
+      }
+
+      // Heartbeat — atualizar last_active_at
       await supabase
         .from("user_sessions")
         .update({ last_active_at: new Date().toISOString() } as any)
         .eq("user_id", user.id)
         .eq("is_active", true);
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
+    }, HEARTBEAT_INTERVAL_MS);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("mousemove", trackActivity);
+      window.removeEventListener("keydown", trackActivity);
+      window.removeEventListener("click", trackActivity);
+      window.removeEventListener("touchstart", trackActivity);
+    };
   }, [user]);
+
+  // Detectar se a sessão do usuário foi encerrada por um admin
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel('my-session-terminated')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'user_sessions',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload: any) => {
+          const newRecord = payload.new;
+          if (newRecord && newRecord.is_active === false && newRecord.termination_reason === 'admin') {
+            console.log("[AUTH] Sessão encerrada por administrador — forçando logout");
+            supabase.auth.signOut();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   const signIn = async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({
