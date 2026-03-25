@@ -1095,6 +1095,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const selectQuote = async (quotationItemId: string, quoteId: string) => {
+    if (!canEdit) return;
     try {
       await supabase.from('supplier_quotes').update({ is_selected: false }).eq('quotation_item_id', quotationItemId);
       await supabase.from('supplier_quotes').update({ is_selected: true }).eq('id', quoteId);
