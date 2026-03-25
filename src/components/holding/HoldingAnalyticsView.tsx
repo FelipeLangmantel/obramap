@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { MapPin, DollarSign, TrendingUp, TrendingDown, Wallet, Filter } from "lucide-react";
+import HoldingMap, { MapObra } from "./HoldingMap";
 
 const parseLocalDate = (d: string) => { const [y, m, day] = d.split("-").map(Number); return new Date(y, m - 1, day); };
 /* ═══════════════════════════════════════
