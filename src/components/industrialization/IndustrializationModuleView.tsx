@@ -502,7 +502,7 @@ export default function IndustrializationModuleView() {
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <div className={`rounded px-2 py-1 text-center text-xs font-medium ${bg}`}>
-                                        {load > 0 ? `${load}` : "—"}
+                                        {pct > 0 ? `${Math.round(pct)}%` : "—"}
                                       </div>
                                     </TooltipTrigger>
                                     <TooltipContent>
