@@ -291,15 +291,9 @@ export function UserPermissionsPanel() {
   const openPermissionDialog = (userId: string) => {
     setSelectedUserId(userId);
     const existingPermission = permissions[userId];
-    // New users get empty permissions (all deselected)
-    setEditingPermission(existingPermission || {
-      id: "",
-      user_id: userId,
-      department: "geral",
-      allowed_project_ids: null,
-      visible_menus: [],
-      visible_management_sections: [],
-    });
+    const user = users.find(u => u.user_id === userId);
+    const defaults = user ? getDefaultPermissions(user.role as 'admin' | 'editor' | 'viewer') : { visible_menus: [], visible_management_sections: [] };
+    setEditingPermission(existingPermission || { id: '', user_id: userId, department: 'geral', allowed_project_ids: null, ...defaults });
     setIsPermissionDialogOpen(true);
   };
 
