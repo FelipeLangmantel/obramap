@@ -121,3 +121,15 @@ export function getDefaultPermissions(role: 'admin' | 'editor' | 'viewer') {
     visible_management_sections: DEFAULT_MANAGEMENT_BY_ROLE[role] || [],
   };
 }
+
+/**
+ * Retorna todos os IDs de modulos que existem na definicao atual.
+ * Usado para sincronizar permissoes quando novos modulos sao adicionados.
+ */
+export function getAllModuleIds(): string[] {
+  return MENU_MODULES.map(m => m.id);
+}
+
+export function getAllManagementIds(): string[] {
+  return MANAGEMENT_MODULES.map(m => m.id);
+}

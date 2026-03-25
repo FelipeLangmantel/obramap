@@ -107,7 +107,7 @@ interface UserSession {
 }
 
 // ✅ Importado da fonte única de verdade – novos módulos aparecem automaticamente
-import { MENU_MODULES, MANAGEMENT_MODULES, MENU_TO_MODULE_KEY, getDefaultPermissions } from "@/constants/modulePermissions";
+import { MENU_MODULES, MANAGEMENT_MODULES, MENU_TO_MODULE_KEY, getDefaultPermissions, getAllModuleIds, getAllManagementIds } from "@/constants/modulePermissions";
 
 // Aliases para compatibilidade interna
 const MENU_OPTIONS = MENU_MODULES;
@@ -197,6 +197,31 @@ export function UserPermissionsPanel() {
           visible_management_sections: (p.visible_management_sections as string[]) || [],
         };
       });
+
+      // Sincronizar modulos para admins
+      const allModuleIds = getAllModuleIds();
+      const allMgmtIds = getAllManagementIds();
+
+      for (const u of usersWithRoles) {
+        if (u.role !== 'admin') continue;
+        const perm = permissionsMap[u.user_id];
+        if (!perm) continue;
+
+        const missingMenus = allModuleIds.filter(id => !perm.visible_menus.includes(id));
+        const missingMgmt = allMgmtIds.filter(id => !perm.visible_management_sections.includes(id));
+
+        if (missingMenus.length > 0 || missingMgmt.length > 0) {
+          const updatedMenus = [...perm.visible_menus, ...missingMenus];
+          const updatedMgmt = [...perm.visible_management_sections, ...missingMgmt];
+
+          await supabase.from('user_permissions')
+            .update({ visible_menus: updatedMenus, visible_management_sections: updatedMgmt })
+            .eq('user_id', u.user_id);
+
+          perm.visible_menus = updatedMenus;
+          perm.visible_management_sections = updatedMgmt;
+        }
+      }
 
       setUsers(usersWithRoles);
       setPermissions(permissionsMap);
