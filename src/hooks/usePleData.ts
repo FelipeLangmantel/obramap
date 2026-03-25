@@ -236,7 +236,7 @@ export function usePleData() {
 
   // Undo measurement approval (temporary for testing)
   const undoMeasurementApproval = useCallback(async (id: string) => {
-    const { error } = await supabase.from("ple_measurements").update({ status: "draft", approved_at: null, approved_by: null, approved_by_name: null } as any).eq("id", id);
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     if (error) { toast.error("Erro ao desfazer aprovação"); return; }
     setMeasurements(prev => prev.map(m => m.id === id ? { ...m, status: "draft" } : m));
     logAudit("measurement_undo_approval", {}, id);
