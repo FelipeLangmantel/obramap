@@ -585,7 +585,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
   }, [projectId, company?.id, activeVersion?.id, loadPeriods]);
 
   const deletePeriod = useCallback(async (periodId: string) => {
-    try {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
       const { data, error } = await supabase.rpc("delete_planning_period", {
         p_period_id: periodId,
       });
