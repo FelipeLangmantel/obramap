@@ -376,7 +376,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
                         <div className="mt-3 pt-3 border-t border-border space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-xs font-medium text-muted-foreground">Modelos de Produção</span>
-                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openNewModel(f.id)}>
+                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => openNewModel(f.id)} disabled={!canEdit}>
                               <Plus className="h-3 w-3" /> Novo Modelo
                             </Button>
                           </div>
