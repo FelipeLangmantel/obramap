@@ -234,13 +234,14 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       ],
     },
     {
-      label: "Financeiro & Contratos",
+      label: "Financeiro & Operações",
       items: [
         { title: "Contrato da Obra", view: "project-contract", icon: FileText, permissionId: "contrato" },
         { title: "Custos da Obra", view: "costs", icon: DollarSign, permissionId: "custos" },
         { title: "Fluxo Financeiro", view: "financial-flow", icon: Wallet, permissionId: "financeiro" },
         { title: "Suprimentos", view: "supplies", icon: Package, permissionId: "suprimentos" },
         { title: "Empreiteiros", view: "contractors", icon: Truck, permissionId: "empreiteiros" },
+        { title: "Industrialização", view: "industrialization", icon: Factory, permissionId: "industrializacao", badge: "BETA" },
       ],
     },
     {
@@ -248,27 +249,12 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       items: [
         { title: "Painel da Holding", view: "holding-dashboard", icon: Crown, permissionId: "holding" },
         { title: "Receitas & Medições", view: "holding-receitas", icon: TrendingUp, permissionId: "holding_receitas" },
+        { title: "Medições PLE", view: "ple-measurements", icon: ClipboardList, permissionId: "ple_medicoes" },
         { title: "Despesas & Custos", view: "holding-despesas", icon: Receipt, permissionId: "holding_despesas" },
         { title: "Documentação", view: "holding-documentos", icon: FolderOpen, permissionId: "holding_documentos" },
         { title: "PRD — Cronograma", view: "holding-prd", icon: BarChart3, permissionId: "holding_prd" },
         { title: "IA — Insights", view: "holding-insights", icon: Sparkles, permissionId: "holding_insights", badge: "BETA" },
         { title: "Configurações", view: "holding-config", icon: Settings, permissionId: "holding" },
-      ],
-    },
-    {
-      label: "Industrialização",
-      highlight: true,
-      badge: "Beta",
-      items: [
-        { title: "Industrialização & Logística", view: "industrialization", icon: Factory, permissionId: "industrializacao" },
-      ],
-    },
-    {
-      label: "Medições PLE",
-      highlight: true,
-      badge: "Módulo à parte",
-      items: [
-        { title: "Medições PLE", view: "ple-measurements", icon: ClipboardList, permissionId: "ple_medicoes" },
       ],
     },
   ];
