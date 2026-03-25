@@ -661,6 +661,20 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
 
   useEffect(() => { load(); }, [load]);
 
+  const saldoDisponivel = useMemo(() => {
+    if (valorContrato === 0) return Infinity;
+    const totalLancado = medicoes
+      .filter(m => m.num_medicao !== "Saldo Inicial")
+      .reduce((s, m) => s + (Number(m.valor_medicao) || 0) + (Number(m.valor_previsto_medicao) || 0), 0);
+    return Math.max(0, valorContrato - totalLancado);
+  }, [medicoes, valorContrato]);
+
+  const totalJaLancado = useMemo(() => {
+    return medicoes
+      .filter(m => m.num_medicao !== "Saldo Inicial")
+      .reduce((s, m) => s + (Number(m.valor_medicao) || 0) + (Number(m.valor_previsto_medicao) || 0), 0);
+  }, [medicoes]);
+
   const addMedicao = async () => {
     if (form.num_medicao && form.mes_referencia) {
       const isDuplicate = medicoes.some(m =>
@@ -670,6 +684,23 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
       );
       if (isDuplicate) {
         toast.warning(`Já existe uma medição Nº ${form.num_medicao} para ${form.mes_referencia}/${form.ano_referencia} nesta obra.`);
+        return;
+      }
+    }
+
+    // Validar limite do contrato
+    if (valorContrato > 0) {
+      const novoValorMedicao = Number(form.valor_medicao) || 0;
+      const novoValorPrevisto = Number(form.valor_previsto_medicao) || 0;
+      const novoValorTotal = novoValorMedicao + novoValorPrevisto;
+
+      if (novoValorTotal > 0 && totalJaLancado + novoValorTotal > valorContrato) {
+        const disponivel = valorContrato - totalJaLancado;
+        toast.error(
+          disponivel <= 0
+            ? `❌ Limite atingido. O total de medições já alcançou o valor do contrato (${BRL.format(valorContrato)}).`
+            : `❌ Valor excede o saldo disponível. Saldo restante: ${BRL.format(disponivel)}. Valor lançado: ${BRL.format(novoValorTotal)}.`
+        );
         return;
       }
     }
