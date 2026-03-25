@@ -938,7 +938,7 @@ export default function HoldingDashboardView() {
       ) : mainView === "manual" ? (
         <HoldingManualView />
       ) : (
-        <HoldingAnalyticsView obras={globalEmpresa !== "all" ? obras.filter(o => o.empresa === globalEmpresa) : obras} alerts={alerts} onObraClick={openObra} />
+        <HoldingAnalyticsView obras={obrasFiltradas} alerts={alerts} onObraClick={openObra} />
       )}
 
       {/* Central de Alertas */}
