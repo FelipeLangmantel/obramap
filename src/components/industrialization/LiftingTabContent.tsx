@@ -229,6 +229,7 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
 
   // ─── Complete schedule ───
   const handleComplete = async () => {
+    if (!requireEdit()) return;
     if (!completeTarget) return;
     // Update schedule status
     const { error: schErr } = await supabase
