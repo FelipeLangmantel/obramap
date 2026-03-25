@@ -274,6 +274,7 @@ export function usePleData() {
 
   // Create event group
   const createGroup = useCallback(async (data: { code: string; name: string; parent_id?: string | null }) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
     if (!currentProjectId) return null;
     const maxOrder = groups.length > 0 ? Math.max(...groups.map(g => g.display_order)) + 1 : 0;
     const { data: result, error } = await supabase
