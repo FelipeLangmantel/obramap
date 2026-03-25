@@ -901,14 +901,18 @@ export default function IndustrializationModuleView() {
           {capacityData.activeFactories.length > 0 && (
             <div className="rounded-lg border bg-card">
               <div className="p-3 border-b">
-                <h3 className="text-sm font-semibold text-foreground">Capacidade Fábricas × Demanda Consolidada</h3>
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-amber-500" />
+                  Capacidade Fábricas × Demanda Consolidada — Próximas 8 Semanas
+                </h3>
               </div>
               <div className="overflow-x-auto p-3">
                 <TooltipProvider>
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-xs min-w-[120px]">Fábrica</TableHead>
+                        <TableHead className="text-xs min-w-[140px]">FÁBRICA</TableHead>
+                        <TableHead className="text-xs text-center w-20">CAP/SEM</TableHead>
                         {capacityData.weeks.map((w, i) => (
                           <TableHead key={i} className="text-xs text-center w-20">{w.label}</TableHead>
                         ))}
@@ -919,10 +923,13 @@ export default function IndustrializationModuleView() {
                         const cap = getFactoryCapacity(fac.id);
                         return (
                           <TableRow key={fac.id}>
-                            <TableCell className="text-xs font-medium">
-                              {fac.name}
-                              <span className="text-muted-foreground ml-1">({cap}/sem)</span>
+                            <TableCell className="text-xs">
+                              <div className="font-bold text-foreground">{fac.name}</div>
+                              <div className="text-[10px] text-muted-foreground">
+                                Lead: {fac.avg_lead_time_days || 0}d | Entrada: {fac.advance_payment_pct || 0}%
+                              </div>
                             </TableCell>
+                            <TableCell className="text-xs text-center text-muted-foreground">{cap} un</TableCell>
                             {capacityData.weeks.map((w, i) => {
                               const load = getWeekLoad(fac.id, w.start, w.end);
                               const pct = cap > 0 ? (load / cap) * 100 : 0;
