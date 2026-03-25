@@ -440,8 +440,8 @@ export default function IndustrializationModuleView() {
                     <TableCell />
                     <TableCell />
                     {allPeriodsSorted.map(period => {
-                      const planned = batches.filter(b => b.ind_period_id === period.id).reduce((s, b) => s + (b.planned_quantity || 0), 0);
-                      const actual = batches.filter(b => b.ind_period_id === period.id).reduce((s, b) => s + (b.actual_quantity || 0), 0);
+                      const planned = batches.filter(b => (period.period_type==='ind' ? b.ind_period_id===period.id : b.obramap_period_id===period.id)).reduce((s, b) => s + (b.planned_quantity || 0), 0);
+                      const actual = batches.filter(b => (period.period_type==='ind' ? b.ind_period_id===period.id : b.obramap_period_id===period.id)).reduce((s, b) => s + (b.actual_quantity || 0), 0);
                       return (
                         <TableCell key={period.id} className="text-xs text-center font-medium">
                           {planned > 0 ? `${actual}/${planned}` : "—"}
