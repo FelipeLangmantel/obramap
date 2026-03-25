@@ -799,20 +799,35 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
       {/* ═══ DIALOGS ═══ */}
 
       {/* Cell edit dialog */}
-      <Dialog open={!!cellDialog} onOpenChange={v => !v && setCellDialog(null)}>
+      <Dialog open={!!cellDialog} onOpenChange={v => { if (!v) { setCellDialog(null); setSelectedCellFactoryId(''); } }}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
             <DialogTitle className="text-sm">Planejar Produção</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">{cellDialog?.factoryName} — {cellDialog?.periodLabel}</p>
+            {!cellDialog?.factoryId && (
+              <div>
+                <Label className='text-xs'>Empresa Fabril *</Label>
+                <Select value={selectedCellFactoryId} onValueChange={setSelectedCellFactoryId}>
+                  <SelectTrigger className='h-8 text-xs'>
+                    <SelectValue placeholder='Selecionar empresa...' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {factories.map(f => (
+                      <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <Label className="text-xs">Quantidade Planejada</Label>
               <Input type="number" min={0} value={cellValue} onChange={e => setCellValue(parseInt(e.target.value) || 0)} className="h-8 text-sm" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setCellDialog(null)}>Cancelar</Button>
+            <Button variant="outline" size="sm" onClick={() => { setCellDialog(null); setSelectedCellFactoryId(''); }}>Cancelar</Button>
             <Button size="sm" onClick={saveCellEdit}>Salvar</Button>
           </DialogFooter>
         </DialogContent>
