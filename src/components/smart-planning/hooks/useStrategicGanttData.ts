@@ -315,6 +315,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
     serviceId: string,
     predecessorStageId: string | null
   ) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     if (!projectId) return;
 
     const service = ganttServices.find((s) => s.id === serviceId);
