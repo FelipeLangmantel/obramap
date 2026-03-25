@@ -952,8 +952,8 @@ export default function IndustrializationModuleView() {
                                 <TableCell key={i} className="p-1">
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <div className={`rounded px-2 py-1 text-center text-xs font-medium ${bg}`}>
-                                        {pct > 0 ? `${Math.round(pct)}%` : "—"}
+                                      <div className={`rounded px-2 py-1.5 text-center text-xs font-bold ${bg}`}>
+                                        {load > 0 ? load : "—"}
                                       </div>
                                     </TooltipTrigger>
                                     <TooltipContent>
