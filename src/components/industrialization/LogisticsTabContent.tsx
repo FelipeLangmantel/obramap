@@ -180,6 +180,7 @@ export function LogisticsTabContent({ companyId, contextId }: LogisticsTabProps)
   };
 
   const saveShipment = async () => {
+    if (!requireEdit()) return;
     if (!shipForm.batch_id || !shipForm.truck_id || !shipForm.planned_date) {
       toast.error("Lote, caminhão e data são obrigatórios");
       return;
