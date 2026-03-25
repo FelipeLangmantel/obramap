@@ -207,6 +207,7 @@ export function ContractorContractsTab({
   };
 
   const handleAddServices = async () => {
+    if (!requireEdit()) return;
     if (!assignContractId) return;
     setSaving(true);
     for (const svcId of selectedServiceIds) {
