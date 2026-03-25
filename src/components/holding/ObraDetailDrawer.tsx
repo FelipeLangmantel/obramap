@@ -1438,7 +1438,14 @@ function AditivosTab({ obraId }: { obraId: string }) {
           <TableBody>
             {aditivos.map((a) => (
               <TableRow key={a.id}>
-                <TableCell className="font-medium">{a.num_aditivo || "—"}</TableCell>
+                <TableCell className="font-medium">
+                  <span>{a.num_aditivo || "—"}</span>
+                  {a.created_by_name && (
+                    <span className="text-[10px] text-muted-foreground ml-1">
+                      por {a.created_by_name}
+                    </span>
+                  )}
+                </TableCell>
                 <TableCell>{a.aditivo_prazo_dias > 0 ? `+${a.aditivo_prazo_dias}` : "—"}</TableCell>
                 <TableCell className="text-right font-mono">{a.aditivo_valor > 0 ? BRL.format(a.aditivo_valor) : "—"}</TableCell>
                 <TableCell className="text-right font-mono">{a.supressao_valor > 0 ? BRL.format(a.supressao_valor) : "—"}</TableCell>
