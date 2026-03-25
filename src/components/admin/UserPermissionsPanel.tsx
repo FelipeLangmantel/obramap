@@ -502,12 +502,22 @@ export function UserPermissionsPanel() {
 
   const handleTerminateSession = async (sessionId: string) => {
     try {
+      // Check if this is the current user's session
+      const targetSession = sessions.find(s => s.id === sessionId);
+      
       const { error } = await supabase
         .from("user_sessions")
-        .update({ is_active: false, logout_at: new Date().toISOString() })
+        .update({ is_active: false, logout_at: new Date().toISOString(), termination_reason: "admin" } as any)
         .eq("id", sessionId);
       if (error) throw error;
       toast.success("Sessão encerrada!");
+      
+      // If admin terminated their own session, force logout
+      if (targetSession && targetSession.user_id === user?.id) {
+        await supabase.auth.signOut();
+        return;
+      }
+      
       fetchData();
     } catch (error) {
       console.error("Error terminating session:", error);
