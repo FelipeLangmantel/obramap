@@ -460,6 +460,7 @@ export default function HoldingDashboardView() {
     if (!deletingObraId || !company?.id) return;
     await supabase.from("obras_portfolio").delete().eq("id", deletingObraId);
     queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+    queryClient.invalidateQueries({ queryKey: ["holding-aditivos-pendentes", company?.id] });
     toast.success("Obra excluída.");
     setDeletingObraId(null);
   };
