@@ -39,6 +39,7 @@ export function NewProjectDialog({ open, onOpenChange, onProjectCreated }: NewPr
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
+    if (!requireEdit()) return;
     if (!name || !totalHouses) return;
     
     setIsSubmitting(true);
