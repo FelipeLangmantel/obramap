@@ -201,6 +201,7 @@ export function PleContractTab(props: PleDataReturn) {
   };
 
   const handleAddStage = async () => {
+    if (!requireEdit()) return;
     if (!newStage.code || !newStage.name) { toast.error("Código e nome obrigatórios"); return; }
     const result = await createGroup({ ...newStage, parent_id: null });
     if (result) {
