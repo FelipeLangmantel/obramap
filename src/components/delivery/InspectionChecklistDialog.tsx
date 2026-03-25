@@ -49,6 +49,7 @@ export const InspectionChecklistDialog: React.FC<InspectionChecklistDialogProps>
   templates,
   onSave
 }) => {
+  const { canEdit, requireEdit } = useAuth();
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>("");
