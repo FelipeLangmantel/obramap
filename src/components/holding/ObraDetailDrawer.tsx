@@ -132,7 +132,7 @@ function ResumoTab({ obra }: { obra: ObraDrawerData }) {
     }
 
     return {
-      valorContrato, totalMedido, totalRecebido, totalPrevisto,
+      valorContrato, totalMedido, totalEnviado, totalEmAberto, totalRecebido, totalPrevisto,
       pctMedido, saldoMedir, totalGlosa, totalAcatado,
       medicoesEnviadas, medicoesAprovadas, medicoesPrevistas,
       diasRestantes, previsaoFim, pctPrazo,
