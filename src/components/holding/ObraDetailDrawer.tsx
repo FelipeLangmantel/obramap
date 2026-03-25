@@ -393,6 +393,7 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
           <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
           <TabsTrigger value="aditivos">Aditivos</TabsTrigger>
           <TabsTrigger value="pendencias">Pendências</TabsTrigger>
+          <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <TabsContent value="resumo" className="mt-0"><ResumoTab obra={obra} /></TabsContent>
@@ -401,6 +402,7 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
           <TabsContent value="financeiro" className="mt-0"><FinanceiroTab obraId={obra.id} /></TabsContent>
           <TabsContent value="aditivos" className="mt-0"><AditivosTab obraId={obra.id} /></TabsContent>
           <TabsContent value="pendencias" className="mt-0"><PendenciasTab obraId={obra.id} /></TabsContent>
+          <TabsContent value="historico" className="mt-0"><HistoricoTab obraId={obra.id} /></TabsContent>
         </div>
       </Tabs>
     </div>
@@ -1030,7 +1032,19 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
               return (
                 <TableRow key={m.id}>
                   <TableCell className="font-medium">{m.num_medicao || "—"}</TableCell>
-                  <TableCell>{m.mes_referencia}/{m.ano_referencia}</TableCell>
+                  <TableCell>
+                    <span>{m.mes_referencia}/{m.ano_referencia}</span>
+                    {m.created_by_name && (
+                      <span className="text-[10px] text-muted-foreground ml-1">
+                        por {m.created_by_name}
+                      </span>
+                    )}
+                    {m.updated_by_name && (
+                      <span className="text-[10px] text-amber-600 ml-1">
+                        · editado por {m.updated_by_name}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell>{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                   <TableCell>{m.data_envio ? format(new Date(m.data_envio + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                   <TableCell>{m.data_aprovacao ? format(new Date(m.data_aprovacao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
@@ -1258,7 +1272,14 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
               const s = DESPESA_STATUS_BADGE[d.status] || DESPESA_STATUS_BADGE.nao_iniciado;
               return (
                 <TableRow key={d.id}>
-                  <TableCell>{d.mes_referencia}/{d.ano_referencia}</TableCell>
+                  <TableCell>
+                    <span>{d.mes_referencia}/{d.ano_referencia}</span>
+                    {d.created_by_name && (
+                      <span className="text-[10px] text-muted-foreground ml-1">
+                        por {d.created_by_name}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right font-mono">{BRL.format(d.valor)}</TableCell>
                   <TableCell><Badge variant="secondary" className={`text-[10px] ${s.cls}`}>{s.label}</Badge></TableCell>
                 </TableRow>
@@ -1417,7 +1438,14 @@ function AditivosTab({ obraId }: { obraId: string }) {
           <TableBody>
             {aditivos.map((a) => (
               <TableRow key={a.id}>
-                <TableCell className="font-medium">{a.num_aditivo || "—"}</TableCell>
+                <TableCell className="font-medium">
+                  <span>{a.num_aditivo || "—"}</span>
+                  {a.created_by_name && (
+                    <span className="text-[10px] text-muted-foreground ml-1">
+                      por {a.created_by_name}
+                    </span>
+                  )}
+                </TableCell>
                 <TableCell>{a.aditivo_prazo_dias > 0 ? `+${a.aditivo_prazo_dias}` : "—"}</TableCell>
                 <TableCell className="text-right font-mono">{a.aditivo_valor > 0 ? BRL.format(a.aditivo_valor) : "—"}</TableCell>
                 <TableCell className="text-right font-mono">{a.supressao_valor > 0 ? BRL.format(a.supressao_valor) : "—"}</TableCell>
@@ -1515,6 +1543,76 @@ function PendenciasTab({ obraId }: { obraId: string }) {
           <Input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Descreva a pendência..." />
         </div>
         <Button size="sm" onClick={addPendencia}><Plus className="h-4 w-4 mr-1" /> Adicionar</Button>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   TAB 6 — HISTÓRICO (Audit Log)
+   ══════════════════════════════════════════════ */
+
+function HistoricoTab({ obraId }: { obraId: string }) {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    supabase
+      .from("holding_audit_log")
+      .select("*")
+      .eq("obra_id", obraId)
+      .order("realizado_em", { ascending: false })
+      .limit(100)
+      .then(({ data }) => { setLogs(data || []); setLoading(false); });
+  }, [obraId]);
+
+  const ACAO_ICON: Record<string, string> = {
+    criou: "✅", editou: "✏️", excluiu: "🗑️",
+    aprovou: "✔️", cancelou: "❌",
+  };
+  const ACAO_COLOR: Record<string, string> = {
+    criou: "text-emerald-600", editou: "text-amber-600",
+    excluiu: "text-destructive", aprovou: "text-blue-600", cancelou: "text-muted-foreground",
+  };
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+
+  if (logs.length === 0) return (
+    <div className="text-center py-10 text-muted-foreground text-sm">
+      Nenhuma ação registrada ainda.
+    </div>
+  );
+
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground mb-3">
+        Histórico completo de alterações — {logs.length} registro{logs.length !== 1 ? "s" : ""}
+      </p>
+      <div className="relative pl-4">
+        <div className="absolute left-[7px] top-0 bottom-0 w-[2px] bg-border" />
+        {logs.map((log) => {
+          const data = new Date(log.realizado_em);
+          const dataFmt = data.toLocaleDateString("pt-BR");
+          const horaFmt = data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+          return (
+            <div key={log.id} className="relative flex gap-3 pb-4">
+              <div className="absolute left-[-9px] top-[4px] w-[10px] h-[10px] rounded-full bg-background border-2 border-border" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-xs">
+                    <span className={`font-semibold ${ACAO_COLOR[log.acao] || ""}`}>
+                      {ACAO_ICON[log.acao] || "•"} {log.realizado_por_nome}
+                    </span>
+                    {" "}<span className="text-muted-foreground">{log.descricao}</span>
+                  </p>
+                  <span className="text-[10px] text-muted-foreground shrink-0 whitespace-nowrap">
+                    {dataFmt} {horaFmt}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
