@@ -91,6 +91,15 @@ interface Department {
   display_order: number;
 }
 
+interface DepartmentPermission {
+  id?: string;
+  department_name: string;
+  visible_menus: string[];
+  visible_management_sections: string[];
+  can_edit: boolean;
+  allowed_project_ids: string[] | null;
+}
+
 interface Project {
   id: string;
   name: string;
