@@ -372,7 +372,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
                   .map((obra) => {
                     const isHov = hoveredObra === obra.id;
                     const hc = HEALTH_PIN[obra.health] || "#3b82f6";
-                    const isOnMap = !!MUNICIPIO_COORDS[obra.municipio || ""];
+                    const isOnMap = !!CITY_COORDS[obra.municipio || ""];
                     return (
                       <button
                         key={obra.id}
