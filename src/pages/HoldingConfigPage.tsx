@@ -151,6 +151,7 @@ export default function HoldingConfigPage() {
   };
 
   const deleteDocTipo = async () => {
+    if (!isCompanyAdmin) return;
     if (!deletingDocId) return;
     // First remove all obra_docs entries that reference this doc type
     await supabase.from("holding_obra_docs").delete().eq("doc_tipo_id", deletingDocId);
