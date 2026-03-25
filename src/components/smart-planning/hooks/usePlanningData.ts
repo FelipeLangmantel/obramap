@@ -294,7 +294,7 @@ export function usePlanningData(projectId: string | undefined) {
 
   // Baseline (Freeze planning)
   const createBaseline = async (name: string = 'Planejamento Inicial') => {
-    const baselineData = {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
       stages: stages,
       teams: teams,
       projected_end_date: new Date().toISOString(),
