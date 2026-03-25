@@ -1007,6 +1007,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   };
 
   const deleteQuotation = async (id: string, quotation?: QuotationRequest) => {
+    if (!canEdit) return;
     try {
       // If quotation has associated orders, delete them first (cascade delete)
       const { data: relatedOrders } = await supabase.from('purchase_orders').select('id').eq('quotation_id', id);
