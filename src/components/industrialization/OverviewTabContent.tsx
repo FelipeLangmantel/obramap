@@ -88,6 +88,7 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
   // Cell editing
   const [cellDialog, setCellDialog] = useState<{ periodId: string; factoryId: string; periodLabel: string; factoryName: string } | null>(null);
   const [cellValue, setCellValue] = useState(0);
+  const [selectedCellFactoryId, setSelectedCellFactoryId] = useState('');
 
   // Period CRUD
   const [periodDialog, setPeriodDialog] = useState(false);
@@ -199,20 +200,25 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
   const saveCellEdit = async () => {
     if (!cellDialog) return;
     const { periodId, factoryId } = cellDialog;
+    const resolvedFactoryId = factoryId || selectedCellFactoryId;
+    if (!resolvedFactoryId) {
+      toast.error('Selecione uma empresa fabril antes de salvar');
+      return;
+    }
     // Check if batch exists for this period+factory
-    const existing = batches.find(b => b.ind_period_id === periodId && b.factory_id === factoryId);
+    const existing = batches.find(b => b.ind_period_id === periodId && b.factory_id === resolvedFactoryId);
     if (existing) {
       const { error } = await supabase.from("ind_production_batches")
         .update({ planned_quantity: cellValue } as any)
         .eq("id", existing.id);
       if (error) { toast.error("Erro ao atualizar"); return; }
     } else {
-      const factory = factories.find(f => f.id === factoryId);
+      const factory = factories.find(f => f.id === resolvedFactoryId);
       const { error } = await supabase.from("ind_production_batches")
         .insert({
           company_id: companyId,
           context_id: contextId,
-          factory_id: factoryId,
+          factory_id: resolvedFactoryId,
           ind_period_id: periodId,
           batch_code: `${factory?.name?.slice(0, 3).toUpperCase() || "LOT"}-${Date.now().toString(36).slice(-4).toUpperCase()}`,
           planned_quantity: cellValue,
@@ -222,6 +228,7 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
     }
     toast.success("Planejamento atualizado!");
     setCellDialog(null);
+    setSelectedCellFactoryId('');
     fetchAll();
   };
 
@@ -792,20 +799,35 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
       {/* ═══ DIALOGS ═══ */}
 
       {/* Cell edit dialog */}
-      <Dialog open={!!cellDialog} onOpenChange={v => !v && setCellDialog(null)}>
+      <Dialog open={!!cellDialog} onOpenChange={v => { if (!v) { setCellDialog(null); setSelectedCellFactoryId(''); } }}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
             <DialogTitle className="text-sm">Planejar Produção</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">{cellDialog?.factoryName} — {cellDialog?.periodLabel}</p>
+            {!cellDialog?.factoryId && (
+              <div>
+                <Label className='text-xs'>Empresa Fabril *</Label>
+                <Select value={selectedCellFactoryId} onValueChange={setSelectedCellFactoryId}>
+                  <SelectTrigger className='h-8 text-xs'>
+                    <SelectValue placeholder='Selecionar empresa...' />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {factories.map(f => (
+                      <SelectItem key={f.id} value={f.id}>{f.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <Label className="text-xs">Quantidade Planejada</Label>
               <Input type="number" min={0} value={cellValue} onChange={e => setCellValue(parseInt(e.target.value) || 0)} className="h-8 text-sm" />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setCellDialog(null)}>Cancelar</Button>
+            <Button variant="outline" size="sm" onClick={() => { setCellDialog(null); setSelectedCellFactoryId(''); }}>Cancelar</Button>
             <Button size="sm" onClick={saveCellEdit}>Salvar</Button>
           </DialogFooter>
         </DialogContent>
