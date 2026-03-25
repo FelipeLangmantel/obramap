@@ -538,7 +538,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
           setMacrosDialogOpen(true);
         }}
       />
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <ManageMacrosDialog open={macrosDialogOpen} onOpenChange={setMacrosDialogOpen} />
       <ManageMacrosDialog open={macrosDialogOpen} onOpenChange={setMacrosDialogOpen} />
       <ManageQuadrasDialog open={quadrasDialogOpen} onOpenChange={setQuadrasDialogOpen} />
     </>
