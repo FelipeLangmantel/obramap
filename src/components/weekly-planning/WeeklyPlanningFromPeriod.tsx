@@ -645,7 +645,7 @@ function WeekCalendarConfigurator({
 // ══════════════════════════════════════════════════════════════
 export function WeeklyPlanningFromPeriod() {
   const { currentProject } = useConstruction();
-  const { company } = useAuth();
+  const { company, canEdit, requireEdit } = useAuth();
   const projectId = currentProject?.id;
   const companyId = company?.id;
   const macros = currentProject?.macrosTemplate || [];
