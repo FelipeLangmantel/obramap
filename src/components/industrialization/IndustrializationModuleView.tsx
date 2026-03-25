@@ -71,6 +71,34 @@ export default function IndustrializationModuleView() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadingDemo, setLoadingDemo] = useState(false);
 
+  // Limpar automaticamente se houver demos duplicadas (proteção contra cliques múltiplos)
+  useEffect(() => {
+    const demos = contexts.filter(c => c.name.includes("— DEMO"));
+    if (demos.length <= 1) return;
+    const limpar = async () => {
+      for (const ctx of demos) {
+        await supabase.from("ind_installation_schedule").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_unit_kits").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_lifting_schedule").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_shipment_units").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_shipments").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_batch_units").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_production_batches").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_periods").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_units").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_zones").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_services").delete().eq("context_id", ctx.id);
+        await supabase.from("ind_operation_contexts").delete().eq("id", ctx.id);
+      }
+      await supabase.from("ind_factories").delete().eq("company_id", companyId!).ilike("name", "%— DEMO%");
+      await supabase.from("ind_lifting_equipment").delete().eq("company_id", companyId!).ilike("name", "%— DEMO%");
+      await supabase.from("ind_trucks").delete().eq("company_id", companyId!).in("plate", ["ABC-1D23", "XYZ-4E56"]);
+      toast.info("Demonstrações duplicadas removidas automaticamente.");
+      fetchAll();
+    };
+    limpar();
+  }, [contexts.length]);
+
   // Dialog
   const [newContextDialog, setNewContextDialog] = useState(false);
   const [newContextForm, setNewContextForm] = useState({
@@ -144,6 +172,13 @@ export default function IndustrializationModuleView() {
   const criarDemonstracao = async () => {
     if (!companyId) return;
     setLoadingDemo(true);
+
+    // Impedir criação se já existe demo
+    if (contexts.some(c => c.name.includes("— DEMO"))) {
+      toast.warning("Demonstração já existe. Use o botão 'Excluir Demonstração' antes de criar nova.");
+      setLoadingDemo(false);
+      return;
+    }
     try {
       const hoje = new Date();
       const fmt = (d: Date) => d.toISOString().split("T")[0];
@@ -231,7 +266,8 @@ export default function IndustrializationModuleView() {
         { context_id: ctx.id, company_id: companyId, name: "Quadra B", code: "QB", color: "#10b981", display_order: 2 },
         { context_id: ctx.id, company_id: companyId, name: "Quadra C", code: "QC", color: "#f59e0b", display_order: 3 },
       ]).select("id, name");
-      const [zA, zB, zC] = zonas || [];
+      if (!zonas || zonas.length < 3) throw new Error("Erro ao criar zonas — verifique permissões do banco");
+      const [zA, zB, zC] = zonas;
 
       // 5. PERÍODOS
       const { data: periodos, error: periodError } = await supabase.from("ind_periods").insert([
@@ -298,7 +334,8 @@ export default function IndustrializationModuleView() {
       ]).select("id, batch_code, status, planned_quantity");
       if (batchError) throw new Error("Erro ao criar lotes: " + batchError.message);
       if (!lotes || lotes.length < 4) throw new Error("Erro ao criar lotes de produção — dados insuficientes retornados");
-      const [l1, l2, l3, l4] = lotes;
+      const [l1, l2, l3, l4, l5, l6] = lotes;
+      if (!l1?.id || !l2?.id || !l3?.id || !l4?.id) throw new Error("IDs dos lotes inválidos");
 
       // 7. UNIDADES — 120 UH
       const unidades: any[] = [];
