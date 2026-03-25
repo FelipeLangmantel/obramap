@@ -40,7 +40,7 @@ interface Schedule {
   id: string; context_id: string; equipment_id: string; linked_shipment_id: string | null;
   booking_date: string; start_time: string | null; end_time: string | null;
   daily_cost: number; status: string; notes: string | null; ind_period_id: string | null;
-  batch_id: string | null;
+  batch_id: string | null; unit_ids?: string[] | null;
 }
 
 interface Shipment {
