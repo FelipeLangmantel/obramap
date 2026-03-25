@@ -192,7 +192,7 @@ export default function IndustrializationModuleView() {
   // Global alerts
   const alerts = useMemo(() => {
     const today = new Date();
-    const items: { type: "danger" | "warning"; msg: string }[] = [];
+    const items: { type: "danger" | "warning"; msg: string; contextId?: string }[] = [];
     // Late batches
     batches.forEach(b => {
       if (b.planned_finish && !["delivered", "installed", "cancelled"].includes(b.status)) {
