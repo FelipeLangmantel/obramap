@@ -105,6 +105,7 @@ export default function HoldingConfigPage() {
   };
 
   const toggleEmpresaAtivo = async (e: HoldingEmpresa) => {
+    if (!isCompanyAdmin) return;
     await supabase.from("holding_empresas").update({ ativo: !e.ativo } as any).eq("id", e.id);
     invalidate();
   };
