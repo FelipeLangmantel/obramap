@@ -387,6 +387,10 @@ export default function HoldingDashboardView() {
   });
 
   const handleSaveObra = async () => {
+    if (!isCompanyAdmin) {
+      toast.error("Apenas administradores podem cadastrar ou editar obras.");
+      return;
+    }
     if (!newObraForm.nome.trim() || !company?.id) {
       toast.error("Nome da obra é obrigatório.");
       return;
