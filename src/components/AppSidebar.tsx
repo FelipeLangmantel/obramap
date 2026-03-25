@@ -25,6 +25,8 @@ import {
   BarChart3,
   Users,
   LogOut,
+  Sun,
+  Moon,
   Building2,
   Plus,
   Settings,
