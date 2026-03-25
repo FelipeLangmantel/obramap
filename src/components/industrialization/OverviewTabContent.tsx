@@ -200,20 +200,25 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
   const saveCellEdit = async () => {
     if (!cellDialog) return;
     const { periodId, factoryId } = cellDialog;
+    const resolvedFactoryId = factoryId || selectedCellFactoryId;
+    if (!resolvedFactoryId) {
+      toast.error('Selecione uma empresa fabril antes de salvar');
+      return;
+    }
     // Check if batch exists for this period+factory
-    const existing = batches.find(b => b.ind_period_id === periodId && b.factory_id === factoryId);
+    const existing = batches.find(b => b.ind_period_id === periodId && b.factory_id === resolvedFactoryId);
     if (existing) {
       const { error } = await supabase.from("ind_production_batches")
         .update({ planned_quantity: cellValue } as any)
         .eq("id", existing.id);
       if (error) { toast.error("Erro ao atualizar"); return; }
     } else {
-      const factory = factories.find(f => f.id === factoryId);
+      const factory = factories.find(f => f.id === resolvedFactoryId);
       const { error } = await supabase.from("ind_production_batches")
         .insert({
           company_id: companyId,
           context_id: contextId,
-          factory_id: factoryId,
+          factory_id: resolvedFactoryId,
           ind_period_id: periodId,
           batch_code: `${factory?.name?.slice(0, 3).toUpperCase() || "LOT"}-${Date.now().toString(36).slice(-4).toUpperCase()}`,
           planned_quantity: cellValue,
@@ -223,6 +228,7 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
     }
     toast.success("Planejamento atualizado!");
     setCellDialog(null);
+    setSelectedCellFactoryId('');
     fetchAll();
   };
 
