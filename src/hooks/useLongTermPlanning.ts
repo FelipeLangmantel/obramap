@@ -558,6 +558,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
   }, [initializePlanning]);
 
   const addPeriod = useCallback(async () => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     if (!projectId || !company?.id || !activeVersion?.id) return;
 
     try {
