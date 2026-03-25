@@ -99,7 +99,8 @@ export default function HoldingPrdPage() {
           })
           .reduce((s: number, d: any) => s + (Number(d.valor) || 0), 0);
 
-        months.push({ key, label: `${MONTHS[mes]}/${String(ano).slice(2)}`, mes: mes + 1, ano, previsto: monthlyPrevisto, previstoCadastrado, realizado, despesas: desp });
+        const previstoFinal = previstoCadastrado > 0 ? previstoCadastrado : monthlyPrevisto;
+        months.push({ key, label: `${MONTHS[mes]}/${String(ano).slice(2)}`, mes: mes + 1, ano, previsto: previstoFinal, previstoCadastrado, realizado, despesas: desp });
       }
 
       result.set(o.id, { obra: o, months });
