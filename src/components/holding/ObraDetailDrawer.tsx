@@ -658,7 +658,7 @@ function ClearableDateInput({ value, onChange, label }: { value: string; onChang
 }
 
 function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato: number }) {
-  const { user, profile } = useAuth();
+  const { user, profile, requireEdit } = useAuth();
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
