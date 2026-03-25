@@ -709,6 +709,7 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
   }, [medicoes]);
 
   const addMedicao = async () => {
+    if (!requireEdit()) return;
     if (form.num_medicao && form.mes_referencia) {
       const isDuplicate = medicoes.some(m =>
         m.num_medicao === form.num_medicao &&
