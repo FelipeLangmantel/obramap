@@ -47,6 +47,7 @@ interface Props {
 }
 
 export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: Props) {
+  const { canEdit, requireEdit } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [items, setItems] = useState<ExtractedItem[]>([]);
