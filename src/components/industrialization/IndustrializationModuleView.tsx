@@ -246,7 +246,7 @@ export default function IndustrializationModuleView() {
       const [p1, p2, p3, p4, p5, p6] = periodos || [];
 
       // 6. LOTES
-      const { data: lotes } = await supabase.from("ind_production_batches").insert([
+      const { data: lotes, error: batchError } = await supabase.from("ind_production_batches").insert([
         {
           context_id: ctx.id, company_id: companyId, factory_id: fab1.id,
           model_id: mod1?.id, ind_period_id: p1?.id, batch_code: "ELD-L01", status: "installed",
