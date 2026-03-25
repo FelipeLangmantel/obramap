@@ -826,6 +826,21 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
           </div>
         </div>
 
+        {valorContrato > 0 && (
+          <div className={`flex items-center justify-between text-xs p-2 rounded-md ${
+            saldoDisponivel <= 0
+              ? "bg-destructive/10 text-destructive"
+              : saldoDisponivel < valorContrato * 0.1
+                ? "bg-amber-500/10 text-amber-700"
+                : "bg-emerald-500/10 text-emerald-700"
+          }`}>
+            <span>Saldo disponível para medições:</span>
+            <span className="font-semibold">
+              {saldoDisponivel <= 0 ? "Limite atingido" : BRL.format(saldoDisponivel)}
+            </span>
+          </div>
+        )}
+
         <Separator />
 
         {/* ENGENHARIA */}
