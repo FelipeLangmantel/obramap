@@ -248,6 +248,7 @@ export function InstallationTabContent({ companyId, contextId, contextType }: In
   };
 
   const saveAssembly = async () => {
+    if (!requireEdit()) return;
     if (assemblyForm.selectedUnitIds.length === 0) {
       toast.error("Selecione ao menos uma unidade");
       return;
