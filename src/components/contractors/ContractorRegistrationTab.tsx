@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Edit2, Building2, Phone, Mail, Landmark } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import type { Contractor } from "@/hooks/useContractors";
 
 interface Props {
@@ -24,6 +25,7 @@ const emptyForm = (): Partial<Contractor> => ({
 });
 
 export function ContractorRegistrationTab({ contractors, onCreateContractor, onUpdateContractor }: Props) {
+  const { canEdit, requireEdit } = useAuth();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<Contractor>>(emptyForm());
