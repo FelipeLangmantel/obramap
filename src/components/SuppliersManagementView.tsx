@@ -93,6 +93,7 @@ export function SuppliersManagementView() {
   const globalSuppliers = filteredSuppliers.filter(s => s.supplier_scope === 'global');
 
   const saveSupplier = async () => {
+    if (!canEdit) return;
     if (!newSupplier.name) {
       toast.error('Preencha o nome do fornecedor');
       return;
