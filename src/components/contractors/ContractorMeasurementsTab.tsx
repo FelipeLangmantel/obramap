@@ -366,7 +366,7 @@ export function ContractorMeasurementsTab({
         {/* Measurements Tab */}
         <TabsContent value="measurements" className="mt-3">
           <div className="flex justify-end mb-3">
-            <Button size="sm" onClick={() => setNewMeasOpen(true)} className="gap-1.5 text-xs h-7">
+            <Button size="sm" onClick={() => setNewMeasOpen(true)} className="gap-1.5 text-xs h-7" disabled={!canEdit}>
               <Plus className="h-3.5 w-3.5" /> Nova Medição
             </Button>
           </div>
