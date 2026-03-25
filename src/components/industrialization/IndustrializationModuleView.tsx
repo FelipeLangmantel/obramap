@@ -830,10 +830,15 @@ export default function IndustrializationModuleView() {
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => { setActiveContext(ctx); setView("detail"); }}
                       >
-                        <TableCell className="text-xs font-medium">{ctx.name}</TableCell>
-                        <TableCell className="text-xs text-center">{ctx.total_units}</TableCell>
+                        <TableCell className="text-xs">
+                          <div className="font-bold text-foreground">{ctx.name}</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {ctx.context_type === "integrated" ? "Integrado — ObraMap" : `Standalone — ${ctx.total_units.toLocaleString("pt-BR")} un`}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-center font-medium">{ctx.total_units.toLocaleString("pt-BR")}</TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge variant="outline" className={`text-[10px] ${ctx.context_type === "integrated" ? "bg-blue-500/10 text-blue-600 border-blue-200" : "bg-amber-500/10 text-amber-600 border-amber-200"}`}>
                             {ctx.context_type === "integrated" ? "Integrado" : "Standalone"}
                           </Badge>
                         </TableCell>
