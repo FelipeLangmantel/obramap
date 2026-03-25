@@ -627,7 +627,7 @@ function ClearableDateInput({ value, onChange, label }: { value: string; onChang
   );
 }
 
-function MedicoesTab({ obraId }: { obraId: string }) {
+function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato: number }) {
   const invalidateHolding = useInvalidateHolding();
   const [medicoes, setMedicoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
