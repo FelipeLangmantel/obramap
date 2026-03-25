@@ -730,27 +730,25 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
           ) : (
             <div className="flex gap-2 overflow-x-auto pb-2">
               {filteredBatches.map(b => {
-                const factory = factories.find(f => f.id === b.factory_id);
+                const style = PIPELINE_STYLE[b.status] || PIPELINE_STYLE.planned;
+                const isLate = b.planned_finish && new Date(b.planned_finish) < new Date()
+                  && !['delivered','installed','cancelled'].includes(b.status);
                 return (
-                  <Tooltip key={b.id}>
-                    <TooltipTrigger asChild>
-                      <div className={cn(
-                        "shrink-0 rounded-lg p-2 min-w-[100px] text-center cursor-default border",
-                        batchStatusColor(b.status),
-                      )}>
-                        <div className="text-[10px] font-bold">{b.batch_code}</div>
-                        <div className="text-[9px] mt-0.5">{b.planned_quantity} un</div>
-                        <Badge variant="outline" className="text-[8px] mt-1 px-1">{batchStatusLabel(b.status)}</Badge>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs max-w-[200px]">
-                      <p><strong>Fábrica:</strong> {factory?.name || "—"}</p>
-                      <p><strong>Qtd:</strong> {b.actual_quantity}/{b.planned_quantity}</p>
-                      <p><strong>Valor:</strong> {BRL.format(b.planned_quantity * b.unit_value)}</p>
-                      {b.planned_start && <p><strong>Início:</strong> {format(new Date(b.planned_start + "T12:00:00"), "dd/MM/yy")}</p>}
-                      {b.planned_finish && <p><strong>Fim:</strong> {format(new Date(b.planned_finish + "T12:00:00"), "dd/MM/yy")}</p>}
-                    </TooltipContent>
-                  </Tooltip>
+                  <div key={b.id}
+                    className={`shrink-0 rounded-lg border-2 p-3 min-w-[120px] cursor-pointer transition-all hover:-translate-y-1
+                      ${style.bg} ${isLate ? 'border-destructive' : style.border}`}
+                    onClick={() => setCellDialog(null)}>
+                    <div className='text-[10px] font-bold text-foreground'>{b.batch_code}{isLate ? ' ⚠️' : ''}</div>
+                    <div className='text-[10px] text-muted-foreground mt-0.5'>
+                      {factories.find(f => f.id === b.factory_id)?.name || '—'}
+                    </div>
+                    <div className='text-xs font-semibold text-foreground mt-1'>
+                      {b.actual_quantity || 0}/{b.planned_quantity} un
+                    </div>
+                    <span className={`mt-1.5 inline-block rounded-full px-2 py-0.5 text-[9px] font-semibold ${style.badge}`}>
+                      {STATUS_LABEL[b.status] || b.status}
+                    </span>
+                  </div>
                 );
               })}
             </div>
