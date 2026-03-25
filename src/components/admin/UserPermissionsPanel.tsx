@@ -398,6 +398,7 @@ export function UserPermissionsPanel() {
       const { error } = await supabase.from("departments").insert({
         name: newDepartment.trim(),
         display_order: departments.length,
+        company_id: company!.id,
       });
       if (error) throw error;
       toast.success("Departamento adicionado!");
