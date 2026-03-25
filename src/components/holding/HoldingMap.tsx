@@ -34,15 +34,15 @@ const obraIcon = (health: string) => {
   return L.divIcon({
     html: `<div style="
       background:${color};
-      border:2.5px solid ${border};
+      border:2px solid ${border};
       border-radius:50%;
-      width:20px;height:20px;
-      box-shadow:0 2px 6px rgba(0,0,0,0.4);
+      width:14px;height:14px;
+      box-shadow:0 1px 4px rgba(0,0,0,0.35);
       transition:transform 0.1s;
     "></div>`,
     className: "",
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
   });
 };
 
@@ -126,26 +126,20 @@ export default function HoldingMap({ obras, onObraClick }: HoldingMapProps) {
 
       const distStr = distanciaLinhaReta(SEDE.lat, SEDE.lng, obra.lat, obra.lng);
 
-      marker.bindPopup(`
+      marker.bindTooltip(`
         <div style="min-width:200px;font-family:sans-serif;line-height:1.7">
           <b style="font-size:13px">${obra.nome}</b><br/>
           <span style="color:#666;font-size:11px">📍 ${obra.municipio}</span><br/>
           <span style="font-size:12px;font-weight:600">${BRL.format(obra.valor_contrato)}</span><br/>
           <span style="font-size:11px">${statusLabel[obra.status] || obra.status}</span><br/>
-          <span style="color:#1d4ed8;font-size:11px">${distStr}</span><br/>
-          <a href="#"
-            onclick="window.__holdingObraClick && window.__holdingObraClick('${obra.id}'); return false;"
-            style="color:#3b82f6;text-decoration:underline;font-size:12px;margin-top:2px;display:inline-block">
-            Abrir obra →
-          </a>
+          <span style="color:#1d4ed8;font-size:11px">${distStr}</span>
         </div>
-      `);
+      `, { sticky: true, direction: "top", offset: [0, -8] });
 
-      marker.on("mouseover", () => marker.openPopup());
       marker.on("click", () => onObraClick(obra.id));
     });
 
-    (window as any).__holdingObraClick = onObraClick;
+    
   }, [obras, onObraClick]);
 
   return (
