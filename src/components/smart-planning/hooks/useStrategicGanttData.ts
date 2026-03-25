@@ -271,6 +271,7 @@ export function useStrategicGanttData(projectId: string | undefined) {
     newProductivity: number,
     newTeams: number
   ) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     if (!company?.id) return;
 
     // Update service_productivities
