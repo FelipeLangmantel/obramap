@@ -136,6 +136,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
     setFactoryDialog(true);
   };
   const saveFactory = async () => {
+    if (!requireEdit()) return;
     if (!factoryForm.name.trim()) { toast.error("Nome obrigatório"); return; }
     const payload = {
       ...factoryForm,
