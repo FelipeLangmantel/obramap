@@ -538,6 +538,7 @@ export function BudgetItemsEditor({
 
   // Delete item after confirmation
   const executeDeleteItem = async () => {
+    if (!requireEdit()) return;
     if (!itemToDelete) return;
     
     const { index, item } = itemToDelete;
