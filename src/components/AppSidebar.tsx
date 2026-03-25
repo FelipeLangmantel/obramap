@@ -369,53 +369,12 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       >
         {/* Header with Logo */}
         <SidebarHeader className="px-4 py-4 border-b border-border bg-background">
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-3">
             <div className="h-10 w-10 flex items-center justify-center shrink-0">
               <img src={isDark ? obraMapLogoDark : obraMapLogoLight} alt="ObraMap" className="h-10 w-10 object-contain drop-shadow-sm" />
             </div>
             <h1 className="text-lg font-bold text-foreground tracking-tight">ObraMap</h1>
           </div>
-          
-          {/* ✅ Seletor de Obras no Sidebar */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg bg-accent/50 hover:bg-accent border border-border text-left transition-colors">
-                <Building2 className="h-4 w-4 text-primary shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <span className="text-xs text-muted-foreground block">Obra Selecionada</span>
-                  <span className="text-sm font-medium text-foreground truncate block">
-                    {currentProject?.name || "Selecionar obra"}
-                  </span>
-                </div>
-                <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-[240px] max-h-[50vh] overflow-y-auto">
-              {accessibleProjects.length === 0 ? (
-                <div className="py-4 px-3 text-center text-sm text-muted-foreground">
-                  Nenhuma obra disponível
-                </div>
-              ) : (
-                accessibleProjects.map((project) => (
-                  <DropdownMenuItem
-                    key={project.id}
-                    className="flex items-center justify-between cursor-pointer py-2.5"
-                    onClick={() => setCurrentProject(project.id)}
-                  >
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <span className="font-medium text-sm truncate">{project.name}</span>
-                      <span className="text-[11px] text-muted-foreground">
-                        {project.totalHouses} casas • {project.location}
-                      </span>
-                    </div>
-                    {project.id === currentProject?.id && (
-                      <Check className="h-4 w-4 text-primary shrink-0 ml-2" />
-                    )}
-                  </DropdownMenuItem>
-                ))
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
         </SidebarHeader>
 
         <SidebarContent className="px-3 overflow-y-auto bg-background">
