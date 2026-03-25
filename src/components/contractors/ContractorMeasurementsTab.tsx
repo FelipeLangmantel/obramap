@@ -133,6 +133,7 @@ export function ContractorMeasurementsTab({
   };
 
   const handleUpdateItem = async (serviceId: string, housesCount: number) => {
+    if (!requireEdit()) return;
     if (!selectedMeasurement) return;
     const svc = services.find(s => s.id === serviceId);
     if (!svc) return;
