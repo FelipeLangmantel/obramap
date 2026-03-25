@@ -387,6 +387,10 @@ export default function HoldingDashboardView() {
   });
 
   const handleSaveObra = async () => {
+    if (!isCompanyAdmin) {
+      toast.error("Apenas administradores podem cadastrar ou editar obras.");
+      return;
+    }
     if (!newObraForm.nome.trim() || !company?.id) {
       toast.error("Nome da obra é obrigatório.");
       return;
@@ -1259,6 +1263,7 @@ function KpiCard({ icon: Icon, label, value, sub, borderColor, valueColor }: {
    ══════════════════════════════════════════════ */
 
 function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onClick: () => void; onEdit: () => void; onDelete: () => void }) {
+  const { isCompanyAdmin } = useAuth();
   const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
   const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
   const receitas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
@@ -1288,8 +1293,17 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
                 <button className="p-1 rounded-md hover:bg-muted" onClick={(e) => e.stopPropagation()}><MoreVertical className="h-4 w-4 text-muted-foreground" /></button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}><Pencil className="h-3.5 w-3.5 mr-2" /> Editar</DropdownMenuItem>
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive"><Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir</DropdownMenuItem>
+                {isCompanyAdmin && (
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}><Pencil className="h-3.5 w-3.5 mr-2" /> Editar</DropdownMenuItem>
+                )}
+                {isCompanyAdmin && (
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive"><Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir</DropdownMenuItem>
+                )}
+                {!isCompanyAdmin && (
+                  <DropdownMenuItem disabled className="text-muted-foreground text-xs">
+                    Somente visualização
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
