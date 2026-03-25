@@ -34,7 +34,7 @@ interface DocTipo {
 }
 
 export default function HoldingConfigPage() {
-  const { company } = useAuth();
+  const { company, isCompanyAdmin } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
