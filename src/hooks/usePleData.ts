@@ -212,7 +212,7 @@ export function usePleData() {
 
   // Approve measurement (with or without glosses)
   const approveMeasurement = useCallback(async (id: string, hasGlosses?: boolean) => {
-    const newStatus = hasGlosses ? "approved_with_glosses" : "approved";
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const { data: userData } = await supabase.auth.getUser();
     const userName = getUserName();
     const { error } = await supabase.from("ple_measurements").update({ 
