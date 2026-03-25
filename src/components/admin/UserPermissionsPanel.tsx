@@ -708,24 +708,49 @@ export function UserPermissionsPanel() {
                 </Button>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                {departments.map((dept) => (
-                  <div
-                    key={dept.id}
-                    className="flex items-center justify-between p-3 bg-muted rounded-lg"
-                  >
-                    <span>{dept.name}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 text-destructive hover:bg-destructive/10"
-                      onClick={() => handleDeleteDepartment(dept.id)}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {departments.map((dept) => {
+                  const perm = deptPermissions[dept.name];
+                  return (
+                    <div key={dept.id}
+                      className="flex items-center justify-between p-3 bg-muted rounded-lg border border-border/40">
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-medium truncate">{dept.name}</span>
+                        <span className={`text-[10px] mt-0.5 ${perm ? "text-emerald-600" : "text-amber-600"}`}>
+                          {perm
+                            ? `${perm.visible_menus.length} módulos · ${perm.can_edit ? "Editor" : "Visualizador"}`
+                            : "Sem permissões definidas"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          title="Configurar permissões do departamento"
+                          onClick={() => {
+                            const defaults = getDefaultPermissions('editor');
+                            setEditingDeptPerm(perm || {
+                              department_name: dept.name,
+                              visible_menus: defaults.visible_menus,
+                              visible_management_sections: defaults.visible_management_sections,
+                              can_edit: true,
+                              allowed_project_ids: null,
+                            });
+                            setIsDeptPermDialogOpen(true);
+                          }}>
+                          <Settings className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDeleteDepartment(dept.id)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                Clique em ⚙️ para configurar quais módulos cada departamento pode acessar.
+                Usuários novos herdam automaticamente as permissões do departamento em que estão locados.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>
