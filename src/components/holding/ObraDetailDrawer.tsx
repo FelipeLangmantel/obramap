@@ -1272,7 +1272,14 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
               const s = DESPESA_STATUS_BADGE[d.status] || DESPESA_STATUS_BADGE.nao_iniciado;
               return (
                 <TableRow key={d.id}>
-                  <TableCell>{d.mes_referencia}/{d.ano_referencia}</TableCell>
+                  <TableCell>
+                    <span>{d.mes_referencia}/{d.ano_referencia}</span>
+                    {d.created_by_name && (
+                      <span className="text-[10px] text-muted-foreground ml-1">
+                        por {d.created_by_name}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right font-mono">{BRL.format(d.valor)}</TableCell>
                   <TableCell><Badge variant="secondary" className={`text-[10px] ${s.cls}`}>{s.label}</Badge></TableCell>
                 </TableRow>
