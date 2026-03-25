@@ -480,17 +480,6 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
-                {canEdit && canAccessManagement("configuracoes") && (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      onClick={() => setSettingsOpen(true)}
-                      className="w-full justify-start gap-3 px-3 py-3 rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-150"
-                    >
-                      <Settings className="h-5 w-5 shrink-0" />
-                      <span className="text-sm font-medium">Configurações</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
