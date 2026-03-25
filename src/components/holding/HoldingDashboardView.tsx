@@ -541,8 +541,10 @@ export default function HoldingDashboardView() {
       const fim = o.data_inicio ? format(addDays(parseLocalDate(o.data_inicio!), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
       const statusLbl = STATUS_CONFIG[o.status]?.label || o.status;
       const healthLbl = o.health === "green" ? "Verde" : o.health === "yellow" ? "Amarelo" : "Vermelho";
-      const receitas = o.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
-      const saldo = o.valor_contrato - receitas;
+      const recAprov = o.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
+      const vc = o.valor_contrato || 0;
+      const receitas = recAprov > 0 ? recAprov : (vc > 0 && o.percentual_andamento > 0 ? (o.percentual_andamento / 100) * vc : 0);
+      const saldo = vc - receitas;
       const pctFin = o.valor_contrato > 0 && receitas > 0 ? (receitas / o.valor_contrato * 100).toFixed(1) + "%" : "—";
       return `${o.nome};${o.empresa || "—"};${o.num_contrato || "—"};${o.parceria_scp || "—"};${o.uh || "—"};${o.tipo_contrato || "—"};${o.responsavel_nome || o.responsavel || "—"};${o.responsavel_telefone || "—"};${o.valor_contrato};${receitas};${saldo};${pctFin};${o.data_inicio || "—"};${o.prazo_dias || "—"};${fim};${statusLbl};${o.percentual_andamento}%;${o.docsCount}/${o.docsTotal};${healthLbl}`;
     });
@@ -647,9 +649,13 @@ export default function HoldingDashboardView() {
   const kpis = useMemo(() => {
     const base = obrasFiltradas;
     const totalContratos = base.reduce((s, o) => s + (o.valor_contrato || 0), 0);
-    const totalMedido = base.reduce(
-      (s, o) => s + o.allMedicoes.filter((m) => m.status_medicao === "aprovada").reduce((ss, m) => ss + m.valor_medicao, 0), 0
-    );
+    const totalMedido = base.reduce((s, o) => {
+      const aprovadas = o.allMedicoes.filter((m) => m.status_medicao === "aprovada").reduce((ss, m) => ss + m.valor_medicao, 0);
+      // Se não há medições aprovadas mas há andamento físico, estimar pelo percentual
+      if (aprovadas > 0) return s + aprovadas;
+      const vc = o.valor_contrato || 0;
+      return s + (vc > 0 && o.percentual_andamento > 0 ? (o.percentual_andamento / 100) * vc : 0);
+    }, 0);
     const saldoFaturar = totalContratos - totalMedido;
     const totalMedicoesAprovadas = totalMedido;
     const obrasAtivas = base.filter((o) => o.status === "em_andamento").length;
@@ -1278,8 +1284,15 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
   const { isCompanyAdmin } = useAuth();
   const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
   const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
-  const receitas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
+  const receitasAprovadas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
   const valorContrato = obra.valor_contrato || 0;
+  // Se não há medições aprovadas mas há andamento físico, estimar valor medido pelo percentual
+  const receitasEstimadas = receitasAprovadas > 0
+    ? receitasAprovadas
+    : (valorContrato > 0 && obra.percentual_andamento > 0
+      ? (obra.percentual_andamento / 100) * valorContrato
+      : 0);
+  const receitas = receitasEstimadas;
   const percentualFinanceiro = valorContrato > 0 && receitas > 0 ? Math.min(100, (receitas / valorContrato) * 100) : 0;
   const saldoContrato = valorContrato - receitas;
 
@@ -1422,7 +1435,9 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
               {obras.map((obra, idx) => {
                 const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
                 const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yy") : "—";
-                const receitas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
+                const recAprov = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
+                const vc = obra.valor_contrato || 0;
+                const receitas = recAprov > 0 ? recAprov : (vc > 0 && obra.percentual_andamento > 0 ? (obra.percentual_andamento / 100) * vc : 0);
                 return (
                   <TableRow
                     key={obra.id}
