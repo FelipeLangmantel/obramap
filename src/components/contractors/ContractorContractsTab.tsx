@@ -321,7 +321,7 @@ export function ContractorContractsTab({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewContractOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCreateContract} disabled={saving || !selectedContractorId}>{saving ? "Salvando..." : "Criar Contrato"}</Button>
+            <Button onClick={handleCreateContract} disabled={saving || !selectedContractorId || !canEdit}>{saving ? "Salvando..." : "Criar Contrato"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
