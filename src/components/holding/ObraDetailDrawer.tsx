@@ -57,8 +57,8 @@ async function registrarLog(
       registro_id: registroId,
       acao,
       descricao,
-      dados_anteriores: dadosAnteriores || {},
-      dados_novos: dadosNovos || {},
+      dados_anteriores: (dadosAnteriores || {}) as any,
+      dados_novos: (dadosNovos || {}) as any,
       realizado_por: userId,
       realizado_por_nome: userName,
     }]);
