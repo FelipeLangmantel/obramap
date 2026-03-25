@@ -379,7 +379,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.id, refreshPermissions]);
 
-  const signIn = async (email: string, password: string) => {
+  // Manter last_active_at atualizado a cada 5 minutos
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(async () => {
+      await supabase
+        .from("user_sessions")
+        .update({ last_active_at: new Date().toISOString() } as any)
+        .eq("user_id", user.id)
+        .eq("is_active", true);
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
