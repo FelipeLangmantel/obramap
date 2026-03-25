@@ -217,6 +217,7 @@ export default function IndustrializationModuleView() {
         items.push({
           type: daysUntil <= 7 ? "danger" : "warning",
           msg: `Entrada de ${BRL.format(val)} vence em ${daysUntil} dias (${factory.name})`,
+          contextId: b.context_id,
         });
       }
     });
