@@ -169,7 +169,7 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const updateStage = async (stageId: string, updates: Partial<PlanningStage>) => {
-    const { error } = await supabase
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
       .from('planning_stages')
       .update(updates)
       .eq('id', stageId);
