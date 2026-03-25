@@ -172,10 +172,10 @@ function ResumoTab({ obra }: { obra: ObraDrawerData }) {
     <div className="space-y-4">
       {/* KPI Row 1 — Financeiro */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <MiniKpi icon={<DollarSign className="h-4 w-4" />} label="Valor Contrato" value={BRL.format(kpis.valorContrato)} color="text-primary" />
-        <MiniKpi icon={<TrendingUp className="h-4 w-4" />} label="Total Medido" value={BRL.format(kpis.totalMedido)} sub={`${kpis.pctMedido.toFixed(1)}% do contrato`} color="text-blue-600" />
-        <MiniKpi icon={<Target className="h-4 w-4" />} label="Saldo a Medir" value={BRL.format(kpis.saldoMedir)} color="text-amber-600" />
-        <MiniKpi icon={<DollarSign className="h-4 w-4" />} label="Total Recebido" value={BRL.format(kpis.totalRecebido)} color="text-emerald-600" />
+        <MiniKpi icon={<TrendingUp className="h-4 w-4" />} label="Total Medido" value={BRL.format(kpis.totalMedido)} sub={`${kpis.pctMedido.toFixed(1)}% do contrato`} color="text-emerald-600" />
+        <MiniKpi icon={<Clock className="h-4 w-4" />} label="Enviado/Pendente" value={BRL.format(kpis.totalEnviado)} sub="aguardando aprovação" color="text-amber-600" />
+        <MiniKpi icon={<Target className="h-4 w-4" />} label="Saldo a Medir" value={BRL.format(kpis.saldoMedir)} color="text-blue-600" />
+        <MiniKpi icon={<BarChart3 className="h-4 w-4" />} label="% Financeiro" value={`${kpis.pctMedido.toFixed(1)}%`} color="text-primary" />
       </div>
 
       {/* Contract Timeline */}
