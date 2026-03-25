@@ -824,6 +824,7 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
   };
 
   const deleteMedicao = async (id: string) => {
+    if (!requireEdit()) return;
     if (!confirm("Excluir esta medição? Esta ação não pode ser desfeita.")) return;
     const medicaoSnap = medicoes.find(m => m.id === id);
     const { error } = await supabase.from("medicoes_ple").delete().eq("id", id);
