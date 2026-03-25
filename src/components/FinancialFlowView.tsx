@@ -295,6 +295,7 @@ export function FinancialFlowView() {
   };
 
   const handleCategoriesChange = async (newCategories: string[]) => {
+    if (!canEdit) return;
     if (!currentProject?.id) return;
     
     setCategories(newCategories);
