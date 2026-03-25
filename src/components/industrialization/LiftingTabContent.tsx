@@ -215,6 +215,7 @@ export function LiftingTabContent({ companyId, contextId }: LiftingTabProps) {
       ind_period_id: scheduleForm.ind_period_id || null,
       status: "scheduled",
       notes: scheduleForm.notes || null,
+      unit_ids: scheduleForm.selectedUnitIds,
     } as any);
 
     if (error) { toast.error("Erro ao agendar: " + error.message); return; }
