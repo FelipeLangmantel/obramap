@@ -449,6 +449,7 @@ export default function HoldingDashboardView() {
       toast.success("Obra cadastrada com sucesso!");
     }
     queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+    queryClient.invalidateQueries({ queryKey: ["holding-aditivos-pendentes", company?.id] });
     setShowNewObraDialog(false);
     setEditingObra(null);
     resetNewObraForm();
