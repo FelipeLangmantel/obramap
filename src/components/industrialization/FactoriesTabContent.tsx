@@ -234,6 +234,7 @@ export function FactoriesTabContent({ companyId, contextId, contextType }: Facto
 
   // ─── Delete handler ───
   const handleDelete = async () => {
+    if (!requireEdit()) return;
     if (!deleteTarget) return;
     const { type, id } = deleteTarget;
     if (type === "period") {
