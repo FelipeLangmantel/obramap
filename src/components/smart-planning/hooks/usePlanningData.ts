@@ -366,6 +366,7 @@ export function usePlanningData(projectId: string | undefined) {
   };
 
   const removeTeamFromStage = async (teamId: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
     const team = teams.find(t => t.id === teamId);
     if (!team) return;
 
