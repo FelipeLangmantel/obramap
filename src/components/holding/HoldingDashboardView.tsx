@@ -541,7 +541,7 @@ export default function HoldingDashboardView() {
       const fim = o.data_inicio ? format(addDays(parseLocalDate(o.data_inicio!), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
       const statusLbl = STATUS_CONFIG[o.status]?.label || o.status;
       const healthLbl = o.health === "green" ? "Verde" : o.health === "yellow" ? "Amarelo" : "Vermelho";
-      const recAprov = o.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
+      const recAprov = o.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
       const vc = o.valor_contrato || 0;
       const receitas = recAprov > 0 ? recAprov : (vc > 0 && o.percentual_andamento > 0 ? (o.percentual_andamento / 100) * vc : 0);
       const saldo = vc - receitas;
@@ -563,16 +563,19 @@ export default function HoldingDashboardView() {
     queryKey: ["holding-portfolio", company?.id],
     queryFn: async () => {
       if (!company?.id) return [];
-      const [obrasRes, docsRes, medicoesRes] = await Promise.all([
-        supabase.from("obras_portfolio").select("*").eq("company_id", company.id).order("nome"),
+      // 1. Buscar obras primeiro para ter os IDs
+      const { data: obrasRaw } = await supabase
+        .from("obras_portfolio").select("*").eq("company_id", company.id).order("nome");
+      const obraIds = (obrasRaw || []).map(o => o.id);
+
+      // 2. Buscar docs e medições em paralelo, com IDs já disponíveis
+      const [docsRes, medicoesRes] = await Promise.all([
         supabase.from("documentos_obra").select("*"),
-        supabase
-          .from("medicoes_ple")
-          .select("*")
-          .in("obra_id", (await supabase.from("obras_portfolio").select("id").eq("company_id", company.id)).data?.map(o => o.id) || [])
-          .order("ano_referencia", { ascending: false }),
+        obraIds.length > 0
+          ? supabase.from("medicoes_ple").select("*").in("obra_id", obraIds).order("ano_referencia", { ascending: false })
+          : Promise.resolve({ data: [] as any[], error: null }),
       ]);
-      const obrasData = (obrasRes.data || []) as ObraPortfolio[];
+      const obrasData = (obrasRaw || []) as ObraPortfolio[];
       const docsData = (docsRes.data || []) as DocumentosObra[];
       const medicoesData = (medicoesRes.data || []) as MedicaoPle[];
 
@@ -650,7 +653,7 @@ export default function HoldingDashboardView() {
     const base = obrasFiltradas;
     const totalContratos = base.reduce((s, o) => s + (o.valor_contrato || 0), 0);
     const totalMedido = base.reduce((s, o) => {
-      const aprovadas = o.allMedicoes.filter((m) => m.status_medicao === "aprovada").reduce((ss, m) => ss + m.valor_medicao, 0);
+      const aprovadas = o.allMedicoes.filter((m) => m.status_medicao === "aprovada").reduce((ss, m) => ss + (Number(m.valor_medicao) || 0), 0);
       // Se não há medições aprovadas mas há andamento físico, estimar pelo percentual
       if (aprovadas > 0) return s + aprovadas;
       const vc = o.valor_contrato || 0;
@@ -1284,7 +1287,7 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
   const { isCompanyAdmin } = useAuth();
   const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
   const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
-  const receitasAprovadas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
+  const receitasAprovadas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
   const valorContrato = obra.valor_contrato || 0;
   // Se não há medições aprovadas mas há andamento físico, estimar valor medido pelo percentual
   const receitasEstimadas = receitasAprovadas > 0
@@ -1435,7 +1438,7 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
               {obras.map((obra, idx) => {
                 const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
                 const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yy") : "—";
-                const recAprov = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0);
+                const recAprov = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
                 const vc = obra.valor_contrato || 0;
                 const receitas = recAprov > 0 ? recAprov : (vc > 0 && obra.percentual_andamento > 0 ? (obra.percentual_andamento / 100) * vc : 0);
                 return (
