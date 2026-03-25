@@ -53,7 +53,11 @@ import {
   Clock,
   Globe,
   LogOut,
-  Key
+  ChevronDown,
+  ChevronUp,
+  MapPin,
+  Monitor,
+  Smartphone,
 } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
@@ -111,8 +115,15 @@ interface UserSession {
   login_at: string;
   logout_at: string | null;
   ip_address: string | null;
+  city: string | null;
+  region: string | null;
+  browser: string | null;
+  device_type: string | null;
   user_agent: string | null;
   is_active: boolean;
+  last_active_at: string | null;
+  inactivity_timeout_min: number | null;
+  termination_reason: string | null;
 }
 
 // ✅ Importado da fonte única de verdade – novos módulos aparecem automaticamente
@@ -142,6 +153,7 @@ export function UserPermissionsPanel() {
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
   const [selectedUserForPassword, setSelectedUserForPassword] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
+  const [showAllSessions, setShowAllSessions] = useState(false);
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isPermissionDialogOpen, setIsPermissionDialogOpen] = useState(false);
@@ -763,68 +775,127 @@ export function UserPermissionsPanel() {
                 Sessões Ativas e Histórico
               </CardTitle>
               <CardDescription>
-                Monitore logins, IPs, duração e encerre sessões se necessário
+                Monitore logins, IPs, localização, duração e encerre sessões se necessário
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Usuário</TableHead>
-                    <TableHead>Login</TableHead>
-                    <TableHead>IP</TableHead>
-                    <TableHead>Duração</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sessions.map((session) => (
-                    <TableRow key={session.id}>
-                      <TableCell className="font-medium">{getUserName(session.user_id)}</TableCell>
-                      <TableCell className="text-sm">
-                        {new Date(session.login_at).toLocaleString('pt-BR')}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Globe className="h-3 w-3" />
-                          {session.ip_address || "N/A"}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {formatSessionDuration(session.login_at, session.logout_at)}
-                      </TableCell>
-                      <TableCell>
-                        {session.is_active ? (
-                          <Badge className="bg-green-500/20 text-green-600">Ativa</Badge>
-                        ) : (
-                          <Badge variant="outline">Encerrada</Badge>
+              {(() => {
+                const VISIBLE_LIMIT = 20;
+                const visibleSessions = showAllSessions ? sessions : sessions.slice(0, VISIBLE_LIMIT);
+                const hasMore = sessions.length > VISIBLE_LIMIT;
+
+                return (
+                  <>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Usuário</TableHead>
+                          <TableHead>Login</TableHead>
+                          <TableHead>IP / Localização</TableHead>
+                          <TableHead>Dispositivo</TableHead>
+                          <TableHead>Duração</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {visibleSessions.map((session) => {
+                          const locationParts = [session.city, session.region].filter(Boolean);
+                          const locationStr = locationParts.length > 0 ? locationParts.join(", ") : null;
+
+                          return (
+                            <TableRow key={session.id}>
+                              <TableCell className="font-medium">{getUserName(session.user_id)}</TableCell>
+                              <TableCell className="text-sm">
+                                {new Date(session.login_at).toLocaleString('pt-BR')}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="flex items-center gap-1 text-muted-foreground">
+                                    <Globe className="h-3 w-3" />
+                                    {session.ip_address || "N/A"}
+                                  </span>
+                                  {locationStr && (
+                                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                      <MapPin className="h-3 w-3" />
+                                      {locationStr}
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                  {session.device_type === "mobile" ? (
+                                    <Smartphone className="h-3 w-3" />
+                                  ) : (
+                                    <Monitor className="h-3 w-3" />
+                                  )}
+                                  {session.browser || "—"}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {formatSessionDuration(session.login_at, session.logout_at)}
+                              </TableCell>
+                              <TableCell>
+                                {session.is_active ? (
+                                  <Badge className="bg-green-500/20 text-green-600">Ativa</Badge>
+                                ) : session.termination_reason === "inatividade" ? (
+                                  <Badge variant="outline" className="text-amber-600 border-amber-300">Inatividade</Badge>
+                                ) : (
+                                  <Badge variant="outline">Encerrada</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {session.is_active && (
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => handleTerminateSession(session.id)}
+                                    title="Encerrar sessão"
+                                  >
+                                    <LogOut className="h-4 w-4 mr-1" />
+                                    Encerrar
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        {sessions.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                              Nenhuma sessão registrada
+                            </TableCell>
+                          </TableRow>
                         )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {session.is_active && (
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleTerminateSession(session.id)}
-                            title="Encerrar sessão"
-                          >
-                            <LogOut className="h-4 w-4 mr-1" />
-                            Encerrar
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {sessions.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                        Nenhuma sessão registrada
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                      </TableBody>
+                    </Table>
+
+                    {hasMore && (
+                      <div className="flex justify-center mt-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowAllSessions(!showAllSessions)}
+                          className="gap-2"
+                        >
+                          {showAllSessions ? (
+                            <>
+                              <ChevronUp className="h-4 w-4" />
+                              Mostrar apenas as últimas {VISIBLE_LIMIT}
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="h-4 w-4" />
+                              Ver todas ({sessions.length} sessões)
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </CardContent>
           </Card>
 
@@ -838,6 +909,7 @@ export function UserPermissionsPanel() {
                   <h4 className="font-semibold mb-1">Segurança de Sessões</h4>
                   <p className="text-sm text-muted-foreground">
                     Use o botão "Encerrar" para desconectar sessões travadas ou suspeitas. 
+                    Sessões inativas por tempo prolongado são encerradas automaticamente.
                     O usuário precisará fazer login novamente.
                   </p>
                 </div>
