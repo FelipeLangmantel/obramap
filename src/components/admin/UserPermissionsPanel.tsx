@@ -158,6 +158,9 @@ export function UserPermissionsPanel() {
   
   // Permission editing state
   const [editingPermission, setEditingPermission] = useState<UserPermission | null>(null);
+  const [deptPermissions, setDeptPermissions] = useState<Record<string, DepartmentPermission>>({});
+  const [editingDeptPerm, setEditingDeptPerm] = useState<DepartmentPermission | null>(null);
+  const [isDeptPermDialogOpen, setIsDeptPermDialogOpen] = useState(false);
 
   const fetchData = async () => {
     setIsLoading(true);
