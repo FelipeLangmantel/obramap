@@ -162,14 +162,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("user_id", userId)
         .maybeSingle();
 
-      if (permData) {
+      // Fetch department permissions for inheritance
+      let deptPerm: any = null;
+      const userDept = permData?.department;
+      const userCompanyId = typedProfile.company_id;
+
+      if (userCompanyId && userDept && userDept !== 'geral') {
+        const { data: deptData } = await supabase
+          .from("department_permissions")
+          .select("*")
+          .eq("company_id", userCompanyId)
+          .eq("department_name", userDept)
+          .maybeSingle();
+        deptPerm = deptData;
+      }
+
+      if (permData || deptPerm) {
+        // Resolução: permissão individual tem prioridade, departamento é fallback
+        const effectiveMenus =
+          (permData?.visible_menus as string[])?.length > 0
+            ? (permData.visible_menus as string[])
+            : deptPerm?.visible_menus?.length > 0
+              ? deptPerm.visible_menus as string[]
+              : DEFAULT_MENUS;
+
+        const effectiveMgmt =
+          (permData?.visible_management_sections as string[])?.length > 0
+            ? (permData.visible_management_sections as string[])
+            : deptPerm?.visible_management_sections?.length > 0
+              ? deptPerm.visible_management_sections as string[]
+              : DEFAULT_MANAGEMENT;
+
+        // can_edit: permissão individual sobrescreve, null herda do departamento
+        const effectiveCanEdit: boolean | null =
+          permData?.can_edit !== undefined && permData?.can_edit !== null
+            ? (permData.can_edit as boolean)
+            : deptPerm?.can_edit !== undefined && deptPerm?.can_edit !== null
+              ? (deptPerm.can_edit as boolean)
+              : null;
+
         setPermissions({
-          id: permData.id,
-          user_id: permData.user_id,
-          department: permData.department,
-          allowed_project_ids: permData.allowed_project_ids,
-          visible_menus: (permData.visible_menus as string[]) || DEFAULT_MENUS,
-          visible_management_sections: (permData.visible_management_sections as string[]) || DEFAULT_MANAGEMENT,
+          id: permData?.id || "",
+          user_id: userId,
+          department: permData?.department || null,
+          allowed_project_ids: permData?.allowed_project_ids || deptPerm?.allowed_project_ids || null,
+          visible_menus: effectiveMenus,
+          visible_management_sections: effectiveMgmt,
+          can_edit: effectiveCanEdit,
         });
       } else {
         setPermissions(null);
