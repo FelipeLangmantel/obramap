@@ -107,7 +107,7 @@ interface UserSession {
 }
 
 // ✅ Importado da fonte única de verdade – novos módulos aparecem automaticamente
-import { MENU_MODULES, MANAGEMENT_MODULES, MENU_TO_MODULE_KEY, getDefaultPermissions } from "@/constants/modulePermissions";
+import { MENU_MODULES, MANAGEMENT_MODULES, MENU_TO_MODULE_KEY, getDefaultPermissions, getAllModuleIds, getAllManagementIds } from "@/constants/modulePermissions";
 
 // Aliases para compatibilidade interna
 const MENU_OPTIONS = MENU_MODULES;
