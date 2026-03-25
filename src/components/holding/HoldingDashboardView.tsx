@@ -570,7 +570,11 @@ export default function HoldingDashboardView() {
       const [obrasRes, docsRes, medicoesRes] = await Promise.all([
         supabase.from("obras_portfolio").select("*").eq("company_id", company.id).order("nome"),
         supabase.from("documentos_obra").select("*"),
-        supabase.from("medicoes_ple").select("*").order("ano_referencia", { ascending: false }),
+        supabase
+          .from("medicoes_ple")
+          .select("*")
+          .in("obra_id", (await supabase.from("obras_portfolio").select("id").eq("company_id", company.id)).data?.map(o => o.id) || [])
+          .order("ano_referencia", { ascending: false }),
       ]);
       const obrasData = (obrasRes.data || []) as ObraPortfolio[];
       const docsData = (docsRes.data || []) as DocumentosObra[];
