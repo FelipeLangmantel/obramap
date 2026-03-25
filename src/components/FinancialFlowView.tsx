@@ -325,6 +325,7 @@ export function FinancialFlowView() {
   };
 
   const handleCreateNewSupplier = async () => {
+    if (!canEdit) return;
     if (!currentProject?.id || !newSupplier.name) {
       toast.error("Preencha o nome do fornecedor");
       return;
