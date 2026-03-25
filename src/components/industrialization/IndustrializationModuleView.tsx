@@ -19,7 +19,9 @@ import {
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Factory, Plus, ChevronLeft, AlertTriangle, Loader2, Trash2, Zap } from "lucide-react";
+import { Factory, Plus, ChevronLeft, AlertTriangle, Loader2, Trash2, Zap, Pencil } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+
 import { toast } from "sonner";
 import { FactoriesTabContent } from "./FactoriesTabContent";
 import { LiftingTabContent } from "./LiftingTabContent";
@@ -107,6 +109,17 @@ export default function IndustrializationModuleView() {
     obras_portfolio_id: "", obramap_project_id: "",
   });
 
+  // Factory dialog states
+  const [factoryDialog, setFactoryDialog] = useState(false);
+  const [editingFactory, setEditingFactory] = useState<any>(null);
+  const defaultFactoryForm = {
+    name: "", city: "", state: "RS", contact_name: "", contact_phone: "",
+    avg_lead_time_days: 21, advance_payment_pct: 30,
+    payment_terms: "", capacity_houses_month: 0, price_per_house: 0,
+    is_active: true, notes: "",
+  };
+  const [factoryForm, setFactoryForm] = useState(defaultFactoryForm);
+
   useEffect(() => {
     if (!companyId) return;
     fetchAll();
@@ -118,7 +131,7 @@ export default function IndustrializationModuleView() {
     try {
       const [ctxRes, facRes, modRes, batRes, perRes, obrasRes, planPeriRes] = await Promise.all([
         supabase.from("ind_operation_contexts").select("*").order("created_at"),
-        supabase.from("ind_factories").select("id,name,is_active,advance_payment_pct,avg_lead_time_days").eq("company_id", companyId),
+        supabase.from("ind_factories").select("id,name,is_active,advance_payment_pct,avg_lead_time_days,city,state,contact_name,contact_phone,capacity_houses_month,price_per_house,payment_terms,notes").eq("company_id", companyId),
         supabase.from("ind_factory_models").select("id,factory_id,units_per_week,is_active").eq("company_id", companyId),
         supabase.from("ind_production_batches").select("id,context_id,factory_id,planned_quantity,actual_quantity,unit_value,status,planned_start,planned_finish,ind_period_id,obramap_period_id"),
         supabase.from("ind_periods").select("id,context_id,name,start_date,end_date,target_units").order("start_date"),
@@ -164,6 +177,38 @@ export default function IndustrializationModuleView() {
     toast.success("Obra industrial criada!");
     setNewContextDialog(false);
     setNewContextForm({ name: "", total_units: 0, context_type: "standalone", obras_portfolio_id: "", obramap_project_id: "" });
+    fetchAll();
+  };
+
+  // ── Factory CRUD ──
+  const openEditFactoryDashboard = (f: any) => {
+    setEditingFactory(f);
+    setFactoryForm({
+      name: f.name || "", city: f.city || "", state: f.state || "RS",
+      contact_name: f.contact_name || "", contact_phone: f.contact_phone || "",
+      avg_lead_time_days: f.avg_lead_time_days || 21, advance_payment_pct: f.advance_payment_pct || 30,
+      payment_terms: f.payment_terms || "", capacity_houses_month: f.capacity_houses_month || 0,
+      price_per_house: f.price_per_house || 0, is_active: f.is_active ?? true, notes: f.notes || "",
+    });
+    setFactoryDialog(true);
+  };
+
+  const saveFactory = async () => {
+    if (!requireEdit()) return;
+    if (!factoryForm.name.trim()) { toast.error("Nome obrigatório"); return; }
+    const payload = { ...factoryForm, company_id: companyId };
+    if (editingFactory?.id) {
+      const { error } = await supabase.from("ind_factories").update(payload as any).eq("id", editingFactory.id);
+      if (error) { toast.error("Erro: " + error.message); return; }
+      toast.success("Fábrica atualizada!");
+    } else {
+      const { error } = await supabase.from("ind_factories").insert(payload as any);
+      if (error) { toast.error("Erro: " + error.message); return; }
+      toast.success("Fábrica cadastrada!");
+    }
+    setFactoryDialog(false);
+    setEditingFactory(null);
+    setFactoryForm(defaultFactoryForm);
     fetchAll();
   };
 
@@ -683,7 +728,7 @@ export default function IndustrializationModuleView() {
         <Tabs defaultValue="overview" className="w-full">
           <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="overview" className="gap-1.5">🏗️ Visão Geral</TabsTrigger>
-            <TabsTrigger value="factories" className="gap-1.5">🏭 Fábricas</TabsTrigger>
+            <TabsTrigger value="factories" className="gap-1.5">📅 Períodos & Serviços</TabsTrigger>
             <TabsTrigger value="batches" className="gap-1.5">📦 Lotes</TabsTrigger>
             <TabsTrigger value="logistics" className="gap-1.5">🚛 Logística</TabsTrigger>
             <TabsTrigger value="lifting" className="gap-1.5">🏗 Içamento</TabsTrigger>
@@ -985,11 +1030,101 @@ export default function IndustrializationModuleView() {
             </div>
           )}
 
-          {/* alerts already shown above */}
+          {/* ── Bloco 3: Fábricas Parceiras ── */}
+          <div className="rounded-lg border bg-card">
+            <div className="p-3 border-b flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Factory className="h-4 w-4 text-primary" /> Fábricas Parceiras
+              </h3>
+              {canEdit && (
+                <Button size="sm" className="h-7 text-xs gap-1" onClick={() => { setEditingFactory(null); setFactoryForm(defaultFactoryForm); setFactoryDialog(true); }}>
+                  <Plus className="h-3.5 w-3.5" /> Nova Fábrica
+                </Button>
+              )}
+            </div>
+            {factories.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground text-sm">
+                Nenhuma fábrica cadastrada. Adicione as fábricas parceiras para iniciar o planejamento.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs">Fábrica</TableHead>
+                      <TableHead className="text-xs">Cidade/UF</TableHead>
+                      <TableHead className="text-xs text-center">Cap. Mensal</TableHead>
+                      <TableHead className="text-xs text-right">Preço/Casa</TableHead>
+                      <TableHead className="text-xs text-center">Entrada</TableHead>
+                      <TableHead className="text-xs">Lead Time</TableHead>
+                      <TableHead className="text-xs">Contato</TableHead>
+                      <TableHead className="text-xs text-center">Status</TableHead>
+                      {canEdit && <TableHead className="text-xs w-10" />}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {factories.map(f => (
+                      <TableRow key={f.id}>
+                        <TableCell className="text-xs font-medium">{f.name}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{f.city && f.state ? `${f.city}/${f.state}` : "—"}</TableCell>
+                        <TableCell className="text-xs text-center font-semibold">
+                          {f.capacity_houses_month > 0 ? `${f.capacity_houses_month} casas/mês` : "—"}
+                        </TableCell>
+                        <TableCell className="text-xs text-right">{f.price_per_house > 0 ? BRL.format(f.price_per_house) : "—"}</TableCell>
+                        <TableCell className="text-xs text-center text-amber-600">{f.advance_payment_pct > 0 ? `${f.advance_payment_pct}%` : "—"}</TableCell>
+                        <TableCell className="text-xs">{f.avg_lead_time_days}d</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{f.contact_name || "—"}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline" className={`text-[10px] ${f.is_active ? "text-emerald-600 border-emerald-300" : "text-muted-foreground"}`}>
+                            {f.is_active ? "Ativa" : "Inativa"}
+                          </Badge>
+                        </TableCell>
+                        {canEdit && (
+                          <TableCell>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEditFactoryDashboard(f)}>
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
         </>
       )}
 
-      {/* ── Dialog: Nova Obra Industrial ── */}
+      {/* ── Dialog: Fábrica ── */}
+      <Dialog open={factoryDialog} onOpenChange={v => { setFactoryDialog(v); if (!v) { setEditingFactory(null); setFactoryForm(defaultFactoryForm); } }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingFactory ? "Editar Fábrica" : "Nova Fábrica"}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2"><Label className="text-xs">Nome *</Label><Input value={factoryForm.name} onChange={e => setFactoryForm(f => ({ ...f, name: e.target.value }))} className="h-8 text-xs" /></div>
+            <div><Label className="text-xs">Cidade</Label><Input value={factoryForm.city} onChange={e => setFactoryForm(f => ({ ...f, city: e.target.value }))} className="h-8 text-xs" /></div>
+            <div><Label className="text-xs">UF</Label><Input value={factoryForm.state} onChange={e => setFactoryForm(f => ({ ...f, state: e.target.value }))} className="h-8 text-xs" maxLength={2} /></div>
+            <div><Label className="text-xs">Cap. Casas/Mês *</Label><Input type="number" value={factoryForm.capacity_houses_month} onChange={e => setFactoryForm(f => ({ ...f, capacity_houses_month: parseInt(e.target.value) || 0 }))} className="h-8 text-xs" /></div>
+            <div><Label className="text-xs">Preço por Casa (R$)</Label><Input type="number" step="0.01" value={factoryForm.price_per_house} onChange={e => setFactoryForm(f => ({ ...f, price_per_house: parseFloat(e.target.value) || 0 }))} className="h-8 text-xs" /></div>
+            <div><Label className="text-xs">% Entrada</Label><Input type="number" step="0.1" value={factoryForm.advance_payment_pct} onChange={e => setFactoryForm(f => ({ ...f, advance_payment_pct: parseFloat(e.target.value) || 0 }))} className="h-8 text-xs" /></div>
+            <div><Label className="text-xs">Lead Time (dias)</Label><Input type="number" value={factoryForm.avg_lead_time_days} onChange={e => setFactoryForm(f => ({ ...f, avg_lead_time_days: parseInt(e.target.value) || 0 }))} className="h-8 text-xs" /></div>
+            <div className="col-span-2"><Label className="text-xs">Condições de Pagamento</Label><Input value={factoryForm.payment_terms} onChange={e => setFactoryForm(f => ({ ...f, payment_terms: e.target.value }))} className="h-8 text-xs" placeholder="Ex: 30% entrada + 70% na entrega" /></div>
+            <div><Label className="text-xs">Contato</Label><Input value={factoryForm.contact_name} onChange={e => setFactoryForm(f => ({ ...f, contact_name: e.target.value }))} className="h-8 text-xs" /></div>
+            <div><Label className="text-xs">Telefone</Label><Input value={factoryForm.contact_phone} onChange={e => setFactoryForm(f => ({ ...f, contact_phone: e.target.value }))} className="h-8 text-xs" /></div>
+            <div className="col-span-2"><Label className="text-xs">Observações</Label><Input value={factoryForm.notes} onChange={e => setFactoryForm(f => ({ ...f, notes: e.target.value }))} className="h-8 text-xs" /></div>
+            <div className="col-span-2 flex items-center gap-2">
+              <Switch checked={factoryForm.is_active} onCheckedChange={v => setFactoryForm(f => ({ ...f, is_active: v }))} />
+              <Label className="text-xs">Fábrica Ativa</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setFactoryDialog(false)}>Cancelar</Button>
+            <Button size="sm" onClick={saveFactory}>{editingFactory ? "Salvar" : "Criar"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={newContextDialog} onOpenChange={setNewContextDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
