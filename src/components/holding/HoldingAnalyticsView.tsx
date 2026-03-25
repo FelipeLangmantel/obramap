@@ -224,10 +224,27 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
 
   // Obras with map pins
   const obrasOnMap = useMemo(() => {
-    return filteredObras
-      .filter(o => o.municipio && MUNICIPIO_COORDS[o.municipio])
-      .map(o => ({ ...o, coords: MUNICIPIO_COORDS[o.municipio!] }));
+    return filteredObras.filter(o => o.municipio && CITY_COORDS[o.municipio]);
   }, [filteredObras]);
+
+  const mapObras: MapObra[] = useMemo(() => {
+    return obrasOnMap
+      .map(obra => {
+        const coords = CITY_COORDS[obra.municipio || ""];
+        if (!coords) return null;
+        return {
+          id: obra.id,
+          nome: obra.nome,
+          municipio: obra.municipio || "",
+          lat: coords.lat,
+          lng: coords.lng,
+          health: obra.health,
+          valor_contrato: obra.valor_contrato,
+          status: obra.status,
+        };
+      })
+      .filter(Boolean) as MapObra[];
+  }, [obrasOnMap]);
 
   // Map stats
   const mapStats = useMemo(() => ({
