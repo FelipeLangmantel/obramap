@@ -600,6 +600,31 @@ export default function HoldingDashboardView() {
     enabled: !!company?.id && obras.length > 0,
   });
 
+  // Filters — must be before kpis/alerts so they can use obrasFiltradas
+  const empresas = useMemo(() => [...new Set(obras.map(o => o.empresa).filter(Boolean))].sort(), [obras]);
+
+  const obrasFiltradas = useMemo(() => {
+    return obras.filter(o => {
+      if (globalEmpresa !== "all" && o.empresa !== globalEmpresa) return false;
+      if (filterEmpresa !== "all" && o.empresa !== filterEmpresa) return false;
+      if (filterStatus !== "all" && o.status !== filterStatus) return false;
+      if (filterSaude !== "all" && o.health !== filterSaude) return false;
+      if (filterTipo !== "all" && o.tipo_contrato !== filterTipo) return false;
+      if (searchNome && !o.nome.toLowerCase().includes(searchNome.toLowerCase())) return false;
+      return true;
+    });
+  }, [obras, globalEmpresa, filterEmpresa, filterStatus, filterSaude, filterTipo, searchNome]);
+
+  const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || filterTipo !== "all" || searchNome !== "";
+
+  const clearFilters = () => {
+    setFilterEmpresa("all");
+    setFilterStatus("all");
+    setFilterSaude("all");
+    setFilterTipo("all");
+    setSearchNome("");
+  };
+
   const kpis = useMemo(() => {
     const base = obrasFiltradas;
     const totalContratos = base.reduce((s, o) => s + (o.valor_contrato || 0), 0);
@@ -678,32 +703,7 @@ export default function HoldingDashboardView() {
 
     const order = { critical: 0, warning: 1, info: 2 };
     return result.sort((a, b) => order[a.severity] - order[b.severity]);
-  }, [obras, aditivosPendentes]);
-
-  // Filters
-  const empresas = useMemo(() => [...new Set(obras.map(o => o.empresa).filter(Boolean))].sort(), [obras]);
-
-  const obrasFiltradas = useMemo(() => {
-    return obras.filter(o => {
-      if (globalEmpresa !== "all" && o.empresa !== globalEmpresa) return false;
-      if (filterEmpresa !== "all" && o.empresa !== filterEmpresa) return false;
-      if (filterStatus !== "all" && o.status !== filterStatus) return false;
-      if (filterSaude !== "all" && o.health !== filterSaude) return false;
-      if (filterTipo !== "all" && o.tipo_contrato !== filterTipo) return false;
-      if (searchNome && !o.nome.toLowerCase().includes(searchNome.toLowerCase())) return false;
-      return true;
-    });
-  }, [obras, globalEmpresa, filterEmpresa, filterStatus, filterSaude, filterTipo, searchNome]);
-
-  const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || filterTipo !== "all" || searchNome !== "";
-
-  const clearFilters = () => {
-    setFilterEmpresa("all");
-    setFilterStatus("all");
-    setFilterSaude("all");
-    setFilterTipo("all");
-    setSearchNome("");
-  };
+  }, [obrasFiltradas, aditivosPendentes, obras]);
 
   const openObra = useCallback((obraId: string) => {
     const obra = obras.find((o) => o.id === obraId);
