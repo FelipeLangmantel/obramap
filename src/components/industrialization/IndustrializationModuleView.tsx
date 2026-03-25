@@ -87,13 +87,14 @@ export default function IndustrializationModuleView() {
     if (!companyId) return;
     setIsLoading(true);
     try {
-      const [ctxRes, facRes, modRes, batRes, perRes, obrasRes] = await Promise.all([
+      const [ctxRes, facRes, modRes, batRes, perRes, obrasRes, planPeriRes] = await Promise.all([
         supabase.from("ind_operation_contexts").select("*").order("created_at"),
         supabase.from("ind_factories").select("id,name,is_active,advance_payment_pct,avg_lead_time_days").eq("company_id", companyId),
         supabase.from("ind_factory_models").select("id,factory_id,units_per_week,is_active").eq("company_id", companyId),
-        supabase.from("ind_production_batches").select("id,context_id,factory_id,planned_quantity,actual_quantity,unit_value,status,planned_start,planned_finish,ind_period_id"),
+        supabase.from("ind_production_batches").select("id,context_id,factory_id,planned_quantity,actual_quantity,unit_value,status,planned_start,planned_finish,ind_period_id,obramap_period_id"),
         supabase.from("ind_periods").select("id,context_id,name,start_date,end_date,target_units").order("start_date"),
         supabase.from("obras_portfolio").select("id,nome,total_houses,empresa,num_contrato,obramap_project_id").eq("company_id", companyId).order("nome"),
+        supabase.from("planning_periods").select("id,name,start_date,end_date,total_planned_houses,project_id").order("start_date"),
       ]);
       setContexts((ctxRes.data || []) as OperationContext[]);
       setFactories(facRes.data || []);
@@ -101,6 +102,7 @@ export default function IndustrializationModuleView() {
       setBatches(batRes.data || []);
       setPeriods(perRes.data || []);
       setObrasPortfolio((obrasRes.data || []) as ObraPortfolioItem[]);
+      setPlanningPeriods(planPeriRes.data || []);
     } catch (err: any) {
       console.error("[Industrialization] fetchAll error:", err);
     } finally {
