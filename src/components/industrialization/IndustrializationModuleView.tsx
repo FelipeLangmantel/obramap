@@ -761,10 +761,37 @@ export default function IndustrializationModuleView() {
               </Button>
             </div>
           )}
+
+          {/* ── Alertas globais (acima da tabela) ── */}
+          {alerts.length > 0 && (
+            <div className="space-y-2">
+              {alerts.map((a, i) => (
+                <div key={i} className={`flex items-center gap-3 rounded-lg px-4 py-3 text-sm ${
+                  a.type === 'danger'
+                    ? 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
+                    : 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                }`}>
+                  <AlertTriangle className='h-4 w-4 shrink-0' />
+                  <span className='flex-1 text-xs font-medium'>{a.msg}</span>
+                  {a.contextId && (
+                    <Button variant='ghost' size='sm' className='h-6 text-[10px] px-2 shrink-0'
+                      onClick={() => {
+                        const ctx = contexts.find(c => c.id === a.contextId);
+                        if (ctx) { setActiveContext(ctx); setView('detail'); }
+                      }}>
+                      Ver obra →
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* ── Bloco 1: Multi-obra table ── */}
           <div className="rounded-lg border bg-card">
-            <div className="p-3 border-b">
+            <div className="p-3 border-b flex items-center justify-between">
               <h3 className="text-sm font-semibold text-foreground">Obras Industriais</h3>
+              <span className="text-[10px] text-muted-foreground italic">Clique em qualquer obra para ver detalhes</span>
             </div>
             <div className="overflow-x-auto">
               <Table>
