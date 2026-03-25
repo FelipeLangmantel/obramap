@@ -765,7 +765,7 @@ export default function IndustrializationModuleView() {
              <Button onClick={() => setNewContextDialog(true)} disabled={!canEdit}>
               <Plus className="h-4 w-4 mr-2" /> Nova Obra Industrial
             </Button>
-            <Button variant="outline" onClick={criarDemonstracao} disabled={loadingDemo}>
+            <Button variant="outline" onClick={criarDemonstracao} disabled={!canEdit || loadingDemo}>
               {loadingDemo ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               {loadingDemo ? "Criando..." : "Criar Demonstração"}
             </Button>
