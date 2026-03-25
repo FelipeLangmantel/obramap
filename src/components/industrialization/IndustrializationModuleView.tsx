@@ -667,37 +667,16 @@ export default function IndustrializationModuleView() {
             <Factory className="h-6 w-6 text-primary" />
             <div>
               <h2 className="text-lg font-bold text-foreground">{activeContext.name}</h2>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className={statusColor(activeContext.status || "active")}>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="outline" className={`text-xs ${activeContext.context_type === "integrated" ? "bg-blue-500/10 text-blue-600 border-blue-200" : "bg-amber-500/10 text-amber-600 border-amber-200"}`}>
                   {activeContext.context_type === "integrated" ? "Integrado" : "Standalone"}
                 </Badge>
                 <span className="text-sm text-muted-foreground">
-                  {activeContext.total_units} unidades
+                  {activeContext.total_units} unidades · {batches.filter(b => b.context_id === activeContext.id).reduce((s, b) => s + (b.planned_quantity || 0), 0)} planejadas · {batches.filter(b => b.context_id === activeContext.id && (b.status === 'installed' || b.status === 'completed')).reduce((s, b) => s + (b.actual_quantity || 0), 0)} instaladas
                 </span>
               </div>
             </div>
           </div>
-
-          {contexts.length > 1 && (
-            <Select
-              value={activeContext.id}
-              onValueChange={id => {
-                const c = contexts.find(x => x.id === id);
-                if (c) setActiveContext(c);
-              }}
-            >
-              <SelectTrigger className="h-8 text-xs w-52">
-                <SelectValue placeholder="Selecionar contexto" />
-              </SelectTrigger>
-              <SelectContent>
-                {contexts.map(c => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name} — {c.context_type === "integrated" ? "Integrado" : "Standalone"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
         </div>
 
         {/* Tabs */}
