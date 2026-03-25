@@ -67,6 +67,7 @@ export default function IndustrializationModuleView() {
   const [batches, setBatches] = useState<any[]>([]);
   const [periods, setPeriods] = useState<any[]>([]);
   const [obrasPortfolio, setObrasPortfolio] = useState<ObraPortfolioItem[]>([]);
+  const [planningPeriods, setPlanningPeriods] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Dialog
@@ -86,13 +87,14 @@ export default function IndustrializationModuleView() {
     if (!companyId) return;
     setIsLoading(true);
     try {
-      const [ctxRes, facRes, modRes, batRes, perRes, obrasRes] = await Promise.all([
+      const [ctxRes, facRes, modRes, batRes, perRes, obrasRes, planPeriRes] = await Promise.all([
         supabase.from("ind_operation_contexts").select("*").order("created_at"),
         supabase.from("ind_factories").select("id,name,is_active,advance_payment_pct,avg_lead_time_days").eq("company_id", companyId),
         supabase.from("ind_factory_models").select("id,factory_id,units_per_week,is_active").eq("company_id", companyId),
-        supabase.from("ind_production_batches").select("id,context_id,factory_id,planned_quantity,actual_quantity,unit_value,status,planned_start,planned_finish,ind_period_id"),
+        supabase.from("ind_production_batches").select("id,context_id,factory_id,planned_quantity,actual_quantity,unit_value,status,planned_start,planned_finish,ind_period_id,obramap_period_id"),
         supabase.from("ind_periods").select("id,context_id,name,start_date,end_date,target_units").order("start_date"),
         supabase.from("obras_portfolio").select("id,nome,total_houses,empresa,num_contrato,obramap_project_id").eq("company_id", companyId).order("nome"),
+        supabase.from("planning_periods").select("id,name,start_date,end_date,total_planned_houses,project_id").order("start_date"),
       ]);
       setContexts((ctxRes.data || []) as OperationContext[]);
       setFactories(facRes.data || []);
@@ -100,6 +102,7 @@ export default function IndustrializationModuleView() {
       setBatches(batRes.data || []);
       setPeriods(perRes.data || []);
       setObrasPortfolio((obrasRes.data || []) as ObraPortfolioItem[]);
+      setPlanningPeriods(planPeriRes.data || []);
     } catch (err: any) {
       console.error("[Industrialization] fetchAll error:", err);
     } finally {
@@ -146,15 +149,21 @@ export default function IndustrializationModuleView() {
 
   // ── Computed data for dashboard ──
   const allPeriodsSorted = useMemo(() => {
-    const uniqueIds = new Set<string>();
-    return periods
-      .filter(p => {
-        const ctxIds = new Set(contexts.map(c => c.id));
-        return ctxIds.has(p.context_id);
-      })
-      .sort((a: any, b: any) => a.start_date?.localeCompare(b.start_date))
-      .filter(p => { if (uniqueIds.has(p.id)) return false; uniqueIds.add(p.id); return true; });
-  }, [periods, contexts]);
+    const integCtxProjectIds = new Set(
+      contexts.filter(c=>c.context_type==='integrated'&&c.obramap_project_id)
+             .map(c=>c.obramap_project_id)
+    );
+    const oPeriods = planningPeriods
+      .filter(pp => integCtxProjectIds.has(pp.project_id))
+      .map(pp => ({...pp, period_type:'obramap', target_units:pp.total_planned_houses||0}));
+    const iPeriods = periods
+      .filter(p => contexts.some(c=>c.id===p.context_id))
+      .map(p => ({...p, period_type:'ind'}));
+    const seen = new Set<string>();
+    return [...iPeriods, ...oPeriods]
+      .filter(p => { if(seen.has(p.id)) return false; seen.add(p.id); return true; })
+      .sort((a,b) => a.start_date.localeCompare(b.start_date));
+  }, [periods, planningPeriods, contexts]);
 
   // Capacity heatmap data
   const capacityData = useMemo(() => {
@@ -400,7 +409,7 @@ export default function IndustrializationModuleView() {
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{linkedFactoryNames || "—"}</TableCell>
                         {allPeriodsSorted.map(period => {
-                          const periodBatches = ctxBatches.filter(b => b.ind_period_id === period.id);
+                          const periodBatches = ctxBatches.filter(b => (period.period_type==='ind' ? b.ind_period_id===period.id : b.obramap_period_id===period.id));
                           const planned = periodBatches.reduce((s, b) => s + (b.planned_quantity || 0), 0);
                           const actual = periodBatches.reduce((s, b) => s + (b.actual_quantity || 0), 0);
                           const hasPeriod = ctxPeriods.some(p => p.id === period.id);
@@ -431,8 +440,8 @@ export default function IndustrializationModuleView() {
                     <TableCell />
                     <TableCell />
                     {allPeriodsSorted.map(period => {
-                      const planned = batches.filter(b => b.ind_period_id === period.id).reduce((s, b) => s + (b.planned_quantity || 0), 0);
-                      const actual = batches.filter(b => b.ind_period_id === period.id).reduce((s, b) => s + (b.actual_quantity || 0), 0);
+                      const planned = batches.filter(b => (period.period_type==='ind' ? b.ind_period_id===period.id : b.obramap_period_id===period.id)).reduce((s, b) => s + (b.planned_quantity || 0), 0);
+                      const actual = batches.filter(b => (period.period_type==='ind' ? b.ind_period_id===period.id : b.obramap_period_id===period.id)).reduce((s, b) => s + (b.actual_quantity || 0), 0);
                       return (
                         <TableCell key={period.id} className="text-xs text-center font-medium">
                           {planned > 0 ? `${actual}/${planned}` : "—"}
