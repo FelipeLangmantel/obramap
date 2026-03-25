@@ -50,6 +50,8 @@ import {
   TrendingUp,
   Pause,
   FileText,
+  Home,
+  Wallet,
 } from "lucide-react";
 import { addDays, format, differenceInDays, differenceInMonths } from "date-fns";
 
@@ -447,6 +449,7 @@ export default function HoldingDashboardView() {
       toast.success("Obra cadastrada com sucesso!");
     }
     queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+    queryClient.invalidateQueries({ queryKey: ["holding-aditivos-pendentes", company?.id] });
     setShowNewObraDialog(false);
     setEditingObra(null);
     resetNewObraForm();
@@ -457,6 +460,7 @@ export default function HoldingDashboardView() {
     if (!deletingObraId || !company?.id) return;
     await supabase.from("obras_portfolio").delete().eq("id", deletingObraId);
     queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+    queryClient.invalidateQueries({ queryKey: ["holding-aditivos-pendentes", company?.id] });
     toast.success("Obra excluída.");
     setDeletingObraId(null);
   };
@@ -514,6 +518,7 @@ export default function HoldingDashboardView() {
       }
 
       queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+      queryClient.invalidateQueries({ queryKey: ["holding-aditivos-pendentes", company?.id] });
       if (skipped > 0) toast.success(`${inserted?.length || 0} obras importadas. ${skipped} já existiam e foram ignoradas.`);
       else toast.success(`${inserted?.length || 0} obras importadas com sucesso!`);
       setShowImportDialog(false);
@@ -598,24 +603,53 @@ export default function HoldingDashboardView() {
     enabled: !!company?.id && obras.length > 0,
   });
 
+  // Filters — must be before kpis/alerts so they can use obrasFiltradas
+  const empresas = useMemo(() => [...new Set(obras.map(o => o.empresa).filter(Boolean))].sort(), [obras]);
+
+  const obrasFiltradas = useMemo(() => {
+    return obras.filter(o => {
+      if (globalEmpresa !== "all" && o.empresa !== globalEmpresa) return false;
+      if (filterEmpresa !== "all" && o.empresa !== filterEmpresa) return false;
+      if (filterStatus !== "all" && o.status !== filterStatus) return false;
+      if (filterSaude !== "all" && o.health !== filterSaude) return false;
+      if (filterTipo !== "all" && o.tipo_contrato !== filterTipo) return false;
+      if (searchNome && !o.nome.toLowerCase().includes(searchNome.toLowerCase())) return false;
+      return true;
+    });
+  }, [obras, globalEmpresa, filterEmpresa, filterStatus, filterSaude, filterTipo, searchNome]);
+
+  const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || filterTipo !== "all" || searchNome !== "";
+
+  const clearFilters = () => {
+    setFilterEmpresa("all");
+    setFilterStatus("all");
+    setFilterSaude("all");
+    setFilterTipo("all");
+    setSearchNome("");
+  };
+
   const kpis = useMemo(() => {
-    const totalContratos = obras.reduce((s, o) => s + (o.valor_contrato || 0), 0);
-    const totalMedicoesAprovadas = obras.reduce(
+    const base = obrasFiltradas;
+    const totalContratos = base.reduce((s, o) => s + (o.valor_contrato || 0), 0);
+    const totalMedido = base.reduce(
       (s, o) => s + o.allMedicoes.filter((m) => m.status_medicao === "aprovada").reduce((ss, m) => ss + m.valor_medicao, 0), 0
     );
-    const obrasAtivas = obras.filter((o) => o.status === "em_andamento").length;
-    const obrasNaoIniciadas = obras.filter((o) => o.status === "nao_iniciada").length;
-    const alertasCriticos = obras.filter((o) => o.health === "red").length;
-    const emAndamento = obras.filter((o) => o.status === "em_andamento");
+    const saldoFaturar = totalContratos - totalMedido;
+    const totalMedicoesAprovadas = totalMedido;
+    const obrasAtivas = base.filter((o) => o.status === "em_andamento").length;
+    const obrasNaoIniciadas = base.filter((o) => o.status === "nao_iniciada").length;
+    const alertasCriticos = base.filter((o) => o.health === "red").length;
+    const emAndamento = base.filter((o) => o.status === "em_andamento");
     const andamentoMedio = emAndamento.length > 0 ? Math.round(emAndamento.reduce((s, o) => s + o.percentual_andamento, 0) / emAndamento.length) : 0;
-    return { totalContratos, totalMedicoesAprovadas, obrasAtivas, obrasNaoIniciadas, alertasCriticos, andamentoMedio };
-  }, [obras]);
+    const totalUH = base.reduce((s, o) => s + (o.uh || 0), 0);
+    return { totalContratos, totalMedido, saldoFaturar, totalMedicoesAprovadas, obrasAtivas, obrasNaoIniciadas, alertasCriticos, andamentoMedio, totalUH };
+  }, [obrasFiltradas]);
 
   const alerts = useMemo((): HoldingAlert[] => {
     const result: HoldingAlert[] = [];
     const now = new Date();
 
-    for (const obra of obras) {
+    for (const obra of obrasFiltradas) {
       const docObraFields = ["ata", "ois", "art", "cno", "impl", "scp"];
       const docObraCount = obra.docs ? docObraFields.filter((f) => (obra.docs as any)?.[f]).length : 0;
       if (docObraCount < 4) {
@@ -672,32 +706,7 @@ export default function HoldingDashboardView() {
 
     const order = { critical: 0, warning: 1, info: 2 };
     return result.sort((a, b) => order[a.severity] - order[b.severity]);
-  }, [obras, aditivosPendentes]);
-
-  // Filters
-  const empresas = useMemo(() => [...new Set(obras.map(o => o.empresa).filter(Boolean))].sort(), [obras]);
-
-  const obrasFiltradas = useMemo(() => {
-    return obras.filter(o => {
-      if (globalEmpresa !== "all" && o.empresa !== globalEmpresa) return false;
-      if (filterEmpresa !== "all" && o.empresa !== filterEmpresa) return false;
-      if (filterStatus !== "all" && o.status !== filterStatus) return false;
-      if (filterSaude !== "all" && o.health !== filterSaude) return false;
-      if (filterTipo !== "all" && o.tipo_contrato !== filterTipo) return false;
-      if (searchNome && !o.nome.toLowerCase().includes(searchNome.toLowerCase())) return false;
-      return true;
-    });
-  }, [obras, globalEmpresa, filterEmpresa, filterStatus, filterSaude, filterTipo, searchNome]);
-
-  const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || filterTipo !== "all" || searchNome !== "";
-
-  const clearFilters = () => {
-    setFilterEmpresa("all");
-    setFilterStatus("all");
-    setFilterSaude("all");
-    setFilterTipo("all");
-    setSearchNome("");
-  };
+  }, [obrasFiltradas, aditivosPendentes, obras]);
 
   const openObra = useCallback((obraId: string) => {
     const obra = obras.find((o) => o.id === obraId);
@@ -750,14 +759,19 @@ export default function HoldingDashboardView() {
         </div>
       )}
 
-      {/* KPI Row — 6 cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <KpiCard icon={DollarSign} label="Total em Contratos" value={BRL.format(kpis.totalContratos)} borderColor="border-b-emerald-500" valueColor="text-emerald-600 dark:text-emerald-400" />
-        <KpiCard icon={ClipboardCheck} label="Medições Aprovadas" value={BRL.format(kpis.totalMedicoesAprovadas)} borderColor="border-b-cyan-500" valueColor="text-cyan-600 dark:text-cyan-400" />
-        <KpiCard icon={Building2} label="Obras Ativas" value={String(kpis.obrasAtivas)} borderColor="border-b-blue-500" valueColor="text-blue-600 dark:text-blue-400" />
-        <KpiCard icon={Pause} label="Não Iniciadas" value={String(kpis.obrasNaoIniciadas)} borderColor="border-b-gray-400" valueColor="text-muted-foreground" />
-        <KpiCard icon={AlertTriangle} label="Alertas Críticos" value={String(kpis.alertasCriticos)} borderColor={kpis.alertasCriticos > 0 ? "border-b-red-500" : "border-b-gray-300"} valueColor={kpis.alertasCriticos > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"} />
-        <KpiCard icon={TrendingUp} label="% Andamento Médio" value={`${kpis.andamentoMedio}%`} borderColor="border-b-blue-500" valueColor="text-blue-600 dark:text-blue-400" />
+      {/* KPI Row — 8 cards em 2 linhas */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* Linha 1 — Financeiro */}
+        <KpiCard icon={DollarSign} label="Total em Contratos" value={BRL.format(kpis.totalContratos)} sub={kpis.totalUH > 0 ? `${kpis.totalUH} UH` : ""} borderColor="border-b-emerald-500" valueColor="text-emerald-600 dark:text-emerald-400" />
+        <KpiCard icon={ClipboardCheck} label="Total Medido / Faturado" value={BRL.format(kpis.totalMedido)} sub={kpis.totalContratos > 0 ? `${((kpis.totalMedido / kpis.totalContratos) * 100).toFixed(1)}% do portfólio` : ""} borderColor="border-b-cyan-500" valueColor="text-cyan-600 dark:text-cyan-400" />
+        <KpiCard icon={Wallet} label="Saldo a Faturar" value={BRL.format(Math.max(0, kpis.saldoFaturar))} sub={kpis.totalContratos > 0 ? `${((Math.max(0, kpis.saldoFaturar) / kpis.totalContratos) * 100).toFixed(1)}% restante` : ""} borderColor="border-b-blue-500" valueColor="text-blue-600 dark:text-blue-400" />
+        <KpiCard icon={TrendingUp} label="Andamento Médio" value={`${kpis.andamentoMedio}%`} sub="obras em andamento" borderColor="border-b-violet-500" valueColor="text-violet-600 dark:text-violet-400" />
+
+        {/* Linha 2 — Operacional */}
+        <KpiCard icon={Building2} label="Obras Ativas" value={String(kpis.obrasAtivas)} sub="em andamento" borderColor="border-b-blue-400" valueColor="text-blue-600 dark:text-blue-400" />
+        <KpiCard icon={Pause} label="Não Iniciadas" value={String(kpis.obrasNaoIniciadas)} sub="aguardando início" borderColor="border-b-gray-400" valueColor="text-muted-foreground" />
+        <KpiCard icon={AlertTriangle} label="Alertas Críticos" value={String(kpis.alertasCriticos)} sub={kpis.alertasCriticos > 0 ? "requerem atenção" : "tudo sob controle"} borderColor={kpis.alertasCriticos > 0 ? "border-b-red-500" : "border-b-gray-300"} valueColor={kpis.alertasCriticos > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"} />
+        <KpiCard icon={Home} label="Total UH" value={kpis.totalUH > 0 ? kpis.totalUH.toLocaleString("pt-BR") : "—"} sub="unidades habitacionais" borderColor="border-b-amber-500" valueColor="text-amber-600 dark:text-amber-400" />
       </div>
 
       {/* Main View Tabs + Actions */}
@@ -927,7 +941,7 @@ export default function HoldingDashboardView() {
       ) : mainView === "manual" ? (
         <HoldingManualView />
       ) : (
-        <HoldingAnalyticsView obras={globalEmpresa !== "all" ? obras.filter(o => o.empresa === globalEmpresa) : obras} alerts={alerts} onObraClick={openObra} />
+        <HoldingAnalyticsView obras={obrasFiltradas} alerts={alerts} onObraClick={openObra} />
       )}
 
       {/* Central de Alertas */}
@@ -1224,17 +1238,19 @@ function GanttTimeline({ obras, onObraClick }: { obras: ObraEnriched[]; onObraCl
    KPI Card (compact with bottom border)
    ══════════════════════════════════════════════ */
 
-function KpiCard({ icon: Icon, label, value, borderColor, valueColor }: { icon: any; label: string; value: string; borderColor: string; valueColor: string }) {
+function KpiCard({ icon: Icon, label, value, sub, borderColor, valueColor }: {
+  icon: any; label: string; value: string; sub?: string;
+  borderColor: string; valueColor: string
+}) {
   return (
-    <Card className={`border-border/60 border-b-2 ${borderColor}`}>
-      <CardContent className="p-4 flex items-center gap-3">
-        <Icon className={`h-4 w-4 shrink-0 ${valueColor}`} />
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] text-muted-foreground truncate">{label}</p>
-          <p className={`text-xl font-bold ${valueColor} leading-tight break-words`}>{value}</p>
-        </div>
-      </CardContent>
-    </Card>
+    <div className={`bg-card rounded-xl border border-border/60 border-b-4 ${borderColor} p-4 space-y-1`}>
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</span>
+        <Icon className="h-4 w-4 text-muted-foreground/60" />
+      </div>
+      <p className={`text-xl font-bold ${valueColor}`}>{value}</p>
+      {sub && <p className="text-[10px] text-muted-foreground">{sub}</p>}
+    </div>
   );
 }
 
