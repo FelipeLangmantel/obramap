@@ -377,19 +377,23 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
           {obra.uh && <Badge variant="secondary" className="text-[10px]">{obra.uh} UH</Badge>}
           {obra.empresa && <Badge variant="outline" className="text-[10px]">{obra.empresa}</Badge>}
           {(() => {
-            const nome = obra.responsavel_nome || obra.responsavel?.split(" - ")[0] || "";
-            const tel = obra.responsavel_telefone || obra.responsavel?.split(" - ")[1] || "";
-            const telLimpo = tel.replace(/\D/g, "");
-            const waNumber = telLimpo.startsWith("55") ? telLimpo : `55${telLimpo}`;
-            if (!nome) return null;
-            return (
-              <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                👤 {nome}
-                {telLimpo && (
-                  <a href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Olá ${nome}, tudo bem?`)}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-emerald-600 hover:text-emerald-500 font-medium">📱 {tel}</a>
-                )}
-              </span>
-            );
+            const contacts = [
+              { label: "🏗️ Eng.", nome: obra.responsavel_nome || obra.responsavel?.split(" - ")[0] || "", tel: obra.responsavel_telefone || obra.responsavel?.split(" - ")[1] || "" },
+              { label: "📋 Coord.", nome: obra.coordenador_nome || "", tel: obra.coordenador_telefone || "" },
+              { label: "📐 Plan.", nome: obra.planejador_nome || "", tel: obra.planejador_telefone || "" },
+            ].filter(c => c.nome);
+            return contacts.map((c, i) => {
+              const telLimpo = c.tel.replace(/\D/g, "");
+              const waNumber = telLimpo.startsWith("55") ? telLimpo : `55${telLimpo}`;
+              return (
+                <span key={i} className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  {c.label}: {c.nome}
+                  {telLimpo && (
+                    <a href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Olá ${c.nome}, tudo bem?`)}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-emerald-600 hover:text-emerald-500 font-medium">📱 {c.tel}</a>
+                  )}
+                </span>
+              );
+            });
           })()}
         </div>
       </SheetHeader>
