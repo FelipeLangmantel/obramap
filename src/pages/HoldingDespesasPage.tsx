@@ -76,7 +76,7 @@ export default function HoldingDespesasPage() {
       // Buscar obras primeiro para ter os IDs (evita buscar dados de outras empresas)
       const { data: obrasRaw } = await supabase
         .from("obras_portfolio")
-        .select("id, nome, empresa, num_contrato, valor_contrato, uh")
+        .select("id, nome, empresa, num_contrato, valor_contrato, uh, aditivo_valor_total")
         .eq("company_id", company!.id);
 
       const obras: ObraBasic[] = obrasRaw || [];
