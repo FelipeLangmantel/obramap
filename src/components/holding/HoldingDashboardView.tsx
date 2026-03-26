@@ -91,6 +91,10 @@ interface ObraPortfolio {
   responsavel: string | null;
   responsavel_nome: string | null;
   responsavel_telefone: string | null;
+  coordenador_nome: string | null;
+  coordenador_telefone: string | null;
+  planejador_nome: string | null;
+  planejador_telefone: string | null;
   tipo_contrato: string | null;
   has_initial_balance: boolean;
   valor_medido_inicial: number;
