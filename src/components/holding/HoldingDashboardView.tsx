@@ -441,6 +441,10 @@ export default function HoldingDashboardView() {
       responsavel_nome: newObraForm.responsavel_nome || null,
       responsavel_telefone: newObraForm.responsavel_telefone?.replace(/\D/g, "") || null,
       responsavel: [newObraForm.responsavel_nome, newObraForm.responsavel_telefone].filter(Boolean).join(" - ") || null,
+      coordenador_nome: newObraForm.coordenador_nome || null,
+      coordenador_telefone: newObraForm.coordenador_telefone?.replace(/\D/g, "") || null,
+      planejador_nome: newObraForm.planejador_nome || null,
+      planejador_telefone: newObraForm.planejador_telefone?.replace(/\D/g, "") || null,
       tipo_contrato: newObraForm.tipo_contrato || null,
     };
 
