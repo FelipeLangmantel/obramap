@@ -924,6 +924,15 @@ export default function HoldingDashboardView() {
               <SelectItem value="Projeto de Obra">Projeto de Obra</SelectItem>
             </SelectContent>
           </Select>
+          {responsaveis.length > 0 && (
+            <Select value={filterResponsavel} onValueChange={setFilterResponsavel}>
+              <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos Resp.</SelectItem>
+                {responsaveis.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
           <Badge variant="secondary" className="text-xs h-6">{obrasFiltradas.length} obras</Badge>
           {hasActiveFilter && (
             <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={clearFilters}>
