@@ -664,10 +664,14 @@ export default function HoldingDashboardView() {
       if (filterStatus !== "all" && o.status !== filterStatus) return false;
       if (filterSaude !== "all" && o.health !== filterSaude) return false;
       if (filterTipo !== "all" && o.tipo_contrato !== filterTipo) return false;
+      if (filterResponsavel !== "all") {
+        const match = [o.responsavel_nome, o.coordenador_nome, o.planejador_nome].some(n => n === filterResponsavel);
+        if (!match) return false;
+      }
       if (searchNome && !o.nome.toLowerCase().includes(searchNome.toLowerCase())) return false;
       return true;
     });
-  }, [obras, globalEmpresa, filterEmpresa, filterStatus, filterSaude, filterTipo, searchNome]);
+  }, [obras, globalEmpresa, filterEmpresa, filterStatus, filterSaude, filterTipo, filterResponsavel, searchNome]);
 
   const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || filterTipo !== "all" || searchNome !== "";
 
