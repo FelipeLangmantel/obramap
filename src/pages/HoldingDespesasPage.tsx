@@ -44,6 +44,7 @@ interface ObraBasic {
   num_contrato: string | null;
   valor_contrato: number;
   uh: number | null;
+  aditivo_valor_total: number;
 }
 
 // ─── Formatters ───
