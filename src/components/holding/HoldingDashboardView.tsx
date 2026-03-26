@@ -406,7 +406,10 @@ export default function HoldingDashboardView() {
     status: "nao_iniciada", percentual_andamento: 0,
     periodo_medicao: "", prazo_pagamento: "",
     municipio: "", estado: "RS",
-    uh: "", responsavel: "", responsavel_nome: "", responsavel_telefone: "", tipo_contrato: "",
+    uh: "", responsavel: "", responsavel_nome: "", responsavel_telefone: "",
+    coordenador_nome: "", coordenador_telefone: "",
+    planejador_nome: "", planejador_telefone: "",
+    tipo_contrato: "",
   });
 
   const handleSaveObra = async () => {
