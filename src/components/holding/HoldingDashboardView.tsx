@@ -673,15 +673,21 @@ export default function HoldingDashboardView() {
     });
   }, [obras, globalEmpresa, filterEmpresa, filterStatus, filterSaude, filterTipo, filterResponsavel, searchNome]);
 
-  const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || filterTipo !== "all" || searchNome !== "";
+  const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || filterTipo !== "all" || filterResponsavel !== "all" || searchNome !== "";
 
   const clearFilters = () => {
     setFilterEmpresa("all");
     setFilterStatus("all");
     setFilterSaude("all");
     setFilterTipo("all");
+    setFilterResponsavel("all");
     setSearchNome("");
   };
+
+  const responsaveis = useMemo(() => {
+    const names = obras.flatMap(o => [o.responsavel_nome, o.coordenador_nome, o.planejador_nome]).filter(Boolean) as string[];
+    return [...new Set(names)].sort();
+  }, [obras]);
 
   const kpis = useMemo(() => {
     const base = obrasFiltradas;
