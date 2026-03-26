@@ -91,6 +91,10 @@ interface ObraPortfolio {
   responsavel: string | null;
   responsavel_nome: string | null;
   responsavel_telefone: string | null;
+  coordenador_nome: string | null;
+  coordenador_telefone: string | null;
+  planejador_nome: string | null;
+  planejador_telefone: string | null;
   tipo_contrato: string | null;
   has_initial_balance: boolean;
   valor_medido_inicial: number;
@@ -247,7 +251,10 @@ export default function HoldingDashboardView() {
     percentual_andamento: 0,
     periodo_medicao: "", prazo_pagamento: "",
     municipio: "", estado: "RS",
-    uh: "", responsavel: "", responsavel_nome: "", responsavel_telefone: "", tipo_contrato: "",
+    uh: "", responsavel: "", responsavel_nome: "", responsavel_telefone: "",
+    coordenador_nome: "", coordenador_telefone: "",
+    planejador_nome: "", planejador_telefone: "",
+    tipo_contrato: "",
   });
   const [savingObra, setSavingObra] = useState(false);
   const [editingObra, setEditingObra] = useState<ObraEnriched | null>(null);
@@ -282,6 +289,7 @@ export default function HoldingDashboardView() {
   const [filterSaude, setFilterSaude] = useState("all");
   const [searchNome, setSearchNome] = useState("");
   const [filterTipo, setFilterTipo] = useState("all");
+  const [filterResponsavel, setFilterResponsavel] = useState("all");
 
   const exportarPDF = async () => {
     setIsPrinting(true);
@@ -399,7 +407,10 @@ export default function HoldingDashboardView() {
     status: "nao_iniciada", percentual_andamento: 0,
     periodo_medicao: "", prazo_pagamento: "",
     municipio: "", estado: "RS",
-    uh: "", responsavel: "", responsavel_nome: "", responsavel_telefone: "", tipo_contrato: "",
+    uh: "", responsavel: "", responsavel_nome: "", responsavel_telefone: "",
+    coordenador_nome: "", coordenador_telefone: "",
+    planejador_nome: "", planejador_telefone: "",
+    tipo_contrato: "",
   });
 
   const handleSaveObra = async () => {
@@ -431,6 +442,10 @@ export default function HoldingDashboardView() {
       responsavel_nome: newObraForm.responsavel_nome || null,
       responsavel_telefone: newObraForm.responsavel_telefone?.replace(/\D/g, "") || null,
       responsavel: [newObraForm.responsavel_nome, newObraForm.responsavel_telefone].filter(Boolean).join(" - ") || null,
+      coordenador_nome: newObraForm.coordenador_nome || null,
+      coordenador_telefone: newObraForm.coordenador_telefone?.replace(/\D/g, "") || null,
+      planejador_nome: newObraForm.planejador_nome || null,
+      planejador_telefone: newObraForm.planejador_telefone?.replace(/\D/g, "") || null,
       tipo_contrato: newObraForm.tipo_contrato || null,
     };
 
@@ -649,20 +664,30 @@ export default function HoldingDashboardView() {
       if (filterStatus !== "all" && o.status !== filterStatus) return false;
       if (filterSaude !== "all" && o.health !== filterSaude) return false;
       if (filterTipo !== "all" && o.tipo_contrato !== filterTipo) return false;
+      if (filterResponsavel !== "all") {
+        const match = [o.responsavel_nome, o.coordenador_nome, o.planejador_nome].some(n => n === filterResponsavel);
+        if (!match) return false;
+      }
       if (searchNome && !o.nome.toLowerCase().includes(searchNome.toLowerCase())) return false;
       return true;
     });
-  }, [obras, globalEmpresa, filterEmpresa, filterStatus, filterSaude, filterTipo, searchNome]);
+  }, [obras, globalEmpresa, filterEmpresa, filterStatus, filterSaude, filterTipo, filterResponsavel, searchNome]);
 
-  const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || filterTipo !== "all" || searchNome !== "";
+  const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || filterTipo !== "all" || filterResponsavel !== "all" || searchNome !== "";
 
   const clearFilters = () => {
     setFilterEmpresa("all");
     setFilterStatus("all");
     setFilterSaude("all");
     setFilterTipo("all");
+    setFilterResponsavel("all");
     setSearchNome("");
   };
+
+  const responsaveis = useMemo(() => {
+    const names = obras.flatMap(o => [o.responsavel_nome, o.coordenador_nome, o.planejador_nome]).filter(Boolean) as string[];
+    return [...new Set(names)].sort();
+  }, [obras]);
 
   const kpis = useMemo(() => {
     const base = obrasFiltradas;
@@ -899,6 +924,15 @@ export default function HoldingDashboardView() {
               <SelectItem value="Projeto de Obra">Projeto de Obra</SelectItem>
             </SelectContent>
           </Select>
+          {responsaveis.length > 0 && (
+            <Select value={filterResponsavel} onValueChange={setFilterResponsavel}>
+              <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos Resp.</SelectItem>
+                {responsaveis.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
           <Badge variant="secondary" className="text-xs h-6">{obrasFiltradas.length} obras</Badge>
           {hasActiveFilter && (
             <Button variant="ghost" size="sm" className="h-7 text-xs px-2" onClick={clearFilters}>
@@ -952,6 +986,10 @@ export default function HoldingDashboardView() {
                       uh: String(obra.uh || ""), responsavel: obra.responsavel || "",
                       responsavel_nome: obra.responsavel_nome || (obra.responsavel?.split(" - ")[0] || ""),
                       responsavel_telefone: obra.responsavel_telefone || (obra.responsavel?.split(" - ")[1] || ""),
+                      coordenador_nome: obra.coordenador_nome || "",
+                      coordenador_telefone: obra.coordenador_telefone || "",
+                      planejador_nome: obra.planejador_nome || "",
+                      planejador_telefone: obra.planejador_telefone || "",
                       tipo_contrato: obra.tipo_contrato || "",
                     });
                     setEditingObra(obra);
@@ -1015,7 +1053,7 @@ export default function HoldingDashboardView() {
       )}
 
       {/* Detail Drawer */}
-      <ObraDetailDrawer obra={selectedObra ? { id: selectedObra.id, nome: selectedObra.nome, uh: selectedObra.uh, responsavel: selectedObra.responsavel, responsavel_nome: selectedObra.responsavel_nome, responsavel_telefone: selectedObra.responsavel_telefone, tipo_contrato: selectedObra.tipo_contrato, valor_contrato: selectedObra.valor_contrato, data_inicio: selectedObra.data_inicio, prazo_dias: selectedObra.prazo_dias, aditivo_prazo_dias: selectedObra.aditivo_prazo_dias, aditivo_valor_total: selectedObra.aditivo_valor_total, percentual_andamento: selectedObra.percentual_andamento, status: selectedObra.status, prazo_pagamento: selectedObra.prazo_pagamento, empresa: selectedObra.empresa } : null} onClose={() => setSelectedObra(null)} />
+      <ObraDetailDrawer obra={selectedObra ? { id: selectedObra.id, nome: selectedObra.nome, uh: selectedObra.uh, responsavel: selectedObra.responsavel, responsavel_nome: selectedObra.responsavel_nome, responsavel_telefone: selectedObra.responsavel_telefone, coordenador_nome: selectedObra.coordenador_nome, coordenador_telefone: selectedObra.coordenador_telefone, planejador_nome: selectedObra.planejador_nome, planejador_telefone: selectedObra.planejador_telefone, tipo_contrato: selectedObra.tipo_contrato, valor_contrato: selectedObra.valor_contrato, data_inicio: selectedObra.data_inicio, prazo_dias: selectedObra.prazo_dias, aditivo_prazo_dias: selectedObra.aditivo_prazo_dias, aditivo_valor_total: selectedObra.aditivo_valor_total, percentual_andamento: selectedObra.percentual_andamento, status: selectedObra.status, prazo_pagamento: selectedObra.prazo_pagamento, empresa: selectedObra.empresa } : null} onClose={() => setSelectedObra(null)} />
 
       {/* Nova Obra Dialog */}
       <Dialog open={showNewObraDialog} onOpenChange={(o) => { if (!o) { setShowNewObraDialog(false); setEditingObra(null); resetNewObraForm(); } }}>
@@ -1106,10 +1144,8 @@ export default function HoldingDashboardView() {
               <div><Label className="text-xs">Município</Label><Input value={newObraForm.municipio} onChange={(e) => setNewObraForm(p => ({ ...p, municipio: e.target.value }))} placeholder="Ex: Taquara, Esteio..." /></div>
               <div><Label className="text-xs">Estado</Label><Input value={newObraForm.estado} onChange={(e) => setNewObraForm(p => ({ ...p, estado: e.target.value }))} placeholder="RS" /></div>
             </div>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">UH (Unidades Hab.)</Label><Input type="number" value={newObraForm.uh} onChange={(e) => setNewObraForm(p => ({ ...p, uh: e.target.value }))} placeholder="Ex: 20, 70, 246" /></div>
-              <div><Label className="text-xs">Nome do Responsável</Label><Input value={newObraForm.responsavel_nome} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_nome: e.target.value }))} placeholder="Ex: Bruno" /></div>
-              <div><Label className="text-xs">Telefone (WhatsApp)</Label><Input type="tel" value={newObraForm.responsavel_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_telefone: e.target.value }))} placeholder="Ex: 51982637961" /></div>
               <div>
                 <Label className="text-xs">Tipo de Contrato</Label>
                 <Select value={newObraForm.tipo_contrato} onValueChange={(v) => setNewObraForm(p => ({ ...p, tipo_contrato: v }))}>
@@ -1125,6 +1161,17 @@ export default function HoldingDashboardView() {
                     <SelectItem value="Projeto de Obra">Projeto de Obra</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+            <div className="border-t border-border/40 pt-3 mt-1">
+              <p className="text-xs font-medium text-foreground mb-2">Responsáveis</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label className="text-xs">Eng. Residente</Label><Input value={newObraForm.responsavel_nome} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_nome: e.target.value }))} placeholder="Nome" /></div>
+                <div><Label className="text-xs">Tel. Eng. Residente</Label><Input type="tel" value={newObraForm.responsavel_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_telefone: e.target.value }))} placeholder="51982637961" /></div>
+                <div><Label className="text-xs">Coordenador</Label><Input value={newObraForm.coordenador_nome} onChange={(e) => setNewObraForm(p => ({ ...p, coordenador_nome: e.target.value }))} placeholder="Nome" /></div>
+                <div><Label className="text-xs">Tel. Coordenador</Label><Input type="tel" value={newObraForm.coordenador_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, coordenador_telefone: e.target.value }))} placeholder="51982637961" /></div>
+                <div><Label className="text-xs">Planejador</Label><Input value={newObraForm.planejador_nome} onChange={(e) => setNewObraForm(p => ({ ...p, planejador_nome: e.target.value }))} placeholder="Nome" /></div>
+                <div><Label className="text-xs">Tel. Planejador</Label><Input type="tel" value={newObraForm.planejador_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, planejador_telefone: e.target.value }))} placeholder="51982637961" /></div>
               </div>
             </div>
           </div>
@@ -1368,19 +1415,28 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
         </div>
 
         {(() => {
-          const nome = obra.responsavel_nome || obra.responsavel?.split(" - ")[0] || "";
-          const tel = obra.responsavel_telefone || obra.responsavel?.split(" - ")[1] || "";
-          const telLimpo = tel.replace(/\D/g, "");
-          const waNumber = telLimpo.startsWith("55") ? telLimpo : `55${telLimpo}`;
-          if (!nome) return null;
+          const contacts = [
+            { label: "🏗️", nome: obra.responsavel_nome || obra.responsavel?.split(" - ")[0] || "", tel: obra.responsavel_telefone || obra.responsavel?.split(" - ")[1] || "" },
+            { label: "📋", nome: obra.coordenador_nome || "", tel: obra.coordenador_telefone || "" },
+            { label: "📐", nome: obra.planejador_nome || "", tel: obra.planejador_telefone || "" },
+          ].filter(c => c.nome);
+          if (contacts.length === 0) return null;
           return (
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <span>👤 {nome}</span>
-              {telLimpo && (
-                <a href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Olá ${nome}, tudo bem? Preciso falar sobre a obra ${obra.nome}.`)}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="flex items-center gap-0.5 text-emerald-600 hover:text-emerald-500 font-medium transition-colors">
-                  📱 {tel}
-                </a>
-              )}
+            <div className="space-y-0.5">
+              {contacts.map((c, i) => {
+                const telLimpo = c.tel.replace(/\D/g, "");
+                const waNumber = telLimpo.startsWith("55") ? telLimpo : `55${telLimpo}`;
+                return (
+                  <div key={i} className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                    <span>{c.label} {c.nome}</span>
+                    {telLimpo && (
+                      <a href={`https://wa.me/${waNumber}?text=${encodeURIComponent(`Olá ${c.nome}, tudo bem? Preciso falar sobre a obra ${obra.nome}.`)}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="flex items-center gap-0.5 text-emerald-600 hover:text-emerald-500 font-medium transition-colors">
+                        📱 {c.tel}
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           );
         })()}

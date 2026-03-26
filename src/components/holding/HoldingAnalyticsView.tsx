@@ -29,6 +29,7 @@ interface ObraPortfolio {
   estado: string | null;
   uh: number | null;
   tipo_contrato: string | null;
+  aditivo_valor_total: number;
 }
 
 interface ObraEnriched extends ObraPortfolio {

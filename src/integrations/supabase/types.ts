@@ -4522,7 +4522,10 @@ export type Database = {
       obras_portfolio: {
         Row: {
           aditivo_prazo_dias: number
+          aditivo_valor_total: number
           company_id: string
+          coordenador_nome: string | null
+          coordenador_telefone: string | null
           created_at: string
           data_inicio: string | null
           empresa: string | null
@@ -4538,6 +4541,8 @@ export type Database = {
           parceria_scp: string | null
           percentual_andamento: number
           periodo_medicao: string | null
+          planejador_nome: string | null
+          planejador_telefone: string | null
           prazo_dias: number
           prazo_pagamento: string | null
           responsavel: string | null
@@ -4552,7 +4557,10 @@ export type Database = {
         }
         Insert: {
           aditivo_prazo_dias?: number
+          aditivo_valor_total?: number
           company_id: string
+          coordenador_nome?: string | null
+          coordenador_telefone?: string | null
           created_at?: string
           data_inicio?: string | null
           empresa?: string | null
@@ -4568,6 +4576,8 @@ export type Database = {
           parceria_scp?: string | null
           percentual_andamento?: number
           periodo_medicao?: string | null
+          planejador_nome?: string | null
+          planejador_telefone?: string | null
           prazo_dias?: number
           prazo_pagamento?: string | null
           responsavel?: string | null
@@ -4582,7 +4592,10 @@ export type Database = {
         }
         Update: {
           aditivo_prazo_dias?: number
+          aditivo_valor_total?: number
           company_id?: string
+          coordenador_nome?: string | null
+          coordenador_telefone?: string | null
           created_at?: string
           data_inicio?: string | null
           empresa?: string | null
@@ -4598,6 +4611,8 @@ export type Database = {
           parceria_scp?: string | null
           percentual_andamento?: number
           periodo_medicao?: string | null
+          planejador_nome?: string | null
+          planejador_telefone?: string | null
           prazo_dias?: number
           prazo_pagamento?: string | null
           responsavel?: string | null
