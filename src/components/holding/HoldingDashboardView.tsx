@@ -966,6 +966,10 @@ export default function HoldingDashboardView() {
                       uh: String(obra.uh || ""), responsavel: obra.responsavel || "",
                       responsavel_nome: obra.responsavel_nome || (obra.responsavel?.split(" - ")[0] || ""),
                       responsavel_telefone: obra.responsavel_telefone || (obra.responsavel?.split(" - ")[1] || ""),
+                      coordenador_nome: obra.coordenador_nome || "",
+                      coordenador_telefone: obra.coordenador_telefone || "",
+                      planejador_nome: obra.planejador_nome || "",
+                      planejador_telefone: obra.planejador_telefone || "",
                       tipo_contrato: obra.tipo_contrato || "",
                     });
                     setEditingObra(obra);
