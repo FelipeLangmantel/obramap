@@ -290,6 +290,7 @@ export default function HoldingDashboardView() {
   const [searchNome, setSearchNome] = useState("");
   const [filterTipo, setFilterTipo] = useState("all");
   const [filterResponsavel, setFilterResponsavel] = useState("all");
+  const [filterCargo, setFilterCargo] = useState<"all" | "eng" | "coord" | "plan">("all");
 
   const exportarPDF = async () => {
     setIsPrinting(true);
@@ -665,15 +666,27 @@ export default function HoldingDashboardView() {
       if (filterSaude !== "all" && o.health !== filterSaude) return false;
       if (filterTipo !== "all" && o.tipo_contrato !== filterTipo) return false;
       if (filterResponsavel !== "all") {
-        const match = [o.responsavel_nome, o.coordenador_nome, o.planejador_nome].some(n => n === filterResponsavel);
-        if (!match) return false;
+        // Filtrar pelo cargo selecionado + nome selecionado
+        const camposCargo =
+          filterCargo === "eng"   ? [o.responsavel_nome] :
+          filterCargo === "coord" ? [o.coordenador_nome] :
+          filterCargo === "plan"  ? [o.planejador_nome]  :
+          [o.responsavel_nome, o.coordenador_nome, o.planejador_nome];
+        if (!camposCargo.some(n => n === filterResponsavel)) return false;
+      } else if (filterCargo !== "all") {
+        // Cargo selecionado mas sem nome específico: mostrar obras que têm esse cargo preenchido
+        const temCargo =
+          filterCargo === "eng"   ? !!o.responsavel_nome :
+          filterCargo === "coord" ? !!o.coordenador_nome :
+          filterCargo === "plan"  ? !!o.planejador_nome  : true;
+        if (!temCargo) return false;
       }
       if (searchNome && !o.nome.toLowerCase().includes(searchNome.toLowerCase())) return false;
       return true;
     });
-  }, [obras, globalEmpresa, filterEmpresa, filterStatus, filterSaude, filterTipo, filterResponsavel, searchNome]);
+  }, [obras, globalEmpresa, filterEmpresa, filterStatus, filterSaude, filterTipo, filterResponsavel, filterCargo, searchNome]);
 
-  const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || filterTipo !== "all" || filterResponsavel !== "all" || searchNome !== "";
+  const hasActiveFilter = filterEmpresa !== "all" || filterStatus !== "all" || filterSaude !== "all" || filterTipo !== "all" || filterResponsavel !== "all" || filterCargo !== "all" || searchNome !== "";
 
   const clearFilters = () => {
     setFilterEmpresa("all");
@@ -681,13 +694,36 @@ export default function HoldingDashboardView() {
     setFilterSaude("all");
     setFilterTipo("all");
     setFilterResponsavel("all");
+    setFilterCargo("all");
     setSearchNome("");
   };
 
-  const responsaveis = useMemo(() => {
-    const names = obras.flatMap(o => [o.responsavel_nome, o.coordenador_nome, o.planejador_nome]).filter(Boolean) as string[];
+  const responsaveisEng = useMemo(() => {
+    const names = obras.map(o => o.responsavel_nome).filter(Boolean) as string[];
     return [...new Set(names)].sort();
   }, [obras]);
+
+  const responsaveisCoord = useMemo(() => {
+    const names = obras.map(o => o.coordenador_nome).filter(Boolean) as string[];
+    return [...new Set(names)].sort();
+  }, [obras]);
+
+  const responsaveisPlan = useMemo(() => {
+    const names = obras.map(o => o.planejador_nome).filter(Boolean) as string[];
+    return [...new Set(names)].sort();
+  }, [obras]);
+
+  // Lista ativa baseada no cargo selecionado
+  const responsaveisAtivos = useMemo(() => {
+    if (filterCargo === "eng")   return responsaveisEng;
+    if (filterCargo === "coord") return responsaveisCoord;
+    if (filterCargo === "plan")  return responsaveisPlan;
+    // "all": todos os nomes combinados
+    const all = obras.flatMap(o => [o.responsavel_nome, o.coordenador_nome, o.planejador_nome]).filter(Boolean) as string[];
+    return [...new Set(all)].sort();
+  }, [obras, filterCargo, responsaveisEng, responsaveisCoord, responsaveisPlan]);
+
+  const temResponsaveis = responsaveisEng.length > 0 || responsaveisCoord.length > 0 || responsaveisPlan.length > 0;
 
   const kpis = useMemo(() => {
     const base = obrasFiltradas;
@@ -924,14 +960,32 @@ export default function HoldingDashboardView() {
               <SelectItem value="Projeto de Obra">Projeto de Obra</SelectItem>
             </SelectContent>
           </Select>
-          {responsaveis.length > 0 && (
-            <Select value={filterResponsavel} onValueChange={setFilterResponsavel}>
-              <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Responsável" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos Resp.</SelectItem>
-                {responsaveis.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          {temResponsaveis && (
+            <>
+              {/* Select 1: cargo */}
+              <Select value={filterCargo} onValueChange={(v) => {
+                setFilterCargo(v as "all" | "eng" | "coord" | "plan");
+                setFilterResponsavel("all"); // resetar nome ao trocar cargo
+              }}>
+                <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Cargo" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos Cargos</SelectItem>
+                  {responsaveisEng.length   > 0 && <SelectItem value="eng">Eng. Residente</SelectItem>}
+                  {responsaveisCoord.length > 0 && <SelectItem value="coord">Coordenador</SelectItem>}
+                  {responsaveisPlan.length  > 0 && <SelectItem value="plan">Planejador</SelectItem>}
+                </SelectContent>
+              </Select>
+              {/* Select 2: nome — só aparece quando há mais de 1 opção no cargo */}
+              {responsaveisAtivos.length > 0 && (
+                <Select value={filterResponsavel} onValueChange={setFilterResponsavel}>
+                  <SelectTrigger className="h-8 w-36 text-xs"><SelectValue placeholder="Todos Resp." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {responsaveisAtivos.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+            </>
           )}
           <Badge variant="secondary" className="text-xs h-6">{obrasFiltradas.length} obras</Badge>
           {hasActiveFilter && (
@@ -1166,12 +1220,12 @@ export default function HoldingDashboardView() {
             <div className="border-t border-border/40 pt-3 mt-1">
               <p className="text-xs font-medium text-foreground mb-2">Responsáveis</p>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label className="text-xs">Eng. Residente</Label><Input value={newObraForm.responsavel_nome} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_nome: e.target.value }))} placeholder="Nome" /></div>
-                <div><Label className="text-xs">Tel. Eng. Residente</Label><Input type="tel" value={newObraForm.responsavel_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_telefone: e.target.value }))} placeholder="51982637961" /></div>
-                <div><Label className="text-xs">Coordenador</Label><Input value={newObraForm.coordenador_nome} onChange={(e) => setNewObraForm(p => ({ ...p, coordenador_nome: e.target.value }))} placeholder="Nome" /></div>
-                <div><Label className="text-xs">Tel. Coordenador</Label><Input type="tel" value={newObraForm.coordenador_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, coordenador_telefone: e.target.value }))} placeholder="51982637961" /></div>
-                <div><Label className="text-xs">Planejador</Label><Input value={newObraForm.planejador_nome} onChange={(e) => setNewObraForm(p => ({ ...p, planejador_nome: e.target.value }))} placeholder="Nome" /></div>
-                <div><Label className="text-xs">Tel. Planejador</Label><Input type="tel" value={newObraForm.planejador_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, planejador_telefone: e.target.value }))} placeholder="51982637961" /></div>
+                <div><Label className="text-xs">Eng. Residente</Label><Input value={newObraForm.responsavel_nome} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_nome: e.target.value }))} placeholder="" /></div>
+                <div><Label className="text-xs">Tel. Eng. Residente</Label><Input type="tel" value={newObraForm.responsavel_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_telefone: e.target.value }))} placeholder="(51) 9 9999-9999" /></div>
+                <div><Label className="text-xs">Coordenador</Label><Input value={newObraForm.coordenador_nome} onChange={(e) => setNewObraForm(p => ({ ...p, coordenador_nome: e.target.value }))} placeholder="" /></div>
+                <div><Label className="text-xs">Tel. Coordenador</Label><Input type="tel" value={newObraForm.coordenador_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, coordenador_telefone: e.target.value }))} placeholder="(51) 9 9999-9999" /></div>
+                <div><Label className="text-xs">Planejador</Label><Input value={newObraForm.planejador_nome} onChange={(e) => setNewObraForm(p => ({ ...p, planejador_nome: e.target.value }))} placeholder="" /></div>
+                <div><Label className="text-xs">Tel. Planejador</Label><Input type="tel" value={newObraForm.planejador_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, planejador_telefone: e.target.value }))} placeholder="(51) 9 9999-9999" /></div>
               </div>
             </div>
           </div>
