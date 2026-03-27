@@ -1368,7 +1368,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                 <ScrollArea className="h-[200px] md:h-[250px]">
                   <div className="space-y-2 pr-2 md:pr-4">
                     {overdueRequests.map((req: any) => (
-                      <div key={req.id} className="p-2 md:p-3 rounded-lg border border-red-200 bg-white dark:bg-background">
+                      <div key={req.id} className="p-2 md:p-3 rounded-lg border border-red-200 dark:border-red-800 bg-card">
                         <div className="flex items-start md:items-center gap-2 md:gap-3 flex-wrap md:flex-nowrap">
                           <div className="w-3 h-3 rounded-full shrink-0 mt-1 md:mt-0" style={{ backgroundColor: req.family_color || '#9ca3af' }} />
                           <div className="flex-1 min-w-0">

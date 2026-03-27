@@ -1321,7 +1321,7 @@ export function FinancialFlowView() {
             
             return (
               <div className="space-y-4 text-center">
-                <div className="bg-white p-4 rounded-lg inline-block mx-auto">
+                <div className="bg-card p-4 rounded-lg inline-block mx-auto">
                   {hasValidPayment ? (
                     <QRCodeSVG 
                       value={boletoCode ? generateBoletoPayload(boletoCode) : getPixPayloadForEntry(selectedEntry)}

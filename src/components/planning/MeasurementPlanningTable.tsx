@@ -107,7 +107,7 @@ export function MeasurementPlanningTable({
         );
       case 'danger':
         return (
-          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 gap-1">
+          <Badge variant="outline" className="bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800 gap-1">
             <XCircle className="h-3 w-3" />
             Prejuízo
           </Badge>
