@@ -17,10 +17,9 @@ function getSystemTheme(): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-function applyTheme(theme: Theme) {
+function applyTheme(_theme: Theme) {
   const root = document.documentElement;
-  const resolved = theme === "system" ? getSystemTheme() : theme;
-  root.classList.toggle("dark", resolved === "dark");
+  root.classList.add("dark");
 }
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
