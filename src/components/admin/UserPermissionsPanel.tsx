@@ -345,11 +345,14 @@ export function UserPermissionsPanel() {
       // ✅ Atualizar permissões com os padrões do novo perfil
       const defaults = getDefaultPermissions(newRole);
       const existingPermission = permissions[userId];
-      
+      // can_edit: editor/admin → true | viewer → false (explícito para não ficar preso no valor antigo)
+      const newCanEdit = newRole === "viewer" ? false : true;
+
       if (existingPermission?.id) {
         await supabase.from("user_permissions").update({
           visible_menus: defaults.visible_menus,
           visible_management_sections: defaults.visible_management_sections,
+          can_edit: newCanEdit,
           updated_at: new Date().toISOString(),
         }).eq("id", existingPermission.id);
       } else {
@@ -358,6 +361,7 @@ export function UserPermissionsPanel() {
           department: "geral",
           visible_menus: defaults.visible_menus,
           visible_management_sections: defaults.visible_management_sections,
+          can_edit: newCanEdit,
         });
       }
 
