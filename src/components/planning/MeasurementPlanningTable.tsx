@@ -93,7 +93,7 @@ export function MeasurementPlanningTable({
     switch (status) {
       case 'success':
         return (
-          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1">
+          <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 gap-1">
             <CheckCircle2 className="h-3 w-3" />
             OK
           </Badge>
