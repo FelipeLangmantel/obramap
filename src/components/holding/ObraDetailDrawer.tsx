@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical, CalendarDays, TrendingUp, Clock, BarChart3, Target, AlertTriangle } from "lucide-react";
+import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical, CalendarDays, TrendingUp, Clock, BarChart3, Target, AlertTriangle, DollarSign } from "lucide-react";
 import { CurrencyInput } from "./CurrencyInput";
 import { useAuth } from "@/contexts/AuthContext";
 import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart } from "recharts";
@@ -88,6 +88,8 @@ export interface ObraDrawerData {
   aditivo_prazo_dias?: number;
   aditivo_valor_total?: number;
   percentual_andamento?: number;
+  has_initial_balance?: boolean;
+  valor_medido_inicial?: number;
   status?: string;
   prazo_pagamento?: string | null;
   empresa?: string | null;
@@ -130,10 +132,24 @@ function ResumoTab({ obra }: { obra: ObraDrawerData }) {
 
   const kpis = useMemo(() => {
     const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
-    // Medido/Faturado = aprovadas (igual ao card do painel e à tabela de obras)
-    const totalMedido = medicoes
-      .filter(m => m.status_medicao === "aprovada")
+
+    // Medições aprovadas reais (excluindo Saldo Inicial)
+    const totalMedidoReal = medicoes
+      .filter(m => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial")
       .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+
+    // Saldo Inicial (% executado ao cadastrar a obra)
+    const totalMedidoInicial = medicoes
+      .filter(m => m.num_medicao === "Saldo Inicial" && m.status_medicao === "aprovada")
+      .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+
+    // Total medido = medições reais + saldo inicial
+    // Se não há nada no banco, usa fallback do % (consistente com ObraCard)
+    const totalMedido = (totalMedidoReal + totalMedidoInicial) > 0
+      ? totalMedidoReal + totalMedidoInicial
+      : (valorContrato > 0 && (obra.percentual_andamento || 0) > 0
+        ? ((obra.percentual_andamento || 0) / 100) * valorContrato
+        : 0);
 
     // Enviado (aguardando aprovação) — separado
     const totalEnviado = medicoes
@@ -208,10 +224,10 @@ function ResumoTab({ obra }: { obra: ObraDrawerData }) {
     <div className="space-y-4">
       {/* KPI Row 1 — Financeiro */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <MiniKpi icon={<DollarSign className="h-4 w-4" />} label="Valor Contrato" value={BRL.format(kpis.valorContrato)} sub="valor total contratado" color="text-foreground" />
         <MiniKpi icon={<TrendingUp className="h-4 w-4" />} label="Total Medido" value={BRL.format(kpis.totalMedido)} sub={`${kpis.pctMedido.toFixed(1)}% do contrato`} color="text-emerald-600" />
         <MiniKpi icon={<Clock className="h-4 w-4" />} label="Enviado/Pendente" value={BRL.format(kpis.totalEnviado)} sub="aguardando aprovação" color="text-amber-600" />
-        <MiniKpi icon={<Target className="h-4 w-4" />} label="Saldo a Medir" value={BRL.format(kpis.saldoMedir)} color="text-blue-600" />
-        <MiniKpi icon={<BarChart3 className="h-4 w-4" />} label="% Financeiro" value={`${kpis.pctMedido.toFixed(1)}%`} color="text-primary" />
+        <MiniKpi icon={<Target className="h-4 w-4" />} label="Saldo a Medir" value={BRL.format(kpis.saldoMedir)} sub={kpis.valorContrato > 0 ? `${((kpis.saldoMedir / kpis.valorContrato) * 100).toFixed(1)}% restante` : undefined} color="text-blue-600" />
       </div>
 
       {/* Contract Timeline */}
