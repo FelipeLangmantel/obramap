@@ -85,16 +85,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchUserData = useCallback(async (userId: string) => {
     // ✅ Proteção contra execução duplicada
     if (isFetchingUserData.current) {
-      console.log("[AUTH EFFECT] fetchUserData already in progress, skipping");
       return;
     }
     if (hasFetchedUserData.current === userId) {
-      console.log("[AUTH EFFECT] fetchUserData already completed for user:", userId);
       return;
     }
 
     isFetchingUserData.current = true;
-    console.log("[AUTH EFFECT] fetchUserData starting for user:", userId);
 
     try {
       // Fetch profile with new fields
@@ -209,7 +206,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       hasFetchedUserData.current = userId;
-      console.log("[AUTH EFFECT] fetchUserData completed for user:", userId);
     } catch (error) {
       console.error("Error fetching user data:", error);
     } finally {
@@ -238,15 +234,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ✅ Listener registrado APENAS UMA VEZ com array vazio
   useEffect(() => {
     if (authListenerRegistered.current) {
-      console.log("[AUTH EFFECT] Listener already registered, skipping");
       return;
     }
     authListenerRegistered.current = true;
-    console.log("[AUTH EFFECT] Registering auth listener");
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        console.log("[AUTH EFFECT] Auth state changed:", event);
 
         const sameLoadedUser = !!session?.user && hasFetchedUserData.current === session.user.id;
         const shouldSkipUiRebuild = sameLoadedUser && (
@@ -257,7 +250,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         );
 
         if (shouldSkipUiRebuild && session?.user) {
-          console.log("[AUTH EFFECT] Skipping UI rebuild for stable session event:", event);
           setSession(session);
           setUser(session.user);
           return;
@@ -295,7 +287,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log("[AUTH EFFECT] Initial session check");
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -309,7 +300,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      console.log("[AUTH EFFECT] Unsubscribing auth listener");
       subscription.unsubscribe();
     };
   }, []); // ✅ Array vazio - nunca re-executa
@@ -318,7 +308,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user?.id) return;
 
-    console.log("[AUTH EFFECT] Setting up realtime for user:", user.id);
 
     const channel = supabase
       .channel('user-permissions-changes')
@@ -331,7 +320,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           filter: `user_id=eq.${user.id}`,
         },
         () => {
-          console.log("[AUTH EFFECT] Permission change detected");
           refreshPermissions();
         }
       )
@@ -344,7 +332,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           filter: `user_id=eq.${user.id}`,
         },
         () => {
-          console.log("[AUTH EFFECT] Profile change detected");
           refreshPermissions();
         }
       )
@@ -357,7 +344,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           filter: `company_id=eq.${profile?.company_id}`,
         },
         () => {
-          console.log("[AUTH EFFECT] Department permission change detected");
           hasFetchedUserData.current = null;
           if (user?.id) fetchUserData(user.id);
         }
@@ -390,7 +376,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (inactiveDuration >= INACTIVITY_LIMIT_MS) {
         // Encerrar sessão por inatividade
-        console.log("[AUTH] Sessão encerrada por inatividade (20min)");
         try {
           await supabase
             .from("user_sessions")
@@ -440,7 +425,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         (payload: any) => {
           const newRecord = payload.new;
           if (newRecord && newRecord.is_active === false && newRecord.termination_reason === 'admin') {
-            console.log("[AUTH] Sessão encerrada por administrador — forçando logout");
             supabase.auth.signOut();
           }
         }

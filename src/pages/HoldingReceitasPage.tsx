@@ -257,9 +257,9 @@ export default function HoldingReceitasPage() {
         obrasCount,
         aprovado: porMesRef.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
         enviado: porMesRef.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-        pendente: porMesRef.filter(m => m.status_medicao === "pendente").reduce((s, m) => s + m.valor_medicao, 0),
-        nfRecebido: porMesRef.filter(m => m.status_nf === "recebido").reduce((s, m) => s + m.valor_medicao, 0),
-        total: porMesRef.reduce((s, m) => s + m.valor_medicao, 0),
+        pendente: porMesRef.filter(m => m.status_medicao === "pendente").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+        nfRecebido: porMesRef.filter(m => m.status_nf === "recebido").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+        total: porMesRef.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
         previsto: porPrevisao.reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0),
         countPrevistas: porPrevisao.length,
       };
@@ -324,11 +324,11 @@ export default function HoldingReceitasPage() {
           label: `${format(weekStart, "dd/MM")} - ${format(weekEnd, "dd/MM")}`,
           start: weekStart,
           end: weekEnd,
-          recebido: medsInWeek.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + m.valor_medicao, 0),
-          aprovado: medsInWeek.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + m.valor_medicao, 0),
-          enviado: medsInWeek.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + m.valor_medicao, 0),
-          pendente: medsInWeek.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + m.valor_medicao, 0),
-          total: medsInWeek.reduce((s, m) => s + m.valor_medicao, 0),
+          recebido: medsInWeek.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          aprovado: medsInWeek.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          enviado: medsInWeek.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          pendente: medsInWeek.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          total: medsInWeek.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
           medicoes: medsInWeek,
         });
       }
@@ -346,11 +346,11 @@ export default function HoldingReceitasPage() {
           label: `${format(fStart, "dd/MM")} - ${format(fEnd, "dd/MM")}`,
           start: fStart,
           end: fEnd,
-          recebido: medsInPeriod.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + m.valor_medicao, 0),
-          aprovado: medsInPeriod.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + m.valor_medicao, 0),
-          enviado: medsInPeriod.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + m.valor_medicao, 0),
-          pendente: medsInPeriod.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + m.valor_medicao, 0),
-          total: medsInPeriod.reduce((s, m) => s + m.valor_medicao, 0),
+          recebido: medsInPeriod.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          aprovado: medsInPeriod.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          enviado: medsInPeriod.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          pendente: medsInPeriod.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          total: medsInPeriod.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
           medicoes: medsInPeriod,
         });
       }
@@ -367,11 +367,11 @@ export default function HoldingReceitasPage() {
           label: format(monthStart, "MMM/yy", { locale: ptBR }),
           start: monthStart,
           end: monthEnd,
-          recebido: medsInMonth.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + m.valor_medicao, 0),
-          aprovado: medsInMonth.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + m.valor_medicao, 0),
-          enviado: medsInMonth.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + m.valor_medicao, 0),
-          pendente: medsInMonth.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + m.valor_medicao, 0),
-          total: medsInMonth.reduce((s, m) => s + m.valor_medicao, 0),
+          recebido: medsInMonth.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          aprovado: medsInMonth.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          enviado: medsInMonth.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          pendente: medsInMonth.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          total: medsInMonth.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
           medicoes: medsInMonth,
         };
       });
@@ -680,9 +680,9 @@ export default function HoldingReceitasPage() {
                 <div className="flex items-center justify-between text-xs text-muted-foreground px-2">
                   <span>{medicoesFiltradas.length} medições encontradas</span>
                   <span>
-                    <strong>Total:</strong> {BRL.format(medicoesFiltradas.reduce((s, m) => s + m.valor_medicao, 0))}
+                    <strong>Total:</strong> {BRL.format(medicoesFiltradas.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0))}
                     {" | "}
-                    <strong>Aprovado:</strong> {BRL.format(medicoesFiltradas.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + m.valor_medicao, 0))}
+                    <strong>Aprovado:</strong> {BRL.format(medicoesFiltradas.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0))}
                   </span>
                 </div>
               </TabsContent>

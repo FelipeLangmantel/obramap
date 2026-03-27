@@ -418,8 +418,6 @@ export function UserPermissionsPanel() {
         updated_at: new Date().toISOString(),
       };
 
-      console.log("Saving permissions for user:", selectedUserId, permissionData);
-
       if (existingPermission?.id) {
         // Update existing permission
         const { error } = await supabase
