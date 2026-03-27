@@ -1357,9 +1357,9 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
 
           {/* Overdue Purchases */}
           {overdueRequests.length > 0 && (
-            <Card className="border-red-300 bg-red-50/50 dark:bg-red-900/10">
+            <Card className="border-red-300 dark:border-red-800 bg-red-500/10">
               <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-lg text-red-700">
+                <CardTitle className="flex items-center gap-2 text-lg text-red-700 dark:text-red-400">
                   <AlertTriangle className="w-5 h-5" />
                   Compras em Atraso ({overdueRequests.length})
                 </CardTitle>
