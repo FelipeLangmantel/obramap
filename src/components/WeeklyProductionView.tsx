@@ -1672,11 +1672,11 @@ export function WeeklyProductionView() {
                               className={`
                                 relative w-10 h-10 rounded-md border-2 flex flex-col items-center justify-center text-xs font-medium transition-all
                                 ${isCompleted 
-                                  ? 'bg-green-100 border-green-500 text-green-700 cursor-not-allowed opacity-60' 
+                                  ? 'bg-green-500/15 border-green-500 text-green-700 dark:text-green-400 cursor-not-allowed opacity-60' 
                                   : hasPartialProgress
                                     ? isSelected 
                                       ? 'border-primary bg-primary/20 text-primary cursor-pointer'
-                                      : 'border-amber-400 bg-amber-50 text-amber-700 cursor-pointer'
+                                      : 'border-amber-400 bg-amber-500/10 text-amber-700 dark:text-amber-400 cursor-pointer'
                                     : isSelected 
                                       ? 'border-primary bg-primary/20 text-primary cursor-pointer' 
                                       : isPlanned

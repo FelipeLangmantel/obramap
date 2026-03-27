@@ -1431,9 +1431,9 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                         }}>
                           <CollapsibleTrigger asChild>
                             <div className={`p-2 md:p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors ${
-                              alert.priority === 'urgent' ? 'bg-red-50 border-red-200 dark:bg-red-900/20' : 
-                              alert.priority === 'warning' ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20' : 
-                              'bg-blue-50 border-blue-200 dark:bg-blue-900/20'
+                              alert.priority === 'urgent' ? 'bg-red-500/10 border-red-200 dark:border-red-800' : 
+                              alert.priority === 'warning' ? 'bg-yellow-500/10 border-yellow-200 dark:border-yellow-800' : 
+                              'bg-blue-500/10 border-blue-200 dark:border-blue-800'
                             }`}>
                               <div className="flex items-start md:items-center gap-2 md:gap-3 flex-wrap md:flex-nowrap">
                                 {isExpanded ? <ChevronDown className="w-4 h-4 shrink-0 mt-0.5 md:mt-0" /> : <ChevronRight className="w-4 h-4 shrink-0 mt-0.5 md:mt-0" />}
