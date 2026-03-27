@@ -363,7 +363,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
           </div>
         </SidebarHeader>
 
-        <SidebarContent className="px-3 overflow-y-auto bg-background">
+        <SidebarContent className="px-3 overflow-y-auto scrollbar-none bg-background">
           {/* Grouped menu sections */}
           {menuGroups.map((group) => {
             const visibleItems = getVisibleItems(group.items);
