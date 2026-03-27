@@ -426,7 +426,7 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <TabsContent value="resumo" className="mt-0"><ResumoTab obra={obra} /></TabsContent>
           <TabsContent value="documentos" className="mt-0"><DocumentosTab obraId={obra.id} /></TabsContent>
-          <TabsContent value="medicoes" className="mt-0"><MedicoesTab obraId={obra.id} valorContrato={(obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0)} /></TabsContent>
+          <TabsContent value="medicoes" className="mt-0"><MedicoesTab obraId={obra.id} valorContrato={(obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0)} hasInitialBalance={obra.has_initial_balance || false} valorMedidoInicial={obra.valor_medido_inicial || 0} /></TabsContent>
           <TabsContent value="financeiro" className="mt-0"><FinanceiroTab obraId={obra.id} /></TabsContent>
           <TabsContent value="aditivos" className="mt-0"><AditivosTab obraId={obra.id} /></TabsContent>
           <TabsContent value="pendencias" className="mt-0"><PendenciasTab obraId={obra.id} /></TabsContent>
@@ -685,7 +685,7 @@ function ClearableDateInput({ value, onChange, label }: { value: string; onChang
   );
 }
 
-function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato: number }) {
+function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInicial }: { obraId: string; valorContrato: number; hasInitialBalance: boolean; valorMedidoInicial: number }) {
   const { user, profile, requireEdit } = useAuth();
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
@@ -722,19 +722,24 @@ function MedicoesTab({ obraId, valorContrato }: { obraId: string; valorContrato:
 
   useEffect(() => { load(); }, [load]);
 
+  // Valor já comprometido pelo % de execução inicial (opção B: já faturado informalmente)
+  const baseJaComprometida = hasInitialBalance ? (valorMedidoInicial || 0) : 0;
+
   const saldoDisponivel = useMemo(() => {
     if (valorContrato === 0) return Infinity;
     const totalLancado = medicoes
       .filter(m => m.num_medicao !== "Saldo Inicial")
       .reduce((s, m) => s + (Number(m.valor_medicao) || 0) + (Number(m.valor_previsto_medicao) || 0), 0);
-    return Math.max(0, valorContrato - totalLancado);
-  }, [medicoes, valorContrato]);
+    return Math.max(0, valorContrato - baseJaComprometida - totalLancado);
+  }, [medicoes, valorContrato, baseJaComprometida]);
 
   const totalJaLancado = useMemo(() => {
-    return medicoes
+    const lancadoNoBanco = medicoes
       .filter(m => m.num_medicao !== "Saldo Inicial")
       .reduce((s, m) => s + (Number(m.valor_medicao) || 0) + (Number(m.valor_previsto_medicao) || 0), 0);
-  }, [medicoes]);
+    // Inclui o valor inicial já comprometido para fins de validação de limite
+    return baseJaComprometida + lancadoNoBanco;
+  }, [medicoes, baseJaComprometida]);
 
   const addMedicao = async () => {
     if (!requireEdit()) return;
