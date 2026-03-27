@@ -341,8 +341,29 @@ export function UserPermissionsPanel() {
     try {
       const { error } = await supabase.from("user_roles").update({ role: newRole }).eq("user_id", userId);
       if (error) throw error;
+
+      // ✅ Atualizar permissões com os padrões do novo perfil
+      const defaults = getDefaultPermissions(newRole);
+      const existingPermission = permissions[userId];
+      
+      if (existingPermission?.id) {
+        await supabase.from("user_permissions").update({
+          visible_menus: defaults.visible_menus,
+          visible_management_sections: defaults.visible_management_sections,
+          updated_at: new Date().toISOString(),
+        }).eq("id", existingPermission.id);
+      } else {
+        await supabase.from("user_permissions").insert({
+          user_id: userId,
+          department: "geral",
+          visible_menus: defaults.visible_menus,
+          visible_management_sections: defaults.visible_management_sections,
+        });
+      }
+
       setUsers((prev) => prev.map((u) => (u.user_id === userId ? { ...u, role: newRole } : u)));
-      toast.success("Função atualizada!");
+      toast.success("Função e permissões atualizadas!");
+      await fetchData(); // Recarregar permissões atualizadas
     } catch (error) {
       console.error("Error updating role:", error);
       toast.error("Erro ao atualizar função");
