@@ -1357,9 +1357,9 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
 
           {/* Overdue Purchases */}
           {overdueRequests.length > 0 && (
-            <Card className="border-red-300 bg-red-50/50 dark:bg-red-900/10">
+            <Card className="border-red-300 dark:border-red-800 bg-red-500/10">
               <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-lg text-red-700">
+                <CardTitle className="flex items-center gap-2 text-lg text-red-700 dark:text-red-400">
                   <AlertTriangle className="w-5 h-5" />
                   Compras em Atraso ({overdueRequests.length})
                 </CardTitle>
@@ -1368,7 +1368,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                 <ScrollArea className="h-[200px] md:h-[250px]">
                   <div className="space-y-2 pr-2 md:pr-4">
                     {overdueRequests.map((req: any) => (
-                      <div key={req.id} className="p-2 md:p-3 rounded-lg border border-red-200 bg-white dark:bg-background">
+                      <div key={req.id} className="p-2 md:p-3 rounded-lg border border-red-200 dark:border-red-800 bg-card">
                         <div className="flex items-start md:items-center gap-2 md:gap-3 flex-wrap md:flex-nowrap">
                           <div className="w-3 h-3 rounded-full shrink-0 mt-1 md:mt-0" style={{ backgroundColor: req.family_color || '#9ca3af' }} />
                           <div className="flex-1 min-w-0">
@@ -1431,9 +1431,9 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                         }}>
                           <CollapsibleTrigger asChild>
                             <div className={`p-2 md:p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors ${
-                              alert.priority === 'urgent' ? 'bg-red-50 border-red-200 dark:bg-red-900/20' : 
-                              alert.priority === 'warning' ? 'bg-yellow-50 border-yellow-200 dark:bg-yellow-900/20' : 
-                              'bg-blue-50 border-blue-200 dark:bg-blue-900/20'
+                              alert.priority === 'urgent' ? 'bg-red-500/10 border-red-200 dark:border-red-800' : 
+                              alert.priority === 'warning' ? 'bg-yellow-500/10 border-yellow-200 dark:border-yellow-800' : 
+                              'bg-blue-500/10 border-blue-200 dark:border-blue-800'
                             }`}>
                               <div className="flex items-start md:items-center gap-2 md:gap-3 flex-wrap md:flex-nowrap">
                                 {isExpanded ? <ChevronDown className="w-4 h-4 shrink-0 mt-0.5 md:mt-0" /> : <ChevronRight className="w-4 h-4 shrink-0 mt-0.5 md:mt-0" />}
@@ -2229,10 +2229,10 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                           ) : null}
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                             quotation.status === 'approved' 
-                              ? 'bg-green-100 text-green-600' 
+                              ? 'bg-green-500/15 text-green-600 dark:text-green-400' 
                               : quotation.status === 'pending' 
-                                ? 'bg-yellow-100 text-yellow-600' 
-                                : 'bg-gray-100 text-gray-600'
+                                ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400' 
+                                : 'bg-muted text-muted-foreground'
                           }`}>
                             {quotation.status === 'approved' ? <CheckCircle2 className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
                           </div>
@@ -2419,7 +2419,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                                                   {quote.delivery_days} dias
                                                 </div>
                                                 {isLowest && !quote.is_selected && (
-                                                  <Badge variant="secondary" className="text-[10px] mt-1 bg-green-100 text-green-700">Menor preço</Badge>
+                                                  <Badge variant="secondary" className="text-[10px] mt-1 bg-green-500/15 text-green-700 dark:text-green-400">Menor preço</Badge>
                                                 )}
                                                 {quote.is_selected && (
                                                   <Badge className="text-[10px] mt-1 bg-green-500">

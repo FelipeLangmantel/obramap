@@ -629,7 +629,7 @@ export default function SystemUserManagement() {
                 <p className="text-sm text-green-700 mb-3">
                   Envie a senha temporária abaixo para o usuário:
                 </p>
-                <div className="flex items-center gap-2 bg-white p-2 rounded border">
+                <div className="flex items-center gap-2 bg-card p-2 rounded border">
                   <code className="flex-1 font-mono text-sm">{tempPassword}</code>
                   <Button
                     variant="outline"

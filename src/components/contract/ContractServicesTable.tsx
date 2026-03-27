@@ -17,14 +17,14 @@ interface ContractServicesTableProps {
 // Cores suaves para macros
 const MACRO_COLORS: Record<string, string> = {};
 const COLOR_PALETTE = [
-  "bg-blue-50 border-l-blue-400",
-  "bg-emerald-50 border-l-emerald-400",
-  "bg-purple-50 border-l-purple-400",
-  "bg-orange-50 border-l-orange-400",
-  "bg-pink-50 border-l-pink-400",
-  "bg-cyan-50 border-l-cyan-400",
-  "bg-yellow-50 border-l-yellow-400",
-  "bg-indigo-50 border-l-indigo-400",
+  "bg-blue-500/10 border-l-blue-400 dark:bg-blue-500/15",
+  "bg-emerald-500/10 border-l-emerald-400 dark:bg-emerald-500/15",
+  "bg-purple-500/10 border-l-purple-400 dark:bg-purple-500/15",
+  "bg-orange-500/10 border-l-orange-400 dark:bg-orange-500/15",
+  "bg-pink-500/10 border-l-pink-400 dark:bg-pink-500/15",
+  "bg-cyan-500/10 border-l-cyan-400 dark:bg-cyan-500/15",
+  "bg-yellow-500/10 border-l-yellow-400 dark:bg-yellow-500/15",
+  "bg-indigo-500/10 border-l-indigo-400 dark:bg-indigo-500/15",
 ];
 
 function getMacroColor(macroId: string): string {
@@ -109,7 +109,7 @@ function EditableCell({ value, onSave, isEditing }: EditableCellProps) {
       onKeyDown={handleKeyDown}
       className={cn(
         "w-28 text-right font-mono h-8 px-2",
-        value === 0 && "border-yellow-400 bg-yellow-50"
+        value === 0 && "border-yellow-400 bg-yellow-500/10"
       )}
     />
   );

@@ -93,21 +93,21 @@ export function MeasurementPlanningTable({
     switch (status) {
       case 'success':
         return (
-          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1">
+          <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800 gap-1">
             <CheckCircle2 className="h-3 w-3" />
             OK
           </Badge>
         );
       case 'warning':
         return (
-          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 gap-1">
+          <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800 gap-1">
             <AlertTriangle className="h-3 w-3" />
             Atenção
           </Badge>
         );
       case 'danger':
         return (
-          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 gap-1">
+          <Badge variant="outline" className="bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800 gap-1">
             <XCircle className="h-3 w-3" />
             Prejuízo
           </Badge>

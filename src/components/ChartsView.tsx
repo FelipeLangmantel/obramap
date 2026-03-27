@@ -167,7 +167,7 @@ export function ChartsView() {
     });
 
     const summaryData = [
-      { label: "Não Iniciado", value: counts["not-started"], color: "bg-gray-400" },
+      { label: "Não Iniciado", value: counts["not-started"], color: "bg-muted-foreground" },
       { label: "Fundação", value: counts["foundation"], color: "bg-red-500" },
       { label: "Estrutura", value: counts["structure"], color: "bg-amber-500" },
       { label: "Acabamento", value: counts["finishing"], color: "bg-blue-500" },

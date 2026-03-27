@@ -477,7 +477,7 @@ export function PlannedVsActualView({
               <CardContent>
                 <div className="space-y-2">
                   {comparisons.filter(c => c.isNegative && !c.hasDeviation).map((comp, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-2 bg-white dark:bg-background rounded border">
+                    <div key={idx} className="flex items-center justify-between p-2 bg-card rounded border">
                       <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full" style={{ backgroundColor: comp.macroColor }} />
                         <span className="text-sm font-medium">{comp.scopeName}</span>
