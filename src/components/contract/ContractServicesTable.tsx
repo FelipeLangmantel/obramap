@@ -109,7 +109,7 @@ function EditableCell({ value, onSave, isEditing }: EditableCellProps) {
       onKeyDown={handleKeyDown}
       className={cn(
         "w-28 text-right font-mono h-8 px-2",
-        value === 0 && "border-yellow-400 bg-yellow-50"
+        value === 0 && "border-yellow-400 bg-yellow-500/10"
       )}
     />
   );

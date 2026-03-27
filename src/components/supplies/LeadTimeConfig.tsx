@@ -141,7 +141,7 @@ export function LeadTimeConfig({ families, projectLeadTimes, canEdit, onSave }: 
                         Personalizado
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="bg-gray-50 text-gray-600">
+                      <Badge variant="outline" className="bg-muted text-muted-foreground">
                         Padrão
                       </Badge>
                     )}

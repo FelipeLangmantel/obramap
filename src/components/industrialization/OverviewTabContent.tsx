@@ -333,13 +333,13 @@ export function OverviewTabContent({ companyId, contextId, contextName, contextT
 
   const PIPELINE_STYLE: Record<string, {bg:string, border:string, badge:string}> = {
     planned:            { bg:'bg-muted/40',          border:'border-border',       badge:'bg-muted text-muted-foreground' },
-    released:           { bg:'bg-blue-500/10',       border:'border-blue-300',     badge:'bg-blue-100 text-blue-700' },
-    in_production:      { bg:'bg-amber-500/10',      border:'border-amber-300',    badge:'bg-amber-100 text-amber-700' },
-    ready:              { bg:'bg-emerald-500/10',    border:'border-emerald-300',  badge:'bg-emerald-100 text-emerald-700' },
-    awaiting_transport: { bg:'bg-orange-500/10',     border:'border-orange-300',   badge:'bg-orange-100 text-orange-700' },
-    in_transit:         { bg:'bg-purple-500/10',     border:'border-purple-300',   badge:'bg-purple-100 text-purple-700' },
-    delivered:          { bg:'bg-green-500/10',      border:'border-green-300',    badge:'bg-green-100 text-green-800' },
-    installed:          { bg:'bg-emerald-600/15',    border:'border-emerald-500',  badge:'bg-emerald-200 text-emerald-900' },
+    released:           { bg:'bg-blue-500/10',       border:'border-blue-300',     badge:'bg-blue-500/15 text-blue-700 dark:text-blue-300' },
+    in_production:      { bg:'bg-amber-500/10',      border:'border-amber-300',    badge:'bg-amber-500/15 text-amber-700 dark:text-amber-300' },
+    ready:              { bg:'bg-emerald-500/10',    border:'border-emerald-300',  badge:'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' },
+    awaiting_transport: { bg:'bg-orange-500/10',     border:'border-orange-300',   badge:'bg-orange-500/15 text-orange-700 dark:text-orange-300' },
+    in_transit:         { bg:'bg-purple-500/10',     border:'border-purple-300',   badge:'bg-purple-500/15 text-purple-700 dark:text-purple-300' },
+    delivered:          { bg:'bg-green-500/10',      border:'border-green-300',    badge:'bg-green-500/15 text-green-700 dark:text-green-300' },
+    installed:          { bg:'bg-emerald-600/15',    border:'border-emerald-500',  badge:'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300' },
     cancelled:          { bg:'bg-destructive/10',    border:'border-destructive',  badge:'bg-destructive/20 text-destructive' },
   };
 
