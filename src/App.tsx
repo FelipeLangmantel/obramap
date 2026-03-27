@@ -93,8 +93,8 @@ function CompanyLayout() {
 
 const App = () => {
   useEffect(() => {
-    console.log("[MOUNT] App mounted");
-    return () => console.log("[UNMOUNT] App unmounted");
+    document.documentElement.classList.add("dark");
+    localStorage.setItem("obramap_theme", "dark");
   }, []);
 
   return (
