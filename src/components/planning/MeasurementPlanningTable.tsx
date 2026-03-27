@@ -100,7 +100,7 @@ export function MeasurementPlanningTable({
         );
       case 'warning':
         return (
-          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 gap-1">
+          <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800 gap-1">
             <AlertTriangle className="h-3 w-3" />
             Atenção
           </Badge>
