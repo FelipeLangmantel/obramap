@@ -2229,10 +2229,10 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                           ) : null}
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                             quotation.status === 'approved' 
-                              ? 'bg-green-100 text-green-600' 
+                              ? 'bg-green-500/15 text-green-600 dark:text-green-400' 
                               : quotation.status === 'pending' 
-                                ? 'bg-yellow-100 text-yellow-600' 
-                                : 'bg-gray-100 text-gray-600'
+                                ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400' 
+                                : 'bg-muted text-muted-foreground'
                           }`}>
                             {quotation.status === 'approved' ? <CheckCircle2 className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
                           </div>
