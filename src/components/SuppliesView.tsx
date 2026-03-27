@@ -2419,7 +2419,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                                                   {quote.delivery_days} dias
                                                 </div>
                                                 {isLowest && !quote.is_selected && (
-                                                  <Badge variant="secondary" className="text-[10px] mt-1 bg-green-100 text-green-700">Menor preço</Badge>
+                                                  <Badge variant="secondary" className="text-[10px] mt-1 bg-green-500/15 text-green-700 dark:text-green-400">Menor preço</Badge>
                                                 )}
                                                 {quote.is_selected && (
                                                   <Badge className="text-[10px] mt-1 bg-green-500">
