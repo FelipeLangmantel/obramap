@@ -1755,11 +1755,11 @@ export function WeeklyProductionView() {
                         <span>Planejada</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <div className="w-3 h-3 rounded bg-amber-50 border-2 border-amber-400" />
+                        <div className="w-3 h-3 rounded bg-amber-500/10 border-2 border-amber-400" />
                         <span>Parcial</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <div className="w-3 h-3 rounded bg-green-100 border-2 border-green-500" />
+                        <div className="w-3 h-3 rounded bg-green-500/15 border-2 border-green-500" />
                         <span>Concluída</span>
                       </div>
                       <div className="flex items-center gap-1">
