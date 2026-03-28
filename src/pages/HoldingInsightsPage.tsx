@@ -42,7 +42,7 @@ export default function HoldingInsightsPage() {
       const [obrasRes, medRes, despRes, docsRes] = await Promise.all([
         supabase.from("obras_portfolio").select("*").eq("company_id", company!.id),
         supabase.from("medicoes_ple").select("id, obra_id, status_medicao, valor_medicao, data_previsao_medicao, data_aprovacao"),
-        supabase.from("despesas_mensais").select("id, obra_id, valor"),
+        supabase.from("despesas_mensais").select("id, obra_id, valor, mes_referencia, ano_referencia"),
         supabase.from("documentos_obra").select("id, obra_id, ata, ois, art, cno, impl, scp"),
       ]);
 
