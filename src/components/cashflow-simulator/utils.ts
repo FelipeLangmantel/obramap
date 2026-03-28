@@ -20,12 +20,17 @@ const FAMILY_COLORS = [
   "hsl(240, 60%, 60%)",
 ];
 
-const familyColorCache = new Map<string, string>();
+// Hash determinístico: mesma família sempre recebe a mesma cor
+// independente da ordem em que aparece ou dos filtros ativos
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
 
 export function getFamilyColor(family: string): string {
-  if (familyColorCache.has(family)) return familyColorCache.get(family)!;
-  const idx = familyColorCache.size % FAMILY_COLORS.length;
-  const color = FAMILY_COLORS[idx];
-  familyColorCache.set(family, color);
-  return color;
+  const idx = hashString(family) % FAMILY_COLORS.length;
+  return FAMILY_COLORS[idx];
 }

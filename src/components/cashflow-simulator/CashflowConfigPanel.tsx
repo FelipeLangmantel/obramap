@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { ChevronLeft, ChevronRight, Save, Filter, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import type { useCashflowSimulator } from "@/hooks/useCashflowSimulator";
 import type { SimInput } from "@/hooks/useCashflowSimulator";
 
@@ -42,6 +43,16 @@ export function CashflowConfigPanel({ simulator, collapsed, onToggleCollapse }: 
   }
 
   const handleSave = async (input: SimInput) => {
+    // Validar que percentuais somam 100%
+    const totalPct = (input.installment_1_pct || 0)
+      + (input.installment_2_pct || 0)
+      + (input.installment_3_pct || 0);
+    if (Math.abs(totalPct - 100) > 0.01) {
+      toast.warning(
+        `Percentuais somam ${totalPct.toFixed(0)}% — ajuste para 100% antes de salvar.`
+      );
+      return;
+    }
     await saveSimInput(input);
     setEditingId(null);
   };
