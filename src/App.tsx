@@ -136,6 +136,7 @@ const App = () => {
                   <Route path="/holding-prd" element={<HoldingPrdPage />} />
                   <Route path="/holding-insights" element={<HoldingInsightsPage />} />
                   <Route path="/holding-config" element={<HoldingConfigPage />} />
+                  <Route path="/cashflow-simulator" element={<CashflowSimulatorPage />} />
                   <Route path="/dashboard" element={<Index />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>
