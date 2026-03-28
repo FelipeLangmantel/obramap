@@ -27,6 +27,7 @@ import HoldingDocumentosPage from "./pages/HoldingDocumentosPage";
 import HoldingPrdPage from "./pages/HoldingPrdPage";
 import HoldingInsightsPage from "./pages/HoldingInsightsPage";
 import HoldingConfigPage from "./pages/HoldingConfigPage";
+import CashflowSimulatorPage from "./pages/CashflowSimulatorPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
