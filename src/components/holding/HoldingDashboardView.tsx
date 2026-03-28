@@ -731,10 +731,17 @@ export default function HoldingDashboardView() {
     const base = obrasFiltradas;
     const totalContratos = base.reduce((s, o) => s + (o.valor_contrato || 0) + (o.aditivo_valor_total || 0), 0);
     const totalMedido = base.reduce((s, o) => {
-      // Consistente com ObraCard: usar só medições aprovadas
-      return s + o.allMedicoes
+      const valorContrato = (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
+      const aprovadas = o.allMedicoes
         .filter((m) => m.status_medicao === "aprovada")
         .reduce((ss, m) => ss + (Number(m.valor_medicao) || 0), 0);
+      // Mesmo fallback do ObraCard: se não há medições aprovadas mas há % de execução,
+      // usar percentual × valorContrato como estimativa (obras cadastradas com % inicial)
+      return s + (aprovadas > 0
+        ? aprovadas
+        : (valorContrato > 0 && o.percentual_andamento > 0
+          ? (o.percentual_andamento / 100) * valorContrato
+          : 0));
     }, 0);
     const saldoFaturar = totalContratos - totalMedido;
     const totalMedicoesAprovadas = totalMedido;
