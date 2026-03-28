@@ -75,7 +75,7 @@ export function useCashflowSimulator() {
   // Carregar insumos do orçamento (scope_items) e mesclar com config salva
   // scope_items é a tabela real com dados — budget_service_inputs estava vazia
   const loadInputs = useCallback(async () => {
-    if (!projectId || !companyId) return;
+    if (!projectId) return;  // scope_items só precisa de projectId
     setIsLoading(true);
     try {
       // 1. Buscar insumos do orçamento executivo (scope_items)
@@ -87,12 +87,12 @@ export function useCashflowSimulator() {
 
       if (siErr) throw siErr;
 
-      // 2. Buscar configurações já salvas para este projeto
-      const { data: savedInputs } = await supabase
+      // 2. Buscar configurações já salvas (só se companyId disponível)
+      const savedInputs = companyId ? (await supabase
         .from("cashflow_sim_inputs")
         .select("*")
         .eq("project_id", projectId)
-        .eq("company_id", companyId);
+        .eq("company_id", companyId)).data : null;
 
       // Chave: scope_items.id gravado no campo budget_service_input_id
       const savedMap = new Map((savedInputs || []).map((s: any) => [s.budget_service_input_id, s]));
