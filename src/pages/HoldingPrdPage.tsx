@@ -57,8 +57,8 @@ export default function HoldingPrdPage() {
       // 2. Filtrar medições e despesas por obra_id
       const [medRes, despRes] = obraIds.length > 0
         ? await Promise.all([
-            supabase.from("medicoes_ple").select("id, obra_id, mes_referencia, ano_referencia, status_medicao, valor_medicao, valor_previsto_medicao, data_previsao_medicao").in("obra_id", obraIds),
-            supabase.from("despesas_mensais").select("id, obra_id, mes_referencia, ano_referencia, valor").in("obra_id", obraIds),
+            supabase.from("medicoes_ple").select("id, obra_id, num_medicao, mes_referencia, ano_referencia, status_medicao, valor_medicao, valor_previsto_medicao, data_previsao_medicao, data_envio").in("obra_id", obraIds),
+            supabase.from("despesas_mensais").select("id, obra_id, mes_referencia, ano_referencia, valor, status").in("obra_id", obraIds),
           ])
         : [{ data: [] }, { data: [] }];
 

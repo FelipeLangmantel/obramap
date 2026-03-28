@@ -49,7 +49,7 @@ export default function HoldingInsightsPage() {
       // 2. Buscar medições, despesas e docs filtrados por obra_id
       const [medRes, despRes, docsRes] = obraIds.length > 0
         ? await Promise.all([
-            supabase.from("medicoes_ple").select("id, obra_id, status_medicao, valor_medicao, data_previsao_medicao").in("obra_id", obraIds),
+            supabase.from("medicoes_ple").select("id, obra_id, status_medicao, valor_medicao, data_previsao_medicao, data_aprovacao").in("obra_id", obraIds),
             supabase.from("despesas_mensais").select("id, obra_id, valor").in("obra_id", obraIds),
             supabase.from("documentos_obra").select("*").in("obra_id", obraIds),
           ])
