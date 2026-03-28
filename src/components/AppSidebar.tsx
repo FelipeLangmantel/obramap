@@ -234,6 +234,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         { title: "Planej. Inteligente", view: "smart-planning", icon: Target, permissionId: "smart_planning" },
         { title: "Entrega & Pós-Obra", view: "delivery", icon: ClipboardCheck, permissionId: "entrega" },
         { title: "Simulador Desembolsos", view: "cashflow-simulator", icon: Wallet, permissionId: "simulador_desembolsos" },
+      ],
     },
     {
       label: "Financeiro & Operações",
