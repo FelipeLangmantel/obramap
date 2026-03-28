@@ -49,6 +49,7 @@ export const MENU_MODULES: MenuModule[] = [
   { id: "smart_planning", label: "Planej. Inteligente", moduleKey: "smart-planning" },
   { id: "productivity", label: "Produtividade e Equipes" },
   { id: "empreiteiros", label: "Empreiteiros", moduleKey: "contractors" },
+  { id: "simulador_desembolsos", label: "Simulador de Desembolsos", moduleKey: "cashflow-simulator" },
   { id: "industrializacao", label: "Industrialização & Logística", moduleKey: "industrialization" },
   { id: "holding", label: "Holding — Painel Principal", moduleKey: "holding-dashboard" },
   { id: "holding_receitas", label: "Holding — Receitas & Medições" },
