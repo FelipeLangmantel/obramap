@@ -72,55 +72,58 @@ export function useCashflowSimulator() {
     setSuppliers(data || []);
   }, [projectId, companyId]);
 
-  // Load budget_service_inputs and merge with saved sim config
+  // Carregar insumos do orçamento (scope_items) e mesclar com config salva
+  // scope_items é a tabela real com dados — budget_service_inputs estava vazia
   const loadInputs = useCallback(async () => {
     if (!projectId || !companyId) return;
     setIsLoading(true);
     try {
-      // Get budget service inputs
-      const { data: budgetInputs, error: biErr } = await supabase
-        .from("budget_service_inputs")
-        .select("id, input_id, input_name, macro_id, scope_id, service_name, quantity_per_unit, unit")
+      // 1. Buscar insumos do orçamento executivo (scope_items)
+      const { data: scopeItems, error: siErr } = await supabase
+        .from("scope_items")
+        .select("id, name, macro_id, scope_id, quantity, unit_value, unit, input_id")
         .eq("project_id", projectId)
-        .eq("company_id", companyId);
+        .eq("category", "material");  // só materiais para o simulador de desembolsos
 
-      if (biErr) throw biErr;
+      if (siErr) throw siErr;
 
-      // Get saved sim inputs
+      // 2. Buscar configurações já salvas para este projeto
       const { data: savedInputs } = await supabase
         .from("cashflow_sim_inputs")
         .select("*")
         .eq("project_id", projectId)
         .eq("company_id", companyId);
 
+      // Chave: scope_items.id gravado no campo budget_service_input_id
       const savedMap = new Map((savedInputs || []).map((s: any) => [s.budget_service_input_id, s]));
 
-      // Get macro/scope names from contract services
-      const { data: contractServices } = await supabase
-        .from("project_contract_services")
+      // 3. Buscar nomes de macro/scope via scope_costs (macro_id TEXT + scope_id TEXT — match perfeito)
+      const { data: scopeCosts } = await supabase
+        .from("scope_costs")
         .select("macro_id, scope_id, macro_name, scope_name")
         .eq("project_id", projectId);
 
       const nameMap = new Map(
-        (contractServices || []).map((cs: any) => [`${cs.macro_id}::${cs.scope_id}`, cs])
+        (scopeCosts || []).map((sc: any) => [`${sc.macro_id}::${sc.scope_id}`, sc])
       );
 
-      const merged: SimInput[] = (budgetInputs || []).map((bi: any) => {
-        const saved = savedMap.get(bi.id);
-        const names = nameMap.get(`${bi.macro_id}::${bi.scope_id}`);
+      const merged: SimInput[] = (scopeItems || []).map((si: any) => {
+        const saved = savedMap.get(si.id);
+        const names = nameMap.get(`${si.macro_id}::${si.scope_id}`);
         return {
-          budget_service_input_id: bi.id,
-          input_id: bi.input_id,
-          input_name: bi.input_name || bi.service_name || "Sem nome",
-          macro_id: bi.macro_id,
-          scope_id: bi.scope_id,
-          macro_name: names?.macro_name || "—",
-          scope_name: names?.scope_name || "—",
-          quantity_per_unit: bi.quantity_per_unit || 0,
-          unit: bi.unit,
+          budget_service_input_id: si.id,          // reutiliza campo como chave do scope_item
+          input_id: si.input_id || si.id,           // input_id NOT NULL — fallback para scope_item.id
+          input_name: si.name || "Sem nome",
+          macro_id: si.macro_id,
+          scope_id: si.scope_id,
+          macro_name: names?.macro_name || si.macro_id || "—",
+          scope_name: names?.scope_name || si.scope_id || "—",
+          quantity_per_unit: si.quantity || 0,
+          unit: si.unit,
           supplier_name: saved?.supplier_name || "",
           supplier_id: saved?.supplier_id || null,
-          reference_price: saved?.reference_price ?? 0,
+          // Preço de referência: usa valor salvo ou valor do orçamento como base
+          reference_price: saved?.reference_price ?? si.unit_value ?? 0,
           lead_time_days: saved?.lead_time_days ?? 7,
           installment_1_days: saved?.installment_1_days ?? 0,
           installment_1_pct: saved?.installment_1_pct ?? 100,
