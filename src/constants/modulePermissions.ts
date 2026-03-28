@@ -49,6 +49,7 @@ export const MENU_MODULES: MenuModule[] = [
   { id: "smart_planning", label: "Planej. Inteligente", moduleKey: "smart-planning" },
   { id: "productivity", label: "Produtividade e Equipes" },
   { id: "empreiteiros", label: "Empreiteiros", moduleKey: "contractors" },
+  { id: "simulador_desembolsos", label: "Simulador de Desembolsos", moduleKey: "cashflow-simulator" },
   { id: "industrializacao", label: "Industrialização & Logística", moduleKey: "industrialization" },
   { id: "holding", label: "Holding — Painel Principal", moduleKey: "holding-dashboard" },
   { id: "holding_receitas", label: "Holding — Receitas & Medições" },
@@ -89,7 +90,7 @@ export const DEFAULT_MENUS_BY_ROLE: Record<string, string[]> = {
   admin: [
     'painel_inicial','mapa','mapa_interativo','mapa_3d','graficos','diretoria',
     'producao','planejamento_semanal','planejamento_periodo','planejamento_estrategico',
-    'smart_planning','productivity','entrega',
+    'smart_planning','productivity','entrega','simulador_desembolsos',
     'contrato','ple_medicoes','custos','suprimentos','financeiro','empreiteiros',
     'industrializacao',
     'holding','holding_receitas','holding_despesas','holding_documentos',

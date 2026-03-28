@@ -190,6 +190,207 @@ export type Database = {
           },
         ]
       }
+      cashflow_sim_inputs: {
+        Row: {
+          budget_service_input_id: string | null
+          company_id: string
+          created_at: string
+          id: string
+          input_id: string
+          input_name: string
+          installment_1_days: number
+          installment_1_pct: number
+          installment_2_days: number
+          installment_2_pct: number
+          installment_3_days: number
+          installment_3_pct: number
+          lead_time_days: number
+          macro_id: string
+          project_id: string
+          reference_price: number
+          scope_id: string
+          supplier_id: string | null
+          supplier_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          budget_service_input_id?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          input_id: string
+          input_name: string
+          installment_1_days?: number
+          installment_1_pct?: number
+          installment_2_days?: number
+          installment_2_pct?: number
+          installment_3_days?: number
+          installment_3_pct?: number
+          lead_time_days?: number
+          macro_id: string
+          project_id: string
+          reference_price?: number
+          scope_id: string
+          supplier_id?: string | null
+          supplier_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          budget_service_input_id?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          input_id?: string
+          input_name?: string
+          installment_1_days?: number
+          installment_1_pct?: number
+          installment_2_days?: number
+          installment_2_pct?: number
+          installment_3_days?: number
+          installment_3_pct?: number
+          lead_time_days?: number
+          macro_id?: string
+          project_id?: string
+          reference_price?: number
+          scope_id?: string
+          supplier_id?: string | null
+          supplier_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cashflow_sim_inputs_budget_service_input_id_fkey"
+            columns: ["budget_service_input_id"]
+            isOneToOne: false
+            referencedRelation: "budget_service_inputs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cashflow_sim_inputs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cashflow_sim_inputs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cashflow_sim_inputs_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cashflow_sim_suppliers: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          name: string
+          project_id: string
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          name: string
+          project_id: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          project_id?: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cashflow_sim_suppliers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cashflow_sim_suppliers_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cashflow_sim_suppliers_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cashflow_simulations: {
+        Row: {
+          company_id: string
+          config_snapshot: Json
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          config_snapshot?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          config_snapshot?: Json
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cashflow_simulations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cashflow_simulations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       category_lead_times: {
         Row: {
           category: string

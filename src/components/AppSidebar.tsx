@@ -80,7 +80,7 @@ import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard";
 
 // Views com rotas separadas (navegam para página diferente)
-type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements" | "holding-receitas" | "holding-despesas" | "holding-documentos" | "holding-prd" | "holding-insights" | "holding-config";
+type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements" | "holding-receitas" | "holding-despesas" | "holding-documentos" | "holding-prd" | "holding-insights" | "holding-config" | "cashflow-simulator";
 type MenuViewType = ViewType | RouteViewType;
 
 // Rotas dedicadas (navegam para páginas separadas)
@@ -95,6 +95,7 @@ const DEDICATED_ROUTE_MAP: Record<RouteViewType, string> = {
   "holding-prd": "/holding-prd",
   "holding-insights": "/holding-insights",
   "holding-config": "/holding-config",
+  "cashflow-simulator": "/cashflow-simulator",
 };
 
 interface AppSidebarProps {
@@ -129,6 +130,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     if (pathname === "/holding-prd") return "holding-prd";
     if (pathname === "/holding-insights") return "holding-insights";
     if (pathname === "/holding-config") return "holding-config";
+    if (pathname === "/cashflow-simulator") return "cashflow-simulator";
     
     return activeView;
   };
@@ -231,6 +233,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         { title: "Planej. Estratégico", view: "long-term-planning", icon: Calendar, permissionId: "planejamento_estrategico" },
         { title: "Planej. Inteligente", view: "smart-planning", icon: Target, permissionId: "smart_planning" },
         { title: "Entrega & Pós-Obra", view: "delivery", icon: ClipboardCheck, permissionId: "entrega" },
+        { title: "Simulador Desembolsos", view: "cashflow-simulator", icon: Wallet, permissionId: "simulador_desembolsos" },
       ],
     },
     {
