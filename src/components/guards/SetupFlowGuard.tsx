@@ -43,11 +43,6 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
   const { currentProject, projects, isLoading: projectsLoading } = useConstruction();
   const location = useLocation();
 
-  useEffect(() => {
-    console.log("[MOUNT] SetupFlowGuard mounted");
-    return () => console.log("[UNMOUNT] SetupFlowGuard unmounted");
-  }, []);
-
   // ✅ Estado para verificação inicial do sistema
   const [systemCheckComplete, setSystemCheckComplete] = useState(false);
   const [needsInitialSetup, setNeedsInitialSetup] = useState(false);
@@ -65,14 +60,12 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
     // Verificar cache primeiro
     const cacheKey = `${user?.id ?? "anon"}|${isSystemAdmin ? "sys" : "nosys"}`;
     if (sessionStorage.getItem(SETUP_CACHE_KEY) === cacheKey) {
-      console.log("[SETUP GUARD] Cache hit, skipping system check");
       checkedRef.current = true;
       setSystemCheckComplete(true);
       return;
     }
 
     checkingRef.current = true;
-    console.log("[SETUP GUARD] Starting system check for:", cacheKey);
 
     try {
       // Verificar se admin existe
@@ -90,7 +83,6 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
 
       // Se não existe admin, precisa de setup inicial
       if (!adminExists) {
-        console.log("[SETUP GUARD] No admin exists, showing setup wizard");
         
         // Verificar dados órfãos para o wizard
         try {
@@ -168,20 +160,17 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
 
   // ✅ 3. Não autenticado -> redirect para /auth
   if (!user) {
-    console.log("[SETUP GUARD] No user, redirecting to /auth");
     return <Navigate to="/auth" replace />;
   }
 
   // ✅ 4. System admin tem acesso total (ANTES de verificar projetos)
   // System admin ignora completamente o fluxo de setup de obra
   if (isSystemAdmin) {
-    console.log("[SETUP GUARD] System admin, granting full access (bypassing project checks)");
     return <>{children}</>;
   }
 
   // ✅ 5. Rotas admin requerem apenas autenticação (não precisa de projeto)
   if (location.pathname.startsWith("/admin")) {
-    console.log("[SETUP GUARD] Admin route, granting access");
     return <>{children}</>;
   }
 
@@ -202,16 +191,13 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
   // ✅ 7. NAVEGAÇÃO LIVRE - Não bloqueia por falta de projetos
   // O usuário pode acessar qualquer rota livremente
   if (projects.length === 0) {
-    console.log("[SETUP GUARD] No projects, but allowing free navigation");
   }
 
   if (!currentProject && location.pathname !== "/") {
-    console.log("[SETUP GUARD] No current project, but allowing free navigation");
   }
 
   // ✅ 9. BLOQUEIO DE ROTA REMOVIDO - Navegação livre
   // O setup_step é mantido apenas para exibição informativa
-  console.log(`[SETUP GUARD] Free navigation enabled - no route blocking based on setup_step`);
 
   // ✅ 10. Tudo OK, renderiza children
   return <>{children}</>;

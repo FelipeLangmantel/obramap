@@ -38,25 +38,16 @@ export default function HoldingInsightsPage() {
     queryKey: ["holding-insights-data", company?.id],
     enabled: !!company?.id,
     queryFn: async () => {
-      // 1. Buscar obras primeiro para ter os IDs
-      const { data: obrasData } = await supabase
-        .from("obras_portfolio")
-        .select("*")
-        .eq("company_id", company!.id);
-
-      const obraIds = (obrasData || []).map((o: any) => o.id);
-
-      // 2. Buscar medições, despesas e docs filtrados por obra_id
-      const [medRes, despRes, docsRes] = obraIds.length > 0
-        ? await Promise.all([
-            supabase.from("medicoes_ple").select("id, obra_id, status_medicao, valor_medicao, data_previsao_medicao, data_aprovacao").in("obra_id", obraIds),
-            supabase.from("despesas_mensais").select("id, obra_id, valor").in("obra_id", obraIds),
-            supabase.from("documentos_obra").select("*").in("obra_id", obraIds),
-          ])
-        : [{ data: [] }, { data: [] }, { data: [] }];
+      // 1 round trip paralelo — RLS garante isolamento por empresa
+      const [obrasRes, medRes, despRes, docsRes] = await Promise.all([
+        supabase.from("obras_portfolio").select("*").eq("company_id", company!.id),
+        supabase.from("medicoes_ple").select("id, obra_id, status_medicao, valor_medicao, data_previsao_medicao, data_aprovacao"),
+        supabase.from("despesas_mensais").select("id, obra_id, valor"),
+        supabase.from("documentos_obra").select("id, obra_id, ata, ois, art, cno, impl, scp"),
+      ]);
 
       return {
-        obras: obrasData || [],
+        obras: obrasRes.data || [],
         medicoes: medRes.data || [],
         despesas: despRes.data || [],
         docs: docsRes.data || [],
