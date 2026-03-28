@@ -236,7 +236,6 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
 
     // Logout -> hard reset
     if (!user) {
-      console.log("[PROJECT EFFECT] No user -> reset");
       setProjects([]);
       setCurrentProjectId(null);
       setSelectedHouse(null);
@@ -249,7 +248,6 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
 
     // Regular users: wait until company_id exists (don't clear/reload in the meantime)
     if (!isSystemAdmin && !profile?.company_id) {
-      console.log("[PROJECT EFFECT] Waiting for company_id...");
       setIsLoading(true);
       return;
     }
@@ -262,7 +260,6 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    console.log("[PROJECT EFFECT] Loading projects for:", loadKey);
     lastProjectsLoadKeyRef.current = loadKey;
 
     // Reset project-scoped state ONLY when the key actually changed
@@ -334,12 +331,10 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     if (!currentProjectId) return;
     // ✅ Only hydrate if we don't already have houses loaded for this project
     if (hydratedProjectIdsRef.current.has(currentProjectId)) {
-      console.log("[PROJECT EFFECT] Project already hydrated:", currentProjectId);
       return;
     }
     // ✅ Prevent parallel hydration
     if (isHydratingRef.current) {
-      console.log("[PROJECT EFFECT] Hydration already in progress, skipping");
       return;
     }
 
@@ -347,7 +342,6 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     if (!project) return;
 
     isHydratingRef.current = true;
-    console.log("[PROJECT EFFECT] Hydrating project:", currentProjectId);
 
     (async () => {
       setIsLoading(true);
@@ -401,7 +395,6 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       } finally {
         setIsLoading(false);
         isHydratingRef.current = false;
-        console.log("[PROJECT EFFECT] Hydration complete for:", currentProjectId);
       }
     })();
   }, [currentProjectId]); // ✅ Removido 'projects' das deps para evitar loop
@@ -449,7 +442,6 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
 
   // ✅ 5. RESETAR ESTADOS AO TROCAR DE PROJETO
   const setCurrentProject = useCallback((projectId: string | null) => {
-    console.log("[PROJECT EFFECT] Switching to project:", projectId);
     
     // ✅ Limpa todos os estados de módulos ao trocar de obra
     setCurrentProjectId(projectId);
@@ -830,7 +822,6 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         p.id === currentProjectId ? { ...p, setupStep: step } : p
       ));
 
-      console.log(`[SETUP] Projeto avançou para etapa: ${step}`);
       return true;
     } catch (error) {
       console.error("Erro ao avançar etapa:", error);
@@ -1245,7 +1236,6 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     const result = data as { success: boolean; removed_scopes?: string[]; removed_macros?: string[]; total_scopes_removed?: number; total_macros_removed?: number } | null;
 
     if (result?.total_scopes_removed || result?.total_macros_removed) {
-      console.log(`[StructureMutation] Removed ${result.total_scopes_removed} scopes, ${result.total_macros_removed} macros. Cascaded to all dependent tables.`);
     }
 
     // Sync houses (preserves production progress, client-side)

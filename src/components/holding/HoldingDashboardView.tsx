@@ -601,7 +601,9 @@ export default function HoldingDashboardView() {
 
       // 2. Buscar docs e medições em paralelo, com IDs já disponíveis
       const [docsRes, medicoesRes] = await Promise.all([
-        supabase.from("documentos_obra").select("*"),
+        obraIds.length > 0
+          ? supabase.from("documentos_obra").select("*").in("obra_id", obraIds)
+          : Promise.resolve({ data: [] as any[], error: null }),
         obraIds.length > 0
           ? supabase.from("medicoes_ple").select("*").in("obra_id", obraIds).order("ano_referencia", { ascending: false })
           : Promise.resolve({ data: [] as any[], error: null }),

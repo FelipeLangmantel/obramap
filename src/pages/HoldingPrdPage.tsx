@@ -46,12 +46,23 @@ export default function HoldingPrdPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["holding-prd", company?.id],
     queryFn: async () => {
-      const [obrasRes, medRes, despRes] = await Promise.all([
-        supabase.from("obras_portfolio").select("id, nome, empresa, valor_contrato, data_inicio, prazo_dias, uh, status").eq("company_id", company!.id),
-        supabase.from("medicoes_ple").select("*"),
-        supabase.from("despesas_mensais").select("*"),
-      ]);
-      return { obras: (obrasRes.data || []) as ObraFull[], medicoes: medRes.data || [], despesas: despRes.data || [] };
+      // 1. Buscar obras primeiro para ter os IDs
+      const { data: obrasData } = await supabase
+        .from("obras_portfolio")
+        .select("id, nome, empresa, valor_contrato, data_inicio, prazo_dias, uh, status")
+        .eq("company_id", company!.id);
+
+      const obraIds = (obrasData || []).map((o: any) => o.id);
+
+      // 2. Filtrar medições e despesas por obra_id
+      const [medRes, despRes] = obraIds.length > 0
+        ? await Promise.all([
+            supabase.from("medicoes_ple").select("id, obra_id, mes_referencia, ano_referencia, status_medicao, valor_medicao, valor_previsto_medicao, data_previsao_medicao").in("obra_id", obraIds),
+            supabase.from("despesas_mensais").select("id, obra_id, mes_referencia, ano_referencia, valor").in("obra_id", obraIds),
+          ])
+        : [{ data: [] }, { data: [] }];
+
+      return { obras: (obrasData || []) as ObraFull[], medicoes: medRes.data || [], despesas: despRes.data || [] };
     },
     enabled: !!company?.id,
   });

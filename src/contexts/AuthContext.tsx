@@ -445,52 +445,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!error && data.user) {
       // Reset fetch flag for new login
       hasFetchedUserData.current = null;
-      
-      try {
-        // Capturar IP e localização via API pública gratuita
-        let ipData = { ip: null as string|null, city: null as string|null, region: null as string|null };
+
+      // ✅ Registro de sessão em background — não bloqueia o retorno do login
+      const userId = data.user.id;
+      const ua = navigator.userAgent;
+      const browser = ua.includes("Chrome") && !ua.includes("Edg") ? "Chrome"
+        : ua.includes("Firefox") ? "Firefox"
+        : ua.includes("Safari") && !ua.includes("Chrome") ? "Safari"
+        : ua.includes("Edg") ? "Edge"
+        : "Outro";
+      const deviceType = /Mobi|Android|iPhone|iPad/i.test(ua) ? "mobile" : "desktop";
+
+      // Fire-and-forget: não usa await — login retorna imediatamente
+      (async () => {
         try {
-          const ipRes = await fetch("https://ipapi.co/json/", { signal: AbortSignal.timeout(3000) });
-          if (ipRes.ok) {
-            const ipJson = await ipRes.json();
-            ipData = { ip: ipJson.ip || null, city: ipJson.city || null, region: ipJson.region || null };
-          }
-        } catch { /* silencioso — não bloquear login */ }
+          // Capturar IP com timeout curto (não bloqueia login)
+          let ipData = { ip: null as string|null, city: null as string|null, region: null as string|null };
+          try {
+            const ipRes = await fetch("https://ipapi.co/json/", { signal: AbortSignal.timeout(2000) });
+            if (ipRes.ok) {
+              const ipJson = await ipRes.json();
+              ipData = { ip: ipJson.ip || null, city: ipJson.city || null, region: ipJson.region || null };
+            }
+          } catch { /* silencioso */ }
 
-        // Detectar browser e device do user-agent
-        const ua = navigator.userAgent;
-        const browser = ua.includes("Chrome") && !ua.includes("Edg") ? "Chrome"
-          : ua.includes("Firefox") ? "Firefox"
-          : ua.includes("Safari") && !ua.includes("Chrome") ? "Safari"
-          : ua.includes("Edg") ? "Edge"
-          : "Outro";
-        const deviceType = /Mobi|Android|iPhone|iPad/i.test(ua) ? "mobile" : "desktop";
+          // Encerrar sessões anteriores
+          await supabase
+            .from("user_sessions")
+            .update({ is_active: false, logout_at: new Date().toISOString(), termination_reason: "novo_login" })
+            .eq("user_id", userId)
+            .eq("is_active", true);
 
-        // Encerrar sessões anteriores ativas do mesmo usuário (mesmo dispositivo/browser)
-        // antes de criar nova — evita acúmulo de sessões "fantasma"
-        await supabase
-          .from("user_sessions")
-          .update({ is_active: false, logout_at: new Date().toISOString(), termination_reason: "novo_login" })
-          .eq("user_id", data.user.id)
-          .eq("is_active", true);
-
-        await supabase.from("user_sessions").insert({
-          user_id: data.user.id,
-          ip_address: ipData.ip,
-          city: ipData.city,
-          region: ipData.region,
-          country: "BR",
-          user_agent: ua,
-          browser,
-          device_type: deviceType,
-          is_active: true,
-          last_active_at: new Date().toISOString(),
-        } as any);
-      } catch (sessionError) {
-        console.error("Error registering session:", sessionError);
-      }
+          await supabase.from("user_sessions").insert({
+            user_id: userId,
+            ip_address: ipData.ip,
+            city: ipData.city,
+            region: ipData.region,
+            country: "BR",
+            user_agent: ua,
+            browser,
+            device_type: deviceType,
+            is_active: true,
+            last_active_at: new Date().toISOString(),
+          } as any);
+        } catch { /* silencioso — registro de sessão não é crítico */ }
+      })();
     }
-    
+
     return { error };
   };
 
