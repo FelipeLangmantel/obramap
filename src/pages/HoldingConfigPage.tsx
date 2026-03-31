@@ -364,8 +364,100 @@ export default function HoldingConfigPage() {
         <TabsContent value="ensaios" className="mt-4">
           {renderDocTab("ensaios_projetos", ensaios)}
         </TabsContent>
-      </Tabs>
 
+        {/* === SAÚDE DAS OBRAS === */}
+        <TabsContent value="saude" className="mt-4 space-y-6">
+          <div className="bg-muted/50 border rounded-lg p-4 text-sm text-muted-foreground">
+            Configure os limites dos indicadores de saúde das obras. Estes valores definem quando
+            o semáforo muda de verde para amarelo (atenção) ou vermelho (crítico).
+          </div>
+
+          {/* IDC */}
+          <div className="border rounded-lg p-4 space-y-3">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              IDC — Índice de Desempenho de Custo
+            </h3>
+            <p className="text-xs text-muted-foreground">Compara valor medido com o esperado. Valores abaixo de 1.0 indicam medição abaixo do previsto.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs">Amarelo (abaixo de)</Label>
+                <Input type="number" step="0.01" value={healthForm.idc_yellow} onChange={e => setHealthForm(p => ({ ...p, idc_yellow: parseFloat(e.target.value) || 0 }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Vermelho (abaixo de)</Label>
+                <Input type="number" step="0.01" value={healthForm.idc_red} onChange={e => setHealthForm(p => ({ ...p, idc_red: parseFloat(e.target.value) || 0 }))} />
+              </div>
+            </div>
+          </div>
+
+          {/* IDP */}
+          <div className="border rounded-lg p-4 space-y-3">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              IDP — Índice de Desempenho de Prazo
+            </h3>
+            <p className="text-xs text-muted-foreground">Compara execução física com tempo consumido. IDP abaixo de 1.0 indica atraso.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs">Amarelo (abaixo de)</Label>
+                <Input type="number" step="0.01" value={healthForm.idp_yellow} onChange={e => setHealthForm(p => ({ ...p, idp_yellow: parseFloat(e.target.value) || 0 }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Vermelho (abaixo de)</Label>
+                <Input type="number" step="0.01" value={healthForm.idp_red} onChange={e => setHealthForm(p => ({ ...p, idp_red: parseFloat(e.target.value) || 0 }))} />
+              </div>
+            </div>
+          </div>
+
+          {/* Dias sem medição */}
+          <div className="border rounded-lg p-4 space-y-3">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Dias sem Medição Aprovada
+            </h3>
+            <p className="text-xs text-muted-foreground">Dias desde a última medição aprovada. Quanto maior, mais risco de problemas de fluxo.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs">Amarelo (acima de dias)</Label>
+                <Input type="number" step="1" value={healthForm.dias_sem_medicao_yellow} onChange={e => setHealthForm(p => ({ ...p, dias_sem_medicao_yellow: parseInt(e.target.value) || 0 }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Vermelho (acima de dias)</Label>
+                <Input type="number" step="1" value={healthForm.dias_sem_medicao_red} onChange={e => setHealthForm(p => ({ ...p, dias_sem_medicao_red: parseInt(e.target.value) || 0 }))} />
+              </div>
+            </div>
+          </div>
+
+          {/* Glosa */}
+          <div className="border rounded-lg p-4 space-y-3">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Glosa Acumulada
+            </h3>
+            <p className="text-xs text-muted-foreground">Percentual do valor medido que foi glosado. Valores altos indicam conflito com o contratante.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs">Amarelo (acima de %)</Label>
+                <Input type="number" step="0.01" value={(healthForm.glosa_yellow * 100).toFixed(0)} onChange={e => setHealthForm(p => ({ ...p, glosa_yellow: (parseFloat(e.target.value) || 0) / 100 }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Vermelho (acima de %)</Label>
+                <Input type="number" step="0.01" value={(healthForm.glosa_red * 100).toFixed(0)} onChange={e => setHealthForm(p => ({ ...p, glosa_red: (parseFloat(e.target.value) || 0) / 100 }))} />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            <Button variant="outline" size="sm" onClick={restoreDefaultThresholds}>
+              <RotateCcw className="h-4 w-4 mr-1" /> Restaurar Padrões
+            </Button>
+            <Button size="sm" onClick={saveHealthThresholds}>
+              Salvar Thresholds
+            </Button>
+          </div>
+        </TabsContent>
+      </Tabs>
       {/* === EMPRESA DIALOG === */}
       <Dialog open={showEmpresaDialog} onOpenChange={setShowEmpresaDialog}>
         <DialogContent>
