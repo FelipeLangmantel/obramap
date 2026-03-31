@@ -38,7 +38,7 @@ interface ObraEnriched extends ObraPortfolio {
   allMedicoes: any[];
   docsCount: number;
   docsTotal: number;
-  health: "green" | "yellow" | "red";
+  health: "green" | "yellow" | "red" | "gray";
 }
 
 interface HoldingAlert {

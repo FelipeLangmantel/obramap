@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import {} from "@/components/ui/card";
+import { DEFAULT_HEALTH_THRESHOLDS, loadHealthThresholds, HEALTH_THRESHOLDS, type HealthThresholds } from "@/components/holding/HoldingDashboardView";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Settings, Building2, FileText, FlaskConical, Plus, Pencil, Trash2, GripVertical, RefreshCw, ArrowLeft } from "lucide-react";
+import { Settings, Building2, FileText, FlaskConical, Plus, Pencil, Trash2, GripVertical, RefreshCw, ArrowLeft, HeartPulse, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
@@ -116,6 +117,29 @@ export default function HoldingConfigPage() {
   const [docForm, setDocForm] = useState({ nome: "", obrigatorio: true });
   const [docCategoria, setDocCategoria] = useState<"doc_obra" | "ensaios_projetos">("doc_obra");
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+
+  // === Health Thresholds state ===
+  const [healthForm, setHealthForm] = useState<HealthThresholds>(() => loadHealthThresholds(company?.id));
+
+  useEffect(() => {
+    setHealthForm(loadHealthThresholds(company?.id));
+  }, [company?.id]);
+
+  const saveHealthThresholds = () => {
+    if (!company?.id) return;
+    localStorage.setItem(`obramap_health_thresholds_${company.id}`, JSON.stringify(healthForm));
+    // Update the mutable global reference
+    Object.assign(HEALTH_THRESHOLDS, healthForm);
+    toast.success("Thresholds de saúde salvos!");
+  };
+
+  const restoreDefaultThresholds = () => {
+    if (!company?.id) return;
+    localStorage.removeItem(`obramap_health_thresholds_${company.id}`);
+    setHealthForm({ ...DEFAULT_HEALTH_THRESHOLDS });
+    Object.assign(HEALTH_THRESHOLDS, DEFAULT_HEALTH_THRESHOLDS);
+    toast.success("Thresholds restaurados para os valores padrão!");
+  };
 
   const openNewDoc = (cat: "doc_obra" | "ensaios_projetos") => {
     setDocCategoria(cat);
@@ -273,6 +297,9 @@ export default function HoldingConfigPage() {
           <TabsTrigger value="ensaios" className="gap-1.5">
             <FlaskConical className="h-3.5 w-3.5" /> Ensaios e Projetos ({ensaios.length})
           </TabsTrigger>
+          <TabsTrigger value="saude" className="gap-1.5">
+            <HeartPulse className="h-3.5 w-3.5" /> Saúde das Obras
+          </TabsTrigger>
         </TabsList>
 
         {/* === EMPRESAS === */}
@@ -337,8 +364,100 @@ export default function HoldingConfigPage() {
         <TabsContent value="ensaios" className="mt-4">
           {renderDocTab("ensaios_projetos", ensaios)}
         </TabsContent>
-      </Tabs>
 
+        {/* === SAÚDE DAS OBRAS === */}
+        <TabsContent value="saude" className="mt-4 space-y-6">
+          <div className="bg-muted/50 border rounded-lg p-4 text-sm text-muted-foreground">
+            Configure os limites dos indicadores de saúde das obras. Estes valores definem quando
+            o semáforo muda de verde para amarelo (atenção) ou vermelho (crítico).
+          </div>
+
+          {/* IDC */}
+          <div className="border rounded-lg p-4 space-y-3">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              IDC — Índice de Desempenho de Custo
+            </h3>
+            <p className="text-xs text-muted-foreground">Compara valor medido com o esperado. Valores abaixo de 1.0 indicam medição abaixo do previsto.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs">Amarelo (abaixo de)</Label>
+                <Input type="number" step="0.01" value={healthForm.idc_yellow} onChange={e => setHealthForm(p => ({ ...p, idc_yellow: parseFloat(e.target.value) || 0 }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Vermelho (abaixo de)</Label>
+                <Input type="number" step="0.01" value={healthForm.idc_red} onChange={e => setHealthForm(p => ({ ...p, idc_red: parseFloat(e.target.value) || 0 }))} />
+              </div>
+            </div>
+          </div>
+
+          {/* IDP */}
+          <div className="border rounded-lg p-4 space-y-3">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              IDP — Índice de Desempenho de Prazo
+            </h3>
+            <p className="text-xs text-muted-foreground">Compara execução física com tempo consumido. IDP abaixo de 1.0 indica atraso.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs">Amarelo (abaixo de)</Label>
+                <Input type="number" step="0.01" value={healthForm.idp_yellow} onChange={e => setHealthForm(p => ({ ...p, idp_yellow: parseFloat(e.target.value) || 0 }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Vermelho (abaixo de)</Label>
+                <Input type="number" step="0.01" value={healthForm.idp_red} onChange={e => setHealthForm(p => ({ ...p, idp_red: parseFloat(e.target.value) || 0 }))} />
+              </div>
+            </div>
+          </div>
+
+          {/* Dias sem medição */}
+          <div className="border rounded-lg p-4 space-y-3">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Dias sem Medição Aprovada
+            </h3>
+            <p className="text-xs text-muted-foreground">Dias desde a última medição aprovada. Quanto maior, mais risco de problemas de fluxo.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs">Amarelo (acima de dias)</Label>
+                <Input type="number" step="1" value={healthForm.dias_sem_medicao_yellow} onChange={e => setHealthForm(p => ({ ...p, dias_sem_medicao_yellow: parseInt(e.target.value) || 0 }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Vermelho (acima de dias)</Label>
+                <Input type="number" step="1" value={healthForm.dias_sem_medicao_red} onChange={e => setHealthForm(p => ({ ...p, dias_sem_medicao_red: parseInt(e.target.value) || 0 }))} />
+              </div>
+            </div>
+          </div>
+
+          {/* Glosa */}
+          <div className="border rounded-lg p-4 space-y-3">
+            <h3 className="font-semibold text-sm flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Glosa Acumulada
+            </h3>
+            <p className="text-xs text-muted-foreground">Percentual do valor medido que foi glosado. Valores altos indicam conflito com o contratante.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs">Amarelo (acima de %)</Label>
+                <Input type="number" step="0.01" value={(healthForm.glosa_yellow * 100).toFixed(0)} onChange={e => setHealthForm(p => ({ ...p, glosa_yellow: (parseFloat(e.target.value) || 0) / 100 }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Vermelho (acima de %)</Label>
+                <Input type="number" step="0.01" value={(healthForm.glosa_red * 100).toFixed(0)} onChange={e => setHealthForm(p => ({ ...p, glosa_red: (parseFloat(e.target.value) || 0) / 100 }))} />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            <Button variant="outline" size="sm" onClick={restoreDefaultThresholds}>
+              <RotateCcw className="h-4 w-4 mr-1" /> Restaurar Padrões
+            </Button>
+            <Button size="sm" onClick={saveHealthThresholds}>
+              Salvar Thresholds
+            </Button>
+          </div>
+        </TabsContent>
+      </Tabs>
       {/* === EMPRESA DIALOG === */}
       <Dialog open={showEmpresaDialog} onOpenChange={setShowEmpresaDialog}>
         <DialogContent>
