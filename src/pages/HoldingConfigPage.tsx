@@ -297,6 +297,9 @@ export default function HoldingConfigPage() {
           <TabsTrigger value="ensaios" className="gap-1.5">
             <FlaskConical className="h-3.5 w-3.5" /> Ensaios e Projetos ({ensaios.length})
           </TabsTrigger>
+          <TabsTrigger value="saude" className="gap-1.5">
+            <HeartPulse className="h-3.5 w-3.5" /> Saúde das Obras
+          </TabsTrigger>
         </TabsList>
 
         {/* === EMPRESAS === */}
