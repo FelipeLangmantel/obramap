@@ -449,6 +449,11 @@ export function calcHealthDetails(
 
 export default function HoldingDashboardView() {
   const { company, isCompanyAdmin, canEdit } = useAuth();
+
+  // Load thresholds from localStorage on mount
+  useEffect(() => {
+    HEALTH_THRESHOLDS = loadHealthThresholds(company?.id);
+  }, [company?.id]);
   const queryClient = useQueryClient();
   const [selectedObra, setSelectedObra] = useState<ObraEnriched | null>(null);
 
