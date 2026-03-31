@@ -5,7 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Building2, Users, LogOut, Package } from "lucide-react";
+import { Loader2, Building2, Users, LogOut, Package, Download } from "lucide-react";
+import { toast } from "sonner";
 import obraMapLogo from "@/assets/obramap-logo-new.png";
 import CompanyManagement from "@/components/admin/CompanyManagement";
 import SystemUserManagement from "@/components/admin/SystemUserManagement";
@@ -94,6 +95,54 @@ export default function SystemDashboard() {
     navigate("/auth");
   };
 
+  const [isBackingUp, setIsBackingUp] = useState(false);
+
+  const handleBackup = async () => {
+    setIsBackingUp(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) {
+        toast.error("Sessão expirada. Faça login novamente.");
+        return;
+      }
+
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const res = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/backup-database`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Erro ao gerar backup");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `backup_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success("Backup baixado com sucesso!");
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Erro desconhecido";
+      toast.error(`Falha no backup: ${msg}`);
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
   if (authLoading || !isSystemAdmin) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -115,6 +164,10 @@ export default function SystemDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleBackup} disabled={isBackingUp}>
+              {isBackingUp ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+              Backup
+            </Button>
             <Button variant="outline" onClick={handleLogout}>
               <LogOut className="h-4 w-4 mr-2" />
               Sair
