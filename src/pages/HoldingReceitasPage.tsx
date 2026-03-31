@@ -282,13 +282,13 @@ export default function HoldingReceitasPage() {
         dataRef = new Date(m.data_pagamento + "T12:00:00");
         statusEntrada = "recebido";
         calculo = `Pagamento confirmado em ${m.data_pagamento}`;
-      } else if (m.status_medicao === "aprovada" && m.data_aprovacao) {
-        // Approved → payment expected = data_aprovacao + prazo_pagamento
+      } else if ((m.status_medicao === "aprovada" || m.data_aprovacao) && m.data_aprovacao) {
+        // Approved (or enviada with data_aprovacao filled) → use real approval date
         dataRef = addDays(new Date(m.data_aprovacao + "T12:00:00"), prazo);
         statusEntrada = "aprovado";
         calculo = `Aprovada ${m.data_aprovacao} + ${prazo} dias = ${format(dataRef, "dd/MM/yy")}`;
       } else if (m.status_medicao === "enviada" && m.data_envio) {
-        // Sent → estimate approval in ~15 days, then + prazo_pagamento
+        // Sent without approval date → estimate approval in ~15 days, then + prazo_pagamento
         const diasAprovacao = 15;
         dataRef = addDays(new Date(m.data_envio + "T12:00:00"), diasAprovacao + prazo);
         statusEntrada = "enviado";
@@ -932,7 +932,16 @@ export default function HoldingReceitasPage() {
                                 <p className="text-xs font-semibold mb-1">{p.label} — {BRL.format(p.total)}</p>
                                 <div className="space-y-1">
                                   {p.medicoes.map((m: any) => {
-                                    const statusCfg = STATUS_MED_CONFIG[m.status_medicao] || STATUS_MED_CONFIG.nao_iniciada;
+                                    // No contexto de projeção, usa statusEntrada (calculado) — não status do banco
+                                    const STATUS_ENTRADA_BADGE: Record<string, { label: string; cls: string }> = {
+                                      recebido: { label: "NF Recebida", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+                                      aprovado: { label: "Medição Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+                                      enviado:  { label: "Medição Enviada", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+                                      previsto: { label: "Prevista", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+                                      estimado: { label: "Estimada", cls: "bg-muted text-muted-foreground" },
+                                      pendente: { label: "Pendente", cls: "bg-muted text-muted-foreground" },
+                                    };
+                                    const statusCfg = STATUS_ENTRADA_BADGE[m.statusEntrada] || STATUS_ENTRADA_BADGE.pendente;
                                     const statusColors: Record<string, string> = {
                                       recebido: "border-l-emerald-500",
                                       aprovado: "border-l-emerald-400",
