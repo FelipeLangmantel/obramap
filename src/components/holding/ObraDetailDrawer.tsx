@@ -964,7 +964,18 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <ClearableDateInput label="Previsão Envio" value={data.data_previsao_medicao || ""} onChange={(v) => setData({ ...data, data_previsao_medicao: v })} />
             <ClearableDateInput label="Data Envio" value={data.data_envio || ""} onChange={(v) => setData({ ...data, data_envio: v })} />
-            <ClearableDateInput label="Data Aprovação" value={data.data_aprovacao || ""} onChange={(v) => setData({ ...data, data_aprovacao: v })} />
+            <ClearableDateInput label="Data Aprovação" value={data.data_aprovacao || ""} onChange={(v) => {
+              const updates: any = { ...data, data_aprovacao: v };
+              // Auto-avança status para 'aprovada' ao preencher a data de aprovação
+              if (v && data.status_medicao === "enviada") {
+                updates.status_medicao = "aprovada";
+              }
+              // Reverte para 'enviada' se a data for apagada (e data_envio existir)
+              if (!v && data.status_medicao === "aprovada" && data.data_envio) {
+                updates.status_medicao = "enviada";
+              }
+              setData(updates);
+            }} />
             <div>
               <label className="text-xs text-muted-foreground">Valor Previsto (R$)</label>
               <CurrencyInput value={data.valor_previsto_medicao || 0} onChange={(v) => setData({ ...data, valor_previsto_medicao: v })} />
