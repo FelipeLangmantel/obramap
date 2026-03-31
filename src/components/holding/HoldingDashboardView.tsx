@@ -1106,7 +1106,7 @@ export default function HoldingDashboardView() {
             <Crown className="h-4 w-4" /> Portfólio
           </button>
           <button onClick={() => setMainView("analytics")} className={`px-4 py-2 text-sm rounded-md transition-all flex items-center gap-2 ${mainView === "analytics" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-            <BarChart3 className="h-4 w-4" /> Analytics
+            <BarChart3 className="h-4 w-4" /> Análises
           </button>
           <button onClick={() => setMainView("manual")} className={`px-4 py-2 text-sm rounded-md transition-all flex items-center gap-2 ${mainView === "manual" ? "bg-card shadow font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
             <BookOpen className="h-4 w-4" /> Manual
