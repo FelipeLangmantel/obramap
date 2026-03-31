@@ -29,8 +29,8 @@ const sedeIcon = L.divIcon({
 
 // Ícone de obra por health
 const obraIcon = (health: string) => {
-  const color = health === "green" ? "#22c55e" : health === "yellow" ? "#f59e0b" : "#ef4444";
-  const border = health === "green" ? "#15803d" : health === "yellow" ? "#b45309" : "#b91c1c";
+  const color = health === "green" ? "#22c55e" : health === "yellow" ? "#f59e0b" : health === "red" ? "#ef4444" : "#94a3b8";
+  const border = health === "green" ? "#15803d" : health === "yellow" ? "#b45309" : health === "red" ? "#b91c1c" : "#64748b";
   return L.divIcon({
     html: `<div style="
       background:${color};

@@ -150,6 +150,7 @@ const HEALTH_PIN: Record<string, string> = {
   green: "#22c55e",
   yellow: "#f59e0b",
   red: "#ef4444",
+  gray: "#94a3b8",
 };
 
 /* ═══════════════════════════════════════

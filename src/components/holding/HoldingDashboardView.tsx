@@ -140,7 +140,7 @@ export interface ObraEnriched extends ObraPortfolio {
   allMedicoes: MedicaoPle[];
   docsCount: number;
   docsTotal: number;
-  health: "green" | "yellow" | "red";
+  health: "green" | "yellow" | "red" | "gray";
 }
 
 export interface HoldingAlert {
@@ -170,12 +170,14 @@ const HEALTH_COLORS: Record<string, string> = {
   green: "bg-emerald-500",
   yellow: "bg-amber-500",
   red: "bg-red-500",
+  gray: "bg-slate-400",
 };
 
 const HEALTH_BORDER: Record<string, string> = {
   green: "border-l-emerald-500",
   yellow: "border-l-amber-500",
   red: "border-l-red-500",
+  gray: "border-l-slate-400",
 };
 
 const STATUS_BAR_COLORS: Record<string, string> = {
@@ -238,12 +240,12 @@ export const HEALTH_THRESHOLDS = {
 function calcHealth(
   obra: ObraPortfolio,
   allMedicoes: MedicaoPle[]
-): "green" | "yellow" | "red" {
+): "green" | "yellow" | "red" | "gray" {
   const T = HEALTH_THRESHOLDS;
   const now = new Date();
 
   // Obras não iniciadas ou paralisadas: não penalizar
-  if (obra.status === "nao_iniciada") return "yellow";
+  if (obra.status === "nao_iniciada") return "gray";  // sem dados para avaliar
   if (obra.status === "paralisada") return "red";
   if (obra.status === "concluida") return "green";
 
@@ -305,6 +307,135 @@ function calcHealth(
 
   // ── Verde: todos os indicadores dentro do limite ──────────────────────────
   return "green";
+}
+
+export interface HealthIndicator {
+  id: "idc" | "idp" | "dias_medicao" | "glosa";
+  label: string;
+  description: string;
+  value: number | null;       // valor calculado (ex: 0.92 para IDC)
+  displayValue: string;       // valor formatado para exibição (ex: "92%")
+  status: "green" | "yellow" | "red" | "gray" | "na"; // "na" = sem dados suficientes
+  threshold_yellow: number;
+  threshold_red: number;
+  unit: string;               // "índice", "dias", "%"
+  higherIsBetter: boolean;    // true: IDC/IDP mais alto = melhor | false: dias/glosa menor = melhor
+}
+
+/**
+ * Retorna o detalhamento de cada indicador de saúde para exibição no card.
+ * Usa os mesmos cálculos do calcHealth — nenhuma duplicação de lógica.
+ */
+export function calcHealthDetails(
+  obra: ObraPortfolio,
+  allMedicoes: MedicaoPle[]
+): HealthIndicator[] {
+  const T = HEALTH_THRESHOLDS;
+  const now = new Date();
+  const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
+  const pctFisico = (obra.percentual_andamento || 0) / 100;
+
+  const totalMedidoAprovado = allMedicoes
+    .filter(m => m.status_medicao === "aprovada")
+    .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+
+  // ── IDC ──────────────────────────────────────────────────────────────────
+  let idcValue: number | null = null;
+  let idcStatus: HealthIndicator["status"] = "na";
+  if (pctFisico > 0.05 && valorContrato > 0) {
+    const valorPlanejado = pctFisico * valorContrato;
+    idcValue = totalMedidoAprovado > 0 ? totalMedidoAprovado / valorPlanejado : 0;
+    idcStatus = idcValue < T.idc_red ? "red" : idcValue < T.idc_yellow ? "yellow" : "green";
+  }
+
+  // ── IDP ──────────────────────────────────────────────────────────────────
+  let idpValue: number | null = null;
+  let idpStatus: HealthIndicator["status"] = "na";
+  if (obra.data_inicio && obra.prazo_dias > 0) {
+    const inicio = new Date(obra.data_inicio + "T12:00:00");
+    const prazoTotal = obra.prazo_dias + (obra.aditivo_prazo_dias || 0);
+    const diasDecorridos = differenceInDays(now, inicio);
+    const pctTempo = Math.min(1, diasDecorridos / prazoTotal);
+    if (pctTempo > 0.05) {
+      idpValue = pctTempo > 0 ? pctFisico / pctTempo : 1;
+      idpStatus = idpValue < T.idp_red ? "red" : idpValue < T.idp_yellow ? "yellow" : "green";
+    }
+  }
+
+  // ── Dias sem medição ─────────────────────────────────────────────────────
+  const ultimaAprovada = allMedicoes
+    .filter(m => m.status_medicao === "aprovada" && m.data_aprovacao)
+    .sort((a, b) => new Date(b.data_aprovacao!).getTime() - new Date(a.data_aprovacao!).getTime())[0];
+  let diasValue: number | null = null;
+  let diasStatus: HealthIndicator["status"] = "na";
+  if (ultimaAprovada?.data_aprovacao) {
+    diasValue = differenceInDays(now, new Date(ultimaAprovada.data_aprovacao + "T12:00:00"));
+    diasStatus = diasValue > T.dias_sem_medicao_red ? "red" : diasValue > T.dias_sem_medicao_yellow ? "yellow" : "green";
+  } else if (pctFisico > 0.1) {
+    diasStatus = "yellow";
+  }
+
+  // ── Glosa ────────────────────────────────────────────────────────────────
+  const totalGlosa = allMedicoes
+    .filter(m => Number(m.valor_acatado) > 0 && Number(m.valor_medicao) > 0)
+    .reduce((s, m) => s + Math.max(0, Number(m.valor_medicao) - Number(m.valor_acatado)), 0);
+  let glosaValue: number | null = null;
+  let glosaStatus: HealthIndicator["status"] = "na";
+  if (totalMedidoAprovado > 0) {
+    glosaValue = totalGlosa / totalMedidoAprovado;
+    glosaStatus = glosaValue > T.glosa_red ? "red" : glosaValue > T.glosa_yellow ? "yellow" : "green";
+  }
+
+  return [
+    {
+      id: "idc",
+      label: "IDC — Desempenho de Custo",
+      description: "Compara o valor medido com o esperado dado o andamento físico. IDC < 1 significa que a obra está medindo menos do que deveria.",
+      value: idcValue,
+      displayValue: idcValue !== null ? `${(idcValue * 100).toFixed(1)}%` : "—",
+      status: idcStatus,
+      threshold_yellow: T.idc_yellow,
+      threshold_red: T.idc_red,
+      unit: "índice",
+      higherIsBetter: true,
+    },
+    {
+      id: "idp",
+      label: "IDP — Desempenho de Prazo",
+      description: "Compara o % de execução física com o % do prazo contratual consumido. IDP < 1 indica atraso.",
+      value: idpValue,
+      displayValue: idpValue !== null ? `${(idpValue * 100).toFixed(1)}%` : "—",
+      status: idpStatus,
+      threshold_yellow: T.idp_yellow,
+      threshold_red: T.idp_red,
+      unit: "índice",
+      higherIsBetter: true,
+    },
+    {
+      id: "dias_medicao",
+      label: "Dias sem Medição",
+      description: "Dias desde a última medição aprovada. Obras em andamento sem medição recente indicam risco de fluxo.",
+      value: diasValue,
+      displayValue: diasValue !== null ? `${diasValue}d` : "—",
+      status: diasStatus,
+      threshold_yellow: T.dias_sem_medicao_yellow,
+      threshold_red: T.dias_sem_medicao_red,
+      unit: "dias",
+      higherIsBetter: false,
+    },
+    {
+      id: "glosa",
+      label: "Glosa Acumulada",
+      description: "Percentual do valor medido que foi glosado (não acatado). Alta glosa indica conflito com o contratante.",
+      value: glosaValue,
+      displayValue: glosaValue !== null ? `${(glosaValue * 100).toFixed(1)}%` : "—",
+      status: glosaStatus,
+      threshold_yellow: T.glosa_yellow,
+      threshold_red: T.glosa_red,
+      unit: "%",
+      higherIsBetter: false,
+    },
+  ];
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -417,7 +548,7 @@ export default function HoldingDashboardView() {
       doc.text(today, 283, 16, { align: "right" });
 
       const statusLbl: Record<string, string> = { em_andamento: "Em Andamento", nao_iniciada: "Não Iniciada", concluida: "Concluída", paralisada: "Paralisada" };
-      const healthLbl: Record<string, string> = { green: "Verde", yellow: "Amarelo", red: "Vermelho" };
+      const healthLbl: Record<string, string> = { green: "Verde", yellow: "Amarelo", red: "Vermelho", gray: "Neutro" };
       const sorted = [...obras].sort((a, b) => ({ em_andamento: 0, nao_iniciada: 1, concluida: 2, paralisada: 3 }[a.status] ?? 9) - ({ em_andamento: 0, nao_iniciada: 1, concluida: 2, paralisada: 3 }[b.status] ?? 9));
 
       autoTable(doc, {
@@ -646,7 +777,7 @@ export default function HoldingDashboardView() {
     const rows = obrasFiltradas.map((o) => {
       const fim = o.data_inicio ? format(addDays(parseLocalDate(o.data_inicio!), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
       const statusLbl = STATUS_CONFIG[o.status]?.label || o.status;
-      const healthLbl = o.health === "green" ? "Verde" : o.health === "yellow" ? "Amarelo" : "Vermelho";
+      const healthLbl = o.health === "green" ? "Verde" : o.health === "yellow" ? "Amarelo" : o.health === "red" ? "Vermelho" : "Neutro";
       const recAprov = o.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
       const vc = (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
       const receitas = recAprov > 0 ? recAprov : (vc > 0 && o.percentual_andamento > 0 ? (o.percentual_andamento / 100) * vc : 0);
