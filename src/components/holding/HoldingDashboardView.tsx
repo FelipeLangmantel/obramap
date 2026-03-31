@@ -204,27 +204,32 @@ function countDocs(docs: DocumentosObra | null): { count: number; total: number 
 }
 
 // ─── Configuração de thresholds de saúde da obra ───────────────────────────
-// Altere aqui para recalibrar o semáforo em todo o sistema automaticamente.
 // Baseado em Earned Value Management (EVM — ISO 21508 / PMI PMBOK)
-export const HEALTH_THRESHOLDS = {
-  // IDC — Índice de Desempenho de Custo (Earned Value / Planned Value)
-  // Compara quanto foi medido vs quanto deveria ter sido medido dado o andamento físico
-  idc_yellow: 0.85,   // IDC < 0.85 → atenção (medindo menos que deveria)
-  idc_red:    0.70,   // IDC < 0.70 → crítico
-
-  // IDP — Índice de Desempenho de Prazo
-  // Compara % execução física vs % tempo decorrido do prazo contratual
-  idp_yellow: 0.90,   // IDP < 0.90 → atenção (execução atrasada em relação ao tempo)
-  idp_red:    0.70,   // IDP < 0.70 → crítico
-
-  // Dias sem medição aprovada (obra em andamento)
-  dias_sem_medicao_yellow: 30,   // > 30 dias → atenção
-  dias_sem_medicao_red:    60,   // > 60 dias → crítico
-
-  // Glosa acumulada como % do total medido
-  glosa_yellow: 0.05,  // > 5% → atenção
-  glosa_red:    0.15,  // > 15% → crítico
+export const DEFAULT_HEALTH_THRESHOLDS = {
+  idc_yellow: 0.85,
+  idc_red:    0.70,
+  idp_yellow: 0.90,
+  idp_red:    0.70,
+  dias_sem_medicao_yellow: 30,
+  dias_sem_medicao_red:    60,
+  glosa_yellow: 0.05,
+  glosa_red:    0.15,
 };
+
+export type HealthThresholds = typeof DEFAULT_HEALTH_THRESHOLDS;
+
+/** Carrega thresholds do localStorage (se existirem) ou retorna os padrões */
+export function loadHealthThresholds(companyId?: string): HealthThresholds {
+  if (!companyId) return { ...DEFAULT_HEALTH_THRESHOLDS };
+  try {
+    const stored = localStorage.getItem(`obramap_health_thresholds_${companyId}`);
+    if (stored) return { ...DEFAULT_HEALTH_THRESHOLDS, ...JSON.parse(stored) };
+  } catch { /* ignore */ }
+  return { ...DEFAULT_HEALTH_THRESHOLDS };
+}
+
+// Mutable reference used by calcHealth / calcHealthDetails
+export let HEALTH_THRESHOLDS = { ...DEFAULT_HEALTH_THRESHOLDS };
 
 /**
  * Calcula a saúde da obra com base em indicadores de Engenharia de Custos (EVM).
