@@ -28,6 +28,7 @@ interface ObraFull {
   id: string; nome: string; empresa: string | null; valor_contrato: number;
   data_inicio: string | null; prazo_dias: number; uh: number | null; status: string;
   aditivo_valor_total: number;
+  obramap_project_id: string | null;
 }
 
 interface MonthEntry {
@@ -46,14 +47,96 @@ export default function HoldingPrdPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["holding-prd", company?.id],
     queryFn: async () => {
-      // 1 round trip paralelo — RLS garante isolamento por empresa
       const [obrasRes, medRes, despRes] = await Promise.all([
-        supabase.from("obras_portfolio").select("id, nome, empresa, valor_contrato, aditivo_valor_total, data_inicio, prazo_dias, uh, status").eq("company_id", company!.id),
+        supabase.from("obras_portfolio").select("id, nome, empresa, valor_contrato, aditivo_valor_total, data_inicio, prazo_dias, uh, status, obramap_project_id").eq("company_id", company!.id),
         supabase.from("medicoes_ple").select("id, obra_id, num_medicao, mes_referencia, ano_referencia, status_medicao, valor_medicao, valor_previsto_medicao, data_previsao_medicao, data_envio"),
         supabase.from("despesas_mensais").select("id, obra_id, mes_referencia, ano_referencia, valor, status"),
       ]);
 
-      return { obras: (obrasRes.data || []) as ObraFull[], medicoes: medRes.data || [], despesas: despRes.data || [] };
+      const obras = (obrasRes.data || []) as ObraFull[];
+
+      // For obras with obramap_project_id, fetch planning data
+      const obraMapIds = obras
+        .filter(o => o.obramap_project_id)
+        .map(o => o.obramap_project_id!);
+
+      let planningByMonth = new Map<string, Map<string, number>>(); // projectId -> "YYYY-MM" -> revenue
+
+      if (obraMapIds.length > 0) {
+        // Get active planning versions for these projects
+        const { data: versions } = await supabase
+          .from("planning_versions")
+          .select("id, project_id")
+          .in("project_id", obraMapIds)
+          .eq("is_active", true);
+
+        if (versions && versions.length > 0) {
+          const versionIds = versions.map(v => v.id);
+          const versionProjectMap = new Map(versions.map(v => [v.id, v.project_id]));
+
+          // Get planning periods for these versions
+          const { data: periods } = await supabase
+            .from("planning_periods")
+            .select("id, planning_version_id, start_date, end_date")
+            .in("planning_version_id", versionIds);
+
+          if (periods && periods.length > 0) {
+            const periodIds = periods.map(p => p.id);
+
+            // Get service planning data - fetch in chunks if needed
+            const chunkSize = 200;
+            const allSpbp: any[] = [];
+            for (let i = 0; i < periodIds.length; i += chunkSize) {
+              const chunk = periodIds.slice(i, i + chunkSize);
+              const { data: spbp } = await supabase
+                .from("service_planning_by_period")
+                .select("planning_period_id, target_houses, unit_revenue_value")
+                .in("planning_period_id", chunk);
+              if (spbp) allSpbp.push(...spbp);
+            }
+
+            // Build period lookup: periodId -> { projectId, startDate, endDate }
+            const periodLookup = new Map(periods.map(p => [
+              p.id,
+              { projectId: versionProjectMap.get(p.planning_version_id)!, startDate: p.start_date, endDate: p.end_date }
+            ]));
+
+            // Aggregate revenue by project and month
+            for (const sp of allSpbp) {
+              const periodInfo = periodLookup.get(sp.planning_period_id);
+              if (!periodInfo) continue;
+              const revenue = (Number(sp.target_houses) || 0) * (Number(sp.unit_revenue_value) || 0);
+              if (revenue <= 0) continue;
+
+              // Distribute revenue across months the period spans
+              const pStart = parseLocalDate(periodInfo.startDate);
+              const pEnd = parseLocalDate(periodInfo.endDate);
+              const startMonth = new Date(pStart.getFullYear(), pStart.getMonth(), 1);
+              const endMonth = new Date(pEnd.getFullYear(), pEnd.getMonth(), 1);
+
+              // Count months in the period
+              const monthsInPeriod: string[] = [];
+              let cursor = new Date(startMonth);
+              while (cursor <= endMonth) {
+                monthsInPeriod.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`);
+                cursor = addMonths(cursor, 1);
+              }
+
+              const revenuePerMonth = revenue / monthsInPeriod.length;
+
+              if (!planningByMonth.has(periodInfo.projectId)) {
+                planningByMonth.set(periodInfo.projectId, new Map());
+              }
+              const projectMap = planningByMonth.get(periodInfo.projectId)!;
+              for (const mk of monthsInPeriod) {
+                projectMap.set(mk, (projectMap.get(mk) || 0) + revenuePerMonth);
+              }
+            }
+          }
+        }
+      }
+
+      return { obras, medicoes: medRes.data || [], despesas: despRes.data || [], planningByMonth };
     },
     enabled: !!company?.id,
   });
@@ -62,9 +145,9 @@ export default function HoldingPrdPage() {
   const medicoes = data?.medicoes || [];
   const despesas = data?.despesas || [];
   const obraIds = new Set(obras.map(o => o.id));
+  const planningByMonth = data?.planningByMonth || new Map<string, Map<string, number>>();
 
   // Obras com dados: em_andamento OU com pelo menos 1 medição OU 1 despesa
-  // Evita linhas vazias de obras ainda não iniciadas sem nenhum lançamento
   const obrasMedIds = new Set(medicoes.map((m: any) => m.obra_id));
   const obrasDespIds = new Set(despesas.map((d: any) => d.obra_id));
   const obrasComDados = obras.filter(o =>
@@ -80,15 +163,30 @@ export default function HoldingPrdPage() {
     obras.forEach(o => {
       if (!o.data_inicio) return;
       const start = parseLocalDate(o.data_inicio!);
-      const prazoMeses = Math.max(1, Math.ceil(o.prazo_dias / 30.44)); // 30.44 = média real de dias/mês
-      const monthlyPrevisto = ((o.valor_contrato || 0) + (o.aditivo_valor_total || 0)) / prazoMeses;
-      const months: MonthEntry[] = [];
+      const prazoMeses = Math.max(1, Math.ceil(o.prazo_dias / 30.44));
+      const monthlyPrevistoLinear = ((o.valor_contrato || 0) + (o.aditivo_valor_total || 0)) / prazoMeses;
 
+      // Check if this obra has planning data from long-term planning
+      const obraPlanning = o.obramap_project_id ? planningByMonth.get(o.obramap_project_id) : null;
+      const usePlanning = obraPlanning && obraPlanning.size > 0;
+
+      // Determine month keys
+      const monthKeysSet = new Set<string>();
       for (let i = 0; i < prazoMeses; i++) {
         const d = addMonths(start, i);
-        const mes = d.getMonth(); // 0-based
-        const ano = d.getFullYear();
-        const key = `${ano}-${String(mes + 1).padStart(2, "0")}`;
+        monthKeysSet.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      }
+      if (usePlanning) {
+        obraPlanning!.forEach((_, k) => monthKeysSet.add(k));
+      }
+      const monthKeys = [...monthKeysSet].sort();
+
+      const months: MonthEntry[] = [];
+
+      for (const key of monthKeys) {
+        const [anoStr, mesStr] = key.split("-");
+        const ano = Number(anoStr);
+        const mes = Number(mesStr) - 1; // 0-based
 
         const realizado = medicoes
           .filter((m: any) => {
@@ -112,7 +210,16 @@ export default function HoldingPrdPage() {
           })
           .reduce((s: number, d: any) => s + (Number(d.valor) || 0), 0);
 
-        const previstoFinal = previstoCadastrado > 0 ? previstoCadastrado : monthlyPrevisto;
+        // Priority: 1) previstoCadastrado manual, 2) planning data, 3) linear fallback
+        let previstoFinal: number;
+        if (previstoCadastrado > 0) {
+          previstoFinal = previstoCadastrado;
+        } else if (usePlanning) {
+          previstoFinal = obraPlanning!.get(key) || 0;
+        } else {
+          previstoFinal = monthlyPrevistoLinear;
+        }
+
         months.push({ key, label: `${MONTHS[mes]}/${String(ano).slice(2)}`, mes: mes + 1, ano, previsto: previstoFinal, previstoCadastrado, realizado, despesas: desp });
       }
 
@@ -120,7 +227,7 @@ export default function HoldingPrdPage() {
     });
 
     return result;
-  }, [obras, medicoes, despesas]);
+  }, [obras, medicoes, despesas, planningByMonth]);
 
   // All unique months sorted
   const allMonths = useMemo(() => {

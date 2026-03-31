@@ -128,6 +128,7 @@ interface MedicaoPle {
   data_aprovacao: string | null;
   status_medicao: "aprovada" | "enviada" | "pendente" | "nao_iniciada";
   valor_medicao: number;
+  valor_acatado: number | null;
   num_nf: string | null;
   data_pagamento: string | null;
   status_nf: "recebido" | "aguardando_aprovacao" | "pendente";
