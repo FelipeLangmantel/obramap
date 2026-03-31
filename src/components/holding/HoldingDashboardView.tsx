@@ -1625,11 +1625,11 @@ function KpiCard({ icon: Icon, label, value, sub, borderColor, valueColor }: {
 
 function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onClick: () => void; onEdit: () => void; onDelete: () => void }) {
   const { isCompanyAdmin, canEdit } = useAuth();
+  const [healthOpen, setHealthOpen] = useState(false);
   const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
   const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
   const receitasAprovadas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
   const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
-  // Se não há medições aprovadas mas há andamento físico, estimar valor medido pelo percentual
   const receitasEstimadas = receitasAprovadas > 0
     ? receitasAprovadas
     : (valorContrato > 0 && obra.percentual_andamento > 0
@@ -1638,6 +1638,16 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
   const receitas = receitasEstimadas;
   const percentualFinanceiro = valorContrato > 0 && receitas > 0 ? Math.min(100, (receitas / valorContrato) * 100) : 0;
   const saldoContrato = valorContrato - receitas;
+
+  const healthIndicators = useMemo(() => calcHealthDetails(obra, obra.allMedicoes), [obra]);
+
+  const INDICATOR_STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+    green: { bg: "bg-emerald-100 dark:bg-emerald-900/40", text: "text-emerald-700 dark:text-emerald-300", border: "border-emerald-300 dark:border-emerald-700" },
+    yellow: { bg: "bg-amber-100 dark:bg-amber-900/40", text: "text-amber-700 dark:text-amber-300", border: "border-amber-300 dark:border-amber-700" },
+    red: { bg: "bg-red-100 dark:bg-red-900/40", text: "text-red-700 dark:text-red-300", border: "border-red-300 dark:border-red-700" },
+    gray: { bg: "bg-muted", text: "text-muted-foreground", border: "border-border" },
+    na: { bg: "bg-muted", text: "text-muted-foreground", border: "border-border" },
+  };
 
   return (
     <Card className={`border-border/60 border-l-4 ${HEALTH_BORDER[obra.health]} hover:border-primary/40 hover:shadow-md transition-all cursor-pointer`} onClick={onClick}>
@@ -1744,6 +1754,68 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
         {valorContrato === 0 && receitas > 0 && (
           <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">✓ {BRL_SHORT(receitas)} recebido</p>
         )}
+
+        {/* ── Health Indicators Expandable Section ── */}
+        <div className="border-t border-border/40 pt-1.5">
+          <button
+            className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full"
+            onClick={(e) => { e.stopPropagation(); setHealthOpen(!healthOpen); }}
+          >
+            <span className={`h-2 w-2 rounded-full ${HEALTH_COLORS[obra.health]}`} />
+            <span className="font-medium">Saúde da Obra</span>
+            <span className="ml-auto text-[10px]">{healthOpen ? "▲" : "▼"}</span>
+          </button>
+          {healthOpen && (
+            <div className="mt-2 space-y-2" onClick={e => e.stopPropagation()}>
+              {healthIndicators.map(ind => {
+                const colors = INDICATOR_STATUS_COLORS[ind.status];
+                // Bar visualization: compute position of value relative to thresholds
+                const barMax = ind.higherIsBetter
+                  ? Math.max(1.2, (ind.value || 0) * 1.3)
+                  : Math.max(ind.threshold_red * 2, (ind.value || 0) * 1.3);
+                const barPct = ind.value !== null ? Math.min(100, (ind.value / barMax) * 100) : 0;
+                const yellowPct = (ind.threshold_yellow / barMax) * 100;
+                const redPct = (ind.threshold_red / barMax) * 100;
+
+                return (
+                  <div key={ind.id} className={`rounded-md border p-2 ${colors.border} ${colors.bg}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-semibold text-foreground">{ind.label}</span>
+                      <Badge variant="secondary" className={`text-[9px] h-4 px-1.5 ${colors.bg} ${colors.text} border ${colors.border}`}>
+                        {ind.displayValue}
+                      </Badge>
+                    </div>
+                    {/* Threshold bar */}
+                    {ind.value !== null && (
+                      <div className="relative h-2 bg-muted rounded-full overflow-hidden mb-1">
+                        {/* Threshold markers */}
+                        {ind.higherIsBetter ? (
+                          <>
+                            <div className="absolute top-0 h-full bg-red-300/40 dark:bg-red-800/40" style={{ left: 0, width: `${redPct}%` }} />
+                            <div className="absolute top-0 h-full bg-amber-300/40 dark:bg-amber-800/40" style={{ left: `${redPct}%`, width: `${yellowPct - redPct}%` }} />
+                            <div className="absolute top-0 h-full bg-emerald-300/40 dark:bg-emerald-800/40" style={{ left: `${yellowPct}%`, width: `${100 - yellowPct}%` }} />
+                          </>
+                        ) : (
+                          <>
+                            <div className="absolute top-0 h-full bg-emerald-300/40 dark:bg-emerald-800/40" style={{ left: 0, width: `${yellowPct}%` }} />
+                            <div className="absolute top-0 h-full bg-amber-300/40 dark:bg-amber-800/40" style={{ left: `${yellowPct}%`, width: `${redPct - yellowPct}%` }} />
+                            <div className="absolute top-0 h-full bg-red-300/40 dark:bg-red-800/40" style={{ left: `${redPct}%`, width: `${100 - redPct}%` }} />
+                          </>
+                        )}
+                        {/* Value indicator */}
+                        <div
+                          className={`absolute top-0 h-full rounded-full ${ind.status === "green" ? "bg-emerald-500" : ind.status === "yellow" ? "bg-amber-500" : ind.status === "red" ? "bg-red-500" : "bg-muted-foreground"}`}
+                          style={{ width: `${barPct}%`, maxWidth: "100%" }}
+                        />
+                      </div>
+                    )}
+                    <p className="text-[9px] text-muted-foreground leading-tight">{ind.description}</p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
