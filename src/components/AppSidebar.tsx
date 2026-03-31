@@ -386,7 +386,11 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
             );
           })}
 
-          {/* Gerenciamento - Filtrado por permissões */}
+          {/* Gerenciamento - só renderiza se ao menos 1 item estiver visível */}
+          {(canAccessManagement("projetos") || canAccessManagement("quadras") ||
+            canAccessManagement("macros") || canAccessManagement("insumos") ||
+            canAccessManagement("fornecedores") ||
+            ((isAdmin || isCompanyAdmin) && canAccessManagement("usuarios"))) && (
           <SidebarGroup className="mt-4">
             <SidebarGroupLabel className="text-primary text-xs font-bold uppercase tracking-wider px-3 mb-2">
               Gerenciamento
@@ -485,6 +489,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+          )}
         </SidebarContent>
 
         {/* Footer with User Info */}

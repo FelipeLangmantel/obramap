@@ -593,10 +593,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canAccessMenu = useCallback((menuId: string): boolean => {
     if (isSystemAdmin) return false;
     if (isCompanyAdmin) return true;
-    // painel_inicial sempre visível para qualquer usuário autenticado
-    if (menuId === "painel_inicial") return true;
-    // Sem permissão cadastrada: admin vê tudo, outros só o painel inicial
+    // Sem permissão cadastrada: admin vê tudo, outros não veem nada
     if (!permissions) return isAdmin;
+    // Respeita exatamente o que o admin configurou — sem exceções hardcoded
     return permissions.visible_menus.includes(menuId);
   }, [isSystemAdmin, isCompanyAdmin, isAdmin, permissions]);
 
