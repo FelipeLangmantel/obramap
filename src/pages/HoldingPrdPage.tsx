@@ -63,6 +63,16 @@ export default function HoldingPrdPage() {
   const despesas = data?.despesas || [];
   const obraIds = new Set(obras.map(o => o.id));
 
+  // Obras com dados: em_andamento OU com pelo menos 1 medição OU 1 despesa
+  // Evita linhas vazias de obras ainda não iniciadas sem nenhum lançamento
+  const obrasMedIds = new Set(medicoes.map((m: any) => m.obra_id));
+  const obrasDespIds = new Set(despesas.map((d: any) => d.obra_id));
+  const obrasComDados = obras.filter(o =>
+    o.status === "em_andamento" ||
+    obrasMedIds.has(o.id) ||
+    obrasDespIds.has(o.id)
+  );
+
   // Build month matrix per obra
   const obraMonthData = useMemo(() => {
     const result = new Map<string, { obra: ObraFull; months: MonthEntry[] }>();
@@ -144,7 +154,7 @@ export default function HoldingPrdPage() {
       .filter((m: any) => obraIds.has(m.obra_id) && m.status_medicao === "aprovada")
       .reduce((s: number, m: any) => s + (Number(m.valor_medicao) || 0), 0);
     const despesasAcum = despesas
-      .filter((d: any) => obraIds.has(d.obra_id) && d.status === "fechado")
+      .filter((d: any) => obraIds.has(d.obra_id))  // todos os status — total comprometido
       .reduce((s: number, d: any) => s + (Number(d.valor) || 0), 0);
     const desvio = previstoAcum > 0 ? (realizadoAcum / previstoAcum) * 100 : 0;
     return { previstoAcum, realizadoAcum, despesasAcum, desvio };
@@ -152,7 +162,7 @@ export default function HoldingPrdPage() {
 
   // Per-obra summary
   const obraSummary = useMemo(() => {
-    return obras.map(o => {
+    return obrasComDados.map(o => {
       const entry = obraMonthData.get(o.id);
       const previsto = entry ? entry.months.reduce((s, m) => s + m.previsto, 0) : (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
       const realizado = medicoes.filter((m: any) => m.obra_id === o.id && m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_medicao) || 0), 0);
@@ -466,7 +476,7 @@ export default function HoldingPrdPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {obras.map((o, i) => {
+                  {obrasComDados.map((o, i) => {
                     const entry = obraMonthData.get(o.id);
                     const tp = entry?.months.reduce((s, m) => s + m.previsto, 0) || 0;
                     const tr = entry?.months.reduce((s, m) => s + m.realizado, 0) || 0;
