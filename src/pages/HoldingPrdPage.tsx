@@ -145,9 +145,9 @@ export default function HoldingPrdPage() {
   const medicoes = data?.medicoes || [];
   const despesas = data?.despesas || [];
   const obraIds = new Set(obras.map(o => o.id));
+  const planningByMonth = data?.planningByMonth || new Map<string, Map<string, number>>();
 
   // Obras com dados: em_andamento OU com pelo menos 1 medição OU 1 despesa
-  // Evita linhas vazias de obras ainda não iniciadas sem nenhum lançamento
   const obrasMedIds = new Set(medicoes.map((m: any) => m.obra_id));
   const obrasDespIds = new Set(despesas.map((d: any) => d.obra_id));
   const obrasComDados = obras.filter(o =>
@@ -163,15 +163,30 @@ export default function HoldingPrdPage() {
     obras.forEach(o => {
       if (!o.data_inicio) return;
       const start = parseLocalDate(o.data_inicio!);
-      const prazoMeses = Math.max(1, Math.ceil(o.prazo_dias / 30.44)); // 30.44 = média real de dias/mês
-      const monthlyPrevisto = ((o.valor_contrato || 0) + (o.aditivo_valor_total || 0)) / prazoMeses;
-      const months: MonthEntry[] = [];
+      const prazoMeses = Math.max(1, Math.ceil(o.prazo_dias / 30.44));
+      const monthlyPrevistoLinear = ((o.valor_contrato || 0) + (o.aditivo_valor_total || 0)) / prazoMeses;
 
+      // Check if this obra has planning data from long-term planning
+      const obraPlanning = o.obramap_project_id ? planningByMonth.get(o.obramap_project_id) : null;
+      const usePlanning = obraPlanning && obraPlanning.size > 0;
+
+      // Determine month keys
+      const monthKeysSet = new Set<string>();
       for (let i = 0; i < prazoMeses; i++) {
         const d = addMonths(start, i);
-        const mes = d.getMonth(); // 0-based
-        const ano = d.getFullYear();
-        const key = `${ano}-${String(mes + 1).padStart(2, "0")}`;
+        monthKeysSet.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+      }
+      if (usePlanning) {
+        obraPlanning!.forEach((_, k) => monthKeysSet.add(k));
+      }
+      const monthKeys = [...monthKeysSet].sort();
+
+      const months: MonthEntry[] = [];
+
+      for (const key of monthKeys) {
+        const [anoStr, mesStr] = key.split("-");
+        const ano = Number(anoStr);
+        const mes = Number(mesStr) - 1; // 0-based
 
         const realizado = medicoes
           .filter((m: any) => {
@@ -195,7 +210,16 @@ export default function HoldingPrdPage() {
           })
           .reduce((s: number, d: any) => s + (Number(d.valor) || 0), 0);
 
-        const previstoFinal = previstoCadastrado > 0 ? previstoCadastrado : monthlyPrevisto;
+        // Priority: 1) previstoCadastrado manual, 2) planning data, 3) linear fallback
+        let previstoFinal: number;
+        if (previstoCadastrado > 0) {
+          previstoFinal = previstoCadastrado;
+        } else if (usePlanning) {
+          previstoFinal = obraPlanning!.get(key) || 0;
+        } else {
+          previstoFinal = monthlyPrevistoLinear;
+        }
+
         months.push({ key, label: `${MONTHS[mes]}/${String(ano).slice(2)}`, mes: mes + 1, ano, previsto: previstoFinal, previstoCadastrado, realizado, despesas: desp });
       }
 
@@ -203,7 +227,7 @@ export default function HoldingPrdPage() {
     });
 
     return result;
-  }, [obras, medicoes, despesas]);
+  }, [obras, medicoes, despesas, planningByMonth]);
 
   // All unique months sorted
   const allMonths = useMemo(() => {
