@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical, CalendarDays, TrendingUp, Clock, BarChart3, Target, AlertTriangle, DollarSign } from "lucide-react";
+import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical, CalendarDays, TrendingUp, Clock, BarChart3, Target, AlertTriangle, DollarSign, Upload, Download, File } from "lucide-react";
 import { CurrencyInput } from "./CurrencyInput";
 import { useAuth } from "@/contexts/AuthContext";
 import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart } from "recharts";
@@ -458,15 +458,36 @@ const ENSAIOS_PROJETOS_FIELDS: { key: string; label: string }[] = [
   { key: "checklist_seguranca", label: "Checklist Segurança" },
 ];
 
+interface DocFile {
+  id: string;
+  obra_doc_id: string;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  content_type: string;
+  uploaded_by: string;
+  uploaded_by_name: string;
+  created_at: string;
+}
+
+const ACCEPTED_FILE_TYPES = ".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx";
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function DocumentosTab({ obraId }: { obraId: string }) {
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const invalidateHolding = useInvalidateHolding();
 
-  // Fetch configured doc types for this company
   const [docTipos, setDocTipos] = useState<{ id: string; nome: string; categoria: string; obrigatorio: boolean }[]>([]);
   const [obraDocsMap, setObraDocsMap] = useState<Map<string, any>>(new Map());
+  const [docFilesMap, setDocFilesMap] = useState<Map<string, DocFile[]>>(new Map());
+  const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
 
-  // Legacy documentos_obra for backwards compatibility
   const [legacyDocs, setLegacyDocs] = useState<Record<string, boolean> | null>(null);
   const [legacyDocId, setLegacyDocId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -474,7 +495,6 @@ function DocumentosTab({ obraId }: { obraId: string }) {
   const load = useCallback(async () => {
     if (!company?.id) return;
 
-    // Load configured doc types
     const { data: tipos } = await supabase
       .from("holding_doc_tipos")
       .select("id, nome, categoria, obrigatorio")
@@ -485,7 +505,6 @@ function DocumentosTab({ obraId }: { obraId: string }) {
 
     setDocTipos(tipos || []);
 
-    // Load obra docs (flexible system)
     const { data: obraDocs } = await supabase
       .from("holding_obra_docs")
       .select("*")
@@ -495,7 +514,6 @@ function DocumentosTab({ obraId }: { obraId: string }) {
     (obraDocs || []).forEach((d: any) => map.set(d.doc_tipo_id, d));
     setObraDocsMap(map);
 
-    // Auto-create missing entries
     if (tipos && tipos.length > 0) {
       const missingTipos = tipos.filter(t => !map.has(t.id));
       if (missingTipos.length > 0) {
@@ -510,7 +528,25 @@ function DocumentosTab({ obraId }: { obraId: string }) {
       }
     }
 
-    // Legacy documentos_obra
+    // Load files for all obra docs
+    const obraDocIds = Array.from(map.values()).map((d: any) => d.id).filter(Boolean);
+    if (obraDocIds.length > 0) {
+      const { data: files } = await supabase
+        .from("holding_doc_files")
+        .select("*")
+        .in("obra_doc_id", obraDocIds)
+        .order("created_at", { ascending: false });
+
+      const filesMap = new Map<string, DocFile[]>();
+      (files || []).forEach((f: any) => {
+        const list = filesMap.get(f.obra_doc_id) || [];
+        list.push(f);
+        filesMap.set(f.obra_doc_id, list);
+      });
+      setDocFilesMap(filesMap);
+    }
+
+    // Legacy
     const { data: legacy } = await supabase
       .from("documentos_obra")
       .select("*")
@@ -522,7 +558,6 @@ function DocumentosTab({ obraId }: { obraId: string }) {
       const { id: _id, obra_id: _oid, ...fields } = legacy as any;
       setLegacyDocs(fields);
     } else {
-      // Create legacy doc row if none exists
       const { data: created } = await supabase
         .from("documentos_obra")
         .insert({ obra_id: obraId } as any)
@@ -540,7 +575,6 @@ function DocumentosTab({ obraId }: { obraId: string }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Toggle for flexible system
   const toggleFlexible = async (docTipoId: string, value: boolean) => {
     const existing = obraDocsMap.get(docTipoId);
     setObraDocsMap(prev => {
@@ -558,12 +592,105 @@ function DocumentosTab({ obraId }: { obraId: string }) {
     invalidateHolding();
   };
 
-  // Toggle for legacy system
   const toggleLegacy = async (key: string, value: boolean) => {
     if (!legacyDocId) return;
     setLegacyDocs(prev => prev ? { ...prev, [key]: value } : prev);
     await supabase.from("documentos_obra").update({ [key]: value } as any).eq("id", legacyDocId);
     invalidateHolding();
+  };
+
+  const handleFileUpload = async (docTipoId: string, file: globalThis.File) => {
+    const obraDoc = obraDocsMap.get(docTipoId);
+    if (!obraDoc?.id || !company?.id) return;
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error("Arquivo muito grande. Máximo: 20MB");
+      return;
+    }
+
+    setUploadingDocId(docTipoId);
+    try {
+      const timestamp = Date.now();
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const storagePath = `${company.id}/${obraId}/${docTipoId}/${timestamp}_${safeName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("holding-documents")
+        .upload(storagePath, file, { contentType: file.type });
+
+      if (uploadError) throw uploadError;
+
+      const profileName = user?.email?.split("@")[0] || "Usuário";
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("holding_doc_files")
+        .insert({
+          obra_doc_id: obraDoc.id,
+          file_name: file.name,
+          file_path: storagePath,
+          file_size: file.size,
+          content_type: file.type || "application/octet-stream",
+          uploaded_by: user?.id || "",
+          uploaded_by_name: profileName,
+        } as any)
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      // Update local state
+      setDocFilesMap(prev => {
+        const next = new Map(prev);
+        const list = next.get(obraDoc.id) || [];
+        next.set(obraDoc.id, [inserted as any, ...list]);
+        return next;
+      });
+
+      await registrarLog(obraId, "holding_doc_files", (inserted as any)?.id, "upload", `Arquivo "${file.name}" anexado ao documento`, user?.id || null, profileName);
+
+      toast.success(`Arquivo "${file.name}" anexado com sucesso`);
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      toast.error("Erro ao enviar arquivo: " + (err.message || "erro desconhecido"));
+    } finally {
+      setUploadingDocId(null);
+    }
+  };
+
+  const handleFileDownload = async (file: DocFile) => {
+    try {
+      const { data, error } = await supabase.storage
+        .from("holding-documents")
+        .createSignedUrl(file.file_path, 60);
+
+      if (error) throw error;
+      window.open(data.signedUrl, "_blank");
+    } catch (err: any) {
+      toast.error("Erro ao baixar arquivo");
+    }
+  };
+
+  const handleFileDelete = async (file: DocFile) => {
+    if (!confirm(`Excluir "${file.file_name}"?`)) return;
+
+    try {
+      await supabase.storage.from("holding-documents").remove([file.file_path]);
+      await supabase.from("holding_doc_files").delete().eq("id", file.id);
+
+      setDocFilesMap(prev => {
+        const next = new Map(prev);
+        const list = (next.get(file.obra_doc_id) || []).filter(f => f.id !== file.id);
+        next.set(file.obra_doc_id, list);
+        return next;
+      });
+
+      const profileName = user?.email?.split("@")[0] || "Usuário";
+      await registrarLog(obraId, "holding_doc_files", file.id, "delete", `Arquivo "${file.file_name}" removido`, user?.id || null, profileName);
+
+      toast.success("Arquivo removido");
+    } catch {
+      toast.error("Erro ao excluir arquivo");
+    }
   };
 
   if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
@@ -602,12 +729,69 @@ function DocumentosTab({ obraId }: { obraId: string }) {
             </p>
           )}
           {useFlexible
-            ? flexibleItems.map(item => (
-                <div key={item.id} className="flex items-center justify-between">
-                  <span className="text-sm">{item.nome}</span>
-                  <Switch checked={!!obraDocsMap.get(item.id)?.checked} onCheckedChange={(v) => toggleFlexible(item.id, v)} />
-                </div>
-              ))
+            ? flexibleItems.map(item => {
+                const obraDoc = obraDocsMap.get(item.id);
+                const files = obraDoc ? (docFilesMap.get(obraDoc.id) || []) : [];
+                const isUploading = uploadingDocId === item.id;
+
+                return (
+                  <div key={item.id} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">{item.nome}</span>
+                      <div className="flex items-center gap-2">
+                        {obraDoc && (
+                          <label className="cursor-pointer">
+                            <input
+                              type="file"
+                              className="hidden"
+                              accept={ACCEPTED_FILE_TYPES}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) handleFileUpload(item.id, f);
+                                e.target.value = "";
+                              }}
+                              disabled={isUploading}
+                            />
+                            {isUploading ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            ) : (
+                              <Upload className="h-4 w-4 text-muted-foreground hover:text-primary cursor-pointer" />
+                            )}
+                          </label>
+                        )}
+                        <Switch checked={!!obraDoc?.checked} onCheckedChange={(v) => toggleFlexible(item.id, v)} />
+                      </div>
+                    </div>
+                    {/* File list */}
+                    {files.length > 0 && (
+                      <div className="ml-2 space-y-1">
+                        {files.map(f => (
+                          <div key={f.id} className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1.5 gap-2">
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              <File className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="truncate font-medium">{f.file_name}</span>
+                              <span className="text-muted-foreground shrink-0">({formatFileSize(f.file_size)})</span>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <span className="text-muted-foreground hidden md:inline">
+                                {f.uploaded_by_name} · {format(new Date(f.created_at), "dd/MM/yy")}
+                              </span>
+                              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleFileDownload(f)} title="Baixar">
+                                <Download className="h-3.5 w-3.5" />
+                              </Button>
+                              {f.uploaded_by === user?.id && (
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleFileDelete(f)} title="Excluir">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             : legacyFields.map(f => (
                 <div key={f.key} className="flex items-center justify-between">
                   <span className="text-sm">{f.label}</span>
