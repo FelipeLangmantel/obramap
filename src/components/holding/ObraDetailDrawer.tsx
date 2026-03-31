@@ -776,14 +776,11 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     if (!payload.data_envio) delete payload.data_envio;
     if (!payload.data_aprovacao) delete payload.data_aprovacao;
     if (!payload.data_pagamento) delete payload.data_pagamento;
-    const { error } = await supabase.from("medicoes_ple").insert(payload);
+    const { data: inserted, error } = await supabase
+      .from("medicoes_ple").insert(payload).select("id").single();
     if (error) { toast.error("Erro ao salvar medição"); return; }
 
-    // Audit: gravar log
-    const { data: inserted } = await supabase
-      .from("medicoes_ple").select("id")
-      .eq("obra_id", obraId).order("created_at", { ascending: false }).limit(1).single();
-
+    // Audit: gravar campos de autoria no mesmo registro inserido
     if (inserted?.id) {
       await supabase.from("medicoes_ple").update({
         created_by_user_id: userId,
@@ -810,16 +807,18 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     if (!requireEdit()) return;
     if (!editingMedicao) return;
 
-    // Validar limite do contrato
+    // Validar limite do contrato (mesmo critério do addMedicao: desconta baseJaComprometida)
     if (valorContrato > 0) {
       const novoValor = (Number(editForm.valor_medicao) || 0) + (Number(editForm.valor_previsto_medicao) || 0);
       const totalSemEsta = medicoes
         .filter(m => m.id !== editingMedicao.id && m.num_medicao !== "Saldo Inicial")
         .reduce((s, m) => s + (Number(m.valor_medicao) || 0) + (Number(m.valor_previsto_medicao) || 0), 0);
+      // Inclui baseJaComprometida — igual ao addMedicao — para consistência
+      const totalComBase = totalSemEsta + baseJaComprometida;
 
-      if (novoValor > 0 && totalSemEsta + novoValor > valorContrato) {
-        const disponivel = valorContrato - totalSemEsta;
-        toast.error(`❌ Valor excede o saldo disponível. Saldo restante para esta medição: ${BRL.format(Math.max(0, disponivel))}.`);
+      if (novoValor > 0 && totalComBase + novoValor > valorContrato) {
+        const disponivel = Math.max(0, valorContrato - totalComBase);
+        toast.error(`❌ Valor excede o saldo disponível. Saldo restante para esta medição: ${BRL.format(disponivel)}.`);
         return;
       }
     }
