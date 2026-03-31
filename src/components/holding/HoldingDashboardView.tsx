@@ -200,36 +200,110 @@ function countDocs(docs: DocumentosObra | null): { count: number; total: number 
   return { count: fields.filter((f) => docs[f] === true).length, total: fields.length };
 }
 
-function calcHealth(docsCount: number, docsTotal: number, latestMedicao: MedicaoPle | null): "green" | "yellow" | "red" {
-  const docsRatio = docsCount / docsTotal;
-  const medicaoStatus = latestMedicao?.status_medicao;
+// ─── Configuração de thresholds de saúde da obra ───────────────────────────
+// Altere aqui para recalibrar o semáforo em todo o sistema automaticamente.
+// Baseado em Earned Value Management (EVM — ISO 21508 / PMI PMBOK)
+export const HEALTH_THRESHOLDS = {
+  // IDC — Índice de Desempenho de Custo (Earned Value / Planned Value)
+  // Compara quanto foi medido vs quanto deveria ter sido medido dado o andamento físico
+  idc_yellow: 0.85,   // IDC < 0.85 → atenção (medindo menos que deveria)
+  idc_red:    0.70,   // IDC < 0.70 → crítico
 
-  // Crítico: poucos documentos
-  if (docsRatio < 3 / 11) return "red";
+  // IDP — Índice de Desempenho de Prazo
+  // Compara % execução física vs % tempo decorrido do prazo contratual
+  idp_yellow: 0.90,   // IDP < 0.90 → atenção (execução atrasada em relação ao tempo)
+  idp_red:    0.70,   // IDP < 0.70 → crítico
 
-  // Crítico: medição pendente há muito tempo
-  if (medicaoStatus === "pendente") {
-    if (latestMedicao?.data_envio) {
-      const days = differenceInDays(new Date(), new Date(latestMedicao.data_envio));
-      if (days > 30) return "red";
-    }
-    return "red";
+  // Dias sem medição aprovada (obra em andamento)
+  dias_sem_medicao_yellow: 30,   // > 30 dias → atenção
+  dias_sem_medicao_red:    60,   // > 60 dias → crítico
+
+  // Glosa acumulada como % do total medido
+  glosa_yellow: 0.05,  // > 5% → atenção
+  glosa_red:    0.15,  // > 15% → crítico
+};
+
+/**
+ * Calcula a saúde da obra com base em indicadores de Engenharia de Custos (EVM).
+ *
+ * Indicadores considerados (em ordem de prioridade):
+ *  1. IDC — Índice de Desempenho de Custo
+ *  2. IDP — Índice de Desempenho de Prazo
+ *  3. Dias sem medição aprovada
+ *  4. Glosa acumulada
+ *
+ * Obras não iniciadas ou sem dados suficientes retornam amarelo (neutro).
+ */
+function calcHealth(
+  obra: ObraPortfolio,
+  allMedicoes: MedicaoPle[]
+): "green" | "yellow" | "red" {
+  const T = HEALTH_THRESHOLDS;
+  const now = new Date();
+
+  // Obras não iniciadas ou paralisadas: não penalizar
+  if (obra.status === "nao_iniciada") return "yellow";
+  if (obra.status === "paralisada") return "red";
+  if (obra.status === "concluida") return "green";
+
+  const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
+  const pctFisico = (obra.percentual_andamento || 0) / 100;
+
+  // ── IDC — Índice de Desempenho de Custo ──────────────────────────────────
+  // Só calcula se há andamento físico registrado (> 5%) e valor de contrato
+  const totalMedidoAprovado = allMedicoes
+    .filter(m => m.status_medicao === "aprovada")
+    .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+
+  if (pctFisico > 0.05 && valorContrato > 0) {
+    const valorPlanejado = pctFisico * valorContrato; // quanto deveria ter medido
+    const idc = totalMedidoAprovado > 0 ? totalMedidoAprovado / valorPlanejado : 0;
+
+    if (idc < T.idc_red) return "red";
+    if (idc < T.idc_yellow) return "yellow";
   }
 
-  // Atenção: documentos insuficientes
-  if (docsRatio < 5 / 11) return "yellow";
+  // ── IDP — Índice de Desempenho de Prazo ──────────────────────────────────
+  if (obra.data_inicio && obra.prazo_dias > 0) {
+    const inicio = new Date(obra.data_inicio + "T12:00:00");
+    const prazoTotal = obra.prazo_dias + (obra.aditivo_prazo_dias || 0);
+    const diasDecorridos = differenceInDays(now, inicio);
+    const pctTempo = Math.min(1, diasDecorridos / prazoTotal); // % do prazo consumido
 
-  // Atenção: medição enviada aguardando aprovação
-  if (medicaoStatus === "enviada") return "yellow";
+    if (pctTempo > 0.05 && pctFisico >= 0) {
+      const idp = pctTempo > 0 ? pctFisico / pctTempo : 1;
+      if (idp < T.idp_red) return "red";
+      if (idp < T.idp_yellow) return "yellow";
+    }
+  }
 
-  // Atenção: obra sem NENHUMA medição (nunca iniciou o processo de medição)
-  // Só verde se já tem ao menos uma medição aprovada
-  if (!medicaoStatus) return "yellow";
+  // ── Dias sem medição aprovada ─────────────────────────────────────────────
+  const ultimaAprovada = allMedicoes
+    .filter(m => m.status_medicao === "aprovada" && m.data_aprovacao)
+    .sort((a, b) => new Date(b.data_aprovacao!).getTime() - new Date(a.data_aprovacao!).getTime())[0];
 
-  // Verde: docs ok + última medição aprovada
-  if (docsRatio >= 5 / 11 && medicaoStatus === "aprovada") return "green";
+  if (ultimaAprovada?.data_aprovacao) {
+    const diasSemMedicao = differenceInDays(now, new Date(ultimaAprovada.data_aprovacao + "T12:00:00"));
+    if (diasSemMedicao > T.dias_sem_medicao_red) return "red";
+    if (diasSemMedicao > T.dias_sem_medicao_yellow) return "yellow";
+  } else if (pctFisico > 0.1) {
+    // Obra com >10% de andamento mas sem nenhuma medição aprovada
+    return "yellow";
+  }
 
-  return "yellow";
+  // ── Glosa acumulada ───────────────────────────────────────────────────────
+  const totalGlosa = allMedicoes
+    .filter(m => Number(m.valor_acatado) > 0 && Number(m.valor_medicao) > 0)
+    .reduce((s, m) => s + Math.max(0, Number(m.valor_medicao) - Number(m.valor_acatado)), 0);
+
+  if (totalMedidoAprovado > 0 && totalGlosa > 0) {
+    const pctGlosa = totalGlosa / totalMedidoAprovado;
+    if (pctGlosa > T.glosa_red) return "red";
+    if (pctGlosa > T.glosa_yellow) return "yellow";
+  }
+
+  // ── Verde: todos os indicadores dentro do limite ──────────────────────────
+  return "green";
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -627,7 +701,7 @@ export default function HoldingDashboardView() {
         const allMedicoes = medicoesMap.get(obra.id) || [];
         const latestMedicao = allMedicoes[0] || null;
         const { count: docsCount, total: docsTotal } = countDocs(docs);
-        const health = calcHealth(docsCount, docsTotal, latestMedicao);
+        const health = calcHealth(obra, allMedicoes);
         return { ...obra, docs, latestMedicao, allMedicoes, docsCount, docsTotal, health };
       });
     },
