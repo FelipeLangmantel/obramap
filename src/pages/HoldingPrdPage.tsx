@@ -28,6 +28,7 @@ interface ObraFull {
   id: string; nome: string; empresa: string | null; valor_contrato: number;
   data_inicio: string | null; prazo_dias: number; uh: number | null; status: string;
   aditivo_valor_total: number;
+  obramap_project_id: string | null;
 }
 
 interface MonthEntry {
