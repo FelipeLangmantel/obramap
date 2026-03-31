@@ -18,7 +18,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Settings, Building2, FileText, FlaskConical, Plus, Pencil, Trash2, GripVertical, RefreshCw, ArrowLeft } from "lucide-react";
+import { Settings, Building2, FileText, FlaskConical, Plus, Pencil, Trash2, GripVertical, RefreshCw, ArrowLeft, HeartPulse, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
