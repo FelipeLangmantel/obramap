@@ -118,6 +118,29 @@ export default function HoldingConfigPage() {
   const [docCategoria, setDocCategoria] = useState<"doc_obra" | "ensaios_projetos">("doc_obra");
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
 
+  // === Health Thresholds state ===
+  const [healthForm, setHealthForm] = useState<HealthThresholds>(() => loadHealthThresholds(company?.id));
+
+  useEffect(() => {
+    setHealthForm(loadHealthThresholds(company?.id));
+  }, [company?.id]);
+
+  const saveHealthThresholds = () => {
+    if (!company?.id) return;
+    localStorage.setItem(`obramap_health_thresholds_${company.id}`, JSON.stringify(healthForm));
+    // Update the mutable global reference
+    Object.assign(HEALTH_THRESHOLDS, healthForm);
+    toast.success("Thresholds de saúde salvos!");
+  };
+
+  const restoreDefaultThresholds = () => {
+    if (!company?.id) return;
+    localStorage.removeItem(`obramap_health_thresholds_${company.id}`);
+    setHealthForm({ ...DEFAULT_HEALTH_THRESHOLDS });
+    Object.assign(HEALTH_THRESHOLDS, DEFAULT_HEALTH_THRESHOLDS);
+    toast.success("Thresholds restaurados para os valores padrão!");
+  };
+
   const openNewDoc = (cat: "doc_obra" | "ensaios_projetos") => {
     setDocCategoria(cat);
     setEditingDoc(null);
