@@ -1680,6 +1680,50 @@ export type Database = {
           },
         ]
       }
+      holding_doc_files: {
+        Row: {
+          content_type: string
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number
+          id: string
+          obra_doc_id: string
+          uploaded_by: string
+          uploaded_by_name: string
+        }
+        Insert: {
+          content_type?: string
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number
+          id?: string
+          obra_doc_id: string
+          uploaded_by: string
+          uploaded_by_name?: string
+        }
+        Update: {
+          content_type?: string
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number
+          id?: string
+          obra_doc_id?: string
+          uploaded_by?: string
+          uploaded_by_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holding_doc_files_obra_doc_id_fkey"
+            columns: ["obra_doc_id"]
+            isOneToOne: false
+            referencedRelation: "holding_obra_docs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       holding_doc_tipos: {
         Row: {
           ativo: boolean
