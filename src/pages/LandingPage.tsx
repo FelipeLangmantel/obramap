@@ -70,17 +70,10 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-3">
             <Button
-              variant="ghost"
-              className="text-[#8a8a9a] hover:text-white text-sm"
+              className="bg-[#e67e22] hover:bg-[#d35400] text-white text-sm font-semibold rounded-lg px-5"
               onClick={() => navigate("/auth")}
             >
               Entrar
-            </Button>
-            <Button
-              className="bg-[#e67e22] hover:bg-[#d35400] text-white text-sm font-semibold rounded-lg px-5"
-onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demonstração%20do%20ObraMap", "_blank")}
-            >
-              Solicitar demonstração
             </Button>
           </div>
         </div>
@@ -116,7 +109,7 @@ onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demon
               <Button
                 size="lg"
                 className="bg-[#e67e22] hover:bg-[#d35400] text-white font-semibold rounded-lg text-base px-8 h-12"
-                onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demonstração%20do%20ObraMap", "_blank")}
+                onClick={() => window.open("https://wa.me/5553999307786?text=" + encodeURIComponent("Olá! Quero ver o ObraMap funcionando na prática. Pode me ajudar?"), "_blank")}
               >
                 Ver minha obra funcionando
                 <ArrowRight className="ml-2 h-5 w-5" />
@@ -435,7 +428,7 @@ onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demon
           <Button
             size="lg"
             className="bg-[#e67e22] hover:bg-[#d35400] text-white font-semibold rounded-lg text-base px-10 h-14"
-            onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demonstração%20do%20ObraMap", "_blank")}
+            onClick={() => window.open("https://wa.me/5553999307786?text=" + encodeURIComponent("Olá! Quero ver o ObraMap funcionando na prática. Pode me ajudar?"), "_blank")}
           >
             Solicitar demonstração
             <ArrowRight className="ml-2 h-5 w-5" />
