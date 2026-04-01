@@ -68,7 +68,7 @@ function Index() {
   });
   const location = useLocation();
   const { selectedHouse, isLoading, projects, currentProject, setCurrentProject } = useConstruction();
-  const { canAccessProject } = useAuth();
+  const { canAccessProject, canAccessMenu } = useAuth();
 
   // ✅ Persistir estado real da rota
   useEffect(() => {
@@ -118,6 +118,33 @@ function Index() {
     console.log("[MOUNT] Index mounted");
     return () => console.log("[UNMOUNT] Index unmounted");
   }, []);
+
+  // ✅ Validar view restaurada do sessionStorage contra permissões do usuário atual
+  // Impede que um visitante herde a view de uma sessão anterior de admin
+  useEffect(() => {
+    const VIEW_PERMISSION_MAP: Partial<Record<ViewType, string>> = {
+      "map": "mapa",
+      "interactive-map": "mapa_interativo",
+      "3d-map": "mapa_3d",
+      "charts": "graficos",
+      "production": "producao",
+      "productivity": "productivity",
+      "planning": "planejamento_semanal",
+      "smart-planning": "smart_planning",
+      "delivery": "entrega",
+      "costs": "custos",
+      "financial-flow": "financeiro",
+      "supplies": "suprimentos",
+      "contractors": "empreiteiros",
+      "industrialization": "industrializacao",
+      "board-decisions": "diretoria",
+      "holding-dashboard": "holding",
+    };
+    const permId = VIEW_PERMISSION_MAP[activeView];
+    if (permId && !canAccessMenu(permId)) {
+      setActiveView("home");
+    }
+  }, [activeView, canAccessMenu]);
 
   // ✅ Se navegou de outra rota com targetView no state, aplicar a view
   useEffect(() => {
