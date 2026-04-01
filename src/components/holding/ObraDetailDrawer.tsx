@@ -908,6 +908,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
+  const [deletingMedicaoId, setDeletingMedicaoId] = useState<string | null>(null);
   const [medicoes, setMedicoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
