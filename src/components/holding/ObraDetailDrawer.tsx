@@ -1250,6 +1250,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
   );
 
   return (
+    <>
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h4 className="font-semibold text-sm">Medições ({medicoes.length})</h4>
