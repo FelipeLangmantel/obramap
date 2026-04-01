@@ -1079,7 +1079,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
 
   const deleteMedicao = async (id: string) => {
     if (!requireEdit()) return;
-    if (!confirm("Excluir esta medição? Esta ação não pode ser desfeita.")) return;
+    setDeletingMedicaoId(null);
     const medicaoSnap = medicoes.find(m => m.id === id);
     const { error } = await supabase.from("medicoes_ple").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir medição"); return; }
