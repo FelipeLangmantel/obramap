@@ -511,6 +511,8 @@ export default function HoldingDashboardView() {
   const exportarPDF = async () => {
     setIsPrinting(true);
     try {
+      const { jsPDF } = await import("jspdf");
+      const { default: autoTable } = await import("jspdf-autotable");
       const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
       const today = format(new Date(), "dd/MM/yyyy");
       const companyName = (company as any)?.name || "Holding";

@@ -177,7 +177,8 @@ export default function HoldingInsightsPage() {
     toast.success("Relatório copiado!");
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
+    const { default: jsPDF } = await import("jspdf");
     const doc = new jsPDF({ orientation: "landscape" });
     doc.setFontSize(16);
     doc.text("Relatório Executivo — Holding", 14, 20);
