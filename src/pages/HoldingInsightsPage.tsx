@@ -75,7 +75,7 @@ export default function HoldingInsightsPage() {
         ? differenceInDays(addDays(parseLocalDate(o.data_inicio!), o.prazo_dias + (o.aditivo_prazo_dias || 0)), new Date())
         : null;
       // Usar a mesma lógica EVM do Painel Principal (IDC, IDP, dias, glosa)
-      const health = calcHealth(o as any, obraMeds);
+      const health = calcHealth(o as any, obraMeds as any);
       return { ...o, docsCount, totalReceitas, totalDesp, diasRestantes, health, medsCount: obraMeds.length };
     });
   }, [obras, medicoes, despesas, docs]);
