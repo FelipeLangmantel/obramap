@@ -179,7 +179,8 @@ export default function HoldingConfigPage() {
     if (!isCompanyAdmin) return;
     if (!deletingDocId) return;
     // First remove all obra_docs entries that reference this doc type
-    await supabase.from("holding_obra_docs").delete().eq("doc_tipo_id", deletingDocId);
+    const { error: docsError } = await supabase.from("holding_obra_docs").delete().eq("doc_tipo_id", deletingDocId);
+    if (docsError) { toast.error("Erro ao remover documentos vinculados: " + docsError.message); return; }
     // Then delete the doc type itself
     const { error } = await supabase.from("holding_doc_tipos").delete().eq("id", deletingDocId);
     if (error) { toast.error("Erro: " + error.message); return; }
