@@ -1661,6 +1661,7 @@ function AditivosTab({ obraId }: { obraId: string }) {
   const totalSupressao = aditivos.reduce((s, a) => s + (a.supressao_valor || 0), 0);
 
   return (
+    <>
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 flex-wrap">
