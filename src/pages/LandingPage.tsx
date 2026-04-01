@@ -70,10 +70,10 @@ export default function LandingPage() {
           </div>
           <div className="flex items-center gap-3">
             <Button
-              className="bg-[#e67e22] hover:bg-[#d35400] text-white text-sm font-semibold rounded-lg px-5"
+              className="bg-[#e67e22] hover:bg-[#d35400] text-white text-sm font-semibold rounded-lg px-5 flex items-center gap-2"
               onClick={() => navigate("/auth")}
             >
-              Entrar
+              Login
             </Button>
           </div>
         </div>
