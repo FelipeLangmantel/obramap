@@ -1379,7 +1379,7 @@ export default function HoldingDashboardView() {
               <div><Label className="text-xs">Nº Contrato</Label><Input value={newObraForm.num_contrato} onChange={(e) => setNewObraForm(p => ({ ...p, num_contrato: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">Parceria SCP</Label><Input value={newObraForm.parceria_scp} onChange={(e) => setNewObraForm(p => ({ ...p, parceria_scp: e.target.value }))} placeholder="Ex: SCP Binotto" /></div>
+              <div><Label className="text-xs">Parceria SCP</Label><Input value={newObraForm.parceria_scp} onChange={(e) => setNewObraForm(p => ({ ...p, parceria_scp: e.target.value }))} placeholder="" /></div>
               <div><Label className="text-xs">Valor Contrato (R$)</Label><Input type="number" value={newObraForm.valor_contrato} onChange={(e) => setNewObraForm(p => ({ ...p, valor_contrato: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -1428,15 +1428,15 @@ export default function HoldingDashboardView() {
               )}
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">Período Medição</Label><Input value={newObraForm.periodo_medicao} onChange={(e) => setNewObraForm(p => ({ ...p, periodo_medicao: e.target.value }))} placeholder="Mensal, Bimestral..." /></div>
-              <div><Label className="text-xs">Prazo Pagamento</Label><Input value={newObraForm.prazo_pagamento} onChange={(e) => setNewObraForm(p => ({ ...p, prazo_pagamento: e.target.value }))} placeholder="30 dias, 45 dias..." /></div>
+              <div><Label className="text-xs">Período Medição</Label><Input value={newObraForm.periodo_medicao} onChange={(e) => setNewObraForm(p => ({ ...p, periodo_medicao: e.target.value }))} placeholder="" /></div>
+              <div><Label className="text-xs">Prazo Pagamento</Label><Input value={newObraForm.prazo_pagamento} onChange={(e) => setNewObraForm(p => ({ ...p, prazo_pagamento: e.target.value }))} placeholder="" /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">Município</Label><Input value={newObraForm.municipio} onChange={(e) => setNewObraForm(p => ({ ...p, municipio: e.target.value }))} placeholder="Ex: Taquara, Esteio..." /></div>
+              <div><Label className="text-xs">Município</Label><Input value={newObraForm.municipio} onChange={(e) => setNewObraForm(p => ({ ...p, municipio: e.target.value }))} placeholder="" /></div>
               <div><Label className="text-xs">Estado</Label><Input value={newObraForm.estado} onChange={(e) => setNewObraForm(p => ({ ...p, estado: e.target.value }))} placeholder="RS" /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">UH (Unidades Hab.)</Label><Input type="number" value={newObraForm.uh} onChange={(e) => setNewObraForm(p => ({ ...p, uh: e.target.value }))} placeholder="Ex: 20, 70, 246" /></div>
+              <div><Label className="text-xs">UH (Unidades Hab.)</Label><Input type="number" value={newObraForm.uh} onChange={(e) => setNewObraForm(p => ({ ...p, uh: e.target.value }))} placeholder="" /></div>
               <div>
                 <Label className="text-xs">Tipo de Contrato</Label>
                 <Select value={newObraForm.tipo_contrato} onValueChange={(v) => setNewObraForm(p => ({ ...p, tipo_contrato: v }))}>
@@ -1458,11 +1458,11 @@ export default function HoldingDashboardView() {
               <p className="text-xs font-medium text-foreground mb-2">Responsáveis</p>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label className="text-xs">Eng. Residente</Label><Input value={newObraForm.responsavel_nome} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_nome: e.target.value }))} placeholder="" /></div>
-                <div><Label className="text-xs">Tel. Eng. Residente</Label><Input type="tel" value={newObraForm.responsavel_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_telefone: e.target.value }))} placeholder="(51) 9 9999-9999" /></div>
+                <div><Label className="text-xs">Tel. Eng. Residente</Label><Input type="tel" value={newObraForm.responsavel_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_telefone: e.target.value }))} placeholder="" /></div>
                 <div><Label className="text-xs">Coordenador</Label><Input value={newObraForm.coordenador_nome} onChange={(e) => setNewObraForm(p => ({ ...p, coordenador_nome: e.target.value }))} placeholder="" /></div>
-                <div><Label className="text-xs">Tel. Coordenador</Label><Input type="tel" value={newObraForm.coordenador_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, coordenador_telefone: e.target.value }))} placeholder="(51) 9 9999-9999" /></div>
+                <div><Label className="text-xs">Tel. Coordenador</Label><Input type="tel" value={newObraForm.coordenador_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, coordenador_telefone: e.target.value }))} placeholder="" /></div>
                 <div><Label className="text-xs">Planejador</Label><Input value={newObraForm.planejador_nome} onChange={(e) => setNewObraForm(p => ({ ...p, planejador_nome: e.target.value }))} placeholder="" /></div>
-                <div><Label className="text-xs">Tel. Planejador</Label><Input type="tel" value={newObraForm.planejador_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, planejador_telefone: e.target.value }))} placeholder="(51) 9 9999-9999" /></div>
+                <div><Label className="text-xs">Tel. Planejador</Label><Input type="tel" value={newObraForm.planejador_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, planejador_telefone: e.target.value }))} placeholder="" /></div>
               </div>
             </div>
           </div>
