@@ -1739,7 +1739,7 @@ function AditivosTab({ obraId }: { obraId: string }) {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteAditivo(a.id)}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeletingAditivoId(a.id)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </TableCell>
