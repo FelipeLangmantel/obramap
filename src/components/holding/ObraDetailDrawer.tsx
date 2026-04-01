@@ -674,8 +674,11 @@ function DocumentosTab({ obraId }: { obraId: string }) {
     if (!confirm(`Excluir "${file.file_name}"?`)) return;
 
     try {
+      // DB primeiro: se falhar, o arquivo permanece no storage (consistência preferível)
+      const { error: dbErr } = await supabase.from("holding_doc_files").delete().eq("id", file.id);
+      if (dbErr) throw dbErr;
+      // Storage depois: se falhar, o registro DB já foi removido (arquivo órfão no storage, não visível ao usuário)
       await supabase.storage.from("holding-documents").remove([file.file_path]);
-      await supabase.from("holding_doc_files").delete().eq("id", file.id);
 
       setDocFilesMap(prev => {
         const next = new Map(prev);
@@ -1008,7 +1011,10 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     }
 
     const payload: any = { ...editForm };
+    // Remover campos de sistema que não devem ser sobrescritos pelo update
     delete payload.id; delete payload.obra_id; delete payload.created_at;
+    delete payload.created_by_user_id; delete payload.created_by_name;
+    delete payload.updated_by_user_id; delete payload.updated_by_name; delete payload.updated_at;
     // Allow clearing dates by setting to null
     if (payload.data_previsao_medicao === "") payload.data_previsao_medicao = null;
     if (payload.data_envio === "") payload.data_envio = null;
@@ -1364,21 +1370,17 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
       return;
     }
     setSavingDespesa(true);
-    const { error } = await supabase.from("despesas_mensais").insert({
+    const { data: ins, error } = await supabase.from("despesas_mensais").insert({
       obra_id: obraId,
       mes_referencia: newDespesa.mes_referencia,
       ano_referencia: Number(newDespesa.ano_referencia),
       valor: Number(newDespesa.valor),
       status: newDespesa.status as any,
-    });
+    }).select("id").single();
     setSavingDespesa(false);
     if (error) { toast.error("Erro ao salvar despesa."); return; }
 
-    // Audit
-    const { data: ins } = await supabase
-      .from("despesas_mensais").select("id")
-      .eq("obra_id", obraId).order("created_at", { ascending: false }).limit(1).single();
-
+    // Audit: gravar autoria no registro inserido (ID garantido pelo .select)
     if (ins?.id) {
       await supabase.from("despesas_mensais").update({
         created_by_user_id: userId,
@@ -1562,13 +1564,9 @@ function AditivosTab({ obraId }: { obraId: string }) {
       status: form.status,
     };
     if (form.data) payload.data = form.data;
-    const { error } = await supabase.from("aditivos_contratos").insert(payload);
+    const { data: ins, error } = await supabase
+      .from("aditivos_contratos").insert(payload).select("id").single();
     if (error) { toast.error("Erro ao salvar aditivo"); return; }
-
-    // Audit
-    const { data: ins } = await supabase
-      .from("aditivos_contratos").select("id")
-      .eq("obra_id", obraId).order("created_at", { ascending: false }).limit(1).single();
 
     await registrarLog(
       obraId, "aditivos_contratos", ins?.id || null,

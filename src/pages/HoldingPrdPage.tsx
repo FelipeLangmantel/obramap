@@ -148,13 +148,16 @@ export default function HoldingPrdPage() {
   const planningByMonth = data?.planningByMonth || new Map<string, Map<string, number>>();
 
   // Obras com dados: em_andamento OU com pelo menos 1 medição OU 1 despesa
-  const obrasMedIds = new Set(medicoes.map((m: any) => m.obra_id));
-  const obrasDespIds = new Set(despesas.map((d: any) => d.obra_id));
-  const obrasComDados = obras.filter(o =>
-    o.status === "em_andamento" ||
-    obrasMedIds.has(o.id) ||
-    obrasDespIds.has(o.id)
-  );
+  // Envolvido em useMemo para evitar recriação de Sets a cada render
+  const obrasComDados = useMemo(() => {
+    const obrasMedIds = new Set(medicoes.map((m: any) => m.obra_id));
+    const obrasDespIds = new Set(despesas.map((d: any) => d.obra_id));
+    return obras.filter(o =>
+      o.status === "em_andamento" ||
+      obrasMedIds.has(o.id) ||
+      obrasDespIds.has(o.id)
+    );
+  }, [obras, medicoes, despesas]);
 
   // Build month matrix per obra
   const obraMonthData = useMemo(() => {

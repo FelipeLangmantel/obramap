@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Sparkles, TrendingUp, AlertTriangle, DollarSign, Building2, RefreshCw, Copy, FileDown, Clock, ShieldAlert, FileWarning, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 import { format, addDays, differenceInDays } from "date-fns";
+import { calcHealth } from "@/components/holding/HoldingDashboardView";
 const parseLocalDate = (d: string) => { const [y, m, day] = d.split("-").map(Number); return new Date(y, m - 1, day); };
 import jsPDF from "jspdf";
 
@@ -41,7 +42,7 @@ export default function HoldingInsightsPage() {
       // 1 round trip paralelo — RLS garante isolamento por empresa
       const [obrasRes, medRes, despRes, docsRes] = await Promise.all([
         supabase.from("obras_portfolio").select("*").eq("company_id", company!.id),
-        supabase.from("medicoes_ple").select("id, obra_id, status_medicao, valor_medicao, data_previsao_medicao, data_aprovacao"),
+        supabase.from("medicoes_ple").select("id, obra_id, status_medicao, valor_medicao, valor_acatado, data_previsao_medicao, data_aprovacao"),
         supabase.from("despesas_mensais").select("id, obra_id, valor, mes_referencia, ano_referencia"),
         supabase.from("documentos_obra").select("id, obra_id, ata, ois, art, cno, impl, scp"),
       ]);
@@ -73,8 +74,8 @@ export default function HoldingInsightsPage() {
       const diasRestantes = o.data_inicio && o.prazo_dias
         ? differenceInDays(addDays(parseLocalDate(o.data_inicio!), o.prazo_dias + (o.aditivo_prazo_dias || 0)), new Date())
         : null;
-      const health = docsCount < 3 || (diasRestantes !== null && diasRestantes < 0) ? "red"
-        : docsCount < 5 || (diasRestantes !== null && diasRestantes < 30) ? "yellow" : "green";
+      // Usar a mesma lógica EVM do Painel Principal (IDC, IDP, dias, glosa)
+      const health = calcHealth(o as any, obraMeds);
       return { ...o, docsCount, totalReceitas, totalDesp, diasRestantes, health, medsCount: obraMeds.length };
     });
   }, [obras, medicoes, despesas, docs]);

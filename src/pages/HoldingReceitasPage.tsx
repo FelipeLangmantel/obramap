@@ -150,15 +150,20 @@ export default function HoldingReceitasPage() {
   });
 
   // ─── Realtime: auto-update when medicoes_ple changes ───
+  // Filtro por obra_id (IN lista de obras da empresa) não é suportado diretamente
+  // pelo realtime do Supabase. Usamos channel por company_id como namespace
+  // para evitar invalidações cruzadas entre empresas diferentes.
   useEffect(() => {
+    if (!company?.id) return;
+    const channelName = `holding-receitas-${company.id}`;
     const channel = supabase
-      .channel("holding-receitas-realtime")
+      .channel(channelName)
       .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["holding-receitas"] });
+        queryClient.invalidateQueries({ queryKey: ["holding-receitas", company.id] });
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [queryClient]);
+  }, [queryClient, company?.id]);
 
   const obras = data?.obras || [];
   const medicoes = data?.medicoes || [];

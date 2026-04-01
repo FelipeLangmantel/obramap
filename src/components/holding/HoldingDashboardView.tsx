@@ -242,7 +242,7 @@ export let HEALTH_THRESHOLDS = { ...DEFAULT_HEALTH_THRESHOLDS };
  *
  * Obras não iniciadas ou sem dados suficientes retornam amarelo (neutro).
  */
-function calcHealth(
+export function calcHealth(
   obra: ObraPortfolio,
   allMedicoes: MedicaoPle[]
 ): "green" | "yellow" | "red" | "gray" {
@@ -279,6 +279,8 @@ function calcHealth(
     const pctTempo = Math.min(1, diasDecorridos / prazoTotal); // % do prazo consumido
 
     if (pctTempo > 0.05 && pctFisico >= 0) {
+      // Obra com prazo 100% consumido e execução física incompleta → sempre vermelho
+      if (pctTempo >= 1 && pctFisico < 1) return "red";
       const idp = pctTempo > 0 ? pctFisico / pctTempo : 1;
       if (idp < T.idp_red) return "red";
       if (idp < T.idp_yellow) return "yellow";
@@ -680,15 +682,25 @@ export default function HoldingDashboardView() {
         const novoValorInicial = Number(newObraForm.valor_contrato) * newObraForm.percentual_andamento / 100;
 
         // Atualizar a medição de saldo inicial existente
-        await supabase.from("medicoes_ple")
+        const { error: errMed } = await supabase.from("medicoes_ple")
           .update({ valor_medicao: novoValorInicial })
           .eq("obra_id", editingObra.id)
           .eq("num_medicao", "Saldo Inicial");
+        if (errMed) {
+          toast.error("Obra atualizada, mas erro ao recalcular saldo inicial da medição. Verifique os valores.");
+          setSavingObra(false);
+          return;
+        }
 
         // Atualizar o valor_medido_inicial na obra
-        await supabase.from("obras_portfolio").update({
+        const { error: errObra } = await supabase.from("obras_portfolio").update({
           valor_medido_inicial: novoValorInicial,
         }).eq("id", editingObra.id);
+        if (errObra) {
+          toast.error("Medição atualizada, mas erro ao sincronizar valor_medido_inicial na obra.");
+          setSavingObra(false);
+          return;
+        }
 
         toast.success(`Obra atualizada! Saldo inicial recalculado para ${BRL.format(novoValorInicial)}.`);
       } else {
