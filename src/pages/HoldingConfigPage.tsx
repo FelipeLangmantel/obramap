@@ -193,7 +193,8 @@ export default function HoldingConfigPage() {
 
   const toggleDocAtivo = async (d: DocTipo) => {
     if (!isCompanyAdmin) return;
-    await supabase.from("holding_doc_tipos").update({ ativo: !d.ativo } as any).eq("id", d.id);
+    const { error } = await supabase.from("holding_doc_tipos").update({ ativo: !d.ativo } as any).eq("id", d.id);
+    if (error) { toast.error("Erro ao atualizar status: " + error.message); return; }
     invalidate();
   };
 
