@@ -1588,6 +1588,7 @@ function AditivosTab({ obraId }: { obraId: string }) {
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
+  const [deletingAditivoId, setDeletingAditivoId] = useState<string | null>(null);
   const [aditivos, setAditivos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
