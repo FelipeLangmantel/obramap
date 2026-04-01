@@ -1342,7 +1342,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(m)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMedicao(m.id)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeletingMedicaoId(m.id)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
