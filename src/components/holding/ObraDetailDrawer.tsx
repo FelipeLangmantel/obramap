@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback, useMemo, ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -487,6 +491,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
   const [obraDocsMap, setObraDocsMap] = useState<Map<string, any>>(new Map());
   const [docFilesMap, setDocFilesMap] = useState<Map<string, DocFile[]>>(new Map());
   const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
+  const [deletingFile, setDeletingFile] = useState<DocFile | null>(null);
 
   const [legacyDocs, setLegacyDocs] = useState<Record<string, boolean> | null>(null);
   const [legacyDocId, setLegacyDocId] = useState<string | null>(null);
@@ -678,7 +683,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
   };
 
   const handleFileDelete = async (file: DocFile) => {
-    if (!confirm(`Excluir "${file.file_name}"?`)) return;
+    setDeletingFile(null);
 
     try {
       // DB primeiro: se falhar, o arquivo permanece no storage (consistência preferível)
@@ -790,7 +795,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
                                 <Download className="h-3.5 w-3.5" />
                               </Button>
                               {f.uploaded_by === user?.id && (
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleFileDelete(f)} title="Excluir">
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => setDeletingFile(f)} title="Excluir">
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               )}
@@ -815,10 +820,29 @@ function DocumentosTab({ obraId }: { obraId: string }) {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {renderDocCard("Pré Obra", <FileText className="h-4 w-4" />, docObraTipos, PRE_OBRA_FIELDS)}
-      {renderDocCard("Ensaios e Projetos", <FlaskConical className="h-4 w-4" />, ensaiosTipos, ENSAIOS_PROJETOS_FIELDS)}
-    </div>
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {renderDocCard("Pré Obra", <FileText className="h-4 w-4" />, docObraTipos, PRE_OBRA_FIELDS)}
+        {renderDocCard("Ensaios e Projetos", <FlaskConical className="h-4 w-4" />, ensaiosTipos, ENSAIOS_PROJETOS_FIELDS)}
+      </div>
+
+      <AlertDialog open={!!deletingFile} onOpenChange={(open) => !open && setDeletingFile(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir arquivo</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir "{deletingFile?.file_name}"? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deletingFile && handleFileDelete(deletingFile)}>
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -884,6 +908,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
+  const [deletingMedicaoId, setDeletingMedicaoId] = useState<string | null>(null);
   const [medicoes, setMedicoes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -1054,7 +1079,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
 
   const deleteMedicao = async (id: string) => {
     if (!requireEdit()) return;
-    if (!confirm("Excluir esta medição? Esta ação não pode ser desfeita.")) return;
+    setDeletingMedicaoId(null);
     const medicaoSnap = medicoes.find(m => m.id === id);
     const { error } = await supabase.from("medicoes_ple").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir medição"); return; }
@@ -1225,6 +1250,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
   );
 
   return (
+    <>
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h4 className="font-semibold text-sm">Medições ({medicoes.length})</h4>
@@ -1317,7 +1343,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(m)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteMedicao(m.id)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeletingMedicaoId(m.id)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -1332,6 +1358,24 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
         </Table>
       </div>
     </div>
+
+      <AlertDialog open={!!deletingMedicaoId} onOpenChange={(open) => !open && setDeletingMedicaoId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir medição</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta medição? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deletingMedicaoId && deleteMedicao(deletingMedicaoId)}>
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 /* ══════════════════════════════════════════════
@@ -1544,6 +1588,7 @@ function AditivosTab({ obraId }: { obraId: string }) {
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
+  const [deletingAditivoId, setDeletingAditivoId] = useState<string | null>(null);
   const [aditivos, setAditivos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -1591,7 +1636,7 @@ function AditivosTab({ obraId }: { obraId: string }) {
 
   const deleteAditivo = async (id: string) => {
     if (!requireEdit()) return;
-    if (!confirm("Excluir este aditivo?")) return;
+    setDeletingAditivoId(null);
     const aditivoSnap = aditivos.find(a => a.id === id);
     const { error } = await supabase.from("aditivos_contratos").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir"); return; }
@@ -1616,6 +1661,7 @@ function AditivosTab({ obraId }: { obraId: string }) {
   const totalSupressao = aditivos.reduce((s, a) => s + (a.supressao_valor || 0), 0);
 
   return (
+    <>
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 flex-wrap">
@@ -1694,7 +1740,7 @@ function AditivosTab({ obraId }: { obraId: string }) {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteAditivo(a.id)}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeletingAditivoId(a.id)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </TableCell>
@@ -1707,6 +1753,24 @@ function AditivosTab({ obraId }: { obraId: string }) {
         </Table>
       </div>
     </div>
+
+      <AlertDialog open={!!deletingAditivoId} onOpenChange={(open) => !open && setDeletingAditivoId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir aditivo</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este aditivo? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deletingAditivoId && deleteAditivo(deletingAditivoId)}>
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
