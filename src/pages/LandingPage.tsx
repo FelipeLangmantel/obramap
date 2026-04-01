@@ -91,19 +91,19 @@ onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demon
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="flex flex-col gap-6">
             <h1 className="text-4xl md:text-5xl xl:text-6xl font-bold leading-[1.1] tracking-tight">
-              Controle total da produção de{" "}
-              <span className="text-[#e67e22]">obras habitacionais</span>
+              Você sabe o que está acontecendo em cada{" "}
+              <span className="text-[#e67e22]">unidade da sua obra</span>{" "}agora?
             </h1>
             <p className="text-[#8a8a9a] text-lg leading-relaxed max-w-xl">
-              Planeje, execute e controle sua obra com visão real da produção, equipes e custos por casa — tudo integrado em um único sistema.
+              ObraMap é o único sistema construído para obras habitacionais em escala — horizontal ou vertical. Do planejamento à entrega, cada unidade controlada, cada real projetado, cada decisão embasada em dados reais.
             </p>
 
             <div className="flex flex-col gap-3 mt-2">
               {[
-                "Planejamento que se ajusta automaticamente conforme a produção",
-                "Controle visual da obra com mapa e visualização 3D por unidade",
-                "Dimensionamento de equipes com cálculo automático de capacidade",
-                "Integração total entre planejamento, execução, medições e custos",
+                "Planejamento que se ajusta conforme a produção avança — automático",
+                "Status visual de cada unidade no mapa ou em 3D — sem relatório",
+                "Saúde financeira de cada obra calculada automaticamente",
+                "Simulação de desembolso antes de qualquer compra acontecer",
               ].map((item) => (
                 <div key={item} className="flex items-start gap-3">
                   <CheckCircle2 className="w-5 h-5 text-[#e67e22] flex-shrink-0 mt-0.5" />
@@ -118,7 +118,7 @@ onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demon
                 className="bg-[#e67e22] hover:bg-[#d35400] text-white font-semibold rounded-lg text-base px-8 h-12"
                 onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demonstração%20do%20ObraMap", "_blank")}
               >
-                Solicitar demonstração
+                Ver minha obra funcionando
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
               <Button
@@ -157,15 +157,15 @@ onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demon
             Sua obra está rodando <span className="text-[#e67e22]">no escuro</span>
           </h2>
           <p className="text-[#8a8a9a] text-base leading-relaxed">
-            Você planeja em uma planilha, controla custo em outra, acompanha produção por WhatsApp e mede serviços manualmente.
+            Você planeja em uma planilha, controla custo em outra, acompanha produção por WhatsApp e mede serviços manualmente. Seja em casas, sobrados ou apartamentos — o problema é o mesmo.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           {[
-            { icon: AlertTriangle, title: "O prazo escapa", desc: "Sem visão real, os atrasos só aparecem quando é tarde demais." },
-            { icon: DollarSign, title: "O custo estoura", desc: "Retrabalho e falta de controle geram desperdícios invisíveis." },
-            { icon: Search, title: "Problema descoberto tarde", desc: "Sem rastreabilidade, erros de execução passam despercebidos." },
+            { icon: AlertTriangle, title: "O prazo escapa", desc: "Sem visão real por unidade, os atrasos só aparecem quando já é tarde demais." },
+            { icon: DollarSign, title: "O custo estoura", desc: "Retrabalho e falta de controle geram desperdícios invisíveis em cada unidade executada." },
+            { icon: Search, title: "Problema descoberto tarde", desc: "Sem rastreabilidade por unidade, erros de execução passam despercebidos por semanas." },
           ].map((item) => (
             <div
               key={item.title}
@@ -182,11 +182,11 @@ onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demon
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto">
           {[
-            "Falta de visão real da produção",
-            "Dificuldade de dimensionar equipes",
-            "Retrabalho por falta de controle",
+            "Falta de visão real da produção por unidade",
+            "Dificuldade de dimensionar equipes para o ritmo da obra",
+            "Retrabalho por falta de controle de execução",
             "Medições demoradas e sujeitas a erro",
-            "Planejamento que não reflete a realidade",
+            "Planejamento que não reflete a realidade do canteiro",
           ].map((pain) => (
             <div key={pain} className="flex items-center gap-3 bg-[#1a1a2e]/60 rounded-lg px-4 py-3 border border-[#2a2a45]/50">
               <div className="w-2 h-2 rounded-full bg-red-400 flex-shrink-0" />
@@ -201,10 +201,10 @@ onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demon
         <div className="text-center max-w-3xl mx-auto mb-14">
           <SectionBadge>A Solução</SectionBadge>
           <h2 className="text-3xl md:text-4xl font-bold mb-5">
-            Um sistema pensado para <span className="text-[#e67e22]">obras em série</span>
+            Um sistema pensado para <span className="text-[#e67e22]">obras habitacionais em série</span>
           </h2>
           <p className="text-[#8a8a9a] text-base leading-relaxed">
-            O ObraMap conecta todas as etapas da obra em um único fluxo. Tudo integrado, atualizado em tempo real.
+            Horizontal ou vertical. Casas, sobrados ou apartamentos. O ObraMap conecta todas as etapas da obra em um único fluxo, com controle por unidade do início ao fim.
           </p>
         </div>
 
@@ -222,10 +222,10 @@ onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demon
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-4xl mx-auto">
           {[
-            { icon: Target, text: "Controle por casa, não só por etapa" },
-            { icon: Layers, text: "Produção conectada ao planejamento" },
+            { icon: Target, text: "Controle por unidade, não só por etapa" },
+            { icon: Layers, text: "Produção conectada ao planejamento em tempo real" },
             { icon: Users, text: "Equipes dimensionadas com base em produtividade real" },
-            { icon: BarChart3, text: "Dados confiáveis para tomada de decisão" },
+            { icon: BarChart3, text: "Dados confiáveis para tomada de decisão da diretoria" },
           ].map((item) => (
             <div key={item.text} className="flex items-start gap-4 bg-[#16213e]/40 border border-[#2a2a45] rounded-xl p-5">
               <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#e67e22]/10 flex items-center justify-center">
@@ -251,25 +251,25 @@ onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demon
             {
               step: "01",
               title: "Estruture sua obra",
-              desc: "Defina etapas, serviços e custos uma única vez.",
+              desc: "Defina quadras, torres, blocos, serviços e custos uma única vez. Funciona para qualquer tipologia.",
               icon: Layers,
             },
             {
               step: "02",
               title: "Planeje com base na produção",
-              desc: "O sistema calcula capacidade, equipes e duração automaticamente.",
+              desc: "O sistema calcula capacidade, equipes e duração automaticamente, por unidade e por período.",
               icon: CalendarClock,
             },
             {
               step: "03",
               title: "Execute e acompanhe em tempo real",
-              desc: "Veja o avanço por casa, por equipe e por serviço.",
+              desc: "Veja o avanço por unidade, por equipe e por serviço — no mapa 2D ou na visualização 3D.",
               icon: BarChart3,
             },
             {
               step: "04",
               title: "Meça e controle financeiro",
-              desc: "Medições automáticas conectadas ao que foi executado.",
+              desc: "Medições integradas ao que foi executado. Saúde financeira de cada obra calculada automaticamente.",
               icon: DollarSign,
             },
           ].map((item) => (
@@ -301,28 +301,33 @@ onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demon
           {[
             {
               icon: Map,
-              title: "Controle visual da obra",
-              desc: "Mapa e visualização 3D com status de cada casa em tempo real.",
-            },
-            {
-              icon: Users,
-              title: "Gestão de produtividade e equipes",
-              desc: "Saiba quantas casas cada equipe entrega e dimensione corretamente.",
+              title: "Controle visual por unidade",
+              desc: "Mapa interativo e visualização 3D com o status de cada unidade — casa, sobrado ou apartamento — em tempo real.",
             },
             {
               icon: CalendarClock,
-              title: "Planejamento inteligente",
-              desc: "Cronograma ajustado automaticamente com base na execução real.",
+              title: "Planejamento inteligente em 4 camadas",
+              desc: "Estratégico, por período, semanal e com Linha de Balanço. Cronograma que se ajusta com a execução real.",
             },
             {
-              icon: Layers,
-              title: "Integração total",
-              desc: "Planejamento, produção, medições e custos conectados.",
+              icon: BarChart3,
+              title: "Saúde financeira automática",
+              desc: "IDC e IDP calculados automaticamente para cada obra. O diretor vê verde, amarelo ou vermelho — sem planilha.",
+            },
+            {
+              icon: DollarSign,
+              title: "Simulação de desembolso antecipado",
+              desc: "Projete o fluxo de caixa de materiais antes de qualquer pedido de compra. Não depois da nota chegar.",
+            },
+            {
+              icon: Users,
+              title: "Empreiteiros e PLE integrados",
+              desc: "Medições de empreiteiro conectadas ao planejamento e ao financeiro. Tudo no mesmo sistema.",
             },
             {
               icon: Search,
-              title: "Rastreabilidade completa",
-              desc: "Saiba quem executou cada serviço em cada unidade.",
+              title: "Rastreabilidade completa por unidade",
+              desc: "Saiba quem executou cada serviço em cada unidade, quando foi medido e quanto foi pago.",
             },
           ].map((item) => (
             <div
@@ -393,25 +398,26 @@ onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demon
         <div className="text-center max-w-3xl mx-auto mb-14">
           <SectionBadge>Para quem é</SectionBadge>
           <h2 className="text-3xl md:text-4xl font-bold mb-5">
-            Feito para quem constrói <span className="text-[#e67e22]">em escala</span>
+            Feito para quem constrói <span className="text-[#e67e22]">unidades habitacionais em escala</span>
           </h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
           {[
-            { icon: Building2, text: "Construtoras de casas populares" },
-            { icon: Map, text: "Loteamentos e condomínios horizontais" },
-            { icon: Layers, text: "Obras com produção repetitiva" },
-            { icon: ShieldCheck, text: "Empresas que precisam de controle real de execução" },
+            { icon: Building2, text: "Construtoras de obras horizontais", sub: "Casas, sobrados, loteamentos e condomínios horizontais." },
+            { icon: Layers, text: "Construtoras de obras verticais", sub: "Edifícios residenciais, apartamentos e torres em série." },
+            { icon: Target, text: "Obras com produção repetitiva", sub: "Qualquer empreendimento com unidades padronizadas." },
+            { icon: ShieldCheck, text: "Empresas que precisam de controle real", sub: "Gestores que não aceitam descobrir problemas só no fim do mês." },
           ].map((item) => (
             <div
               key={item.text}
-              className="rounded-xl border border-[#2a2a45] bg-[#16213e]/40 p-6 text-center flex flex-col items-center gap-4"
+              className="rounded-xl border border-[#2a2a45] bg-[#16213e]/40 p-6 text-center flex flex-col items-center gap-3"
             >
               <div className="w-12 h-12 rounded-xl bg-[#e67e22]/10 flex items-center justify-center">
                 <item.icon className="w-6 h-6 text-[#e67e22]" />
               </div>
-              <span className="text-[#b0b0c0] text-sm leading-relaxed">{item.text}</span>
+              <span className="text-white text-sm font-semibold leading-snug">{item.text}</span>
+              <span className="text-[#8a8a9a] text-xs leading-relaxed">{item.sub}</span>
             </div>
           ))}
         </div>
@@ -421,10 +427,10 @@ onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demon
       <Section dark>
         <div className="text-center max-w-2xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold mb-5">
-            Quer ter <span className="text-[#e67e22]">controle real</span> da sua obra?
+            Quer ver cada unidade da sua obra <span className="text-[#e67e22]">sob controle</span>?
           </h2>
           <p className="text-[#8a8a9a] text-base leading-relaxed mb-8">
-            Veja na prática como o ObraMap pode organizar sua produção e melhorar seus resultados.
+            Veja na prática como o ObraMap funciona para o seu tipo de obra — horizontal, vertical ou os dois.
           </p>
           <Button
             size="lg"
@@ -445,7 +451,7 @@ onClick={() => window.open("https://wa.me/5553999307786?text=Quero%20uma%20demon
             <span className="text-white font-semibold text-sm">ObraMap</span>
           </div>
           <p className="text-[#5a5a70] text-xs">
-            © {new Date().getFullYear()} ObraMap — Plataforma de gestão de obras habitacionais
+            © {new Date().getFullYear()} ObraMap — Gestão de obras habitacionais horizontais e verticais
           </p>
         </div>
       </footer>
