@@ -68,7 +68,7 @@ function Index() {
   });
   const location = useLocation();
   const { selectedHouse, isLoading, projects, currentProject, setCurrentProject } = useConstruction();
-  const { canAccessProject } = useAuth();
+  const { canAccessProject, canAccessMenu, isLoading: authLoading } = useAuth();
 
   // ✅ Persistir estado real da rota
   useEffect(() => {
@@ -156,6 +156,41 @@ function Index() {
     console.log("[INDEX] Auto-selecting first accessible project:", accessibleProjects[0].id);
     setCurrentProject(accessibleProjects[0].id);
   }, [isLoading, projects.length, currentProject?.id, canAccessProject, setCurrentProject]);
+
+  // ─── Mapa view → permissionId (espelha AppSidebar) ───────────────────────
+  // Usado para proteger a restauração do sessionStorage: se o usuário não tem
+  // permissão para a view salva, volta para 'home' silenciosamente.
+  const VIEW_PERMISSION_MAP: Partial<Record<ViewType, string>> = {
+    home:               "painel_inicial",
+    map:                "mapa",
+    "interactive-map":  "mapa_interativo",
+    "3d-map":           "mapa_3d",
+    charts:             "graficos",
+    "board-decisions":  "diretoria",
+    production:         "producao",
+    productivity:       "productivity",
+    planning:           "planejamento_semanal",
+    "smart-planning":   "smart_planning",
+    delivery:           "entrega",
+    costs:              "custos",
+    "financial-flow":   "financeiro",
+    supplies:           "suprimentos",
+    contractors:        "empreiteiros",
+    industrialization:  "industrializacao",
+    "holding-dashboard":"holding",
+  };
+
+  // ─── Proteção de view restaurada ─────────────────────────────────────────
+  // Roda após o auth carregar. Se a view ativa (vinda do sessionStorage) não
+  // for permitida para este usuário, redireciona silenciosamente para 'home'.
+  useEffect(() => {
+    if (authLoading) return;
+    const requiredPermission = VIEW_PERMISSION_MAP[activeView];
+    if (requiredPermission && !canAccessMenu(requiredPermission)) {
+      setActiveView("home");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading]);
 
   const mapGridRef = useRef<HTMLDivElement>(null);
   const printAreaRef = useRef<HTMLDivElement>(null);
