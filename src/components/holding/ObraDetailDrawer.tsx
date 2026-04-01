@@ -1357,6 +1357,24 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
         </Table>
       </div>
     </div>
+
+      <AlertDialog open={!!deletingMedicaoId} onOpenChange={(open) => !open && setDeletingMedicaoId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir medição</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta medição? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deletingMedicaoId && deleteMedicao(deletingMedicaoId)}>
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 /* ══════════════════════════════════════════════
