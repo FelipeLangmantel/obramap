@@ -1752,6 +1752,24 @@ function AditivosTab({ obraId }: { obraId: string }) {
         </Table>
       </div>
     </div>
+
+      <AlertDialog open={!!deletingAditivoId} onOpenChange={(open) => !open && setDeletingAditivoId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir aditivo</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este aditivo? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deletingAditivoId && deleteAditivo(deletingAditivoId)}>
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
