@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { format, addDays, differenceInDays } from "date-fns";
 import { calcHealth } from "@/components/holding/HoldingDashboardView";
 const parseLocalDate = (d: string) => { const [y, m, day] = d.split("-").map(Number); return new Date(y, m - 1, day); };
-import jsPDF from "jspdf";
+
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
