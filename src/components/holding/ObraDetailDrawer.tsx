@@ -683,7 +683,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
   };
 
   const handleFileDelete = async (file: DocFile) => {
-    if (!confirm(`Excluir "${file.file_name}"?`)) return;
+    setDeletingFile(null);
 
     try {
       // DB primeiro: se falhar, o arquivo permanece no storage (consistência preferível)
