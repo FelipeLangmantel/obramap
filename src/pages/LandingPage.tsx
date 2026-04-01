@@ -416,7 +416,34 @@ export default function LandingPage() {
         </div>
       </Section>
 
-      {/* ═══ 8. CTA FINAL ═══ */}
+      {/* ═══ 8. MISSÃO ═══ */}
+      <Section>
+        <div className="text-center max-w-3xl mx-auto">
+          <SectionBadge>Nossa missão</SectionBadge>
+          <h2 className="text-3xl md:text-4xl font-bold mb-6">
+            Clareza para quem <span className="text-[#e67e22]">constrói o Brasil</span>
+          </h2>
+          <p className="text-[#8a8a9a] text-base leading-relaxed mb-10">
+            Dar às construtoras habitacionais a visibilidade que precisam para construir melhor — controlando cada unidade, cada equipe e cada real investido, em tempo real. Horizontal ou vertical. 10 unidades ou 2.000. O ObraMap foi construído para que nenhuma unidade seja perdida de vista.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-4xl mx-auto text-left">
+            {[
+              { title: "Clareza antes de relatório", desc: "A informação certa tem que ser visual, imediata e sem intermediário." },
+              { title: "Construído para o canteiro", desc: "Partimos de como obras habitacionais realmente funcionam — não adaptamos um ERP genérico." },
+              { title: "Crescimento com controle", desc: "Escalar de 10 para 2.000 unidades sem perder a granularidade de cada uma." },
+              { title: "Dado que protege", desc: "Segurança, rastreabilidade e auditoria — o patrimônio da construtora está nos dados." },
+            ].map((item) => (
+              <div key={item.title} className="rounded-xl border border-[#2a2a45] bg-[#16213e]/40 p-5">
+                <div className="w-2 h-2 rounded-full bg-[#e67e22] mb-3" />
+                <h3 className="text-white text-sm font-semibold mb-2">{item.title}</h3>
+                <p className="text-[#8a8a9a] text-xs leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Section>
+
+      {/* ═══ 9. CTA FINAL ═══ */}
       <Section dark>
         <div className="text-center max-w-2xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold mb-5">
