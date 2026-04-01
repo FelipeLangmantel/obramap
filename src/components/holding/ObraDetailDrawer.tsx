@@ -603,6 +603,13 @@ function DocumentosTab({ obraId }: { obraId: string }) {
     const obraDoc = obraDocsMap.get(docTipoId);
     if (!obraDoc?.id || !company?.id) return;
 
+    const ALLOWED_EXTENSIONS = ['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx', 'xls', 'xlsx'];
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || '';
+    if (!ALLOWED_EXTENSIONS.includes(fileExt)) {
+      toast.error("Tipo de arquivo não permitido. Aceitos: PDF, PNG, JPG, DOC, DOCX, XLS, XLSX");
+      return;
+    }
+
     if (file.size > MAX_FILE_SIZE) {
       toast.error("Arquivo muito grande. Máximo: 20MB");
       return;
