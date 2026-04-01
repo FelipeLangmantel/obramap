@@ -795,7 +795,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
                                 <Download className="h-3.5 w-3.5" />
                               </Button>
                               {f.uploaded_by === user?.id && (
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleFileDelete(f)} title="Excluir">
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => setDeletingFile(f)} title="Excluir">
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               )}
