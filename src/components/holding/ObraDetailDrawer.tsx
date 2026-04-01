@@ -46,6 +46,39 @@ function useInvalidateHolding() {
   };
 }
 
+/**
+ * Recalcula e persiste o percentual_andamento em obras_portfolio
+ * com base nas medições aprovadas / valor do contrato.
+ * Chamado após qualquer add/update/delete de medição.
+ * Só atualiza se valorContrato > 0 — sem contrato não há base de cálculo.
+ */
+async function recalcularPercentualAndamento(
+  obraId: string,
+  valorContrato: number
+): Promise<void> {
+  if (valorContrato <= 0) return;
+  try {
+    // Buscar todas as medições aprovadas (incluindo Saldo Inicial)
+    const { data: meds } = await supabase
+      .from("medicoes_ple")
+      .select("valor_medicao, status_medicao")
+      .eq("obra_id", obraId)
+      .eq("status_medicao", "aprovada");
+
+    const totalAprovado = (meds || []).reduce(
+      (s, m) => s + (Number(m.valor_medicao) || 0), 0
+    );
+    const novoPercentual = Math.min(100, (totalAprovado / valorContrato) * 100);
+
+    await supabase
+      .from("obras_portfolio")
+      .update({ percentual_andamento: Math.round(novoPercentual * 10) / 10 })
+      .eq("id", obraId);
+  } catch (e) {
+    console.error("[recalcularPercentualAndamento] Erro:", e);
+  }
+}
+
 async function registrarLog(
   obraId: string,
   tabela: string,
@@ -1015,6 +1048,8 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       {}, { ...form }
     );
 
+    // Recalcular % andamento físico com base nas medições aprovadas
+    await recalcularPercentualAndamento(obraId, valorContrato);
     toast.success("Medição adicionada");
     invalidateHolding();
     setShowForm(false);
@@ -1070,6 +1105,8 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       { ...editingMedicao }, { ...editForm }
     );
 
+    // Recalcular % andamento físico com base nas medições aprovadas
+    await recalcularPercentualAndamento(obraId, valorContrato);
     toast.success("Medição atualizada!");
     invalidateHolding();
     setEditingMedicao(null);
@@ -1092,6 +1129,8 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       { ...medicaoSnap }, {}
     );
 
+    // Recalcular % andamento físico com base nas medições aprovadas
+    await recalcularPercentualAndamento(obraId, valorContrato);
     toast.success("Medição excluída.");
     invalidateHolding();
     load();

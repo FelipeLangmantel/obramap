@@ -977,7 +977,20 @@ export default function HoldingDashboardView() {
     const obrasNaoIniciadas = base.filter((o) => o.status === "nao_iniciada").length;
     const alertasCriticos = base.filter((o) => o.health === "red").length;
     const emAndamento = base.filter((o) => o.status === "em_andamento");
-    const andamentoMedio = emAndamento.length > 0 ? Math.round(emAndamento.reduce((s, o) => s + o.percentual_andamento, 0) / emAndamento.length) : 0;
+    // Andamento médio calculado pelo % financeiro real (medições aprovadas / contrato)
+    // Atualiza automaticamente a cada medição aprovada — sem necessidade de input manual
+    const andamentoMedio = emAndamento.length > 0 ? Math.round(
+      emAndamento.reduce((s, o) => {
+        const vc = (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
+        if (vc <= 0) return s + (o.percentual_andamento || 0); // fallback se sem contrato
+        const aprovadas = o.allMedicoes
+          .filter((m) => m.status_medicao === "aprovada")
+          .reduce((ss, m) => ss + (Number(m.valor_medicao) || 0), 0);
+        // Se tem medições aprovadas, usa o financeiro; senão usa o percentual manual
+        const pct = aprovadas > 0 ? (aprovadas / vc) * 100 : (o.percentual_andamento || 0);
+        return s + Math.min(100, pct);
+      }, 0) / emAndamento.length
+    ) : 0;
     const totalUH = base.reduce((s, o) => s + (o.uh || 0), 0);
     return { totalContratos, totalMedido, saldoFaturar, totalMedicoesAprovadas, obrasAtivas, obrasNaoIniciadas, alertasCriticos, andamentoMedio, totalUH };
   }, [obrasFiltradas]);
