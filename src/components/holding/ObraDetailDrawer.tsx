@@ -1636,7 +1636,7 @@ function AditivosTab({ obraId }: { obraId: string }) {
 
   const deleteAditivo = async (id: string) => {
     if (!requireEdit()) return;
-    if (!confirm("Excluir este aditivo?")) return;
+    setDeletingAditivoId(null);
     const aditivoSnap = aditivos.find(a => a.id === id);
     const { error } = await supabase.from("aditivos_contratos").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir"); return; }
