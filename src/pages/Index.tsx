@@ -182,12 +182,15 @@ function Index() {
 
   // ─── Proteção de view restaurada ─────────────────────────────────────────
   // Roda após o auth carregar. Se a view ativa (vinda do sessionStorage) não
-  // for permitida para este usuário, redireciona silenciosamente para 'home'.
+  // for permitida para este usuário, redireciona para a primeira view permitida.
   useEffect(() => {
     if (authLoading) return;
     const requiredPermission = VIEW_PERMISSION_MAP[activeView];
     if (requiredPermission && !canAccessMenu(requiredPermission)) {
-      setActiveView("home");
+      // Encontrar a primeira view que o usuário tem permissão
+      const firstAllowed = (Object.entries(VIEW_PERMISSION_MAP) as [ViewType, string][])
+        .find(([, perm]) => canAccessMenu(perm));
+      setActiveView(firstAllowed ? firstAllowed[0] : "home");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading]);
