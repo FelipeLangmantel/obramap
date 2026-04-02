@@ -645,7 +645,7 @@ export default function HoldingDashboardView() {
     // Validar limite de % baseado nas medições aprovadas
     if (editingObra) {
       const totalMedidoAprovado = (editingObra.allMedicoes || [])
-        .filter(m => m.status_medicao === "aprovada")
+        .filter(m => m.status_medicao !== "nao_iniciada")
         .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
       const valorContrato = Number(newObraForm.valor_contrato) || 0;
       if (valorContrato > 0 && totalMedidoAprovado > 0) {
@@ -1430,7 +1430,7 @@ export default function HoldingDashboardView() {
               <Label className="text-xs">% Andamento Físico</Label>
               {(() => {
                 const totalMedidoAprovado = (editingObra?.allMedicoes || [])
-                  .filter(m => m.status_medicao === "aprovada")
+                  .filter(m => m.status_medicao !== "nao_iniciada")
                   .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
                 const valorContrato = Number(newObraForm.valor_contrato) || 0;
                 const maxPct = valorContrato > 0 && totalMedidoAprovado > 0
