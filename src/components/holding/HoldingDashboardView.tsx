@@ -31,6 +31,8 @@ import {
   BarChart3,
   Eye,
   FileWarning,
+  ChevronDown,
+  ChevronUp,
   Clock,
   CalendarClock,
   FileCheck2,
