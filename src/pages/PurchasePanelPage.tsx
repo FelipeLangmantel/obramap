@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/AppSidebar";
 import {
   AlertTriangle, ChevronLeft, ChevronRight, ChevronDown,
   ShoppingCart, Truck, Clock, DollarSign, Building2,
@@ -58,8 +59,14 @@ export default function PurchasePanelPage() {
     alertsByProject, orders,
   } = usePurchasePanel();
 
+  const [activeView, setActiveView] = useState<string>("purchase-panel");
+
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full bg-background">
+        <AppSidebar activeView={activeView} onViewChange={setActiveView} />
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div className="flex flex-col min-h-screen bg-background">
       <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-3 flex items-center gap-3">
         <SidebarTrigger className="shrink-0" />
         <div className="flex-1">
@@ -452,6 +459,9 @@ function OrdersTab({ orders }: { orders: ReturnType<typeof usePurchasePanel>["or
           </TableBody>
         </Table>
       </div>
-    </>
+        </div>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }
