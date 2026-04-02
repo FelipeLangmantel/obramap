@@ -1707,6 +1707,7 @@ function KpiCard({ icon: Icon, label, value, sub, borderColor, valueColor }: {
 function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onClick: () => void; onEdit: () => void; onDelete: () => void }) {
   const { isCompanyAdmin, canEdit } = useAuth();
   const [healthOpen, setHealthOpen] = useState(false);
+  const [expandedIndicator, setExpandedIndicator] = useState<string | null>(null);
   const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
   const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
   const receitasAprovadas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
