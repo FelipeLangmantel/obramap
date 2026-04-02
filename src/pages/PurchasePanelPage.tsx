@@ -119,7 +119,10 @@ export default function PurchasePanelPage() {
           </TabsContent>
         </Tabs>
       )}
-    </div>
+          </div>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }
 
