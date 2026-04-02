@@ -62,7 +62,7 @@ export default function PurchasePanelPage() {
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
-        <AppSidebar activeView="purchase-panel" onViewChange={() => {}} />
+        <AppSidebar activeView={"purchase-panel" as any} onViewChange={() => {}} />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-3 flex items-center gap-3">
             <SidebarTrigger className="shrink-0" />
