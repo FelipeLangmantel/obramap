@@ -96,6 +96,7 @@ const DEDICATED_ROUTE_MAP: Record<RouteViewType, string> = {
   "holding-insights": "/holding-insights",
   "holding-config": "/holding-config",
   "cashflow-simulator": "/cashflow-simulator",
+  "purchase-panel": "/purchase-panel",
 };
 
 interface AppSidebarProps {
