@@ -244,6 +244,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         { title: "Contrato da Obra", view: "project-contract", icon: FileText, permissionId: "contrato" },
         { title: "Custos da Obra", view: "costs", icon: DollarSign, permissionId: "custos" },
         { title: "Fluxo Financeiro", view: "financial-flow", icon: Wallet, permissionId: "financeiro" },
+        { title: "Painel de Compras", view: "purchase-panel", icon: ShoppingCart, permissionId: "painel_compras" },
         { title: "Suprimentos", view: "supplies", icon: Package, permissionId: "suprimentos" },
         { title: "Empreiteiros", view: "contractors", icon: Truck, permissionId: "empreiteiros" },
         { title: "Industrialização", view: "industrialization", icon: Factory, permissionId: "industrializacao", badge: "BETA" },
