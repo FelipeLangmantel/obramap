@@ -1861,18 +1861,68 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
                 const yellowPct = (ind.threshold_yellow / barMax) * 100;
                 const redPct = (ind.threshold_red / barMax) * 100;
 
+                const isExpanded = expandedIndicator === ind.id;
+                const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+                const rv = ind.rawValues || {};
+
+                const renderDetails = () => {
+                  if (ind.id === "idc") {
+                    return (
+                      <>
+                        <div><span className="text-muted-foreground">Valor Medido Aprovado:</span> <span className="font-medium text-foreground">{BRL.format(Number(rv.medidoAprovado) || 0)}</span></div>
+                        <div><span className="text-muted-foreground">Valor Planejado (% físico × contrato):</span> <span className="font-medium text-foreground">{BRL.format(Number(rv.planejado) || 0)}</span></div>
+                        <div><span className="text-muted-foreground">IDC = medido / planejado =</span> <span className="font-medium text-foreground">{ind.value !== null ? ind.value.toFixed(2) : "—"}</span></div>
+                        <div className="flex gap-2 flex-wrap"><span className="text-emerald-600 dark:text-emerald-400">Verde ≥ 85%</span><span className="text-amber-600 dark:text-amber-400">Amarelo ≥ 70%</span><span className="text-red-600 dark:text-red-400">Vermelho &lt; 70%</span></div>
+                      </>
+                    );
+                  }
+                  if (ind.id === "idp") {
+                    return (
+                      <>
+                        <div><span className="text-muted-foreground">Execução Física:</span> <span className="font-medium text-foreground">{Number(rv.pctFisico || 0).toFixed(1)}%</span></div>
+                        <div><span className="text-muted-foreground">Prazo Consumido:</span> <span className="font-medium text-foreground">{Number(rv.pctTempo || 0).toFixed(1)}% ({rv.diasDecorridos} dias de {rv.prazoTotal} dias)</span></div>
+                        <div><span className="text-muted-foreground">IDP = físico / prazo =</span> <span className="font-medium text-foreground">{ind.value !== null ? ind.value.toFixed(2) : "—"}</span></div>
+                        <div className="flex gap-2 flex-wrap"><span className="text-emerald-600 dark:text-emerald-400">Verde ≥ 90%</span><span className="text-amber-600 dark:text-amber-400">Amarelo ≥ 70%</span><span className="text-red-600 dark:text-red-400">Vermelho &lt; 70%</span></div>
+                      </>
+                    );
+                  }
+                  if (ind.id === "dias_medicao") {
+                    const dtStr = rv.ultimaAprovadaDate ? format(new Date(String(rv.ultimaAprovadaDate) + "T12:00:00"), "dd/MM/yyyy") : "Nenhuma";
+                    return (
+                      <>
+                        <div><span className="text-muted-foreground">Última medição aprovada:</span> <span className="font-medium text-foreground">{dtStr}</span></div>
+                        <div><span className="text-muted-foreground">Dias sem medição:</span> <span className="font-medium text-foreground">{ind.value !== null ? `${ind.value} dias` : "—"}</span></div>
+                        <div className="flex gap-2 flex-wrap"><span className="text-emerald-600 dark:text-emerald-400">Verde &lt; 30 dias</span><span className="text-amber-600 dark:text-amber-400">Amarelo &lt; 60 dias</span><span className="text-red-600 dark:text-red-400">Vermelho ≥ 60 dias</span></div>
+                      </>
+                    );
+                  }
+                  if (ind.id === "glosa") {
+                    return (
+                      <>
+                        <div><span className="text-muted-foreground">Total Medido Aprovado:</span> <span className="font-medium text-foreground">{BRL.format(Number(rv.totalMedidoAprovado) || 0)}</span></div>
+                        <div><span className="text-muted-foreground">Total Glosado:</span> <span className="font-medium text-foreground">{BRL.format(Number(rv.totalGlosa) || 0)}</span></div>
+                        <div><span className="text-muted-foreground">Glosa = glosado / medido =</span> <span className="font-medium text-foreground">{ind.value !== null ? `${(ind.value * 100).toFixed(1)}%` : "—"}</span></div>
+                        <div className="flex gap-2 flex-wrap"><span className="text-emerald-600 dark:text-emerald-400">Verde &lt; 5%</span><span className="text-amber-600 dark:text-amber-400">Amarelo &lt; 15%</span><span className="text-red-600 dark:text-red-400">Vermelho ≥ 15%</span></div>
+                      </>
+                    );
+                  }
+                  return null;
+                };
+
                 return (
-                  <div key={ind.id} className={`rounded-md border p-2 ${colors.border} ${colors.bg}`}>
+                  <div key={ind.id} className={`rounded-md border p-2 ${colors.border} ${colors.bg} cursor-pointer`} onClick={() => setExpandedIndicator(isExpanded ? null : ind.id)}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] font-semibold text-foreground">{ind.label}</span>
-                      <Badge variant="secondary" className={`text-[9px] h-4 px-1.5 ${colors.bg} ${colors.text} border ${colors.border}`}>
-                        {ind.displayValue}
-                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <Badge variant="secondary" className={`text-[9px] h-4 px-1.5 ${colors.bg} ${colors.text} border ${colors.border}`}>
+                          {ind.displayValue}
+                        </Badge>
+                        {isExpanded ? <ChevronUp className="h-3 w-3 text-muted-foreground" /> : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
+                      </div>
                     </div>
                     {/* Threshold bar */}
                     {ind.value !== null && (
                       <div className="relative h-2 bg-muted rounded-full overflow-hidden mb-1">
-                        {/* Threshold markers */}
                         {ind.higherIsBetter ? (
                           <>
                             <div className="absolute top-0 h-full bg-red-300/40 dark:bg-red-800/40" style={{ left: 0, width: `${redPct}%` }} />
@@ -1886,7 +1936,6 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
                             <div className="absolute top-0 h-full bg-red-300/40 dark:bg-red-800/40" style={{ left: `${redPct}%`, width: `${100 - redPct}%` }} />
                           </>
                         )}
-                        {/* Value indicator */}
                         <div
                           className={`absolute top-0 h-full rounded-full ${ind.status === "green" ? "bg-emerald-500" : ind.status === "yellow" ? "bg-amber-500" : ind.status === "red" ? "bg-red-500" : "bg-muted-foreground"}`}
                           style={{ width: `${barPct}%`, maxWidth: "100%" }}
@@ -1894,6 +1943,11 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
                       </div>
                     )}
                     <p className="text-[9px] text-muted-foreground leading-tight">{ind.description}</p>
+                    {isExpanded && (
+                      <div className="bg-background/60 rounded p-2 mt-1 text-[9px] space-y-0.5">
+                        {renderDetails()}
+                      </div>
+                    )}
                   </div>
                 );
               })}
