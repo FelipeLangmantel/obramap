@@ -28,6 +28,7 @@ import HoldingPrdPage from "./pages/HoldingPrdPage";
 import HoldingInsightsPage from "./pages/HoldingInsightsPage";
 import HoldingConfigPage from "./pages/HoldingConfigPage";
 import CashflowSimulatorPage from "./pages/CashflowSimulatorPage";
+import PurchasePanelPage from "./pages/PurchasePanelPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
