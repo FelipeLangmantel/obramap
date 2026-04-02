@@ -60,9 +60,12 @@ export default function PurchasePanelPage() {
   } = usePurchasePanel();
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-3 flex items-center gap-3">
-        <SidebarTrigger className="shrink-0" />
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full bg-background">
+        <AppSidebar activeView="purchase-panel" onViewChange={() => {}} />
+        <div className="flex-1 flex flex-col min-w-0">
+          <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-3 flex items-center gap-3">
+            <SidebarTrigger className="shrink-0" />
         <div className="flex-1">
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
             <ShoppingCart className="h-5 w-5 text-primary" />
