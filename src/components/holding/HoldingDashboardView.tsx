@@ -645,7 +645,7 @@ export default function HoldingDashboardView() {
     // Validar limite de % baseado nas medições aprovadas
     if (editingObra) {
       const totalMedidoAprovado = (editingObra.allMedicoes || [])
-        .filter(m => m.status_medicao !== "nao_iniciada" && m.num_medicao !== "Saldo Inicial")
+        .filter(m => (m.status_medicao === "enviada" || m.status_medicao === "aprovada") && m.num_medicao !== "Saldo Inicial")
         .reduce((s, m) => {
           if (m.status_medicao === "aprovada") {
             return s + (Number(m.valor_acatado ?? m.valor_medicao) || 0);
@@ -1435,7 +1435,7 @@ export default function HoldingDashboardView() {
               <Label className="text-xs">% Andamento Físico</Label>
               {(() => {
                 const totalMedidoAprovado = (editingObra?.allMedicoes || [])
-                  .filter(m => m.status_medicao !== "nao_iniciada" && m.num_medicao !== "Saldo Inicial")
+                  .filter(m => (m.status_medicao === "enviada" || m.status_medicao === "aprovada") && m.num_medicao !== "Saldo Inicial")
                   .reduce((s, m) => {
                     if (m.status_medicao === "aprovada") {
                       return s + (Number(m.valor_acatado ?? m.valor_medicao) || 0);
