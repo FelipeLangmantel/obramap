@@ -646,7 +646,12 @@ export default function HoldingDashboardView() {
     if (editingObra) {
       const totalMedidoAprovado = (editingObra.allMedicoes || [])
         .filter(m => m.status_medicao !== "nao_iniciada")
-        .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+        .reduce((s, m) => {
+          if (m.status_medicao === "aprovada") {
+            return s + (Number(m.valor_acatado ?? m.valor_medicao) || 0);
+          }
+          return s + (Number(m.valor_medicao) || 0);
+        }, 0);
       const valorContrato = Number(newObraForm.valor_contrato) || 0;
       if (valorContrato > 0 && totalMedidoAprovado > 0) {
         const maxPct = Math.min(100, Math.round((totalMedidoAprovado / valorContrato) * 1000) / 10);
@@ -1431,7 +1436,12 @@ export default function HoldingDashboardView() {
               {(() => {
                 const totalMedidoAprovado = (editingObra?.allMedicoes || [])
                   .filter(m => m.status_medicao !== "nao_iniciada")
-                  .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+                  .reduce((s, m) => {
+                    if (m.status_medicao === "aprovada") {
+                      return s + (Number(m.valor_acatado ?? m.valor_medicao) || 0);
+                    }
+                    return s + (Number(m.valor_medicao) || 0);
+                  }, 0);
                 const valorContrato = Number(newObraForm.valor_contrato) || 0;
                 const maxPct = valorContrato > 0 && totalMedidoAprovado > 0
                   ? Math.min(100, Math.round((totalMedidoAprovado / valorContrato) * 1000) / 10)
