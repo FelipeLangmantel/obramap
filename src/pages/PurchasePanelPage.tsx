@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, getDay,
-  addMonths, subMonths, isSameMonth, isToday, isBefore, startOfDay,
+  addMonths, subMonths, isToday, isBefore, startOfDay,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 

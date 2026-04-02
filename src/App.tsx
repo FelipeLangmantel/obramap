@@ -139,6 +139,7 @@ const App = () => {
                   <Route path="/holding-insights" element={<HoldingInsightsPage />} />
                   <Route path="/holding-config" element={<HoldingConfigPage />} />
                   <Route path="/cashflow-simulator" element={<CashflowSimulatorPage />} />
+                  <Route path="/purchase-panel" element={<PurchasePanelPage />} />
                   <Route path="/dashboard" element={<Index />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>
