@@ -69,6 +69,21 @@ export function usePurchasePanel() {
     if (!companyId) return;
     setIsLoading(true);
     try {
+      // Step 1: get all project IDs for this company
+      const { data: projectsData } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("company_id", companyId);
+
+      const projectIds = (projectsData || []).map((p: any) => p.id);
+
+      if (projectIds.length === 0) {
+        setAlerts([]); setRequests([]); setOrders([]);
+        setIsLoading(false);
+        return;
+      }
+
+      // Step 2: fetch all three tables filtered by project IDs
       const [alertsRes, requestsRes, ordersRes] = await Promise.all([
         supabase
           .from("supply_alerts")
@@ -76,11 +91,11 @@ export function usePurchasePanel() {
             id, project_id, required_date, order_by_date, planned_use_date,
             actual_delivery_date, delay_days, is_critical, status,
             total_quantity, total_value, notes, family_id, scope_item_id,
-            projects!inner(name, company_id),
+            projects(name),
             material_families(name, color),
             scope_items(name, input_code)
           `)
-          .eq("projects.company_id", companyId),
+          .in("project_id", projectIds),
 
         supabase
           .from("supply_requests")
@@ -88,10 +103,10 @@ export function usePurchasePanel() {
             id, project_id, item_name, item_unit, quantity, unit_value,
             total_value, status, required_date, order_by_date, is_critical,
             supplier_id,
-            projects!inner(name, company_id),
+            projects(name),
             suppliers(name)
           `)
-          .eq("projects.company_id", companyId),
+          .in("project_id", projectIds),
 
         supabase
           .from("purchase_orders")
@@ -99,10 +114,10 @@ export function usePurchasePanel() {
             id, project_id, order_number, status, total_value,
             expected_delivery_date, actual_delivery_date, created_at,
             supplier_id,
-            projects!inner(name, company_id),
+            projects(name),
             suppliers(name)
           `)
-          .eq("projects.company_id", companyId),
+          .in("project_id", projectIds),
       ]);
 
       if (alertsRes.data) {
