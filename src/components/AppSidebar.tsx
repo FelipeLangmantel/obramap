@@ -132,6 +132,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     if (pathname === "/holding-insights") return "holding-insights";
     if (pathname === "/holding-config") return "holding-config";
     if (pathname === "/cashflow-simulator") return "cashflow-simulator";
+    if (pathname === "/purchase-panel") return "purchase-panel";
     
     return activeView;
   };
