@@ -53,6 +53,7 @@ import {
   Receipt,
   FolderOpen,
   Sparkles,
+  ShoppingCart,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
