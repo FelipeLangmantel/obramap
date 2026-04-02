@@ -392,6 +392,8 @@ export function calcHealthDetails(
     glosaStatus = glosaValue > T.glosa_red ? "red" : glosaValue > T.glosa_yellow ? "yellow" : "green";
   }
 
+  const valorPlanejado = pctFisico * valorContrato;
+
   return [
     {
       id: "idc",
@@ -404,6 +406,7 @@ export function calcHealthDetails(
       threshold_red: T.idc_red,
       unit: "índice",
       higherIsBetter: true,
+      rawValues: { medidoAprovado: totalMedidoAprovado, planejado: valorPlanejado },
     },
     {
       id: "idp",
@@ -416,6 +419,7 @@ export function calcHealthDetails(
       threshold_red: T.idp_red,
       unit: "índice",
       higherIsBetter: true,
+      rawValues: { pctFisico: pctFisico * 100, pctTempo: idpPctTempo * 100, diasDecorridos: idpDiasDecorridos, prazoTotal: idpPrazoTotal },
     },
     {
       id: "dias_medicao",
@@ -428,6 +432,7 @@ export function calcHealthDetails(
       threshold_red: T.dias_sem_medicao_red,
       unit: "dias",
       higherIsBetter: false,
+      rawValues: { ultimaAprovadaDate: ultimaAprovada?.data_aprovacao || '' },
     },
     {
       id: "glosa",
@@ -440,6 +445,7 @@ export function calcHealthDetails(
       threshold_red: T.glosa_red,
       unit: "%",
       higherIsBetter: false,
+      rawValues: { totalGlosa, totalMedidoAprovado },
     },
   ];
 }
