@@ -116,7 +116,9 @@ export default function PurchasePanelPage() {
           </TabsContent>
         </Tabs>
       )}
-    </div>
+        </div>
+      </div>
+    </SidebarProvider>
   );
 }
 
