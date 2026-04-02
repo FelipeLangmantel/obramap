@@ -244,25 +244,25 @@ export default function LandingPage() {
             {
               step: "01",
               title: "Estruture sua obra",
-              desc: "Defina quadras, torres, blocos, serviços e custos uma única vez. Funciona para qualquer tipologia.",
+              desc: "Cadastre quadras, torres, blocos, serviços e orçamento. O sistema monta o mapa visual da obra automaticamente.",
               icon: Layers,
             },
             {
               step: "02",
-              title: "Planeje com base na produção",
-              desc: "O sistema calcula capacidade, equipes e duração automaticamente, por unidade e por período.",
+              title: "Planeje com inteligência",
+              desc: "Defina metas por período. O sistema calcula equipes necessárias, datas e capacidade — sem planilha.",
               icon: CalendarClock,
             },
             {
               step: "03",
-              title: "Execute e acompanhe em tempo real",
-              desc: "Veja o avanço por unidade, por equipe e por serviço — no mapa 2D ou na visualização 3D.",
+              title: "Acompanhe unidade por unidade",
+              desc: "Lance produção por serviço e unidade. O mapa atualiza em tempo real — todo atraso fica visível na hora.",
               icon: BarChart3,
             },
             {
               step: "04",
-              title: "Meça e controle financeiro",
-              desc: "Medições integradas ao que foi executado. Saúde financeira de cada obra calculada automaticamente.",
+              title: "Controle custo e entrega",
+              desc: "Medições conectadas à execução real. Saúde financeira calculada automaticamente. Da produção à chave entregue.",
               icon: DollarSign,
             },
           ].map((item) => (
@@ -346,16 +346,16 @@ export default function LandingPage() {
               Mais controle, <span className="text-[#e67e22]">menos improviso</span>
             </h2>
             <p className="text-[#8a8a9a] text-base leading-relaxed mb-8">
-              O ObraMap transforma a forma como você gerencia sua obra. Veja os resultados que nossos clientes alcançam:
+              O ObraMap transforma a forma como construtoras gerenciam suas obras. Em vez de descobrir problemas no relatório do fim do mês, você age no momento certo — com dados reais de cada unidade.
             </p>
 
             <div className="flex flex-col gap-4">
               {[
-                "Redução de atrasos",
-                "Melhor uso das equipes",
-                "Menos retrabalho",
-                "Mais previsibilidade de prazo",
-                "Maior controle de custo",
+                "Atrasos identificados antes de virar problema",
+                "Equipes alocadas com base em capacidade real",
+                "Medições sem retrabalho — integradas à execução",
+                "Fluxo de caixa de materiais projetado com antecedência",
+                "Diretoria com visão de saúde de todas as obras em segundos",
               ].map((result) => (
                 <div key={result} className="flex items-center gap-3">
                   <TrendingUp className="w-5 h-5 text-emerald-400 flex-shrink-0" />
@@ -424,7 +424,7 @@ export default function LandingPage() {
             Clareza para quem <span className="text-[#e67e22]">constrói o Brasil</span>
           </h2>
           <p className="text-[#8a8a9a] text-base leading-relaxed mb-10">
-            Dar às construtoras habitacionais a visibilidade que precisam para construir melhor — controlando cada unidade, cada equipe e cada real investido, em tempo real. Horizontal ou vertical. 10 unidades ou 2.000. O ObraMap foi construído para que nenhuma unidade seja perdida de vista.
+            Dar às construtoras habitacionais a visibilidade que precisam para construir melhor — controlando cada unidade, cada equipe e cada real investido, em tempo real. Do projeto à entrega, o ObraMap foi construído para que nenhuma decisão seja tomada no escuro.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-4xl mx-auto text-left">
             {[
@@ -447,10 +447,10 @@ export default function LandingPage() {
       <Section dark>
         <div className="text-center max-w-2xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold mb-5">
-            Quer ver cada unidade da sua obra <span className="text-[#e67e22]">sob controle</span>?
+            Pronto para ter <span className="text-[#e67e22]">clareza real</span> sobre cada obra?
           </h2>
           <p className="text-[#8a8a9a] text-base leading-relaxed mb-8">
-            Veja na prática como o ObraMap funciona para o seu tipo de obra — horizontal, vertical ou os dois.
+            Agende uma demonstração e veja o ObraMap funcionando com dados reais — sem compromisso.
           </p>
           <Button
             size="lg"
