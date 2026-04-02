@@ -28,6 +28,7 @@ import HoldingPrdPage from "./pages/HoldingPrdPage";
 import HoldingInsightsPage from "./pages/HoldingInsightsPage";
 import HoldingConfigPage from "./pages/HoldingConfigPage";
 import CashflowSimulatorPage from "./pages/CashflowSimulatorPage";
+import PurchasePanelPage from "./pages/PurchasePanelPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,6 +54,7 @@ const ROUTE_PERMISSION_MAP: Record<string, string> = {
   "/holding-insights": "holding_insights",
   "/holding-config": "holding",
   "/cashflow-simulator": "simulador_desembolsos",
+  "/purchase-panel": "painel_compras",
 };
 
 /** Layout para rotas de System Admin */
@@ -137,6 +139,7 @@ const App = () => {
                   <Route path="/holding-insights" element={<HoldingInsightsPage />} />
                   <Route path="/holding-config" element={<HoldingConfigPage />} />
                   <Route path="/cashflow-simulator" element={<CashflowSimulatorPage />} />
+                  <Route path="/purchase-panel" element={<PurchasePanelPage />} />
                   <Route path="/dashboard" element={<Index />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>

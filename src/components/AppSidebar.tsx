@@ -53,6 +53,7 @@ import {
   Receipt,
   FolderOpen,
   Sparkles,
+  ShoppingCart,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -79,8 +80,7 @@ import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 
 type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard";
 
-// Views com rotas separadas (navegam para página diferente)
-type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements" | "holding-receitas" | "holding-despesas" | "holding-documentos" | "holding-prd" | "holding-insights" | "holding-config" | "cashflow-simulator";
+type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements" | "holding-receitas" | "holding-despesas" | "holding-documentos" | "holding-prd" | "holding-insights" | "holding-config" | "cashflow-simulator" | "purchase-panel";
 type MenuViewType = ViewType | RouteViewType;
 
 // Rotas dedicadas (navegam para páginas separadas)
@@ -96,6 +96,7 @@ const DEDICATED_ROUTE_MAP: Record<RouteViewType, string> = {
   "holding-insights": "/holding-insights",
   "holding-config": "/holding-config",
   "cashflow-simulator": "/cashflow-simulator",
+  "purchase-panel": "/purchase-panel",
 };
 
 interface AppSidebarProps {
@@ -131,6 +132,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
     if (pathname === "/holding-insights") return "holding-insights";
     if (pathname === "/holding-config") return "holding-config";
     if (pathname === "/cashflow-simulator") return "cashflow-simulator";
+    if (pathname === "/purchase-panel") return "purchase-panel";
     
     return activeView;
   };
@@ -242,6 +244,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         { title: "Contrato da Obra", view: "project-contract", icon: FileText, permissionId: "contrato" },
         { title: "Custos da Obra", view: "costs", icon: DollarSign, permissionId: "custos" },
         { title: "Fluxo Financeiro", view: "financial-flow", icon: Wallet, permissionId: "financeiro" },
+        { title: "Painel de Compras", view: "purchase-panel", icon: ShoppingCart, permissionId: "painel_compras" },
         { title: "Suprimentos", view: "supplies", icon: Package, permissionId: "suprimentos" },
         { title: "Empreiteiros", view: "contractors", icon: Truck, permissionId: "empreiteiros" },
         { title: "Industrialização", view: "industrialization", icon: Factory, permissionId: "industrializacao", badge: "BETA" },
