@@ -54,6 +54,7 @@ const ROUTE_PERMISSION_MAP: Record<string, string> = {
   "/holding-insights": "holding_insights",
   "/holding-config": "holding",
   "/cashflow-simulator": "simulador_desembolsos",
+  "/purchase-panel": "painel_compras",
 };
 
 /** Layout para rotas de System Admin */
