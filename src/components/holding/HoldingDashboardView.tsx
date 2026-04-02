@@ -325,6 +325,7 @@ export interface HealthIndicator {
   threshold_red: number;
   unit: string;               // "índice", "dias", "%"
   higherIsBetter: boolean;    // true: IDC/IDP mais alto = melhor | false: dias/glosa menor = melhor
+  rawValues?: Record<string, number | string>;
 }
 
 /**
