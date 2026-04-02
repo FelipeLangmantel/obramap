@@ -359,13 +359,16 @@ export function calcHealthDetails(
   // ── IDP ──────────────────────────────────────────────────────────────────
   let idpValue: number | null = null;
   let idpStatus: HealthIndicator["status"] = "na";
+  let idpPctTempo = 0;
+  let idpDiasDecorridos = 0;
+  let idpPrazoTotal = 0;
   if (obra.data_inicio && obra.prazo_dias > 0) {
     const inicio = new Date(obra.data_inicio + "T12:00:00");
-    const prazoTotal = obra.prazo_dias + (obra.aditivo_prazo_dias || 0);
-    const diasDecorridos = differenceInDays(now, inicio);
-    const pctTempo = Math.min(1, diasDecorridos / prazoTotal);
-    if (pctTempo > 0.05) {
-      idpValue = pctTempo > 0 ? pctFisico / pctTempo : 1;
+    idpPrazoTotal = obra.prazo_dias + (obra.aditivo_prazo_dias || 0);
+    idpDiasDecorridos = differenceInDays(now, inicio);
+    idpPctTempo = Math.min(1, idpDiasDecorridos / idpPrazoTotal);
+    if (idpPctTempo > 0.05) {
+      idpValue = idpPctTempo > 0 ? pctFisico / idpPctTempo : 1;
       idpStatus = idpValue < T.idp_red ? "red" : idpValue < T.idp_yellow ? "yellow" : "green";
     }
   }
