@@ -1247,7 +1247,18 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Valor Acatado (R$)</label>
-              <CurrencyInput value={data.valor_acatado || 0} onChange={(v) => setData({ ...data, valor_acatado: v })} />
+              <CurrencyInput value={data.valor_acatado || 0} onChange={(v) => {
+                const updates: any = { ...data, valor_acatado: v };
+                // Auto-avança status para 'aprovada' ao preencher valor acatado
+                if (v > 0 && data.status_medicao === "enviada") {
+                  updates.status_medicao = "aprovada";
+                }
+                // Volta para 'enviada' se limpar o valor acatado e tinha sido aprovada
+                if (v === 0 && data.status_medicao === "aprovada" && data.data_envio) {
+                  updates.status_medicao = "enviada";
+                }
+                setData(updates);
+              }} />
               {data.valor_acatado > 0 && data.valor_medicao > 0 && data.valor_acatado !== data.valor_medicao && (
                 <p className="text-[10px] text-amber-600 mt-0.5">
                   Glosa: {BRL.format(Math.abs(data.valor_medicao - data.valor_acatado))}
