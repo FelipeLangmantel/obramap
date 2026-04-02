@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import {
-  AlertTriangle, Calendar, ChevronLeft, ChevronRight, ChevronDown,
+  AlertTriangle, ChevronLeft, ChevronRight, ChevronDown,
   ShoppingCart, Truck, Clock, DollarSign, Building2,
 } from "lucide-react";
 import {
