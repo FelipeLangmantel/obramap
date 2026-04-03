@@ -305,6 +305,9 @@ export default function HoldingConfigPage() {
           <TabsTrigger value="saude" className="gap-1.5">
             <HeartPulse className="h-3.5 w-3.5" /> Saúde das Obras
           </TabsTrigger>
+          <TabsTrigger value="geocode" className="gap-1.5">
+            <MapPin className="h-3.5 w-3.5" /> Geocodificação
+          </TabsTrigger>
         </TabsList>
 
         {/* === EMPRESAS === */}
