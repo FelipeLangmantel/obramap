@@ -465,6 +465,15 @@ export default function HoldingConfigPage() {
             </Button>
           </div>
         </TabsContent>
+
+        {/* === GEOCODIFICAÇÃO === */}
+        <TabsContent value="geocode" className="mt-4 space-y-4">
+          <div className="bg-muted/50 border rounded-lg p-4 text-sm text-muted-foreground">
+            Geocodifica obras existentes que ainda não possuem coordenadas (latitude/longitude).
+            Utiliza o serviço gratuito do OpenStreetMap (Nominatim) com limite de 1 requisição por segundo.
+          </div>
+          <GeocodeBackfillPanel companyId={company?.id || ""} />
+        </TabsContent>
       </Tabs>
       {/* === EMPRESA DIALOG === */}
       <Dialog open={showEmpresaDialog} onOpenChange={setShowEmpresaDialog}>
