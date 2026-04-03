@@ -914,6 +914,18 @@ export function UserPermissionsPanel() {
                   <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={fetchData}>
                     <RefreshCw className="h-3 w-3" /> Atualizar
                   </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={async () => {
+                    try {
+                      const { error } = await supabase.rpc("cleanup_stale_sessions");
+                      if (error) throw error;
+                      toast.success("Sessões inativas limpas!");
+                      fetchData();
+                    } catch (e: any) {
+                      toast.error("Erro ao limpar sessões: " + e.message);
+                    }
+                  }}>
+                    <Trash2 className="h-3 w-3" /> Limpar inativas
+                  </Button>
                   <Button
                     variant="destructive" size="sm" className="h-7 text-xs gap-1"
                     disabled={sessions.filter(s => s.is_active && (sessionUserFilter === "all" || s.user_id === sessionUserFilter)).length === 0}
