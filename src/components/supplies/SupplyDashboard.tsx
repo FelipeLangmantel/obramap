@@ -41,7 +41,7 @@ export function SupplyDashboard({ kpis, isLoading }: SupplyDashboardProps) {
           <XCircle className="h-4 w-4 text-red-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-red-600">
+          <div className="text-2xl font-bold text-red-600 dark:text-red-400">
             {isLoading ? '-' : kpis?.delayed_orders || 0}
           </div>
           <div className="flex items-center gap-2 mt-2">
