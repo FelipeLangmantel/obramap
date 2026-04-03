@@ -291,7 +291,7 @@ export function SupplyAlertsList({ alerts, isLoading, canEdit, onUpdateStatus }:
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span className="font-medium text-green-600">Entregues ({groupedByStatus.delivered.length})</span>
+              <span className="font-medium text-green-600 dark:text-green-400">Entregues ({groupedByStatus.delivered.length})</span>
             </div>
             {groupedByStatus.delivered.map(renderAlertCard)}
           </div>
