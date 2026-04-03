@@ -905,18 +905,80 @@ const NF_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   pendente: { label: "Pendente", cls: "bg-muted text-muted-foreground" },
 };
 
-/** Determines the display status badge based on measurement state */
-function getMedicaoDisplayStatus(m: any): { label: string; cls: string } {
-  const now = new Date();
-  const MONTHS_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-  const mesIdx = MONTHS_SHORT.findIndex(x => x.toLowerCase() === (m.mes_referencia || "").toLowerCase());
-  const isCurrentMonth = mesIdx === now.getMonth() && m.ano_referencia === now.getFullYear();
-
+/**
+ * Determines the display status badge based on measurement state.
+ * "Em Andamento" is determined by date range: the measurement whose
+ * data_previsao_medicao period covers today (between this measurement's
+ * forecast date and the next measurement's forecast date).
+ * Only ONE measurement can be "Em Andamento" at a time.
+ * 
+ * MEASUREMENT LIFECYCLE:
+ * prevista  → enviada:  requires data_envio + valor_medicao > 0
+ * enviada   → aprovada: requires data_aprovacao + valor_acatado > 0 + valor_acatado <= valor_medicao
+ * aprovada  → recebido: requires data_pagamento (status_nf field, not status_medicao)
+ * 
+ * DISPLAY-ONLY:
+ * 'em_andamento' shown when prevista + current date within measurement period (stored as prevista)
+ */
+function getMedicaoDisplayStatus(m: any, allMedicoes?: any[]): { label: string; cls: string; isOverdue?: boolean } {
   if (m.status_medicao === "aprovada") return { label: "Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" };
   if (m.status_medicao === "enviada") return { label: "Enviada", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" };
-  if (m.status_medicao === "prevista" && isCurrentMonth) return { label: "Em Andamento", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" };
-  if (m.status_medicao === "prevista") return { label: "Previsão", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" };
+
+  if (m.status_medicao === "prevista") {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Check if overdue: forecast date passed and not yet sent
+    const previsaoDate = m.data_previsao_medicao ? new Date(m.data_previsao_medicao + "T12:00:00") : null;
+    const isOverdue = previsaoDate ? previsaoDate < today : false;
+
+    // Determine "Em Andamento": use sorted prevista measurements date ranges
+    if (allMedicoes && allMedicoes.length > 0) {
+      // Get only prevista measurements sorted by data_previsao_medicao
+      const previstas = allMedicoes
+        .filter(x => x.status_medicao === "prevista" && x.num_medicao !== "Saldo Inicial" && x.data_previsao_medicao)
+        .sort((a, b) => a.data_previsao_medicao.localeCompare(b.data_previsao_medicao));
+
+      const idx = previstas.findIndex(x => x.id === m.id);
+      if (idx >= 0) {
+        const startDate = new Date(previstas[idx].data_previsao_medicao + "T00:00:00");
+        const endDate = idx < previstas.length - 1
+          ? new Date(previstas[idx + 1].data_previsao_medicao + "T00:00:00")
+          : null; // last prevista: open-ended
+
+        // "Em Andamento" if today >= startDate AND (no endDate OR today < endDate)
+        const isInRange = today >= startDate && (endDate === null || today < endDate);
+        // Also show as "Em Andamento" if it's the first prevista and today < its start (the next one to be done)
+        const isFirstPrevista = idx === 0 && today < startDate;
+
+        if (isInRange) {
+          return { label: "Em Andamento", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", isOverdue };
+        }
+      }
+    }
+
+    if (isOverdue) {
+      return { label: "Atrasada", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300", isOverdue: true };
+    }
+
+    return { label: "Previsão", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" };
+  }
+
   return { label: m.status_medicao || "—", cls: "bg-muted text-muted-foreground" };
+}
+
+/** Build WhatsApp message URL for overdue measurement alerts */
+function buildWhatsAppUrl(phone: string, obraNome: string, numMedicao: string, dataPrevisao: string): string {
+  const cleanPhone = phone.replace(/\D/g, "");
+  const fullPhone = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`;
+  const msg = encodeURIComponent(
+    `⚠️ *Alerta de Medição Atrasada*\n\n` +
+    `Obra: *${obraNome}*\n` +
+    `Medição nº: *${numMedicao}*\n` +
+    `Data prevista de envio: *${dataPrevisao}*\n\n` +
+    `A medição está com a data de previsão vencida e ainda não foi enviada ao fiscal. Por favor, providenciar o envio o mais breve possível.`
+  );
+  return `https://wa.me/${fullPhone}?text=${msg}`;
 }
 
 function ClearableDateInput({ value, onChange, label, disabled }: { value: string; onChange: (v: string) => void; label: string; disabled?: boolean }) {
