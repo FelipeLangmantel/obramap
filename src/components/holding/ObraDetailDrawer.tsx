@@ -129,6 +129,8 @@ export interface ObraDrawerData {
   aditivo_prazo_dias?: number;
   aditivo_valor_total?: number;
   percentual_andamento?: number;
+  percentual_fisico?: number;
+  percentual_financeiro?: number;
   has_initial_balance?: boolean;
   valor_medido_inicial?: number;
   status?: string;
