@@ -182,7 +182,8 @@ export default function HoldingReceitasPage() {
     const nfRecebida = medicoes.filter(m => m.status_nf === "recebido");
 
     return {
-      totalGeral: medicoes.filter(m => m.num_medicao !== "Saldo Inicial").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
+      // Total Geral = só medições aprovadas acatadas (exclui Saldo Inicial e enviadas não acatadas)
+      totalGeral: aprovadas.filter(m => m.num_medicao !== "Saldo Inicial").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
       // Aprovado: usa valor_acatado (o que o governo efetivamente aceitou)
       totalAprovado: aprovadas.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
       // Enviado/Pendente: usa valor_medicao (o que foi submetido, ainda não acatado)
@@ -272,8 +273,8 @@ export default function HoldingReceitasPage() {
         aprovado: porMesRef.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
         enviado: porMesRef.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
         pendente: porMesRef.filter(m => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
-        nfRecebido: porMesRef.filter(m => m.status_nf === "recebido").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-        total: porMesRef.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+        nfRecebido: porMesRef.filter(m => m.status_nf === "recebido").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
+        total: porMesRef.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
         previsto: porPrevisao.reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0),
         countPrevistas: porPrevisao.length,
       };

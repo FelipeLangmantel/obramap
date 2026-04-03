@@ -530,7 +530,8 @@ export default function HoldingPrdPage() {
                           <TableBody>
                             {obraData.map((m: any) => {
                               const prevVal = Number(m.valor_previsto_medicao) || 0;
-                              const realVal = Number(m.valor_medicao) || 0;
+                              // Usa valor_acatado quando disponível — valor real aceito pelo governo
+                              const realVal = Number(m.valor_acatado ?? m.valor_medicao) || 0;
                               const desvio = prevVal > 0 ? realVal - prevVal : null;
                               const pct = desvio !== null && prevVal > 0 ? ((desvio / prevVal) * 100).toFixed(1) : null;
                               const statusCls: Record<string, string> = {
