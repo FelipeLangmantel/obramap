@@ -299,6 +299,18 @@ export function UserPermissionsPanel() {
     }
   }, [isAdmin]);
 
+  // Realtime for sessions
+  useEffect(() => {
+    if (!isAdmin || !company?.id) return;
+    const channel = supabase
+      .channel(`admin-sessions-${company.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_sessions" }, () => {
+        fetchData();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [isAdmin, company?.id]);
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
