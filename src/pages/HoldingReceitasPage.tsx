@@ -174,8 +174,10 @@ export default function HoldingReceitasPage() {
   // ─── KPIs ───
   const kpis = useMemo(() => {
     const aprovadas = medicoes.filter(m => m.status_medicao === "aprovada");
+    // enviadas = enviadas ao fiscal aguardando análise
     const enviadas = medicoes.filter(m => m.status_medicao === "enviada");
-    const pendentes = medicoes.filter(m => m.status_medicao === "pendente");
+    // pendentes no KPI = medições previstas ainda não enviadas ao fiscal
+    const pendentes = medicoes.filter(m => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada");
     const nfRecebida = medicoes.filter(m => m.status_nf === "recebido");
 
     return {
@@ -206,7 +208,7 @@ export default function HoldingReceitasPage() {
       if (!monthMap[key]) monthMap[key] = { mes: label, aprovado: 0, enviado: 0, pendente: 0, nf_recebido: 0 };
       if (m.status_medicao === "aprovada") monthMap[key].aprovado += Number(m.valor_acatado ?? m.valor_medicao) || 0;
       if (m.status_medicao === "enviada") monthMap[key].enviado += m.valor_medicao;
-      if (m.status_medicao === "pendente") monthMap[key].pendente += m.valor_medicao;
+      if (m.status_medicao === "enviada" && !monthMap[key].aprovado) monthMap[key].pendente += Number(m.valor_acatado ?? m.valor_medicao) || 0;
       if (m.status_nf === "recebido") monthMap[key].nf_recebido += Number(m.valor_acatado ?? m.valor_medicao) || 0;
     });
     return Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
@@ -234,7 +236,7 @@ export default function HoldingReceitasPage() {
     medicoes.forEach(m => {
       if (!obraMap[m.obra_id]) obraMap[m.obra_id] = { nome: m.obra_nome, aprovado: 0, pendente: 0 };
       if (m.status_medicao === "aprovada") obraMap[m.obra_id].aprovado += m.valor_medicao;
-      if (m.status_medicao === "pendente") obraMap[m.obra_id].pendente += m.valor_medicao;
+      if (m.status_medicao === "enviada") obraMap[m.obra_id].pendente += m.valor_medicao;
     });
     return Object.values(obraMap)
       .sort((a, b) => (b.aprovado + b.pendente) - (a.aprovado + a.pendente))
@@ -268,7 +270,7 @@ export default function HoldingReceitasPage() {
         obrasCount,
         aprovado: porMesRef.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
         enviado: porMesRef.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-        pendente: porMesRef.filter(m => m.status_medicao === "pendente").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+        pendente: porMesRef.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
         nfRecebido: porMesRef.filter(m => m.status_nf === "recebido").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
         total: porMesRef.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
         previsto: porPrevisao.reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0),
@@ -391,9 +393,17 @@ export default function HoldingReceitasPage() {
 
   // ─── Insights ───
   const insights = useMemo(() => {
-    const enviadas = medicoes.filter(m => m.status_medicao === "enviada" || m.status_medicao === "pendente");
+    const enviadas = medicoes.filter(m => m.status_medicao === "enviada");
     const first = enviadas.sort((a, b) => (a.data_envio || "z").localeCompare(b.data_envio || "z"))[0];
-    const next3 = previsaoData.slice(3, 6).reduce((s, p) => s + p.total, 0);
+    const now3 = new Date();
+    const in3months = new Date(now3.getFullYear(), now3.getMonth() + 3, now3.getDate());
+    const next3 = medicoes
+      .filter(m => m.status_medicao !== "aprovada" && m.data_previsao_medicao)
+      .filter(m => {
+        const d = new Date(m.data_previsao_medicao + "T12:00:00");
+        return d >= now3 && d <= in3months;
+      })
+      .reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0);
     const obraIds = new Set(medicoes.map(m => m.obra_id));
     const obrasSem = obras.filter(o => !obraIds.has(o.id));
     return { proximaEntrada: first, totalProx3Meses: next3, obrasSemMedicao: obrasSem };
