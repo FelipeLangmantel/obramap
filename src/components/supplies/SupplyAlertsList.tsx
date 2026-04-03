@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Package, Clock, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Calendar } from 'lucide-react';
+import { Package, Clock, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Calendar, HardHat } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Tabs, TabsList, TabsTrigger as TabTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SupplyAlert, ALERT_STATUS_LABELS, ALERT_STATUS_COLORS, SupplyAlertStatus } from './types';
 import { format, differenceInDays, isPast } from 'date-fns';
@@ -33,15 +34,22 @@ export function SupplyAlertsList({ alerts, isLoading, canEdit, onUpdateStatus }:
     });
   };
 
+  const [activeSection, setActiveSection] = useState<'material' | 'labor'>('material');
+
   const filteredAlerts = alerts.filter(a => 
     filterStatus === 'all' || a.status === filterStatus
   );
 
+  const materialAlerts = filteredAlerts.filter(a => !a.is_labor);
+  const laborAlerts = filteredAlerts.filter(a => a.is_labor);
+
+  const currentAlerts = activeSection === 'material' ? materialAlerts : laborAlerts;
+
   const groupedByStatus = {
-    delayed: filteredAlerts.filter(a => a.status === 'delayed'),
-    pending: filteredAlerts.filter(a => a.status === 'pending'),
-    ordered: filteredAlerts.filter(a => a.status === 'ordered'),
-    delivered: filteredAlerts.filter(a => a.status === 'delivered')
+    delayed: currentAlerts.filter(a => a.status === 'delayed'),
+    pending: currentAlerts.filter(a => a.status === 'pending'),
+    ordered: currentAlerts.filter(a => a.status === 'ordered'),
+    delivered: currentAlerts.filter(a => a.status === 'delivered')
   };
 
   const formatDate = (dateStr: string) => {
@@ -202,21 +210,47 @@ export function SupplyAlertsList({ alerts, isLoading, canEdit, onUpdateStatus }:
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h3 className="text-lg font-medium">Alertas de Compra</h3>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filtrar por status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="delayed">Atrasados</SelectItem>
-            <SelectItem value="pending">Pendentes</SelectItem>
-            <SelectItem value="ordered">Em Pedido</SelectItem>
-            <SelectItem value="delivered">Entregues</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Tabs value={activeSection} onValueChange={(v) => setActiveSection(v as 'material' | 'labor')}>
+            <TabsList className="h-8">
+              <TabTrigger value="material" className="text-xs gap-1">
+                <Package className="h-3 w-3" />
+                Materiais ({materialAlerts.length})
+              </TabTrigger>
+              <TabTrigger value="labor" className="text-xs gap-1">
+                <HardHat className="h-3 w-3" />
+                Mão de Obra ({laborAlerts.length})
+              </TabTrigger>
+            </TabsList>
+          </Tabs>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-[160px] h-8 text-xs">
+              <SelectValue placeholder="Filtrar por status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="delayed">Atrasados</SelectItem>
+              <SelectItem value="pending">Pendentes</SelectItem>
+              <SelectItem value="ordered">Em Pedido</SelectItem>
+              <SelectItem value="delivered">Entregues</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+
+      {activeSection === 'labor' && laborAlerts.length > 0 && (
+        <div className="flex items-center gap-2 p-3 rounded-md bg-muted/50 border border-border">
+          <HardHat className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground flex-1">
+            Mão de obra e equipamentos são gerenciados via contratos de empreiteiros.
+          </span>
+          <Button variant="outline" size="sm" className="text-xs" asChild>
+            <a href="/contractors">Ver Contratos</a>
+          </Button>
+        </div>
+      )}
 
       <ScrollArea className="h-[calc(100vh-400px)]">
         {/* Atrasados primeiro */}

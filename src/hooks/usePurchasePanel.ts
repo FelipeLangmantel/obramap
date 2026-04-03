@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { format, isToday, isBefore, startOfDay } from "date-fns";
+import { format, isToday, isBefore, startOfDay, addDays } from "date-fns";
 import type { SupplyAlertStatus } from "@/components/supplies/types";
 
 export interface PurchaseAlert {
@@ -54,6 +54,14 @@ export interface PurchaseOrder {
   supplier_name: string | null;
 }
 
+export interface CompanySupplyKPIs {
+  total_pending: number;
+  total_critical: number;
+  total_overdue: number;
+  total_in_transit: number;
+  total_pending_value: number;
+}
+
 const FINISHED_STATUSES = ["delivered", "contracted"];
 
 export function usePurchasePanel() {
@@ -63,13 +71,22 @@ export function usePurchasePanel() {
   const [alerts, setAlerts] = useState<PurchaseAlert[]>([]);
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
+  const [companyKpis, setCompanyKpis] = useState<CompanySupplyKPIs | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // IMPORTANT 4: today updates at midnight
+  const [today, setToday] = useState(() => startOfDay(new Date()));
+  useEffect(() => {
+    const now = new Date();
+    const msToMidnight = startOfDay(addDays(now, 1)).getTime() - now.getTime();
+    const timer = setTimeout(() => setToday(startOfDay(new Date())), msToMidnight);
+    return () => clearTimeout(timer);
+  }, [today]);
 
   const fetchData = useCallback(async () => {
     if (!companyId) return;
     setIsLoading(true);
     try {
-      // Step 1: get all project IDs for this company
       const { data: projectsData } = await supabase
         .from("projects")
         .select("id")
@@ -78,13 +95,13 @@ export function usePurchasePanel() {
       const projectIds = (projectsData || []).map((p: any) => p.id);
 
       if (projectIds.length === 0) {
-        setAlerts([]); setRequests([]); setOrders([]);
+        setAlerts([]); setRequests([]); setOrders([]); setCompanyKpis(null);
         setIsLoading(false);
         return;
       }
 
-      // Step 2: fetch all three tables filtered by project IDs
-      const [alertsRes, requestsRes, ordersRes] = await Promise.all([
+      // Fetch all data + company KPIs in parallel
+      const [alertsRes, requestsRes, ordersRes, kpisRes] = await Promise.all([
         supabase
           .from("supply_alerts")
           .select(`
@@ -118,6 +135,8 @@ export function usePurchasePanel() {
             suppliers(name)
           `)
           .in("project_id", projectIds),
+
+        supabase.rpc("get_company_supply_kpis", { p_company_id: companyId }),
       ]);
 
       if (alertsRes.data) {
@@ -181,6 +200,10 @@ export function usePurchasePanel() {
           }))
         );
       }
+
+      if (kpisRes.data) {
+        setCompanyKpis(kpisRes.data as unknown as CompanySupplyKPIs);
+      }
     } catch (err) {
       console.error("[PurchasePanel] fetch error:", err);
     } finally {
@@ -188,13 +211,26 @@ export function usePurchasePanel() {
     }
   }, [companyId]);
 
+  // CRITICAL 2: Realtime subscriptions
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
 
-  const today = startOfDay(new Date());
+    if (!companyId) return;
 
-  const overdueCount = useMemo(
+    const channel = supabase
+      .channel(`purchase-panel-${companyId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "supply_alerts" }, () => fetchData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "supply_requests" }, () => fetchData())
+      .on("postgres_changes", { event: "*", schema: "public", table: "purchase_orders" }, () => fetchData())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchData, companyId]);
+
+  // Use server KPIs when available, fallback to client calculations
+  const overdueCount = companyKpis?.total_overdue ?? useMemo(
     () =>
       alerts.filter(
         (a) =>
@@ -213,12 +249,12 @@ export function usePurchasePanel() {
     [alerts]
   );
 
-  const inTransitCount = useMemo(
+  const inTransitCount = companyKpis?.total_in_transit ?? useMemo(
     () => orders.filter((o) => o.status === "in_transit").length,
     [orders]
   );
 
-  const totalPendingValue = useMemo(
+  const totalPendingValue = companyKpis?.total_pending_value ?? useMemo(
     () =>
       requests
         .filter((r) => !["delivered", "cancelled"].includes(r.status))
@@ -249,7 +285,6 @@ export function usePurchasePanel() {
     return map;
   }, [alerts]);
 
-  // Group alerts by project
   const alertsByProject = useMemo(() => {
     const map = new Map<
       string,
@@ -277,6 +312,7 @@ export function usePurchasePanel() {
     alerts,
     requests,
     orders,
+    companyKpis,
     isLoading,
     overdueCount,
     todayCount,

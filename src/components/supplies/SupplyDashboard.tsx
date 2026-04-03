@@ -41,7 +41,7 @@ export function SupplyDashboard({ kpis, isLoading }: SupplyDashboardProps) {
           <XCircle className="h-4 w-4 text-red-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-red-600">
+          <div className="text-2xl font-bold text-red-600 dark:text-red-400">
             {isLoading ? '-' : kpis?.delayed_orders || 0}
           </div>
           <div className="flex items-center gap-2 mt-2">
@@ -62,7 +62,7 @@ export function SupplyDashboard({ kpis, isLoading }: SupplyDashboardProps) {
           <CheckCircle2 className="h-4 w-4 text-green-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-green-600">
+          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
             {isLoading ? '-' : kpis?.on_time_delivered || 0}
           </div>
           <div className="flex items-center gap-2 mt-2">
@@ -83,7 +83,7 @@ export function SupplyDashboard({ kpis, isLoading }: SupplyDashboardProps) {
           <AlertTriangle className="h-4 w-4 text-orange-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-orange-600">
+          <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
             {isLoading ? '-' : kpis?.critical_purchases || 0}
           </div>
           <div className="flex items-center gap-2 mt-2">
@@ -104,7 +104,7 @@ export function SupplyDashboard({ kpis, isLoading }: SupplyDashboardProps) {
           <Pause className="h-4 w-4 text-purple-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-purple-600">
+          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
             {isLoading ? '-' : kpis?.production_stopped || 0}
           </div>
           <div className="flex items-center gap-2 mt-2">
@@ -125,7 +125,7 @@ export function SupplyDashboard({ kpis, isLoading }: SupplyDashboardProps) {
           <DollarSign className="h-4 w-4 text-blue-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold text-blue-600">
+          <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
             {isLoading ? '-' : formatCurrency(kpis?.total_pending_value || 0)}
           </div>
         </CardContent>

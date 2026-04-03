@@ -33,9 +33,9 @@ const fmtShort = (d: string) => format(new Date(d), "dd/MM");
 
 const statusBadge = (status: string) => {
   const label = ALERT_STATUS_LABELS[status as SupplyAlertStatus] || status;
-  const color = ALERT_STATUS_COLORS[status as SupplyAlertStatus] || "bg-gray-500";
+  const color = ALERT_STATUS_COLORS[status as SupplyAlertStatus] || "bg-muted text-muted-foreground";
   return (
-    <Badge className={`${color} text-white text-[10px] px-1.5 py-0.5`}>
+    <Badge className={`${color} text-[10px] px-1.5 py-0.5`}>
       {label}
     </Badge>
   );
