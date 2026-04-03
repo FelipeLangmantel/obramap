@@ -201,7 +201,7 @@ export default function HoldingReceitasPage() {
       totalPendente: pendentes.reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
       // NF Recebida: usa valor_acatado (valor real pago)
       totalNFRecebida: nfRecebida.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
-      totalAguardandoNF: medicoes.filter(m => m.status_nf === "aguardando_aprovacao").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+      totalAguardandoNF: medicoes.filter(m => m.status_nf === "aguardando_aprovacao").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
       countAprovadas: aprovadas.length,
       countEnviadas: enviadas.length,
       countPendentes: pendentes.length,
