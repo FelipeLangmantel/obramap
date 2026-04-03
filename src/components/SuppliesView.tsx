@@ -385,7 +385,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         ]);
         if (inputsRes.data) setInputs(inputsRes.data.map((i: any) => ({ ...i, material_family: i.material_families, category: i.category as 'material' | 'labor' | 'equipment', unit_value: i.unit_value || 0, stock_quantity: i.stock_quantity || 0 })));
         if (unitsRes.data) setUnits(unitsRes.data);
-        if (familiesRes.data) setFamilies(familiesRes.data.map(f => ({ id: f.id, name: f.name, color: f.color || '#9ca3af', lead_time_days: f.lead_time_days || 7 })));
+        if (familiesRes.data) setFamilies(familiesRes.data.map(f => ({ id: f.id, name: f.name, color: f.color || '#9ca3af', lead_time_days: f.lead_time_days || 7, is_labor: f.is_labor || false })));
       } else if (tab === 'quotations') {
         // Load suppliers first to have them available for quotation details
         const [quotRes, suppliersRes] = await Promise.all([
