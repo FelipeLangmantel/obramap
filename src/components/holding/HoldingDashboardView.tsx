@@ -641,7 +641,7 @@ export default function HoldingDashboardView() {
   const resetNewObraForm = () => setNewObraForm({
     nome: "", empresa: "", num_contrato: "", parceria_scp: "",
     valor_contrato: "", data_inicio: "", prazo_dias: "",
-    status: "nao_iniciada", percentual_andamento: 0,
+    status: "nao_iniciada", percentual_andamento: 0, percentual_fisico: 0,
     periodo_medicao: "", prazo_pagamento: "",
     municipio: "", estado: "RS",
     uh: "", responsavel: "", responsavel_nome: "", responsavel_telefone: "",
