@@ -16,6 +16,10 @@ import { toast } from "sonner";
 import ObraDetailDrawer from "./ObraDetailDrawer";
 import HoldingAnalyticsView from "./HoldingAnalyticsView";
 import HoldingManualView from "./HoldingManualView";
+import { OnboardingDialog } from "./OnboardingDialog";
+import { ObraDocConfigDialog } from "./ObraDocConfigDialog";
+import { EditRequestDialog } from "./EditRequestDialog";
+import { useOnboarding } from "@/hooks/useOnboarding";
 import { geocodeMunicipio } from "@/lib/geocode";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -53,6 +57,7 @@ import {
   FileText,
   Home,
   Wallet,
+  Lock,
 } from "lucide-react";
 import { addDays, format, differenceInDays, differenceInMonths } from "date-fns";
 
@@ -497,6 +502,14 @@ export default function HoldingDashboardView() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [showConfirmSave, setShowConfirmSave] = useState(false);
+  const [showEditRequestDialog, setShowEditRequestDialog] = useState(false);
+  const [showDocConfigDialog, setShowDocConfigDialog] = useState(false);
+  const [docConfigObraId, setDocConfigObraId] = useState<string>("");
+  const [docConfigObraNome, setDocConfigObraNome] = useState<string>("");
+  const onboarding = useOnboarding("cadastro_obra");
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Holding empresas for select
   const { data: holdingEmpresas = [] } = useQuery({
@@ -650,17 +663,42 @@ export default function HoldingDashboardView() {
     tipo_contrato: "",
   });
 
-  const handleSaveObra = async () => {
+  const validateObraForm = (): Record<string, string> => {
+    const errs: Record<string, string> = {};
+    if (!newObraForm.nome.trim()) errs.nome = "Nome é obrigatório";
+    if (!newObraForm.municipio.trim()) errs.municipio = "Município é obrigatório";
+    if (!newObraForm.estado.trim()) errs.estado = "Estado é obrigatório";
+    if (!newObraForm.uh || Number(newObraForm.uh) <= 0) errs.uh = "UH deve ser > 0";
+    if (!newObraForm.status) errs.status = "Status é obrigatório";
+    if (!newObraForm.num_contrato.trim()) errs.num_contrato = "Nº Contrato é obrigatório";
+    if (!newObraForm.data_inicio) errs.data_inicio = "Data Início é obrigatória";
+    if (!newObraForm.prazo_dias || Number(newObraForm.prazo_dias) <= 0) errs.prazo_dias = "Prazo deve ser > 0";
+    if (!newObraForm.periodo_medicao.trim()) errs.periodo_medicao = "Período de Medição é obrigatório";
+    if (!newObraForm.prazo_pagamento.trim()) errs.prazo_pagamento = "Prazo de Pagamento é obrigatório";
+    if (!newObraForm.responsavel_nome.trim()) errs.responsavel_nome = "Eng. Residente é obrigatório (se não houver, digite 'Contratar')";
+    return errs;
+  };
+
+  const isEditorRestricted = !isCompanyAdmin && canEdit;
+
+  const handlePreSave = () => {
     if (!canEdit) {
       toast.error("Você não tem permissão para cadastrar ou editar obras.");
       return;
     }
-    if (!newObraForm.nome.trim() || !company?.id) {
-      toast.error("Nome da obra é obrigatório.");
+    if (!company?.id) return;
+    const errs = validateObraForm();
+    setFormErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      toast.error("Preencha todos os campos obrigatórios.");
       return;
     }
+    setShowConfirmSave(true);
+  };
 
-    // percentual_fisico é livre — inserido pelo engenheiro sem limite financeiro
+  const handleSaveObra = async () => {
+    setShowConfirmSave(false);
+    if (!canEdit || !company?.id) return;
     setSavingObra(true);
     const payload = {
       company_id: company.id,
@@ -1390,22 +1428,49 @@ export default function HoldingDashboardView() {
       {/* Detail Drawer */}
       <ObraDetailDrawer obra={selectedObra ? { id: selectedObra.id, nome: selectedObra.nome, uh: selectedObra.uh, responsavel: selectedObra.responsavel, responsavel_nome: selectedObra.responsavel_nome, responsavel_telefone: selectedObra.responsavel_telefone, coordenador_nome: selectedObra.coordenador_nome, coordenador_telefone: selectedObra.coordenador_telefone, planejador_nome: selectedObra.planejador_nome, planejador_telefone: selectedObra.planejador_telefone, tipo_contrato: selectedObra.tipo_contrato, valor_contrato: selectedObra.valor_contrato, data_inicio: selectedObra.data_inicio, prazo_dias: selectedObra.prazo_dias, aditivo_prazo_dias: selectedObra.aditivo_prazo_dias, aditivo_valor_total: selectedObra.aditivo_valor_total, percentual_andamento: selectedObra.percentual_andamento, has_initial_balance: selectedObra.has_initial_balance, valor_medido_inicial: selectedObra.valor_medido_inicial, status: selectedObra.status, prazo_pagamento: selectedObra.prazo_pagamento, empresa: selectedObra.empresa } : null} onClose={() => setSelectedObra(null)} />
 
+      {/* Onboarding Dialog */}
+      <OnboardingDialog
+        actionKey="cadastro_obra"
+        open={showOnboarding}
+        onComplete={() => { onboarding.markAsSeen(); setShowOnboarding(false); }}
+      />
+
+      {/* Doc Config Dialog */}
+      <ObraDocConfigDialog
+        open={showDocConfigDialog}
+        onOpenChange={setShowDocConfigDialog}
+        obraId={docConfigObraId}
+        obraNome={docConfigObraNome}
+      />
+
+      {/* Edit Request Dialog (for editors) */}
+      <EditRequestDialog
+        open={showEditRequestDialog}
+        onOpenChange={setShowEditRequestDialog}
+        obraId={editingObra?.id || ""}
+        obraNome={editingObra?.nome || ""}
+      />
+
       {/* Nova Obra Dialog */}
-      <Dialog open={showNewObraDialog} onOpenChange={(o) => { if (!o) { setShowNewObraDialog(false); setEditingObra(null); resetNewObraForm(); } }}>
+      <Dialog open={showNewObraDialog} onOpenChange={(o) => { if (!o) { setShowNewObraDialog(false); setEditingObra(null); resetNewObraForm(); setFormErrors({}); } else if (!editingObra && onboarding.shouldShow) { setShowOnboarding(true); } }}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingObra ? "Editar Obra" : "Cadastrar Nova Obra"}</DialogTitle>
+            {editingObra && isEditorRestricted && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">⚠️ Como Editor, você pode alterar apenas Responsáveis e Nº Contrato. Para outros campos, solicite permissão.</p>
+            )}
           </DialogHeader>
           <div className="grid gap-3">
             <div>
               <Label className="text-xs">Nome *</Label>
-              <Input value={newObraForm.nome} onChange={(e) => setNewObraForm(p => ({ ...p, nome: e.target.value }))} />
+              <Input value={newObraForm.nome} onChange={(e) => setNewObraForm(p => ({ ...p, nome: e.target.value }))} disabled={editingObra && isEditorRestricted} className={formErrors.nome ? "border-destructive" : ""} />
+              {formErrors.nome && <p className="text-[10px] text-destructive mt-0.5">{formErrors.nome}</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Empresa</Label>
                 {holdingEmpresas.length > 0 ? (
-                  <Select value={newObraForm.empresa} onValueChange={(v) => setNewObraForm(p => ({ ...p, empresa: v }))}>
+                  <Select value={newObraForm.empresa} onValueChange={(v) => setNewObraForm(p => ({ ...p, empresa: v }))} disabled={editingObra && isEditorRestricted}>
                     <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                     <SelectContent>
                       {holdingEmpresas.map(e => (
@@ -1415,25 +1480,37 @@ export default function HoldingDashboardView() {
                   </Select>
                 ) : (
                   <div>
-                    <Input value={newObraForm.empresa} onChange={(e) => setNewObraForm(p => ({ ...p, empresa: e.target.value }))} placeholder="Digite o nome" />
+                    <Input value={newObraForm.empresa} onChange={(e) => setNewObraForm(p => ({ ...p, empresa: e.target.value }))} placeholder="Digite o nome" disabled={editingObra && isEditorRestricted} />
                     <p className="text-[10px] text-muted-foreground mt-0.5">💡 Cadastre empresas em Configurações para usar o seletor.</p>
                   </div>
                 )}
               </div>
-              <div><Label className="text-xs">Nº Contrato</Label><Input value={newObraForm.num_contrato} onChange={(e) => setNewObraForm(p => ({ ...p, num_contrato: e.target.value }))} /></div>
+              <div>
+                <Label className="text-xs">Nº Contrato *</Label>
+                <Input value={newObraForm.num_contrato} onChange={(e) => setNewObraForm(p => ({ ...p, num_contrato: e.target.value }))} className={formErrors.num_contrato ? "border-destructive" : ""} />
+                {formErrors.num_contrato && <p className="text-[10px] text-destructive mt-0.5">{formErrors.num_contrato}</p>}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">Parceria SCP</Label><Input value={newObraForm.parceria_scp} onChange={(e) => setNewObraForm(p => ({ ...p, parceria_scp: e.target.value }))} placeholder="" /></div>
-              <div><Label className="text-xs">Valor Contrato (R$)</Label><Input type="number" value={newObraForm.valor_contrato} onChange={(e) => setNewObraForm(p => ({ ...p, valor_contrato: e.target.value }))} /></div>
+              <div><Label className="text-xs">Parceria SCP</Label><Input value={newObraForm.parceria_scp} onChange={(e) => setNewObraForm(p => ({ ...p, parceria_scp: e.target.value }))} disabled={editingObra && isEditorRestricted} /></div>
+              <div><Label className="text-xs">Valor Contrato (R$)</Label><Input type="number" value={newObraForm.valor_contrato} onChange={(e) => setNewObraForm(p => ({ ...p, valor_contrato: e.target.value }))} disabled={editingObra && isEditorRestricted} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">Data Início</Label><Input type="date" value={newObraForm.data_inicio} onChange={(e) => setNewObraForm(p => ({ ...p, data_inicio: e.target.value }))} /></div>
-              <div><Label className="text-xs">Prazo (dias)</Label><Input type="number" value={newObraForm.prazo_dias} onChange={(e) => setNewObraForm(p => ({ ...p, prazo_dias: e.target.value }))} /></div>
+              <div>
+                <Label className="text-xs">Data Início *</Label>
+                <Input type="date" value={newObraForm.data_inicio} onChange={(e) => setNewObraForm(p => ({ ...p, data_inicio: e.target.value }))} disabled={editingObra && isEditorRestricted} className={formErrors.data_inicio ? "border-destructive" : ""} />
+                {formErrors.data_inicio && <p className="text-[10px] text-destructive mt-0.5">{formErrors.data_inicio}</p>}
+              </div>
+              <div>
+                <Label className="text-xs">Prazo (dias) *</Label>
+                <Input type="number" value={newObraForm.prazo_dias} onChange={(e) => setNewObraForm(p => ({ ...p, prazo_dias: e.target.value }))} disabled={editingObra && isEditorRestricted} className={formErrors.prazo_dias ? "border-destructive" : ""} />
+                {formErrors.prazo_dias && <p className="text-[10px] text-destructive mt-0.5">{formErrors.prazo_dias}</p>}
+              </div>
             </div>
             <div>
-              <Label className="text-xs">Status</Label>
-              <Select value={newObraForm.status} onValueChange={(v) => setNewObraForm(p => ({ ...p, status: v as typeof p.status }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Label className="text-xs">Status *</Label>
+              <Select value={newObraForm.status} onValueChange={(v) => setNewObraForm(p => ({ ...p, status: v as typeof p.status }))} disabled={editingObra && isEditorRestricted}>
+                <SelectTrigger className={formErrors.status ? "border-destructive" : ""}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="nao_iniciada">Não Iniciada</SelectItem>
                   <SelectItem value="em_andamento">Em Andamento</SelectItem>
@@ -1448,32 +1525,20 @@ export default function HoldingDashboardView() {
                 <Slider
                   value={[newObraForm.percentual_fisico]}
                   onValueChange={([v]) => setNewObraForm(p => ({ ...p, percentual_fisico: v }))}
-                  max={100}
-                  step={0.5}
-                  className="flex-1"
+                  max={100} step={0.5} className="flex-1"
+                  disabled={editingObra && isEditorRestricted}
                 />
                 <div className="flex items-center gap-1">
-                  <Input
-                    type="number"
-                    min={0} max={100} step={0.5}
-                    value={newObraForm.percentual_fisico}
-                    onChange={(e) => {
-                      const v = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0));
-                      setNewObraForm(p => ({ ...p, percentual_fisico: v }));
-                    }}
-                    className="w-20 text-sm text-right"
+                  <Input type="number" min={0} max={100} step={0.5} value={newObraForm.percentual_fisico}
+                    onChange={(e) => { const v = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)); setNewObraForm(p => ({ ...p, percentual_fisico: v })); }}
+                    className="w-20 text-sm text-right" disabled={editingObra && isEditorRestricted}
                   />
                   <span className="text-xs text-muted-foreground">%</span>
                 </div>
               </div>
               {newObraForm.valor_contrato && Number(newObraForm.valor_contrato) > 0 && (
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  Valor executado estimado:{" "}
-                  <span className="font-medium text-foreground">
-                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                      Number(newObraForm.valor_contrato) * newObraForm.percentual_fisico / 100
-                    )}
-                  </span>
+                  Valor executado estimado: <span className="font-medium text-foreground">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(newObraForm.valor_contrato) * newObraForm.percentual_fisico / 100)}</span>
                 </p>
               )}
             </div>
@@ -1481,32 +1546,45 @@ export default function HoldingDashboardView() {
               <Label className="text-xs">% Financeiro (calculado automaticamente)</Label>
               <div className="flex items-center gap-3 mt-2">
                 <div className="flex-1 h-2 rounded-full bg-secondary overflow-hidden">
-                  <div 
-                    className="h-full bg-primary rounded-full transition-all" 
-                    style={{ width: `${Math.min(100, editingObra?.percentual_financeiro || editingObra?.percentual_andamento || 0)}%` }} 
-                  />
+                  <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${Math.min(100, editingObra?.percentual_financeiro || editingObra?.percentual_andamento || 0)}%` }} />
                 </div>
-                <span className="text-sm font-medium w-16 text-right">
-                  {(editingObra?.percentual_financeiro || editingObra?.percentual_andamento || 0).toFixed(1)}%
-                </span>
+                <span className="text-sm font-medium w-16 text-right">{(editingObra?.percentual_financeiro || editingObra?.percentual_andamento || 0).toFixed(1)}%</span>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-1">
-                Baseado nas medições aprovadas / valor do contrato
-              </p>
+              <p className="text-[10px] text-muted-foreground mt-1">Baseado nas medições aprovadas / valor do contrato</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">Período Medição</Label><Input value={newObraForm.periodo_medicao} onChange={(e) => setNewObraForm(p => ({ ...p, periodo_medicao: e.target.value }))} placeholder="" /></div>
-              <div><Label className="text-xs">Prazo Pagamento</Label><Input value={newObraForm.prazo_pagamento} onChange={(e) => setNewObraForm(p => ({ ...p, prazo_pagamento: e.target.value }))} placeholder="" /></div>
+              <div>
+                <Label className="text-xs">Período Medição *</Label>
+                <Input value={newObraForm.periodo_medicao} onChange={(e) => setNewObraForm(p => ({ ...p, periodo_medicao: e.target.value }))} disabled={editingObra && isEditorRestricted} className={formErrors.periodo_medicao ? "border-destructive" : ""} />
+                {formErrors.periodo_medicao && <p className="text-[10px] text-destructive mt-0.5">{formErrors.periodo_medicao}</p>}
+              </div>
+              <div>
+                <Label className="text-xs">Prazo Pagamento *</Label>
+                <Input value={newObraForm.prazo_pagamento} onChange={(e) => setNewObraForm(p => ({ ...p, prazo_pagamento: e.target.value }))} disabled={editingObra && isEditorRestricted} className={formErrors.prazo_pagamento ? "border-destructive" : ""} />
+                {formErrors.prazo_pagamento && <p className="text-[10px] text-destructive mt-0.5">{formErrors.prazo_pagamento}</p>}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">Município</Label><Input value={newObraForm.municipio} onChange={(e) => setNewObraForm(p => ({ ...p, municipio: e.target.value }))} placeholder="" /></div>
-              <div><Label className="text-xs">Estado</Label><Input value={newObraForm.estado} onChange={(e) => setNewObraForm(p => ({ ...p, estado: e.target.value }))} placeholder="RS" /></div>
+              <div>
+                <Label className="text-xs">Município *</Label>
+                <Input value={newObraForm.municipio} onChange={(e) => setNewObraForm(p => ({ ...p, municipio: e.target.value }))} disabled={editingObra && isEditorRestricted} className={formErrors.municipio ? "border-destructive" : ""} />
+                {formErrors.municipio && <p className="text-[10px] text-destructive mt-0.5">{formErrors.municipio}</p>}
+              </div>
+              <div>
+                <Label className="text-xs">Estado *</Label>
+                <Input value={newObraForm.estado} onChange={(e) => setNewObraForm(p => ({ ...p, estado: e.target.value }))} disabled={editingObra && isEditorRestricted} className={formErrors.estado ? "border-destructive" : ""} />
+                {formErrors.estado && <p className="text-[10px] text-destructive mt-0.5">{formErrors.estado}</p>}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs">UH (Unidades Hab.)</Label><Input type="number" value={newObraForm.uh} onChange={(e) => setNewObraForm(p => ({ ...p, uh: e.target.value }))} placeholder="" /></div>
+              <div>
+                <Label className="text-xs">UH (Unidades Hab.) *</Label>
+                <Input type="number" value={newObraForm.uh} onChange={(e) => setNewObraForm(p => ({ ...p, uh: e.target.value }))} disabled={editingObra && isEditorRestricted} className={formErrors.uh ? "border-destructive" : ""} />
+                {formErrors.uh && <p className="text-[10px] text-destructive mt-0.5">{formErrors.uh}</p>}
+              </div>
               <div>
                 <Label className="text-xs">Tipo de Contrato</Label>
-                <Select value={newObraForm.tipo_contrato} onValueChange={(v) => setNewObraForm(p => ({ ...p, tipo_contrato: v }))}>
+                <Select value={newObraForm.tipo_contrato} onValueChange={(v) => setNewObraForm(p => ({ ...p, tipo_contrato: v }))} disabled={editingObra && isEditorRestricted}>
                   <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Ata Estado RS">Ata Estado RS</SelectItem>
@@ -1524,24 +1602,66 @@ export default function HoldingDashboardView() {
             <div className="border-t border-border/40 pt-3 mt-1">
               <p className="text-xs font-medium text-foreground mb-2">Responsáveis</p>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label className="text-xs">Eng. Residente</Label><Input value={newObraForm.responsavel_nome} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_nome: e.target.value }))} placeholder="" /></div>
-                <div><Label className="text-xs">Tel. Eng. Residente</Label><Input type="tel" value={newObraForm.responsavel_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_telefone: e.target.value }))} placeholder="" /></div>
-                <div><Label className="text-xs">Coordenador</Label><Input value={newObraForm.coordenador_nome} onChange={(e) => setNewObraForm(p => ({ ...p, coordenador_nome: e.target.value }))} placeholder="" /></div>
-                <div><Label className="text-xs">Tel. Coordenador</Label><Input type="tel" value={newObraForm.coordenador_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, coordenador_telefone: e.target.value }))} placeholder="" /></div>
-                <div><Label className="text-xs">Planejador</Label><Input value={newObraForm.planejador_nome} onChange={(e) => setNewObraForm(p => ({ ...p, planejador_nome: e.target.value }))} placeholder="" /></div>
-                <div><Label className="text-xs">Tel. Planejador</Label><Input type="tel" value={newObraForm.planejador_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, planejador_telefone: e.target.value }))} placeholder="" /></div>
+                <div>
+                  <Label className="text-xs">Eng. Residente *</Label>
+                  <Input value={newObraForm.responsavel_nome} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_nome: e.target.value }))} className={formErrors.responsavel_nome ? "border-destructive" : ""} />
+                  {formErrors.responsavel_nome && <p className="text-[10px] text-destructive mt-0.5">{formErrors.responsavel_nome}</p>}
+                </div>
+                <div><Label className="text-xs">Tel. Eng. Residente</Label><Input type="tel" value={newObraForm.responsavel_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, responsavel_telefone: e.target.value }))} /></div>
+                <div><Label className="text-xs">Coordenador</Label><Input value={newObraForm.coordenador_nome} onChange={(e) => setNewObraForm(p => ({ ...p, coordenador_nome: e.target.value }))} /></div>
+                <div><Label className="text-xs">Tel. Coordenador</Label><Input type="tel" value={newObraForm.coordenador_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, coordenador_telefone: e.target.value }))} /></div>
+                <div><Label className="text-xs">Planejador</Label><Input value={newObraForm.planejador_nome} onChange={(e) => setNewObraForm(p => ({ ...p, planejador_nome: e.target.value }))} /></div>
+                <div><Label className="text-xs">Tel. Planejador</Label><Input type="tel" value={newObraForm.planejador_telefone} onChange={(e) => setNewObraForm(p => ({ ...p, planejador_telefone: e.target.value }))} /></div>
               </div>
             </div>
+            {editingObra && isEditorRestricted && (
+              <Button variant="outline" className="w-full mt-2" onClick={() => setShowEditRequestDialog(true)}>
+                <Lock className="h-4 w-4 mr-2" /> Solicitar permissão de edição
+              </Button>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowNewObraDialog(false); setEditingObra(null); resetNewObraForm(); }}>Cancelar</Button>
-            <Button onClick={handleSaveObra} disabled={savingObra}>
+            <Button variant="outline" onClick={() => { setShowNewObraDialog(false); setEditingObra(null); resetNewObraForm(); setFormErrors({}); }}>Cancelar</Button>
+            <Button onClick={handlePreSave} disabled={savingObra}>
               {savingObra ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
               {editingObra ? "Atualizar" : "Salvar"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Confirmation AlertDialog */}
+      <AlertDialog open={showConfirmSave} onOpenChange={setShowConfirmSave}>
+        <AlertDialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirme os dados antes de salvar</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <div className="grid grid-cols-2 gap-1 text-xs bg-muted/50 rounded-lg p-3">
+                  <span className="text-muted-foreground">Nome:</span><span className="font-medium">{newObraForm.nome}</span>
+                  <span className="text-muted-foreground">Município:</span><span className="font-medium">{newObraForm.municipio}/{newObraForm.estado}</span>
+                  <span className="text-muted-foreground">Nº Contrato:</span><span className="font-medium">{newObraForm.num_contrato}</span>
+                  <span className="text-muted-foreground">UH:</span><span className="font-medium">{newObraForm.uh}</span>
+                  <span className="text-muted-foreground">Valor:</span><span className="font-medium">{newObraForm.valor_contrato ? BRL.format(Number(newObraForm.valor_contrato)) : "—"}</span>
+                  <span className="text-muted-foreground">Data Início:</span><span className="font-medium">{newObraForm.data_inicio || "—"}</span>
+                  <span className="text-muted-foreground">Prazo:</span><span className="font-medium">{newObraForm.prazo_dias} dias</span>
+                  <span className="text-muted-foreground">Status:</span><span className="font-medium">{STATUS_CONFIG[newObraForm.status]?.label}</span>
+                  <span className="text-muted-foreground">Eng. Residente:</span><span className="font-medium">{newObraForm.responsavel_nome}</span>
+                </div>
+                {!editingObra && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded p-2">
+                    ⚠️ Após salvar, somente o Administrador da empresa poderá editar esta obra. Editores precisarão solicitar autorização.
+                  </p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Revisar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSaveObra}>Confirmar e Salvar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deletingObraId} onOpenChange={(o) => !o && setDeletingObraId(null)}>

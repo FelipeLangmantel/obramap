@@ -70,6 +70,45 @@ export type Database = {
           },
         ]
       }
+      audit_log: {
+        Row: {
+          acao: string
+          created_at: string | null
+          dados_anteriores: Json | null
+          dados_novos: Json | null
+          id: string
+          ip: string | null
+          registro_id: string | null
+          tabela: string
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          acao: string
+          created_at?: string | null
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          id?: string
+          ip?: string | null
+          registro_id?: string | null
+          tabela: string
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          acao?: string
+          created_at?: string | null
+          dados_anteriores?: Json | null
+          dados_novos?: Json | null
+          id?: string
+          ip?: string | null
+          registro_id?: string | null
+          tabela?: string
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: []
+      }
       board_decisions: {
         Row: {
           action_taken: string
@@ -1554,6 +1593,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "documentos_obra_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      edit_requests: {
+        Row: {
+          admin_response: string | null
+          created_at: string | null
+          id: string
+          justificativa: string
+          obra_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          user_id: string
+          user_name: string
+        }
+        Insert: {
+          admin_response?: string | null
+          created_at?: string | null
+          id?: string
+          justificativa: string
+          obra_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          user_id: string
+          user_name: string
+        }
+        Update: {
+          admin_response?: string | null
+          created_at?: string | null
+          id?: string
+          justificativa?: string
+          obra_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          user_id?: string
+          user_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "edit_requests_obra_id_fkey"
             columns: ["obra_id"]
             isOneToOne: false
             referencedRelation: "obras_portfolio"
@@ -4825,6 +4911,38 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "medicoes_ple_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      obra_doc_config: {
+        Row: {
+          created_at: string | null
+          id: string
+          obra_id: string
+          obrigatorio: boolean | null
+          tipo_doc: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          obra_id: string
+          obrigatorio?: boolean | null
+          tipo_doc: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          obra_id?: string
+          obrigatorio?: boolean | null
+          tipo_doc?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "obra_doc_config_obra_id_fkey"
             columns: ["obra_id"]
             isOneToOne: false
             referencedRelation: "obras_portfolio"
@@ -8689,6 +8807,24 @@ export type Database = {
           },
         ]
       }
+      user_onboarding: {
+        Row: {
+          action_key: string
+          seen_at: string | null
+          user_id: string
+        }
+        Insert: {
+          action_key: string
+          seen_at?: string | null
+          user_id: string
+        }
+        Update: {
+          action_key?: string
+          seen_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_permissions: {
         Row: {
           allowed_project_ids: string[] | null
@@ -9273,6 +9409,7 @@ export type Database = {
         Returns: Json
       }
       check_legacy_data_status: { Args: never; Returns: Json }
+      cleanup_stale_sessions: { Args: never; Returns: undefined }
       clone_planning_version: {
         Args: { p_new_name: string; p_source_version_id: string }
         Returns: string
