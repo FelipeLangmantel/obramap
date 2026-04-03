@@ -660,25 +660,7 @@ export default function HoldingDashboardView() {
       return;
     }
 
-    // Validar limite de % baseado nas medições aprovadas
-    if (editingObra) {
-      const totalMedidoAprovado = (editingObra.allMedicoes || [])
-        .filter(m => (m.status_medicao === "enviada" || m.status_medicao === "aprovada") && m.num_medicao !== "Saldo Inicial")
-        .reduce((s, m) => {
-          if (m.status_medicao === "aprovada") {
-            return s + (Number(m.valor_acatado ?? m.valor_medicao) || 0);
-          }
-          return s + (Number(m.valor_medicao) || 0);
-        }, 0);
-      const valorContrato = Number(newObraForm.valor_contrato) || 0;
-      if (valorContrato > 0 && totalMedidoAprovado > 0) {
-        const maxPct = Math.min(100, Math.round((totalMedidoAprovado / valorContrato) * 1000) / 10);
-        if (newObraForm.percentual_andamento > maxPct) {
-          toast.warning(`% Andamento não pode ultrapassar ${maxPct.toFixed(1)}% — limite baseado nas medições aprovadas.`);
-          return;
-        }
-      }
-    }
+    // percentual_fisico é livre — inserido pelo engenheiro sem limite financeiro
     setSavingObra(true);
     const payload = {
       company_id: company.id,
