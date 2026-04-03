@@ -2662,20 +2662,21 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
 
         {/* Lead Time Tab — Project-level */}
         <TabsContent value="leadtime" className="flex-1 overflow-auto mt-4 space-y-4">
+          {/* Material Families */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Clock className="w-5 h-5" />
-                Lead Time por Família — Esta Obra
+                <Package className="w-5 h-5" />
+                Lead Time de Materiais — Esta Obra
               </CardTitle>
               <p className="text-sm text-muted-foreground">
-                Configure o prazo de antecedência para pedidos de cada família. Valores são específicos desta obra e não alteram o padrão da empresa.
+                Prazo de antecedência para pedidos de compra de materiais. O sistema gera alertas quando a data limite se aproxima.
               </p>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[400px]">
+              <ScrollArea className="h-[300px]">
                 <div className="space-y-2">
-                  {families.map(family => {
+                  {families.filter(f => !f.is_labor).map(family => {
                     const projectLT = projectLeadTimes[family.id];
                     const currentLT = projectLT ?? family.lead_time_days;
                     const isCustom = projectLT !== undefined;
@@ -2690,7 +2691,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                               {!isCustom ? (
                                 <Badge variant="outline" className="text-[10px] text-muted-foreground">(padrão empresa)</Badge>
                               ) : (
-                                <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20">Personalizado</Badge>
+                                <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300">Personalizado</Badge>
                               )}
                             </div>
                             <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">
@@ -2702,9 +2703,9 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                           {currentLT === 0 ? (
                             <Badge variant="destructive" className="text-[10px]">Sem prazo</Badge>
                           ) : currentLT < 5 ? (
-                            <Badge className="text-[10px] bg-amber-500">Curto</Badge>
+                            <Badge className="text-[10px] bg-amber-500 dark:bg-amber-600">Curto</Badge>
                           ) : (
-                            <Badge className="text-[10px] bg-green-500">OK</Badge>
+                            <Badge className="text-[10px] bg-green-500 dark:bg-green-600">OK</Badge>
                           )}
                           {canEdit ? (
                             <Input
@@ -2741,10 +2742,109 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
                       </div>
                     );
                   })}
-                  {families.length === 0 && (
+                  {families.filter(f => !f.is_labor).length === 0 && (
                     <p className="text-center text-muted-foreground py-8">
                       Cadastre famílias de materiais na aba Insumos
                     </p>
+                  )}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+
+          {/* Labor / Equipment Families */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Hammer className="w-5 h-5" />
+                Lead Time de Mão de Obra / Equipamentos — Esta Obra
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Prazo de antecedência para contratação de mão de obra e equipamentos. O sistema gera alertas quando uma medição planejada está próxima e o serviço ainda não foi contratado.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[300px]">
+                <div className="space-y-2">
+                  {families.filter(f => f.is_labor).map(family => {
+                    const projectLT = projectLeadTimes[family.id];
+                    const currentLT = projectLT ?? family.lead_time_days;
+                    const isCustom = projectLT !== undefined;
+
+                    return (
+                      <div key={family.id} className="flex items-center justify-between p-3 border rounded-lg gap-3">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: family.color }} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-sm">{family.name}</span>
+                              <Badge variant="outline" className="text-[10px] bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-300">
+                                <Wrench className="w-2.5 h-2.5 mr-0.5" />
+                                Contratação
+                              </Badge>
+                              {!isCustom ? (
+                                <Badge variant="outline" className="text-[10px] text-muted-foreground">(padrão empresa)</Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300">Personalizado</Badge>
+                              )}
+                            </div>
+                            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">
+                              Ex: Início Medição - {currentLT} dias = data limite para contratar
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {currentLT === 0 ? (
+                            <Badge variant="destructive" className="text-[10px]">Sem prazo</Badge>
+                          ) : currentLT < 5 ? (
+                            <Badge className="text-[10px] bg-amber-500 dark:bg-amber-600">Curto</Badge>
+                          ) : (
+                            <Badge className="text-[10px] bg-green-500 dark:bg-green-600">OK</Badge>
+                          )}
+                          {canEdit ? (
+                            <Input
+                              type="number"
+                              min="0"
+                              max="365"
+                              className="w-20 h-8"
+                              value={currentLT}
+                              onChange={async (e) => {
+                                const newDays = parseInt(e.target.value) || 0;
+                                try {
+                                  if (isCustom) {
+                                    await supabase.from('project_lead_times')
+                                      .update({ lead_time_days: newDays })
+                                      .eq('project_id', projectId!)
+                                      .eq('family_id', family.id);
+                                  } else {
+                                    await supabase.from('project_lead_times')
+                                      .insert({ project_id: projectId!, family_id: family.id, lead_time_days: newDays, company_id: companyId! });
+                                  }
+                                  setProjectLeadTimes(prev => ({ ...prev, [family.id]: newDays }));
+                                  toast.success(`Lead time: ${family.name} → ${newDays} dias`);
+                                } catch (error) {
+                                  console.error('Error updating lead time:', error);
+                                  toast.error('Erro ao salvar lead time');
+                                }
+                              }}
+                            />
+                          ) : (
+                            <span className="text-sm font-medium w-20 text-right">{currentLT}</span>
+                          )}
+                          <span className="text-sm text-muted-foreground">dias</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {families.filter(f => f.is_labor).length === 0 && (
+                    <div className="text-center py-8 space-y-2">
+                      <p className="text-muted-foreground">
+                        Nenhuma família de mão de obra/equipamento cadastrada.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Crie famílias com tipo "Mão de Obra" na aba Insumos para configurar alertas de contratação.
+                      </p>
+                    </div>
                   )}
                 </div>
               </ScrollArea>
