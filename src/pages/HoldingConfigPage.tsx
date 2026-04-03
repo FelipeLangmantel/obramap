@@ -18,9 +18,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Settings, Building2, FileText, FlaskConical, Plus, Pencil, Trash2, GripVertical, RefreshCw, ArrowLeft, HeartPulse, RotateCcw } from "lucide-react";
+import { Settings, Building2, FileText, FlaskConical, Plus, Pencil, Trash2, GripVertical, RefreshCw, ArrowLeft, HeartPulse, RotateCcw, MapPin, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { geocodeMunicipio } from "@/lib/geocode";
+import { Progress } from "@/components/ui/progress";
 
 interface HoldingEmpresa {
   id: string; company_id: string; nome: string; cnpj: string | null;
@@ -32,6 +34,104 @@ interface DocTipo {
   id: string; company_id: string; nome: string;
   categoria: "doc_obra" | "ensaios_projetos";
   obrigatorio: boolean; ordem: number; ativo: boolean;
+}
+
+function GeocodeBackfillPanel({ companyId }: { companyId: string }) {
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0, errors: 0 });
+  const [result, setResult] = useState<string | null>(null);
+
+  const handleBackfill = async () => {
+    if (!companyId) return;
+    setRunning(true);
+    setResult(null);
+    setProgress({ done: 0, total: 0, errors: 0 });
+
+    const { data: obras, error } = await supabase
+      .from("obras_portfolio")
+      .select("id, municipio, estado, latitude, longitude")
+      .eq("company_id", companyId)
+      .or("latitude.is.null,longitude.is.null");
+
+    if (error || !obras) {
+      toast.error("Erro ao buscar obras.");
+      setRunning(false);
+      return;
+    }
+
+    const pending = obras.filter(o => o.municipio?.trim());
+    if (pending.length === 0) {
+      setResult("Todas as obras já possuem coordenadas ou não possuem município cadastrado.");
+      setRunning(false);
+      return;
+    }
+
+    setProgress({ done: 0, total: pending.length, errors: 0 });
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (let i = 0; i < pending.length; i++) {
+      const obra = pending[i];
+      try {
+        const coords = await geocodeMunicipio(obra.municipio!, obra.estado || "RS");
+        if (coords) {
+          await supabase.from("obras_portfolio").update({
+            latitude: coords.lat,
+            longitude: coords.lng,
+          }).eq("id", obra.id);
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      } catch {
+        errorCount++;
+      }
+      setProgress({ done: i + 1, total: pending.length, errors: errorCount });
+      // Respect Nominatim rate limit: 1 req/sec
+      if (i < pending.length - 1) {
+        await new Promise(r => setTimeout(r, 1100));
+      }
+    }
+
+    setResult(`Concluído: ${successCount} geocodificadas, ${errorCount} sem resultado.`);
+    setRunning(false);
+    if (successCount > 0) toast.success(`${successCount} obra(s) geocodificada(s) com sucesso!`);
+  };
+
+  return (
+    <div className="border rounded-lg p-4 space-y-4">
+      <h3 className="font-semibold text-sm flex items-center gap-2">
+        <MapPin className="h-4 w-4 text-primary" />
+        Geocodificar obras existentes
+      </h3>
+      <p className="text-xs text-muted-foreground">
+        Busca as coordenadas de todas as obras que possuem município cadastrado mas ainda não têm latitude/longitude.
+        Respeita o limite de 1 requisição por segundo do Nominatim.
+      </p>
+
+      {running && progress.total > 0 && (
+        <div className="space-y-2">
+          <Progress value={(progress.done / progress.total) * 100} className="h-2" />
+          <p className="text-xs text-muted-foreground">
+            {progress.done} de {progress.total} processada(s)
+            {progress.errors > 0 && ` · ${progress.errors} sem resultado`}
+          </p>
+        </div>
+      )}
+
+      {result && (
+        <p className="text-xs font-medium text-foreground bg-muted/50 rounded p-2">{result}</p>
+      )}
+
+      <Button size="sm" onClick={handleBackfill} disabled={running || !companyId}>
+        {running ? (
+          <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Processando...</>
+        ) : (
+          <><MapPin className="h-4 w-4 mr-1" /> Geocodificar obras existentes</>
+        )}
+      </Button>
+    </div>
+  );
 }
 
 export default function HoldingConfigPage() {
@@ -303,6 +403,9 @@ export default function HoldingConfigPage() {
           <TabsTrigger value="saude" className="gap-1.5">
             <HeartPulse className="h-3.5 w-3.5" /> Saúde das Obras
           </TabsTrigger>
+          <TabsTrigger value="geocode" className="gap-1.5">
+            <MapPin className="h-3.5 w-3.5" /> Geocodificação
+          </TabsTrigger>
         </TabsList>
 
         {/* === EMPRESAS === */}
@@ -459,6 +562,15 @@ export default function HoldingConfigPage() {
               Salvar Thresholds
             </Button>
           </div>
+        </TabsContent>
+
+        {/* === GEOCODIFICAÇÃO === */}
+        <TabsContent value="geocode" className="mt-4 space-y-4">
+          <div className="bg-muted/50 border rounded-lg p-4 text-sm text-muted-foreground">
+            Geocodifica obras existentes que ainda não possuem coordenadas (latitude/longitude).
+            Utiliza o serviço gratuito do OpenStreetMap (Nominatim) com limite de 1 requisição por segundo.
+          </div>
+          <GeocodeBackfillPanel companyId={company?.id || ""} />
         </TabsContent>
       </Tabs>
       {/* === EMPRESA DIALOG === */}

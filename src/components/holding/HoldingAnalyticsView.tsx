@@ -30,6 +30,8 @@ interface ObraPortfolio {
   uh: number | null;
   tipo_contrato: string | null;
   aditivo_valor_total: number;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface ObraEnriched extends ObraPortfolio {
@@ -264,13 +266,20 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
 
   // Obras with map pins
   const obrasOnMap = useMemo(() => {
-    return filteredObras.filter(o => o.municipio && CITY_COORDS[o.municipio]);
+    return filteredObras.filter(o =>
+      (o.latitude && o.longitude) || (o.municipio && CITY_COORDS[o.municipio])
+    );
   }, [filteredObras]);
 
   const mapObras: MapObra[] = useMemo(() => {
     return obrasOnMap
       .map(obra => {
-        const coords = CITY_COORDS[obra.municipio || ""];
+        // Prefer real coordinates from DB, fallback to static dictionary
+        const dbCoords = obra.latitude && obra.longitude
+          ? { lat: obra.latitude, lng: obra.longitude }
+          : null;
+        const staticCoords = CITY_COORDS[obra.municipio || ""];
+        const coords = dbCoords || staticCoords;
         if (!coords) return null;
         return {
           id: obra.id,
