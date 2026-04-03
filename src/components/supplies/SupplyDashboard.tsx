@@ -62,7 +62,7 @@ export function SupplyDashboard({ kpis, isLoading }: SupplyDashboardProps) {
           <CheckCircle2 className="h-4 w-4 text-green-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-green-600">
+          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
             {isLoading ? '-' : kpis?.on_time_delivered || 0}
           </div>
           <div className="flex items-center gap-2 mt-2">
