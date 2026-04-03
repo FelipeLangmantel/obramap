@@ -18,7 +18,7 @@ import {
 } from "recharts";
 import {
   TrendingUp, DollarSign, Clock, CheckCircle2, AlertCircle, Download, RefreshCw,
-  Search, Calendar, FileText, X, Wallet
+  Search, Calendar, FileText, X, Wallet, ChevronRight, ChevronDown
 } from "lucide-react";
 import { format, addMonths, startOfMonth, startOfWeek, endOfWeek, addWeeks, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
