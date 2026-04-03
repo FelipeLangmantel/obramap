@@ -280,7 +280,31 @@ export default function HoldingReceitasPage() {
     });
   }, [medicoes, previsaoMonths]);
 
-  // ─── Programação Financeira (Semanal / Quinzenal / Mensal) ───
+  // ─── Drill-down: medições do mês selecionado na previsão ───
+  const drillDownMedicoes = useMemo(() => {
+    if (!selectedMonth) return [];
+    const month = previsaoMonths.find(m => m.key === selectedMonth);
+    if (!month) return [];
+    // Same filter logic as previsaoData: porMesRef union porPrevisao
+    const seen = new Set<string>();
+    const result: MedicaoCompleta[] = [];
+    medicoes.forEach(m => {
+      if (seen.has(m.id)) return;
+      // Match by mes_referencia/ano_referencia
+      if (m.ano_referencia === month.year) {
+        const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0, 3).toLowerCase());
+        if (mesIdx === month.monthIdx) { seen.add(m.id); result.push(m); return; }
+      }
+      // Match by data_previsao_medicao
+      if (m.data_previsao_medicao) {
+        const d = new Date(m.data_previsao_medicao + "T12:00:00");
+        if (d.getMonth() === month.monthIdx && d.getFullYear() === month.year) { seen.add(m.id); result.push(m); }
+      }
+    });
+    return result.sort((a, b) => a.obra_nome.localeCompare(b.obra_nome, "pt-BR"));
+  }, [selectedMonth, medicoes, previsaoMonths]);
+
+
   const programacaoData = useMemo(() => {
     const now = new Date();
     // Project PAYMENT dates based on obra's prazo_pagamento
