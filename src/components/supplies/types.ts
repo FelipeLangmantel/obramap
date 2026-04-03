@@ -113,14 +113,14 @@ export const ALERT_STATUS_LABELS: Record<SupplyAlertStatus, string> = {
 };
 
 export const ALERT_STATUS_COLORS: Record<SupplyAlertStatus, string> = {
-  pending: 'bg-yellow-500',
-  quoted: 'bg-blue-400',
-  approved: 'bg-blue-600',
-  ordered: 'bg-purple-500',
-  in_transit: 'bg-orange-500',
-  delivered: 'bg-green-500',
-  contracted: 'bg-teal-500',
-  delayed: 'bg-red-500'
+  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-200',
+  quoted: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+  approved: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200',
+  ordered: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200',
+  in_transit: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200',
+  delivered: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200',
+  contracted: 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200',
+  delayed: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
 };
 
 // Measurement status for backend validation

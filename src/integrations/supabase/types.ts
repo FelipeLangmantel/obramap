@@ -9616,6 +9616,7 @@ export type Database = {
           status: string
         }[]
       }
+      get_company_supply_kpis: { Args: { p_company_id: string }; Returns: Json }
       get_contract_financial_dashboard: {
         Args: { p_contract_id: string }
         Returns: Json
