@@ -264,21 +264,34 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
     };
   }, [filteredObras]);
 
+  // Build a case-insensitive + trimmed lookup for CITY_COORDS
+  const cityLookup = useMemo(() => {
+    const map = new Map<string, { lat: number; lng: number }>();
+    for (const [key, val] of Object.entries(CITY_COORDS)) {
+      map.set(key.trim().toLowerCase(), val);
+    }
+    return map;
+  }, []);
+
+  const getCityCoords = (municipio: string | null) => {
+    if (!municipio) return null;
+    return cityLookup.get(municipio.trim().toLowerCase()) || null;
+  };
+
   // Obras with map pins
   const obrasOnMap = useMemo(() => {
     return filteredObras.filter(o =>
-      (o.latitude && o.longitude) || (o.municipio && CITY_COORDS[o.municipio])
+      (o.latitude && o.longitude) || (o.municipio && getCityCoords(o.municipio))
     );
-  }, [filteredObras]);
+  }, [filteredObras, cityLookup]);
 
   const mapObras: MapObra[] = useMemo(() => {
     return obrasOnMap
       .map(obra => {
-        // Prefer real coordinates from DB, fallback to static dictionary
         const dbCoords = obra.latitude && obra.longitude
           ? { lat: obra.latitude, lng: obra.longitude }
           : null;
-        const staticCoords = CITY_COORDS[obra.municipio || ""];
+        const staticCoords = getCityCoords(obra.municipio);
         const coords = dbCoords || staticCoords;
         if (!coords) return null;
         return {
