@@ -1002,7 +1002,7 @@ function ClearableDateInput({ value, onChange, label, disabled }: { value: strin
   );
 }
 
-function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInicial }: { obraId: string; valorContrato: number; hasInitialBalance: boolean; valorMedidoInicial: number }) {
+function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInicial, obra }: { obraId: string; valorContrato: number; hasInitialBalance: boolean; valorMedidoInicial: number; obra: ObraDrawerData }) {
   const { user, profile, requireEdit, isCompanyAdmin, isSystemAdmin } = useAuth();
   const isAdmin = isCompanyAdmin || isSystemAdmin;
   const userName = profile?.display_name || user?.email || "Usuário";
