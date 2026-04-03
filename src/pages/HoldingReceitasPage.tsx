@@ -63,11 +63,11 @@ const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" 
 const BRL_SHORT = (v: number) => v >= 1e6 ? `R$ ${(v / 1e6).toFixed(1)}M` : v >= 1000 ? `R$ ${(v / 1000).toFixed(0)}k` : BRL.format(v);
 
 const STATUS_MED_CONFIG: Record<string, { label: string; cls: string }> = {
-  aprovada: { label: "Medição Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
-  enviada: { label: "Medição Enviada", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
-  prevista: { label: "Previsão", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
-  pendente: { label: "Medição Pendente", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
-  nao_iniciada: { label: "Não Iniciada", cls: "bg-muted text-muted-foreground" },
+  aprovada: { label: "Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  enviada: { label: "Aguard. Fiscal", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+  prevista: { label: "Prevista", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
+  pendente: { label: "Prevista", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
+  nao_iniciada: { label: "Prevista", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
 };
 
 const STATUS_NF_CONFIG: Record<string, { label: string; cls: string }> = {
@@ -270,7 +270,7 @@ export default function HoldingReceitasPage() {
         obrasCount,
         aprovado: porMesRef.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
         enviado: porMesRef.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-        pendente: porMesRef.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+        pendente: porMesRef.filter(m => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
         nfRecebido: porMesRef.filter(m => m.status_nf === "recebido").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
         total: porMesRef.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
         previsto: porPrevisao.reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0),
@@ -287,7 +287,7 @@ export default function HoldingReceitasPage() {
     const medicoesComData = medicoes.map(m => {
       const prazo = m.obra_prazo_pagamento || 30;
       let dataRef: Date | null = null;
-      let statusEntrada = "pendente";
+      let statusEntrada = "previsto";
       let calculo = "";
 
       if (m.status_nf === "recebido" && m.data_pagamento) {
@@ -383,7 +383,7 @@ export default function HoldingReceitasPage() {
           recebido: medsInMonth.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           aprovado: medsInMonth.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           enviado: medsInMonth.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-          pendente: medsInMonth.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          pendente: medsInMonth.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
           total: medsInMonth.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
           medicoes: medsInMonth,
         };
@@ -480,14 +480,14 @@ export default function HoldingReceitasPage() {
               </Card>
               <Card className="border-b-2 border-b-blue-500">
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Clock className="h-3.5 w-3.5 text-blue-500" />Aguardando Aprovação</div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><Clock className="h-3.5 w-3.5 text-blue-500" />Aguard. Fiscal</div>
                   <p className="text-xl font-bold text-blue-600">{BRL.format(kpis.totalEnviado)}</p>
                   <p className="text-[10px] text-muted-foreground">{kpis.countEnviadas} medições</p>
                 </CardContent>
               </Card>
               <Card className="border-b-2 border-b-amber-500">
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><AlertCircle className="h-3.5 w-3.5 text-amber-500" />Medições Pendentes</div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1"><AlertCircle className="h-3.5 w-3.5 text-amber-500" />Medições Previstas</div>
                   <p className="text-xl font-bold text-amber-600">{BRL.format(kpis.totalPendente)}</p>
                   <p className="text-[10px] text-muted-foreground">{kpis.countPendentes} medições</p>
                 </CardContent>
@@ -702,7 +702,7 @@ export default function HoldingReceitasPage() {
                   <span>
                     <strong>Total:</strong> {BRL.format(medicoesFiltradas.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0))}
                     {" | "}
-                    <strong>Aprovado:</strong> {BRL.format(medicoesFiltradas.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0))}
+                    <strong>Aprovado:</strong> {BRL.format(medicoesFiltradas.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0))}
                   </span>
                 </div>
               </TabsContent>
@@ -772,8 +772,9 @@ export default function HoldingReceitasPage() {
                           <Tooltip formatter={(v: number) => BRL.format(v)} />
                           <Legend />
                           <Bar dataKey="aprovado" name="Aprovado" fill="#22c55e" />
-                          <Bar dataKey="enviado" name="Enviado" fill="#3b82f6" />
-                          <Bar dataKey="pendente" name="Pendente" fill="#f59e0b" />
+                          <Bar dataKey="enviado" name="Aguard. Fiscal" fill="#3b82f6" />
+                          <Bar dataKey="previsto" name="Previsto" fill="#f59e0b" />
+                          <Bar dataKey="pendente" name="Medições Previstas" fill="#94a3b8" />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
