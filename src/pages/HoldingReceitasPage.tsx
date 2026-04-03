@@ -42,9 +42,10 @@ interface MedicaoCompleta {
   data_previsao_medicao: string | null;
   data_envio: string | null;
   data_aprovacao: string | null;
-  status_medicao: "aprovada" | "enviada" | "pendente" | "nao_iniciada";
+  status_medicao: "aprovada" | "enviada" | "pendente" | "nao_iniciada" | "prevista";
   valor_previsto_medicao: number;
   valor_medicao: number;
+  valor_acatado: number | null;
   num_nf: string | null;
   data_pagamento: string | null;
   status_nf: "recebido" | "aguardando_aprovacao" | "pendente";
