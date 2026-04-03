@@ -104,7 +104,7 @@ export function SupplyDashboard({ kpis, isLoading }: SupplyDashboardProps) {
           <Pause className="h-4 w-4 text-purple-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-purple-600">
+          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
             {isLoading ? '-' : kpis?.production_stopped || 0}
           </div>
           <div className="flex items-center gap-2 mt-2">
