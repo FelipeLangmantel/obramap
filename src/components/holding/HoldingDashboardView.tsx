@@ -1332,7 +1332,7 @@ export default function HoldingDashboardView() {
                       nome: obra.nome, empresa: obra.empresa || "", num_contrato: obra.num_contrato || "",
                       parceria_scp: obra.parceria_scp || "", valor_contrato: String(obra.valor_contrato || ""),
                       data_inicio: obra.data_inicio || "", prazo_dias: String(obra.prazo_dias || ""),
-                      status: obra.status, percentual_andamento: obra.percentual_andamento,
+                      status: obra.status, percentual_andamento: obra.percentual_andamento, percentual_fisico: obra.percentual_fisico || 0,
                       periodo_medicao: obra.periodo_medicao || "", prazo_pagamento: obra.prazo_pagamento || "",
                       municipio: obra.municipio || "", estado: obra.estado || "RS",
                       uh: String(obra.uh || ""), responsavel: obra.responsavel || "",
