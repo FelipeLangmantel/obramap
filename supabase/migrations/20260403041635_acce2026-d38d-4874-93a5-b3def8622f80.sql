@@ -1,0 +1,1 @@
+ALTER TYPE medicao_status ADD VALUE IF NOT EXISTS 'prevista';
