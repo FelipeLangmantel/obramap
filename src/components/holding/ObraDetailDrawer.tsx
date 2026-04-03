@@ -47,10 +47,11 @@ function useInvalidateHolding() {
 }
 
 /**
- * Recalcula e persiste o percentual_andamento em obras_portfolio
+ * Recalcula e persiste o percentual_financeiro em obras_portfolio
  * com base nas medições aprovadas / valor do contrato.
  * Chamado após qualquer add/update/delete de medição.
  * Só atualiza se valorContrato > 0 — sem contrato não há base de cálculo.
+ * Também atualiza percentual_andamento para compatibilidade legada.
  */
 async function recalcularPercentualAndamento(
   obraId: string,
@@ -58,8 +59,6 @@ async function recalcularPercentualAndamento(
 ): Promise<void> {
   if (valorContrato <= 0) return;
   try {
-    // Buscar todas as medições aprovadas (incluindo Saldo Inicial)
-    // Usa valor_acatado quando disponível — o que foi efetivamente aceito pelo governo
     const { data: meds } = await supabase
       .from("medicoes_ple")
       .select("valor_medicao, valor_acatado, status_medicao")
@@ -70,10 +69,14 @@ async function recalcularPercentualAndamento(
       (s, m) => s + (Number((m as any).valor_acatado ?? m.valor_medicao) || 0), 0
     );
     const novoPercentual = Math.min(100, (totalAprovado / valorContrato) * 100);
+    const rounded = Math.round(novoPercentual * 10) / 10;
 
     await supabase
       .from("obras_portfolio")
-      .update({ percentual_andamento: Math.round(novoPercentual * 10) / 10 })
+      .update({ 
+        percentual_financeiro: rounded,
+        percentual_andamento: rounded 
+      })
       .eq("id", obraId);
   } catch (e) {
     console.error("[recalcularPercentualAndamento] Erro:", e);
@@ -126,6 +129,8 @@ export interface ObraDrawerData {
   aditivo_prazo_dias?: number;
   aditivo_valor_total?: number;
   percentual_andamento?: number;
+  percentual_fisico?: number;
+  percentual_financeiro?: number;
   has_initial_balance?: boolean;
   valor_medido_inicial?: number;
   status?: string;

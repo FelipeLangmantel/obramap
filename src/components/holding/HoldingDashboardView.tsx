@@ -84,6 +84,8 @@ interface ObraPortfolio {
   aditivo_prazo_dias: number;
   status: "em_andamento" | "nao_iniciada" | "concluida" | "paralisada";
   percentual_andamento: number;
+  percentual_fisico: number;
+  percentual_financeiro: number;
   periodo_medicao: string | null;
   prazo_pagamento: string | null;
   municipio: string | null;
@@ -258,20 +260,20 @@ export function calcHealth(
   if (obra.status === "concluida") return "green";
 
   const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
-  const pctFisico = (obra.percentual_andamento || 0) / 100;
+  const pctFisico = (obra.percentual_fisico || 0) / 100;
 
   // ── IDC — Índice de Desempenho de Custo ──────────────────────────────────
-  // NOTA TÉCNICA: O IDC compara % físico executado vs valor medido.
-  // Atualmente o percentual_andamento é calculado automaticamente pelo financeiro
-  // (acatado/contrato), tornando o IDC matematicamente = 1.0 sempre.
-  // O IDC real requer um campo percentual_fisico independente (a implementar).
-  // Por ora, o IDC é suprimido para não enganar o gestor com verde falso.
+  // IDC compara valor medido aprovado vs valor planejado (% físico × contrato)
   const totalMedidoAprovado = allMedicoes
     .filter(m => m.status_medicao === "aprovada")
     .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
 
-  // IDC desabilitado até ter campo percentual_fisico independente do financeiro
-  // if (pctFisico > 0.05 && valorContrato > 0) { ... }
+  if (pctFisico > 0.05 && valorContrato > 0) {
+    const valorPlanejado = pctFisico * valorContrato;
+    const idc = totalMedidoAprovado / valorPlanejado;
+    if (idc < T.idc_red) return "red";
+    if (idc < T.idc_yellow) return "yellow";
+  }
 
   // ── IDP — Índice de Desempenho de Prazo ──────────────────────────────────
   if (obra.data_inicio && obra.prazo_dias > 0) {
@@ -343,7 +345,7 @@ export function calcHealthDetails(
   const T = HEALTH_THRESHOLDS;
   const now = new Date();
   const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
-  const pctFisico = (obra.percentual_andamento || 0) / 100;
+  const pctFisico = (obra.percentual_fisico || 0) / 100;
 
   // Usa valor_acatado para IDC — valor real aceito pelo governo
   const totalMedidoAprovado = allMedicoes
@@ -351,12 +353,13 @@ export function calcHealthDetails(
     .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
 
   // ── IDC ──────────────────────────────────────────────────────────────────
-  // IDC desabilitado: percentual_andamento é financeiro, não físico.
-  // IDC = acatado / (acatado/contrato × contrato) = 1.0 sempre — sem valor informativo.
-  // Reativar após implementar campo percentual_fisico independente.
   let idcValue: number | null = null;
   let idcStatus: HealthIndicator["status"] = "na";
-  // if (pctFisico > 0.05 && valorContrato > 0) { ... disabled ... }
+  if (pctFisico > 0.05 && valorContrato > 0) {
+    const valorPlanejado = pctFisico * valorContrato;
+    idcValue = totalMedidoAprovado / valorPlanejado;
+    idcStatus = idcValue < T.idc_red ? "red" : idcValue < T.idc_yellow ? "yellow" : "green";
+  }
 
   // ── IDP ──────────────────────────────────────────────────────────────────
   let idpValue: number | null = null;
@@ -479,6 +482,7 @@ export default function HoldingDashboardView() {
     valor_contrato: "", data_inicio: "", prazo_dias: "",
     status: "nao_iniciada" as "nao_iniciada" | "em_andamento" | "concluida" | "paralisada",
     percentual_andamento: 0,
+    percentual_fisico: 0,
     periodo_medicao: "", prazo_pagamento: "",
     municipio: "", estado: "RS",
     uh: "", responsavel: "", responsavel_nome: "", responsavel_telefone: "",
@@ -637,7 +641,7 @@ export default function HoldingDashboardView() {
   const resetNewObraForm = () => setNewObraForm({
     nome: "", empresa: "", num_contrato: "", parceria_scp: "",
     valor_contrato: "", data_inicio: "", prazo_dias: "",
-    status: "nao_iniciada", percentual_andamento: 0,
+    status: "nao_iniciada", percentual_andamento: 0, percentual_fisico: 0,
     periodo_medicao: "", prazo_pagamento: "",
     municipio: "", estado: "RS",
     uh: "", responsavel: "", responsavel_nome: "", responsavel_telefone: "",
@@ -656,25 +660,7 @@ export default function HoldingDashboardView() {
       return;
     }
 
-    // Validar limite de % baseado nas medições aprovadas
-    if (editingObra) {
-      const totalMedidoAprovado = (editingObra.allMedicoes || [])
-        .filter(m => (m.status_medicao === "enviada" || m.status_medicao === "aprovada") && m.num_medicao !== "Saldo Inicial")
-        .reduce((s, m) => {
-          if (m.status_medicao === "aprovada") {
-            return s + (Number(m.valor_acatado ?? m.valor_medicao) || 0);
-          }
-          return s + (Number(m.valor_medicao) || 0);
-        }, 0);
-      const valorContrato = Number(newObraForm.valor_contrato) || 0;
-      if (valorContrato > 0 && totalMedidoAprovado > 0) {
-        const maxPct = Math.min(100, Math.round((totalMedidoAprovado / valorContrato) * 1000) / 10);
-        if (newObraForm.percentual_andamento > maxPct) {
-          toast.warning(`% Andamento não pode ultrapassar ${maxPct.toFixed(1)}% — limite baseado nas medições aprovadas.`);
-          return;
-        }
-      }
-    }
+    // percentual_fisico é livre — inserido pelo engenheiro sem limite financeiro
     setSavingObra(true);
     const payload = {
       company_id: company.id,
@@ -687,6 +673,7 @@ export default function HoldingDashboardView() {
       prazo_dias: Number(newObraForm.prazo_dias) || 0,
       status: newObraForm.status,
       percentual_andamento: newObraForm.percentual_andamento,
+      percentual_fisico: newObraForm.percentual_fisico,
       periodo_medicao: newObraForm.periodo_medicao || null,
       prazo_pagamento: newObraForm.prazo_pagamento || null,
       municipio: newObraForm.municipio || null,
@@ -1328,7 +1315,7 @@ export default function HoldingDashboardView() {
                       nome: obra.nome, empresa: obra.empresa || "", num_contrato: obra.num_contrato || "",
                       parceria_scp: obra.parceria_scp || "", valor_contrato: String(obra.valor_contrato || ""),
                       data_inicio: obra.data_inicio || "", prazo_dias: String(obra.prazo_dias || ""),
-                      status: obra.status, percentual_andamento: obra.percentual_andamento,
+                      status: obra.status, percentual_andamento: obra.percentual_andamento, percentual_fisico: obra.percentual_fisico || 0,
                       periodo_medicao: obra.periodo_medicao || "", prazo_pagamento: obra.prazo_pagamento || "",
                       municipio: obra.municipio || "", estado: obra.estado || "RS",
                       uh: String(obra.uh || ""), responsavel: obra.responsavel || "",
@@ -1456,66 +1443,56 @@ export default function HoldingDashboardView() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs">% Andamento Físico</Label>
-              {(() => {
-                const totalMedidoAprovado = (editingObra?.allMedicoes || [])
-                  .filter(m => (m.status_medicao === "enviada" || m.status_medicao === "aprovada") && m.num_medicao !== "Saldo Inicial")
-                  .reduce((s, m) => {
-                    if (m.status_medicao === "aprovada") {
-                      return s + (Number(m.valor_acatado ?? m.valor_medicao) || 0);
-                    }
-                    return s + (Number(m.valor_medicao) || 0);
-                  }, 0);
-                const valorContrato = Number(newObraForm.valor_contrato) || 0;
-                const maxPct = valorContrato > 0 && totalMedidoAprovado > 0
-                  ? Math.min(100, Math.round((totalMedidoAprovado / valorContrato) * 1000) / 10)
-                  : 100;
-                return (
-                  <>
-                    <div className="flex items-center gap-3 mt-2">
-                      <Slider
-                        value={[newObraForm.percentual_andamento]}
-                        onValueChange={([v]) => setNewObraForm(p => ({ ...p, percentual_andamento: Math.min(v, maxPct) }))}
-                        max={maxPct}
-                        step={0.5}
-                        className="flex-1"
-                      />
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          min={0} max={maxPct} step={0.5}
-                          value={newObraForm.percentual_andamento}
-                          onChange={(e) => {
-                            const v = Math.min(maxPct, Math.max(0, parseFloat(e.target.value) || 0));
-                            setNewObraForm(p => ({ ...p, percentual_andamento: v }));
-                          }}
-                          className="w-20 text-sm text-right"
-                        />
-                        <span className="text-xs text-muted-foreground">%</span>
-                      </div>
-                    </div>
-                    <div className="mt-1 space-y-0.5">
-                      {newObraForm.valor_contrato && Number(newObraForm.valor_contrato) > 0 && (
-                        <p className="text-[10px] text-muted-foreground">
-                          Valor executado estimado:{" "}
-                          <span className="font-medium text-foreground">
-                            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                              Number(newObraForm.valor_contrato) * newObraForm.percentual_andamento / 100
-                            )}
-                          </span>
-                        </p>
-                      )}
-                      {maxPct < 100 && (
-                        <p className="text-[10px] text-amber-500">
-                          Máximo permitido: {maxPct.toFixed(1)}% — baseado em{" "}
-                          {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalMedidoAprovado)}{" "}
-                          medidos e aprovados
-                        </p>
-                      )}
-                    </div>
-                  </>
-                );
-              })()}
+              <Label className="text-xs">% Físico (inserido pelo engenheiro)</Label>
+              <div className="flex items-center gap-3 mt-2">
+                <Slider
+                  value={[newObraForm.percentual_fisico]}
+                  onValueChange={([v]) => setNewObraForm(p => ({ ...p, percentual_fisico: v }))}
+                  max={100}
+                  step={0.5}
+                  className="flex-1"
+                />
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    min={0} max={100} step={0.5}
+                    value={newObraForm.percentual_fisico}
+                    onChange={(e) => {
+                      const v = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0));
+                      setNewObraForm(p => ({ ...p, percentual_fisico: v }));
+                    }}
+                    className="w-20 text-sm text-right"
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                </div>
+              </div>
+              {newObraForm.valor_contrato && Number(newObraForm.valor_contrato) > 0 && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Valor executado estimado:{" "}
+                  <span className="font-medium text-foreground">
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                      Number(newObraForm.valor_contrato) * newObraForm.percentual_fisico / 100
+                    )}
+                  </span>
+                </p>
+              )}
+            </div>
+            <div>
+              <Label className="text-xs">% Financeiro (calculado automaticamente)</Label>
+              <div className="flex items-center gap-3 mt-2">
+                <div className="flex-1 h-2 rounded-full bg-secondary overflow-hidden">
+                  <div 
+                    className="h-full bg-primary rounded-full transition-all" 
+                    style={{ width: `${Math.min(100, editingObra?.percentual_financeiro || editingObra?.percentual_andamento || 0)}%` }} 
+                  />
+                </div>
+                <span className="text-sm font-medium w-16 text-right">
+                  {(editingObra?.percentual_financeiro || editingObra?.percentual_andamento || 0).toFixed(1)}%
+                </span>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Baseado nas medições aprovadas / valor do contrato
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">Período Medição</Label><Input value={newObraForm.periodo_medicao} onChange={(e) => setNewObraForm(p => ({ ...p, periodo_medicao: e.target.value }))} placeholder="" /></div>
