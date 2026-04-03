@@ -509,7 +509,6 @@ export default function HoldingDashboardView() {
   const [docConfigObraNome, setDocConfigObraNome] = useState<string>("");
   const onboarding = useOnboarding("cadastro_obra");
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [importing, setImporting] = useState(false);
 
   // Holding empresas for select
   const { data: holdingEmpresas = [] } = useQuery({
