@@ -941,7 +941,8 @@ function ClearableDateInput({ value, onChange, label, disabled }: { value: strin
 }
 
 function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInicial }: { obraId: string; valorContrato: number; hasInitialBalance: boolean; valorMedidoInicial: number }) {
-  const { user, profile, requireEdit } = useAuth();
+  const { user, profile, requireEdit, isCompanyAdmin, isSystemAdmin } = useAuth();
+  const isAdmin = isCompanyAdmin || isSystemAdmin;
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
@@ -965,14 +966,20 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
   const [confirmAcatamento, setConfirmAcatamento] = useState(false);
   const [confirmRecebimento, setConfirmRecebimento] = useState(false);
   const [confirmEnvioEarly, setConfirmEnvioEarly] = useState(false);
+  const [confirmPrevisao, setConfirmPrevisao] = useState(false);
+
+  // Correction request
+  const [showCorrectionDialog, setShowCorrectionDialog] = useState(false);
+  const [correctionSection, setCorrectionSection] = useState("previsao");
+  const [correctionReason, setCorrectionReason] = useState("");
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
 
   const load = useCallback(async () => {
-    const { data } = await supabase
-      .from("medicoes_ple")
-      .select("*")
-      .eq("obra_id", obraId)
-      .order("ano_referencia", { ascending: true });
-    const sorted = (data || []).sort((a, b) => {
+    const [medRes, reqRes] = await Promise.all([
+      supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).order("ano_referencia", { ascending: true }),
+      supabase.from("medicao_correction_requests").select("*").eq("obra_id", obraId).eq("status", "pending").order("created_at", { ascending: false }),
+    ]);
+    const sorted = (medRes.data || []).sort((a, b) => {
       if (a.num_medicao === "Saldo Inicial") return -1;
       if (b.num_medicao === "Saldo Inicial") return 1;
       const na = parseInt(a.num_medicao || "0", 10);
@@ -981,6 +988,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       return (a.num_medicao || "").localeCompare(b.num_medicao || "");
     });
     setMedicoes(sorted);
+    setPendingRequests(reqRes.data || []);
     setLoading(false);
   }, [obraId]);
 
@@ -1002,6 +1010,38 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       .reduce((s, m) => s + Math.max(Number(m.valor_medicao) || 0, Number(m.valor_previsto_medicao) || 0), 0);
     return baseJaComprometida + lancadoNoBanco;
   }, [medicoes, baseJaComprometida]);
+
+  /** Check if a measurement section is locked and whether user can edit it */
+  const isSectionLocked = useCallback((m: any, section: string): boolean => {
+    if (!m) return false;
+    // Check temporary unlock
+    if (m.unlocked_section === section && m.unlocked_until) {
+      const unlockExpiry = new Date(m.unlocked_until);
+      if (unlockExpiry > new Date()) return false; // temporarily unlocked
+    }
+    const status = m.status_medicao;
+    switch (section) {
+      case "previsao":
+        // Locked after envio is registered (status is enviada or aprovada)
+        return status === "enviada" || status === "aprovada";
+      case "envio":
+        // Locked after envio is registered
+        return status === "enviada" || status === "aprovada";
+      case "acatamento":
+        // Locked after aprovada
+        return status === "aprovada";
+      case "pagamento":
+        // Locked after recebido
+        return m.status_nf === "recebido";
+      default:
+        return false;
+    }
+  }, []);
+
+  const canEditSection = useCallback((m: any, section: string): boolean => {
+    if (isAdmin) return true; // admin can always edit
+    return !isSectionLocked(m, section);
+  }, [isAdmin, isSectionLocked]);
 
   // ─── CREATE NEW MEASUREMENT (Step 1: prevista) ───
   const addMedicao = async () => {
@@ -1033,6 +1073,12 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       }
     }
 
+    // Show confirmation dialog
+    setConfirmPrevisao(true);
+  };
+
+  const doAddMedicao = async () => {
+    setConfirmPrevisao(false);
     const payload: any = {
       obra_id: obraId,
       num_medicao: newForm.num_medicao,
@@ -1072,6 +1118,12 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
   // ─── SAVE EDIT (Section 1 only — previsão fields) ───
   const saveEditPrevisao = async () => {
     if (!requireEdit() || !editingMedicao) return;
+
+    // Check locking
+    if (isSectionLocked(editingMedicao, "previsao") && !isAdmin) {
+      toast.error("🔒 Seção bloqueada. Solicite correção ao administrador.");
+      return;
+    }
 
     if (valorContrato > 0) {
       const novoValor = Math.max(Number(editForm.valor_medicao) || 0, Number(editForm.valor_previsto_medicao) || 0);
@@ -1134,7 +1186,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       { status_medicao: editingMedicao.status_medicao }, payload);
 
     await recalcularPercentualAndamento(obraId, valorContrato);
-    toast.success("Medição registrada como Enviada!");
+    toast.success("Medição registrada como Enviada! Os campos de previsão e envio estão agora bloqueados.");
     invalidateHolding();
     setEditingMedicao(null);
     load();
@@ -1175,7 +1227,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       userId, userName, { status_medicao: "enviada" }, payload);
 
     await recalcularPercentualAndamento(obraId, valorContrato);
-    toast.success(glosa > 0 ? "Medição aprovada com glosa!" : "Medição aprovada integralmente!");
+    toast.success(glosa > 0 ? "Medição aprovada com glosa! Campos bloqueados." : "Medição aprovada integralmente! Campos bloqueados.");
     invalidateHolding();
     setEditingMedicao(null);
     load();
@@ -1211,7 +1263,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       `Recebimento NF ${editForm.num_nf || "—"} — Pgto: ${editForm.data_pagamento}`,
       userId, userName, { status_nf: editingMedicao.status_nf }, payload);
 
-    toast.success("Recebimento registrado!");
+    toast.success("Recebimento registrado! Medição completamente bloqueada.");
     invalidateHolding();
     setEditingMedicao(null);
     load();
@@ -1224,10 +1276,78 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     setConfirmRecebimento(true);
   };
 
+  // ─── CORRECTION REQUEST ───
+  const submitCorrectionRequest = async () => {
+    if (!editingMedicao || !correctionReason.trim()) {
+      toast.warning("Informe o motivo da correção.");
+      return;
+    }
+
+    const { error } = await supabase.from("medicao_correction_requests").insert({
+      obra_id: obraId,
+      medicao_id: editingMedicao.id,
+      requested_by: userId,
+      requested_by_name: userName,
+      reason: correctionReason,
+      section: correctionSection,
+    } as any);
+
+    if (error) { toast.error("Erro ao enviar solicitação."); return; }
+
+    await registrarLog(obraId, "medicao_correction_requests", editingMedicao.id, "solicitou_correcao",
+      `Solicitou correção na seção "${correctionSection}" — Motivo: ${correctionReason}`,
+      userId, userName);
+
+    toast.success("Solicitação enviada ao administrador da empresa!");
+    setShowCorrectionDialog(false);
+    setCorrectionReason("");
+    load();
+  };
+
+  // ─── ADMIN: APPROVE/REJECT CORRECTION REQUEST ───
+  const handleCorrectionReview = async (requestId: string, approve: boolean) => {
+    const request = pendingRequests.find(r => r.id === requestId);
+    if (!request) return;
+
+    if (approve) {
+      // Unlock the measurement section for 24 hours
+      const unlockUntil = new Date();
+      unlockUntil.setHours(unlockUntil.getHours() + 24);
+
+      await supabase.from("medicoes_ple").update({
+        unlocked_until: unlockUntil.toISOString(),
+        unlocked_by: userId,
+        unlocked_section: request.section,
+      } as any).eq("id", request.medicao_id);
+    }
+
+    await supabase.from("medicao_correction_requests").update({
+      status: approve ? "approved" : "rejected",
+      reviewed_by: userId,
+      reviewed_by_name: userName,
+      reviewed_at: new Date().toISOString(),
+    } as any).eq("id", requestId);
+
+    await registrarLog(obraId, "medicao_correction_requests", requestId,
+      approve ? "aprovou_correcao" : "rejeitou_correcao",
+      `${approve ? "Aprovou" : "Rejeitou"} solicitação de correção — Medição: ${request.medicao_id}`,
+      userId, userName);
+
+    toast.success(approve ? "Solicitação aprovada! Medição desbloqueada por 24h." : "Solicitação rejeitada.");
+    load();
+  };
+
   const deleteMedicao = async (id: string) => {
     if (!requireEdit()) return;
-    setDeletingMedicaoId(null);
     const medicaoSnap = medicoes.find(m => m.id === id);
+
+    // Non-admins can't delete locked measurements
+    if (!isAdmin && (medicaoSnap?.status_medicao === "enviada" || medicaoSnap?.status_medicao === "aprovada")) {
+      toast.error("🔒 Medição bloqueada. Somente o administrador pode excluir.");
+      return;
+    }
+
+    setDeletingMedicaoId(null);
     const { error } = await supabase.from("medicoes_ple").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir medição"); return; }
 
@@ -1264,9 +1384,23 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
   const status = editForm.status_medicao || "prevista";
   const glosaValue = (editForm.valor_medicao || 0) - (editForm.valor_acatado || 0);
 
+  // Lock status checks for the current editing measurement
+  const previsaoLocked = editingMedicao ? isSectionLocked(editingMedicao, "previsao") : false;
+  const envioLocked = editingMedicao ? isSectionLocked(editingMedicao, "envio") : false;
+  const acatamentoLocked = editingMedicao ? isSectionLocked(editingMedicao, "acatamento") : false;
+  const pagamentoLocked = editingMedicao ? isSectionLocked(editingMedicao, "pagamento") : false;
+
+  const canEditPrevisao = editingMedicao ? canEditSection(editingMedicao, "previsao") : true;
+  const canEditEnvio = editingMedicao ? canEditSection(editingMedicao, "envio") : true;
+  const canEditAcatamento = editingMedicao ? canEditSection(editingMedicao, "acatamento") : true;
+  const canEditPagamento = editingMedicao ? canEditSection(editingMedicao, "pagamento") : true;
+
   // ─── RENDER STAGED EDIT FORM ───
   const renderStagedEditForm = () => {
     if (!editingMedicao) return null;
+
+    // Check for pending correction request for this measurement
+    const hasPendingRequest = pendingRequests.some(r => r.medicao_id === editingMedicao.id);
 
     return (
       <Card className="border-primary">
@@ -1278,32 +1412,50 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
             </Button>
           </div>
 
-          {/* SECTION 1 — Previsão (always visible, always editable) */}
+          {/* SECTION 1 — Previsão */}
           <div className="space-y-3">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1">
               <CalendarDays className="h-3 w-3" /> 1. Previsão
+              {previsaoLocked && !isAdmin && <Lock className="h-3 w-3 text-amber-500 ml-1" />}
+              {previsaoLocked && isAdmin && <Badge variant="outline" className="text-[9px] ml-1 text-amber-600">Admin: desbloqueado</Badge>}
             </p>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <div><label className="text-xs text-muted-foreground">Nº Medição</label><Input value={editForm.num_medicao || ""} onChange={(e) => setEditForm({ ...editForm, num_medicao: e.target.value })} /></div>
-              <div><label className="text-xs text-muted-foreground">Mês Ref.</label>
-                <Select value={editForm.mes_referencia || ""} onValueChange={(v) => setEditForm({ ...editForm, mes_referencia: v })}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>
-                    {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map(m => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {previsaoLocked && !isAdmin ? (
+              <div className="flex items-center justify-between text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/30 rounded p-3 border border-amber-200 dark:border-amber-800">
+                <div className="flex items-center gap-2">
+                  <Lock className="h-3.5 w-3.5 text-amber-500" />
+                  <span>Seção bloqueada após registro do envio. Somente o administrador da empresa pode editar.</span>
+                </div>
+                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setCorrectionSection("previsao"); setShowCorrectionDialog(true); }}>
+                  Solicitar Correção
+                </Button>
               </div>
-              <div><label className="text-xs text-muted-foreground">Ano Ref.</label><Input type="number" value={editForm.ano_referencia || ""} onChange={(e) => setEditForm({ ...editForm, ano_referencia: Number(e.target.value) })} /></div>
-              <ClearableDateInput label="Previsão Envio" value={editForm.data_previsao_medicao || ""} onChange={(v) => setEditForm({ ...editForm, data_previsao_medicao: v })} />
-              <div><label className="text-xs text-muted-foreground">Valor Previsto (R$)</label>
-                <CurrencyInput value={editForm.valor_previsto_medicao || 0} onChange={(v) => setEditForm({ ...editForm, valor_previsto_medicao: v })} />
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <Button size="sm" variant="outline" onClick={saveEditPrevisao}>Salvar Previsão</Button>
-            </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <div><label className="text-xs text-muted-foreground">Nº Medição</label><Input value={editForm.num_medicao || ""} onChange={(e) => setEditForm({ ...editForm, num_medicao: e.target.value })} disabled={!canEditPrevisao} /></div>
+                  <div><label className="text-xs text-muted-foreground">Mês Ref.</label>
+                    <Select value={editForm.mes_referencia || ""} onValueChange={(v) => setEditForm({ ...editForm, mes_referencia: v })} disabled={!canEditPrevisao}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                      <SelectContent>
+                        {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map(m => (
+                          <SelectItem key={m} value={m}>{m}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div><label className="text-xs text-muted-foreground">Ano Ref.</label><Input type="number" value={editForm.ano_referencia || ""} onChange={(e) => setEditForm({ ...editForm, ano_referencia: Number(e.target.value) })} disabled={!canEditPrevisao} /></div>
+                  <ClearableDateInput label="Previsão Envio" value={editForm.data_previsao_medicao || ""} onChange={(v) => setEditForm({ ...editForm, data_previsao_medicao: v })} disabled={!canEditPrevisao} />
+                  <div><label className="text-xs text-muted-foreground">Valor Previsto (R$)</label>
+                    <CurrencyInput value={editForm.valor_previsto_medicao || 0} onChange={(v) => setEditForm({ ...editForm, valor_previsto_medicao: v })} />
+                  </div>
+                </div>
+                {canEditPrevisao && (
+                  <div className="flex justify-end">
+                    <Button size="sm" variant="outline" onClick={saveEditPrevisao}>Salvar Previsão</Button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           <Separator />
@@ -1312,6 +1464,8 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
           <div className="space-y-3">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1">
               <TrendingUp className="h-3 w-3" /> 2. Envio ao Fiscal
+              {envioLocked && !isAdmin && <Lock className="h-3 w-3 text-amber-500 ml-1" />}
+              {envioLocked && isAdmin && <Badge variant="outline" className="text-[9px] ml-1 text-amber-600">Admin: desbloqueado</Badge>}
             </p>
             {status === "prevista" && !editForm.data_envio ? (
               <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded p-3">
@@ -1319,16 +1473,30 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
                 Preencha quando enviar ao fiscal
               </div>
             ) : null}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <ClearableDateInput label="Data Envio" value={editForm.data_envio || ""} onChange={(v) => setEditForm({ ...editForm, data_envio: v })} disabled={status === "enviada" || status === "aprovada"} />
-              <div><label className="text-xs text-muted-foreground">Valor Realizado (R$)</label>
-                <CurrencyInput value={editForm.valor_medicao || 0} onChange={(v) => setEditForm({ ...editForm, valor_medicao: v })} />
+            {envioLocked && !isAdmin ? (
+              <div className="flex items-center justify-between text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/30 rounded p-3 border border-amber-200 dark:border-amber-800">
+                <div className="flex items-center gap-2">
+                  <Lock className="h-3.5 w-3.5 text-amber-500" />
+                  <span>Seção bloqueada após registro do envio.</span>
+                </div>
+                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setCorrectionSection("envio"); setShowCorrectionDialog(true); }}>
+                  Solicitar Correção
+                </Button>
               </div>
-            </div>
-            {status === "prevista" && (
-              <div className="flex justify-end">
-                <Button size="sm" onClick={handleRegistrarEnvio}>Registrar Envio</Button>
-              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <ClearableDateInput label="Data Envio" value={editForm.data_envio || ""} onChange={(v) => setEditForm({ ...editForm, data_envio: v })} disabled={!canEditEnvio} />
+                  <div><label className="text-xs text-muted-foreground">Valor Realizado (R$)</label>
+                    <CurrencyInput value={editForm.valor_medicao || 0} onChange={(v) => setEditForm({ ...editForm, valor_medicao: v })} />
+                  </div>
+                </div>
+                {status === "prevista" && (
+                  <div className="flex justify-end">
+                    <Button size="sm" onClick={handleRegistrarEnvio}>Registrar Envio</Button>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -1338,16 +1506,28 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
           <div className="space-y-3">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1">
               <CheckCircle2 className="h-3 w-3" /> 3. Acatamento
+              {acatamentoLocked && !isAdmin && <Lock className="h-3 w-3 text-amber-500 ml-1" />}
+              {acatamentoLocked && isAdmin && <Badge variant="outline" className="text-[9px] ml-1 text-amber-600">Admin: desbloqueado</Badge>}
             </p>
             {status === "prevista" ? (
               <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded p-3">
                 <Lock className="h-3.5 w-3.5" />
                 Disponível após registrar o envio
               </div>
+            ) : acatamentoLocked && !isAdmin ? (
+              <div className="flex items-center justify-between text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/30 rounded p-3 border border-amber-200 dark:border-amber-800">
+                <div className="flex items-center gap-2">
+                  <Lock className="h-3.5 w-3.5 text-amber-500" />
+                  <span>Seção bloqueada após aprovação.</span>
+                </div>
+                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setCorrectionSection("acatamento"); setShowCorrectionDialog(true); }}>
+                  Solicitar Correção
+                </Button>
+              </div>
             ) : (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <ClearableDateInput label="Data Aprovação" value={editForm.data_aprovacao || ""} onChange={(v) => setEditForm({ ...editForm, data_aprovacao: v })} disabled={status === "aprovada"} />
+                  <ClearableDateInput label="Data Aprovação" value={editForm.data_aprovacao || ""} onChange={(v) => setEditForm({ ...editForm, data_aprovacao: v })} disabled={!canEditAcatamento} />
                   <div><label className="text-xs text-muted-foreground">Valor Acatado (R$)</label>
                     <CurrencyInput value={editForm.valor_acatado || 0} onChange={(v) => setEditForm({ ...editForm, valor_acatado: v })} />
                     {editForm.valor_acatado > 0 && editForm.valor_medicao > 0 && editForm.valor_acatado !== editForm.valor_medicao && (
@@ -1370,17 +1550,29 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
           <div className="space-y-3">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1">
               <DollarSign className="h-3 w-3" /> 4. NF e Pagamento
+              {pagamentoLocked && !isAdmin && <Lock className="h-3 w-3 text-amber-500 ml-1" />}
+              {pagamentoLocked && isAdmin && <Badge variant="outline" className="text-[9px] ml-1 text-amber-600">Admin: desbloqueado</Badge>}
             </p>
             {status !== "aprovada" ? (
               <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded p-3">
                 <Lock className="h-3.5 w-3.5" />
                 Disponível após acatamento
               </div>
+            ) : pagamentoLocked && !isAdmin ? (
+              <div className="flex items-center justify-between text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/30 rounded p-3 border border-amber-200 dark:border-amber-800">
+                <div className="flex items-center gap-2">
+                  <Lock className="h-3.5 w-3.5 text-amber-500" />
+                  <span>Seção bloqueada após recebimento.</span>
+                </div>
+                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setCorrectionSection("pagamento"); setShowCorrectionDialog(true); }}>
+                  Solicitar Correção
+                </Button>
+              </div>
             ) : (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div><label className="text-xs text-muted-foreground">Nº NF</label><Input value={editForm.num_nf || ""} onChange={(e) => setEditForm({ ...editForm, num_nf: e.target.value })} /></div>
-                  <ClearableDateInput label="Data Pagamento" value={editForm.data_pagamento || ""} onChange={(v) => setEditForm({ ...editForm, data_pagamento: v })} />
+                  <div><label className="text-xs text-muted-foreground">Nº NF</label><Input value={editForm.num_nf || ""} onChange={(e) => setEditForm({ ...editForm, num_nf: e.target.value })} disabled={!canEditPagamento} /></div>
+                  <ClearableDateInput label="Data Pagamento" value={editForm.data_pagamento || ""} onChange={(v) => setEditForm({ ...editForm, data_pagamento: v })} disabled={!canEditPagamento} />
                   <div className="flex items-end">
                     {editForm.status_nf !== "recebido" ? (
                       <Button size="sm" onClick={handleRegistrarRecebimento}>Confirmar Recebimento</Button>
@@ -1392,6 +1584,60 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
               </>
             )}
           </div>
+
+          {/* Correction request button (visible for non-admins when any section is locked) */}
+          {!isAdmin && hasPendingRequest && (
+            <div className="flex items-center gap-2 text-xs bg-blue-50 dark:bg-blue-950/30 rounded p-3 border border-blue-200 dark:border-blue-800">
+              <Clock className="h-3.5 w-3.5 text-blue-500" />
+              <span className="text-blue-700 dark:text-blue-300">Você já possui uma solicitação de correção pendente para esta medição.</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
+
+  // ─── ADMIN: PENDING CORRECTION REQUESTS PANEL ───
+  const renderAdminRequests = () => {
+    if (!isAdmin || pendingRequests.length === 0) return null;
+
+    const SECTION_LABELS: Record<string, string> = {
+      previsao: "Previsão", envio: "Envio", acatamento: "Acatamento", pagamento: "Pagamento",
+    };
+
+    return (
+      <Card className="border-amber-300 dark:border-amber-700">
+        <CardContent className="p-4 space-y-3">
+          <h4 className="font-semibold text-sm flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
+            <AlertTriangle className="h-4 w-4" /> Solicitações de Correção Pendentes ({pendingRequests.length})
+          </h4>
+          {pendingRequests.map(req => {
+            const med = medicoes.find(m => m.id === req.medicao_id);
+            return (
+              <div key={req.id} className="border rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-sm font-medium">Medição Nº {med?.num_medicao || "—"}</span>
+                    <Badge variant="outline" className="text-[10px] ml-2">{SECTION_LABELS[req.section] || req.section}</Badge>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground">
+                    {format(new Date(req.created_at), "dd/MM/yy HH:mm")}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  <strong>{req.requested_by_name}</strong>: {req.reason}
+                </p>
+                <div className="flex gap-2 justify-end">
+                  <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" onClick={() => handleCorrectionReview(req.id, false)}>
+                    Rejeitar
+                  </Button>
+                  <Button size="sm" className="h-7 text-xs" onClick={() => handleCorrectionReview(req.id, true)}>
+                    Aprovar (desbloquear 24h)
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
     );
@@ -1406,6 +1652,9 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
           <Plus className="h-4 w-4 mr-1" /> Nova Medição
         </Button>
       </div>
+
+      {/* ADMIN: Pending correction requests */}
+      {renderAdminRequests()}
 
       {/* NEW MEASUREMENT FORM (Step 1 only) */}
       {showForm && (
@@ -1481,10 +1730,14 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
               const acatado = Number(m.valor_acatado) || 0;
               const showNF = m.status_medicao === "enviada" || m.status_medicao === "aprovada";
               const hasGlosa = acatado > 0 && acatado !== realizado;
+              const isLocked = m.status_medicao === "enviada" || m.status_medicao === "aprovada";
 
               return (
                 <TableRow key={m.id}>
-                  <TableCell className="font-medium">{m.num_medicao || "—"}</TableCell>
+                  <TableCell className="font-medium">
+                    {m.num_medicao || "—"}
+                    {isLocked && !isAdmin && <Lock className="h-3 w-3 text-amber-500 inline ml-1" />}
+                  </TableCell>
                   <TableCell>
                     <span>{m.mes_referencia}/{m.ano_referencia}</span>
                     {m.created_by_name && (
@@ -1522,9 +1775,11 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(m)}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeletingMedicaoId(m.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      {(isAdmin || m.status_medicao === "prevista") && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeletingMedicaoId(m.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -1552,15 +1807,40 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* CONFIRM NEW PREVISÃO */}
+      <AlertDialog open={confirmPrevisao} onOpenChange={setConfirmPrevisao}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>⚠️ Confirmar lançamento de medição</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Você está criando a medição:</p>
+              <p><strong>Nº {newForm.num_medicao}</strong> — {newForm.mes_referencia}/{newForm.ano_referencia}</p>
+              <p>Previsão: {newForm.data_previsao_medicao} | Valor: {BRL.format(newForm.valor_previsto_medicao)}</p>
+              <p className="text-amber-600 font-medium mt-2">
+                ⚠️ Após o lançamento, os campos somente poderão ser editados enquanto o status for "Previsão".
+                Após registrar o envio ao fiscal, os dados serão bloqueados e somente poderão ser editados pelo administrador da empresa.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={doAddMedicao}>Confirmar Lançamento</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* CONFIRM ENVIO */}
       <AlertDialog open={confirmEnvio} onOpenChange={setConfirmEnvio}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar envio ao fiscal</AlertDialogTitle>
-            <AlertDialogDescription>
-              Confirma o envio desta medição ao fiscal?{"\n"}
-              Data: {editForm.data_envio} | Valor: {BRL.format(editForm.valor_medicao || 0)}{"\n"}
-              Após confirmar, o status mudará para Enviada.
+            <AlertDialogTitle>⚠️ Confirmar envio ao fiscal</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Confirma o envio desta medição ao fiscal?</p>
+              <p>Data: {editForm.data_envio} | Valor: {BRL.format(editForm.valor_medicao || 0)}</p>
+              <p className="text-amber-600 font-medium">
+                ⚠️ Após confirmar, o status mudará para "Enviada" e os campos de previsão e envio serão BLOQUEADOS.
+                Somente o administrador da empresa poderá editar estes dados.
+              </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1574,9 +1854,12 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       <AlertDialog open={confirmEnvioEarly} onOpenChange={setConfirmEnvioEarly}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Data de envio anterior à previsão</AlertDialogTitle>
-            <AlertDialogDescription>
-              A data de envio ({editForm.data_envio}) é anterior à data de previsão ({editForm.data_previsao_medicao}). Confirma o envio mesmo assim?
+            <AlertDialogTitle>⚠️ Data de envio anterior à previsão</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>A data de envio ({editForm.data_envio}) é anterior à data de previsão ({editForm.data_previsao_medicao}). Confirma o envio mesmo assim?</p>
+              <p className="text-amber-600 font-medium">
+                ⚠️ Após confirmar, os campos serão BLOQUEADOS e somente o administrador poderá editar.
+              </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1590,17 +1873,21 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       <AlertDialog open={confirmAcatamento} onOpenChange={setConfirmAcatamento}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar acatamento</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle>⚠️ Confirmar acatamento</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
               {editForm.valor_acatado < editForm.valor_medicao ? (
                 <>
-                  ⚠️ Glosa detectada de {BRL.format(Math.abs(glosaValue))}.{"\n"}
-                  Valor enviado: {BRL.format(editForm.valor_medicao || 0)} | Valor acatado: {BRL.format(editForm.valor_acatado || 0)}{"\n"}
-                  Confirma o acatamento com glosa?
+                  <p>⚠️ Glosa detectada de {BRL.format(Math.abs(glosaValue))}.</p>
+                  <p>Valor enviado: {BRL.format(editForm.valor_medicao || 0)} | Valor acatado: {BRL.format(editForm.valor_acatado || 0)}</p>
+                  <p>Confirma o acatamento com glosa?</p>
                 </>
               ) : (
-                <>Confirma o acatamento integral de {BRL.format(editForm.valor_acatado || 0)}?</>
+                <p>Confirma o acatamento integral de {BRL.format(editForm.valor_acatado || 0)}?</p>
               )}
+              <p className="text-amber-600 font-medium">
+                ⚠️ Após confirmar, todos os campos da medição (previsão, envio e acatamento) serão BLOQUEADOS.
+                Somente o administrador da empresa poderá editar.
+              </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1614,16 +1901,55 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       <AlertDialog open={confirmRecebimento} onOpenChange={setConfirmRecebimento}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar recebimento</AlertDialogTitle>
-            <AlertDialogDescription>
-              Confirma o recebimento do pagamento?{"\n"}
-              NF: {editForm.num_nf || "—"} | Data: {editForm.data_pagamento}{"\n"}
-              Esta ação marca a medição como paga.
+            <AlertDialogTitle>⚠️ Confirmar recebimento</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Confirma o recebimento do pagamento?</p>
+              <p>NF: {editForm.num_nf || "—"} | Data: {editForm.data_pagamento}</p>
+              <p className="text-amber-600 font-medium">
+                ⚠️ Esta ação marca a medição como paga. Todos os campos serão PERMANENTEMENTE BLOQUEADOS.
+                Somente o administrador da empresa poderá editar.
+              </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={doRegistrarRecebimento}>Confirmar Recebimento</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* CORRECTION REQUEST DIALOG */}
+      <AlertDialog open={showCorrectionDialog} onOpenChange={setShowCorrectionDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Solicitar correção ao administrador</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <p>Descreva o motivo da correção necessária. O administrador da empresa receberá esta solicitação e poderá desbloquear temporariamente a medição para edição.</p>
+              <div>
+                <label className="text-xs font-medium">Seção a corrigir</label>
+                <Select value={correctionSection} onValueChange={setCorrectionSection}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="previsao">Previsão</SelectItem>
+                    <SelectItem value="envio">Envio ao Fiscal</SelectItem>
+                    <SelectItem value="acatamento">Acatamento</SelectItem>
+                    <SelectItem value="pagamento">NF e Pagamento</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-medium">Motivo da correção *</label>
+                <Input
+                  value={correctionReason}
+                  onChange={(e) => setCorrectionReason(e.target.value)}
+                  placeholder="Ex: Valor realizado informado incorretamente..."
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setCorrectionReason("")}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={submitCorrectionRequest}>Enviar Solicitação</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
