@@ -849,7 +849,7 @@ export default function HoldingDashboardView() {
       const fim = o.data_inicio ? format(addDays(parseLocalDate(o.data_inicio!), o.prazo_dias + o.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
       const statusLbl = STATUS_CONFIG[o.status]?.label || o.status;
       const healthLbl = o.health === "green" ? "Verde" : o.health === "yellow" ? "Amarelo" : o.health === "red" ? "Vermelho" : "Neutro";
-      const recAprov = o.allMedicoes.filter(m => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+      const recAprov = o.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
       const vc = (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
       const receitas = recAprov;
       const saldo = vc - receitas;
@@ -1010,9 +1010,9 @@ export default function HoldingDashboardView() {
     const totalMedido = base.reduce((s, o) => {
       // Usa valor_acatado quando disponível (o que foi efetivamente aceito)
       // Fallback para valor_medicao se valor_acatado for nulo
-      // Exclui Saldo Inicial — representa andamento anterior ao sistema
+      // Inclui Saldo Inicial — faturamento real anterior ao sistema
       const aprovadas = o.allMedicoes
-        .filter((m) => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial")
+        .filter((m) => m.status_medicao === "aprovada")
         .reduce((ss, m) => ss + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
       return s + aprovadas;
     }, 0);
@@ -1029,7 +1029,7 @@ export default function HoldingDashboardView() {
         const vc = (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
         if (vc <= 0) return s + (o.percentual_andamento || 0); // fallback se sem contrato
         const aprovadas = o.allMedicoes
-          .filter((m) => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial")
+          .filter((m) => m.status_medicao === "aprovada")
           .reduce((ss, m) => ss + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
         // Se tem medições aprovadas, usa o financeiro real; senão usa o percentual manual
         const pct = aprovadas > 0 ? (aprovadas / vc) * 100 : (o.percentual_andamento || 0);
@@ -1732,7 +1732,7 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
   const [expandedIndicator, setExpandedIndicator] = useState<string | null>(null);
   const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
   const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
-  const receitasAprovadas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+  const receitasAprovadas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
   const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
   const receitasEstimadas = receitasAprovadas > 0
     ? receitasAprovadas
@@ -2017,7 +2017,7 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
               {obras.map((obra, idx) => {
                 const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
                 const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yy") : "—";
-                const recAprov = obra.allMedicoes.filter(m => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                const recAprov = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
                 const vc = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
                 const receitas = recAprov;
                 return (
