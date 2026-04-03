@@ -464,7 +464,7 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <TabsContent value="resumo" className="mt-0"><ResumoTab obra={obra} /></TabsContent>
           <TabsContent value="documentos" className="mt-0"><DocumentosTab obraId={obra.id} /></TabsContent>
-          <TabsContent value="medicoes" className="mt-0"><MedicoesTab obraId={obra.id} valorContrato={(obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0)} hasInitialBalance={obra.has_initial_balance || false} valorMedidoInicial={obra.valor_medido_inicial || 0} /></TabsContent>
+          <TabsContent value="medicoes" className="mt-0"><MedicoesTab obraId={obra.id} valorContrato={(obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0)} hasInitialBalance={obra.has_initial_balance || false} valorMedidoInicial={obra.valor_medido_inicial || 0} obra={obra} /></TabsContent>
           <TabsContent value="financeiro" className="mt-0"><FinanceiroTab obraId={obra.id} /></TabsContent>
           <TabsContent value="aditivos" className="mt-0"><AditivosTab obraId={obra.id} /></TabsContent>
           <TabsContent value="pendencias" className="mt-0"><PendenciasTab obraId={obra.id} /></TabsContent>
@@ -905,18 +905,78 @@ const NF_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   pendente: { label: "Pendente", cls: "bg-muted text-muted-foreground" },
 };
 
-/** Determines the display status badge based on measurement state */
-function getMedicaoDisplayStatus(m: any): { label: string; cls: string } {
-  const now = new Date();
-  const MONTHS_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-  const mesIdx = MONTHS_SHORT.findIndex(x => x.toLowerCase() === (m.mes_referencia || "").toLowerCase());
-  const isCurrentMonth = mesIdx === now.getMonth() && m.ano_referencia === now.getFullYear();
-
+/**
+ * Determines the display status badge based on measurement state.
+ * "Em Andamento" is determined by date range: the measurement whose
+ * data_previsao_medicao period covers today (between this measurement's
+ * forecast date and the next measurement's forecast date).
+ * Only ONE measurement can be "Em Andamento" at a time.
+ * 
+ * MEASUREMENT LIFECYCLE:
+ * prevista  → enviada:  requires data_envio + valor_medicao > 0
+ * enviada   → aprovada: requires data_aprovacao + valor_acatado > 0 + valor_acatado <= valor_medicao
+ * aprovada  → recebido: requires data_pagamento (status_nf field, not status_medicao)
+ * 
+ * DISPLAY-ONLY:
+ * 'em_andamento' shown when prevista + current date within measurement period (stored as prevista)
+ */
+function getMedicaoDisplayStatus(m: any, allMedicoes?: any[]): { label: string; cls: string; isOverdue?: boolean } {
   if (m.status_medicao === "aprovada") return { label: "Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" };
   if (m.status_medicao === "enviada") return { label: "Enviada", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" };
-  if (m.status_medicao === "prevista" && isCurrentMonth) return { label: "Em Andamento", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" };
-  if (m.status_medicao === "prevista") return { label: "Previsão", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" };
+
+  if (m.status_medicao === "prevista") {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Check if overdue: forecast date passed and not yet sent
+    const previsaoDate = m.data_previsao_medicao ? new Date(m.data_previsao_medicao + "T12:00:00") : null;
+    const isOverdue = previsaoDate ? previsaoDate < today : false;
+
+    // Determine "Em Andamento": use sorted prevista measurements date ranges
+    if (allMedicoes && allMedicoes.length > 0) {
+      // Get only prevista measurements sorted by data_previsao_medicao
+      const previstas = allMedicoes
+        .filter(x => x.status_medicao === "prevista" && x.num_medicao !== "Saldo Inicial" && x.data_previsao_medicao)
+        .sort((a, b) => a.data_previsao_medicao.localeCompare(b.data_previsao_medicao));
+
+      const idx = previstas.findIndex(x => x.id === m.id);
+      if (idx >= 0) {
+        const startDate = new Date(previstas[idx].data_previsao_medicao + "T00:00:00");
+        const endDate = idx < previstas.length - 1
+          ? new Date(previstas[idx + 1].data_previsao_medicao + "T00:00:00")
+          : null; // last prevista: open-ended
+
+        // "Em Andamento" if today >= startDate AND (no endDate OR today < endDate)
+        const isInRange = today >= startDate && (endDate === null || today < endDate);
+
+        if (isInRange) {
+          return { label: "Em Andamento", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", isOverdue };
+        }
+      }
+    }
+
+    if (isOverdue) {
+      return { label: "Atrasada", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300", isOverdue: true };
+    }
+
+    return { label: "Previsão", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" };
+  }
+
   return { label: m.status_medicao || "—", cls: "bg-muted text-muted-foreground" };
+}
+
+/** Build WhatsApp message URL for overdue measurement alerts */
+function buildWhatsAppUrl(phone: string, obraNome: string, numMedicao: string, dataPrevisao: string): string {
+  const cleanPhone = phone.replace(/\D/g, "");
+  const fullPhone = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`;
+  const msg = encodeURIComponent(
+    `⚠️ *Alerta de Medição Atrasada*\n\n` +
+    `Obra: *${obraNome}*\n` +
+    `Medição nº: *${numMedicao}*\n` +
+    `Data prevista de envio: *${dataPrevisao}*\n\n` +
+    `A medição está com a data de previsão vencida e ainda não foi enviada ao fiscal. Por favor, providenciar o envio o mais breve possível.`
+  );
+  return `https://wa.me/${fullPhone}?text=${msg}`;
 }
 
 function ClearableDateInput({ value, onChange, label, disabled }: { value: string; onChange: (v: string) => void; label: string; disabled?: boolean }) {
@@ -940,7 +1000,7 @@ function ClearableDateInput({ value, onChange, label, disabled }: { value: strin
   );
 }
 
-function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInicial }: { obraId: string; valorContrato: number; hasInitialBalance: boolean; valorMedidoInicial: number }) {
+function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInicial, obra }: { obraId: string; valorContrato: number; hasInitialBalance: boolean; valorMedidoInicial: number; obra: ObraDrawerData }) {
   const { user, profile, requireEdit, isCompanyAdmin, isSystemAdmin } = useAuth();
   const isAdmin = isCompanyAdmin || isSystemAdmin;
   const userName = profile?.display_name || user?.email || "Usuário";
@@ -1698,6 +1758,73 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
         </Card>
       )}
 
+      {/* OVERDUE ALERTS CARD */}
+      {(() => {
+        const overdueMedicoes = medicoes.filter(m => {
+          const ds = getMedicaoDisplayStatus(m, medicoes);
+          return ds.isOverdue;
+        });
+        if (overdueMedicoes.length === 0) return null;
+        const contacts: { name: string; phone: string; role: string }[] = [];
+        if (obra.responsavel_telefone) contacts.push({ name: obra.responsavel_nome || "Engenheiro", phone: obra.responsavel_telefone, role: "Engenheiro Residente" });
+        if (obra.coordenador_telefone) contacts.push({ name: obra.coordenador_nome || "Coordenador", phone: obra.coordenador_telefone, role: "Coordenador" });
+        if (obra.planejador_telefone) contacts.push({ name: obra.planejador_nome || "Planejador", phone: obra.planejador_telefone, role: "Planejador" });
+        return (
+          <Card className="border-destructive/50 bg-red-50/50 dark:bg-red-900/10">
+            <CardContent className="p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <span className="text-sm font-semibold text-destructive">
+                  {overdueMedicoes.length} medição(ões) com previsão vencida
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                As medições abaixo passaram da data de previsão de envio e ainda não foram enviadas ao fiscal.
+              </p>
+              <ul className="text-xs space-y-1">
+                {overdueMedicoes.map(m => (
+                  <li key={m.id} className="flex items-center gap-2">
+                    <span className="font-medium">Medição {m.num_medicao}</span>
+                    <span className="text-muted-foreground">
+                      — prevista para {m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yyyy") : "—"}
+                    </span>
+                    <span className="text-destructive font-medium">
+                      ({differenceInDays(new Date(), new Date(m.data_previsao_medicao + "T12:00:00"))} dias atrás)
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {contacts.length > 0 && (
+                <div className="pt-1 border-t border-destructive/20">
+                  <span className="text-[10px] text-muted-foreground block mb-1">Enviar alerta via WhatsApp:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {contacts.map((c) => {
+                      const overdueSummary = overdueMedicoes.map(m => `  • Medição ${m.num_medicao} (prevista: ${m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yyyy") : "—"})`).join("\n");
+                      const cleanPhone = c.phone.replace(/\D/g, "");
+                      const fullPhone = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`;
+                      const msg = encodeURIComponent(
+                        `⚠️ *Alerta de Medição Atrasada*\n\nObra: *${obra.nome}*\n\nMedições com previsão vencida:\n${overdueSummary}\n\nPor favor, providenciar o envio ao fiscal o mais breve possível.`
+                      );
+                      return (
+                        <a
+                          key={c.phone}
+                          href={`https://wa.me/${fullPhone}?text=${msg}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 hover:opacity-80 transition-opacity"
+                        >
+                          📱 {c.role}: {c.name}
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {/* STAGED EDIT FORM */}
       {renderStagedEditForm()}
 
@@ -1723,7 +1850,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
           </TableHeader>
           <TableBody>
             {medicoes.map((m) => {
-              const displayStatus = getMedicaoDisplayStatus(m);
+              const displayStatus = getMedicaoDisplayStatus(m, medicoes);
               const ns = NF_STATUS_BADGE[m.status_nf] || NF_STATUS_BADGE.pendente;
               const previsto = Number(m.valor_previsto_medicao) || 0;
               const realizado = Number(m.valor_medicao) || 0;
@@ -1732,8 +1859,17 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
               const hasGlosa = acatado > 0 && acatado !== realizado;
               const isLocked = m.status_medicao === "enviada" || m.status_medicao === "aprovada";
 
+              // Build WhatsApp contacts for overdue alerts
+              const whatsappContacts: { name: string; phone: string; role: string }[] = [];
+              if (displayStatus.isOverdue) {
+                if (obra.responsavel_telefone) whatsappContacts.push({ name: obra.responsavel_nome || "Engenheiro", phone: obra.responsavel_telefone, role: "Eng." });
+                if (obra.coordenador_telefone) whatsappContacts.push({ name: obra.coordenador_nome || "Coordenador", phone: obra.coordenador_telefone, role: "Coord." });
+                if (obra.planejador_telefone) whatsappContacts.push({ name: obra.planejador_nome || "Planejador", phone: obra.planejador_telefone, role: "Plan." });
+              }
+              const dataPrevisaoFormatted = m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yyyy") : "";
+
               return (
-                <TableRow key={m.id}>
+                <TableRow key={m.id} className={displayStatus.isOverdue ? "bg-red-50/50 dark:bg-red-900/10" : ""}>
                   <TableCell className="font-medium">
                     {m.num_medicao || "—"}
                     {isLocked && !isAdmin && <Lock className="h-3 w-3 text-amber-500 inline ml-1" />}
@@ -1750,7 +1886,32 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
                   <TableCell>{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                   <TableCell>{m.data_envio ? format(new Date(m.data_envio + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                   <TableCell>{m.data_aprovacao ? format(new Date(m.data_aprovacao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
-                  <TableCell><Badge variant="secondary" className={`text-[10px] ${displayStatus.cls}`}>{displayStatus.label}</Badge></TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className={`text-[10px] ${displayStatus.cls}`}>{displayStatus.label}</Badge>
+                    {displayStatus.isOverdue && (
+                      <div className="mt-1 space-y-0.5">
+                        <span className="flex items-center gap-1 text-[9px] text-destructive font-medium">
+                          <AlertTriangle className="h-3 w-3" /> Previsão vencida
+                        </span>
+                        {whatsappContacts.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            {whatsappContacts.map((c) => (
+                              <a
+                                key={c.phone}
+                                href={buildWhatsAppUrl(c.phone, obra.nome, m.num_medicao || "", dataPrevisaoFormatted)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-0.5 text-[8px] px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 hover:opacity-80"
+                                title={`Enviar alerta WhatsApp para ${c.name}`}
+                              >
+                                📱 {c.role}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right font-mono">{previsto > 0 ? BRL.format(previsto) : "—"}</TableCell>
                   <TableCell className="text-right font-mono">{realizado > 0 ? BRL.format(realizado) : "—"}</TableCell>
                   <TableCell className="text-right font-mono">
