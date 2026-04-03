@@ -138,6 +138,7 @@ export default function HoldingReceitasPage() {
           status_medicao: m.status_medicao,
           valor_previsto_medicao: Number(m.valor_previsto_medicao) || 0,
           valor_medicao: Number(m.valor_medicao) || 0,
+          valor_acatado: m.valor_acatado != null ? Number(m.valor_acatado) : null,
           num_nf: m.num_nf,
           data_pagamento: m.data_pagamento,
           status_nf: m.status_nf,
