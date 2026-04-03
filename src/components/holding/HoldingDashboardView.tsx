@@ -20,8 +20,6 @@ import { OnboardingDialog } from "./OnboardingDialog";
 import { ObraDocConfigDialog } from "./ObraDocConfigDialog";
 import { EditRequestDialog } from "./EditRequestDialog";
 import { useOnboarding } from "@/hooks/useOnboarding";
-import HoldingAnalyticsView from "./HoldingAnalyticsView";
-import HoldingManualView from "./HoldingManualView";
 import { geocodeMunicipio } from "@/lib/geocode";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
