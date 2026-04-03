@@ -187,7 +187,7 @@ export default function HoldingReceitasPage() {
       totalAprovado: aprovadas.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
       // Enviado/Pendente: usa valor_medicao (o que foi submetido, ainda não acatado)
       totalEnviado: enviadas.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-      totalPendente: pendentes.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+      totalPendente: pendentes.reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
       // NF Recebida: usa valor_acatado (valor real pago)
       totalNFRecebida: nfRecebida.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
       totalAguardandoNF: medicoes.filter(m => m.status_nf === "aguardando_aprovacao").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
@@ -409,7 +409,7 @@ export default function HoldingReceitasPage() {
           aprovado: medsInMonth.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           enviado: medsInMonth.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
           pendente: medsInMonth.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
-          total: medsInMonth.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          total: medsInMonth.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           medicoes: medsInMonth,
         };
       });

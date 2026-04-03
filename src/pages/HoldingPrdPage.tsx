@@ -49,7 +49,7 @@ export default function HoldingPrdPage() {
     queryFn: async () => {
       const [obrasRes, medRes, despRes] = await Promise.all([
         supabase.from("obras_portfolio").select("id, nome, empresa, valor_contrato, aditivo_valor_total, data_inicio, prazo_dias, uh, status, obramap_project_id").eq("company_id", company!.id),
-        supabase.from("medicoes_ple").select("id, obra_id, num_medicao, mes_referencia, ano_referencia, status_medicao, valor_medicao, valor_previsto_medicao, data_previsao_medicao, data_envio"),
+        supabase.from("medicoes_ple").select("id, obra_id, num_medicao, mes_referencia, ano_referencia, status_medicao, valor_medicao, valor_acatado, valor_previsto_medicao, data_previsao_medicao, data_envio"),
         supabase.from("despesas_mensais").select("id, obra_id, mes_referencia, ano_referencia, valor, status"),
       ]);
 

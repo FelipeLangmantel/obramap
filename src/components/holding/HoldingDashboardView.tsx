@@ -262,9 +262,10 @@ export function calcHealth(
 
   // ── IDC — Índice de Desempenho de Custo ──────────────────────────────────
   // Só calcula se há andamento físico registrado (> 5%) e valor de contrato
+  // Usa valor_acatado (o que foi efetivamente aceito) para IDC preciso
   const totalMedidoAprovado = allMedicoes
     .filter(m => m.status_medicao === "aprovada")
-    .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+    .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
 
   if (pctFisico > 0.05 && valorContrato > 0) {
     const valorPlanejado = pctFisico * valorContrato; // quanto deveria ter medido
@@ -346,9 +347,10 @@ export function calcHealthDetails(
   const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
   const pctFisico = (obra.percentual_andamento || 0) / 100;
 
+  // Usa valor_acatado para IDC — valor real aceito pelo governo
   const totalMedidoAprovado = allMedicoes
     .filter(m => m.status_medicao === "aprovada")
-    .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+    .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
 
   // ── IDC ──────────────────────────────────────────────────────────────────
   let idcValue: number | null = null;
