@@ -125,7 +125,7 @@ export function SupplyDashboard({ kpis, isLoading }: SupplyDashboardProps) {
           <DollarSign className="h-4 w-4 text-blue-500" />
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold text-blue-600">
+          <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
             {isLoading ? '-' : formatCurrency(kpis?.total_pending_value || 0)}
           </div>
         </CardContent>
