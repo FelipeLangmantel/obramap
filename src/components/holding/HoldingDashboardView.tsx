@@ -501,6 +501,15 @@ export default function HoldingDashboardView() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [showConfirmSave, setShowConfirmSave] = useState(false);
+  const [showEditRequestDialog, setShowEditRequestDialog] = useState(false);
+  const [showDocConfigDialog, setShowDocConfigDialog] = useState(false);
+  const [docConfigObraId, setDocConfigObraId] = useState<string>("");
+  const [docConfigObraNome, setDocConfigObraNome] = useState<string>("");
+  const onboarding = useOnboarding("cadastro_obra");
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   // Holding empresas for select
   const { data: holdingEmpresas = [] } = useQuery({
