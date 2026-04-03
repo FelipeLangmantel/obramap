@@ -258,7 +258,7 @@ export function SupplyAlertsList({ alerts, isLoading, canEdit, onUpdateStatus }:
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="h-4 w-4 text-red-500" />
-              <span className="font-medium text-red-500">Atrasados ({groupedByStatus.delayed.length})</span>
+              <span className="font-medium text-red-600 dark:text-red-400">Atrasados ({groupedByStatus.delayed.length})</span>
             </div>
             {groupedByStatus.delayed.map(renderAlertCard)}
           </div>
