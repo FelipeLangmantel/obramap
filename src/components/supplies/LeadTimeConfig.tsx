@@ -86,9 +86,9 @@ export function LeadTimeConfig({ families, projectLeadTimes, canEdit, onSave }: 
       </CardHeader>
       <CardContent>
         {unconfiguredCount > 0 && (
-          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
-            <div className="text-sm text-yellow-800">
+          <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+            <div className="text-sm text-yellow-800 dark:text-yellow-200">
               <strong>{unconfiguredCount} família(s)</strong> usando lead time padrão. 
               Configure valores específicos para esta obra.
             </div>
