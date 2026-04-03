@@ -65,6 +65,8 @@ import {
 } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
+import { AuditLogPanel } from "./AuditLogPanel";
+import { EditRequestsPanel } from "./EditRequestsPanel";
 
 type AppRole = "admin" | "editor" | "viewer";
 
