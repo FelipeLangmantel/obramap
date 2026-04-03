@@ -269,7 +269,7 @@ export function SupplyAlertsList({ alerts, isLoading, canEdit, onUpdateStatus }:
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-2">
               <Clock className="h-4 w-4 text-yellow-500" />
-              <span className="font-medium text-yellow-600">Pendentes ({groupedByStatus.pending.length})</span>
+              <span className="font-medium text-yellow-600 dark:text-yellow-400">Pendentes ({groupedByStatus.pending.length})</span>
             </div>
             {groupedByStatus.pending.map(renderAlertCard)}
           </div>
