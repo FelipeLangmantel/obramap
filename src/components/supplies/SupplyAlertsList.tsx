@@ -33,15 +33,22 @@ export function SupplyAlertsList({ alerts, isLoading, canEdit, onUpdateStatus }:
     });
   };
 
+  const [activeSection, setActiveSection] = useState<'material' | 'labor'>('material');
+
   const filteredAlerts = alerts.filter(a => 
     filterStatus === 'all' || a.status === filterStatus
   );
 
+  const materialAlerts = filteredAlerts.filter(a => !a.is_labor);
+  const laborAlerts = filteredAlerts.filter(a => a.is_labor);
+
+  const currentAlerts = activeSection === 'material' ? materialAlerts : laborAlerts;
+
   const groupedByStatus = {
-    delayed: filteredAlerts.filter(a => a.status === 'delayed'),
-    pending: filteredAlerts.filter(a => a.status === 'pending'),
-    ordered: filteredAlerts.filter(a => a.status === 'ordered'),
-    delivered: filteredAlerts.filter(a => a.status === 'delivered')
+    delayed: currentAlerts.filter(a => a.status === 'delayed'),
+    pending: currentAlerts.filter(a => a.status === 'pending'),
+    ordered: currentAlerts.filter(a => a.status === 'ordered'),
+    delivered: currentAlerts.filter(a => a.status === 'delivered')
   };
 
   const formatDate = (dateStr: string) => {
