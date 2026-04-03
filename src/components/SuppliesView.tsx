@@ -212,7 +212,7 @@ const STATUS_COLORS: Record<string, string> = {
   delivered: 'bg-green-600'
 };
 
-type TabType = "alerts" | "quotations" | "orders" | "contracts" | "leadtime";
+type TabType = "alerts" | "quotations" | "orders" | "contracts";
 
 interface SuppliesViewProps {
   initialTab?: TabType;
@@ -239,7 +239,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
   const [alertsData, setAlertsData] = useState<{ scopeItems: ScopeItem[], pendingQuotations: number, inTransitOrders: number }>({ scopeItems: [], pendingQuotations: 0, inTransitOrders: 0 });
   const [dataLoaded, setDataLoaded] = useState<Record<string, boolean>>({});
   const [supplyKpis, setSupplyKpis] = useState<SupplyKPIs | null>(null);
-  const [projectLeadTimes, setProjectLeadTimes] = useState<Record<string, number>>({});
+  
   const [overdueRequests, setOverdueRequests] = useState<any[]>([]);
 
   // Dialog states
@@ -425,29 +425,9 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
 
   useEffect(() => {
     if (activeTab !== 'alerts') {
-      if (activeTab === 'leadtime') {
-        // Use alertFamilies as fallback if families not loaded yet
-        if (families.length === 0 && alertFamilies.length > 0) {
-          setFamilies(alertFamilies);
-        } else {
-          loadTabData('inputs');
-        }
-        if (projectId) {
-          supabase
-            .from('project_lead_times')
-            .select('family_id, lead_time_days')
-            .eq('project_id', projectId)
-            .then(({ data }) => {
-              const map: Record<string, number> = {};
-              (data || []).forEach((p: any) => { map[p.family_id] = p.lead_time_days; });
-              setProjectLeadTimes(map);
-            });
-        }
-      } else {
-        loadTabData(activeTab);
-      }
+      loadTabData(activeTab);
     }
-  }, [activeTab, loadTabData, projectId, families.length, alertFamilies]);
+  }, [activeTab, loadTabData]);
 
   // Get scopes that have planned production (future only) - match by ID and by name
   const scopesWithPlannedProduction = useMemo(() => {
@@ -1339,7 +1319,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex flex-col h-full overflow-hidden">
         <div className="overflow-x-auto pb-1 -mx-1 px-1">
-          <TabsList className="grid w-full min-w-[400px] grid-cols-5 h-9 md:h-10">
+          <TabsList className="grid w-full min-w-[320px] grid-cols-4 h-9 md:h-10">
             <TabsTrigger value="alerts" className="gap-0.5 md:gap-1 text-[10px] md:text-xs px-1">
               <AlertTriangle className="w-3 h-3 md:w-3.5 md:h-3.5" />
               <span className="hidden sm:inline">Alertas</span>
@@ -1348,7 +1328,6 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
             <TabsTrigger value="quotations" className="gap-0.5 md:gap-1 text-[10px] md:text-xs px-1"><FileText className="w-3 h-3 md:w-3.5 md:h-3.5" /><span className="hidden sm:inline">Cotações</span></TabsTrigger>
             <TabsTrigger value="orders" className="gap-0.5 md:gap-1 text-[10px] md:text-xs px-1"><Truck className="w-3 h-3 md:w-3.5 md:h-3.5" /><span className="hidden sm:inline">Pedidos</span></TabsTrigger>
             <TabsTrigger value="contracts" className="gap-0.5 md:gap-1 text-[10px] md:text-xs px-1"><ClipboardList className="w-3 h-3 md:w-3.5 md:h-3.5" /><span className="hidden sm:inline">Contratações</span></TabsTrigger>
-            <TabsTrigger value="leadtime" className="gap-0.5 md:gap-1 text-[10px] md:text-xs px-1"><Clock className="w-3 h-3 md:w-3.5 md:h-3.5" /><span className="hidden sm:inline">Lead Time</span></TabsTrigger>
           </TabsList>
         </div>
 
@@ -2660,197 +2639,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
           />
         </TabsContent>
 
-        {/* Lead Time Tab — Project-level */}
-        <TabsContent value="leadtime" className="flex-1 overflow-auto mt-4 space-y-4">
-          {/* Material Families */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package className="w-5 h-5" />
-                Lead Time de Materiais — Esta Obra
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Prazo de antecedência para pedidos de compra de materiais. O sistema gera alertas quando a data limite se aproxima.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[300px]">
-                <div className="space-y-2">
-                  {families.filter(f => !f.is_labor).map(family => {
-                    const projectLT = projectLeadTimes[family.id];
-                    const currentLT = projectLT ?? family.lead_time_days;
-                    const isCustom = projectLT !== undefined;
-
-                    return (
-                      <div key={family.id} className="flex items-center justify-between p-3 border rounded-lg gap-3">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: family.color }} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium text-sm">{family.name}</span>
-                              {!isCustom ? (
-                                <Badge variant="outline" className="text-[10px] text-muted-foreground">(padrão empresa)</Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300">Personalizado</Badge>
-                              )}
-                            </div>
-                            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">
-                              Ex: Início Medição - {currentLT} dias = data limite de compra
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {currentLT === 0 ? (
-                            <Badge variant="destructive" className="text-[10px]">Sem prazo</Badge>
-                          ) : currentLT < 5 ? (
-                            <Badge className="text-[10px] bg-amber-500 dark:bg-amber-600">Curto</Badge>
-                          ) : (
-                            <Badge className="text-[10px] bg-green-500 dark:bg-green-600">OK</Badge>
-                          )}
-                          {canEdit ? (
-                            <Input
-                              type="number"
-                              min="0"
-                              max="365"
-                              className="w-20 h-8"
-                              value={currentLT}
-                              onChange={async (e) => {
-                                const newDays = parseInt(e.target.value) || 0;
-                                try {
-                                  if (isCustom) {
-                                    await supabase.from('project_lead_times')
-                                      .update({ lead_time_days: newDays })
-                                      .eq('project_id', projectId!)
-                                      .eq('family_id', family.id);
-                                  } else {
-                                    await supabase.from('project_lead_times')
-                                      .insert({ project_id: projectId!, family_id: family.id, lead_time_days: newDays, company_id: companyId! });
-                                  }
-                                  setProjectLeadTimes(prev => ({ ...prev, [family.id]: newDays }));
-                                  toast.success(`Lead time: ${family.name} → ${newDays} dias`);
-                                } catch (error) {
-                                  console.error('Error updating lead time:', error);
-                                  toast.error('Erro ao salvar lead time');
-                                }
-                              }}
-                            />
-                          ) : (
-                            <span className="text-sm font-medium w-20 text-right">{currentLT}</span>
-                          )}
-                          <span className="text-sm text-muted-foreground">dias</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {families.filter(f => !f.is_labor).length === 0 && (
-                    <p className="text-center text-muted-foreground py-8">
-                      Cadastre famílias de materiais na aba Insumos
-                    </p>
-                  )}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-
-          {/* Labor / Equipment Families */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Hammer className="w-5 h-5" />
-                Lead Time de Mão de Obra / Equipamentos — Esta Obra
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Prazo de antecedência para contratação de mão de obra e equipamentos. O sistema gera alertas quando uma medição planejada está próxima e o serviço ainda não foi contratado.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[300px]">
-                <div className="space-y-2">
-                  {families.filter(f => f.is_labor).map(family => {
-                    const projectLT = projectLeadTimes[family.id];
-                    const currentLT = projectLT ?? family.lead_time_days;
-                    const isCustom = projectLT !== undefined;
-
-                    return (
-                      <div key={family.id} className="flex items-center justify-between p-3 border rounded-lg gap-3">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: family.color }} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium text-sm">{family.name}</span>
-                              <Badge variant="outline" className="text-[10px] bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-300">
-                                <Wrench className="w-2.5 h-2.5 mr-0.5" />
-                                Contratação
-                              </Badge>
-                              {!isCustom ? (
-                                <Badge variant="outline" className="text-[10px] text-muted-foreground">(padrão empresa)</Badge>
-                              ) : (
-                                <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300">Personalizado</Badge>
-                              )}
-                            </div>
-                            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">
-                              Ex: Início Medição - {currentLT} dias = data limite para contratar
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {currentLT === 0 ? (
-                            <Badge variant="destructive" className="text-[10px]">Sem prazo</Badge>
-                          ) : currentLT < 5 ? (
-                            <Badge className="text-[10px] bg-amber-500 dark:bg-amber-600">Curto</Badge>
-                          ) : (
-                            <Badge className="text-[10px] bg-green-500 dark:bg-green-600">OK</Badge>
-                          )}
-                          {canEdit ? (
-                            <Input
-                              type="number"
-                              min="0"
-                              max="365"
-                              className="w-20 h-8"
-                              value={currentLT}
-                              onChange={async (e) => {
-                                const newDays = parseInt(e.target.value) || 0;
-                                try {
-                                  if (isCustom) {
-                                    await supabase.from('project_lead_times')
-                                      .update({ lead_time_days: newDays })
-                                      .eq('project_id', projectId!)
-                                      .eq('family_id', family.id);
-                                  } else {
-                                    await supabase.from('project_lead_times')
-                                      .insert({ project_id: projectId!, family_id: family.id, lead_time_days: newDays, company_id: companyId! });
-                                  }
-                                  setProjectLeadTimes(prev => ({ ...prev, [family.id]: newDays }));
-                                  toast.success(`Lead time: ${family.name} → ${newDays} dias`);
-                                } catch (error) {
-                                  console.error('Error updating lead time:', error);
-                                  toast.error('Erro ao salvar lead time');
-                                }
-                              }}
-                            />
-                          ) : (
-                            <span className="text-sm font-medium w-20 text-right">{currentLT}</span>
-                          )}
-                          <span className="text-sm text-muted-foreground">dias</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {families.filter(f => f.is_labor).length === 0 && (
-                    <div className="text-center py-8 space-y-2">
-                      <p className="text-muted-foreground">
-                        Nenhuma família de mão de obra/equipamento cadastrada.
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Crie famílias com tipo "Mão de Obra" na aba Insumos para configurar alertas de contratação.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* Lead Time tab removed — now in Purchase Panel */}
       </Tabs>
 
       {/* Edit Quotes Dialog - Improved for faster bulk entry */}

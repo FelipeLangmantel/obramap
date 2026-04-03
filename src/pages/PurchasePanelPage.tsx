@@ -1,27 +1,33 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { usePurchasePanel, PurchaseAlert } from "@/hooks/usePurchasePanel";
 import { ALERT_STATUS_LABELS, ALERT_STATUS_COLORS } from "@/components/supplies/types";
 import type { SupplyAlertStatus } from "@/components/supplies/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import {
   AlertTriangle, ChevronLeft, ChevronRight, ChevronDown,
   ShoppingCart, Truck, Clock, DollarSign, Building2,
+  Package, Hammer, Wrench, Save,
 } from "lucide-react";
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, getDay,
   addMonths, subMonths, isToday, isBefore, startOfDay,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 const brl = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -51,6 +57,14 @@ const ORDER_STATUS_MAP: Record<string, { label: string; color: string }> = {
 };
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+interface CompanyFamily {
+  id: string;
+  name: string;
+  color: string | null;
+  lead_time_days: number;
+  is_labor: boolean;
+}
 
 export default function PurchasePanelPage() {
   const {
@@ -86,11 +100,15 @@ export default function PurchasePanelPage() {
         </div>
       ) : (
         <Tabs defaultValue="painel" className="flex-1 flex flex-col">
-          <TabsList className="mx-4 mt-3 grid grid-cols-4 h-10">
+          <TabsList className="mx-4 mt-3 grid grid-cols-5 h-10">
             <TabsTrigger value="painel" className="text-xs">Painel</TabsTrigger>
             <TabsTrigger value="calendario" className="text-xs">Calendário</TabsTrigger>
             <TabsTrigger value="por-obra" className="text-xs">Por Obra</TabsTrigger>
             <TabsTrigger value="pedidos" className="text-xs">Pedidos</TabsTrigger>
+            <TabsTrigger value="leadtime" className="text-xs gap-1">
+              <Clock className="h-3.5 w-3.5" />
+              Lead Time
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="painel" className="flex-1 overflow-auto p-4 space-y-6">
@@ -113,6 +131,10 @@ export default function PurchasePanelPage() {
 
           <TabsContent value="pedidos" className="flex-1 overflow-auto p-4">
             <OrdersTab orders={orders} />
+          </TabsContent>
+
+          <TabsContent value="leadtime" className="flex-1 overflow-auto p-4">
+            <LeadTimeTab />
           </TabsContent>
         </Tabs>
       )}
@@ -459,5 +481,224 @@ function OrdersTab({ orders }: { orders: ReturnType<typeof usePurchasePanel>["or
         </Table>
       </div>
     </>
+  );
+}
+
+/* =============== TAB 5 — LEAD TIME (COMPANY-WIDE) =============== */
+function LeadTimeTab() {
+  const { company, canEdit } = useAuth();
+  const companyId = company?.id;
+
+  const [families, setFamilies] = useState<CompanyFamily[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingValues, setEditingValues] = useState<Record<string, number>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  const loadFamilies = useCallback(async () => {
+    if (!companyId) return;
+    setLoading(true);
+    const { data } = await supabase
+      .from("material_families")
+      .select("id, name, color, lead_time_days, is_labor")
+      .eq("company_id", companyId)
+      .order("display_order", { ascending: true });
+    setFamilies(
+      (data || []).map((f: any) => ({
+        id: f.id,
+        name: f.name,
+        color: f.color,
+        lead_time_days: f.lead_time_days ?? 7,
+        is_labor: f.is_labor ?? false,
+      }))
+    );
+    setLoading(false);
+  }, [companyId]);
+
+  useEffect(() => {
+    loadFamilies();
+  }, [loadFamilies]);
+
+  // Realtime: reload when material_families change
+  useEffect(() => {
+    if (!companyId) return;
+    const channel = supabase
+      .channel(`lead-time-families-${companyId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "material_families" }, () => loadFamilies())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [companyId, loadFamilies]);
+
+  const handleSave = async (familyId: string) => {
+    const newDays = editingValues[familyId];
+    if (newDays === undefined) return;
+
+    setSavingId(familyId);
+    const { error } = await supabase
+      .from("material_families")
+      .update({ lead_time_days: newDays })
+      .eq("id", familyId);
+
+    if (error) {
+      toast.error("Erro ao salvar lead time");
+      console.error(error);
+    } else {
+      toast.success("Lead time atualizado — alertas recalculados automaticamente");
+      setEditingValues((prev) => {
+        const next = { ...prev };
+        delete next[familyId];
+        return next;
+      });
+      // Family list will update via realtime
+    }
+    setSavingId(null);
+  };
+
+  const getCurrentValue = (f: CompanyFamily) =>
+    editingValues[f.id] !== undefined ? editingValues[f.id] : f.lead_time_days;
+
+  const hasChange = (f: CompanyFamily) =>
+    editingValues[f.id] !== undefined && editingValues[f.id] !== f.lead_time_days;
+
+  const materialFamilies = families.filter((f) => !f.is_labor);
+  const laborFamilies = families.filter((f) => f.is_labor);
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {[...Array(3)].map((_, i) => (
+          <Skeleton key={i} className="h-20 w-full rounded-xl" />
+        ))}
+      </div>
+    );
+  }
+
+  const renderFamilyRow = (family: CompanyFamily) => {
+    const currentLT = getCurrentValue(family);
+    const changed = hasChange(family);
+
+    return (
+      <div key={family.id} className="flex items-center justify-between p-3 border border-border rounded-lg gap-3">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <div className="w-4 h-4 rounded-full shrink-0" style={{ backgroundColor: family.color || "#9ca3af" }} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-medium text-sm text-foreground">{family.name}</span>
+              {family.is_labor && (
+                <Badge variant="outline" className="text-[10px] border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/20">
+                  <Wrench className="w-2.5 h-2.5 mr-0.5" />
+                  Contratação
+                </Badge>
+              )}
+            </div>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">
+              {family.is_labor
+                ? `Início Medição - ${currentLT} dias = data limite para contratar`
+                : `Início Medição - ${currentLT} dias = data limite de compra`}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {currentLT === 0 ? (
+            <Badge variant="destructive" className="text-[10px]">Sem prazo</Badge>
+          ) : currentLT < 5 ? (
+            <Badge className="text-[10px] bg-amber-500 dark:bg-amber-600 text-white">Curto</Badge>
+          ) : (
+            <Badge className="text-[10px] bg-green-500 dark:bg-green-600 text-white">OK</Badge>
+          )}
+          {canEdit ? (
+            <>
+              <Input
+                type="number"
+                min={0}
+                max={365}
+                className="w-20 h-8"
+                value={currentLT}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value) || 0;
+                  setEditingValues((prev) => ({ ...prev, [family.id]: v }));
+                }}
+              />
+              <span className="text-sm text-muted-foreground">dias</span>
+              {changed && (
+                <Button size="sm" className="h-8" onClick={() => handleSave(family.id)} disabled={savingId === family.id}>
+                  {savingId === family.id ? (
+                    <div className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full" />
+                  ) : (
+                    <Save className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              )}
+            </>
+          ) : (
+            <>
+              <span className="text-sm font-medium w-20 text-right text-foreground">{currentLT}</span>
+              <span className="text-sm text-muted-foreground">dias</span>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="p-3 rounded-lg border border-primary/20 bg-primary/5">
+        <p className="text-sm text-foreground font-medium">⚡ Configuração global da empresa</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Ao alterar o lead time, todas as compras abertas dessa família serão recalculadas automaticamente em todas as obras.
+        </p>
+      </div>
+
+      {/* Material Families */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Package className="w-5 h-5 text-primary" />
+            Lead Time de Materiais
+          </CardTitle>
+          <CardDescription>
+            Prazo de antecedência para pedidos de compra de materiais
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="max-h-[400px]">
+            <div className="space-y-2">
+              {materialFamilies.map(renderFamilyRow)}
+              {materialFamilies.length === 0 && (
+                <p className="text-center text-muted-foreground py-8">
+                  Nenhuma família de materiais cadastrada.
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+
+      {/* Labor / Equipment Families */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Hammer className="w-5 h-5 text-primary" />
+            Lead Time de Mão de Obra / Equipamentos
+          </CardTitle>
+          <CardDescription>
+            Prazo de antecedência para contratação. Alertas são gerados quando uma medição se aproxima sem contrato vigente.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="max-h-[400px]">
+            <div className="space-y-2">
+              {laborFamilies.map(renderFamilyRow)}
+              {laborFamilies.length === 0 && (
+                <p className="text-center text-muted-foreground py-8 space-y-1">
+                  <span className="block">Nenhuma família de mão de obra/equipamento cadastrada.</span>
+                  <span className="block text-xs">Crie famílias com tipo "Mão de Obra" no módulo de Suprimentos.</span>
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
