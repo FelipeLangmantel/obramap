@@ -28,6 +28,7 @@ interface MaterialFamily {
   name: string;
   color: string;
   lead_time_days: number;
+  is_labor: boolean;
 }
 
 interface InputItem {
