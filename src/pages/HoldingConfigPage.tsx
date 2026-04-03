@@ -18,9 +18,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Settings, Building2, FileText, FlaskConical, Plus, Pencil, Trash2, GripVertical, RefreshCw, ArrowLeft, HeartPulse, RotateCcw } from "lucide-react";
+import { Settings, Building2, FileText, FlaskConical, Plus, Pencil, Trash2, GripVertical, RefreshCw, ArrowLeft, HeartPulse, RotateCcw, MapPin, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { geocodeMunicipio } from "@/lib/geocode";
+import { Progress } from "@/components/ui/progress";
 
 interface HoldingEmpresa {
   id: string; company_id: string; nome: string; cnpj: string | null;
