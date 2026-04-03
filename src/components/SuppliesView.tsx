@@ -820,7 +820,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         const { data, error } = await supabase.from('material_families').insert({ project_id: projectId, company_id: companyId!, name: newFamily.name.trim(), color: newFamily.color, display_order: families.length }).select().single();
         if (error) throw error;
         if (data) {
-          setFamilies(prev => [...prev, { id: data.id, name: data.name, color: data.color || '#9ca3af', lead_time_days: data.lead_time_days || 7 }]);
+          setFamilies(prev => [...prev, { id: data.id, name: data.name, color: data.color || '#9ca3af', lead_time_days: data.lead_time_days || 7, is_labor: data.is_labor || false }]);
         }
         toast.success('Família cadastrada!');
       }
