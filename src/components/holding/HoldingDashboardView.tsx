@@ -1461,66 +1461,56 @@ export default function HoldingDashboardView() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs">% Andamento Físico</Label>
-              {(() => {
-                const totalMedidoAprovado = (editingObra?.allMedicoes || [])
-                  .filter(m => (m.status_medicao === "enviada" || m.status_medicao === "aprovada") && m.num_medicao !== "Saldo Inicial")
-                  .reduce((s, m) => {
-                    if (m.status_medicao === "aprovada") {
-                      return s + (Number(m.valor_acatado ?? m.valor_medicao) || 0);
-                    }
-                    return s + (Number(m.valor_medicao) || 0);
-                  }, 0);
-                const valorContrato = Number(newObraForm.valor_contrato) || 0;
-                const maxPct = valorContrato > 0 && totalMedidoAprovado > 0
-                  ? Math.min(100, Math.round((totalMedidoAprovado / valorContrato) * 1000) / 10)
-                  : 100;
-                return (
-                  <>
-                    <div className="flex items-center gap-3 mt-2">
-                      <Slider
-                        value={[newObraForm.percentual_andamento]}
-                        onValueChange={([v]) => setNewObraForm(p => ({ ...p, percentual_andamento: Math.min(v, maxPct) }))}
-                        max={maxPct}
-                        step={0.5}
-                        className="flex-1"
-                      />
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          min={0} max={maxPct} step={0.5}
-                          value={newObraForm.percentual_andamento}
-                          onChange={(e) => {
-                            const v = Math.min(maxPct, Math.max(0, parseFloat(e.target.value) || 0));
-                            setNewObraForm(p => ({ ...p, percentual_andamento: v }));
-                          }}
-                          className="w-20 text-sm text-right"
-                        />
-                        <span className="text-xs text-muted-foreground">%</span>
-                      </div>
-                    </div>
-                    <div className="mt-1 space-y-0.5">
-                      {newObraForm.valor_contrato && Number(newObraForm.valor_contrato) > 0 && (
-                        <p className="text-[10px] text-muted-foreground">
-                          Valor executado estimado:{" "}
-                          <span className="font-medium text-foreground">
-                            {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                              Number(newObraForm.valor_contrato) * newObraForm.percentual_andamento / 100
-                            )}
-                          </span>
-                        </p>
-                      )}
-                      {maxPct < 100 && (
-                        <p className="text-[10px] text-amber-500">
-                          Máximo permitido: {maxPct.toFixed(1)}% — baseado em{" "}
-                          {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalMedidoAprovado)}{" "}
-                          medidos e aprovados
-                        </p>
-                      )}
-                    </div>
-                  </>
-                );
-              })()}
+              <Label className="text-xs">% Físico (inserido pelo engenheiro)</Label>
+              <div className="flex items-center gap-3 mt-2">
+                <Slider
+                  value={[newObraForm.percentual_fisico]}
+                  onValueChange={([v]) => setNewObraForm(p => ({ ...p, percentual_fisico: v }))}
+                  max={100}
+                  step={0.5}
+                  className="flex-1"
+                />
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    min={0} max={100} step={0.5}
+                    value={newObraForm.percentual_fisico}
+                    onChange={(e) => {
+                      const v = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0));
+                      setNewObraForm(p => ({ ...p, percentual_fisico: v }));
+                    }}
+                    className="w-20 text-sm text-right"
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                </div>
+              </div>
+              {newObraForm.valor_contrato && Number(newObraForm.valor_contrato) > 0 && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Valor executado estimado:{" "}
+                  <span className="font-medium text-foreground">
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+                      Number(newObraForm.valor_contrato) * newObraForm.percentual_fisico / 100
+                    )}
+                  </span>
+                </p>
+              )}
+            </div>
+            <div>
+              <Label className="text-xs">% Financeiro (calculado automaticamente)</Label>
+              <div className="flex items-center gap-3 mt-2">
+                <div className="flex-1 h-2 rounded-full bg-secondary overflow-hidden">
+                  <div 
+                    className="h-full bg-primary rounded-full transition-all" 
+                    style={{ width: `${Math.min(100, editingObra?.percentual_financeiro || editingObra?.percentual_andamento || 0)}%` }} 
+                  />
+                </div>
+                <span className="text-sm font-medium w-16 text-right">
+                  {(editingObra?.percentual_financeiro || editingObra?.percentual_andamento || 0).toFixed(1)}%
+                </span>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Baseado nas medições aprovadas / valor do contrato
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">Período Medição</Label><Input value={newObraForm.periodo_medicao} onChange={(e) => setNewObraForm(p => ({ ...p, periodo_medicao: e.target.value }))} placeholder="" /></div>
