@@ -701,7 +701,21 @@ export default function HoldingDashboardView() {
       planejador_nome: newObraForm.planejador_nome || null,
       planejador_telefone: newObraForm.planejador_telefone?.replace(/\D/g, "") || null,
       tipo_contrato: newObraForm.tipo_contrato || null,
-    };
+    } as any;
+
+    // Geocode if municipio changed or coordinates are missing
+    const needsGeocode =
+      newObraForm.municipio &&
+      (!editingObra || editingObra.municipio !== newObraForm.municipio ||
+       !editingObra.latitude || !editingObra.longitude);
+
+    if (needsGeocode) {
+      const coords = await geocodeMunicipio(newObraForm.municipio, newObraForm.estado || "RS");
+      if (coords) {
+        payload.latitude = coords.lat;
+        payload.longitude = coords.lng;
+      }
+    }
 
     if (editingObra) {
       const { error } = await supabase.from("obras_portfolio").update(payload).eq("id", editingObra.id);
