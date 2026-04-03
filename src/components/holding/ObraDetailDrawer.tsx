@@ -1785,7 +1785,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
           </TableHeader>
           <TableBody>
             {medicoes.map((m) => {
-              const displayStatus = getMedicaoDisplayStatus(m);
+              const displayStatus = getMedicaoDisplayStatus(m, medicoes);
               const ns = NF_STATUS_BADGE[m.status_nf] || NF_STATUS_BADGE.pendente;
               const previsto = Number(m.valor_previsto_medicao) || 0;
               const realizado = Number(m.valor_medicao) || 0;
@@ -1794,8 +1794,17 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
               const hasGlosa = acatado > 0 && acatado !== realizado;
               const isLocked = m.status_medicao === "enviada" || m.status_medicao === "aprovada";
 
+              // Build WhatsApp contacts for overdue alerts
+              const whatsappContacts: { name: string; phone: string; role: string }[] = [];
+              if (displayStatus.isOverdue) {
+                if (obra.responsavel_telefone) whatsappContacts.push({ name: obra.responsavel_nome || "Engenheiro", phone: obra.responsavel_telefone, role: "Eng." });
+                if (obra.coordenador_telefone) whatsappContacts.push({ name: obra.coordenador_nome || "Coordenador", phone: obra.coordenador_telefone, role: "Coord." });
+                if (obra.planejador_telefone) whatsappContacts.push({ name: obra.planejador_nome || "Planejador", phone: obra.planejador_telefone, role: "Plan." });
+              }
+              const dataPrevisaoFormatted = m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yyyy") : "";
+
               return (
-                <TableRow key={m.id}>
+                <TableRow key={m.id} className={displayStatus.isOverdue ? "bg-red-50/50 dark:bg-red-900/10" : ""}>
                   <TableCell className="font-medium">
                     {m.num_medicao || "—"}
                     {isLocked && !isAdmin && <Lock className="h-3 w-3 text-amber-500 inline ml-1" />}
