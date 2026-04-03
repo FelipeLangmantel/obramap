@@ -662,17 +662,42 @@ export default function HoldingDashboardView() {
     tipo_contrato: "",
   });
 
-  const handleSaveObra = async () => {
+  const validateObraForm = (): Record<string, string> => {
+    const errs: Record<string, string> = {};
+    if (!newObraForm.nome.trim()) errs.nome = "Nome é obrigatório";
+    if (!newObraForm.municipio.trim()) errs.municipio = "Município é obrigatório";
+    if (!newObraForm.estado.trim()) errs.estado = "Estado é obrigatório";
+    if (!newObraForm.uh || Number(newObraForm.uh) <= 0) errs.uh = "UH deve ser > 0";
+    if (!newObraForm.status) errs.status = "Status é obrigatório";
+    if (!newObraForm.num_contrato.trim()) errs.num_contrato = "Nº Contrato é obrigatório";
+    if (!newObraForm.data_inicio) errs.data_inicio = "Data Início é obrigatória";
+    if (!newObraForm.prazo_dias || Number(newObraForm.prazo_dias) <= 0) errs.prazo_dias = "Prazo deve ser > 0";
+    if (!newObraForm.periodo_medicao.trim()) errs.periodo_medicao = "Período de Medição é obrigatório";
+    if (!newObraForm.prazo_pagamento.trim()) errs.prazo_pagamento = "Prazo de Pagamento é obrigatório";
+    if (!newObraForm.responsavel_nome.trim()) errs.responsavel_nome = "Eng. Residente é obrigatório (se não houver, digite 'Contratar')";
+    return errs;
+  };
+
+  const isEditorRestricted = !isCompanyAdmin && canEdit;
+
+  const handlePreSave = () => {
     if (!canEdit) {
       toast.error("Você não tem permissão para cadastrar ou editar obras.");
       return;
     }
-    if (!newObraForm.nome.trim() || !company?.id) {
-      toast.error("Nome da obra é obrigatório.");
+    if (!company?.id) return;
+    const errs = validateObraForm();
+    setFormErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      toast.error("Preencha todos os campos obrigatórios.");
       return;
     }
+    setShowConfirmSave(true);
+  };
 
-    // percentual_fisico é livre — inserido pelo engenheiro sem limite financeiro
+  const handleSaveObra = async () => {
+    setShowConfirmSave(false);
+    if (!canEdit || !company?.id) return;
     setSavingObra(true);
     const payload = {
       company_id: company.id,
