@@ -30,6 +30,8 @@ interface ObraPortfolio {
   uh: number | null;
   tipo_contrato: string | null;
   aditivo_valor_total: number;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface ObraEnriched extends ObraPortfolio {
