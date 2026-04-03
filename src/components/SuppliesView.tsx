@@ -212,7 +212,7 @@ const STATUS_COLORS: Record<string, string> = {
   delivered: 'bg-green-600'
 };
 
-type TabType = "alerts" | "quotations" | "orders" | "contracts" | "leadtime";
+type TabType = "alerts" | "quotations" | "orders" | "contracts";
 
 interface SuppliesViewProps {
   initialTab?: TabType;
