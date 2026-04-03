@@ -346,7 +346,8 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         id: f.id, 
         name: f.name, 
         color: f.color || '#9ca3af', 
-        lead_time_days: f.lead_time_days || 7 
+        lead_time_days: f.lead_time_days || 7,
+        is_labor: f.is_labor || false
       })));
       
       // Set backend KPIs
