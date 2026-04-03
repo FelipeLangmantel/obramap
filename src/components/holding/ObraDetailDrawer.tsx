@@ -948,7 +948,6 @@ function getMedicaoDisplayStatus(m: any, allMedicoes?: any[]): { label: string; 
 
         // "Em Andamento" if today >= startDate AND (no endDate OR today < endDate)
         const isInRange = today >= startDate && (endDate === null || today < endDate);
-        const isInRange = today >= startDate && (endDate === null || today < endDate);
 
         if (isInRange) {
           return { label: "Em Andamento", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300", isOverdue };
