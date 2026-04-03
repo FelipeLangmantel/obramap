@@ -72,11 +72,11 @@ export function SupplyAlertsList({ alerts, isLoading, canEdit, onUpdateStatus }:
   };
 
   const getUrgencyColor = (orderByDate: string, status: string) => {
-    if (status === 'delivered') return 'text-green-600';
-    if (status === 'delayed' || isPast(new Date(orderByDate))) return 'text-red-600';
+    if (status === 'delivered') return 'text-green-600 dark:text-green-400';
+    if (status === 'delayed' || isPast(new Date(orderByDate))) return 'text-red-600 dark:text-red-400';
     const days = differenceInDays(new Date(orderByDate), new Date());
-    if (days <= 3) return 'text-orange-600';
-    if (days <= 7) return 'text-yellow-600';
+    if (days <= 3) return 'text-orange-600 dark:text-orange-400';
+    if (days <= 7) return 'text-yellow-600 dark:text-yellow-400';
     return 'text-muted-foreground';
   };
 
@@ -258,7 +258,7 @@ export function SupplyAlertsList({ alerts, isLoading, canEdit, onUpdateStatus }:
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="h-4 w-4 text-red-500" />
-              <span className="font-medium text-red-500">Atrasados ({groupedByStatus.delayed.length})</span>
+              <span className="font-medium text-red-600 dark:text-red-400">Atrasados ({groupedByStatus.delayed.length})</span>
             </div>
             {groupedByStatus.delayed.map(renderAlertCard)}
           </div>
@@ -269,7 +269,7 @@ export function SupplyAlertsList({ alerts, isLoading, canEdit, onUpdateStatus }:
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-2">
               <Clock className="h-4 w-4 text-yellow-500" />
-              <span className="font-medium text-yellow-600">Pendentes ({groupedByStatus.pending.length})</span>
+              <span className="font-medium text-yellow-600 dark:text-yellow-400">Pendentes ({groupedByStatus.pending.length})</span>
             </div>
             {groupedByStatus.pending.map(renderAlertCard)}
           </div>
@@ -280,7 +280,7 @@ export function SupplyAlertsList({ alerts, isLoading, canEdit, onUpdateStatus }:
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-2">
               <Package className="h-4 w-4 text-blue-500" />
-              <span className="font-medium text-blue-600">Em Pedido ({groupedByStatus.ordered.length})</span>
+              <span className="font-medium text-blue-600 dark:text-blue-400">Em Pedido ({groupedByStatus.ordered.length})</span>
             </div>
             {groupedByStatus.ordered.map(renderAlertCard)}
           </div>
@@ -291,7 +291,7 @@ export function SupplyAlertsList({ alerts, isLoading, canEdit, onUpdateStatus }:
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span className="font-medium text-green-600">Entregues ({groupedByStatus.delivered.length})</span>
+              <span className="font-medium text-green-600 dark:text-green-400">Entregues ({groupedByStatus.delivered.length})</span>
             </div>
             {groupedByStatus.delivered.map(renderAlertCard)}
           </div>
