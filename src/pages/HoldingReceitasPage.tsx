@@ -209,8 +209,8 @@ export default function HoldingReceitasPage() {
       const label = `${MONTHS[mesIdx]}/${String(m.ano_referencia).slice(2)}`;
       if (!monthMap[key]) monthMap[key] = { mes: label, aprovado: 0, enviado: 0, pendente: 0, nf_recebido: 0 };
       if (m.status_medicao === "aprovada") monthMap[key].aprovado += Number(m.valor_acatado ?? m.valor_medicao) || 0;
-      if (m.status_medicao === "enviada") monthMap[key].enviado += m.valor_medicao;
-      if (m.status_medicao === "enviada" && !monthMap[key].aprovado) monthMap[key].pendente += Number(m.valor_acatado ?? m.valor_medicao) || 0;
+      if (m.status_medicao === "enviada") monthMap[key].enviado += Number(m.valor_medicao) || 0;
+      if (m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada") monthMap[key].pendente += Number(m.valor_previsto_medicao) || 0;
       if (m.status_nf === "recebido") monthMap[key].nf_recebido += Number(m.valor_acatado ?? m.valor_medicao) || 0;
     });
     return Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
@@ -238,7 +238,7 @@ export default function HoldingReceitasPage() {
     medicoes.forEach(m => {
       if (!obraMap[m.obra_id]) obraMap[m.obra_id] = { nome: m.obra_nome, aprovado: 0, pendente: 0 };
       if (m.status_medicao === "aprovada") obraMap[m.obra_id].aprovado += Number(m.valor_acatado ?? m.valor_medicao) || 0;
-      if (m.status_medicao === "enviada") obraMap[m.obra_id].pendente += m.valor_medicao;
+      if (m.status_medicao === "enviada") obraMap[m.obra_id].aprovado += Number(m.valor_medicao) || 0; // enviada aguard. fiscal — soma ao total em aberto
     });
     return Object.values(obraMap)
       .sort((a, b) => (b.aprovado + b.pendente) - (a.aprovado + a.pendente))
@@ -726,7 +726,7 @@ export default function HoldingReceitasPage() {
                 <div className="flex items-center justify-between text-xs text-muted-foreground px-2">
                   <span>{medicoesFiltradas.length} medições encontradas</span>
                   <span>
-                    <strong>Total:</strong> {BRL.format(medicoesFiltradas.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0))}
+                    <strong>Total:</strong> {BRL.format(medicoesFiltradas.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0))}
                     {" | "}
                     <strong>Aprovado:</strong> {BRL.format(medicoesFiltradas.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0))}
                   </span>
@@ -894,7 +894,7 @@ export default function HoldingReceitasPage() {
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground mb-1">Próxima entrada esperada</p>
                       <p className="text-sm font-semibold">
-                        {insights.proximaEntrada ? `${insights.proximaEntrada.obra_nome} — ${BRL.format(insights.proximaEntrada.valor_medicao)}` : "Nenhuma medição pendente"}
+                        {insights.proximaEntrada ? `${insights.proximaEntrada.obra_nome} — ${BRL.format(insights.proximaEntrada.valor_acatado ?? insights.proximaEntrada.valor_medicao)}` : "Nenhuma medição pendente"}
                       </p>
                     </CardContent>
                   </Card>

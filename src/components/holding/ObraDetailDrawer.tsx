@@ -247,7 +247,7 @@ function ResumoTab({ obra }: { obra: ObraDrawerData }) {
     if (medicoes.length === 0) return [];
     const MONTHS_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
     return medicoes
-      .filter(m => m.mes_referencia)
+      .filter(m => m.mes_referencia && m.num_medicao !== "Saldo Inicial")
       .sort((a, b) => {
         const aIdx = MONTHS_SHORT.findIndex(x => x.toLowerCase() === (a.mes_referencia || "").toLowerCase());
         const bIdx = MONTHS_SHORT.findIndex(x => x.toLowerCase() === (b.mes_referencia || "").toLowerCase());
@@ -256,7 +256,7 @@ function ResumoTab({ obra }: { obra: ObraDrawerData }) {
       .map(m => ({
         name: `${m.mes_referencia}/${String(m.ano_referencia).slice(-2)}`,
         previsto: Number(m.valor_previsto_medicao) || 0,
-        realizado: Number(m.valor_medicao) || 0,
+        realizado: Number(m.valor_acatado ?? m.valor_medicao) || 0,
         acatado: Number(m.valor_acatado) || 0,
       }));
   }, [medicoes]);
@@ -2224,7 +2224,7 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
   medicoes.forEach((m) => {
     const key = `${m.mes_referencia}/${m.ano_referencia}`;
     const entry = monthMap.get(key) || { despesa: 0, receita: 0 };
-    entry.receita += m.valor_medicao || 0;
+    entry.receita += Number(m.valor_acatado ?? m.valor_medicao) || 0;
     monthMap.set(key, entry);
   });
   const chartData = Array.from(monthMap.entries()).map(([month, v]) => ({ month, ...v }));

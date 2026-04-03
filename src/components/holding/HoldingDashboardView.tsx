@@ -261,19 +261,17 @@ export function calcHealth(
   const pctFisico = (obra.percentual_andamento || 0) / 100;
 
   // ── IDC — Índice de Desempenho de Custo ──────────────────────────────────
-  // Só calcula se há andamento físico registrado (> 5%) e valor de contrato
-  // Usa valor_acatado (o que foi efetivamente aceito) para IDC preciso
+  // NOTA TÉCNICA: O IDC compara % físico executado vs valor medido.
+  // Atualmente o percentual_andamento é calculado automaticamente pelo financeiro
+  // (acatado/contrato), tornando o IDC matematicamente = 1.0 sempre.
+  // O IDC real requer um campo percentual_fisico independente (a implementar).
+  // Por ora, o IDC é suprimido para não enganar o gestor com verde falso.
   const totalMedidoAprovado = allMedicoes
     .filter(m => m.status_medicao === "aprovada")
     .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
 
-  if (pctFisico > 0.05 && valorContrato > 0) {
-    const valorPlanejado = pctFisico * valorContrato; // quanto deveria ter medido
-    const idc = totalMedidoAprovado > 0 ? totalMedidoAprovado / valorPlanejado : 0;
-
-    if (idc < T.idc_red) return "red";
-    if (idc < T.idc_yellow) return "yellow";
-  }
+  // IDC desabilitado até ter campo percentual_fisico independente do financeiro
+  // if (pctFisico > 0.05 && valorContrato > 0) { ... }
 
   // ── IDP — Índice de Desempenho de Prazo ──────────────────────────────────
   if (obra.data_inicio && obra.prazo_dias > 0) {
@@ -353,13 +351,12 @@ export function calcHealthDetails(
     .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
 
   // ── IDC ──────────────────────────────────────────────────────────────────
+  // IDC desabilitado: percentual_andamento é financeiro, não físico.
+  // IDC = acatado / (acatado/contrato × contrato) = 1.0 sempre — sem valor informativo.
+  // Reativar após implementar campo percentual_fisico independente.
   let idcValue: number | null = null;
   let idcStatus: HealthIndicator["status"] = "na";
-  if (pctFisico > 0.05 && valorContrato > 0) {
-    const valorPlanejado = pctFisico * valorContrato;
-    idcValue = totalMedidoAprovado > 0 ? totalMedidoAprovado / valorPlanejado : 0;
-    idcStatus = idcValue < T.idc_red ? "red" : idcValue < T.idc_yellow ? "yellow" : "green";
-  }
+  // if (pctFisico > 0.05 && valorContrato > 0) { ... disabled ... }
 
   // ── IDP ──────────────────────────────────────────────────────────────────
   let idpValue: number | null = null;
