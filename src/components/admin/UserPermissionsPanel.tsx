@@ -65,6 +65,8 @@ import {
 } from "lucide-react";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
+import { AuditLogPanel } from "./AuditLogPanel";
+import { EditRequestsPanel } from "./EditRequestsPanel";
 
 type AppRole = "admin" | "editor" | "viewer";
 
@@ -268,12 +270,14 @@ export function UserPermissionsPanel() {
       const companyUserIds = usersWithRoles.map(u => u.user_id);
       let companySessions: UserSession[] = [];
       if (companyUserIds.length > 0) {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const { data: sessionsData } = await supabase
           .from("user_sessions")
           .select("*")
           .in("user_id", companyUserIds)
+          .gte("login_at", thirtyDaysAgo)
           .order("login_at", { ascending: false })
-          .limit(100);
+          .limit(200);
         companySessions = (sessionsData || []) as UserSession[];
       }
 
@@ -294,6 +298,18 @@ export function UserPermissionsPanel() {
       fetchData();
     }
   }, [isAdmin]);
+
+  // Realtime for sessions
+  useEffect(() => {
+    if (!isAdmin || !company?.id) return;
+    const channel = supabase
+      .channel(`admin-sessions-${company.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_sessions" }, () => {
+        fetchData();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [isAdmin, company?.id]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -624,6 +640,14 @@ export function UserPermissionsPanel() {
               <Clock className="h-4 w-4" />
               Sessões
             </TabsTrigger>
+            <TabsTrigger value="edit_requests" className="gap-2">
+              <Pencil className="h-4 w-4" />
+              Solicitações
+            </TabsTrigger>
+            <TabsTrigger value="audit" className="gap-2">
+              <Activity className="h-4 w-4" />
+              Auditoria
+            </TabsTrigger>
           </TabsList>
 
           {activeTab === "users" && (
@@ -902,6 +926,18 @@ export function UserPermissionsPanel() {
                   <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={fetchData}>
                     <RefreshCw className="h-3 w-3" /> Atualizar
                   </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={async () => {
+                    try {
+                      const { error } = await supabase.rpc("cleanup_stale_sessions");
+                      if (error) throw error;
+                      toast.success("Sessões inativas limpas!");
+                      fetchData();
+                    } catch (e: any) {
+                      toast.error("Erro ao limpar sessões: " + e.message);
+                    }
+                  }}>
+                    <Trash2 className="h-3 w-3" /> Limpar inativas
+                  </Button>
                   <Button
                     variant="destructive" size="sm" className="h-7 text-xs gap-1"
                     disabled={sessions.filter(s => s.is_active && (sessionUserFilter === "all" || s.user_id === sessionUserFilter)).length === 0}
@@ -1062,8 +1098,16 @@ export function UserPermissionsPanel() {
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"/> Online agora</span>
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"/> Inativa há mais de 30min</span>
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block"/> Encerrada</span>
-            <span className="ml-auto">Sessões são encerradas automaticamente após 20min de inatividade</span>
+            <span className="ml-auto">Sessões são encerradas automaticamente após 20min de inatividade · Exibindo últimos 30 dias</span>
           </div>
+        </TabsContent>
+
+        <TabsContent value="edit_requests" className="space-y-4">
+          <EditRequestsPanel />
+        </TabsContent>
+
+        <TabsContent value="audit" className="space-y-4">
+          <AuditLogPanel />
         </TabsContent>
       </Tabs>
 

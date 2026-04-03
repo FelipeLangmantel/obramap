@@ -162,6 +162,24 @@ export default function HoldingConfigPage() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["holding-config"] });
 
+  // Realtime auto-update
+  useEffect(() => {
+    if (!company?.id) return;
+    const channel = supabase
+      .channel(`holding-config-${company.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "obras_portfolio" }, () => {
+        invalidate();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "holding_empresas" }, () => {
+        invalidate();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "holding_doc_tipos" }, () => {
+        invalidate();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [company?.id]);
+
   // === Empresa state ===
   const [showEmpresaDialog, setShowEmpresaDialog] = useState(false);
   const [editingEmpresa, setEditingEmpresa] = useState<HoldingEmpresa | null>(null);
@@ -384,9 +402,7 @@ export default function HoldingConfigPage() {
             Gerencie empresas, tipos de documentos e configurações globais
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={invalidate}>
-          <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
-        </Button>
+        {/* Realtime auto-updates — no manual refresh needed */}
       </div>
 
       <Tabs defaultValue="empresas">
