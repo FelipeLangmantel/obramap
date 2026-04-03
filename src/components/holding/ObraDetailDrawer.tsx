@@ -171,41 +171,53 @@ function ResumoTab({ obra }: { obra: ObraDrawerData }) {
   const kpis = useMemo(() => {
     const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
 
-    // Medições aprovadas reais (excluindo Saldo Inicial)
-    const totalMedidoReal = medicoes
+    // ── Acatado real (aprovadas excl. Saldo Inicial) — usa valor_acatado ──
+    const totalAcatadoReal = medicoes
       .filter(m => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial")
-      .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+      .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
 
-    // Saldo Inicial (% executado ao cadastrar a obra)
+    // ── Saldo Inicial — faturamento anterior ao sistema ──
     const totalMedidoInicial = medicoes
       .filter(m => m.num_medicao === "Saldo Inicial" && m.status_medicao === "aprovada")
-      .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+      .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
 
-    // Total medido = medições reais + saldo inicial
-    // Se não há nada no banco, usa fallback do % (consistente com ObraCard)
-    const totalMedido = (totalMedidoReal + totalMedidoInicial) > 0
-      ? totalMedidoReal + totalMedidoInicial
-      : (valorContrato > 0 && (obra.percentual_andamento || 0) > 0
-        ? ((obra.percentual_andamento || 0) / 100) * valorContrato
-        : 0);
+    // ── Total medido = acatado real + saldo inicial (sem fallback de %) ──
+    const totalMedido = totalAcatadoReal + totalMedidoInicial;
 
-    // Enviado (aguardando aprovação) — separado
+    // ── Enviado ao fiscal (aguardando análise) ──
     const totalEnviado = medicoes
       .filter(m => m.status_medicao === "enviada")
       .reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
 
-    // Total em aberto (aprovado + enviado) — para o saldo a medir
+    // ── Total em aberto (medido + enviado) — para saldo a medir ──
     const totalEmAberto = totalMedido + totalEnviado;
 
+    // ── Previsto: só medições futuras ainda não enviadas ──
+    // Exclui aprovadas e enviadas — elas já viraram realizado
+    const totalPrevisto = medicoes
+      .filter(m => m.status_medicao !== "aprovada" && m.status_medicao !== "enviada" && m.num_medicao !== "Saldo Inicial")
+      .reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0);
+
+    // ── Previsto das medições que JÁ foram aprovadas (para calcular desvio correto) ──
+    const totalPrevistoAprovadas = medicoes
+      .filter(m => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial")
+      .reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0);
+
     const totalAcatado = medicoes.filter(m => Number(m.valor_acatado) > 0).reduce((s, m) => s + Number(m.valor_acatado), 0);
-    const totalRecebido = medicoes.filter(m => m.status_nf === "recebido").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
-    const totalPrevisto = medicoes.reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0);
+    const totalRecebido = medicoes.filter(m => m.status_nf === "recebido").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
     const pctMedido = valorContrato > 0 ? (totalMedido / valorContrato) * 100 : 0;
     const saldoMedir = valorContrato - totalEmAberto;
-    const totalGlosa = totalAcatado > 0 ? totalMedido - totalAcatado : 0;
+    // Glosa = diferença entre o que foi enviado e o que foi acatado nas aprovadas
+    const totalGlosa = medicoes
+      .filter(m => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial" && Number(m.valor_acatado) > 0)
+      .reduce((s, m) => s + Math.max(0, (Number(m.valor_medicao) || 0) - (Number(m.valor_acatado) || 0)), 0);
     const medicoesEnviadas = medicoes.filter(m => m.status_medicao === "enviada").length;
     const medicoesAprovadas = medicoes.filter(m => m.status_medicao === "aprovada").length;
     const medicoesPrevistas = medicoes.filter(m => m.data_previsao_medicao && !m.data_envio).length;
+    // Desvio: compara previsto vs acatado APENAS nas medições já aprovadas
+    const desvioAprovadas = totalPrevistoAprovadas > 0
+      ? ((totalAcatadoReal - totalPrevistoAprovadas) / totalPrevistoAprovadas) * 100
+      : null;
 
     // Contract timeline
     let diasRestantes: number | null = null;
@@ -222,8 +234,9 @@ function ResumoTab({ obra }: { obra: ObraDrawerData }) {
     }
 
     return {
-      valorContrato, totalMedido, totalEnviado, totalEmAberto, totalRecebido, totalPrevisto,
-      pctMedido, saldoMedir, totalGlosa, totalAcatado,
+      valorContrato, totalMedido, totalEnviado, totalEmAberto, totalRecebido,
+      totalPrevisto, totalPrevistoAprovadas, totalAcatadoReal,
+      pctMedido, saldoMedir, totalGlosa, totalAcatado, desvioAprovadas,
       medicoesEnviadas, medicoesAprovadas, medicoesPrevistas,
       diasRestantes, previsaoFim, pctPrazo,
       totalMedicoes: medicoes.length,
@@ -368,32 +381,39 @@ function ResumoTab({ obra }: { obra: ObraDrawerData }) {
           </CardHeader>
           <CardContent className="p-4 pt-0 space-y-3">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Andamento físico</span>
-              <span className="font-semibold">{obra.percentual_andamento || 0}%</span>
+              <span className="text-muted-foreground">Andamento financeiro</span>
+              <span className="font-semibold">{kpis.pctMedido.toFixed(1)}%</span>
             </div>
-            <Progress value={obra.percentual_andamento || 0} className="h-2" />
+            <Progress value={kpis.pctMedido} className="h-2" />
 
             {kpis.totalGlosa > 0 && (
-              <div className="flex items-center justify-between text-sm pt-2">
+              <div className="flex items-center justify-between text-sm pt-1">
                 <span className="text-amber-600">Glosa acumulada</span>
                 <span className="font-semibold text-amber-600">{BRL.format(kpis.totalGlosa)}</span>
               </div>
             )}
 
             <Separator />
+
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Previsto total</span>
+              <span className="text-muted-foreground">Acatado (aprovadas)</span>
+              <span className="font-medium text-emerald-600">{BRL.format(kpis.totalAcatadoReal)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Previsto (medições futuras)</span>
               <span className="font-medium">{BRL.format(kpis.totalPrevisto)}</span>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Medido total</span>
-              <span className="font-medium">{BRL.format(kpis.totalMedido)}</span>
-            </div>
-            {kpis.totalPrevisto > 0 && kpis.totalMedido > 0 && (
+            {kpis.totalEnviado > 0 && (
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Desvio prev. × medido</span>
-                <span className={`font-semibold ${kpis.totalMedido >= kpis.totalPrevisto ? "text-emerald-600" : "text-amber-600"}`}>
-                  {((kpis.totalMedido - kpis.totalPrevisto) / kpis.totalPrevisto * 100).toFixed(1)}%
+                <span className="text-muted-foreground">Enviado (aguard. fiscal)</span>
+                <span className="font-medium text-blue-600">{BRL.format(kpis.totalEnviado)}</span>
+              </div>
+            )}
+            {kpis.desvioAprovadas !== null && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Desvio prev. × acatado</span>
+                <span className={`font-semibold ${kpis.desvioAprovadas >= 0 ? "text-emerald-600" : "text-amber-600"}`}>
+                  {kpis.desvioAprovadas >= 0 ? "+" : ""}{kpis.desvioAprovadas.toFixed(1)}%
                 </span>
               </div>
             )}
