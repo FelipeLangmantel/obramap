@@ -137,7 +137,7 @@ export function LeadTimeConfig({ families, projectLeadTimes, canEdit, onSave }: 
                   </TableCell>
                   <TableCell>
                     {isCustomized(family.id) ? (
-                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                      <Badge variant="outline" className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800">
                         Personalizado
                       </Badge>
                     ) : (

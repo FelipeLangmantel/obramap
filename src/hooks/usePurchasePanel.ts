@@ -229,8 +229,8 @@ export function usePurchasePanel() {
     };
   }, [fetchData, companyId]);
 
-  // Use server KPIs when available, fallback to client calculations
-  const overdueCount = companyKpis?.total_overdue ?? useMemo(
+  // Client-side fallback calculations (always computed to respect rules of hooks)
+  const clientOverdueCount = useMemo(
     () =>
       alerts.filter(
         (a) =>
@@ -249,18 +249,23 @@ export function usePurchasePanel() {
     [alerts]
   );
 
-  const inTransitCount = companyKpis?.total_in_transit ?? useMemo(
+  const clientInTransitCount = useMemo(
     () => orders.filter((o) => o.status === "in_transit").length,
     [orders]
   );
 
-  const totalPendingValue = companyKpis?.total_pending_value ?? useMemo(
+  const clientPendingValue = useMemo(
     () =>
       requests
         .filter((r) => !["delivered", "cancelled"].includes(r.status))
         .reduce((sum, r) => sum + r.total_value, 0),
     [requests]
   );
+
+  // Use server KPIs when available, fallback to client calculations
+  const overdueCount = companyKpis?.total_overdue ?? clientOverdueCount;
+  const inTransitCount = companyKpis?.total_in_transit ?? clientInTransitCount;
+  const totalPendingValue = companyKpis?.total_pending_value ?? clientPendingValue;
 
   const criticalAlerts = useMemo(
     () =>

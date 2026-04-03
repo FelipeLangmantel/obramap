@@ -72,11 +72,11 @@ export function SupplyAlertsList({ alerts, isLoading, canEdit, onUpdateStatus }:
   };
 
   const getUrgencyColor = (orderByDate: string, status: string) => {
-    if (status === 'delivered') return 'text-green-600';
-    if (status === 'delayed' || isPast(new Date(orderByDate))) return 'text-red-600';
+    if (status === 'delivered') return 'text-green-600 dark:text-green-400';
+    if (status === 'delayed' || isPast(new Date(orderByDate))) return 'text-red-600 dark:text-red-400';
     const days = differenceInDays(new Date(orderByDate), new Date());
-    if (days <= 3) return 'text-orange-600';
-    if (days <= 7) return 'text-yellow-600';
+    if (days <= 3) return 'text-orange-600 dark:text-orange-400';
+    if (days <= 7) return 'text-yellow-600 dark:text-yellow-400';
     return 'text-muted-foreground';
   };
 
