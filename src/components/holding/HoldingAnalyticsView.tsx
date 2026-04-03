@@ -25,6 +25,8 @@ interface ObraPortfolio {
   aditivo_prazo_dias: number;
   status: "em_andamento" | "nao_iniciada" | "concluida" | "paralisada";
   percentual_andamento: number;
+  percentual_fisico: number;
+  percentual_financeiro: number;
   municipio: string | null;
   estado: string | null;
   uh: number | null;
