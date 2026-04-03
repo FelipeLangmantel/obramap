@@ -1821,7 +1821,32 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
                   <TableCell>{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                   <TableCell>{m.data_envio ? format(new Date(m.data_envio + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                   <TableCell>{m.data_aprovacao ? format(new Date(m.data_aprovacao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
-                  <TableCell><Badge variant="secondary" className={`text-[10px] ${displayStatus.cls}`}>{displayStatus.label}</Badge></TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className={`text-[10px] ${displayStatus.cls}`}>{displayStatus.label}</Badge>
+                    {displayStatus.isOverdue && (
+                      <div className="mt-1 space-y-0.5">
+                        <span className="flex items-center gap-1 text-[9px] text-destructive font-medium">
+                          <AlertTriangle className="h-3 w-3" /> Previsão vencida
+                        </span>
+                        {whatsappContacts.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            {whatsappContacts.map((c) => (
+                              <a
+                                key={c.phone}
+                                href={buildWhatsAppUrl(c.phone, obra.nome, m.num_medicao || "", dataPrevisaoFormatted)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-0.5 text-[8px] px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 hover:opacity-80"
+                                title={`Enviar alerta WhatsApp para ${c.name}`}
+                              >
+                                📱 {c.role}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right font-mono">{previsto > 0 ? BRL.format(previsto) : "—"}</TableCell>
                   <TableCell className="text-right font-mono">{realizado > 0 ? BRL.format(realizado) : "—"}</TableCell>
                   <TableCell className="text-right font-mono">
