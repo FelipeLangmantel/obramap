@@ -345,7 +345,7 @@ export function calcHealthDetails(
   const T = HEALTH_THRESHOLDS;
   const now = new Date();
   const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
-  const pctFisico = (obra.percentual_andamento || 0) / 100;
+  const pctFisico = (obra.percentual_fisico || 0) / 100;
 
   // Usa valor_acatado para IDC — valor real aceito pelo governo
   const totalMedidoAprovado = allMedicoes
@@ -353,12 +353,13 @@ export function calcHealthDetails(
     .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
 
   // ── IDC ──────────────────────────────────────────────────────────────────
-  // IDC desabilitado: percentual_andamento é financeiro, não físico.
-  // IDC = acatado / (acatado/contrato × contrato) = 1.0 sempre — sem valor informativo.
-  // Reativar após implementar campo percentual_fisico independente.
   let idcValue: number | null = null;
   let idcStatus: HealthIndicator["status"] = "na";
-  // if (pctFisico > 0.05 && valorContrato > 0) { ... disabled ... }
+  if (pctFisico > 0.05 && valorContrato > 0) {
+    const valorPlanejado = pctFisico * valorContrato;
+    idcValue = totalMedidoAprovado / valorPlanejado;
+    idcStatus = idcValue < T.idc_red ? "red" : idcValue < T.idc_yellow ? "yellow" : "green";
+  }
 
   // ── IDP ──────────────────────────────────────────────────────────────────
   let idpValue: number | null = null;
