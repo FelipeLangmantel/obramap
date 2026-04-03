@@ -100,6 +100,8 @@ interface ObraPortfolio {
   has_initial_balance: boolean;
   valor_medido_inicial: number;
   aditivo_valor_total: number;
+  latitude: number | null;
+  longitude: number | null;
   created_at: string;
 }
 
