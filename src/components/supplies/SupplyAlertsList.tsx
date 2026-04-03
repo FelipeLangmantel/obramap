@@ -280,7 +280,7 @@ export function SupplyAlertsList({ alerts, isLoading, canEdit, onUpdateStatus }:
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-2">
               <Package className="h-4 w-4 text-blue-500" />
-              <span className="font-medium text-blue-600">Em Pedido ({groupedByStatus.ordered.length})</span>
+              <span className="font-medium text-blue-600 dark:text-blue-400">Em Pedido ({groupedByStatus.ordered.length})</span>
             </div>
             {groupedByStatus.ordered.map(renderAlertCard)}
           </div>
