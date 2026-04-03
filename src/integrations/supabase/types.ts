@@ -4853,6 +4853,8 @@ export type Database = {
           obramap_project_id: string | null
           parceria_scp: string | null
           percentual_andamento: number
+          percentual_financeiro: number | null
+          percentual_fisico: number | null
           periodo_medicao: string | null
           planejador_nome: string | null
           planejador_telefone: string | null
@@ -4888,6 +4890,8 @@ export type Database = {
           obramap_project_id?: string | null
           parceria_scp?: string | null
           percentual_andamento?: number
+          percentual_financeiro?: number | null
+          percentual_fisico?: number | null
           periodo_medicao?: string | null
           planejador_nome?: string | null
           planejador_telefone?: string | null
@@ -4923,6 +4927,8 @@ export type Database = {
           obramap_project_id?: string | null
           parceria_scp?: string | null
           percentual_andamento?: number
+          percentual_financeiro?: number | null
+          percentual_fisico?: number | null
           periodo_medicao?: string | null
           planejador_nome?: string | null
           planejador_telefone?: string | null
