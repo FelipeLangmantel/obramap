@@ -270,12 +270,14 @@ export function UserPermissionsPanel() {
       const companyUserIds = usersWithRoles.map(u => u.user_id);
       let companySessions: UserSession[] = [];
       if (companyUserIds.length > 0) {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const { data: sessionsData } = await supabase
           .from("user_sessions")
           .select("*")
           .in("user_id", companyUserIds)
+          .gte("login_at", thirtyDaysAgo)
           .order("login_at", { ascending: false })
-          .limit(100);
+          .limit(200);
         companySessions = (sessionsData || []) as UserSession[];
       }
 
