@@ -101,6 +101,24 @@ export default function HoldingDocumentosPage() {
     enabled: !!company?.id,
   });
 
+  // ─── Realtime: auto-update on data changes ───
+  useEffect(() => {
+    if (!company?.id) return;
+    const channel = supabase
+      .channel(`holding-documentos-${company.id}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "documentos_obra" }, () => {
+          queryClient.invalidateQueries({ queryKey: ["holding-documentos", company?.id] });
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "pendencias_projeto" }, () => {
+          queryClient.invalidateQueries({ queryKey: ["holding-documentos", company?.id] });
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "obras_portfolio" }, () => {
+          queryClient.invalidateQueries({ queryKey: ["holding-documentos", company?.id] });
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient, company?.id]);
+
   const obras = data?.obras || [];
   const docsRaw = data?.docs || [];
   const pendencias = data?.pendencias || [];
@@ -222,7 +240,7 @@ export default function HoldingDocumentosPage() {
           <p className="text-xs text-muted-foreground">Controle consolidado de documentos — todas as obras</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-documentos"] })}><RefreshCw className="h-4 w-4 mr-1" /> Atualizar</Button>
+          
           <Button variant="outline" size="sm" onClick={exportCSV}><Download className="h-4 w-4 mr-1" /> Exportar CSV</Button>
         </div>
       </div>

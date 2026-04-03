@@ -141,6 +141,24 @@ export default function HoldingPrdPage() {
     enabled: !!company?.id,
   });
 
+  // ─── Realtime: auto-update on data changes ───
+  useEffect(() => {
+    if (!company?.id) return;
+    const channel = supabase
+      .channel(`holding-prd-${company.id}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, () => {
+          queryClient.invalidateQueries({ queryKey: ["holding-prd", company?.id] });
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "despesas_mensais" }, () => {
+          queryClient.invalidateQueries({ queryKey: ["holding-prd", company?.id] });
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "obras_portfolio" }, () => {
+          queryClient.invalidateQueries({ queryKey: ["holding-prd", company?.id] });
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient, company?.id]);
+
   const obras = data?.obras || [];
   const medicoes = data?.medicoes || [];
   const despesas = data?.despesas || [];
@@ -364,7 +382,7 @@ export default function HoldingPrdPage() {
               {obras.map(o => <SelectItem key={o.id} value={o.id}>{o.nome}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-prd"] })}><RefreshCw className="h-4 w-4 mr-1" /> Atualizar</Button>
+          
           <Button variant="outline" size="sm" onClick={exportCSV}><Download className="h-4 w-4 mr-1" /> Exportar CSV</Button>
         </div>
       </div>

@@ -111,6 +111,24 @@ export default function HoldingDespesasPage() {
     enabled: !!company?.id,
   });
 
+  // ─── Realtime: auto-update on data changes ───
+  useEffect(() => {
+    if (!company?.id) return;
+    const channel = supabase
+      .channel(`holding-despesas-${company.id}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "despesas_mensais" }, () => {
+          queryClient.invalidateQueries({ queryKey: ["holding-despesas", company?.id] });
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, () => {
+          queryClient.invalidateQueries({ queryKey: ["holding-despesas", company?.id] });
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "obras_portfolio" }, () => {
+          queryClient.invalidateQueries({ queryKey: ["holding-despesas", company?.id] });
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient, company?.id]);
+
   const obras = data?.obras || [];
   const despesas = data?.despesas || [];
   const medicoes = data?.medicoes || [];
@@ -167,7 +185,7 @@ export default function HoldingDespesasPage() {
   const prdData = useMemo(() => {
     return obras.map(o => {
       const previsto = (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
-      const realizado = medicoes.filter((m: any) => m.obra_id === o.id && m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_medicao) || 0), 0);
+      const realizado = medicoes.filter((m: any) => m.obra_id === o.id && m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
       const desp = despesas.filter(d => d.obra_id === o.id).reduce((s, d) => s + d.valor, 0);
       const saldo = realizado - desp;
       const roi = desp > 0 ? ((realizado - desp) / desp) * 100 : 0;
@@ -288,7 +306,7 @@ export default function HoldingDespesasPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={exportarCSV}><Download className="h-4 w-4" /> Exportar CSV</Button>
-          <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-despesas"] })}><RefreshCw className="h-4 w-4" /> Atualizar</Button>
+          
         </div>
       </div>
 

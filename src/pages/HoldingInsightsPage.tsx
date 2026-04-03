@@ -56,6 +56,27 @@ export default function HoldingInsightsPage() {
     },
   });
 
+  // ─── Realtime: auto-update on data changes ───
+  useEffect(() => {
+    if (!company?.id) return;
+    const channel = supabase
+      .channel(`holding-insights-${company.id}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, () => {
+          queryClient.invalidateQueries({ queryKey: ["holding-insights-data", company?.id] });
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "despesas_mensais" }, () => {
+          queryClient.invalidateQueries({ queryKey: ["holding-insights-data", company?.id] });
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "obras_portfolio" }, () => {
+          queryClient.invalidateQueries({ queryKey: ["holding-insights-data", company?.id] });
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "documentos_obra" }, () => {
+          queryClient.invalidateQueries({ queryKey: ["holding-insights-data", company?.id] });
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient, company?.id]);
+
   const obras = data?.obras || [];
   const medicoes = data?.medicoes || [];
   const despesas = data?.despesas || [];
@@ -69,7 +90,7 @@ export default function HoldingInsightsPage() {
       const obraDesps = despesas.filter((d: any) => d.obra_id === o.id);
       const obraDocs = docs.find((d: any) => d.obra_id === o.id);
       const docsCount = obraDocs ? DOC_FIELDS.filter(f => (obraDocs as any)[f] === true).length : 0;
-      const totalReceitas = obraMeds.filter((m: any) => m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (m.valor_medicao || 0), 0);
+      const totalReceitas = obraMeds.filter((m: any) => m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
       const totalDesp = obraDesps.reduce((s: number, d: any) => s + (d.valor || 0), 0);
       const diasRestantes = o.data_inicio && o.prazo_dias
         ? differenceInDays(addDays(parseLocalDate(o.data_inicio!), o.prazo_dias + (o.aditivo_prazo_dias || 0)), new Date())
@@ -120,7 +141,7 @@ export default function HoldingInsightsPage() {
         if (!m.data_aprovacao) return false;
         const dt = new Date(m.data_aprovacao);
         return dt.getMonth() === d.getMonth() && dt.getFullYear() === d.getFullYear() && m.status_medicao === "aprovada";
-      }).reduce((s: number, m: any) => s + (m.valor_medicao || 0), 0);
+      }).reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
       const desp = despesas.filter((dp: any) => {
         return dp.ano_referencia === ano && dp.mes_referencia?.toLowerCase()?.startsWith(mes.slice(0, 3));
       }).reduce((s: number, dp: any) => s + (dp.valor || 0), 0);
@@ -228,9 +249,6 @@ export default function HoldingInsightsPage() {
           <p className="text-sm text-muted-foreground mt-1">Análise automática gerada por inteligência artificial</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-insights-data"] })} className="gap-1">
-            <RefreshCw className="h-4 w-4" /> Atualizar
-          </Button>
           <Button onClick={handleGenerateInsights} disabled={insightsLoading || enrichedObras.length === 0} className="gap-2">
             {insightsLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             Gerar Insights

@@ -485,7 +485,7 @@ export default function HoldingReceitasPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={exportarCSV}><Download className="h-4 w-4" /> Exportar CSV</Button>
-          <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-receitas"] })}><RefreshCw className="h-4 w-4" /> Atualizar</Button>
+          
         </div>
       </div>
             {/* 5 KPI Cards */}
