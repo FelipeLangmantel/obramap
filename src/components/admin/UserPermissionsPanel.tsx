@@ -1098,8 +1098,16 @@ export function UserPermissionsPanel() {
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"/> Online agora</span>
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"/> Inativa há mais de 30min</span>
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block"/> Encerrada</span>
-            <span className="ml-auto">Sessões são encerradas automaticamente após 20min de inatividade</span>
+            <span className="ml-auto">Sessões são encerradas automaticamente após 20min de inatividade · Exibindo últimos 30 dias</span>
           </div>
+        </TabsContent>
+
+        <TabsContent value="edit_requests" className="space-y-4">
+          <EditRequestsPanel />
+        </TabsContent>
+
+        <TabsContent value="audit" className="space-y-4">
+          <AuditLogPanel />
         </TabsContent>
       </Tabs>
 

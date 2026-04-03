@@ -162,6 +162,24 @@ export default function HoldingConfigPage() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["holding-config"] });
 
+  // Realtime auto-update
+  useEffect(() => {
+    if (!company?.id) return;
+    const channel = supabase
+      .channel(`holding-config-${company.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "obras_portfolio" }, () => {
+        invalidate();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "holding_empresas" }, () => {
+        invalidate();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "holding_doc_tipos" }, () => {
+        invalidate();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [company?.id]);
+
   // === Empresa state ===
   const [showEmpresaDialog, setShowEmpresaDialog] = useState(false);
   const [editingEmpresa, setEditingEmpresa] = useState<HoldingEmpresa | null>(null);
