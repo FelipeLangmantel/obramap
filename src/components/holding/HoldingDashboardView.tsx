@@ -57,6 +57,7 @@ import {
   FileText,
   Home,
   Wallet,
+  Lock,
 } from "lucide-react";
 import { addDays, format, differenceInDays, differenceInMonths } from "date-fns";
 
