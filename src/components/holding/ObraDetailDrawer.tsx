@@ -17,7 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical, CalendarDays, TrendingUp, Clock, BarChart3, Target, AlertTriangle, DollarSign, Upload, Download, File } from "lucide-react";
+import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical, CalendarDays, TrendingUp, Clock, BarChart3, Target, AlertTriangle, DollarSign, Upload, Download, File, Lock, CheckCircle2 } from "lucide-react";
 import { CurrencyInput } from "./CurrencyInput";
 import { useAuth } from "@/contexts/AuthContext";
 import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart } from "recharts";
@@ -882,15 +882,22 @@ function DocumentosTab({ obraId }: { obraId: string }) {
 
 /* ══════════════════════════════════════════════
    TAB 2 — MEDIÇÕES
-   ══════════════════════════════════════════════ */
+   ══════════════════════════════════════════════
+   MEASUREMENT LIFECYCLE:
+   prevista  → enviada:  requires data_envio + valor_medicao > 0
+   enviada   → aprovada: requires data_aprovacao + valor_acatado > 0 + valor_acatado <= valor_medicao
+   aprovada  → recebido: requires data_pagamento (status_nf field, not status_medicao)
 
-const MEDICAO_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
-  aprovada: { label: "Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
-  enviada: { label: "Enviada", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
-  pendente: { label: "Pendente", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
-  nao_iniciada: { label: "Não Iniciada", cls: "bg-muted text-muted-foreground" },
-  previsao: { label: "Previsão", cls: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300" },
-};
+   BLOCKS:
+   - Cannot skip steps
+   - Cannot set aprovada without enviada first
+   - Cannot set recebido without aprovada first
+   - valor_acatado cannot exceed valor_medicao
+   - Dates must be chronologically consistent
+
+   DISPLAY-ONLY:
+   - 'em_andamento' shown when prevista + current month (stored as prevista)
+   ══════════════════════════════════════════════ */
 
 const NF_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   recebido: { label: "Recebido", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
@@ -900,29 +907,25 @@ const NF_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 
 /** Determines the display status badge based on measurement state */
 function getMedicaoDisplayStatus(m: any): { label: string; cls: string } {
-  // If already sent/approved, use real status
-  if (m.status_medicao === "aprovada" || m.status_medicao === "enviada" || m.status_medicao === "pendente") {
-    return MEDICAO_STATUS_BADGE[m.status_medicao];
-  }
-  // If has previsao date and no envio, treat as "Previsão"
-  if (m.data_previsao_medicao && !m.data_envio && m.status_medicao === "nao_iniciada") {
-    return MEDICAO_STATUS_BADGE.previsao;
-  }
-  return MEDICAO_STATUS_BADGE.nao_iniciada;
+  const now = new Date();
+  const MONTHS_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+  const mesIdx = MONTHS_SHORT.findIndex(x => x.toLowerCase() === (m.mes_referencia || "").toLowerCase());
+  const isCurrentMonth = mesIdx === now.getMonth() && m.ano_referencia === now.getFullYear();
+
+  if (m.status_medicao === "aprovada") return { label: "Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" };
+  if (m.status_medicao === "enviada") return { label: "Enviada", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" };
+  if (m.status_medicao === "prevista" && isCurrentMonth) return { label: "Em Andamento", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" };
+  if (m.status_medicao === "prevista") return { label: "Previsão", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" };
+  return { label: m.status_medicao || "—", cls: "bg-muted text-muted-foreground" };
 }
 
-/** Whether NF columns should be shown for this measurement */
-function shouldShowNF(m: any): boolean {
-  return m.status_medicao === "enviada" || m.status_medicao === "aprovada";
-}
-
-function ClearableDateInput({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+function ClearableDateInput({ value, onChange, label, disabled }: { value: string; onChange: (v: string) => void; label: string; disabled?: boolean }) {
   return (
     <div>
       <label className="text-xs text-muted-foreground">{label}</label>
       <div className="relative">
-        <Input type="date" value={value} onChange={(e) => onChange(e.target.value)} className="pr-7" />
-        {value && (
+        <Input type="date" value={value} onChange={(e) => onChange(e.target.value)} className="pr-7" disabled={disabled} />
+        {value && !disabled && (
           <button
             type="button"
             className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
@@ -947,21 +950,21 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingMedicao, setEditingMedicao] = useState<any | null>(null);
-  const [editForm, setEditForm] = useState<any>({});
-  const [form, setForm] = useState({
+
+  // New measurement form (Step 1 only)
+  const [newForm, setNewForm] = useState({
     num_medicao: "", mes_referencia: "", ano_referencia: new Date().getFullYear(),
-    data_previsao_medicao: "", data_envio: "", data_aprovacao: "",
-    status_medicao: "nao_iniciada",
-    valor_previsto_medicao: 0, valor_medicao: 0, valor_acatado: 0,
-    num_nf: "", data_pagamento: "", status_nf: "pendente",
+    data_previsao_medicao: "", valor_previsto_medicao: 0,
   });
 
-  const resetForm = () => setForm({
-    num_medicao: "", mes_referencia: "", ano_referencia: new Date().getFullYear(),
-    data_previsao_medicao: "", data_envio: "", data_aprovacao: "",
-    status_medicao: "nao_iniciada", valor_previsto_medicao: 0, valor_medicao: 0, valor_acatado: 0,
-    num_nf: "", data_pagamento: "", status_nf: "pendente",
-  });
+  // Edit form sections
+  const [editForm, setEditForm] = useState<any>({});
+
+  // Confirmation dialogs
+  const [confirmEnvio, setConfirmEnvio] = useState(false);
+  const [confirmAcatamento, setConfirmAcatamento] = useState(false);
+  const [confirmRecebimento, setConfirmRecebimento] = useState(false);
+  const [confirmEnvioEarly, setConfirmEnvioEarly] = useState(false);
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -969,7 +972,6 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       .select("*")
       .eq("obra_id", obraId)
       .order("ano_referencia", { ascending: true });
-    // Ordenar numericamente pelo número da medição — Saldo Inicial sempre primeiro
     const sorted = (data || []).sort((a, b) => {
       if (a.num_medicao === "Saldo Inicial") return -1;
       if (b.num_medicao === "Saldo Inicial") return 1;
@@ -984,144 +986,242 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
 
   useEffect(() => { load(); }, [load]);
 
-  // Valor já comprometido pelo % de execução inicial (opção B: já faturado informalmente)
   const baseJaComprometida = hasInitialBalance ? (valorMedidoInicial || 0) : 0;
 
   const saldoDisponivel = useMemo(() => {
     if (valorContrato === 0) return Infinity;
     const totalLancado = medicoes
       .filter(m => m.num_medicao !== "Saldo Inicial")
-      .reduce((s, m) => s + (Number(m.valor_medicao) || 0) + (Number(m.valor_previsto_medicao) || 0), 0);
+      .reduce((s, m) => s + Math.max(Number(m.valor_medicao) || 0, Number(m.valor_previsto_medicao) || 0), 0);
     return Math.max(0, valorContrato - baseJaComprometida - totalLancado);
   }, [medicoes, valorContrato, baseJaComprometida]);
 
   const totalJaLancado = useMemo(() => {
     const lancadoNoBanco = medicoes
       .filter(m => m.num_medicao !== "Saldo Inicial")
-      .reduce((s, m) => s + (Number(m.valor_medicao) || 0) + (Number(m.valor_previsto_medicao) || 0), 0);
-    // Inclui o valor inicial já comprometido para fins de validação de limite
+      .reduce((s, m) => s + Math.max(Number(m.valor_medicao) || 0, Number(m.valor_previsto_medicao) || 0), 0);
     return baseJaComprometida + lancadoNoBanco;
   }, [medicoes, baseJaComprometida]);
 
+  // ─── CREATE NEW MEASUREMENT (Step 1: prevista) ───
   const addMedicao = async () => {
     if (!requireEdit()) return;
-    if (form.num_medicao && form.mes_referencia) {
-      const isDuplicate = medicoes.some(m =>
-        m.num_medicao === form.num_medicao &&
-        m.mes_referencia?.toLowerCase() === form.mes_referencia.toLowerCase() &&
-        m.ano_referencia === form.ano_referencia
-      );
-      if (isDuplicate) {
-        toast.warning(`Já existe uma medição Nº ${form.num_medicao} para ${form.mes_referencia}/${form.ano_referencia} nesta obra.`);
-        return;
-      }
+    if (!newForm.num_medicao || !newForm.mes_referencia || !newForm.data_previsao_medicao || newForm.valor_previsto_medicao <= 0) {
+      toast.warning("Preencha todos os campos obrigatórios: Nº, Mês, Ano, Data Previsão e Valor Previsto > 0.");
+      return;
     }
 
-    // Validar limite do contrato
-    if (valorContrato > 0) {
-      const novoValorMedicao = Number(form.valor_medicao) || 0;
-      const novoValorPrevisto = Number(form.valor_previsto_medicao) || 0;
-      const novoValorTotal = novoValorMedicao + novoValorPrevisto;
+    const isDuplicate = medicoes.some(m =>
+      m.num_medicao === newForm.num_medicao &&
+      m.mes_referencia?.toLowerCase() === newForm.mes_referencia.toLowerCase() &&
+      m.ano_referencia === newForm.ano_referencia
+    );
+    if (isDuplicate) {
+      toast.warning(`Já existe uma medição Nº ${newForm.num_medicao} para ${newForm.mes_referencia}/${newForm.ano_referencia}.`);
+      return;
+    }
 
-      if (novoValorTotal > 0 && totalJaLancado + novoValorTotal > valorContrato) {
+    if (valorContrato > 0) {
+      const novoValor = newForm.valor_previsto_medicao;
+      if (totalJaLancado + novoValor > valorContrato) {
         const disponivel = valorContrato - totalJaLancado;
-        toast.error(
-          disponivel <= 0
-            ? `❌ Limite atingido. O total de medições já alcançou o valor do contrato (${BRL.format(valorContrato)}).`
-            : `❌ Valor excede o saldo disponível. Saldo restante: ${BRL.format(disponivel)}. Valor lançado: ${BRL.format(novoValorTotal)}.`
+        toast.error(disponivel <= 0
+          ? `❌ Limite atingido. Total já alcançou ${BRL.format(valorContrato)}.`
+          : `❌ Valor excede o saldo disponível: ${BRL.format(disponivel)}.`
         );
         return;
       }
     }
-    const payload: any = { obra_id: obraId, ...form };
-    if (!payload.data_previsao_medicao) delete payload.data_previsao_medicao;
-    if (!payload.data_envio) delete payload.data_envio;
-    if (!payload.data_aprovacao) delete payload.data_aprovacao;
-    if (!payload.data_pagamento) delete payload.data_pagamento;
+
+    const payload: any = {
+      obra_id: obraId,
+      num_medicao: newForm.num_medicao,
+      mes_referencia: newForm.mes_referencia,
+      ano_referencia: newForm.ano_referencia,
+      data_previsao_medicao: newForm.data_previsao_medicao,
+      valor_previsto_medicao: newForm.valor_previsto_medicao,
+      status_medicao: "prevista",
+      valor_medicao: 0,
+      status_nf: "pendente",
+    };
+
     const { data: inserted, error } = await supabase
       .from("medicoes_ple").insert(payload).select("id").single();
     if (error) { toast.error("Erro ao salvar medição"); return; }
 
-    // Audit: gravar campos de autoria no mesmo registro inserido
     if (inserted?.id) {
       await supabase.from("medicoes_ple").update({
-        created_by_user_id: userId,
-        created_by_name: userName,
+        created_by_user_id: userId, created_by_name: userName,
       }).eq("id", inserted.id);
     }
 
     await registrarLog(
-      obraId, "medicoes_ple", inserted?.id || null,
-      "criou",
-      `Adicionou medição ${form.num_medicao ? `Nº ${form.num_medicao}` : ""} — ${form.mes_referencia}/${form.ano_referencia} — ${BRL.format(Number(form.valor_medicao) || 0)}`,
-      userId, userName,
-      {}, { ...form }
+      obraId, "medicoes_ple", inserted?.id || null, "criou",
+      `Adicionou medição Nº ${newForm.num_medicao} — ${newForm.mes_referencia}/${newForm.ano_referencia} — Previsto: ${BRL.format(newForm.valor_previsto_medicao)}`,
+      userId, userName, {}, { ...newForm }
     );
 
-    // Recalcular % andamento físico com base nas medições aprovadas
     await recalcularPercentualAndamento(obraId, valorContrato);
-    toast.success("Medição adicionada");
+    toast.success("Medição criada com status Previsão!");
     invalidateHolding();
     setShowForm(false);
-    resetForm();
+    setNewForm({ num_medicao: "", mes_referencia: "", ano_referencia: new Date().getFullYear(), data_previsao_medicao: "", valor_previsto_medicao: 0 });
     load();
   };
 
-  const updateMedicao = async () => {
-    if (!requireEdit()) return;
-    if (!editingMedicao) return;
+  // ─── SAVE EDIT (Section 1 only — previsão fields) ───
+  const saveEditPrevisao = async () => {
+    if (!requireEdit() || !editingMedicao) return;
 
-    // Validar limite do contrato (mesmo critério do addMedicao: desconta baseJaComprometida)
     if (valorContrato > 0) {
-      const novoValor = (Number(editForm.valor_medicao) || 0) + (Number(editForm.valor_previsto_medicao) || 0);
+      const novoValor = Math.max(Number(editForm.valor_medicao) || 0, Number(editForm.valor_previsto_medicao) || 0);
       const totalSemEsta = medicoes
         .filter(m => m.id !== editingMedicao.id && m.num_medicao !== "Saldo Inicial")
-        .reduce((s, m) => s + (Number(m.valor_medicao) || 0) + (Number(m.valor_previsto_medicao) || 0), 0);
-      // Inclui baseJaComprometida — igual ao addMedicao — para consistência
+        .reduce((s, m) => s + Math.max(Number(m.valor_medicao) || 0, Number(m.valor_previsto_medicao) || 0), 0);
       const totalComBase = totalSemEsta + baseJaComprometida;
-
       if (novoValor > 0 && totalComBase + novoValor > valorContrato) {
-        const disponivel = Math.max(0, valorContrato - totalComBase);
-        toast.error(`❌ Valor excede o saldo disponível. Saldo restante para esta medição: ${BRL.format(disponivel)}.`);
+        toast.error(`❌ Valor excede o saldo disponível: ${BRL.format(Math.max(0, valorContrato - totalComBase))}.`);
         return;
       }
     }
 
-    const payload: any = { ...editForm };
-    // Remover campos de sistema que não devem ser sobrescritos pelo update
-    delete payload.id; delete payload.obra_id; delete payload.created_at;
-    delete payload.created_by_user_id; delete payload.created_by_name;
-    delete payload.updated_by_user_id; delete payload.updated_by_name; delete payload.updated_at;
-    // Allow clearing dates by setting to null
-    if (payload.data_previsao_medicao === "") payload.data_previsao_medicao = null;
-    if (payload.data_envio === "") payload.data_envio = null;
-    if (payload.data_aprovacao === "") payload.data_aprovacao = null;
-    if (payload.data_pagamento === "") payload.data_pagamento = null;
-    const { error } = await supabase.from("medicoes_ple").update(payload).eq("id", editingMedicao.id);
-    if (error) { toast.error("Erro ao atualizar medição"); return; }
+    const payload: any = {
+      num_medicao: editForm.num_medicao,
+      mes_referencia: editForm.mes_referencia,
+      ano_referencia: editForm.ano_referencia,
+      data_previsao_medicao: editForm.data_previsao_medicao || null,
+      valor_previsto_medicao: editForm.valor_previsto_medicao || 0,
+    };
 
-    // Audit
+    const { error } = await supabase.from("medicoes_ple").update(payload).eq("id", editingMedicao.id);
+    if (error) { toast.error("Erro ao atualizar"); return; }
+
     await supabase.from("medicoes_ple").update({
-      updated_by_user_id: userId,
-      updated_by_name: userName,
-      updated_at: new Date().toISOString(),
+      updated_by_user_id: userId, updated_by_name: userName, updated_at: new Date().toISOString(),
     }).eq("id", editingMedicao.id);
 
-    await registrarLog(
-      obraId, "medicoes_ple", editingMedicao.id,
-      "editou",
-      `Editou medição ${editingMedicao.num_medicao ? `Nº ${editingMedicao.num_medicao}` : ""} — ${editingMedicao.mes_referencia}/${editingMedicao.ano_referencia}`,
-      userId, userName,
-      { ...editingMedicao }, { ...editForm }
-    );
+    await registrarLog(obraId, "medicoes_ple", editingMedicao.id, "editou",
+      `Editou previsão Nº ${editForm.num_medicao}`, userId, userName, { ...editingMedicao }, payload);
 
-    // Recalcular % andamento físico com base nas medições aprovadas
     await recalcularPercentualAndamento(obraId, valorContrato);
-    toast.success("Medição atualizada!");
+    toast.success("Previsão atualizada!");
     invalidateHolding();
     setEditingMedicao(null);
-    setEditForm({});
     load();
+  };
+
+  // ─── REGISTER ENVIO (prevista → enviada) ───
+  const doRegistrarEnvio = async () => {
+    if (!requireEdit() || !editingMedicao) return;
+    setConfirmEnvio(false);
+    setConfirmEnvioEarly(false);
+
+    const payload: any = {
+      data_envio: editForm.data_envio,
+      valor_medicao: editForm.valor_medicao,
+      status_medicao: "enviada",
+    };
+
+    const { error } = await supabase.from("medicoes_ple").update(payload).eq("id", editingMedicao.id);
+    if (error) { toast.error("Erro ao registrar envio"); return; }
+
+    await supabase.from("medicoes_ple").update({
+      updated_by_user_id: userId, updated_by_name: userName, updated_at: new Date().toISOString(),
+    }).eq("id", editingMedicao.id);
+
+    await registrarLog(obraId, "medicoes_ple", editingMedicao.id, "enviou",
+      `Registrou envio Nº ${editForm.num_medicao} — ${BRL.format(editForm.valor_medicao)}`, userId, userName,
+      { status_medicao: editingMedicao.status_medicao }, payload);
+
+    await recalcularPercentualAndamento(obraId, valorContrato);
+    toast.success("Medição registrada como Enviada!");
+    invalidateHolding();
+    setEditingMedicao(null);
+    load();
+  };
+
+  const handleRegistrarEnvio = () => {
+    if (!editForm.data_envio) { toast.warning("Informe a data de envio."); return; }
+    if (!editForm.valor_medicao || editForm.valor_medicao <= 0) { toast.warning("Informe o valor realizado > 0."); return; }
+    // Warning if envio date before previsao
+    if (editForm.data_previsao_medicao && editForm.data_envio < editForm.data_previsao_medicao) {
+      setConfirmEnvioEarly(true);
+      return;
+    }
+    setConfirmEnvio(true);
+  };
+
+  // ─── REGISTER ACATAMENTO (enviada → aprovada) ───
+  const doRegistrarAcatamento = async () => {
+    if (!requireEdit() || !editingMedicao) return;
+    setConfirmAcatamento(false);
+
+    const payload: any = {
+      data_aprovacao: editForm.data_aprovacao,
+      valor_acatado: editForm.valor_acatado,
+      status_medicao: "aprovada",
+    };
+
+    const { error } = await supabase.from("medicoes_ple").update(payload).eq("id", editingMedicao.id);
+    if (error) { toast.error("Erro ao registrar acatamento"); return; }
+
+    await supabase.from("medicoes_ple").update({
+      updated_by_user_id: userId, updated_by_name: userName, updated_at: new Date().toISOString(),
+    }).eq("id", editingMedicao.id);
+
+    const glosa = editForm.valor_medicao - editForm.valor_acatado;
+    await registrarLog(obraId, "medicoes_ple", editingMedicao.id, "aprovou",
+      `Acatamento Nº ${editForm.num_medicao} — ${BRL.format(editForm.valor_acatado)}${glosa > 0 ? ` (glosa: ${BRL.format(glosa)})` : ""}`,
+      userId, userName, { status_medicao: "enviada" }, payload);
+
+    await recalcularPercentualAndamento(obraId, valorContrato);
+    toast.success(glosa > 0 ? "Medição aprovada com glosa!" : "Medição aprovada integralmente!");
+    invalidateHolding();
+    setEditingMedicao(null);
+    load();
+  };
+
+  const handleRegistrarAcatamento = () => {
+    if (!editForm.data_aprovacao) { toast.warning("Informe a data de aprovação."); return; }
+    if (!editForm.valor_acatado || editForm.valor_acatado <= 0) { toast.warning("Informe o valor acatado > 0."); return; }
+    if (editForm.valor_acatado > editForm.valor_medicao) { toast.error("❌ Valor acatado não pode ser maior que o valor realizado."); return; }
+    if (editForm.data_aprovacao < editForm.data_envio) { toast.error("❌ Data de aprovação não pode ser anterior ao envio."); return; }
+    setConfirmAcatamento(true);
+  };
+
+  // ─── REGISTER RECEBIMENTO (NF + pagamento) ───
+  const doRegistrarRecebimento = async () => {
+    if (!requireEdit() || !editingMedicao) return;
+    setConfirmRecebimento(false);
+
+    const payload: any = {
+      num_nf: editForm.num_nf || null,
+      data_pagamento: editForm.data_pagamento,
+      status_nf: "recebido",
+    };
+
+    const { error } = await supabase.from("medicoes_ple").update(payload).eq("id", editingMedicao.id);
+    if (error) { toast.error("Erro ao registrar recebimento"); return; }
+
+    await supabase.from("medicoes_ple").update({
+      updated_by_user_id: userId, updated_by_name: userName, updated_at: new Date().toISOString(),
+    }).eq("id", editingMedicao.id);
+
+    await registrarLog(obraId, "medicoes_ple", editingMedicao.id, "recebeu",
+      `Recebimento NF ${editForm.num_nf || "—"} — Pgto: ${editForm.data_pagamento}`,
+      userId, userName, { status_nf: editingMedicao.status_nf }, payload);
+
+    toast.success("Recebimento registrado!");
+    invalidateHolding();
+    setEditingMedicao(null);
+    load();
+  };
+
+  const handleRegistrarRecebimento = () => {
+    if (!editForm.data_pagamento) { toast.warning("Informe a data de pagamento."); return; }
+    if (editForm.data_pagamento < editForm.data_aprovacao) { toast.error("❌ Data de pagamento não pode ser anterior à aprovação."); return; }
+    if (!editForm.num_nf) { toast.info("💡 Recomendamos informar o Nº da NF."); }
+    setConfirmRecebimento(true);
   };
 
   const deleteMedicao = async (id: string) => {
@@ -1132,14 +1232,11 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     if (error) { toast.error("Erro ao excluir medição"); return; }
 
     await registrarLog(
-      obraId, "medicoes_ple", id,
-      "excluiu",
+      obraId, "medicoes_ple", id, "excluiu",
       `Excluiu medição ${medicaoSnap?.num_medicao ? `Nº ${medicaoSnap.num_medicao}` : ""} — ${medicaoSnap?.mes_referencia}/${medicaoSnap?.ano_referencia}`,
-      userId, userName,
-      { ...medicaoSnap }, {}
+      userId, userName, { ...medicaoSnap }, {}
     );
 
-    // Recalcular % andamento físico com base nas medições aprovadas
     await recalcularPercentualAndamento(obraId, valorContrato);
     toast.success("Medição excluída.");
     invalidateHolding();
@@ -1157,157 +1254,148 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       valor_previsto_medicao: Number(m.valor_previsto_medicao) || 0,
       valor_medicao: Number(m.valor_medicao) || 0,
       valor_acatado: Number(m.valor_acatado) || 0,
+      num_nf: m.num_nf || "",
     });
     setShowForm(false);
   };
 
   if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
 
-  const renderMedicaoForm = (
-    data: any,
-    setData: (d: any) => void,
-    onSave: () => void,
-    title: string,
-    onClose?: () => void,
-  ) => (
-    <Card className={onClose ? "border-primary" : ""}>
-      <CardContent className="p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <h4 className="font-semibold text-sm">{title}</h4>
-          {onClose && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+  const status = editForm.status_medicao || "prevista";
+  const glosaValue = (editForm.valor_medicao || 0) - (editForm.valor_acatado || 0);
+
+  // ─── RENDER STAGED EDIT FORM ───
+  const renderStagedEditForm = () => {
+    if (!editingMedicao) return null;
+
+    return (
+      <Card className="border-primary">
+        <CardContent className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="font-semibold text-sm">Editando Medição Nº {editForm.num_medicao || "—"}</h4>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditingMedicao(null); setEditForm({}); }}>
               <X className="h-4 w-4" />
             </Button>
-          )}
-        </div>
+          </div>
 
-        {/* IDENTIFICAÇÃO */}
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Identificação</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div><label className="text-xs text-muted-foreground">Nº Medição</label><Input value={data.num_medicao || ""} onChange={(e) => setData({ ...data, num_medicao: e.target.value })} /></div>
-            <div><label className="text-xs text-muted-foreground">Mês Ref.</label>
-              <Select value={data.mes_referencia || ""} onValueChange={(v) => setData({ ...data, mes_referencia: v })}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                <SelectContent>
-                  {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map(m => (
-                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {/* SECTION 1 — Previsão (always visible, always editable) */}
+          <div className="space-y-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1">
+              <CalendarDays className="h-3 w-3" /> 1. Previsão
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div><label className="text-xs text-muted-foreground">Nº Medição</label><Input value={editForm.num_medicao || ""} onChange={(e) => setEditForm({ ...editForm, num_medicao: e.target.value })} /></div>
+              <div><label className="text-xs text-muted-foreground">Mês Ref.</label>
+                <Select value={editForm.mes_referencia || ""} onValueChange={(v) => setEditForm({ ...editForm, mes_referencia: v })}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map(m => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><label className="text-xs text-muted-foreground">Ano Ref.</label><Input type="number" value={editForm.ano_referencia || ""} onChange={(e) => setEditForm({ ...editForm, ano_referencia: Number(e.target.value) })} /></div>
+              <ClearableDateInput label="Previsão Envio" value={editForm.data_previsao_medicao || ""} onChange={(v) => setEditForm({ ...editForm, data_previsao_medicao: v })} />
+              <div><label className="text-xs text-muted-foreground">Valor Previsto (R$)</label>
+                <CurrencyInput value={editForm.valor_previsto_medicao || 0} onChange={(v) => setEditForm({ ...editForm, valor_previsto_medicao: v })} />
+              </div>
             </div>
-            <div><label className="text-xs text-muted-foreground">Ano Ref.</label><Input type="number" value={data.ano_referencia || ""} onChange={(e) => setData({ ...data, ano_referencia: Number(e.target.value) })} /></div>
-            <div>
-              <label className="text-xs text-muted-foreground">Status Medição</label>
-              <Select value={data.status_medicao || "nao_iniciada"} onValueChange={(v) => setData({ ...data, status_medicao: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="nao_iniciada">Não Iniciada</SelectItem>
-                  <SelectItem value="pendente">Pendente</SelectItem>
-                  <SelectItem value="enviada">Enviada</SelectItem>
-                  <SelectItem value="aprovada">Aprovada</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex justify-end">
+              <Button size="sm" variant="outline" onClick={saveEditPrevisao}>Salvar Previsão</Button>
             </div>
           </div>
-        </div>
 
-        {valorContrato > 0 && (
-          <div className={`flex items-center justify-between text-xs p-2 rounded-md ${
-            saldoDisponivel <= 0
-              ? "bg-destructive/10 text-destructive"
-              : saldoDisponivel < valorContrato * 0.1
-                ? "bg-amber-500/10 text-amber-700"
-                : "bg-emerald-500/10 text-emerald-700"
-          }`}>
-            <span>Saldo disponível para medições:</span>
-            <span className="font-semibold">
-              {saldoDisponivel <= 0 ? "Limite atingido" : BRL.format(saldoDisponivel)}
-            </span>
+          <Separator />
+
+          {/* SECTION 2 — Envio ao Fiscal */}
+          <div className="space-y-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1">
+              <TrendingUp className="h-3 w-3" /> 2. Envio ao Fiscal
+            </p>
+            {status === "prevista" && !editForm.data_envio ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded p-3">
+                <Lock className="h-3.5 w-3.5" />
+                Preencha quando enviar ao fiscal
+              </div>
+            ) : null}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <ClearableDateInput label="Data Envio" value={editForm.data_envio || ""} onChange={(v) => setEditForm({ ...editForm, data_envio: v })} disabled={status === "enviada" || status === "aprovada"} />
+              <div><label className="text-xs text-muted-foreground">Valor Realizado (R$)</label>
+                <CurrencyInput value={editForm.valor_medicao || 0} onChange={(v) => setEditForm({ ...editForm, valor_medicao: v })} />
+              </div>
+            </div>
+            {status === "prevista" && (
+              <div className="flex justify-end">
+                <Button size="sm" onClick={handleRegistrarEnvio}>Registrar Envio</Button>
+              </div>
+            )}
           </div>
-        )}
 
-        <Separator />
+          <Separator />
 
-        {/* ENGENHARIA */}
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Engenharia — Datas e Valores</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <ClearableDateInput label="Previsão Envio" value={data.data_previsao_medicao || ""} onChange={(v) => setData({ ...data, data_previsao_medicao: v })} />
-            <ClearableDateInput label="Data Envio" value={data.data_envio || ""} onChange={(v) => setData({ ...data, data_envio: v })} />
-            <ClearableDateInput label="Data Aprovação" value={data.data_aprovacao || ""} onChange={(v) => {
-              const updates: any = { ...data, data_aprovacao: v };
-              // Auto-avança status para 'aprovada' ao preencher a data de aprovação
-              if (v && data.status_medicao === "enviada") {
-                updates.status_medicao = "aprovada";
-              }
-              // Reverte para 'enviada' se a data for apagada (e data_envio existir)
-              if (!v && data.status_medicao === "aprovada" && data.data_envio) {
-                updates.status_medicao = "enviada";
-              }
-              setData(updates);
-            }} />
-            <div>
-              <label className="text-xs text-muted-foreground">Valor Previsto (R$)</label>
-              <CurrencyInput value={data.valor_previsto_medicao || 0} onChange={(v) => setData({ ...data, valor_previsto_medicao: v })} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Valor Realizado (R$)</label>
-              <CurrencyInput value={data.valor_medicao || 0} onChange={(v) => setData({ ...data, valor_medicao: v })} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Valor Acatado (R$)</label>
-              <CurrencyInput value={data.valor_acatado || 0} onChange={(v) => {
-                const updates: any = { ...data, valor_acatado: v };
-                // Auto-avança status para 'aprovada' ao preencher valor acatado
-                if (v > 0 && data.status_medicao === "enviada") {
-                  updates.status_medicao = "aprovada";
-                }
-                // Volta para 'enviada' se limpar o valor acatado e tinha sido aprovada
-                if (v === 0 && data.status_medicao === "aprovada" && data.data_envio) {
-                  updates.status_medicao = "enviada";
-                }
-                setData(updates);
-              }} />
-              {data.valor_acatado > 0 && data.valor_medicao > 0 && data.valor_acatado !== data.valor_medicao && (
-                <p className="text-[10px] text-amber-600 mt-0.5">
-                  Glosa: {BRL.format(Math.abs(data.valor_medicao - data.valor_acatado))}
-                </p>
-              )}
-            </div>
+          {/* SECTION 3 — Acatamento */}
+          <div className="space-y-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1">
+              <CheckCircle2 className="h-3 w-3" /> 3. Acatamento
+            </p>
+            {status === "prevista" ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded p-3">
+                <Lock className="h-3.5 w-3.5" />
+                Disponível após registrar o envio
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <ClearableDateInput label="Data Aprovação" value={editForm.data_aprovacao || ""} onChange={(v) => setEditForm({ ...editForm, data_aprovacao: v })} disabled={status === "aprovada"} />
+                  <div><label className="text-xs text-muted-foreground">Valor Acatado (R$)</label>
+                    <CurrencyInput value={editForm.valor_acatado || 0} onChange={(v) => setEditForm({ ...editForm, valor_acatado: v })} />
+                    {editForm.valor_acatado > 0 && editForm.valor_medicao > 0 && editForm.valor_acatado !== editForm.valor_medicao && (
+                      <p className="text-[10px] text-amber-600 mt-0.5">Glosa: {BRL.format(Math.abs(glosaValue))}</p>
+                    )}
+                  </div>
+                </div>
+                {status === "enviada" && (
+                  <div className="flex justify-end">
+                    <Button size="sm" onClick={handleRegistrarAcatamento}>Registrar Acatamento</Button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
-        </div>
 
-        <Separator />
+          <Separator />
 
-        {/* FINANCEIRO */}
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Financeiro — NF e Pagamento</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div><label className="text-xs text-muted-foreground">Nº NF</label><Input value={data.num_nf || ""} onChange={(e) => setData({ ...data, num_nf: e.target.value })} /></div>
-            <ClearableDateInput label="Data Pagamento" value={data.data_pagamento || ""} onChange={(v) => setData({ ...data, data_pagamento: v })} />
-            <div>
-              <label className="text-xs text-muted-foreground">Status NF</label>
-              <Select value={data.status_nf || "pendente"} onValueChange={(v) => setData({ ...data, status_nf: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pendente">Pendente</SelectItem>
-                  <SelectItem value="aguardando_aprovacao">Aguardando</SelectItem>
-                  <SelectItem value="recebido">Recebido</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          {/* SECTION 4 — NF e Pagamento */}
+          <div className="space-y-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex items-center gap-1">
+              <DollarSign className="h-3 w-3" /> 4. NF e Pagamento
+            </p>
+            {status !== "aprovada" ? (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded p-3">
+                <Lock className="h-3.5 w-3.5" />
+                Disponível após acatamento
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div><label className="text-xs text-muted-foreground">Nº NF</label><Input value={editForm.num_nf || ""} onChange={(e) => setEditForm({ ...editForm, num_nf: e.target.value })} /></div>
+                  <ClearableDateInput label="Data Pagamento" value={editForm.data_pagamento || ""} onChange={(v) => setEditForm({ ...editForm, data_pagamento: v })} />
+                  <div className="flex items-end">
+                    {editForm.status_nf !== "recebido" ? (
+                      <Button size="sm" onClick={handleRegistrarRecebimento}>Confirmar Recebimento</Button>
+                    ) : (
+                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">✓ Recebido</Badge>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
-        </div>
-
-        <div className="flex justify-end pt-2">
-          <Button size="sm" onClick={onSave}>
-            {onClose ? "Salvar Edição" : "Salvar"}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <>
@@ -1319,16 +1407,52 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
         </Button>
       </div>
 
-      {showForm && renderMedicaoForm(form, setForm, addMedicao, "Nova Medição")}
+      {/* NEW MEASUREMENT FORM (Step 1 only) */}
+      {showForm && (
+        <Card>
+          <CardContent className="p-4 space-y-4">
+            <h4 className="font-semibold text-sm">Nova Medição — Previsão</h4>
 
-      {editingMedicao && renderMedicaoForm(
-        editForm,
-        setEditForm,
-        updateMedicao,
-        `Editando Medição Nº ${editingMedicao.num_medicao || "—"}`,
-        () => { setEditingMedicao(null); setEditForm({}); }
+            {valorContrato > 0 && (
+              <div className={`flex items-center justify-between text-xs p-2 rounded-md ${
+                saldoDisponivel <= 0 ? "bg-destructive/10 text-destructive"
+                  : saldoDisponivel < valorContrato * 0.1 ? "bg-amber-500/10 text-amber-700"
+                  : "bg-emerald-500/10 text-emerald-700"
+              }`}>
+                <span>Saldo disponível para medições:</span>
+                <span className="font-semibold">{saldoDisponivel <= 0 ? "Limite atingido" : BRL.format(saldoDisponivel)}</span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div><label className="text-xs text-muted-foreground">Nº Medição *</label><Input value={newForm.num_medicao} onChange={(e) => setNewForm({ ...newForm, num_medicao: e.target.value })} /></div>
+              <div><label className="text-xs text-muted-foreground">Mês Ref. *</label>
+                <Select value={newForm.mes_referencia} onValueChange={(v) => setNewForm({ ...newForm, mes_referencia: v })}>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map(m => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div><label className="text-xs text-muted-foreground">Ano Ref. *</label><Input type="number" value={newForm.ano_referencia} onChange={(e) => setNewForm({ ...newForm, ano_referencia: Number(e.target.value) })} /></div>
+              <ClearableDateInput label="Previsão Envio *" value={newForm.data_previsao_medicao} onChange={(v) => setNewForm({ ...newForm, data_previsao_medicao: v })} />
+              <div><label className="text-xs text-muted-foreground">Valor Previsto (R$) *</label>
+                <CurrencyInput value={newForm.valor_previsto_medicao} onChange={(v) => setNewForm({ ...newForm, valor_previsto_medicao: v })} />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button size="sm" onClick={addMedicao}>Salvar Previsão</Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
+      {/* STAGED EDIT FORM */}
+      {renderStagedEditForm()}
+
+      {/* TABLE */}
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
@@ -1355,7 +1479,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
               const previsto = Number(m.valor_previsto_medicao) || 0;
               const realizado = Number(m.valor_medicao) || 0;
               const acatado = Number(m.valor_acatado) || 0;
-              const showNF = shouldShowNF(m);
+              const showNF = m.status_medicao === "enviada" || m.status_medicao === "aprovada";
               const hasGlosa = acatado > 0 && acatado !== realizado;
 
               return (
@@ -1364,14 +1488,10 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
                   <TableCell>
                     <span>{m.mes_referencia}/{m.ano_referencia}</span>
                     {m.created_by_name && (
-                      <span className="text-[10px] text-muted-foreground ml-1">
-                        por {m.created_by_name}
-                      </span>
+                      <span className="text-[10px] text-muted-foreground ml-1">por {m.created_by_name}</span>
                     )}
                     {m.updated_by_name && (
-                      <span className="text-[10px] text-amber-600 ml-1">
-                        · editado por {m.updated_by_name}
-                      </span>
+                      <span className="text-[10px] text-amber-600 ml-1">· editado por {m.updated_by_name}</span>
                     )}
                   </TableCell>
                   <TableCell>{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
@@ -1389,7 +1509,6 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
                     ) : "—"}
                   </TableCell>
                   <TableCell className="text-right font-mono">
-                    {/* Desvio only when realizado > 0 */}
                     {realizado > 0 && previsto > 0 ? (() => {
                       const desvio = realizado - previsto;
                       const pct = ((desvio / previsto) * 100).toFixed(1);
@@ -1419,19 +1538,92 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       </div>
     </div>
 
+      {/* DELETE CONFIRMATION */}
       <AlertDialog open={!!deletingMedicaoId} onOpenChange={(open) => !open && setDeletingMedicaoId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir medição</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza que deseja excluir esta medição? Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deletingMedicaoId && deleteMedicao(deletingMedicaoId)}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* CONFIRM ENVIO */}
+      <AlertDialog open={confirmEnvio} onOpenChange={setConfirmEnvio}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar envio ao fiscal</AlertDialogTitle>
             <AlertDialogDescription>
-              Tem certeza que deseja excluir esta medição? Esta ação não pode ser desfeita.
+              Confirma o envio desta medição ao fiscal?{"\n"}
+              Data: {editForm.data_envio} | Valor: {BRL.format(editForm.valor_medicao || 0)}{"\n"}
+              Após confirmar, o status mudará para Enviada.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deletingMedicaoId && deleteMedicao(deletingMedicaoId)}>
-              Excluir
-            </AlertDialogAction>
+            <AlertDialogAction onClick={doRegistrarEnvio}>Confirmar Envio</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* CONFIRM ENVIO EARLY (date before previsao) */}
+      <AlertDialog open={confirmEnvioEarly} onOpenChange={setConfirmEnvioEarly}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Data de envio anterior à previsão</AlertDialogTitle>
+            <AlertDialogDescription>
+              A data de envio ({editForm.data_envio}) é anterior à data de previsão ({editForm.data_previsao_medicao}). Confirma o envio mesmo assim?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={doRegistrarEnvio}>Confirmar Envio</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* CONFIRM ACATAMENTO */}
+      <AlertDialog open={confirmAcatamento} onOpenChange={setConfirmAcatamento}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar acatamento</AlertDialogTitle>
+            <AlertDialogDescription>
+              {editForm.valor_acatado < editForm.valor_medicao ? (
+                <>
+                  ⚠️ Glosa detectada de {BRL.format(Math.abs(glosaValue))}.{"\n"}
+                  Valor enviado: {BRL.format(editForm.valor_medicao || 0)} | Valor acatado: {BRL.format(editForm.valor_acatado || 0)}{"\n"}
+                  Confirma o acatamento com glosa?
+                </>
+              ) : (
+                <>Confirma o acatamento integral de {BRL.format(editForm.valor_acatado || 0)}?</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={doRegistrarAcatamento}>Confirmar Acatamento</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* CONFIRM RECEBIMENTO */}
+      <AlertDialog open={confirmRecebimento} onOpenChange={setConfirmRecebimento}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar recebimento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Confirma o recebimento do pagamento?{"\n"}
+              NF: {editForm.num_nf || "—"} | Data: {editForm.data_pagamento}{"\n"}
+              Esta ação marca a medição como paga.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={doRegistrarRecebimento}>Confirmar Recebimento</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

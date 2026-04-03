@@ -42,9 +42,10 @@ interface MedicaoCompleta {
   data_previsao_medicao: string | null;
   data_envio: string | null;
   data_aprovacao: string | null;
-  status_medicao: "aprovada" | "enviada" | "pendente" | "nao_iniciada";
+  status_medicao: "aprovada" | "enviada" | "pendente" | "nao_iniciada" | "prevista";
   valor_previsto_medicao: number;
   valor_medicao: number;
+  valor_acatado: number | null;
   num_nf: string | null;
   data_pagamento: string | null;
   status_nf: "recebido" | "aguardando_aprovacao" | "pendente";
@@ -64,6 +65,7 @@ const BRL_SHORT = (v: number) => v >= 1e6 ? `R$ ${(v / 1e6).toFixed(1)}M` : v >=
 const STATUS_MED_CONFIG: Record<string, { label: string; cls: string }> = {
   aprovada: { label: "Medição Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
   enviada: { label: "Medição Enviada", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+  prevista: { label: "Previsão", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" },
   pendente: { label: "Medição Pendente", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
   nao_iniciada: { label: "Não Iniciada", cls: "bg-muted text-muted-foreground" },
 };
@@ -137,6 +139,7 @@ export default function HoldingReceitasPage() {
           status_medicao: m.status_medicao,
           valor_previsto_medicao: Number(m.valor_previsto_medicao) || 0,
           valor_medicao: Number(m.valor_medicao) || 0,
+          valor_acatado: m.valor_acatado != null ? Number(m.valor_acatado) : null,
           num_nf: m.num_nf,
           data_pagamento: m.data_pagamento,
           status_nf: m.status_nf,
@@ -587,8 +590,7 @@ export default function HoldingReceitasPage() {
                       <SelectItem value="all">Status Medição</SelectItem>
                       <SelectItem value="aprovada">Aprovada</SelectItem>
                       <SelectItem value="enviada">Enviada</SelectItem>
-                      <SelectItem value="pendente">Pendente</SelectItem>
-                      <SelectItem value="nao_iniciada">Não Iniciada</SelectItem>
+                      <SelectItem value="prevista">Previsão</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select value={filterStatusNF} onValueChange={setFilterStatusNF}>

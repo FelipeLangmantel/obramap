@@ -9970,7 +9970,12 @@ export type Database = {
         | "em_execucao"
         | "aguardando_validacao"
         | "encerrada"
-      medicao_status: "aprovada" | "enviada" | "pendente" | "nao_iniciada"
+      medicao_status:
+        | "aprovada"
+        | "enviada"
+        | "pendente"
+        | "nao_iniciada"
+        | "prevista"
       nf_status: "recebido" | "aguardando_aprovacao" | "pendente"
       obra_status: "em_andamento" | "nao_iniciada" | "concluida" | "paralisada"
       supply_request_status:
@@ -10125,7 +10130,13 @@ export const Constants = {
         "aguardando_validacao",
         "encerrada",
       ],
-      medicao_status: ["aprovada", "enviada", "pendente", "nao_iniciada"],
+      medicao_status: [
+        "aprovada",
+        "enviada",
+        "pendente",
+        "nao_iniciada",
+        "prevista",
+      ],
       nf_status: ["recebido", "aguardando_aprovacao", "pendente"],
       obra_status: ["em_andamento", "nao_iniciada", "concluida", "paralisada"],
       supply_request_status: [
