@@ -626,6 +626,14 @@ export function UserPermissionsPanel() {
               <Clock className="h-4 w-4" />
               Sessões
             </TabsTrigger>
+            <TabsTrigger value="edit_requests" className="gap-2">
+              <Pencil className="h-4 w-4" />
+              Solicitações
+            </TabsTrigger>
+            <TabsTrigger value="audit" className="gap-2">
+              <Activity className="h-4 w-4" />
+              Auditoria
+            </TabsTrigger>
           </TabsList>
 
           {activeTab === "users" && (
