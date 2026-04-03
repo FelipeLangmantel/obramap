@@ -482,6 +482,7 @@ export default function HoldingDashboardView() {
     valor_contrato: "", data_inicio: "", prazo_dias: "",
     status: "nao_iniciada" as "nao_iniciada" | "em_andamento" | "concluida" | "paralisada",
     percentual_andamento: 0,
+    percentual_fisico: 0,
     periodo_medicao: "", prazo_pagamento: "",
     municipio: "", estado: "RS",
     uh: "", responsavel: "", responsavel_nome: "", responsavel_telefone: "",
