@@ -590,8 +590,7 @@ export default function HoldingReceitasPage() {
                       <SelectItem value="all">Status Medição</SelectItem>
                       <SelectItem value="aprovada">Aprovada</SelectItem>
                       <SelectItem value="enviada">Enviada</SelectItem>
-                      <SelectItem value="pendente">Pendente</SelectItem>
-                      <SelectItem value="nao_iniciada">Não Iniciada</SelectItem>
+                      <SelectItem value="prevista">Previsão</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select value={filterStatusNF} onValueChange={setFilterStatusNF}>
