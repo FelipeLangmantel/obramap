@@ -260,20 +260,20 @@ export function calcHealth(
   if (obra.status === "concluida") return "green";
 
   const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
-  const pctFisico = (obra.percentual_andamento || 0) / 100;
+  const pctFisico = (obra.percentual_fisico || 0) / 100;
 
   // ── IDC — Índice de Desempenho de Custo ──────────────────────────────────
-  // NOTA TÉCNICA: O IDC compara % físico executado vs valor medido.
-  // Atualmente o percentual_andamento é calculado automaticamente pelo financeiro
-  // (acatado/contrato), tornando o IDC matematicamente = 1.0 sempre.
-  // O IDC real requer um campo percentual_fisico independente (a implementar).
-  // Por ora, o IDC é suprimido para não enganar o gestor com verde falso.
+  // IDC compara valor medido aprovado vs valor planejado (% físico × contrato)
   const totalMedidoAprovado = allMedicoes
     .filter(m => m.status_medicao === "aprovada")
     .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
 
-  // IDC desabilitado até ter campo percentual_fisico independente do financeiro
-  // if (pctFisico > 0.05 && valorContrato > 0) { ... }
+  if (pctFisico > 0.05 && valorContrato > 0) {
+    const valorPlanejado = pctFisico * valorContrato;
+    const idc = totalMedidoAprovado / valorPlanejado;
+    if (idc < T.idc_red) return "red";
+    if (idc < T.idc_yellow) return "yellow";
+  }
 
   // ── IDP — Índice de Desempenho de Prazo ──────────────────────────────────
   if (obra.data_inicio && obra.prazo_dias > 0) {
