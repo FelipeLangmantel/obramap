@@ -384,9 +384,7 @@ export default function HoldingConfigPage() {
             Gerencie empresas, tipos de documentos e configurações globais
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={invalidate}>
-          <RefreshCw className="h-4 w-4 mr-1" /> Atualizar
-        </Button>
+        {/* Realtime auto-updates — no manual refresh needed */}
       </div>
 
       <Tabs defaultValue="empresas">
