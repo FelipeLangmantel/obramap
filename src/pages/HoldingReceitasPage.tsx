@@ -764,9 +764,18 @@ export default function HoldingReceitasPage() {
                           {previsaoData.map((p, i) => {
                             const isCurrentMonth = i === 0;
                             const hasData = p.total > 0;
+                            const isExpanded = selectedMonth === p.key;
                             return (
-                               <TableRow key={p.mes} className={`text-xs ${isCurrentMonth ? "bg-primary/5 border-l-2 border-l-primary" : hasData ? "bg-emerald-500/5" : "bg-muted/20"}`}>
-                                 <TableCell className="py-2 font-medium">{p.mes}</TableCell>
+                              <>
+                               <TableRow
+                                 key={p.mes}
+                                 className={`text-xs cursor-pointer transition-colors hover:bg-accent/50 ${isExpanded ? "bg-accent/30 font-semibold" : isCurrentMonth ? "bg-primary/5 border-l-2 border-l-primary" : hasData ? "bg-emerald-500/5" : "bg-muted/20"}`}
+                                 onClick={() => setSelectedMonth(isExpanded ? null : p.key)}
+                               >
+                                 <TableCell className="py-2 font-medium flex items-center gap-1">
+                                   {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+                                   {p.mes}
+                                 </TableCell>
                                  <TableCell className="py-2 text-center">{p.obrasCount || "—"}</TableCell>
                                  <TableCell className="py-2 text-right text-primary">{p.previsto > 0 ? BRL_SHORT(p.previsto) : "—"}</TableCell>
                                  <TableCell className="py-2 text-right text-amber-600">{p.pendente > 0 ? BRL.format(p.pendente) : "—"}</TableCell>
@@ -781,6 +790,78 @@ export default function HoldingReceitasPage() {
                                    })() : "—"}
                                  </TableCell>
                                </TableRow>
+                               {isExpanded && drillDownMedicoes.length > 0 && (
+                                 <>
+                                   {/* Drill-down header */}
+                                   <TableRow className="bg-muted/40">
+                                     <TableCell colSpan={2} className="py-1.5 text-[10px] font-semibold text-muted-foreground">Obra</TableCell>
+                                     <TableCell className="py-1.5 text-[10px] font-semibold text-muted-foreground text-center">Nº Med.</TableCell>
+                                     <TableCell className="py-1.5 text-[10px] font-semibold text-muted-foreground text-center">Status</TableCell>
+                                     <TableCell className="py-1.5 text-[10px] font-semibold text-muted-foreground text-right">Previsto</TableCell>
+                                     <TableCell className="py-1.5 text-[10px] font-semibold text-muted-foreground text-right">Acatado</TableCell>
+                                     <TableCell className="py-1.5 text-[10px] font-semibold text-muted-foreground text-right">Desvio</TableCell>
+                                     <TableCell colSpan={2} className="py-1.5 text-[10px] font-semibold text-muted-foreground text-right">Prev. Envio</TableCell>
+                                   </TableRow>
+                                   {/* Drill-down rows */}
+                                   {drillDownMedicoes.map(m => {
+                                     const desvio = m.valor_acatado != null ? (m.valor_acatado - m.valor_previsto_medicao) : null;
+                                     const statusCfg = m.status_medicao === "aprovada"
+                                       ? { label: "Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" }
+                                       : m.status_medicao === "enviada"
+                                       ? { label: "Aguard. Fiscal", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" }
+                                       : { label: "Prevista", cls: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" };
+                                     return (
+                                       <TableRow key={m.id} className="text-[11px] bg-background/50 border-l-4 border-l-primary/20 hover:bg-accent/20">
+                                         <TableCell colSpan={2} className="py-1.5 pl-6 truncate max-w-[180px]" title={m.obra_nome}>{m.obra_nome}</TableCell>
+                                         <TableCell className="py-1.5 text-center">{m.num_medicao || "—"}</TableCell>
+                                         <TableCell className="py-1.5 text-center">
+                                           <Badge className={`text-[9px] px-1.5 py-0 ${statusCfg.cls}`}>{statusCfg.label}</Badge>
+                                         </TableCell>
+                                         <TableCell className="py-1.5 text-right">{m.valor_previsto_medicao > 0 ? BRL.format(m.valor_previsto_medicao) : "—"}</TableCell>
+                                         <TableCell className="py-1.5 text-right">{m.valor_acatado != null ? BRL.format(m.valor_acatado) : "—"}</TableCell>
+                                         <TableCell className="py-1.5 text-right">
+                                           {desvio != null ? (
+                                             <span className={desvio > 0 ? "text-emerald-600" : desvio < 0 ? "text-destructive" : "text-muted-foreground"}>
+                                               {desvio > 0 ? "+" : ""}{BRL.format(desvio)}
+                                             </span>
+                                           ) : <span className="text-muted-foreground">—</span>}
+                                         </TableCell>
+                                         <TableCell colSpan={2} className="py-1.5 text-right">{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                                       </TableRow>
+                                     );
+                                   })}
+                                   {/* Drill-down footer totals */}
+                                   {(() => {
+                                     const sumPrevisto = drillDownMedicoes.reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0);
+                                     const sumAcatado = drillDownMedicoes.reduce((s, m) => s + (m.valor_acatado ?? 0), 0);
+                                     const hasAcatado = drillDownMedicoes.some(m => m.valor_acatado != null);
+                                     const sumDesvio = hasAcatado ? sumAcatado - sumPrevisto : null;
+                                     return (
+                                       <TableRow className="bg-muted/30 font-semibold text-[11px]">
+                                         <TableCell colSpan={2} className="py-1.5 pl-6">Total ({drillDownMedicoes.length} medições)</TableCell>
+                                         <TableCell className="py-1.5" />
+                                         <TableCell className="py-1.5" />
+                                         <TableCell className="py-1.5 text-right">{BRL.format(sumPrevisto)}</TableCell>
+                                         <TableCell className="py-1.5 text-right">{hasAcatado ? BRL.format(sumAcatado) : "—"}</TableCell>
+                                         <TableCell className="py-1.5 text-right">
+                                           {sumDesvio != null ? (
+                                             <span className={sumDesvio > 0 ? "text-emerald-600" : sumDesvio < 0 ? "text-destructive" : "text-muted-foreground"}>
+                                               {sumDesvio > 0 ? "+" : ""}{BRL.format(sumDesvio)}
+                                             </span>
+                                           ) : "—"}
+                                         </TableCell>
+                                         <TableCell colSpan={2} className="py-1.5" />
+                                       </TableRow>
+                                     );
+                                   })()}
+                                 </>
+                               )}
+                               {isExpanded && drillDownMedicoes.length === 0 && (
+                                 <TableRow className="bg-muted/20">
+                                   <TableCell colSpan={9} className="py-3 text-center text-xs text-muted-foreground">Nenhuma medição encontrada para este mês</TableCell>
+                                 </TableRow>
+                               )}
+                              </>
                             );
                           })}
                         </TableBody>
