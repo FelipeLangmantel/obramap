@@ -1759,6 +1759,73 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
         </Card>
       )}
 
+      {/* OVERDUE ALERTS CARD */}
+      {(() => {
+        const overdueMedicoes = medicoes.filter(m => {
+          const ds = getMedicaoDisplayStatus(m, medicoes);
+          return ds.isOverdue;
+        });
+        if (overdueMedicoes.length === 0) return null;
+        const contacts: { name: string; phone: string; role: string }[] = [];
+        if (obra.responsavel_telefone) contacts.push({ name: obra.responsavel_nome || "Engenheiro", phone: obra.responsavel_telefone, role: "Engenheiro Residente" });
+        if (obra.coordenador_telefone) contacts.push({ name: obra.coordenador_nome || "Coordenador", phone: obra.coordenador_telefone, role: "Coordenador" });
+        if (obra.planejador_telefone) contacts.push({ name: obra.planejador_nome || "Planejador", phone: obra.planejador_telefone, role: "Planejador" });
+        return (
+          <Card className="border-destructive/50 bg-red-50/50 dark:bg-red-900/10">
+            <CardContent className="p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <span className="text-sm font-semibold text-destructive">
+                  {overdueMedicoes.length} medição(ões) com previsão vencida
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                As medições abaixo passaram da data de previsão de envio e ainda não foram enviadas ao fiscal.
+              </p>
+              <ul className="text-xs space-y-1">
+                {overdueMedicoes.map(m => (
+                  <li key={m.id} className="flex items-center gap-2">
+                    <span className="font-medium">Medição {m.num_medicao}</span>
+                    <span className="text-muted-foreground">
+                      — prevista para {m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yyyy") : "—"}
+                    </span>
+                    <span className="text-destructive font-medium">
+                      ({differenceInDays(new Date(), new Date(m.data_previsao_medicao + "T12:00:00"))} dias atrás)
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {contacts.length > 0 && (
+                <div className="pt-1 border-t border-destructive/20">
+                  <span className="text-[10px] text-muted-foreground block mb-1">Enviar alerta via WhatsApp:</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {contacts.map((c) => {
+                      const overdueSummary = overdueMedicoes.map(m => `  • Medição ${m.num_medicao} (prevista: ${m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yyyy") : "—"})`).join("\n");
+                      const cleanPhone = c.phone.replace(/\D/g, "");
+                      const fullPhone = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`;
+                      const msg = encodeURIComponent(
+                        `⚠️ *Alerta de Medição Atrasada*\n\nObra: *${obra.nome}*\n\nMedições com previsão vencida:\n${overdueSummary}\n\nPor favor, providenciar o envio ao fiscal o mais breve possível.`
+                      );
+                      return (
+                        <a
+                          key={c.phone}
+                          href={`https://wa.me/${fullPhone}?text=${msg}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 hover:opacity-80 transition-opacity"
+                        >
+                          📱 {c.role}: {c.name}
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {/* STAGED EDIT FORM */}
       {renderStagedEditForm()}
 
