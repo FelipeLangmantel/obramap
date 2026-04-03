@@ -1339,7 +1339,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex flex-col h-full overflow-hidden">
         <div className="overflow-x-auto pb-1 -mx-1 px-1">
-          <TabsList className="grid w-full min-w-[400px] grid-cols-5 h-9 md:h-10">
+          <TabsList className="grid w-full min-w-[320px] grid-cols-4 h-9 md:h-10">
             <TabsTrigger value="alerts" className="gap-0.5 md:gap-1 text-[10px] md:text-xs px-1">
               <AlertTriangle className="w-3 h-3 md:w-3.5 md:h-3.5" />
               <span className="hidden sm:inline">Alertas</span>
@@ -1348,7 +1348,6 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
             <TabsTrigger value="quotations" className="gap-0.5 md:gap-1 text-[10px] md:text-xs px-1"><FileText className="w-3 h-3 md:w-3.5 md:h-3.5" /><span className="hidden sm:inline">Cotações</span></TabsTrigger>
             <TabsTrigger value="orders" className="gap-0.5 md:gap-1 text-[10px] md:text-xs px-1"><Truck className="w-3 h-3 md:w-3.5 md:h-3.5" /><span className="hidden sm:inline">Pedidos</span></TabsTrigger>
             <TabsTrigger value="contracts" className="gap-0.5 md:gap-1 text-[10px] md:text-xs px-1"><ClipboardList className="w-3 h-3 md:w-3.5 md:h-3.5" /><span className="hidden sm:inline">Contratações</span></TabsTrigger>
-            <TabsTrigger value="leadtime" className="gap-0.5 md:gap-1 text-[10px] md:text-xs px-1"><Clock className="w-3 h-3 md:w-3.5 md:h-3.5" /><span className="hidden sm:inline">Lead Time</span></TabsTrigger>
           </TabsList>
         </div>
 
