@@ -967,8 +967,17 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       .from("medicoes_ple")
       .select("*")
       .eq("obra_id", obraId)
-      .order("ano_referencia", { ascending: false });
-    setMedicoes(data || []);
+      .order("ano_referencia", { ascending: true });
+    // Ordenar numericamente pelo número da medição — Saldo Inicial sempre primeiro
+    const sorted = (data || []).sort((a, b) => {
+      if (a.num_medicao === "Saldo Inicial") return -1;
+      if (b.num_medicao === "Saldo Inicial") return 1;
+      const na = parseInt(a.num_medicao || "0", 10);
+      const nb = parseInt(b.num_medicao || "0", 10);
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return (a.num_medicao || "").localeCompare(b.num_medicao || "");
+    });
+    setMedicoes(sorted);
     setLoading(false);
   }, [obraId]);
 
