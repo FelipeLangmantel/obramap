@@ -181,7 +181,7 @@ export default function HoldingReceitasPage() {
     const nfRecebida = medicoes.filter(m => m.status_nf === "recebido");
 
     return {
-      totalGeral: medicoes.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+      totalGeral: medicoes.filter(m => m.num_medicao !== "Saldo Inicial").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
       // Aprovado: usa valor_acatado (o que o governo efetivamente aceitou)
       totalAprovado: aprovadas.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
       // Enviado/Pendente: usa valor_medicao (o que foi submetido, ainda não acatado)
@@ -235,7 +235,7 @@ export default function HoldingReceitasPage() {
     const obraMap: Record<string, { nome: string; aprovado: number; pendente: number }> = {};
     medicoes.forEach(m => {
       if (!obraMap[m.obra_id]) obraMap[m.obra_id] = { nome: m.obra_nome, aprovado: 0, pendente: 0 };
-      if (m.status_medicao === "aprovada") obraMap[m.obra_id].aprovado += m.valor_medicao;
+      if (m.status_medicao === "aprovada") obraMap[m.obra_id].aprovado += Number(m.valor_acatado ?? m.valor_medicao) || 0;
       if (m.status_medicao === "enviada") obraMap[m.obra_id].pendente += m.valor_medicao;
     });
     return Object.values(obraMap)
@@ -268,7 +268,7 @@ export default function HoldingReceitasPage() {
         mes: month.label,
         key: month.key,
         obrasCount,
-        aprovado: porMesRef.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+        aprovado: porMesRef.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
         enviado: porMesRef.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
         pendente: porMesRef.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
         nfRecebido: porMesRef.filter(m => m.status_nf === "recebido").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
@@ -337,11 +337,11 @@ export default function HoldingReceitasPage() {
           label: `${format(weekStart, "dd/MM")} - ${format(weekEnd, "dd/MM")}`,
           start: weekStart,
           end: weekEnd,
-          recebido: medsInWeek.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-          aprovado: medsInWeek.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          recebido: medsInWeek.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
+          aprovado: medsInWeek.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           enviado: medsInWeek.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-          pendente: medsInWeek.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-          total: medsInWeek.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          pendente: medsInWeek.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
+          total: medsInWeek.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           medicoes: medsInWeek,
         });
       }
@@ -359,11 +359,11 @@ export default function HoldingReceitasPage() {
           label: `${format(fStart, "dd/MM")} - ${format(fEnd, "dd/MM")}`,
           start: fStart,
           end: fEnd,
-          recebido: medsInPeriod.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-          aprovado: medsInPeriod.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          recebido: medsInPeriod.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
+          aprovado: medsInPeriod.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           enviado: medsInPeriod.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-          pendente: medsInPeriod.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-          total: medsInPeriod.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          pendente: medsInPeriod.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
+          total: medsInPeriod.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           medicoes: medsInPeriod,
         });
       }
@@ -380,8 +380,8 @@ export default function HoldingReceitasPage() {
           label: format(monthStart, "MMM/yy", { locale: ptBR }),
           start: monthStart,
           end: monthEnd,
-          recebido: medsInMonth.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-          aprovado: medsInMonth.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+          recebido: medsInMonth.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
+          aprovado: medsInMonth.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           enviado: medsInMonth.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
           pendente: medsInMonth.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
           total: medsInMonth.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
