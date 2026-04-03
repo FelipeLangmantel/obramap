@@ -1056,7 +1056,7 @@ export default function HoldingDashboardView() {
         });
       }
 
-      if (obra.latestMedicao?.status_medicao === "pendente" && obra.latestMedicao.data_envio) {
+      if (obra.latestMedicao?.status_medicao === "enviada" && obra.latestMedicao.data_envio) {
         const days = differenceInDays(now, new Date(obra.latestMedicao.data_envio));
         if (days > 30) {
           result.push({
