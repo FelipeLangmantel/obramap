@@ -4687,6 +4687,65 @@ export type Database = {
           },
         ]
       }
+      medicao_correction_requests: {
+        Row: {
+          created_at: string
+          id: string
+          medicao_id: string
+          obra_id: string
+          reason: string
+          requested_by: string
+          requested_by_name: string
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_by_name: string | null
+          section: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          medicao_id: string
+          obra_id: string
+          reason: string
+          requested_by: string
+          requested_by_name: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string | null
+          section?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          medicao_id?: string
+          obra_id?: string
+          reason?: string
+          requested_by?: string
+          requested_by_name?: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_by_name?: string | null
+          section?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medicao_correction_requests_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       medicoes_ple: {
         Row: {
           ano_referencia: number | null
@@ -4703,6 +4762,9 @@ export type Database = {
           obra_id: string
           status_medicao: Database["public"]["Enums"]["medicao_status"]
           status_nf: Database["public"]["Enums"]["nf_status"]
+          unlocked_by: string | null
+          unlocked_section: string | null
+          unlocked_until: string | null
           updated_at: string | null
           updated_by_name: string | null
           updated_by_user_id: string | null
@@ -4725,6 +4787,9 @@ export type Database = {
           obra_id: string
           status_medicao?: Database["public"]["Enums"]["medicao_status"]
           status_nf?: Database["public"]["Enums"]["nf_status"]
+          unlocked_by?: string | null
+          unlocked_section?: string | null
+          unlocked_until?: string | null
           updated_at?: string | null
           updated_by_name?: string | null
           updated_by_user_id?: string | null
@@ -4747,6 +4812,9 @@ export type Database = {
           obra_id?: string
           status_medicao?: Database["public"]["Enums"]["medicao_status"]
           status_nf?: Database["public"]["Enums"]["nf_status"]
+          unlocked_by?: string | null
+          unlocked_section?: string | null
+          unlocked_until?: string | null
           updated_at?: string | null
           updated_by_name?: string | null
           updated_by_user_id?: string | null
