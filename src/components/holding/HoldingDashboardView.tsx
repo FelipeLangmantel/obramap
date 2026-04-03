@@ -1732,14 +1732,14 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
   const [expandedIndicator, setExpandedIndicator] = useState<string | null>(null);
   const statusCfg = STATUS_CONFIG[obra.status] || STATUS_CONFIG.nao_iniciada;
   const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yyyy") : "—";
+  // Faturado real = medições aprovadas (incl. Saldo Inicial) com valor_acatado
+  // Se não há medições aprovadas mas há valor_medido_inicial, usa ele (faturamento pré-sistema)
+  // Nunca usa % × contrato como fallback — isso não é dinheiro faturado
   const receitasAprovadas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
   const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
-  const receitasEstimadas = receitasAprovadas > 0
+  const receitas = receitasAprovadas > 0
     ? receitasAprovadas
-    : (valorContrato > 0 && obra.percentual_andamento > 0
-      ? (obra.percentual_andamento / 100) * valorContrato
-      : 0);
-  const receitas = receitasEstimadas;
+    : (obra.valor_medido_inicial || 0);
   const percentualFinanceiro = valorContrato > 0 && receitas > 0 ? Math.min(100, (receitas / valorContrato) * 100) : 0;
   const saldoContrato = valorContrato - receitas;
 

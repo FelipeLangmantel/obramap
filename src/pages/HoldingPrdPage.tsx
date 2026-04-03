@@ -194,9 +194,11 @@ export default function HoldingPrdPage() {
         const realizado = medicoes
           .filter((m: any) => {
             const mi = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0,3).toLowerCase());
-            return m.obra_id === o.id && m.status_medicao === "aprovada" && mi === mes && m.ano_referencia === ano;
+            return m.obra_id === o.id && m.status_medicao === "aprovada"
+              && m.num_medicao !== "Saldo Inicial"
+              && mi === mes && m.ano_referencia === ano;
           })
-          .reduce((s: number, m: any) => s + (Number(m.valor_medicao) || 0), 0);
+          .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
 
         const previstoCadastrado = medicoes
           .filter((m: any) => {
@@ -261,8 +263,8 @@ export default function HoldingPrdPage() {
       months.filter(m => m.key <= nowKey).forEach(m => { previstoAcum += m.previsto; });
     });
     const realizadoAcum = medicoes
-      .filter((m: any) => obraIds.has(m.obra_id) && m.status_medicao === "aprovada")
-      .reduce((s: number, m: any) => s + (Number(m.valor_medicao) || 0), 0);
+      .filter((m: any) => obraIds.has(m.obra_id) && m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial")
+      .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
     const despesasAcum = despesas
       .filter((d: any) => obraIds.has(d.obra_id))  // todos os status — total comprometido
       .reduce((s: number, d: any) => s + (Number(d.valor) || 0), 0);
@@ -275,7 +277,7 @@ export default function HoldingPrdPage() {
     return obrasComDados.map(o => {
       const entry = obraMonthData.get(o.id);
       const previsto = entry ? entry.months.reduce((s, m) => s + m.previsto, 0) : (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
-      const realizado = medicoes.filter((m: any) => m.obra_id === o.id && m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_medicao) || 0), 0);
+      const realizado = medicoes.filter((m: any) => m.obra_id === o.id && m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
       const desp = despesas.filter((d: any) => d.obra_id === o.id).reduce((s: number, d: any) => s + (Number(d.valor) || 0), 0);
       const exec = previsto > 0 ? (realizado / previsto) * 100 : 0;
       const saldo = realizado - desp;

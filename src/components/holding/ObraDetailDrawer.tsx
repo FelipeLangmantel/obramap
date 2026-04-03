@@ -59,14 +59,15 @@ async function recalcularPercentualAndamento(
   if (valorContrato <= 0) return;
   try {
     // Buscar todas as medições aprovadas (incluindo Saldo Inicial)
+    // Usa valor_acatado quando disponível — o que foi efetivamente aceito pelo governo
     const { data: meds } = await supabase
       .from("medicoes_ple")
-      .select("valor_medicao, status_medicao")
+      .select("valor_medicao, valor_acatado, status_medicao")
       .eq("obra_id", obraId)
       .eq("status_medicao", "aprovada");
 
     const totalAprovado = (meds || []).reduce(
-      (s, m) => s + (Number(m.valor_medicao) || 0), 0
+      (s, m) => s + (Number((m as any).valor_acatado ?? m.valor_medicao) || 0), 0
     );
     const novoPercentual = Math.min(100, (totalAprovado / valorContrato) * 100);
 

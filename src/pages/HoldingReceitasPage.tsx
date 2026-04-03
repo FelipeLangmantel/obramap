@@ -177,10 +177,13 @@ export default function HoldingReceitasPage() {
 
     return {
       totalGeral: medicoes.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-      totalAprovado: aprovadas.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+      // Aprovado: usa valor_acatado (o que o governo efetivamente aceitou)
+      totalAprovado: aprovadas.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
+      // Enviado/Pendente: usa valor_medicao (o que foi submetido, ainda não acatado)
       totalEnviado: enviadas.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
       totalPendente: pendentes.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-      totalNFRecebida: nfRecebida.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+      // NF Recebida: usa valor_acatado (valor real pago)
+      totalNFRecebida: nfRecebida.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
       totalAguardandoNF: medicoes.filter(m => m.status_nf === "aguardando_aprovacao").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
       countAprovadas: aprovadas.length,
       countEnviadas: enviadas.length,
@@ -198,10 +201,10 @@ export default function HoldingReceitasPage() {
       const key = `${m.ano_referencia}-${String(mesIdx + 1).padStart(2, "0")}`;
       const label = `${MONTHS[mesIdx]}/${String(m.ano_referencia).slice(2)}`;
       if (!monthMap[key]) monthMap[key] = { mes: label, aprovado: 0, enviado: 0, pendente: 0, nf_recebido: 0 };
-      if (m.status_medicao === "aprovada") monthMap[key].aprovado += m.valor_medicao;
+      if (m.status_medicao === "aprovada") monthMap[key].aprovado += Number(m.valor_acatado ?? m.valor_medicao) || 0;
       if (m.status_medicao === "enviada") monthMap[key].enviado += m.valor_medicao;
       if (m.status_medicao === "pendente") monthMap[key].pendente += m.valor_medicao;
-      if (m.status_nf === "recebido") monthMap[key].nf_recebido += m.valor_medicao;
+      if (m.status_nf === "recebido") monthMap[key].nf_recebido += Number(m.valor_acatado ?? m.valor_medicao) || 0;
     });
     return Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
   }, [medicoes]);
