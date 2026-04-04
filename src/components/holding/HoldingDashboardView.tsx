@@ -925,8 +925,15 @@ export default function HoldingDashboardView() {
 
       return obrasData.map((obra): ObraEnriched => {
         const docs = docsMap.get(obra.id) || null;
-        const allMedicoes = medicoesMap.get(obra.id) || [];
-        const latestMedicao = allMedicoes[0] || null;
+        const allMedicoes = (medicoesMap.get(obra.id) || []).sort((a, b) => {
+          if (a.num_medicao === "Saldo Inicial") return -1;
+          if (b.num_medicao === "Saldo Inicial") return 1;
+          const na = parseInt(a.num_medicao || "0", 10);
+          const nb = parseInt(b.num_medicao || "0", 10);
+          if (!isNaN(na) && !isNaN(nb)) return na - nb;
+          return (a.num_medicao || "").localeCompare(b.num_medicao || "");
+        });
+        const latestMedicao = allMedicoes.length > 0 ? allMedicoes[allMedicoes.length - 1] : null;
         const { count: docsCount, total: docsTotal } = countDocs(docs);
         const health = calcHealth(obra, allMedicoes);
         return { ...obra, docs, latestMedicao, allMedicoes, docsCount, docsTotal, health };

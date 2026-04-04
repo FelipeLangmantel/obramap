@@ -146,6 +146,16 @@ export default function HoldingReceitasPage() {
           status_nf: m.status_nf,
         };
       });
+      // Sort: Saldo Inicial first, then by num_medicao ascending within each obra
+      joined.sort((a, b) => {
+        if (a.obra_id !== b.obra_id) return a.obra_nome.localeCompare(b.obra_nome);
+        if (a.num_medicao === "Saldo Inicial") return -1;
+        if (b.num_medicao === "Saldo Inicial") return 1;
+        const na = parseInt(a.num_medicao || "0", 10);
+        const nb = parseInt(b.num_medicao || "0", 10);
+        if (!isNaN(na) && !isNaN(nb)) return na - nb;
+        return (a.num_medicao || "").localeCompare(b.num_medicao || "");
+      });
       return { obras: obrasList, medicoes: joined };
     },
     enabled: !!company?.id,
