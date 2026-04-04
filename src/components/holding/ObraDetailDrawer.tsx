@@ -1079,6 +1079,29 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
 
   useEffect(() => { load(); }, [load]);
 
+  // Realtime: auto-refresh medicoes when any user makes changes
+  useEffect(() => {
+    const channel = supabase
+      .channel(`medicoes_ple_${obraId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'medicoes_ple',
+          filter: `obra_id=eq.${obraId}`,
+        },
+        () => {
+          load();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [obraId, load]);
+
   const baseJaComprometida = hasInitialBalance ? (valorMedidoInicial || 0) : 0;
 
   const saldoDisponivel = useMemo(() => {
