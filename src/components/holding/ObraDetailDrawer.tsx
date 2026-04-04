@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, ReactNode } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -1059,12 +1059,9 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
   const [correctionReason, setCorrectionReason] = useState("");
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
 
-  const load = useCallback(async () => {
-    const [medRes, reqRes] = await Promise.all([
-      supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).order("ano_referencia", { ascending: true }),
-      supabase.from("medicao_correction_requests").select("*").eq("obra_id", obraId).eq("status", "pending").order("created_at", { ascending: false }),
-    ]);
-    const sorted = (medRes.data || []).sort((a, b) => {
+  // Canonical sort: Saldo Inicial first, then by num_medicao as integer
+  const sortMedicoes = useCallback((arr: any[]) => {
+    return [...arr].sort((a, b) => {
       if (a.num_medicao === "Saldo Inicial") return -1;
       if (b.num_medicao === "Saldo Inicial") return 1;
       const na = parseInt(a.num_medicao || "0", 10);
@@ -1072,15 +1069,26 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       if (!isNaN(na) && !isNaN(nb)) return na - nb;
       return (a.num_medicao || "").localeCompare(b.num_medicao || "");
     });
-    setMedicoes(sorted);
+  }, []);
+
+  const loadRef = useRef(0); // prevent race conditions on concurrent loads
+  const load = useCallback(async () => {
+    const seq = ++loadRef.current;
+    const [medRes, reqRes] = await Promise.all([
+      supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).order("num_medicao", { ascending: true }),
+      supabase.from("medicao_correction_requests").select("*").eq("obra_id", obraId).eq("status", "pending").order("created_at", { ascending: false }),
+    ]);
+    if (seq !== loadRef.current) return; // stale response, skip
+    setMedicoes(sortMedicoes(medRes.data || []));
     setPendingRequests(reqRes.data || []);
     setLoading(false);
-  }, [obraId]);
+  }, [obraId, sortMedicoes]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Realtime: auto-refresh medicoes when any user makes changes
+  // Realtime: auto-refresh medicoes when any user makes changes (debounced)
   useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
     const channel = supabase
       .channel(`medicoes_ple_${obraId}`)
       .on(
@@ -1092,12 +1100,14 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
           filter: `obra_id=eq.${obraId}`,
         },
         () => {
-          load();
+          clearTimeout(timer);
+          timer = setTimeout(() => load(), 300); // debounce 300ms
         }
       )
       .subscribe();
 
     return () => {
+      clearTimeout(timer);
       supabase.removeChannel(channel);
     };
   }, [obraId, load]);
