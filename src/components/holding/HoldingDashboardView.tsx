@@ -935,6 +935,21 @@ export default function HoldingDashboardView() {
     enabled: !!company?.id,
   });
 
+  // Realtime: auto-refresh portfolio when medicoes or obras change
+  useEffect(() => {
+    if (!company?.id) return;
+    const channel = supabase
+      .channel(`holding-dashboard-${company.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "obras_portfolio" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [company?.id, queryClient]);
+
   // Manter selectedObra sincronizada quando obras re-fetcha após invalidate
   useEffect(() => {
     if (!selectedObra) return;
