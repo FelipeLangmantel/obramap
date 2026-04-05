@@ -1,10 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -24,6 +23,38 @@ const TABELA_LABELS: Record<string, string> = {
   despesas_mensais: "Despesas",
   holding_doc_files: "Documentos",
 };
+
+/** Extract obra_id from audit log data */
+function extractObraId(log: any): string | null {
+  return log.dados_novos?.obra_id || log.dados_anteriores?.obra_id || null;
+}
+
+/** Extract a human-readable description from audit data */
+function extractDescription(log: any): string {
+  const d = log.dados_novos || log.dados_anteriores || {};
+  // For obras_portfolio, the record itself IS the obra
+  if (log.tabela === "obras_portfolio") return d.nome || log.registro_id?.slice(0, 8) || "—";
+  // For medicoes_ple
+  if (log.tabela === "medicoes_ple") {
+    const num = d.num_medicao || "";
+    const val = d.valor_medicao ? `R$ ${Number(d.valor_medicao).toLocaleString("pt-BR")}` : "";
+    const status = d.status_medicao || "";
+    return [num && `Med. ${num}`, status, val].filter(Boolean).join(" · ") || log.registro_id?.slice(0, 8) || "—";
+  }
+  // For despesas_mensais
+  if (log.tabela === "despesas_mensais") {
+    const mes = d.mes_referencia || "";
+    const ano = d.ano_referencia || "";
+    const val = d.valor ? `R$ ${Number(d.valor).toLocaleString("pt-BR")}` : "";
+    const status = d.status || "";
+    return [mes && ano ? `${mes}/${ano}` : "", status, val].filter(Boolean).join(" · ") || log.registro_id?.slice(0, 8) || "—";
+  }
+  // For documents
+  if (log.tabela === "holding_doc_files") {
+    return d.file_name || d.nome || log.registro_id?.slice(0, 8) || "—";
+  }
+  return d.nome || log.registro_id?.slice(0, 8) || "—";
+}
 
 export function AuditLogPanel() {
   const { company } = useAuth();
@@ -45,6 +76,21 @@ export function AuditLogPanel() {
       (data || []).forEach((p: any) => {
         map.set(p.user_id, p.display_name || p.email || "Usuário");
       });
+      return map;
+    },
+    enabled: !!company?.id,
+  });
+
+  // Fetch obra names for enrichment
+  const { data: obraMap = new Map() } = useQuery({
+    queryKey: ["obras-names-map", company?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("obras_portfolio")
+        .select("id, nome")
+        .eq("company_id", company!.id);
+      const map = new Map<string, string>();
+      (data || []).forEach((o: any) => map.set(o.id, o.nome));
       return map;
     },
     enabled: !!company?.id,
@@ -83,27 +129,43 @@ export function AuditLogPanel() {
   const resolveUserName = (log: any) => {
     if (log.user_name) return log.user_name;
     if (log.user_id && userMap.get(log.user_id)) return userMap.get(log.user_id);
-    // Try from dados_novos
     const fromNew = log.dados_novos?.created_by_name || log.dados_novos?.updated_by_name;
     if (fromNew) return fromNew;
     return "Sistema";
   };
 
-  const filteredLogs = searchUser
-    ? logs.filter((l: any) => {
-        const name = resolveUserName(l);
-        return name?.toLowerCase().includes(searchUser.toLowerCase());
-      })
-    : logs;
+  const resolveObraName = (log: any): string | null => {
+    if (log.tabela === "obras_portfolio") {
+      return log.dados_novos?.nome || log.dados_anteriores?.nome || null;
+    }
+    const obraId = extractObraId(log);
+    if (obraId) return obraMap.get(obraId) || null;
+    return null;
+  };
 
-  const renderJsonDiff = (label: string, data: any) => {
-    if (!data) return null;
+  const filteredLogs = useMemo(() => {
+    if (!searchUser) return logs;
+    return logs.filter((l: any) => {
+      const name = resolveUserName(l);
+      return name?.toLowerCase().includes(searchUser.toLowerCase());
+    });
+  }, [logs, searchUser, userMap]);
+
+  const renderKeyValue = (label: string, data: any) => {
+    if (!data || typeof data !== "object") return null;
+    const entries = Object.entries(data).filter(([k]) => !k.startsWith("_"));
+    if (!entries.length) return null;
     return (
       <div className="space-y-1">
         <p className="text-xs font-semibold text-muted-foreground">{label}</p>
-        <pre className="text-[11px] bg-muted/50 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all max-h-48">
-          {JSON.stringify(data, null, 2)}
-        </pre>
+        <div className="bg-muted/50 rounded p-2 space-y-0.5">
+          {entries.map(([k, v]) => (
+            <div key={k} className="flex gap-2 text-[11px]">
+              <span className="text-muted-foreground font-mono shrink-0">{k}:</span>
+              <span className="break-all">{v === null ? "null" : typeof v === "object" ? JSON.stringify(v) : String(v)}</span>
+            </div>
+          ))}
+        </div>
       </div>
     );
   };
@@ -151,9 +213,10 @@ export function AuditLogPanel() {
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs w-32">Data/Hora</TableHead>
-              <TableHead className="text-xs">Tabela</TableHead>
+              <TableHead className="text-xs">Módulo</TableHead>
               <TableHead className="text-xs">Ação</TableHead>
               <TableHead className="text-xs">Usuário</TableHead>
+              <TableHead className="text-xs">Obra</TableHead>
               <TableHead className="text-xs">Detalhes</TableHead>
               <TableHead className="text-xs w-12"></TableHead>
             </TableRow>
@@ -161,7 +224,7 @@ export function AuditLogPanel() {
           <TableBody>
             {filteredLogs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-sm text-muted-foreground py-8">
                   <History className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
                   Nenhum registro de auditoria encontrado.
                 </TableCell>
@@ -170,7 +233,8 @@ export function AuditLogPanel() {
               filteredLogs.map((log: any) => {
                 const acaoCfg = ACAO_LABELS[log.acao] || { label: log.acao, cls: "" };
                 const tabelaLabel = TABELA_LABELS[log.tabela] || log.tabela;
-                const nome = log.dados_novos?.nome || log.dados_anteriores?.nome || log.registro_id?.slice(0, 8) || "—";
+                const obraName = resolveObraName(log);
+                const description = extractDescription(log);
                 const userName = resolveUserName(log);
                 return (
                   <TableRow
@@ -181,12 +245,17 @@ export function AuditLogPanel() {
                     <TableCell className="whitespace-nowrap">
                       {format(new Date(log.created_at), "dd/MM/yy HH:mm")}
                     </TableCell>
-                    <TableCell>{tabelaLabel}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-[10px]">{tabelaLabel}</Badge>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className={`text-[10px] ${acaoCfg.cls}`}>{acaoCfg.label}</Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">{userName}</TableCell>
-                    <TableCell className="max-w-[200px] truncate text-muted-foreground">{nome}</TableCell>
+                    <TableCell className="font-medium">{userName}</TableCell>
+                    <TableCell className="max-w-[150px] truncate text-muted-foreground">
+                      {obraName || "—"}
+                    </TableCell>
+                    <TableCell className="max-w-[180px] truncate text-muted-foreground">{description}</TableCell>
                     <TableCell>
                       <Eye className="h-3.5 w-3.5 text-muted-foreground" />
                     </TableCell>
@@ -213,8 +282,10 @@ export function AuditLogPanel() {
                     {format(new Date(selectedLog.created_at), "dd/MM/yyyy HH:mm:ss")}
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Tabela:</span>{" "}
-                    {TABELA_LABELS[selectedLog.tabela] || selectedLog.tabela}
+                    <span className="text-muted-foreground">Módulo:</span>{" "}
+                    <Badge variant="outline" className="text-[10px]">
+                      {TABELA_LABELS[selectedLog.tabela] || selectedLog.tabela}
+                    </Badge>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Ação:</span>{" "}
@@ -224,15 +295,21 @@ export function AuditLogPanel() {
                   </div>
                   <div>
                     <span className="text-muted-foreground">Usuário:</span>{" "}
-                    {resolveUserName(selectedLog)}
+                    <span className="font-medium">{resolveUserName(selectedLog)}</span>
                   </div>
+                  {resolveObraName(selectedLog) && (
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Obra:</span>{" "}
+                      <span className="font-medium">{resolveObraName(selectedLog)}</span>
+                    </div>
+                  )}
                   <div className="col-span-2">
                     <span className="text-muted-foreground">Registro ID:</span>{" "}
                     <span className="font-mono text-[10px]">{selectedLog.registro_id || "—"}</span>
                   </div>
                 </div>
-                {renderJsonDiff("Dados Anteriores", selectedLog.dados_anteriores)}
-                {renderJsonDiff("Dados Novos", selectedLog.dados_novos)}
+                {renderKeyValue("Dados Anteriores", selectedLog.dados_anteriores)}
+                {renderKeyValue("Dados Novos", selectedLog.dados_novos)}
               </div>
             </ScrollArea>
           )}

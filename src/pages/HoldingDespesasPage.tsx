@@ -298,7 +298,9 @@ export default function HoldingDespesasPage() {
     <div className="space-y-6 p-6">
       {/* HEADER */}
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex items-center gap-2">
+          <SidebarTrigger className="md:hidden p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors" />
+          <div>
           <h1 className="text-lg font-semibold flex items-center gap-2">
             <Receipt className="h-5 w-5 text-primary" /> Despesas & Custos
           </h1>
