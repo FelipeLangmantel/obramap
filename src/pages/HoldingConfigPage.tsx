@@ -406,7 +406,6 @@ export default function HoldingConfigPage() {
               <Settings className="h-5 w-5 text-primary" />
               Configurações da Holding
             </h1>
-            </h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1 ml-10">
             Gerencie empresas, tipos de documentos e configurações globais
