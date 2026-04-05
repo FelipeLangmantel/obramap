@@ -487,11 +487,14 @@ export default function HoldingReceitasPage() {
     <div className="space-y-4 p-4 md:p-6">
       {/* HEADER */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-primary" />Receitas & Medições PLE
-          </h1>
-          <p className="text-xs text-muted-foreground">Gestão financeira de entradas — todas as obras do portfólio</p>
+        <div className="flex items-center gap-2">
+          <SidebarTrigger className="md:hidden p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors" />
+          <div>
+            <h1 className="text-lg font-semibold flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />Receitas & Medições PLE
+            </h1>
+            <p className="text-xs text-muted-foreground">Gestão financeira de entradas — todas as obras do portfólio</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={exportarCSV}><Download className="h-4 w-4" /> Exportar CSV</Button>

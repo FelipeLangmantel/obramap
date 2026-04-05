@@ -240,13 +240,16 @@ export default function HoldingInsightsPage() {
     <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-6 w-6 text-primary" />
-            <h1 className="text-2xl font-bold text-foreground">IA — Insights do Portfólio</h1>
-            <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 text-[10px] h-5">BETA</Badge>
+        <div className="flex items-center gap-2">
+          <SidebarTrigger className="md:hidden p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors" />
+          <div>
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-6 w-6 text-primary" />
+              <h1 className="text-2xl font-bold text-foreground">IA — Insights do Portfólio</h1>
+              <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 text-[10px] h-5">BETA</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">Análise automática gerada por inteligência artificial</p>
           </div>
-          <p className="text-sm text-muted-foreground mt-1">Análise automática gerada por inteligência artificial</p>
         </div>
         <div className="flex gap-2">
           <Button onClick={handleGenerateInsights} disabled={insightsLoading || enrichedObras.length === 0} className="gap-2">
