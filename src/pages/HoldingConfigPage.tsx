@@ -696,5 +696,8 @@ export default function HoldingConfigPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }
