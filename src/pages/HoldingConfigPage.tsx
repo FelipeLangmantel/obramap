@@ -401,12 +401,11 @@ export default function HoldingConfigPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate("/dashboard")}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
+            <SidebarTrigger className="md:hidden p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors" />
             <h1 className="text-xl font-bold flex items-center gap-2">
               <Settings className="h-5 w-5 text-primary" />
               Configurações da Holding
+            </h1>
             </h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1 ml-10">
