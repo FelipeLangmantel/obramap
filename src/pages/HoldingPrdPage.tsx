@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -368,11 +368,14 @@ export default function HoldingPrdPage() {
     <div className="space-y-6 p-6">
       {/* HEADER */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h1 className="text-lg font-semibold flex items-center gap-2">
-            <BarChart2 className="h-5 w-5 text-primary" /> PRD — Previsto × Realizado × Despesas
-          </h1>
-          <p className="text-xs text-muted-foreground">Acompanhamento físico-financeiro do portfólio</p>
+        <div className="flex items-center gap-2">
+          <SidebarTrigger className="md:hidden p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors" />
+          <div>
+            <h1 className="text-lg font-semibold flex items-center gap-2">
+              <BarChart2 className="h-5 w-5 text-primary" /> PRD — Previsto × Realizado × Despesas
+            </h1>
+            <p className="text-xs text-muted-foreground">Acompanhamento físico-financeiro do portfólio</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Select value={filterObra} onValueChange={setFilterObra}>
