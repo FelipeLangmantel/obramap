@@ -380,9 +380,14 @@ export default function HoldingConfigPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <RefreshCw className="h-6 w-6 animate-spin text-primary" />
-      </div>
+      <SidebarProvider defaultOpen={true}>
+        <div className="h-screen flex w-full overflow-hidden">
+          <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
+          <main className="flex-1 min-w-0 h-full overflow-auto flex items-center justify-center">
+            <RefreshCw className="h-6 w-6 animate-spin text-primary" />
+          </main>
+        </div>
+      </SidebarProvider>
     );
   }
 
