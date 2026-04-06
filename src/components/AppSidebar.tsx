@@ -367,11 +367,25 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       >
         {/* Header with Logo */}
         <SidebarHeader className="px-4 py-4 border-b border-border bg-background">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 flex items-center justify-center shrink-0">
-              <img src={isDark ? obraMapLogoDark : obraMapLogoLight} alt="ObraMap" className="h-10 w-10 object-contain drop-shadow-sm" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 flex items-center justify-center shrink-0">
+                <img src={isDark ? obraMapLogoDark : obraMapLogoLight} alt="ObraMap" className="h-10 w-10 object-contain drop-shadow-sm" />
+              </div>
+              <h1 className="text-lg font-bold text-foreground tracking-tight">ObraMap</h1>
             </div>
-            <h1 className="text-lg font-bold text-foreground tracking-tight">ObraMap</h1>
+            <button
+              className="relative h-8 w-8 flex items-center justify-center rounded-md hover:bg-accent transition-colors"
+              onClick={() => { notif.setIsOpen(true); notif.loadNotifications(); }}
+              title="Notificações"
+            >
+              <Bell className="h-4 w-4 text-foreground" />
+              {notif.count > 0 && (
+                <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+                  {notif.count > 99 ? "99+" : notif.count}
+                </span>
+              )}
+            </button>
           </div>
         </SidebarHeader>
 
