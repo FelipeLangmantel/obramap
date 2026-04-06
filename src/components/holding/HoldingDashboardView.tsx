@@ -151,6 +151,7 @@ export interface ObraEnriched extends ObraPortfolio {
   docsCount: number;
   docsTotal: number;
   health: "green" | "yellow" | "red" | "gray";
+  pendingNotifCount?: number;
 }
 
 export interface HoldingAlert {
