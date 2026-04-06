@@ -900,18 +900,27 @@ export default function HoldingDashboardView() {
         .from("obras_portfolio").select("*").eq("company_id", company.id).order("nome");
       const obraIds = (obrasRaw || []).map(o => o.id);
 
-      // 2. Buscar docs e medições em paralelo, com IDs já disponíveis
-      const [docsRes, medicoesRes] = await Promise.all([
+      // 2. Buscar docs, medições e notificações em paralelo
+      const [docsRes, medicoesRes, notifRes] = await Promise.all([
         obraIds.length > 0
           ? supabase.from("documentos_obra").select("*").in("obra_id", obraIds)
           : Promise.resolve({ data: [] as any[], error: null }),
         obraIds.length > 0
           ? supabase.from("medicoes_ple").select("*").in("obra_id", obraIds).order("ano_referencia", { ascending: false })
           : Promise.resolve({ data: [] as any[], error: null }),
+        obraIds.length > 0
+          ? supabase.from("system_notifications").select("obra_id").in("obra_id", obraIds).eq("resolvida", false).eq("lida", false)
+          : Promise.resolve({ data: [] as any[], error: null }),
       ]);
       const obrasData = (obrasRaw || []) as ObraPortfolio[];
       const docsData = (docsRes.data || []) as DocumentosObra[];
       const medicoesData = (medicoesRes.data || []) as MedicaoPle[];
+
+      // Build notification count map
+      const notifCountMap = new Map<string, number>();
+      (notifRes.data || []).forEach((n: any) => {
+        notifCountMap.set(n.obra_id, (notifCountMap.get(n.obra_id) || 0) + 1);
+      });
 
       const docsMap = new Map<string, DocumentosObra>();
       docsData.forEach((d) => docsMap.set(d.obra_id, d));
