@@ -1494,47 +1494,129 @@ export type Database = {
           },
         ]
       }
+      despesa_edit_requests: {
+        Row: {
+          admin_response: string | null
+          created_at: string
+          despesa_id: string
+          id: string
+          justificativa: string
+          obra_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          user_id: string
+          user_name: string
+        }
+        Insert: {
+          admin_response?: string | null
+          created_at?: string
+          despesa_id: string
+          id?: string
+          justificativa: string
+          obra_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          user_id: string
+          user_name: string
+        }
+        Update: {
+          admin_response?: string | null
+          created_at?: string
+          despesa_id?: string
+          id?: string
+          justificativa?: string
+          obra_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          user_id?: string
+          user_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "despesa_edit_requests_despesa_id_fkey"
+            columns: ["despesa_id"]
+            isOneToOne: false
+            referencedRelation: "despesas_mensais"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "despesa_edit_requests_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       despesas_mensais: {
         Row: {
           ano_referencia: number | null
+          categoria: string
           created_by_name: string | null
           created_by_user_id: string | null
+          descricao: string | null
           id: string
+          is_locked: boolean
+          medicao_id: string | null
           mes_referencia: string | null
           obra_id: string
           status: Database["public"]["Enums"]["despesa_status"]
+          tipo_despesa: string
           updated_at: string | null
           updated_by_name: string | null
           updated_by_user_id: string | null
           valor: number
+          valor_medicao_referencia: number | null
         }
         Insert: {
           ano_referencia?: number | null
+          categoria?: string
           created_by_name?: string | null
           created_by_user_id?: string | null
+          descricao?: string | null
           id?: string
+          is_locked?: boolean
+          medicao_id?: string | null
           mes_referencia?: string | null
           obra_id: string
           status?: Database["public"]["Enums"]["despesa_status"]
+          tipo_despesa?: string
           updated_at?: string | null
           updated_by_name?: string | null
           updated_by_user_id?: string | null
           valor?: number
+          valor_medicao_referencia?: number | null
         }
         Update: {
           ano_referencia?: number | null
+          categoria?: string
           created_by_name?: string | null
           created_by_user_id?: string | null
+          descricao?: string | null
           id?: string
+          is_locked?: boolean
+          medicao_id?: string | null
           mes_referencia?: string | null
           obra_id?: string
           status?: Database["public"]["Enums"]["despesa_status"]
+          tipo_despesa?: string
           updated_at?: string | null
           updated_by_name?: string | null
           updated_by_user_id?: string | null
           valor?: number
+          valor_medicao_referencia?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "despesas_mensais_medicao_id_fkey"
+            columns: ["medicao_id"]
+            isOneToOne: false
+            referencedRelation: "medicoes_ple"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "despesas_mensais_obra_id_fkey"
             columns: ["obra_id"]
@@ -8765,6 +8847,73 @@ export type Database = {
         }
         Relationships: []
       }
+      system_notifications: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          lida: boolean
+          lida_em: string | null
+          medicao_id: string | null
+          mensagem: string
+          obra_id: string
+          resolvida: boolean
+          resolvida_em: string | null
+          tipo: string
+          titulo: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          lida?: boolean
+          lida_em?: string | null
+          medicao_id?: string | null
+          mensagem: string
+          obra_id: string
+          resolvida?: boolean
+          resolvida_em?: string | null
+          tipo: string
+          titulo: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          lida?: boolean
+          lida_em?: string | null
+          medicao_id?: string | null
+          mensagem?: string
+          obra_id?: string
+          resolvida?: boolean
+          resolvida_em?: string | null
+          tipo?: string
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_notifications_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "system_notifications_medicao_id_fkey"
+            columns: ["medicao_id"]
+            isOneToOne: false
+            referencedRelation: "medicoes_ple"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "system_notifications_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       units: {
         Row: {
           abbreviation: string
@@ -9772,6 +9921,29 @@ export type Database = {
         Returns: Json
       }
       get_my_company_id: { Args: never; Returns: string }
+      get_notifications: {
+        Args: { p_company_id: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          company_id: string
+          created_at: string
+          id: string
+          lida: boolean
+          lida_em: string | null
+          medicao_id: string | null
+          mensagem: string
+          obra_id: string
+          resolvida: boolean
+          resolvida_em: string | null
+          tipo: string
+          titulo: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "system_notifications"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_operational_risk_dashboard: {
         Args: { p_project_id: string }
         Returns: Json
@@ -9928,6 +10100,10 @@ export type Database = {
           scope_name: string
           service_id: string
         }[]
+      }
+      get_unread_notifications_count: {
+        Args: { p_company_id: string }
+        Returns: number
       }
       get_user_company_id: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
