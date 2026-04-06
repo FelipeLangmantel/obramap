@@ -5,6 +5,12 @@ import { useConstruction } from "@/contexts/ConstructionContext";
 import { useSystemModules } from "@/hooks/useSystemModules";
 import { supabase } from "@/integrations/supabase/client";
 import { useSupplyOverdueCount } from "@/components/supplies/hooks/useSupplyOverdueCount";
+import { useNotifications } from "@/hooks/useNotifications";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Bell, CheckCheck, AlertTriangle as AlertTriangleIcon, CheckCircle2, FileText as FileTextIcon, Clock as ClockIcon } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import {
   Sidebar,
   SidebarContent,
