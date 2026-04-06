@@ -17,6 +17,8 @@ import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { FileText, Plus, Loader2, ListChecks, Pencil, Trash2, X, FlaskConical, CalendarDays, TrendingUp, Clock, BarChart3, Target, AlertTriangle, DollarSign, Upload, Download, File, Lock, CheckCircle2 } from "lucide-react";
 import { CurrencyInput } from "./CurrencyInput";
 import { useAuth } from "@/contexts/AuthContext";
@@ -2176,7 +2178,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
   );
 }
 /* ══════════════════════════════════════════════
-   TAB 3 — FINANCEIRO
+   TAB 3 — FINANCEIRO (DESPESAS)
    ══════════════════════════════════════════════ */
 
 const DESPESA_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
@@ -2185,73 +2187,174 @@ const DESPESA_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   nao_iniciado: { label: "Não Iniciado", cls: "bg-muted text-muted-foreground" },
 };
 
+const TIPO_DESPESA_BADGE: Record<string, { label: string; cls: string }> = {
+  prevista: { label: "Prevista", cls: "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300" },
+  real: { label: "Real", cls: "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-300" },
+};
+
+const CATEGORIAS = ["Pessoal", "Material", "Equipamento", "Serviço", "Administrativo", "Financeiro", "Geral"];
+
 function FinanceiroTab({ obraId }: { obraId: string }) {
-  const { user, profile, requireEdit } = useAuth();
+  const { user, profile, requireEdit, isAdmin, isCompanyAdmin } = useAuth();
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
   const [despesas, setDespesas] = useState<any[]>([]);
-  const [medicoes, setMedicoes] = useState<any[]>([]);
+  const [allMedicoes, setAllMedicoes] = useState<any[]>([]);
+  const [medicoesAprovadas, setMedicoesAprovadas] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewDespesa, setShowNewDespesa] = useState(false);
-  const [newDespesa, setNewDespesa] = useState({ mes_referencia: "", ano_referencia: String(new Date().getFullYear()), valor: "", status: "nao_iniciado" });
   const [savingDespesa, setSavingDespesa] = useState(false);
+  const [pendingNotifs, setPendingNotifs] = useState<any[]>([]);
 
-  const loadData = useCallback(() => {
+  // Form state
+  const [selectedMedicaoId, setSelectedMedicaoId] = useState("");
+  const [valor, setValor] = useState("");
+  const [categoria, setCategoria] = useState("Geral");
+  const [descricao, setDescricao] = useState("");
+  const [statusDespesa, setStatusDespesa] = useState("nao_iniciado");
+
+  // Edit request state
+  const [editReqDespesaId, setEditReqDespesaId] = useState<string | null>(null);
+  const [editReqJustificativa, setEditReqJustificativa] = useState("");
+  const [editReqSaving, setEditReqSaving] = useState(false);
+
+  // Editing state
+  const [editingDespesa, setEditingDespesa] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({ valor: "", categoria: "", descricao: "", status: "" });
+
+  // Admin unlock confirm
+  const [confirmUnlockId, setConfirmUnlockId] = useState<string | null>(null);
+
+  const selectedMedicao = allMedicoes.find((m: any) => m.id === selectedMedicaoId);
+  const tipoDespesa = selectedMedicao?.status_medicao === "aprovada" ? "real" : "prevista";
+
+  const loadData = useCallback(async () => {
     setLoading(true);
-    Promise.all([
+    const [dRes, mAllRes, notifRes] = await Promise.all([
       supabase.from("despesas_mensais").select("*").eq("obra_id", obraId).order("ano_referencia").order("mes_referencia"),
-      supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).eq("status_medicao", "aprovada"),
-    ]).then(([dRes, mRes]) => {
-      setDespesas(dRes.data || []);
-      setMedicoes(mRes.data || []);
-      setLoading(false);
-    });
+      supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).order("num_medicao"),
+      supabase.from("system_notifications").select("id, tipo, titulo, mensagem, medicao_id").eq("obra_id", obraId).eq("resolvida", false),
+    ]);
+    setDespesas(dRes.data || []);
+    const meds = mAllRes.data || [];
+    setAllMedicoes(meds);
+    setMedicoesAprovadas(meds.filter((m: any) => m.status_medicao === "aprovada"));
+    setPendingNotifs(notifRes.data || []);
+    setLoading(false);
   }, [obraId]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Auto-fill when selecting measurement
+  useEffect(() => {
+    if (selectedMedicao) {
+      const suggestedVal = Number(selectedMedicao.valor_acatado ?? selectedMedicao.valor_medicao) || 0;
+      setValor(String(suggestedVal));
+    }
+  }, [selectedMedicaoId, selectedMedicao]);
+
+  const resetForm = () => {
+    setSelectedMedicaoId("");
+    setValor("");
+    setCategoria("Geral");
+    setDescricao("");
+    setStatusDespesa("nao_iniciado");
+    setShowNewDespesa(false);
+  };
+
   const handleSaveDespesa = async () => {
     if (!requireEdit()) return;
-    if (!newDespesa.mes_referencia || !newDespesa.valor) {
-      toast.warning("Preencha mês e valor.");
+    if (!selectedMedicaoId || !valor) {
+      toast.warning("Selecione uma medição e preencha o valor.");
       return;
     }
     setSavingDespesa(true);
+    const med = selectedMedicao;
     const { data: ins, error } = await supabase.from("despesas_mensais").insert({
       obra_id: obraId,
-      mes_referencia: newDespesa.mes_referencia,
-      ano_referencia: Number(newDespesa.ano_referencia),
-      valor: Number(newDespesa.valor),
-      status: newDespesa.status as any,
-    }).select("id").single();
+      medicao_id: selectedMedicaoId,
+      mes_referencia: med?.mes_referencia || "",
+      ano_referencia: Number(med?.ano_referencia) || new Date().getFullYear(),
+      valor: Number(valor),
+      tipo_despesa: tipoDespesa,
+      categoria,
+      descricao: descricao || null,
+      status: (tipoDespesa === "real" ? statusDespesa : "nao_iniciado") as any,
+      valor_medicao_referencia: Number(med?.valor_acatado ?? med?.valor_medicao) || 0,
+      created_by_user_id: userId,
+      created_by_name: userName,
+    } as any).select("id").single();
     setSavingDespesa(false);
-    if (error) { toast.error("Erro ao salvar despesa."); return; }
-
-    // Audit: gravar autoria no registro inserido (ID garantido pelo .select)
-    if (ins?.id) {
-      await supabase.from("despesas_mensais").update({
-        created_by_user_id: userId,
-        created_by_name: userName,
-      }).eq("id", ins.id);
-    }
+    if (error) { toast.error("Erro ao salvar despesa."); console.error(error); return; }
 
     await registrarLog(
       obraId, "despesas_mensais", ins?.id || null,
       "criou",
-      `Adicionou despesa — ${newDespesa.mes_referencia}/${newDespesa.ano_referencia} — ${BRL.format(Number(newDespesa.valor))}`,
+      `Adicionou despesa — Med. ${med?.num_medicao} — ${categoria} — ${BRL.format(Number(valor))}`,
       userId, userName
     );
-
     toast.success("Despesa adicionada!");
     invalidateHolding();
-    setNewDespesa({ mes_referencia: "", ano_referencia: String(new Date().getFullYear()), valor: "", status: "nao_iniciado" });
-    setShowNewDespesa(false);
+    resetForm();
     loadData();
+  };
+
+  const handleEditDespesa = async () => {
+    if (!editingDespesa || !requireEdit()) return;
+    setSavingDespesa(true);
+    const { error } = await supabase.from("despesas_mensais").update({
+      valor: Number(editForm.valor),
+      categoria: editForm.categoria,
+      descricao: editForm.descricao || null,
+      status: editForm.status as any,
+      updated_by_user_id: userId,
+      updated_by_name: userName,
+      updated_at: new Date().toISOString(),
+    } as any).eq("id", editingDespesa.id);
+    setSavingDespesa(false);
+    if (error) { toast.error("Erro ao atualizar."); return; }
+    toast.success("Despesa atualizada!");
+    setEditingDespesa(null);
+    invalidateHolding();
+    loadData();
+  };
+
+  const handleEditRequest = async () => {
+    if (!editReqDespesaId || !editReqJustificativa.trim()) {
+      toast.warning("Informe o motivo.");
+      return;
+    }
+    setEditReqSaving(true);
+    await supabase.from("despesa_edit_requests").insert({
+      despesa_id: editReqDespesaId,
+      obra_id: obraId,
+      user_id: userId!,
+      user_name: userName,
+      justificativa: editReqJustificativa,
+    } as any);
+    setEditReqSaving(false);
+    toast.success("Solicitação enviada ao administrador.");
+    setEditReqDespesaId(null);
+    setEditReqJustificativa("");
+  };
+
+  const handleAdminUnlock = async (despesaId: string) => {
+    await supabase.from("despesas_mensais").update({ is_locked: false } as any).eq("id", despesaId);
+    toast.success("Despesa desbloqueada para edição.");
+    setConfirmUnlockId(null);
+    loadData();
+  };
+
+  const canEditDespesa = (d: any) => {
+    if (!d.is_locked) return true;
+    if (isAdmin || isCompanyAdmin) return true;
+    return false;
   };
 
   if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
 
+  // Chart data
   const monthMap = new Map<string, { despesa: number; receita: number }>();
   despesas.forEach((d) => {
     const key = `${d.mes_referencia}/${d.ano_referencia}`;
@@ -2259,7 +2362,7 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
     entry.despesa += d.valor || 0;
     monthMap.set(key, entry);
   });
-  medicoes.forEach((m) => {
+  medicoesAprovadas.forEach((m) => {
     const key = `${m.mes_referencia}/${m.ano_referencia}`;
     const entry = monthMap.get(key) || { despesa: 0, receita: 0 };
     entry.receita += Number(m.valor_acatado ?? m.valor_medicao) || 0;
@@ -2269,6 +2372,19 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
 
   return (
     <div className="space-y-6">
+      {/* Pending notifications banner */}
+      {pendingNotifs.length > 0 && (
+        <Alert className="border-amber-500 bg-amber-50 dark:bg-amber-950/20">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertTitle>Atenção — {pendingNotifs.length} pendência(s)</AlertTitle>
+          <AlertDescription>
+            Existem medições aprovadas sem despesa vinculada ou despesas que precisam de fechamento.
+            Revise cada medição e vincule ou confirme as despesas correspondentes.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Chart */}
       {chartData.length > 0 && (
         <Card>
           <CardContent className="p-4">
@@ -2287,6 +2403,7 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
         </Card>
       )}
 
+      {/* Header + New Button */}
       <div className="flex items-center justify-between">
         <h4 className="font-semibold text-sm">Despesas</h4>
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowNewDespesa(!showNewDespesa)}>
@@ -2294,43 +2411,84 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
         </Button>
       </div>
 
+      {/* New Despesa Form */}
       {showNewDespesa && (
         <Card className="border-dashed">
-          <CardContent className="p-3 space-y-3">
-            <div className="grid grid-cols-4 gap-2">
-              <div>
-                <label className="text-xs text-muted-foreground">Mês</label>
-                <Select value={newDespesa.mes_referencia} onValueChange={(v) => setNewDespesa(p => ({ ...p, mes_referencia: v }))}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent>
-                    {["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"].map(m => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
+          <CardContent className="p-4 space-y-3">
+            {/* Medição vinculada */}
+            <div>
+              <label className="text-xs font-medium">Medição vinculada *</label>
+              <Select value={selectedMedicaoId} onValueChange={setSelectedMedicaoId}>
+                <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Selecione a medição..." /></SelectTrigger>
+                <SelectContent>
+                  {allMedicoes
+                    .filter((m: any) => m.num_medicao !== "Saldo Inicial")
+                    .sort((a: any, b: any) => {
+                      const na = parseInt(a.num_medicao || "0");
+                      const nb = parseInt(b.num_medicao || "0");
+                      return na - nb;
+                    })
+                    .map((m: any) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        Nº {m.num_medicao} — {m.mes_referencia}/{m.ano_referencia} — {m.status_medicao}
+                      </SelectItem>
                     ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Tipo auto + Valor */}
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs font-medium">Tipo</label>
+                <div className="mt-1">
+                  {selectedMedicao ? (
+                    <Badge variant="outline" className={`text-xs ${TIPO_DESPESA_BADGE[tipoDespesa].cls}`}>
+                      {TIPO_DESPESA_BADGE[tipoDespesa].label}
+                    </Badge>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Selecione medição</span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium">Valor (R$) *</label>
+                <Input type="number" value={valor} onChange={(e) => setValor(e.target.value)} className="h-9 text-xs" placeholder="0,00" />
+              </div>
+              <div>
+                <label className="text-xs font-medium">Categoria</label>
+                <Select value={categoria} onValueChange={setCategoria}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIAS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Ano</label>
-                <Input type="number" value={newDespesa.ano_referencia} onChange={(e) => setNewDespesa(p => ({ ...p, ano_referencia: e.target.value }))} className="h-8 text-xs" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Valor (R$)</label>
-                <Input type="number" value={newDespesa.valor} onChange={(e) => setNewDespesa(p => ({ ...p, valor: e.target.value }))} className="h-8 text-xs" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Status</label>
-                <Select value={newDespesa.status} onValueChange={(v) => setNewDespesa(p => ({ ...p, status: v }))}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            </div>
+
+            {/* Status (only if real) */}
+            {tipoDespesa === "real" && (
+              <div className="w-48">
+                <label className="text-xs font-medium">Status</label>
+                <Select value={statusDespesa} onValueChange={setStatusDespesa}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="nao_iniciado">Não Iniciado</SelectItem>
                     <SelectItem value="em_fechamento">Em Fechamento</SelectItem>
                     <SelectItem value="fechado">Fechado</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+            )}
+
+            {/* Descrição */}
+            <div>
+              <label className="text-xs font-medium">Descrição (opcional)</label>
+              <Textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} className="text-xs min-h-[60px]" placeholder="Observações sobre a despesa..." />
             </div>
-            <div className="flex justify-end">
-              <Button size="sm" className="h-7 text-xs" onClick={handleSaveDespesa} disabled={savingDespesa}>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={resetForm}>Cancelar</Button>
+              <Button size="sm" className="h-7 text-xs" onClick={handleSaveDespesa} disabled={savingDespesa || !selectedMedicaoId}>
                 {savingDespesa ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                 Salvar
               </Button>
@@ -2339,39 +2497,164 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
         </Card>
       )}
 
+      {/* Table */}
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Medição</TableHead>
               <TableHead>Mês/Ano</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead>Categoria</TableHead>
               <TableHead className="text-right">Valor</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {despesas.map((d) => {
               const s = DESPESA_STATUS_BADGE[d.status] || DESPESA_STATUS_BADGE.nao_iniciado;
+              const tipo = TIPO_DESPESA_BADGE[d.tipo_despesa] || TIPO_DESPESA_BADGE.prevista;
+              const locked = d.is_locked;
+              const editable = canEditDespesa(d);
               return (
                 <TableRow key={d.id}>
-                  <TableCell>
+                  <TableCell className="text-xs">
+                    {d.medicao_id ? `Nº ${allMedicoes.find((m: any) => m.id === d.medicao_id)?.num_medicao || "—"}` : "—"}
+                  </TableCell>
+                  <TableCell className="text-xs">
                     <span>{d.mes_referencia}/{d.ano_referencia}</span>
                     {d.created_by_name && (
-                      <span className="text-[10px] text-muted-foreground ml-1">
-                        por {d.created_by_name}
-                      </span>
+                      <span className="text-[10px] text-muted-foreground ml-1">por {d.created_by_name}</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right font-mono">{BRL.format(d.valor)}</TableCell>
-                  <TableCell><Badge variant="secondary" className={`text-[10px] ${s.cls}`}>{s.label}</Badge></TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={`text-[10px] ${tipo.cls}`}>{tipo.label}</Badge>
+                  </TableCell>
+                  <TableCell className="text-xs">{d.categoria || "Geral"}</TableCell>
+                  <TableCell className="text-right font-mono text-xs">{BRL.format(d.valor)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Badge variant="secondary" className={`text-[10px] ${s.cls}`}>{s.label}</Badge>
+                      {locked && <Lock className="h-3 w-3 text-muted-foreground" />}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {editable ? (
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
+                        if (locked && (isAdmin || isCompanyAdmin)) {
+                          setConfirmUnlockId(d.id);
+                        } else {
+                          setEditingDespesa(d);
+                          setEditForm({ valor: String(d.valor), categoria: d.categoria || "Geral", descricao: d.descricao || "", status: d.status });
+                        }
+                      }}>
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                    ) : locked ? (
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-amber-600" onClick={() => { setEditReqDespesaId(d.id); setEditReqJustificativa(""); }}>
+                        <FileText className="h-3 w-3" />
+                      </Button>
+                    ) : null}
+                  </TableCell>
                 </TableRow>
               );
             })}
             {despesas.length === 0 && (
-              <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground py-8">Nenhuma despesa registrada.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhuma despesa registrada.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
       </div>
+
+      {/* Edit Despesa Dialog */}
+      {editingDespesa && (
+        <AlertDialog open={!!editingDespesa} onOpenChange={(o) => !o && setEditingDespesa(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Editar Despesa</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3 pt-2">
+                  <div>
+                    <label className="text-xs font-medium">Valor (R$)</label>
+                    <Input type="number" value={editForm.valor} onChange={(e) => setEditForm(p => ({ ...p, valor: e.target.value }))} className="h-9 text-xs" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">Categoria</label>
+                    <Select value={editForm.categoria} onValueChange={(v) => setEditForm(p => ({ ...p, categoria: v }))}>
+                      <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {CATEGORIAS.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">Descrição</label>
+                    <Textarea value={editForm.descricao} onChange={(e) => setEditForm(p => ({ ...p, descricao: e.target.value }))} className="text-xs min-h-[60px]" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">Status</label>
+                    <Select value={editForm.status} onValueChange={(v) => setEditForm(p => ({ ...p, status: v }))}>
+                      <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="nao_iniciado">Não Iniciado</SelectItem>
+                        <SelectItem value="em_fechamento">Em Fechamento</SelectItem>
+                        <SelectItem value="fechado">Fechado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleEditDespesa} disabled={savingDespesa}>Salvar</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Edit Request Dialog (for locked items - non-admin) */}
+      <AlertDialog open={!!editReqDespesaId} onOpenChange={(o) => !o && setEditReqDespesaId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Solicitar Edição</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 pt-2">
+                <p className="text-sm">Esta despesa está bloqueada. Descreva o motivo para solicitar desbloqueio ao administrador.</p>
+                <Textarea
+                  value={editReqJustificativa}
+                  onChange={(e) => setEditReqJustificativa(e.target.value)}
+                  placeholder="Motivo da solicitação de edição..."
+                  className="text-xs min-h-[80px]"
+                />
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleEditRequest} disabled={editReqSaving || !editReqJustificativa.trim()}>
+              Enviar Solicitação
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Admin Unlock Confirm */}
+      <AlertDialog open={!!confirmUnlockId} onOpenChange={(o) => !o && setConfirmUnlockId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desbloquear Despesa</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta despesa está bloqueada. Deseja desbloqueá-la para permitir edição? Esta ação será registrada na auditoria.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => confirmUnlockId && handleAdminUnlock(confirmUnlockId)}>Desbloquear</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

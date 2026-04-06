@@ -151,6 +151,7 @@ export interface ObraEnriched extends ObraPortfolio {
   docsCount: number;
   docsTotal: number;
   health: "green" | "yellow" | "red" | "gray";
+  pendingNotifCount?: number;
 }
 
 export interface HoldingAlert {
@@ -900,18 +901,27 @@ export default function HoldingDashboardView() {
         .from("obras_portfolio").select("*").eq("company_id", company.id).order("nome");
       const obraIds = (obrasRaw || []).map(o => o.id);
 
-      // 2. Buscar docs e medições em paralelo, com IDs já disponíveis
-      const [docsRes, medicoesRes] = await Promise.all([
+      // 2. Buscar docs, medições e notificações em paralelo
+      const [docsRes, medicoesRes, notifRes] = await Promise.all([
         obraIds.length > 0
           ? supabase.from("documentos_obra").select("*").in("obra_id", obraIds)
           : Promise.resolve({ data: [] as any[], error: null }),
         obraIds.length > 0
           ? supabase.from("medicoes_ple").select("*").in("obra_id", obraIds).order("ano_referencia", { ascending: false })
           : Promise.resolve({ data: [] as any[], error: null }),
+        obraIds.length > 0
+          ? supabase.from("system_notifications").select("obra_id").in("obra_id", obraIds).eq("resolvida", false).eq("lida", false)
+          : Promise.resolve({ data: [] as any[], error: null }),
       ]);
       const obrasData = (obrasRaw || []) as ObraPortfolio[];
       const docsData = (docsRes.data || []) as DocumentosObra[];
       const medicoesData = (medicoesRes.data || []) as MedicaoPle[];
+
+      // Build notification count map
+      const notifCountMap = new Map<string, number>();
+      (notifRes.data || []).forEach((n: any) => {
+        notifCountMap.set(n.obra_id, (notifCountMap.get(n.obra_id) || 0) + 1);
+      });
 
       const docsMap = new Map<string, DocumentosObra>();
       docsData.forEach((d) => docsMap.set(d.obra_id, d));
@@ -936,7 +946,8 @@ export default function HoldingDashboardView() {
         const latestMedicao = allMedicoes.length > 0 ? allMedicoes[allMedicoes.length - 1] : null;
         const { count: docsCount, total: docsTotal } = countDocs(docs);
         const health = calcHealth(obra, allMedicoes);
-        return { ...obra, docs, latestMedicao, allMedicoes, docsCount, docsTotal, health };
+        const pendingNotifCount = notifCountMap.get(obra.id) || 0;
+        return { ...obra, docs, latestMedicao, allMedicoes, docsCount, docsTotal, health, pendingNotifCount };
       });
     },
     enabled: !!company?.id,
@@ -1887,6 +1898,11 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
             {obra.municipio && <p className="text-[10px] text-muted-foreground truncate">📍 {obra.municipio} / {obra.estado || "RS"}</p>}
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {(obra.pendingNotifCount || 0) > 0 && (
+              <span className="bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center" title="Pendências de despesas">
+                {(obra.pendingNotifCount || 0) > 9 ? "9+" : obra.pendingNotifCount}
+              </span>
+            )}
             <Badge className={`text-[10px] ${statusCfg.className}`} variant="secondary">{statusCfg.label}</Badge>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

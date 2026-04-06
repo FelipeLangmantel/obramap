@@ -5,6 +5,12 @@ import { useConstruction } from "@/contexts/ConstructionContext";
 import { useSystemModules } from "@/hooks/useSystemModules";
 import { supabase } from "@/integrations/supabase/client";
 import { useSupplyOverdueCount } from "@/components/supplies/hooks/useSupplyOverdueCount";
+import { useNotifications } from "@/hooks/useNotifications";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+
+import { Bell, CheckCheck, AlertTriangle as AlertTriangleIcon, CheckCircle2, FileText as FileTextIcon, Clock as ClockIcon } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import {
   Sidebar,
   SidebarContent,
@@ -141,8 +147,8 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const { profile, company, signOut, isAdmin, canEdit, canAccessMenu, canAccessManagement, systemRole, isCompanyAdmin, isSystemAdmin, canAccessProject } = useAuth();
   const { projects, currentProject, setCurrentProject } = useConstruction();
   const supplyOverdueCount = useSupplyOverdueCount(currentProject?.id);
-  
-  
+  const notif = useNotifications();
+
   // ✅ Hook para governança global de módulos
   const { isModuleEnabled, isModuleBeta } = useSystemModules();
   
@@ -361,11 +367,25 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       >
         {/* Header with Logo */}
         <SidebarHeader className="px-4 py-4 border-b border-border bg-background">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 flex items-center justify-center shrink-0">
-              <img src={isDark ? obraMapLogoDark : obraMapLogoLight} alt="ObraMap" className="h-10 w-10 object-contain drop-shadow-sm" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 flex items-center justify-center shrink-0">
+                <img src={isDark ? obraMapLogoDark : obraMapLogoLight} alt="ObraMap" className="h-10 w-10 object-contain drop-shadow-sm" />
+              </div>
+              <h1 className="text-lg font-bold text-foreground tracking-tight">ObraMap</h1>
             </div>
-            <h1 className="text-lg font-bold text-foreground tracking-tight">ObraMap</h1>
+            <button
+              className="relative h-8 w-8 flex items-center justify-center rounded-md hover:bg-accent transition-colors"
+              onClick={() => { notif.setIsOpen(true); notif.loadNotifications(); }}
+              title="Notificações"
+            >
+              <Bell className="h-4 w-4 text-foreground" />
+              {notif.count > 0 && (
+                <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+                  {notif.count > 99 ? "99+" : notif.count}
+                </span>
+              )}
+            </button>
           </div>
         </SidebarHeader>
 
@@ -571,6 +591,73 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       />
       <ManageMacrosDialog open={macrosDialogOpen} onOpenChange={setMacrosDialogOpen} />
       <ManageQuadrasDialog open={quadrasDialogOpen} onOpenChange={setQuadrasDialogOpen} />
+
+      {/* Notifications Sheet */}
+      <Sheet open={notif.isOpen} onOpenChange={notif.setIsOpen}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                Notificações
+                {notif.count > 0 && (
+                  <Badge variant="destructive" className="text-[10px] px-1.5 h-5">
+                    {notif.count}
+                  </Badge>
+                )}
+              </span>
+              {notif.count > 0 && (
+                <button
+                  onClick={notif.markAllAsRead}
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                >
+                  <CheckCheck className="h-3 w-3" /> Marcar todas como lidas
+                </button>
+              )}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 space-y-2">
+            {notif.notifications.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-8">Nenhuma notificação.</p>
+            )}
+            {notif.notifications.map((n) => {
+              const iconMap: Record<string, React.ReactNode> = {
+                despesa_pendente_link: <AlertTriangleIcon className="h-4 w-4 text-amber-500" />,
+                medicao_aprovada_despesa: <CheckCircle2 className="h-4 w-4 text-emerald-500" />,
+                despesa_fechamento: <FileTextIcon className="h-4 w-4 text-blue-500" />,
+              };
+              const icon = iconMap[n.tipo] || <ClockIcon className="h-4 w-4 text-muted-foreground" />;
+              const timeAgo = formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: ptBR });
+              return (
+                <button
+                  key={n.id}
+                  className={cn(
+                    "w-full text-left p-3 rounded-lg border transition-colors",
+                    n.lida ? "bg-background" : "bg-accent/50 border-primary/20"
+                  )}
+                  onClick={() => {
+                    notif.markAsRead(n.id);
+                    notif.setIsOpen(false);
+                    navigate("/holding-despesas");
+                  }}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 shrink-0">{icon}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{n.titulo}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{n.mensagem}</p>
+                      {n.obra_nome && (
+                        <p className="text-[10px] text-primary mt-1">{n.obra_nome}</p>
+                      )}
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{timeAgo}</p>
+                    </div>
+                    {!n.lida && <div className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1.5" />}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }
