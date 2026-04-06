@@ -946,7 +946,8 @@ export default function HoldingDashboardView() {
         const latestMedicao = allMedicoes.length > 0 ? allMedicoes[allMedicoes.length - 1] : null;
         const { count: docsCount, total: docsTotal } = countDocs(docs);
         const health = calcHealth(obra, allMedicoes);
-        return { ...obra, docs, latestMedicao, allMedicoes, docsCount, docsTotal, health };
+        const pendingNotifCount = notifCountMap.get(obra.id) || 0;
+        return { ...obra, docs, latestMedicao, allMedicoes, docsCount, docsTotal, health, pendingNotifCount };
       });
     },
     enabled: !!company?.id,
