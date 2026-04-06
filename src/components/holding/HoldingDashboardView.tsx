@@ -1898,6 +1898,11 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
             {obra.municipio && <p className="text-[10px] text-muted-foreground truncate">📍 {obra.municipio} / {obra.estado || "RS"}</p>}
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {(obra.pendingNotifCount || 0) > 0 && (
+              <span className="bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center" title="Pendências de despesas">
+                {(obra.pendingNotifCount || 0) > 9 ? "9+" : obra.pendingNotifCount}
+              </span>
+            )}
             <Badge className={`text-[10px] ${statusCfg.className}`} variant="secondary">{statusCfg.label}</Badge>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
