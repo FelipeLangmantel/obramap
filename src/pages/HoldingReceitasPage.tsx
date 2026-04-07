@@ -273,55 +273,52 @@ export default function HoldingReceitasPage() {
       return { date: d, key: format(d, "yyyy-MM"), label: format(d, "MMM/yy"), monthIdx: d.getMonth(), year: d.getFullYear() };
     }), []);
 
+  // ─── Assign each medição to exactly ONE month (priority: data_previsao_medicao > mes_referencia) ───
+  const medicaoMonthMap = useMemo(() => {
+    const map = new Map<string, string>(); // medicao.id → "yyyy-MM"
+    medicoesFiltradasGlobal.forEach(m => {
+      let key: string | null = null;
+      if (m.data_previsao_medicao) {
+        const d = new Date(m.data_previsao_medicao + "T12:00:00");
+        key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      } else if (m.mes_referencia && m.ano_referencia) {
+        const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0, 3).toLowerCase());
+        if (mesIdx >= 0) {
+          key = `${m.ano_referencia}-${String(mesIdx + 1).padStart(2, "0")}`;
+        }
+      }
+      if (key) map.set(m.id, key);
+    });
+    return map;
+  }, [medicoesFiltradasGlobal]);
+
   const previsaoData = useMemo(() => {
     return previsaoMonths.map(month => {
-      const porMesRef = medicoesFiltradasGlobal.filter(m => {
-        if (!m.ano_referencia) return false;
-        const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0, 3).toLowerCase());
-        return mesIdx === month.monthIdx && m.ano_referencia === month.year;
-      });
-      const porPrevisao = medicoesFiltradasGlobal.filter(m => {
-        if (!m.data_previsao_medicao) return false;
-        const d = new Date(m.data_previsao_medicao + "T12:00:00");
-        return d.getMonth() === month.monthIdx && d.getFullYear() === month.year;
-      });
-      const obrasCount = new Set([...porMesRef, ...porPrevisao].map(m => m.obra_id)).size;
+      const monthKey = month.key;
+      const medsInMonth = medicoesFiltradasGlobal.filter(m => medicaoMonthMap.get(m.id) === monthKey);
+      const obrasCount = new Set(medsInMonth.map(m => m.obra_id)).size;
       return {
         mes: month.label,
         key: month.key,
         obrasCount,
-        aprovado: porMesRef.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
-        enviado: porMesRef.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-        pendente: porMesRef.filter(m => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
-        nfRecebido: porMesRef.filter(m => m.status_nf === "recebido").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
-        total: porMesRef.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
-        previsto: porPrevisao.reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0),
-        countPrevistas: porPrevisao.length,
+        aprovado: medsInMonth.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
+        enviado: medsInMonth.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
+        pendente: medsInMonth.filter(m => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
+        nfRecebido: medsInMonth.filter(m => m.status_nf === "recebido").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
+        total: medsInMonth.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
+        previsto: medsInMonth.reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0),
+        countPrevistas: medsInMonth.length,
       };
     });
-  }, [medicoesFiltradasGlobal, previsaoMonths]);
+  }, [medicoesFiltradasGlobal, previsaoMonths, medicaoMonthMap]);
 
   // ─── Drill-down: medições do mês selecionado na previsão ───
   const drillDownMedicoes = useMemo(() => {
     if (!selectedMonth) return [];
-    const month = previsaoMonths.find(m => m.key === selectedMonth);
-    if (!month) return [];
-    // Same filter logic as previsaoData: porMesRef union porPrevisao
-    const seen = new Set<string>();
-    const result: MedicaoCompleta[] = [];
-    medicoesFiltradasGlobal.forEach(m => {
-      if (seen.has(m.id)) return;
-      if (m.ano_referencia === month.year) {
-        const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0, 3).toLowerCase());
-        if (mesIdx === month.monthIdx) { seen.add(m.id); result.push(m); return; }
-      }
-      if (m.data_previsao_medicao) {
-        const d = new Date(m.data_previsao_medicao + "T12:00:00");
-        if (d.getMonth() === month.monthIdx && d.getFullYear() === month.year) { seen.add(m.id); result.push(m); }
-      }
-    });
-    return result.sort((a, b) => a.obra_nome.localeCompare(b.obra_nome, "pt-BR"));
-  }, [selectedMonth, medicoesFiltradasGlobal, previsaoMonths]);
+    return medicoesFiltradasGlobal
+      .filter(m => medicaoMonthMap.get(m.id) === selectedMonth)
+      .sort((a, b) => a.obra_nome.localeCompare(b.obra_nome, "pt-BR"));
+  }, [selectedMonth, medicoesFiltradasGlobal, medicaoMonthMap]);
 
 
   const programacaoData = useMemo(() => {
