@@ -182,6 +182,15 @@ export default function HoldingReceitasPage() {
   const obras = data?.obras || [];
   const medicoes = data?.medicoes || [];
 
+  // ─── Global filter (empresa + tipo contrato only) for all tabs ───
+  const medicoesFiltradasGlobal = useMemo(() => {
+    return medicoes.filter(m => {
+      if (filterEmpresa !== "all" && m.obra_empresa !== filterEmpresa) return false;
+      if (filterTipoContrato !== "all" && m.obra_tipo_contrato !== filterTipoContrato) return false;
+      return true;
+    });
+  }, [medicoes, filterEmpresa, filterTipoContrato]);
+
   // ─── KPIs ───
   const kpis = useMemo(() => {
     const src = medicoesFiltradasGlobal;
@@ -208,15 +217,6 @@ export default function HoldingReceitasPage() {
       countPendentes: pendentes.length,
     };
   }, [medicoesFiltradasGlobal]);
-
-  // ─── Global filter (empresa + tipo contrato only) for all tabs ───
-  const medicoesFiltradasGlobal = useMemo(() => {
-    return medicoes.filter(m => {
-      if (filterEmpresa !== "all" && m.obra_empresa !== filterEmpresa) return false;
-      if (filterTipoContrato !== "all" && m.obra_tipo_contrato !== filterTipoContrato) return false;
-      return true;
-    });
-  }, [medicoes, filterEmpresa, filterTipoContrato]);
 
   // ─── Fluxo Mensal ───
   const fluxoData = useMemo(() => {
