@@ -313,21 +313,19 @@ export default function HoldingReceitasPage() {
     // Same filter logic as previsaoData: porMesRef union porPrevisao
     const seen = new Set<string>();
     const result: MedicaoCompleta[] = [];
-    medicoes.forEach(m => {
+    medicoesFiltradasGlobal.forEach(m => {
       if (seen.has(m.id)) return;
-      // Match by mes_referencia/ano_referencia
       if (m.ano_referencia === month.year) {
         const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0, 3).toLowerCase());
         if (mesIdx === month.monthIdx) { seen.add(m.id); result.push(m); return; }
       }
-      // Match by data_previsao_medicao
       if (m.data_previsao_medicao) {
         const d = new Date(m.data_previsao_medicao + "T12:00:00");
         if (d.getMonth() === month.monthIdx && d.getFullYear() === month.year) { seen.add(m.id); result.push(m); }
       }
     });
     return result.sort((a, b) => a.obra_nome.localeCompare(b.obra_nome, "pt-BR"));
-  }, [selectedMonth, medicoes, previsaoMonths]);
+  }, [selectedMonth, medicoesFiltradasGlobal, previsaoMonths]);
 
 
   const programacaoData = useMemo(() => {
