@@ -192,8 +192,13 @@ export default function HoldingReceitasPage() {
     const nfRecebida = medicoes.filter(m => m.status_nf === "recebido");
 
     return {
-      // Total Geral = só medições aprovadas acatadas (exclui Saldo Inicial e enviadas não acatadas)
-      totalGeral: aprovadas.filter(m => m.num_medicao !== "Saldo Inicial").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
+      totalGeral: medicoes
+        .filter(m => m.num_medicao !== "Saldo Inicial")
+        .reduce((s, m) => {
+          if (m.status_medicao === "aprovada") return s + (Number(m.valor_acatado ?? m.valor_medicao) || 0);
+          if (m.status_medicao === "enviada") return s + (Number(m.valor_medicao) || 0);
+          return s + (Number(m.valor_previsto_medicao) || 0);
+        }, 0),
       // Aprovado: usa valor_acatado (o que o governo efetivamente aceitou)
       totalAprovado: aprovadas.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
       // Enviado/Pendente: usa valor_medicao (o que foi submetido, ainda não acatado)
