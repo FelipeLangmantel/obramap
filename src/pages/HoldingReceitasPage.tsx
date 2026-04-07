@@ -818,7 +818,7 @@ export default function HoldingReceitasPage() {
                                    </TableRow>
                                    {/* Drill-down rows */}
                                    {drillDownMedicoes.map(m => {
-                                     const desvio = m.valor_acatado != null ? (m.valor_acatado - m.valor_previsto_medicao) : null;
+                                     const desvio = (m.valor_acatado != null && m.valor_acatado > 0) ? (m.valor_acatado - m.valor_previsto_medicao) : null;
                                      const statusCfg = m.status_medicao === "aprovada"
                                        ? { label: "Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" }
                                        : m.status_medicao === "enviada"
