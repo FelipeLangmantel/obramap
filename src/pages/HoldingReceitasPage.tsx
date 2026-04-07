@@ -332,7 +332,7 @@ export default function HoldingReceitasPage() {
     const now = new Date();
     // Project PAYMENT dates based on obra's prazo_pagamento
     // The financial team needs to know WHEN money will actually arrive, not when it was sent
-    const medicoesComData = medicoes.map(m => {
+    const medicoesComData = medicoesFiltradasGlobal.map(m => {
       const prazo = m.obra_prazo_pagamento || 30;
       let dataRef: Date | null = null;
       let statusEntrada = "previsto";
