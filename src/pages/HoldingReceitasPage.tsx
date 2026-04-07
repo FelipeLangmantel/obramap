@@ -505,8 +505,14 @@ export default function HoldingReceitasPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Select value={filterEmpresa} onValueChange={setFilterEmpresa}>
+            <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="Todas Empresas" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas Empresas</SelectItem>
+              {uniqueEmpresas.map(e => <SelectItem key={e!} value={e!}>{e}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm" onClick={exportarCSV}><Download className="h-4 w-4" /> Exportar CSV</Button>
-          
         </div>
       </div>
             {/* 5 KPI Cards */}
