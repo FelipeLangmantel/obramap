@@ -279,12 +279,12 @@ export default function HoldingReceitasPage() {
 
   const previsaoData = useMemo(() => {
     return previsaoMonths.map(month => {
-      const porMesRef = medicoes.filter(m => {
+      const porMesRef = medicoesFiltradasGlobal.filter(m => {
         if (!m.ano_referencia) return false;
         const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0, 3).toLowerCase());
         return mesIdx === month.monthIdx && m.ano_referencia === month.year;
       });
-      const porPrevisao = medicoes.filter(m => {
+      const porPrevisao = medicoesFiltradasGlobal.filter(m => {
         if (!m.data_previsao_medicao) return false;
         const d = new Date(m.data_previsao_medicao + "T12:00:00");
         return d.getMonth() === month.monthIdx && d.getFullYear() === month.year;
@@ -303,7 +303,7 @@ export default function HoldingReceitasPage() {
         countPrevistas: porPrevisao.length,
       };
     });
-  }, [medicoes, previsaoMonths]);
+  }, [medicoesFiltradasGlobal, previsaoMonths]);
 
   // ─── Drill-down: medições do mês selecionado na previsão ───
   const drillDownMedicoes = useMemo(() => {
