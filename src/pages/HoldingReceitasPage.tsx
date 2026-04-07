@@ -184,34 +184,30 @@ export default function HoldingReceitasPage() {
 
   // ─── KPIs ───
   const kpis = useMemo(() => {
-    const aprovadas = medicoes.filter(m => m.status_medicao === "aprovada");
-    // enviadas = enviadas ao fiscal aguardando análise
-    const enviadas = medicoes.filter(m => m.status_medicao === "enviada");
-    // pendentes no KPI = medições previstas ainda não enviadas ao fiscal
-    const pendentes = medicoes.filter(m => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada");
-    const nfRecebida = medicoes.filter(m => m.status_nf === "recebido");
+    const src = medicoesFiltradasGlobal;
+    const aprovadas = src.filter(m => m.status_medicao === "aprovada");
+    const enviadas = src.filter(m => m.status_medicao === "enviada");
+    const pendentes = src.filter(m => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada");
+    const nfRecebida = src.filter(m => m.status_nf === "recebido");
 
     return {
-      totalGeral: medicoes
+      totalGeral: src
         .filter(m => m.num_medicao !== "Saldo Inicial")
         .reduce((s, m) => {
           if (m.status_medicao === "aprovada") return s + (Number(m.valor_acatado ?? m.valor_medicao) || 0);
           if (m.status_medicao === "enviada") return s + (Number(m.valor_medicao) || 0);
           return s + (Number(m.valor_previsto_medicao) || 0);
         }, 0),
-      // Aprovado: usa valor_acatado (o que o governo efetivamente aceitou)
       totalAprovado: aprovadas.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
-      // Enviado/Pendente: usa valor_medicao (o que foi submetido, ainda não acatado)
       totalEnviado: enviadas.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
       totalPendente: pendentes.reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
-      // NF Recebida: usa valor_acatado (valor real pago)
       totalNFRecebida: nfRecebida.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
-      totalAguardandoNF: medicoes.filter(m => m.status_nf === "aguardando_aprovacao").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
+      totalAguardandoNF: src.filter(m => m.status_nf === "aguardando_aprovacao").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
       countAprovadas: aprovadas.length,
       countEnviadas: enviadas.length,
       countPendentes: pendentes.length,
     };
-  }, [medicoes]);
+  }, [medicoesFiltradasGlobal]);
 
   // ─── Global filter (empresa + tipo contrato only) for all tabs ───
   const medicoesFiltradasGlobal = useMemo(() => {
