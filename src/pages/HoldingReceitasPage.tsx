@@ -856,11 +856,13 @@ export default function HoldingReceitasPage() {
                                      );
                                    })}
                                    {/* Drill-down footer totals */}
-                                   {(() => {
-                                     const sumPrevisto = drillDownMedicoes.reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0);
-                                     const sumAcatado = drillDownMedicoes.reduce((s, m) => s + (m.valor_acatado ?? 0), 0);
-                                     const hasAcatado = drillDownMedicoes.some(m => m.valor_acatado != null);
-                                     const sumDesvio = hasAcatado ? sumAcatado - sumPrevisto : null;
+                                    {(() => {
+                                      const sumPrevisto = drillDownMedicoes.reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0);
+                                      const medsComAcatado = drillDownMedicoes.filter(m => m.valor_acatado != null && m.valor_acatado > 0);
+                                      const sumAcatado = medsComAcatado.reduce((s, m) => s + (m.valor_acatado ?? 0), 0);
+                                      const hasAcatado = medsComAcatado.length > 0;
+                                      const sumPrevistoAcatado = medsComAcatado.reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0);
+                                      const sumDesvio = hasAcatado ? sumAcatado - sumPrevistoAcatado : null;
                                      return (
                                        <TableRow className="bg-muted/30 font-semibold text-[11px]">
                                          <TableCell colSpan={2} className="py-1.5 pl-6">Total ({drillDownMedicoes.length} medições)</TableCell>
