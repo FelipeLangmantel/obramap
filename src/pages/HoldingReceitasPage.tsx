@@ -437,7 +437,7 @@ export default function HoldingReceitasPage() {
         };
       });
     }
-  }, [medicoes, agrupamento]);
+  }, [medicoesFiltradasGlobal, agrupamento]);
 
   // ─── Insights ───
   const insights = useMemo(() => {
