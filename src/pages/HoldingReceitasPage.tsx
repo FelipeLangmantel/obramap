@@ -182,36 +182,46 @@ export default function HoldingReceitasPage() {
   const obras = data?.obras || [];
   const medicoes = data?.medicoes || [];
 
+  // ─── Global filter (empresa + tipo contrato only) for all tabs ───
+  const medicoesFiltradasGlobal = useMemo(() => {
+    return medicoes.filter(m => {
+      if (filterEmpresa !== "all" && m.obra_empresa !== filterEmpresa) return false;
+      if (filterTipoContrato !== "all" && m.obra_tipo_contrato !== filterTipoContrato) return false;
+      return true;
+    });
+  }, [medicoes, filterEmpresa, filterTipoContrato]);
+
   // ─── KPIs ───
   const kpis = useMemo(() => {
-    const aprovadas = medicoes.filter(m => m.status_medicao === "aprovada");
-    // enviadas = enviadas ao fiscal aguardando análise
-    const enviadas = medicoes.filter(m => m.status_medicao === "enviada");
-    // pendentes no KPI = medições previstas ainda não enviadas ao fiscal
-    const pendentes = medicoes.filter(m => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada");
-    const nfRecebida = medicoes.filter(m => m.status_nf === "recebido");
+    const src = medicoesFiltradasGlobal;
+    const aprovadas = src.filter(m => m.status_medicao === "aprovada");
+    const enviadas = src.filter(m => m.status_medicao === "enviada");
+    const pendentes = src.filter(m => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada");
+    const nfRecebida = src.filter(m => m.status_nf === "recebido");
 
     return {
-      // Total Geral = só medições aprovadas acatadas (exclui Saldo Inicial e enviadas não acatadas)
-      totalGeral: aprovadas.filter(m => m.num_medicao !== "Saldo Inicial").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
-      // Aprovado: usa valor_acatado (o que o governo efetivamente aceitou)
+      totalGeral: src
+        .filter(m => m.num_medicao !== "Saldo Inicial")
+        .reduce((s, m) => {
+          if (m.status_medicao === "aprovada") return s + (Number(m.valor_acatado ?? m.valor_medicao) || 0);
+          if (m.status_medicao === "enviada") return s + (Number(m.valor_medicao) || 0);
+          return s + (Number(m.valor_previsto_medicao) || 0);
+        }, 0),
       totalAprovado: aprovadas.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
-      // Enviado/Pendente: usa valor_medicao (o que foi submetido, ainda não acatado)
       totalEnviado: enviadas.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
       totalPendente: pendentes.reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
-      // NF Recebida: usa valor_acatado (valor real pago)
       totalNFRecebida: nfRecebida.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
-      totalAguardandoNF: medicoes.filter(m => m.status_nf === "aguardando_aprovacao").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
+      totalAguardandoNF: src.filter(m => m.status_nf === "aguardando_aprovacao").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
       countAprovadas: aprovadas.length,
       countEnviadas: enviadas.length,
       countPendentes: pendentes.length,
     };
-  }, [medicoes]);
+  }, [medicoesFiltradasGlobal]);
 
   // ─── Fluxo Mensal ───
   const fluxoData = useMemo(() => {
     const monthMap: Record<string, { mes: string; aprovado: number; enviado: number; pendente: number; nf_recebido: number }> = {};
-    medicoes.forEach(m => {
+    medicoesFiltradasGlobal.forEach(m => {
       if (!m.mes_referencia || !m.ano_referencia) return;
       const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === m.mes_referencia!.substring(0, 3).toLowerCase());
       if (mesIdx < 0) return;
@@ -224,7 +234,7 @@ export default function HoldingReceitasPage() {
       if (m.status_nf === "recebido") monthMap[key].nf_recebido += Number(m.valor_acatado ?? m.valor_medicao) || 0;
     });
     return Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
-  }, [medicoes]);
+  }, [medicoesFiltradasGlobal]);
 
   // ─── Filters ───
   const medicoesFiltradas = useMemo(() => {
@@ -265,12 +275,12 @@ export default function HoldingReceitasPage() {
 
   const previsaoData = useMemo(() => {
     return previsaoMonths.map(month => {
-      const porMesRef = medicoes.filter(m => {
+      const porMesRef = medicoesFiltradasGlobal.filter(m => {
         if (!m.ano_referencia) return false;
         const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0, 3).toLowerCase());
         return mesIdx === month.monthIdx && m.ano_referencia === month.year;
       });
-      const porPrevisao = medicoes.filter(m => {
+      const porPrevisao = medicoesFiltradasGlobal.filter(m => {
         if (!m.data_previsao_medicao) return false;
         const d = new Date(m.data_previsao_medicao + "T12:00:00");
         return d.getMonth() === month.monthIdx && d.getFullYear() === month.year;
@@ -289,7 +299,7 @@ export default function HoldingReceitasPage() {
         countPrevistas: porPrevisao.length,
       };
     });
-  }, [medicoes, previsaoMonths]);
+  }, [medicoesFiltradasGlobal, previsaoMonths]);
 
   // ─── Drill-down: medições do mês selecionado na previsão ───
   const drillDownMedicoes = useMemo(() => {
@@ -299,28 +309,26 @@ export default function HoldingReceitasPage() {
     // Same filter logic as previsaoData: porMesRef union porPrevisao
     const seen = new Set<string>();
     const result: MedicaoCompleta[] = [];
-    medicoes.forEach(m => {
+    medicoesFiltradasGlobal.forEach(m => {
       if (seen.has(m.id)) return;
-      // Match by mes_referencia/ano_referencia
       if (m.ano_referencia === month.year) {
         const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0, 3).toLowerCase());
         if (mesIdx === month.monthIdx) { seen.add(m.id); result.push(m); return; }
       }
-      // Match by data_previsao_medicao
       if (m.data_previsao_medicao) {
         const d = new Date(m.data_previsao_medicao + "T12:00:00");
         if (d.getMonth() === month.monthIdx && d.getFullYear() === month.year) { seen.add(m.id); result.push(m); }
       }
     });
     return result.sort((a, b) => a.obra_nome.localeCompare(b.obra_nome, "pt-BR"));
-  }, [selectedMonth, medicoes, previsaoMonths]);
+  }, [selectedMonth, medicoesFiltradasGlobal, previsaoMonths]);
 
 
   const programacaoData = useMemo(() => {
     const now = new Date();
     // Project PAYMENT dates based on obra's prazo_pagamento
     // The financial team needs to know WHEN money will actually arrive, not when it was sent
-    const medicoesComData = medicoes.map(m => {
+    const medicoesComData = medicoesFiltradasGlobal.map(m => {
       const prazo = m.obra_prazo_pagamento || 30;
       let dataRef: Date | null = null;
       let statusEntrada = "previsto";
@@ -425,7 +433,7 @@ export default function HoldingReceitasPage() {
         };
       });
     }
-  }, [medicoes, agrupamento]);
+  }, [medicoesFiltradasGlobal, agrupamento]);
 
   // ─── Insights ───
   const insights = useMemo(() => {
@@ -497,8 +505,14 @@ export default function HoldingReceitasPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Select value={filterEmpresa} onValueChange={setFilterEmpresa}>
+            <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="Todas Empresas" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas Empresas</SelectItem>
+              {uniqueEmpresas.map(e => <SelectItem key={e!} value={e!}>{e}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm" onClick={exportarCSV}><Download className="h-4 w-4" /> Exportar CSV</Button>
-          
         </div>
       </div>
             {/* 5 KPI Cards */}
@@ -818,7 +832,7 @@ export default function HoldingReceitasPage() {
                                    </TableRow>
                                    {/* Drill-down rows */}
                                    {drillDownMedicoes.map(m => {
-                                     const desvio = m.valor_acatado != null ? (m.valor_acatado - m.valor_previsto_medicao) : null;
+                                     const desvio = (m.valor_acatado != null && m.valor_acatado > 0) ? (m.valor_acatado - m.valor_previsto_medicao) : null;
                                      const statusCfg = m.status_medicao === "aprovada"
                                        ? { label: "Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" }
                                        : m.status_medicao === "enviada"
@@ -832,7 +846,7 @@ export default function HoldingReceitasPage() {
                                            <Badge className={`text-[9px] px-1.5 py-0 ${statusCfg.cls}`}>{statusCfg.label}</Badge>
                                          </TableCell>
                                          <TableCell className="py-1.5 text-right">{m.valor_previsto_medicao > 0 ? BRL.format(m.valor_previsto_medicao) : "—"}</TableCell>
-                                         <TableCell className="py-1.5 text-right">{m.valor_acatado != null ? BRL.format(m.valor_acatado) : "—"}</TableCell>
+                                         <TableCell className="py-1.5 text-right">{(m.valor_acatado != null && m.valor_acatado > 0) ? BRL.format(m.valor_acatado) : "—"}</TableCell>
                                          <TableCell className="py-1.5 text-right">
                                            {desvio != null ? (
                                              <span className={desvio > 0 ? "text-emerald-600" : desvio < 0 ? "text-destructive" : "text-muted-foreground"}>
