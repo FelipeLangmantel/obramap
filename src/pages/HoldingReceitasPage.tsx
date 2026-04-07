@@ -832,7 +832,7 @@ export default function HoldingReceitasPage() {
                                            <Badge className={`text-[9px] px-1.5 py-0 ${statusCfg.cls}`}>{statusCfg.label}</Badge>
                                          </TableCell>
                                          <TableCell className="py-1.5 text-right">{m.valor_previsto_medicao > 0 ? BRL.format(m.valor_previsto_medicao) : "—"}</TableCell>
-                                         <TableCell className="py-1.5 text-right">{m.valor_acatado != null ? BRL.format(m.valor_acatado) : "—"}</TableCell>
+                                         <TableCell className="py-1.5 text-right">{(m.valor_acatado != null && m.valor_acatado > 0) ? BRL.format(m.valor_acatado) : "—"}</TableCell>
                                          <TableCell className="py-1.5 text-right">
                                            {desvio != null ? (
                                              <span className={desvio > 0 ? "text-emerald-600" : desvio < 0 ? "text-destructive" : "text-muted-foreground"}>
