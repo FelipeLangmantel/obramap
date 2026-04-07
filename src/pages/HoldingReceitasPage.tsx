@@ -213,10 +213,19 @@ export default function HoldingReceitasPage() {
     };
   }, [medicoes]);
 
+  // ─── Global filter (empresa + tipo contrato only) for all tabs ───
+  const medicoesFiltradasGlobal = useMemo(() => {
+    return medicoes.filter(m => {
+      if (filterEmpresa !== "all" && m.obra_empresa !== filterEmpresa) return false;
+      if (filterTipoContrato !== "all" && m.obra_tipo_contrato !== filterTipoContrato) return false;
+      return true;
+    });
+  }, [medicoes, filterEmpresa, filterTipoContrato]);
+
   // ─── Fluxo Mensal ───
   const fluxoData = useMemo(() => {
     const monthMap: Record<string, { mes: string; aprovado: number; enviado: number; pendente: number; nf_recebido: number }> = {};
-    medicoes.forEach(m => {
+    medicoesFiltradasGlobal.forEach(m => {
       if (!m.mes_referencia || !m.ano_referencia) return;
       const mesIdx = MONTHS.findIndex(mn => mn.toLowerCase() === m.mes_referencia!.substring(0, 3).toLowerCase());
       if (mesIdx < 0) return;
@@ -229,7 +238,7 @@ export default function HoldingReceitasPage() {
       if (m.status_nf === "recebido") monthMap[key].nf_recebido += Number(m.valor_acatado ?? m.valor_medicao) || 0;
     });
     return Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
-  }, [medicoes]);
+  }, [medicoesFiltradasGlobal]);
 
   // ─── Filters ───
   const medicoesFiltradas = useMemo(() => {
