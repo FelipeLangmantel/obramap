@@ -418,7 +418,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
               <p className="text-[10px] text-muted-foreground mb-2">
                 {obrasOnMap.length} obra{obrasOnMap.length !== 1 ? "s" : ""} mapeada{obrasOnMap.length !== 1 ? "s" : ""} · clique para abrir
               </p>
-              <HoldingMap obras={mapObras} onObraClick={onObraClick} />
+              <HoldingMap ref={mapRef} obras={mapObras} onObraClick={onObraClick} />
               {obrasOnMap.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-lg">
                   <p className="text-xs text-muted-foreground text-center px-4">Informe o município ao cadastrar cada obra para visualizá-la no mapa do RS</p>
