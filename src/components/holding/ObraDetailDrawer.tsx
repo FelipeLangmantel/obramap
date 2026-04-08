@@ -1438,6 +1438,54 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     setConfirmAcatamento(true);
   };
 
+  // ─── ADMIN CORRECTION: save envio fields without changing status ───
+  const handleSaveEnvioCorrecao = async () => {
+    if (!requireEdit() || !editingMedicao || !isAdmin) return;
+    const payload: any = {
+      data_envio: editForm.data_envio || null,
+      valor_medicao: editForm.valor_medicao || 0,
+      updated_by_user_id: userId,
+      updated_by_name: userName,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("medicoes_ple").update(payload).eq("id", editingMedicao.id);
+    if (error) { toast.error("Erro ao salvar correção de envio."); return; }
+    await registrarLog(obraId, "medicoes_ple", editingMedicao.id, "corrigiu",
+      `Admin corrigiu envio Nº ${editForm.num_medicao} — Valor: ${BRL.format(editForm.valor_medicao)}`,
+      userId, userName, { data_envio: editingMedicao.data_envio, valor_medicao: editingMedicao.valor_medicao }, payload);
+    await recalcularPercentualAndamento(obraId, valorContrato);
+    toast.success("Correção de envio salva!");
+    invalidateHolding();
+    setEditingMedicao(null);
+    load();
+  };
+
+  // ─── ADMIN CORRECTION: save acatamento fields without changing status ───
+  const handleSaveAcatamentoCorrecao = async () => {
+    if (!requireEdit() || !editingMedicao || !isAdmin) return;
+    if (editForm.valor_acatado > editForm.valor_medicao) {
+      toast.error("❌ Valor acatado não pode ser maior que o valor realizado.");
+      return;
+    }
+    const payload: any = {
+      data_aprovacao: editForm.data_aprovacao || null,
+      valor_acatado: editForm.valor_acatado || 0,
+      updated_by_user_id: userId,
+      updated_by_name: userName,
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabase.from("medicoes_ple").update(payload).eq("id", editingMedicao.id);
+    if (error) { toast.error("Erro ao salvar correção de acatamento."); return; }
+    await registrarLog(obraId, "medicoes_ple", editingMedicao.id, "corrigiu",
+      `Admin corrigiu acatamento Nº ${editForm.num_medicao} — Acatado: ${BRL.format(editForm.valor_acatado)}`,
+      userId, userName, { data_aprovacao: editingMedicao.data_aprovacao, valor_acatado: editingMedicao.valor_acatado }, payload);
+    await recalcularPercentualAndamento(obraId, valorContrato);
+    toast.success("Correção de acatamento salva!");
+    invalidateHolding();
+    setEditingMedicao(null);
+    load();
+  };
+
   // ─── REGISTER RECEBIMENTO (NF + pagamento) ───
   const doRegistrarRecebimento = async () => {
     if (!requireEdit() || !editingMedicao) return;
@@ -1693,6 +1741,13 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
                     <Button size="sm" onClick={handleRegistrarEnvio}>Registrar Envio</Button>
                   </div>
                 )}
+                {(status === "enviada" || status === "aprovada") && isAdmin && (
+                  <div className="flex justify-end">
+                    <Button size="sm" variant="outline" onClick={handleSaveEnvioCorrecao}>
+                      Salvar Correção de Envio
+                    </Button>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1735,6 +1790,13 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
                 {status === "enviada" && (
                   <div className="flex justify-end">
                     <Button size="sm" onClick={handleRegistrarAcatamento}>Registrar Acatamento</Button>
+                  </div>
+                )}
+                {status === "aprovada" && isAdmin && (
+                  <div className="flex justify-end">
+                    <Button size="sm" variant="outline" onClick={handleSaveAcatamentoCorrecao}>
+                      Salvar Correção de Acatamento
+                    </Button>
                   </div>
                 )}
               </>
