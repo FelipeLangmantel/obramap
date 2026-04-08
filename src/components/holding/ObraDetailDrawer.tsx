@@ -194,9 +194,14 @@ function ResumoTab({ obra }: { obra: ObraDrawerData }) {
       .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
 
     // ── Saldo Inicial — faturamento anterior ao sistema ──
-    const totalMedidoInicial = medicoes
+    // Prioridade: medição "Saldo Inicial" aprovada no banco;
+    // fallback: obra.valor_medido_inicial (campo direto em obras_portfolio)
+    const totalMedidoInicialMedicao = medicoes
       .filter(m => m.num_medicao === "Saldo Inicial" && m.status_medicao === "aprovada")
       .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+    const totalMedidoInicial = totalMedidoInicialMedicao > 0
+      ? totalMedidoInicialMedicao
+      : (Number(obra.valor_medido_inicial) || 0);
 
     // ── Total medido = acatado real + saldo inicial (sem fallback de %) ──
     const totalMedido = totalAcatadoReal + totalMedidoInicial;
