@@ -1206,7 +1206,9 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     };
   }, [obraId, load]);
 
-  const baseJaComprometida = hasInitialBalance ? (valorMedidoInicial || 0) : 0;
+  // baseJaComprometida: usa valor_medido_inicial diretamente (independente da flag)
+  // has_initial_balance pode ser false mesmo com valor lançado no campo
+  const baseJaComprometida = valorMedidoInicial > 0 ? valorMedidoInicial : 0;
 
   const saldoDisponivel = useMemo(() => {
     if (valorContrato === 0) return Infinity;

@@ -220,18 +220,19 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
     return filteredObras.map(o => {
       // valor_acatado é a fonte de verdade para medições aprovadas (regra de domínio)
       const medAprovadas = medicoesData
-        .filter(m => m.obra_id === o.id && m.status_medicao === "aprovada")
+        .filter(m => m.obra_id === o.id && m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial")
         .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+      const realizado = medAprovadas + (Number((o as any).valor_medido_inicial) || 0);
       // Apenas despesas reais — previstas são orçamentos futuros, não gastos confirmados
       const despesas = despesasData
         .filter(d => d.obra_id === o.id && d.tipo_despesa === "real")
         .reduce((s: number, d: any) => s + (d.valor || 0), 0);
-      const roi = medAprovadas > 0 && despesas > 0 ? ((medAprovadas - despesas) / despesas) * 100 : 0;
+      const roi = realizado > 0 && despesas > 0 ? ((realizado - despesas) / despesas) * 100 : 0;
       return {
         nome: o.uh ? `${o.nome.slice(0, 12)}… (${o.uh}UH)` : (o.nome.length > 14 ? o.nome.slice(0, 12) + "…" : o.nome),
         fullNome: o.nome,
         previsto: o.valor_contrato || 0,
-        realizado: medAprovadas,
+        realizado,
         despesas,
         roi: Math.round(roi * 10) / 10,
       };

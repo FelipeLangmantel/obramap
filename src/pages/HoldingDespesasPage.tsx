@@ -46,6 +46,7 @@ interface ObraBasic {
   valor_contrato: number;
   uh: number | null;
   aditivo_valor_total: number;
+  valor_medido_inicial: number;
 }
 
 // ─── Formatters ───
@@ -77,7 +78,7 @@ export default function HoldingDespesasPage() {
       // Buscar obras primeiro para ter os IDs (evita buscar dados de outras empresas)
       const { data: obrasRaw } = await supabase
         .from("obras_portfolio")
-        .select("id, nome, empresa, num_contrato, valor_contrato, uh, aditivo_valor_total")
+        .select("id, nome, empresa, num_contrato, valor_contrato, uh, aditivo_valor_total, valor_medido_inicial")
         .eq("company_id", company!.id);
 
       const obras: ObraBasic[] = obrasRaw || [];
@@ -188,7 +189,8 @@ export default function HoldingDespesasPage() {
   const prdData = useMemo(() => {
     return obras.map(o => {
       const previsto = (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
-      const realizado = medicoes.filter((m: any) => m.obra_id === o.id && m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+      const realizadoMedicoes = medicoes.filter((m: any) => m.obra_id === o.id && m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+      const realizado = realizadoMedicoes + (Number(o.valor_medido_inicial) || 0);
       const desp = despesas.filter(d => d.obra_id === o.id && d.tipo_despesa === "real").reduce((s, d) => s + d.valor, 0);
       const saldo = realizado - desp;
       const roi = desp > 0 ? ((realizado - desp) / desp) * 100 : 0;

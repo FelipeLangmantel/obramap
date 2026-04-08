@@ -29,6 +29,7 @@ interface ObraFull {
   data_inicio: string | null; prazo_dias: number; uh: number | null; status: string;
   aditivo_valor_total: number;
   obramap_project_id: string | null;
+  valor_medido_inicial: number;
 }
 
 interface MonthEntry {
@@ -48,7 +49,7 @@ export default function HoldingPrdPage() {
     queryKey: ["holding-prd", company?.id],
     queryFn: async () => {
       const [obrasRes, medRes, despRes] = await Promise.all([
-        supabase.from("obras_portfolio").select("id, nome, empresa, valor_contrato, aditivo_valor_total, data_inicio, prazo_dias, uh, status, obramap_project_id").eq("company_id", company!.id),
+        supabase.from("obras_portfolio").select("id, nome, empresa, valor_contrato, aditivo_valor_total, data_inicio, prazo_dias, uh, status, obramap_project_id, valor_medido_inicial").eq("company_id", company!.id),
         supabase.from("medicoes_ple").select("id, obra_id, num_medicao, mes_referencia, ano_referencia, status_medicao, valor_medicao, valor_acatado, valor_previsto_medicao, data_previsao_medicao, data_envio"),
         supabase.from("despesas_mensais").select("id, obra_id, mes_referencia, ano_referencia, valor, status, tipo_despesa"),
       ]);
@@ -281,9 +282,12 @@ export default function HoldingPrdPage() {
     obraMonthData.forEach(({ months }) => {
       months.filter(m => m.key <= nowKey).forEach(m => { previstoAcum += m.previsto; });
     });
-    const realizadoAcum = medicoes
+    const realizadoAcumMedicoes = medicoes
       .filter((m: any) => obraIds.has(m.obra_id) && m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial")
       .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+    const realizadoAcumInicial = obras
+      .reduce((s: number, o: ObraFull) => s + (Number(o.valor_medido_inicial) || 0), 0);
+    const realizadoAcum = realizadoAcumMedicoes + realizadoAcumInicial;
     const despesasAcum = despesas
       .filter((d: any) => obraIds.has(d.obra_id) && d.tipo_despesa === "real")
       .reduce((s: number, d: any) => s + (Number(d.valor) || 0), 0);
@@ -296,7 +300,8 @@ export default function HoldingPrdPage() {
     return obrasComDados.map(o => {
       const entry = obraMonthData.get(o.id);
       const previsto = entry ? entry.months.reduce((s, m) => s + m.previsto, 0) : (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
-      const realizado = medicoes.filter((m: any) => m.obra_id === o.id && m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+      const realizadoMedicoes = medicoes.filter((m: any) => m.obra_id === o.id && m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+      const realizado = realizadoMedicoes + (Number(o.valor_medido_inicial) || 0);
       const desp = despesas.filter((d: any) => d.obra_id === o.id && d.tipo_despesa === "real").reduce((s: number, d: any) => s + (Number(d.valor) || 0), 0);
       const exec = previsto > 0 ? (realizado / previsto) * 100 : 0;
       const saldo = realizado - desp;
