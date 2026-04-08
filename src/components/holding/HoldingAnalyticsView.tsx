@@ -179,7 +179,8 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
   const [analyticsFilter, setAnalyticsFilter] = useState("all");
 
   const obraIds = obras.map(o => o.id).join(",");
-  useEffect(() => {
+
+  const fetchAnalyticsData = () => {
     if (obras.length === 0) return;
     const ids = obras.map(o => o.id);
     Promise.all([
@@ -189,6 +190,22 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
       setMedicoesData(medRes.data || []);
       setDespesasData(despRes.data || []);
     });
+  };
+
+  // Fetch inicial quando lista de obras muda
+  useEffect(() => {
+    fetchAnalyticsData();
+  }, [obraIds]);
+
+  // Realtime: re-fetch quando medições ou despesas mudam
+  useEffect(() => {
+    if (obras.length === 0) return;
+    const channel = supabase
+      .channel("analytics-data-refresh")
+      .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, fetchAnalyticsData)
+      .on("postgres_changes", { event: "*", schema: "public", table: "despesas_mensais" }, fetchAnalyticsData)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [obraIds]);
 
   // Filter obras by empresa
@@ -201,11 +218,13 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
   // PRD chart data
   const prdData = useMemo(() => {
     return filteredObras.map(o => {
+      // valor_acatado é a fonte de verdade para medições aprovadas (regra de domínio)
       const medAprovadas = medicoesData
         .filter(m => m.obra_id === o.id && m.status_medicao === "aprovada")
-        .reduce((s: number, m: any) => s + (m.valor_medicao || 0), 0);
+        .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+      // Apenas despesas reais — previstas são orçamentos futuros, não gastos confirmados
       const despesas = despesasData
-        .filter(d => d.obra_id === o.id)
+        .filter(d => d.obra_id === o.id && d.tipo_despesa === "real")
         .reduce((s: number, d: any) => s + (d.valor || 0), 0);
       const roi = medAprovadas > 0 && despesas > 0 ? ((medAprovadas - despesas) / despesas) * 100 : 0;
       return {
@@ -230,11 +249,12 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
       const key = monthKey(m.mes_referencia, m.ano_referencia);
       if (!key) return;
       if (!monthMap[key]) monthMap[key] = { receita: 0, despesa: 0, sortKey: (m.ano_referencia || 0) * 100 + MONTH_NAMES.indexOf(key.split("/")[0]) };
-      monthMap[key].receita += m.valor_medicao || 0;
+      monthMap[key].receita += (Number(m.valor_acatado ?? m.valor_medicao) || 0);
     });
 
     despesasData.forEach((d: any) => {
       if (!filteredIds.has(d.obra_id)) return;
+      if (d.tipo_despesa !== "real") return; // apenas despesas confirmadas
       const key = monthKey(d.mes_referencia, d.ano_referencia);
       if (!key) return;
       if (!monthMap[key]) monthMap[key] = { receita: 0, despesa: 0, sortKey: (d.ano_referencia || 0) * 100 + MONTH_NAMES.indexOf(key.split("/")[0]) };
