@@ -307,6 +307,9 @@ export default function HoldingReceitasPage() {
         nfRecebido: medsInMonth.filter(m => m.status_nf === "recebido").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
         total: medsInMonth.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
         previsto: medsInMonth.reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0),
+        // previstoDasAprovadas: valor previsto apenas das medições já aprovadas no mês
+        // Usado no desvio para comparar realizado vs o que era esperado para AQUELAS medições
+        previstoDasAprovadas: medsInMonth.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0),
         countPrevistas: medsInMonth.length,
       };
     });
@@ -809,8 +812,10 @@ export default function HoldingReceitasPage() {
                                  <TableCell className="py-2 text-right text-emerald-500">{p.nfRecebido > 0 ? BRL.format(p.nfRecebido) : "—"}</TableCell>
                                  <TableCell className="py-2 text-right font-bold">{p.total > 0 ? BRL.format(p.total) : "—"}</TableCell>
                                  <TableCell className="py-2 text-right">
-                                   {p.previsto > 0 && p.total > 0 ? (() => {
-                                     const desvio = p.total - p.previsto;
+                                   {p.previstoDasAprovadas > 0 && p.total > 0 ? (() => {
+                                     // Desvio: realizado (acatado) vs previsto das MESMAS medições aprovadas
+                                     // Evita comparação entre aprovadas e total esperado do mês (incluiria pendentes)
+                                     const desvio = p.total - p.previstoDasAprovadas;
                                      return <span className={desvio >= 0 ? "text-emerald-600" : "text-amber-600"}>{desvio >= 0 ? "+" : ""}{BRL_SHORT(Math.abs(desvio))}</span>;
                                    })() : "—"}
                                  </TableCell>

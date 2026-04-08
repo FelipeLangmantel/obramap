@@ -729,6 +729,11 @@ export default function HoldingDashboardView() {
       planejador_telefone: newObraForm.planejador_telefone?.replace(/\D/g, "") || null,
       tipo_contrato: newObraForm.tipo_contrato || null,
       valor_medido_inicial: newObraForm.valor_medido_inicial || 0,
+      // Se há valor faturado fora do sistema e valor de contrato, calcular % financeiro inicial
+      // Evita que nova obra entre com percentual_financeiro = 0 quando já tem execução prévia
+      ...(newObraForm.valor_medido_inicial > 0 && (Number(newObraForm.valor_contrato) || 0) > 0
+        ? { percentual_financeiro: Math.min(100, (newObraForm.valor_medido_inicial / (Number(newObraForm.valor_contrato) || 1)) * 100) }
+        : {}),
     } as any;
 
     // Geocode if municipio changed or coordinates are missing

@@ -40,6 +40,8 @@ export function useNotifications() {
       .from("system_notifications")
       .select("*, obras_portfolio!system_notifications_obra_id_fkey(nome)")
       .eq("company_id", company.id)
+      .eq("resolvida", false)   // só pendentes — resolvidas não devem aparecer no painel
+      .order("lida", { ascending: true })   // não lidas primeiro
       .order("created_at", { ascending: false })
       .limit(30);
 
