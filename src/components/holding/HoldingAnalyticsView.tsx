@@ -426,43 +426,49 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
               )}
             </div>
 
-            {/* Sidebar List */}
+            {/* Sidebar List — Grouped by City */}
             <div className="flex flex-col border-l border-border/40 pl-3">
               <p className="text-xs font-semibold text-foreground mb-2 sticky top-0 bg-card py-1 z-10 flex items-center justify-between">
-                <span>Obras ({filteredObras.length})</span>
+                <span>Cidades ({cityGroups.length})</span>
               </p>
               <div className="flex flex-col gap-0.5 max-h-[450px] overflow-y-auto pr-1">
-                {[...filteredObras]
-                  .sort((a, b) => (b.valor_contrato || 0) - (a.valor_contrato || 0))
-                  .map((obra) => {
-                    const isHov = hoveredObra === obra.id;
-                    const hc = HEALTH_PIN[obra.health] || "#3b82f6";
-                    const isOnMap = !!CITY_COORDS[obra.municipio || ""];
-                    return (
+                {cityGroups.map(({ municipio, obras: cityObras, coords }) => {
+                  const totalValor = cityObras.reduce((s, o) => s + (o.valor_contrato || 0), 0);
+                  const dominant = cityObras.some(o => o.health === "red") ? "red" : cityObras.some(o => o.health === "yellow") ? "yellow" : "green";
+                  const hc = HEALTH_PIN[dominant] || "#3b82f6";
+                  return (
+                    <div key={municipio} className="border-b border-border/30 last:border-0">
                       <button
-                        key={obra.id}
-                        className={`flex items-center gap-2 w-full text-left px-2.5 py-2 rounded-md text-xs transition-colors hover:bg-muted/60 border-b border-border/30 last:border-0 ${isHov ? "bg-muted/80 ring-1 ring-primary/30" : ""}`}
-                        onMouseEnter={() => setHoveredObra(obra.id)}
-                        onMouseLeave={() => setHoveredObra(null)}
-                        onClick={() => onObraClick(obra.id)}
+                        className="flex items-center gap-2 w-full text-left px-2.5 py-2 rounded-md text-xs transition-colors hover:bg-muted/60"
+                        onClick={() => {
+                          if (coords) mapRef.current?.flyTo(coords.lat, coords.lng, 11);
+                        }}
                       >
                         <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: hc }} />
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-foreground truncate text-xs">{obra.nome}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">{obra.municipio || obra.empresa || "—"}</p>
-                          {obra.tipo_contrato && <Badge variant="outline" className="text-[8px] h-3.5 px-1 mt-0.5">{obra.tipo_contrato}</Badge>}
+                          <p className="font-medium text-foreground text-xs">{municipio || "Sem município"} <span className="text-muted-foreground">({cityObras.length})</span></p>
                         </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
-                            {obra.valor_contrato >= 1_000_000
-                              ? `R$ ${(obra.valor_contrato / 1_000_000).toFixed(1)}M`
-                              : `R$ ${(obra.valor_contrato / 1_000).toFixed(0)}k`}
-                          </p>
-                          {!isOnMap && <p className="text-[8px] text-amber-500">sem coords</p>}
-                        </div>
+                        <p className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
+                          {totalValor >= 1_000_000
+                            ? `R$ ${(totalValor / 1_000_000).toFixed(1)}M`
+                            : `R$ ${(totalValor / 1_000).toFixed(0)}k`}
+                        </p>
                       </button>
-                    );
-                  })}
+                      <div className="pl-5 pb-1">
+                        {cityObras.map(obra => (
+                          <button
+                            key={obra.id}
+                            className="flex items-center gap-1.5 w-full text-left px-2 py-1 rounded text-[10px] transition-colors hover:bg-muted/40"
+                            onClick={() => onObraClick(obra.id)}
+                          >
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ background: HEALTH_PIN[obra.health] || "#3b82f6" }} />
+                            <span className="truncate flex-1 text-muted-foreground">{obra.nome}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
