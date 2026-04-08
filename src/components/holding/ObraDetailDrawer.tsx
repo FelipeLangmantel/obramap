@@ -3134,6 +3134,11 @@ function HistoricoTab({ obraId }: { obraId: string }) {
                       {ACAO_ICON[log.acao] || "•"} {log.realizado_por_nome}
                     </span>
                     {" "}<span className="text-muted-foreground">{log.descricao}</span>
+                    {log.tabela && TABELA_BADGE[log.tabela] && (
+                      <Badge variant="secondary" className={`text-[9px] ml-1.5 px-1 py-0 ${TABELA_BADGE[log.tabela].cls}`}>
+                        {TABELA_BADGE[log.tabela].label}
+                      </Badge>
+                    )}
                   </p>
                   <span className="text-[10px] text-muted-foreground shrink-0 whitespace-nowrap">
                     {dataFmt} {horaFmt}
