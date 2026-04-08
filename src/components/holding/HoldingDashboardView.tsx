@@ -471,7 +471,7 @@ export function calcHealthDetails(
    ══════════════════════════════════════════════════════════════ */
 
 export default function HoldingDashboardView() {
-  const { company, isCompanyAdmin, canEdit } = useAuth();
+  const { company, isCompanyAdmin, canEdit, user, profile } = useAuth();
 
   // Load thresholds from localStorage on mount
   useEffect(() => {
@@ -806,7 +806,24 @@ export default function HoldingDashboardView() {
       const { data, error } = await supabase.from("obras_portfolio").insert(payload).select("id").single();
       if (error || !data) { toast.error("Erro ao cadastrar obra."); setSavingObra(false); return; }
       await supabase.from("documentos_obra").insert({ obra_id: data.id });
+      // Audit log — nova obra
+      await supabase.from("holding_audit_log").insert({
+        obra_id: data.id, tabela: "obras_portfolio", registro_id: data.id,
+        acao: "criou", descricao: `Cadastrou obra "${newObraForm.nome}" — ${newObraForm.tipo_contrato || "N/A"} — ${newObraForm.municipio || ""}`,
+        dados_anteriores: {}, dados_novos: { nome: newObraForm.nome, valor_contrato: newObraForm.valor_contrato, empresa: newObraForm.empresa },
+        realizado_por: user?.id, realizado_por_nome: profile?.name || "Usuário",
+      } as any);
       toast.success("Obra cadastrada com sucesso!");
+    }
+    // Audit log — edição (quando editingObra)
+    if (editingObra) {
+      await supabase.from("holding_audit_log").insert({
+        obra_id: editingObra.id, tabela: "obras_portfolio", registro_id: editingObra.id,
+        acao: "editou", descricao: `Editou obra "${newObraForm.nome}"`,
+        dados_anteriores: { nome: editingObra.nome, valor_contrato: editingObra.valor_contrato },
+        dados_novos: { nome: newObraForm.nome, valor_contrato: newObraForm.valor_contrato, empresa: newObraForm.empresa },
+        realizado_por: user?.id, realizado_por_nome: profile?.name || "Usuário",
+      } as any);
     }
     queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
     queryClient.invalidateQueries({ queryKey: ["holding-aditivos-pendentes", company?.id] });

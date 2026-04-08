@@ -545,14 +545,21 @@ function formatFileSize(bytes: number) {
 }
 
 function DocumentosTab({ obraId }: { obraId: string }) {
-  const { company, user } = useAuth();
+  const { company, user, isCompanyAdmin } = useAuth();
   const invalidateHolding = useInvalidateHolding();
+  const userName = user?.email?.split("@")[0] || "Usuário";
+  const userId = user?.id || null;
 
   const [docTipos, setDocTipos] = useState<{ id: string; nome: string; categoria: string; obrigatorio: boolean }[]>([]);
   const [obraDocsMap, setObraDocsMap] = useState<Map<string, any>>(new Map());
   const [docFilesMap, setDocFilesMap] = useState<Map<string, DocFile[]>>(new Map());
   const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
   const [deletingFile, setDeletingFile] = useState<DocFile | null>(null);
+  const [adminEditMode, setAdminEditMode] = useState(false);
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [editDocName, setEditDocName] = useState("");
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [deletingDocFileCount, setDeletingDocFileCount] = useState(0);
 
   const [legacyDocs, setLegacyDocs] = useState<Record<string, boolean> | null>(null);
   const [legacyDocId, setLegacyDocId] = useState<string | null>(null);
@@ -835,6 +842,16 @@ function DocumentosTab({ obraId }: { obraId: string }) {
                             )}
                           </label>
                         )}
+                        {adminEditMode && obraDoc && (
+                          <>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingDocId(obraDoc.id); setEditDocName(item.nome); }} title="Editar nome">
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => { setDeletingDocId(obraDoc.id); setDeletingDocFileCount((docFilesMap.get(obraDoc.id) || []).length); }} title="Excluir documento">
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </>
+                        )}
                         <Switch checked={!!obraDoc?.checked} onCheckedChange={(v) => toggleFlexible(item.id, v)} />
                       </div>
                     </div>
@@ -886,6 +903,66 @@ function DocumentosTab({ obraId }: { obraId: string }) {
         {renderDocCard("Pré Obra", <FileText className="h-4 w-4" />, docObraTipos, PRE_OBRA_FIELDS)}
         {renderDocCard("Ensaios e Projetos", <FlaskConical className="h-4 w-4" />, ensaiosTipos, ENSAIOS_PROJETOS_FIELDS)}
       </div>
+
+      {/* Admin Edit Mode Button */}
+      {isCompanyAdmin && (
+        <div className="flex justify-end">
+          <Button variant={adminEditMode ? "default" : "outline"} size="sm" onClick={() => setAdminEditMode(!adminEditMode)}>
+            <Pencil className="h-3.5 w-3.5 mr-1" /> {adminEditMode ? "Sair do Modo Edição" : "Modo Edição"}
+          </Button>
+        </div>
+      )}
+
+      {/* Admin: Edit doc name dialog */}
+      {editingDocId && (
+        <AlertDialog open={!!editingDocId} onOpenChange={(o) => !o && setEditingDocId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Renomear Documento</AlertDialogTitle>
+              <AlertDialogDescription>
+                <Input value={editDocName} onChange={(e) => setEditDocName(e.target.value)} className="mt-2" />
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={async () => {
+                const doc = Array.from(obraDocsMap.values()).find((d: any) => d.id === editingDocId);
+                if (!doc) return;
+                await supabase.from("holding_obra_docs").update({ notes: editDocName } as any).eq("id", editingDocId);
+                await registrarLog(obraId, "holding_obra_docs", editingDocId, "editou", `Renomeou documento para "${editDocName}"`, userId, userName);
+                setEditingDocId(null);
+                load();
+              }}>Salvar</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Admin: Delete doc confirm */}
+      {deletingDocId && (
+        <AlertDialog open={!!deletingDocId} onOpenChange={(o) => !o && setDeletingDocId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir Documento</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza? {deletingDocFileCount > 0 ? `${deletingDocFileCount} arquivo(s) serão removidos permanentemente.` : "Nenhum arquivo anexado."} Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={async () => {
+                await supabase.from("holding_doc_files").delete().eq("obra_doc_id", deletingDocId);
+                await supabase.from("holding_obra_docs").delete().eq("id", deletingDocId);
+                await registrarLog(obraId, "holding_obra_docs", deletingDocId, "excluiu", `Excluiu documento e ${deletingDocFileCount} arquivo(s)`, userId, userName);
+                setDeletingDocId(null);
+                toast.success("Documento excluído.");
+                invalidateHolding();
+                load();
+              }}>Excluir</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
       <AlertDialog open={!!deletingFile} onOpenChange={(open) => !open && setDeletingFile(null)}>
         <AlertDialogContent>
@@ -2242,9 +2319,9 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
       `Excluiu despesa — ${d.mes_referencia}/${d.ano_referencia} — ${BRL.format(d.valor)}`,
       userId, userName
     );
-    // Marcar notificação relacionada como resolvida
-    await supabase.from("system_notifications")
-      .update({ resolvida: true, resolvida_em: new Date().toISOString() } as any)
+    // Marcar notificação relacionada como resolvida (best-effort, ignore type)
+    await (supabase.from("system_notifications") as any)
+      .update({ resolvida: true, resolvida_em: new Date().toISOString() })
       .eq("despesa_id", despesaId);
     toast.success("Despesa excluída.");
     setDeletingDespesaId(null);
@@ -3010,6 +3087,15 @@ function HistoricoTab({ obraId }: { obraId: string }) {
       .then(({ data }) => { setLogs(data || []); setLoading(false); });
   }, [obraId]);
 
+  const TABELA_BADGE: Record<string, { label: string; cls: string }> = {
+    obras_portfolio: { label: "Obra", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+    holding_obra_docs: { label: "Documentos", cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300" },
+    holding_doc_files: { label: "Documentos", cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300" },
+    despesas_mensais: { label: "Despesas", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
+    medicoes_ple: { label: "Medições", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+    aditivos_contratos: { label: "Aditivos", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  };
+
   const ACAO_ICON: Record<string, string> = {
     criou: "✅", editou: "✏️", excluiu: "🗑️",
     aprovou: "✔️", cancelou: "❌",
@@ -3048,6 +3134,11 @@ function HistoricoTab({ obraId }: { obraId: string }) {
                       {ACAO_ICON[log.acao] || "•"} {log.realizado_por_nome}
                     </span>
                     {" "}<span className="text-muted-foreground">{log.descricao}</span>
+                    {log.tabela && TABELA_BADGE[log.tabela] && (
+                      <Badge variant="secondary" className={`text-[9px] ml-1.5 px-1 py-0 ${TABELA_BADGE[log.tabela].cls}`}>
+                        {TABELA_BADGE[log.tabela].label}
+                      </Badge>
+                    )}
                   </p>
                   <span className="text-[10px] text-muted-foreground shrink-0 whitespace-nowrap">
                     {dataFmt} {horaFmt}

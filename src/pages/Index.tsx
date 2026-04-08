@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
+import { AppSidebar, NotificationBell } from "@/components/AppSidebar";
 import { HomeDashboard } from "@/components/HomeDashboard";
 import { StatsCards } from "@/components/StatsCards";
 import { FilterBar } from "@/components/FilterBar";
@@ -249,6 +249,7 @@ function Index() {
           {/* Top Header */}
           <header className="no-print min-h-[56px] bg-card border-b border-border px-2 md:px-6 flex items-center gap-2 md:gap-4 shrink-0 flex-wrap py-2">
             <SidebarTriggerButton />
+            <NotificationBell />
             <h2 className="text-sm md:text-xl font-semibold text-foreground whitespace-nowrap shrink-0 truncate max-w-[200px] md:max-w-none">
               {viewTitles[activeView]}
             </h2>

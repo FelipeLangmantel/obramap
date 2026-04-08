@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
+import { AppSidebar, NotificationBell } from "@/components/AppSidebar";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -402,6 +402,7 @@ export default function HoldingConfigPage() {
         <div>
           <div className="flex items-center gap-2">
             <SidebarTrigger className="md:hidden p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors" />
+            <NotificationBell />
             <h1 className="text-xl font-bold flex items-center gap-2">
               <Settings className="h-5 w-5 text-primary" />
               Configurações da Holding

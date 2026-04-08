@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { MapPin, DollarSign, TrendingUp, TrendingDown, Wallet, Filter } from "lucide-react";
-import HoldingMap, { MapObra } from "./HoldingMap";
+import HoldingMap, { MapObra, HoldingMapHandle } from "./HoldingMap";
 
 const parseLocalDate = (d: string) => { const [y, m, day] = d.split("-").map(Number); return new Date(y, m - 1, day); };
 /* ═══════════════════════════════════════
@@ -173,7 +173,7 @@ const monthKey = (mes: string | null, ano: number | null) => {
    ═══════════════════════════════════════ */
 
 export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Props) {
-  const [hoveredObra, setHoveredObra] = useState<string | null>(null);
+  const mapRef = useRef<HoldingMapHandle>(null);
   const [medicoesData, setMedicoesData] = useState<any[]>([]);
   const [despesasData, setDespesasData] = useState<any[]>([]);
   const [analyticsFilter, setAnalyticsFilter] = useState("all");
@@ -310,6 +310,25 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
       .filter(Boolean) as MapObra[];
   }, [obrasOnMap]);
 
+  // City groups for sidebar
+  const cityGroups = useMemo(() => {
+    const groups = new Map<string, ObraEnriched[]>();
+    filteredObras.forEach(o => {
+      const key = o.municipio || "__sem_municipio__";
+      const list = groups.get(key) || [];
+      list.push(o);
+      groups.set(key, list);
+    });
+    return [...groups.entries()]
+      .map(([municipio, obras]) => {
+        const dbCoords = obras.find(o => o.latitude && o.longitude);
+        const staticCoords = getCityCoords(municipio);
+        const coords = dbCoords ? { lat: dbCoords.latitude!, lng: dbCoords.longitude! } : staticCoords;
+        return { municipio: municipio === "__sem_municipio__" ? "" : municipio, obras, coords };
+      })
+      .sort((a, b) => b.obras.length - a.obras.length);
+  }, [filteredObras, cityLookup]);
+
   // Map stats
   const mapStats = useMemo(() => ({
     total: filteredObras.length,
@@ -417,7 +436,7 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
               <p className="text-[10px] text-muted-foreground mb-2">
                 {obrasOnMap.length} obra{obrasOnMap.length !== 1 ? "s" : ""} mapeada{obrasOnMap.length !== 1 ? "s" : ""} · clique para abrir
               </p>
-              <HoldingMap obras={mapObras} onObraClick={onObraClick} />
+              <HoldingMap ref={mapRef} obras={mapObras} onObraClick={onObraClick} />
               {obrasOnMap.length === 0 && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/60 rounded-lg">
                   <p className="text-xs text-muted-foreground text-center px-4">Informe o município ao cadastrar cada obra para visualizá-la no mapa do RS</p>
@@ -425,43 +444,49 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
               )}
             </div>
 
-            {/* Sidebar List */}
+            {/* Sidebar List — Grouped by City */}
             <div className="flex flex-col border-l border-border/40 pl-3">
               <p className="text-xs font-semibold text-foreground mb-2 sticky top-0 bg-card py-1 z-10 flex items-center justify-between">
-                <span>Obras ({filteredObras.length})</span>
+                <span>Cidades ({cityGroups.length})</span>
               </p>
               <div className="flex flex-col gap-0.5 max-h-[450px] overflow-y-auto pr-1">
-                {[...filteredObras]
-                  .sort((a, b) => (b.valor_contrato || 0) - (a.valor_contrato || 0))
-                  .map((obra) => {
-                    const isHov = hoveredObra === obra.id;
-                    const hc = HEALTH_PIN[obra.health] || "#3b82f6";
-                    const isOnMap = !!CITY_COORDS[obra.municipio || ""];
-                    return (
+                {cityGroups.map(({ municipio, obras: cityObras, coords }) => {
+                  const totalValor = cityObras.reduce((s, o) => s + (o.valor_contrato || 0), 0);
+                  const dominant = cityObras.some(o => o.health === "red") ? "red" : cityObras.some(o => o.health === "yellow") ? "yellow" : "green";
+                  const hc = HEALTH_PIN[dominant] || "#3b82f6";
+                  return (
+                    <div key={municipio} className="border-b border-border/30 last:border-0">
                       <button
-                        key={obra.id}
-                        className={`flex items-center gap-2 w-full text-left px-2.5 py-2 rounded-md text-xs transition-colors hover:bg-muted/60 border-b border-border/30 last:border-0 ${isHov ? "bg-muted/80 ring-1 ring-primary/30" : ""}`}
-                        onMouseEnter={() => setHoveredObra(obra.id)}
-                        onMouseLeave={() => setHoveredObra(null)}
-                        onClick={() => onObraClick(obra.id)}
+                        className="flex items-center gap-2 w-full text-left px-2.5 py-2 rounded-md text-xs transition-colors hover:bg-muted/60"
+                        onClick={() => {
+                          if (coords) mapRef.current?.flyTo(coords.lat, coords.lng, 11);
+                        }}
                       >
                         <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: hc }} />
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-foreground truncate text-xs">{obra.nome}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">{obra.municipio || obra.empresa || "—"}</p>
-                          {obra.tipo_contrato && <Badge variant="outline" className="text-[8px] h-3.5 px-1 mt-0.5">{obra.tipo_contrato}</Badge>}
+                          <p className="font-medium text-foreground text-xs">{municipio || "Sem município"} <span className="text-muted-foreground">({cityObras.length})</span></p>
                         </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
-                            {obra.valor_contrato >= 1_000_000
-                              ? `R$ ${(obra.valor_contrato / 1_000_000).toFixed(1)}M`
-                              : `R$ ${(obra.valor_contrato / 1_000).toFixed(0)}k`}
-                          </p>
-                          {!isOnMap && <p className="text-[8px] text-amber-500">sem coords</p>}
-                        </div>
+                        <p className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
+                          {totalValor >= 1_000_000
+                            ? `R$ ${(totalValor / 1_000_000).toFixed(1)}M`
+                            : `R$ ${(totalValor / 1_000).toFixed(0)}k`}
+                        </p>
                       </button>
-                    );
-                  })}
+                      <div className="pl-5 pb-1">
+                        {cityObras.map(obra => (
+                          <button
+                            key={obra.id}
+                            className="flex items-center gap-1.5 w-full text-left px-2 py-1 rounded text-[10px] transition-colors hover:bg-muted/40"
+                            onClick={() => onObraClick(obra.id)}
+                          >
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ background: HEALTH_PIN[obra.health] || "#3b82f6" }} />
+                            <span className="truncate flex-1 text-muted-foreground">{obra.nome}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -575,13 +600,6 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
         </Card>
       )}
 
-      {/* Summary Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MiniKpi icon={DollarSign} label="Valor Total do Portfólio" value={BRL.format(summaryStats.totalPortfolio)} className="text-emerald-600 dark:text-emerald-400" />
-        <MiniKpi icon={TrendingUp} label="Total Recebido" value={BRL.format(summaryStats.totalRecebido)} className="text-blue-600 dark:text-blue-400" />
-        <MiniKpi icon={TrendingDown} label="Total Despesas" value={BRL.format(summaryStats.totalDespesas)} className="text-red-600 dark:text-red-400" />
-        <MiniKpi icon={Wallet} label="Saldo Estimado" value={BRL.format(summaryStats.saldo)} className={summaryStats.saldo >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"} />
-      </div>
     </div>
   );
 }

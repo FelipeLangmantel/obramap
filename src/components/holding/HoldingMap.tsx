@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
@@ -46,6 +46,27 @@ const obraIcon = (health: string) => {
   });
 };
 
+// Cluster icon
+const clusterIcon = (count: number, dominantHealth: string) => {
+  const color = dominantHealth === "green" ? "#22c55e" : dominantHealth === "yellow" ? "#f59e0b" : dominantHealth === "red" ? "#ef4444" : "#3b82f6";
+  const border = dominantHealth === "green" ? "#15803d" : dominantHealth === "yellow" ? "#b45309" : dominantHealth === "red" ? "#b91c1c" : "#1d4ed8";
+  return L.divIcon({
+    html: `<div style="
+      background:${color};
+      border:3px solid ${border};
+      border-radius:50%;
+      width:30px;height:30px;
+      display:flex;align-items:center;justify-content:center;
+      box-shadow:0 2px 6px rgba(0,0,0,0.4);
+      font-size:12px;font-weight:bold;color:white;line-height:1;
+      cursor:pointer;
+    ">${count}</div>`,
+    className: "",
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+  });
+};
+
 // Distância em linha reta (Haversine) — sem API externa
 function distanciaLinhaReta(lat1: number, lng1: number, lat2: number, lng2: number): string {
   const R = 6371;
@@ -61,6 +82,16 @@ function distanciaLinhaReta(lat1: number, lng1: number, lat2: number, lng2: numb
   return `📏 ${km.toFixed(0)} km · ~${tempo} (linha reta)`;
 }
 
+// Dominant health in a group
+function getDominantHealth(obras: MapObra[]): string {
+  const counts: Record<string, number> = {};
+  obras.forEach(o => { counts[o.health] = (counts[o.health] || 0) + 1; });
+  if (counts["red"]) return "red";
+  if (counts["yellow"]) return "yellow";
+  if (counts["green"]) return "green";
+  return "gray";
+}
+
 export interface MapObra {
   id: string;
   nome: string;
@@ -72,14 +103,24 @@ export interface MapObra {
   status: string;
 }
 
+export interface HoldingMapHandle {
+  flyTo: (lat: number, lng: number, zoom?: number) => void;
+}
+
 interface HoldingMapProps {
   obras: MapObra[];
   onObraClick: (id: string) => void;
 }
 
-export default function HoldingMap({ obras, onObraClick }: HoldingMapProps) {
+const HoldingMap = forwardRef<HoldingMapHandle, HoldingMapProps>(({ obras, onObraClick }, ref) => {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    flyTo: (lat: number, lng: number, zoom = 11) => {
+      mapRef.current?.flyTo([lat, lng], zoom, { duration: 1.2 });
+    },
+  }));
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -120,26 +161,82 @@ export default function HoldingMap({ obras, onObraClick }: HoldingMapProps) {
       concluida: "Concluída", paralisada: "Paralisada",
     };
 
+    // Group obras by coordinates (rounded to 3 decimals for clustering)
+    const coordKey = (lat: number, lng: number) => `${lat.toFixed(3)}_${lng.toFixed(3)}`;
+    const groups = new Map<string, MapObra[]>();
     obras.forEach(obra => {
-      const marker = L.marker([obra.lat, obra.lng], { icon: obraIcon(obra.health) }).addTo(map);
-      (marker as any)._isObra = true;
-
-      const distStr = distanciaLinhaReta(SEDE.lat, SEDE.lng, obra.lat, obra.lng);
-
-      marker.bindTooltip(`
-        <div style="min-width:200px;font-family:sans-serif;line-height:1.7">
-          <b style="font-size:13px">${obra.nome}</b><br/>
-          <span style="color:#666;font-size:11px">📍 ${obra.municipio}</span><br/>
-          <span style="font-size:12px;font-weight:600">${BRL.format(obra.valor_contrato)}</span><br/>
-          <span style="font-size:11px">${statusLabel[obra.status] || obra.status}</span><br/>
-          <span style="color:#1d4ed8;font-size:11px">${distStr}</span>
-        </div>
-      `, { sticky: true, direction: "top", offset: [0, -8] });
-
-      marker.on("click", () => onObraClick(obra.id));
+      const key = coordKey(obra.lat, obra.lng);
+      const list = groups.get(key) || [];
+      list.push(obra);
+      groups.set(key, list);
     });
 
-    
+    groups.forEach((groupObras) => {
+      if (groupObras.length === 1) {
+        // Single obra — normal marker
+        const obra = groupObras[0];
+        const marker = L.marker([obra.lat, obra.lng], { icon: obraIcon(obra.health) }).addTo(map);
+        (marker as any)._isObra = true;
+
+        const distStr = distanciaLinhaReta(SEDE.lat, SEDE.lng, obra.lat, obra.lng);
+
+        marker.bindTooltip(`
+          <div style="min-width:200px;font-family:sans-serif;line-height:1.7">
+            <b style="font-size:13px">${obra.nome}</b><br/>
+            <span style="color:#666;font-size:11px">📍 ${obra.municipio}</span><br/>
+            <span style="font-size:12px;font-weight:600">${BRL.format(obra.valor_contrato)}</span><br/>
+            <span style="font-size:11px">${statusLabel[obra.status] || obra.status}</span><br/>
+            <span style="color:#1d4ed8;font-size:11px">${distStr}</span>
+          </div>
+        `, { sticky: true, direction: "top", offset: [0, -8] });
+
+        marker.on("click", () => onObraClick(obra.id));
+      } else {
+        // Multiple obras — cluster marker
+        const avgLat = groupObras.reduce((s, o) => s + o.lat, 0) / groupObras.length;
+        const avgLng = groupObras.reduce((s, o) => s + o.lng, 0) / groupObras.length;
+        const dominant = getDominantHealth(groupObras);
+        const marker = L.marker([avgLat, avgLng], { icon: clusterIcon(groupObras.length, dominant) }).addTo(map);
+        (marker as any)._isObra = true;
+
+        const municipio = groupObras[0].municipio;
+        const popupHtml = `
+          <div style="min-width:180px;font-family:sans-serif;">
+            <b style="font-size:13px">📍 ${municipio}</b>
+            <p style="font-size:11px;color:#666;margin:2px 0 6px">${groupObras.length} obras</p>
+            ${groupObras.map(o => {
+              const hc = o.health === "green" ? "#22c55e" : o.health === "yellow" ? "#f59e0b" : o.health === "red" ? "#ef4444" : "#94a3b8";
+              return `<div class="cluster-obra-item" data-obra-id="${o.id}" style="
+                display:flex;align-items:center;gap:6px;padding:4px 6px;margin:2px 0;border-radius:4px;cursor:pointer;
+                border:1px solid #e5e7eb;transition:background 0.15s;
+              " onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'">
+                <span style="width:8px;height:8px;border-radius:50%;background:${hc};flex-shrink:0;"></span>
+                <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${o.nome}</span>
+                <span style="font-size:10px;color:#888;">${BRL.format(o.valor_contrato)}</span>
+              </div>`;
+            }).join("")}
+          </div>
+        `;
+
+        const popup = L.popup({ maxWidth: 300, closeButton: true }).setContent(popupHtml);
+        marker.bindPopup(popup);
+
+        marker.on("popupopen", () => {
+          const container = popup.getElement();
+          if (!container) return;
+          const items = container.querySelectorAll(".cluster-obra-item");
+          items.forEach((el) => {
+            el.addEventListener("click", () => {
+              const obraId = el.getAttribute("data-obra-id");
+              if (obraId) {
+                map.closePopup();
+                onObraClick(obraId);
+              }
+            });
+          });
+        });
+      }
+    });
   }, [obras, onObraClick]);
 
   return (
@@ -158,4 +255,7 @@ export default function HoldingMap({ obras, onObraClick }: HoldingMapProps) {
       </div>
     </div>
   );
-}
+});
+
+HoldingMap.displayName = "HoldingMap";
+export default HoldingMap;
