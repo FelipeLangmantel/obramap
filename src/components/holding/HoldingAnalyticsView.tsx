@@ -310,6 +310,25 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
       .filter(Boolean) as MapObra[];
   }, [obrasOnMap]);
 
+  // City groups for sidebar
+  const cityGroups = useMemo(() => {
+    const groups = new Map<string, ObraEnriched[]>();
+    filteredObras.forEach(o => {
+      const key = o.municipio || "__sem_municipio__";
+      const list = groups.get(key) || [];
+      list.push(o);
+      groups.set(key, list);
+    });
+    return [...groups.entries()]
+      .map(([municipio, obras]) => {
+        const dbCoords = obras.find(o => o.latitude && o.longitude);
+        const staticCoords = getCityCoords(municipio);
+        const coords = dbCoords ? { lat: dbCoords.latitude!, lng: dbCoords.longitude! } : staticCoords;
+        return { municipio: municipio === "__sem_municipio__" ? "" : municipio, obras, coords };
+      })
+      .sort((a, b) => b.obras.length - a.obras.length);
+  }, [filteredObras, cityLookup]);
+
   // Map stats
   const mapStats = useMemo(() => ({
     total: filteredObras.length,
