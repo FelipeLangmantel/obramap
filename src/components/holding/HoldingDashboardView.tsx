@@ -2015,9 +2015,9 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">Andamento</span>
-            <span className="font-medium text-foreground">{obra.percentual_andamento}%</span>
+            <span className="font-medium text-foreground">{percentualFinanceiro.toFixed(1)}%</span>
           </div>
-          <Progress value={obra.percentual_andamento} className="h-1.5" />
+          <Progress value={percentualFinanceiro} className="h-1.5" />
         </div>
 
         <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 text-xs">
