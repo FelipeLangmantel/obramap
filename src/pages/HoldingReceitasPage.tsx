@@ -246,6 +246,21 @@ export default function HoldingReceitasPage() {
       if (filterTipoContrato !== "all" && m.obra_tipo_contrato !== filterTipoContrato) return false;
       if (searchText && !m.obra_nome.toLowerCase().includes(searchText.toLowerCase()) && !m.num_medicao?.includes(searchText)) return false;
       return true;
+    }).sort((a, b) => {
+      // Ordenar por data mais antiga → mais futura
+      // Prioridade: data_previsao_medicao > data_envio > data_aprovacao > mes_referencia/ano_referencia
+      const getDate = (m: typeof a): number => {
+        if (m.data_previsao_medicao) return new Date(m.data_previsao_medicao + "T12:00:00").getTime();
+        if (m.data_envio) return new Date(m.data_envio + "T12:00:00").getTime();
+        if (m.data_aprovacao) return new Date(m.data_aprovacao + "T12:00:00").getTime();
+        if (m.mes_referencia && m.ano_referencia) {
+          const mesIdx = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"]
+            .findIndex(mn => mn === m.mes_referencia!.substring(0, 3).toLowerCase());
+          if (mesIdx >= 0) return new Date(m.ano_referencia, mesIdx, 1).getTime();
+        }
+        return 0;
+      };
+      return getDate(a) - getDate(b);
     });
   }, [medicoes, filterObra, filterEmpresa, filterStatusMed, filterStatusNF, filterTipoContrato, searchText]);
 
@@ -709,17 +724,14 @@ export default function HoldingReceitasPage() {
                   <Table>
                     <TableHeader className="sticky top-0 z-10 bg-background">
                       <TableRow className="bg-muted/50">
-                         <TableHead colSpan={6} className="text-center text-xs font-bold border-r">IDENTIFICAÇÃO</TableHead>
+                         <TableHead colSpan={3} className="text-center text-xs font-bold border-r">IDENTIFICAÇÃO</TableHead>
                           <TableHead colSpan={9} className="text-center text-xs font-bold border-r text-blue-600">ENGENHARIA</TableHead>
                           <TableHead colSpan={3} className="text-center text-xs font-bold text-emerald-600">FINANCEIRO</TableHead>
                       </TableRow>
                       <TableRow>
                         <TableHead className="text-xs w-8">#</TableHead>
                         <TableHead className="text-xs">Obra</TableHead>
-                        <TableHead className="text-xs">Empresa</TableHead>
-                         <TableHead className="text-xs border-r">Contrato</TableHead>
-                         <TableHead className="text-xs text-center">UH</TableHead>
-                         <TableHead className="text-xs">Tipo</TableHead>
+                        <TableHead className="text-xs border-r">Empresa</TableHead>
                          <TableHead className="text-xs">Nº Med.</TableHead>
                         <TableHead className="text-xs">Mês</TableHead>
                         <TableHead className="text-xs">Ano</TableHead>
@@ -742,10 +754,7 @@ export default function HoldingReceitasPage() {
                           <TableRow key={m.id} className={`text-xs ${idx % 2 === 0 ? "" : "bg-muted/20"}`}>
                             <TableCell className="py-2">{idx + 1}</TableCell>
                             <TableCell className="py-2 font-medium">{m.obra_nome}</TableCell>
-                            <TableCell className="py-2">{m.obra_empresa || "—"}</TableCell>
-                             <TableCell className="py-2 border-r">{m.obra_contrato || "—"}</TableCell>
-                             <TableCell className="py-2 text-center">{m.obra_uh || "—"}</TableCell>
-                             <TableCell className="py-2">{m.obra_tipo_contrato || "—"}</TableCell>
+                            <TableCell className="py-2 border-r">{m.obra_empresa || "—"}</TableCell>
                              <TableCell className="py-2">{m.num_medicao || "—"}</TableCell>
                             <TableCell className="py-2">{m.mes_referencia || "—"}</TableCell>
                             <TableCell className="py-2">{m.ano_referencia || "—"}</TableCell>
@@ -762,7 +771,7 @@ export default function HoldingReceitasPage() {
                         );
                       })}
                       {medicoesFiltradas.length === 0 && (
-                        <TableRow><TableCell colSpan={18} className="text-center py-8 text-muted-foreground">Nenhuma medição encontrada.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={15} className="text-center py-8 text-muted-foreground">Nenhuma medição encontrada.</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
