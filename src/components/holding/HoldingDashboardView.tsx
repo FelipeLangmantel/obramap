@@ -812,6 +812,8 @@ export default function HoldingDashboardView() {
         acao: "criou", descricao: `Cadastrou obra "${newObraForm.nome}" — ${newObraForm.tipo_contrato || "N/A"} — ${newObraForm.municipio || ""}`,
         dados_anteriores: {}, dados_novos: { nome: newObraForm.nome, valor_contrato: newObraForm.valor_contrato, empresa: newObraForm.empresa },
         realizado_por: user?.id, realizado_por_nome: profile?.display_name || user?.email || "Usuário",
+      } as any);
+      toast.success("Obra cadastrada com sucesso!");
     }
     // Audit log — edição (quando editingObra)
     if (editingObra) {
