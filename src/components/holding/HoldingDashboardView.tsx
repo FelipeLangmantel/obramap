@@ -811,9 +811,7 @@ export default function HoldingDashboardView() {
         obra_id: data.id, tabela: "obras_portfolio", registro_id: data.id,
         acao: "criou", descricao: `Cadastrou obra "${newObraForm.nome}" — ${newObraForm.tipo_contrato || "N/A"} — ${newObraForm.municipio || ""}`,
         dados_anteriores: {}, dados_novos: { nome: newObraForm.nome, valor_contrato: newObraForm.valor_contrato, empresa: newObraForm.empresa },
-        realizado_por: user?.id, realizado_por_nome: profile?.name || "Usuário",
-      } as any);
-      toast.success("Obra cadastrada com sucesso!");
+        realizado_por: user?.id, realizado_por_nome: profile?.display_name || user?.email || "Usuário",
     }
     // Audit log — edição (quando editingObra)
     if (editingObra) {
@@ -822,7 +820,7 @@ export default function HoldingDashboardView() {
         acao: "editou", descricao: `Editou obra "${newObraForm.nome}"`,
         dados_anteriores: { nome: editingObra.nome, valor_contrato: editingObra.valor_contrato },
         dados_novos: { nome: newObraForm.nome, valor_contrato: newObraForm.valor_contrato, empresa: newObraForm.empresa },
-        realizado_por: user?.id, realizado_por_nome: profile?.name || "Usuário",
+        realizado_por: user?.id, realizado_por_nome: profile?.display_name || user?.email || "Usuário",
       } as any);
     }
     queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
