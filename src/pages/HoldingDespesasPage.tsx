@@ -35,6 +35,7 @@ interface DespesaCompleta {
   ano_referencia: number | null;
   valor: number;
   status: "fechado" | "em_fechamento" | "nao_iniciado";
+  tipo_despesa: "prevista" | "real";
 }
 
 interface ObraBasic {
@@ -101,6 +102,7 @@ export default function HoldingDespesasPage() {
             obra_contrato: o.num_contrato, obra_uh: o.uh,
             mes_referencia: d.mes_referencia, ano_referencia: d.ano_referencia,
             valor: Number(d.valor) || 0, status: d.status || "nao_iniciado",
+            tipo_despesa: (d.tipo_despesa === "real" ? "real" : "prevista") as "prevista" | "real",
           };
         });
 
@@ -136,10 +138,10 @@ export default function HoldingDespesasPage() {
 
   // ─── KPIs ───
   const kpis = useMemo(() => {
-    const totalDespesas = despesas.reduce((s, d) => s + d.valor, 0);
-    const totalFechado = despesas.filter(d => d.status === "fechado").reduce((s, d) => s + d.valor, 0);
-    const totalEmFechamento = despesas.filter(d => d.status === "em_fechamento").reduce((s, d) => s + d.valor, 0);
-    const totalNaoIniciado = despesas.filter(d => d.status === "nao_iniciado").reduce((s, d) => s + d.valor, 0);
+    const totalDespesas = despesas.filter(d => d.tipo_despesa === "real").reduce((s, d) => s + d.valor, 0);
+    const totalFechado = despesas.filter(d => d.tipo_despesa === "real" && d.status === "fechado").reduce((s, d) => s + d.valor, 0);
+    const totalEmFechamento = despesas.filter(d => d.tipo_despesa === "real" && d.status === "em_fechamento").reduce((s, d) => s + d.valor, 0);
+    const totalNaoIniciado = despesas.filter(d => d.tipo_despesa === "real" && d.status === "nao_iniciado").reduce((s, d) => s + d.valor, 0);
     const countObrasComDespesa = new Set(despesas.map(d => d.obra_id)).size;
     return { totalDespesas, totalFechado, totalEmFechamento, totalNaoIniciado, countObrasComDespesa };
   }, [despesas]);
@@ -167,6 +169,7 @@ export default function HoldingDespesasPage() {
     const map = new Map<string, { fechado: number; em_fechamento: number; nao_iniciado: number }>();
     despesas.forEach(d => {
       if (!d.mes_referencia || !d.ano_referencia) return;
+      if (d.tipo_despesa !== "real") return; // apenas custos confirmados no fluxo mensal
       const mi = MONTHS.findIndex(mn => mn.toLowerCase() === (d.mes_referencia || "").substring(0,3).toLowerCase());
       const key = `${d.ano_referencia}-${String(mi >= 0 ? mi + 1 : 1).padStart(2, "0")}`;
       const cur = map.get(key) || { fechado: 0, em_fechamento: 0, nao_iniciado: 0 };
@@ -186,7 +189,7 @@ export default function HoldingDespesasPage() {
     return obras.map(o => {
       const previsto = (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
       const realizado = medicoes.filter((m: any) => m.obra_id === o.id && m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
-      const desp = despesas.filter(d => d.obra_id === o.id).reduce((s, d) => s + d.valor, 0);
+      const desp = despesas.filter(d => d.obra_id === o.id && d.tipo_despesa === "real").reduce((s, d) => s + d.valor, 0);
       const saldo = realizado - desp;
       const roi = desp > 0 ? ((realizado - desp) / desp) * 100 : 0;
       return { nome: o.nome.length > 14 ? o.nome.slice(0, 12) + "…" : o.nome, fullName: o.nome, uh: o.uh || 0, previsto, realizado, despesas: desp, saldo, roi, id: o.id };
@@ -198,6 +201,7 @@ export default function HoldingDespesasPage() {
     const grouped = new Map<string, { nome: string; total: number }>();
     despesas.forEach(d => {
       const cur = grouped.get(d.obra_id) || { nome: d.obra_nome, total: 0 };
+      if (d.tipo_despesa !== "real") return;
       cur.total += d.valor;
       grouped.set(d.obra_id, cur);
     });
@@ -509,7 +513,7 @@ export default function HoldingDespesasPage() {
                         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                         <XAxis dataKey="nome" fontSize={9} interval={0} angle={-20} textAnchor="end" height={50} />
                         <YAxis yAxisId="left" fontSize={9} tickFormatter={(v) => BRL_SHORT(v)} />
-                        <YAxis yAxisId="right" orientation="right" fontSize={9} tickFormatter={(v) => `${v.toFixed(0)}%`} />
+                        <YAxis yAxisId="right" orientation="right" fontSize={9} tickFormatter={(v) => `${v.toFixed(0)}%`} domain={[0, 'auto']} />
                         <Tooltip
                           formatter={(v: number, name: string) => name === "ROI %" ? `${v.toFixed(1)}%` : BRL.format(v)}
                           labelFormatter={(l) => {
