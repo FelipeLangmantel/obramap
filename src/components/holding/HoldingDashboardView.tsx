@@ -1009,6 +1009,9 @@ export default function HoldingDashboardView() {
   // Filters — must be before kpis/alerts so they can use obrasFiltradas
   const empresas = useMemo(() => [...new Set(obras.map(o => o.empresa).filter(Boolean))].sort(), [obras]);
 
+  const normalizeStr = (str: string): string =>
+    str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
   const obrasFiltradas = useMemo(() => {
     return obras.filter(o => {
       if (globalEmpresa !== "all" && o.empresa !== globalEmpresa) return false;
@@ -1017,7 +1020,6 @@ export default function HoldingDashboardView() {
       if (filterSaude !== "all" && o.health !== filterSaude) return false;
       if (filterTipo !== "all" && o.tipo_contrato !== filterTipo) return false;
       if (filterResponsavel !== "all") {
-        // Filtrar pelo cargo selecionado + nome selecionado
         const camposCargo =
           filterCargo === "eng"   ? [o.responsavel_nome] :
           filterCargo === "coord" ? [o.coordenador_nome] :
@@ -1025,15 +1027,26 @@ export default function HoldingDashboardView() {
           [o.responsavel_nome, o.coordenador_nome, o.planejador_nome];
         if (!camposCargo.some(n => n === filterResponsavel)) return false;
       } else if (filterCargo !== "all") {
-        // Cargo selecionado mas sem nome específico: mostrar obras que têm esse cargo preenchido
         const temCargo =
           filterCargo === "eng"   ? !!o.responsavel_nome :
           filterCargo === "coord" ? !!o.coordenador_nome :
           filterCargo === "plan"  ? !!o.planejador_nome  : true;
         if (!temCargo) return false;
       }
-      if (searchNome && !o.nome.toLowerCase().includes(searchNome.toLowerCase())) return false;
+      if (searchNome) {
+        const term = normalizeStr(searchNome);
+        const matchNome = normalizeStr(o.nome).includes(term);
+        const matchEmpresa = o.empresa ? normalizeStr(o.empresa).includes(term) : false;
+        const matchMunicipio = o.municipio ? normalizeStr(o.municipio).includes(term) : false;
+        if (!matchNome && !matchEmpresa && !matchMunicipio) return false;
+      }
       return true;
+    }).sort((a, b) => {
+      if (a.status === "nao_iniciada" && b.status !== "nao_iniciada") return 1;
+      if (b.status === "nao_iniciada" && a.status !== "nao_iniciada") return -1;
+      const da = a.data_inicio ? new Date(a.data_inicio).getTime() : 0;
+      const db = b.data_inicio ? new Date(b.data_inicio).getTime() : 0;
+      return da - db;
     });
   }, [obras, globalEmpresa, filterEmpresa, filterStatus, filterSaude, filterTipo, filterResponsavel, filterCargo, searchNome]);
 
