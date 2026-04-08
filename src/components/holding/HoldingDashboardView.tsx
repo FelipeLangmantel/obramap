@@ -495,6 +495,7 @@ export default function HoldingDashboardView() {
     coordenador_nome: "", coordenador_telefone: "",
     planejador_nome: "", planejador_telefone: "",
     tipo_contrato: "",
+    valor_medido_inicial: 0,
   });
   const [savingObra, setSavingObra] = useState(false);
   const [editingObra, setEditingObra] = useState<ObraEnriched | null>(null);
@@ -662,6 +663,7 @@ export default function HoldingDashboardView() {
     coordenador_nome: "", coordenador_telefone: "",
     planejador_nome: "", planejador_telefone: "",
     tipo_contrato: "",
+    valor_medido_inicial: 0,
   });
 
   const validateObraForm = (): Record<string, string> => {
@@ -726,6 +728,7 @@ export default function HoldingDashboardView() {
       planejador_nome: newObraForm.planejador_nome || null,
       planejador_telefone: newObraForm.planejador_telefone?.replace(/\D/g, "") || null,
       tipo_contrato: newObraForm.tipo_contrato || null,
+      valor_medido_inicial: newObraForm.valor_medido_inicial || 0,
     } as any;
 
     // Geocode if municipio changed or coordinates are missing
@@ -778,6 +781,18 @@ export default function HoldingDashboardView() {
 
         toast.success(`Obra atualizada! Saldo inicial recalculado para ${BRL.format(novoValorInicial)}.`);
       } else {
+        // Recalcular percentual_financeiro se valor_medido_inicial foi alterado
+        if (isCompanyAdmin && newObraForm.valor_medido_inicial > 0) {
+          const vc = (Number(newObraForm.valor_contrato) || 0);
+          if (vc > 0) {
+            const medicoesAprovadas = editingObra.allMedicoes
+              .filter(m => m.status_medicao === "aprovada")
+              .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+            const totalMedido = medicoesAprovadas + newObraForm.valor_medido_inicial;
+            const pctFin = Math.min(100, (totalMedido / vc) * 100);
+            await supabase.from("obras_portfolio").update({ percentual_financeiro: pctFin }).eq("id", editingObra.id);
+          }
+        }
         toast.success("Obra atualizada!");
       }
     } else {
@@ -994,6 +1009,9 @@ export default function HoldingDashboardView() {
   // Filters — must be before kpis/alerts so they can use obrasFiltradas
   const empresas = useMemo(() => [...new Set(obras.map(o => o.empresa).filter(Boolean))].sort(), [obras]);
 
+  const normalizeStr = (str: string): string =>
+    str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
   const obrasFiltradas = useMemo(() => {
     return obras.filter(o => {
       if (globalEmpresa !== "all" && o.empresa !== globalEmpresa) return false;
@@ -1002,7 +1020,6 @@ export default function HoldingDashboardView() {
       if (filterSaude !== "all" && o.health !== filterSaude) return false;
       if (filterTipo !== "all" && o.tipo_contrato !== filterTipo) return false;
       if (filterResponsavel !== "all") {
-        // Filtrar pelo cargo selecionado + nome selecionado
         const camposCargo =
           filterCargo === "eng"   ? [o.responsavel_nome] :
           filterCargo === "coord" ? [o.coordenador_nome] :
@@ -1010,15 +1027,26 @@ export default function HoldingDashboardView() {
           [o.responsavel_nome, o.coordenador_nome, o.planejador_nome];
         if (!camposCargo.some(n => n === filterResponsavel)) return false;
       } else if (filterCargo !== "all") {
-        // Cargo selecionado mas sem nome específico: mostrar obras que têm esse cargo preenchido
         const temCargo =
           filterCargo === "eng"   ? !!o.responsavel_nome :
           filterCargo === "coord" ? !!o.coordenador_nome :
           filterCargo === "plan"  ? !!o.planejador_nome  : true;
         if (!temCargo) return false;
       }
-      if (searchNome && !o.nome.toLowerCase().includes(searchNome.toLowerCase())) return false;
+      if (searchNome) {
+        const term = normalizeStr(searchNome);
+        const matchNome = normalizeStr(o.nome).includes(term);
+        const matchEmpresa = o.empresa ? normalizeStr(o.empresa).includes(term) : false;
+        const matchMunicipio = o.municipio ? normalizeStr(o.municipio).includes(term) : false;
+        if (!matchNome && !matchEmpresa && !matchMunicipio) return false;
+      }
       return true;
+    }).sort((a, b) => {
+      if (a.status === "nao_iniciada" && b.status !== "nao_iniciada") return 1;
+      if (b.status === "nao_iniciada" && a.status !== "nao_iniciada") return -1;
+      const da = a.data_inicio ? new Date(a.data_inicio).getTime() : 0;
+      const db = b.data_inicio ? new Date(b.data_inicio).getTime() : 0;
+      return da - db;
     });
   }, [obras, globalEmpresa, filterEmpresa, filterStatus, filterSaude, filterTipo, filterResponsavel, filterCargo, searchNome]);
 
@@ -1397,6 +1425,7 @@ export default function HoldingDashboardView() {
                       planejador_nome: obra.planejador_nome || "",
                       planejador_telefone: obra.planejador_telefone || "",
                       tipo_contrato: obra.tipo_contrato || "",
+                      valor_medido_inicial: obra.valor_medido_inicial || 0,
                     });
                     setEditingObra(obra);
                     setShowNewObraDialog(true);
@@ -1585,6 +1614,25 @@ export default function HoldingDashboardView() {
               </div>
               <p className="text-[10px] text-muted-foreground mt-1">Baseado nas medições aprovadas / valor do contrato</p>
             </div>
+            {(newObraForm.status === "em_andamento" || (editingObra && editingObra.status === "em_andamento")) && (
+              <div>
+                <Label className="text-xs">Valor já faturado fora do sistema (R$)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={newObraForm.valor_medido_inicial || ""}
+                  onChange={(e) => setNewObraForm(p => ({ ...p, valor_medido_inicial: Number(e.target.value) || 0 }))}
+                  disabled={!isCompanyAdmin}
+                  placeholder="0"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Execução medida antes de entrar no ObraMap. Usado apenas para calcular o saldo a faturar e o % financeiro. Não entra nos relatórios de receitas.
+                </p>
+                {!isCompanyAdmin && (
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">🔒 Somente administradores podem editar este campo.</p>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Período Medição *</Label>
