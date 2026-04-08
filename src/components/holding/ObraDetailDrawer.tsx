@@ -555,6 +555,11 @@ function DocumentosTab({ obraId }: { obraId: string }) {
   const [docFilesMap, setDocFilesMap] = useState<Map<string, DocFile[]>>(new Map());
   const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
   const [deletingFile, setDeletingFile] = useState<DocFile | null>(null);
+  const [adminEditMode, setAdminEditMode] = useState(false);
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [editDocName, setEditDocName] = useState("");
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [deletingDocFileCount, setDeletingDocFileCount] = useState(0);
 
   const [legacyDocs, setLegacyDocs] = useState<Record<string, boolean> | null>(null);
   const [legacyDocId, setLegacyDocId] = useState<string | null>(null);
