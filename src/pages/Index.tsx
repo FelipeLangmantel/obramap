@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
+import { AppSidebar, NotificationBell } from "@/components/AppSidebar";
 import { HomeDashboard } from "@/components/HomeDashboard";
 import { StatsCards } from "@/components/StatsCards";
 import { FilterBar } from "@/components/FilterBar";
