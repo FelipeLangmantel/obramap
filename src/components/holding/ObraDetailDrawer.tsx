@@ -894,6 +894,66 @@ function DocumentosTab({ obraId }: { obraId: string }) {
         {renderDocCard("Ensaios e Projetos", <FlaskConical className="h-4 w-4" />, ensaiosTipos, ENSAIOS_PROJETOS_FIELDS)}
       </div>
 
+      {/* Admin Edit Mode Button */}
+      {isCompanyAdmin && (
+        <div className="flex justify-end">
+          <Button variant={adminEditMode ? "default" : "outline"} size="sm" onClick={() => setAdminEditMode(!adminEditMode)}>
+            <Pencil className="h-3.5 w-3.5 mr-1" /> {adminEditMode ? "Sair do Modo Edição" : "Modo Edição"}
+          </Button>
+        </div>
+      )}
+
+      {/* Admin: Edit doc name dialog */}
+      {editingDocId && (
+        <AlertDialog open={!!editingDocId} onOpenChange={(o) => !o && setEditingDocId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Renomear Documento</AlertDialogTitle>
+              <AlertDialogDescription>
+                <Input value={editDocName} onChange={(e) => setEditDocName(e.target.value)} className="mt-2" />
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={async () => {
+                const doc = Array.from(obraDocsMap.values()).find((d: any) => d.id === editingDocId);
+                if (!doc) return;
+                await supabase.from("holding_obra_docs").update({ notes: editDocName } as any).eq("id", editingDocId);
+                await registrarLog(obraId, "holding_obra_docs", editingDocId, "editou", `Renomeou documento para "${editDocName}"`, userId, userName);
+                setEditingDocId(null);
+                load();
+              }}>Salvar</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {/* Admin: Delete doc confirm */}
+      {deletingDocId && (
+        <AlertDialog open={!!deletingDocId} onOpenChange={(o) => !o && setDeletingDocId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Excluir Documento</AlertDialogTitle>
+              <AlertDialogDescription>
+                Tem certeza? {deletingDocFileCount > 0 ? `${deletingDocFileCount} arquivo(s) serão removidos permanentemente.` : "Nenhum arquivo anexado."} Esta ação não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={async () => {
+                await supabase.from("holding_doc_files").delete().eq("obra_doc_id", deletingDocId);
+                await supabase.from("holding_obra_docs").delete().eq("id", deletingDocId);
+                await registrarLog(obraId, "holding_obra_docs", deletingDocId, "excluiu", `Excluiu documento e ${deletingDocFileCount} arquivo(s)`, userId, userName);
+                setDeletingDocId(null);
+                toast.success("Documento excluído.");
+                invalidateHolding();
+                load();
+              }}>Excluir</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
       <AlertDialog open={!!deletingFile} onOpenChange={(open) => !open && setDeletingFile(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
