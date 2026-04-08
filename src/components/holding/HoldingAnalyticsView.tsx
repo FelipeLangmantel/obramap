@@ -600,13 +600,6 @@ export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Pro
         </Card>
       )}
 
-      {/* Summary Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MiniKpi icon={DollarSign} label="Valor Total do Portfólio" value={BRL.format(summaryStats.totalPortfolio)} className="text-emerald-600 dark:text-emerald-400" />
-        <MiniKpi icon={TrendingUp} label="Total Recebido" value={BRL.format(summaryStats.totalRecebido)} className="text-blue-600 dark:text-blue-400" />
-        <MiniKpi icon={TrendingDown} label="Total Despesas" value={BRL.format(summaryStats.totalDespesas)} className="text-red-600 dark:text-red-400" />
-        <MiniKpi icon={Wallet} label="Saldo Estimado" value={BRL.format(summaryStats.saldo)} className={summaryStats.saldo >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"} />
-      </div>
     </div>
   );
 }
