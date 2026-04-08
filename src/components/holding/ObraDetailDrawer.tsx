@@ -2242,9 +2242,9 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
       `Excluiu despesa — ${d.mes_referencia}/${d.ano_referencia} — ${BRL.format(d.valor)}`,
       userId, userName
     );
-    // Marcar notificação relacionada como resolvida
-    await supabase.from("system_notifications")
-      .update({ resolvida: true, resolvida_em: new Date().toISOString() } as any)
+    // Marcar notificação relacionada como resolvida (best-effort, ignore type)
+    await (supabase.from("system_notifications") as any)
+      .update({ resolvida: true, resolvida_em: new Date().toISOString() })
       .eq("despesa_id", despesaId);
     toast.success("Despesa excluída.");
     setDeletingDespesaId(null);
