@@ -385,7 +385,13 @@ export default function HoldingReceitasPage() {
           aprovado: medsInWeek.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           enviado: medsInWeek.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
           pendente: medsInWeek.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
-          total: medsInWeek.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
+          total: medsInWeek.reduce((s, m) => s + (
+            m.statusEntrada === "recebido" || m.statusEntrada === "aprovado"
+              ? (Number(m.valor_acatado ?? m.valor_medicao) || 0)
+              : m.statusEntrada === "enviado"
+              ? (Number(m.valor_medicao) || 0)
+              : (Number(m.valor_previsto_medicao) || 0)
+          ), 0),
           medicoes: medsInWeek,
         });
       }
@@ -407,7 +413,13 @@ export default function HoldingReceitasPage() {
           aprovado: medsInPeriod.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           enviado: medsInPeriod.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
           pendente: medsInPeriod.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
-          total: medsInPeriod.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
+          total: medsInPeriod.reduce((s, m) => s + (
+            m.statusEntrada === "recebido" || m.statusEntrada === "aprovado"
+              ? (Number(m.valor_acatado ?? m.valor_medicao) || 0)
+              : m.statusEntrada === "enviado"
+              ? (Number(m.valor_medicao) || 0)
+              : (Number(m.valor_previsto_medicao) || 0)
+          ), 0),
           medicoes: medsInPeriod,
         });
       }
@@ -428,7 +440,13 @@ export default function HoldingReceitasPage() {
           aprovado: medsInMonth.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           enviado: medsInMonth.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
           pendente: medsInMonth.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
-          total: medsInMonth.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
+          total: medsInMonth.reduce((s, m) => s + (
+            m.statusEntrada === "recebido" || m.statusEntrada === "aprovado"
+              ? (Number(m.valor_acatado ?? m.valor_medicao) || 0)
+              : m.statusEntrada === "enviado"
+              ? (Number(m.valor_medicao) || 0)
+              : (Number(m.valor_previsto_medicao) || 0)
+          ), 0),
           medicoes: medsInMonth,
         };
       });
@@ -1115,7 +1133,13 @@ export default function HoldingReceitasPage() {
                                           <span className="font-medium truncate flex-1">{m.obra_nome}</span>
                                           <span className="text-muted-foreground">Med {m.num_medicao || "—"}</span>
                                           <Badge className={`text-[9px] ${statusCfg.cls}`} variant="secondary">{statusCfg.label}</Badge>
-                                          <span className="font-semibold whitespace-nowrap">{BRL.format(m.valor_medicao)}</span>
+                                          <span className="font-semibold whitespace-nowrap">{BRL.format(
+                                            m.statusEntrada === "recebido" || m.statusEntrada === "aprovado"
+                                              ? (Number(m.valor_acatado ?? m.valor_medicao) || 0)
+                                              : m.statusEntrada === "enviado"
+                                              ? (Number(m.valor_medicao) || 0)
+                                              : (Number(m.valor_previsto_medicao) || 0)
+                                          )}</span>
                                         </div>
                                         {m.calculo && (
                                           <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
