@@ -842,6 +842,16 @@ function DocumentosTab({ obraId }: { obraId: string }) {
                             )}
                           </label>
                         )}
+                        {adminEditMode && obraDoc && (
+                          <>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setEditingDocId(obraDoc.id); setEditDocName(item.nome); }} title="Editar nome">
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => { setDeletingDocId(obraDoc.id); setDeletingDocFileCount((docFilesMap.get(obraDoc.id) || []).length); }} title="Excluir documento">
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </>
+                        )}
                         <Switch checked={!!obraDoc?.checked} onCheckedChange={(v) => toggleFlexible(item.id, v)} />
                       </div>
                     </div>
