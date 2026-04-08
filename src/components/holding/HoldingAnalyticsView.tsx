@@ -173,6 +173,7 @@ const monthKey = (mes: string | null, ano: number | null) => {
    ═══════════════════════════════════════ */
 
 export default function HoldingAnalyticsView({ obras, alerts, onObraClick }: Props) {
+  const mapRef = useRef<HoldingMapHandle>(null);
   const [hoveredObra, setHoveredObra] = useState<string | null>(null);
   const [medicoesData, setMedicoesData] = useState<any[]>([]);
   const [despesasData, setDespesasData] = useState<any[]>([]);
