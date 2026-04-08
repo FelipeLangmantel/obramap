@@ -1425,6 +1425,7 @@ export default function HoldingDashboardView() {
                       planejador_nome: obra.planejador_nome || "",
                       planejador_telefone: obra.planejador_telefone || "",
                       tipo_contrato: obra.tipo_contrato || "",
+                      valor_medido_inicial: obra.valor_medido_inicial || 0,
                     });
                     setEditingObra(obra);
                     setShowNewObraDialog(true);
