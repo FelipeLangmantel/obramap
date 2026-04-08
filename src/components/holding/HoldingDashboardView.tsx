@@ -471,7 +471,7 @@ export function calcHealthDetails(
    ══════════════════════════════════════════════════════════════ */
 
 export default function HoldingDashboardView() {
-  const { company, isCompanyAdmin, canEdit } = useAuth();
+  const { company, isCompanyAdmin, canEdit, user, profile } = useAuth();
 
   // Load thresholds from localStorage on mount
   useEffect(() => {
