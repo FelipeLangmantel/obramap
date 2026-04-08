@@ -495,6 +495,7 @@ export default function HoldingDashboardView() {
     coordenador_nome: "", coordenador_telefone: "",
     planejador_nome: "", planejador_telefone: "",
     tipo_contrato: "",
+    valor_medido_inicial: 0,
   });
   const [savingObra, setSavingObra] = useState(false);
   const [editingObra, setEditingObra] = useState<ObraEnriched | null>(null);
