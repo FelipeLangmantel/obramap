@@ -676,6 +676,8 @@ export default function HoldingDashboardView() {
     if (!newObraForm.num_contrato.trim()) errs.num_contrato = "Nº Contrato é obrigatório";
     if (!newObraForm.data_inicio) errs.data_inicio = "Data Início é obrigatória";
     if (!newObraForm.prazo_dias || Number(newObraForm.prazo_dias) <= 0) errs.prazo_dias = "Prazo deve ser > 0";
+    if (!newObraForm.empresa?.trim()) errs.empresa = "Empresa é obrigatória";
+    if (!newObraForm.tipo_contrato) errs.tipo_contrato = "Tipo de contrato é obrigatório";
     if (!newObraForm.periodo_medicao.trim()) errs.periodo_medicao = "Período de Medição é obrigatório";
     if (!newObraForm.prazo_pagamento.trim()) errs.prazo_pagamento = "Prazo de Pagamento é obrigatório";
     if (!newObraForm.responsavel_nome.trim()) errs.responsavel_nome = "Eng. Residente é obrigatório (se não houver, digite 'Contratar')";
@@ -1535,10 +1537,10 @@ export default function HoldingDashboardView() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs">Empresa</Label>
+                <Label className="text-xs">Empresa *</Label>
                 {holdingEmpresas.length > 0 ? (
-                  <Select value={newObraForm.empresa} onValueChange={(v) => setNewObraForm(p => ({ ...p, empresa: v }))} disabled={editingObra && isEditorRestricted}>
-                    <SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <Select value={newObraForm.empresa} onValueChange={(v) => setNewObraForm(p => ({ ...p, empresa: v }))} disabled={!!(editingObra && isEditorRestricted)}>
+                    <SelectTrigger className={`h-9 ${formErrors.empresa ? "border-destructive" : ""}`}><SelectValue placeholder="Selecione..." /></SelectTrigger>
                     <SelectContent>
                       {holdingEmpresas.map(e => (
                         <SelectItem key={e.id} value={e.nome}>{e.nome}</SelectItem>
@@ -1547,10 +1549,11 @@ export default function HoldingDashboardView() {
                   </Select>
                 ) : (
                   <div>
-                    <Input value={newObraForm.empresa} onChange={(e) => setNewObraForm(p => ({ ...p, empresa: e.target.value }))} placeholder="Digite o nome" disabled={editingObra && isEditorRestricted} />
+                    <Input value={newObraForm.empresa} onChange={(e) => setNewObraForm(p => ({ ...p, empresa: e.target.value }))} placeholder="Digite o nome" disabled={!!(editingObra && isEditorRestricted)} className={formErrors.empresa ? "border-destructive" : ""} />
                     <p className="text-[10px] text-muted-foreground mt-0.5">💡 Cadastre empresas em Configurações para usar o seletor.</p>
                   </div>
                 )}
+                {formErrors.empresa && <p className="text-[10px] text-destructive mt-0.5">{formErrors.empresa}</p>}
               </div>
               <div>
                 <Label className="text-xs">Nº Contrato *</Label>
@@ -1641,7 +1644,18 @@ export default function HoldingDashboardView() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Período Medição *</Label>
-                <Input value={newObraForm.periodo_medicao} onChange={(e) => setNewObraForm(p => ({ ...p, periodo_medicao: e.target.value }))} disabled={editingObra && isEditorRestricted} className={formErrors.periodo_medicao ? "border-destructive" : ""} />
+                <Select
+                  value={newObraForm.periodo_medicao}
+                  onValueChange={(v) => setNewObraForm(p => ({ ...p, periodo_medicao: v }))}
+                  disabled={!!(editingObra && isEditorRestricted)}
+                >
+                  <SelectTrigger className={formErrors.periodo_medicao ? "border-destructive" : ""}><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Semanal">Semanal</SelectItem>
+                    <SelectItem value="Quinzenal">Quinzenal</SelectItem>
+                    <SelectItem value="Mensal">Mensal</SelectItem>
+                  </SelectContent>
+                </Select>
                 {formErrors.periodo_medicao && <p className="text-[10px] text-destructive mt-0.5">{formErrors.periodo_medicao}</p>}
               </div>
               <div>
@@ -1669,9 +1683,9 @@ export default function HoldingDashboardView() {
                 {formErrors.uh && <p className="text-[10px] text-destructive mt-0.5">{formErrors.uh}</p>}
               </div>
               <div>
-                <Label className="text-xs">Tipo de Contrato</Label>
-                <Select value={newObraForm.tipo_contrato} onValueChange={(v) => setNewObraForm(p => ({ ...p, tipo_contrato: v }))} disabled={editingObra && isEditorRestricted}>
-                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <Label className="text-xs">Tipo de Contrato *</Label>
+                <Select value={newObraForm.tipo_contrato} onValueChange={(v) => setNewObraForm(p => ({ ...p, tipo_contrato: v }))} disabled={!!(editingObra && isEditorRestricted)}>
+                  <SelectTrigger className={formErrors.tipo_contrato ? "border-destructive" : ""}><SelectValue placeholder="Selecione..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="Ata Estado RS">Ata Estado RS</SelectItem>
                     <SelectItem value="Licitação">Licitação</SelectItem>
@@ -1683,6 +1697,7 @@ export default function HoldingDashboardView() {
                     <SelectItem value="Projeto de Obra">Projeto de Obra</SelectItem>
                   </SelectContent>
                 </Select>
+                {formErrors.tipo_contrato && <p className="text-[10px] text-destructive mt-0.5">{formErrors.tipo_contrato}</p>}
               </div>
             </div>
             <div className="border-t border-border/40 pt-3 mt-1">

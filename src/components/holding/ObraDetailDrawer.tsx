@@ -148,7 +148,7 @@ interface ObraDetailDrawerProps {
 export default function ObraDetailDrawer({ obra, onClose }: ObraDetailDrawerProps) {
   return (
     <Sheet open={!!obra} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="w-full sm:max-w-[75vw] lg:max-w-[70vw] overflow-y-auto p-0">
+      <SheetContent className="w-full sm:max-w-[90vw] lg:max-w-[85vw] overflow-y-auto p-0">
         {obra && <ObraDetailContent obra={obra} />}
       </SheetContent>
     </Sheet>
@@ -483,7 +483,7 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
           <TabsTrigger value="resumo">Resumo</TabsTrigger>
           <TabsTrigger value="documentos">Documentos</TabsTrigger>
           <TabsTrigger value="medicoes">Medições</TabsTrigger>
-          <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
+          <TabsTrigger value="financeiro">Despesas</TabsTrigger>
           <TabsTrigger value="aditivos">Aditivos</TabsTrigger>
           <TabsTrigger value="pendencias">Pendências</TabsTrigger>
           <TabsTrigger value="historico">Histórico</TabsTrigger>
