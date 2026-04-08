@@ -545,8 +545,10 @@ function formatFileSize(bytes: number) {
 }
 
 function DocumentosTab({ obraId }: { obraId: string }) {
-  const { company, user } = useAuth();
+  const { company, user, isCompanyAdmin } = useAuth();
   const invalidateHolding = useInvalidateHolding();
+  const userName = user?.email?.split("@")[0] || "Usuário";
+  const userId = user?.id || null;
 
   const [docTipos, setDocTipos] = useState<{ id: string; nome: string; categoria: string; obrigatorio: boolean }[]>([]);
   const [obraDocsMap, setObraDocsMap] = useState<Map<string, any>>(new Map());
