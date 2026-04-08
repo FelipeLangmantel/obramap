@@ -1614,6 +1614,25 @@ export default function HoldingDashboardView() {
               </div>
               <p className="text-[10px] text-muted-foreground mt-1">Baseado nas medições aprovadas / valor do contrato</p>
             </div>
+            {(newObraForm.status === "em_andamento" || (editingObra && editingObra.status === "em_andamento")) && (
+              <div>
+                <Label className="text-xs">Valor já faturado fora do sistema (R$)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={newObraForm.valor_medido_inicial || ""}
+                  onChange={(e) => setNewObraForm(p => ({ ...p, valor_medido_inicial: Number(e.target.value) || 0 }))}
+                  disabled={!isCompanyAdmin}
+                  placeholder="0"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Execução medida antes de entrar no ObraMap. Usado apenas para calcular o saldo a faturar e o % financeiro. Não entra nos relatórios de receitas.
+                </p>
+                {!isCompanyAdmin && (
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">🔒 Somente administradores podem editar este campo.</p>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Período Medição *</Label>
