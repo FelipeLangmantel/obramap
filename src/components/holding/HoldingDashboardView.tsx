@@ -1140,8 +1140,10 @@ export default function HoldingDashboardView() {
         const aprovadas = o.allMedicoes
           .filter((m) => m.status_medicao === "aprovada")
           .reduce((ss, m) => ss + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
-        // Se tem medições aprovadas, usa o financeiro real; senão usa o percentual manual
-        const pct = aprovadas > 0 ? (aprovadas / vc) * 100 : (o.percentual_andamento || 0);
+        // Soma valor_medido_inicial (faturamento anterior ao sistema) para percentual correto
+        const totalFinanceiro = aprovadas + (o.valor_medido_inicial || 0);
+        // Se há dados financeiros reais, usa-os; senão usa o percentual manual
+        const pct = totalFinanceiro > 0 ? (totalFinanceiro / vc) * 100 : (o.percentual_andamento || 0);
         return s + Math.min(100, pct);
       }, 0) / emAndamento.length
     ) : 0;
@@ -1951,9 +1953,9 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
   // Nunca usa % × contrato como fallback — isso não é dinheiro faturado
   const receitasAprovadas = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
   const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
-  const receitas = receitasAprovadas > 0
-    ? receitasAprovadas
-    : (obra.valor_medido_inicial || 0);
+  // Receita total = acatado em medições + valor faturado antes do sistema (ambos somados sempre)
+  // Bug anterior: usava OR exclusivo — ignorava valor_medido_inicial após a 1ª aprovação
+  const receitas = receitasAprovadas + (obra.valor_medido_inicial || 0);
   const percentualFinanceiro = valorContrato > 0 && receitas > 0 ? Math.min(100, (receitas / valorContrato) * 100) : 0;
   const saldoContrato = valorContrato - receitas;
 
