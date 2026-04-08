@@ -580,7 +580,33 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       <ManageMacrosDialog open={macrosDialogOpen} onOpenChange={setMacrosDialogOpen} />
       <ManageQuadrasDialog open={quadrasDialogOpen} onOpenChange={setQuadrasDialogOpen} />
 
-      {/* Notifications Sheet */}
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════
+   Exported NotificationBell — standalone
+   ═══════════════════════════════════════ */
+
+export function NotificationBell() {
+  const navigate = useNavigate();
+  const notif = useNotifications();
+
+  return (
+    <>
+      <button
+        className="relative h-8 w-8 flex items-center justify-center rounded-md hover:bg-accent transition-colors"
+        onClick={() => { notif.setIsOpen(true); notif.loadNotifications(); }}
+        title="Notificações"
+      >
+        <Bell className="h-4 w-4 text-foreground" />
+        {notif.count > 0 && (
+          <span className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+            {notif.count > 99 ? "99+" : notif.count}
+          </span>
+        )}
+      </button>
+
       <Sheet open={notif.isOpen} onOpenChange={notif.setIsOpen}>
         <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader>
