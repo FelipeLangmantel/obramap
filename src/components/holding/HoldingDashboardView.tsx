@@ -781,6 +781,18 @@ export default function HoldingDashboardView() {
 
         toast.success(`Obra atualizada! Saldo inicial recalculado para ${BRL.format(novoValorInicial)}.`);
       } else {
+        // Recalcular percentual_financeiro se valor_medido_inicial foi alterado
+        if (isCompanyAdmin && newObraForm.valor_medido_inicial > 0) {
+          const vc = (Number(newObraForm.valor_contrato) || 0);
+          if (vc > 0) {
+            const medicoesAprovadas = editingObra.allMedicoes
+              .filter(m => m.status_medicao === "aprovada")
+              .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+            const totalMedido = medicoesAprovadas + newObraForm.valor_medido_inicial;
+            const pctFin = Math.min(100, (totalMedido / vc) * 100);
+            await supabase.from("obras_portfolio").update({ percentual_financeiro: pctFin }).eq("id", editingObra.id);
+          }
+        }
         toast.success("Obra atualizada!");
       }
     } else {
