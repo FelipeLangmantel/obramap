@@ -2225,6 +2225,32 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
 
   // Admin unlock confirm
   const [confirmUnlockId, setConfirmUnlockId] = useState<string | null>(null);
+  // Delete despesa confirm
+  const [deletingDespesaId, setDeletingDespesaId] = useState<string | null>(null);
+
+  const handleDeleteDespesa = async (despesaId: string) => {
+    const d = despesas.find(x => x.id === despesaId);
+    if (!d) return;
+    if (d.is_locked && !(isAdmin || isCompanyAdmin)) {
+      toast.error("Despesa fechada. Solicite desbloqueio ao administrador antes de excluir.");
+      return;
+    }
+    const { error } = await supabase.from("despesas_mensais").delete().eq("id", despesaId);
+    if (error) { toast.error("Erro ao excluir despesa."); return; }
+    await registrarLog(
+      obraId, "despesas_mensais", despesaId, "excluiu",
+      `Excluiu despesa — ${d.mes_referencia}/${d.ano_referencia} — ${BRL.format(d.valor)}`,
+      userId, userName
+    );
+    // Marcar notificação relacionada como resolvida
+    await supabase.from("system_notifications")
+      .update({ resolvida: true, resolvida_em: new Date().toISOString() } as any)
+      .eq("despesa_id", despesaId);
+    toast.success("Despesa excluída.");
+    setDeletingDespesaId(null);
+    invalidateHolding();
+    loadData();
+  };
 
   const selectedMedicao = allMedicoes.find((m: any) => m.id === selectedMedicaoId);
   const tipoDespesa = selectedMedicao?.status_medicao === "aprovada" ? "real" : "prevista";
@@ -2556,6 +2582,17 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
                         <FileText className="h-3 w-3" />
                       </Button>
                     ) : null}
+                    {/* Excluir — admin pode sempre, editor só se não locked */}
+                    {(isAdmin || isCompanyAdmin || (!locked && canEditDespesa(d))) && (
+                      <Button
+                        variant="ghost" size="icon"
+                        className="h-6 w-6 text-destructive/70 hover:text-destructive"
+                        title="Excluir despesa"
+                        onClick={() => setDeletingDespesaId(d.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               );
@@ -2652,6 +2689,31 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={() => confirmUnlockId && handleAdminUnlock(confirmUnlockId)}>Desbloquear</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Despesa Confirm */}
+      <AlertDialog open={!!deletingDespesaId} onOpenChange={(o) => !o && setDeletingDespesaId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Despesa</AlertDialogTitle>
+            <AlertDialogDescription>
+              {(() => {
+                const d = despesas.find(x => x.id === deletingDespesaId);
+                if (!d) return "Confirmar exclusão?";
+                return `Excluir despesa de ${BRL.format(d.valor)} (${d.mes_referencia}/${d.ano_referencia} — ${d.tipo_despesa === "real" ? "Real" : "Prevista"})? Esta ação não pode ser desfeita.`;
+              })()}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deletingDespesaId && handleDeleteDespesa(deletingDespesaId)}
+            >
+              Excluir
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
