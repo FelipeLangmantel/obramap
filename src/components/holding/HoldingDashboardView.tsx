@@ -308,8 +308,9 @@ export function calcHealth(
     const diasSemMedicao = differenceInDays(now, new Date(ultimaAprovada.data_aprovacao + "T12:00:00"));
     if (diasSemMedicao > T.dias_sem_medicao_red) return "red";
     if (diasSemMedicao > T.dias_sem_medicao_yellow) return "yellow";
-  } else if (pctFisico > 0.1) {
-    // Obra com >10% de andamento mas sem nenhuma medição aprovada
+  } else if (pctFisico > 0.1 && !(obra.valor_medido_inicial > 0)) {
+    // Obra com >10% de andamento mas sem nenhuma medição aprovada E sem saldo inicial
+    // Se tem valor_medido_inicial, o faturamento é pré-sistema — não é alerta
     return "yellow";
   }
 
@@ -397,7 +398,7 @@ export function calcHealthDetails(
   if (ultimaAprovada?.data_aprovacao) {
     diasValue = differenceInDays(now, new Date(ultimaAprovada.data_aprovacao + "T12:00:00"));
     diasStatus = diasValue > T.dias_sem_medicao_red ? "red" : diasValue > T.dias_sem_medicao_yellow ? "yellow" : "green";
-  } else if (pctFisico > 0.1) {
+  } else if (pctFisico > 0.1 && !(obra.valor_medido_inicial > 0)) {
     diasStatus = "yellow";
   }
 
