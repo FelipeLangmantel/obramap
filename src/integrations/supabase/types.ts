@@ -4921,6 +4921,7 @@ export type Database = {
           created_by_user_id: string | null
           data_aprovacao: string | null
           data_envio: string | null
+          data_envio_nf: string | null
           data_pagamento: string | null
           data_previsao_medicao: string | null
           id: string
@@ -4946,6 +4947,7 @@ export type Database = {
           created_by_user_id?: string | null
           data_aprovacao?: string | null
           data_envio?: string | null
+          data_envio_nf?: string | null
           data_pagamento?: string | null
           data_previsao_medicao?: string | null
           id?: string
@@ -4971,6 +4973,7 @@ export type Database = {
           created_by_user_id?: string | null
           data_aprovacao?: string | null
           data_envio?: string | null
+          data_envio_nf?: string | null
           data_pagamento?: string | null
           data_previsao_medicao?: string | null
           id?: string
@@ -5067,6 +5070,7 @@ export type Database = {
           tipo_contrato: string | null
           total_houses: number
           uh: number | null
+          updated_at: string | null
           valor_contrato: number
           valor_medido_inicial: number
         }
@@ -5104,6 +5108,7 @@ export type Database = {
           tipo_contrato?: string | null
           total_houses?: number
           uh?: number | null
+          updated_at?: string | null
           valor_contrato?: number
           valor_medido_inicial?: number
         }
@@ -5141,6 +5146,7 @@ export type Database = {
           tipo_contrato?: string | null
           total_houses?: number
           uh?: number | null
+          updated_at?: string | null
           valor_contrato?: number
           valor_medido_inicial?: number
         }
@@ -7566,6 +7572,94 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      restricoes_financeiras: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          created_by_name: string | null
+          data_limite: string
+          descricao: string
+          forma_resolucao: string | null
+          id: string
+          impacto_medicao: number
+          medicao_id: string | null
+          obra_id: string
+          resolvida: boolean
+          resolvida_em: string | null
+          resolvida_por: string | null
+          resolvida_por_nome: string | null
+          tipo: string
+          updated_at: string | null
+          valor: number
+          valor_pago: number | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          data_limite: string
+          descricao: string
+          forma_resolucao?: string | null
+          id?: string
+          impacto_medicao?: number
+          medicao_id?: string | null
+          obra_id: string
+          resolvida?: boolean
+          resolvida_em?: string | null
+          resolvida_por?: string | null
+          resolvida_por_nome?: string | null
+          tipo: string
+          updated_at?: string | null
+          valor?: number
+          valor_pago?: number | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          created_by_name?: string | null
+          data_limite?: string
+          descricao?: string
+          forma_resolucao?: string | null
+          id?: string
+          impacto_medicao?: number
+          medicao_id?: string | null
+          obra_id?: string
+          resolvida?: boolean
+          resolvida_em?: string | null
+          resolvida_por?: string | null
+          resolvida_por_nome?: string | null
+          tipo?: string
+          updated_at?: string | null
+          valor?: number
+          valor_pago?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "restricoes_financeiras_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "restricoes_financeiras_medicao_id_fkey"
+            columns: ["medicao_id"]
+            isOneToOne: false
+            referencedRelation: "medicoes_ple"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "restricoes_financeiras_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
             referencedColumns: ["id"]
           },
         ]
@@ -10172,6 +10266,10 @@ export type Database = {
       promote_to_system_admin: { Args: { admin_email: string }; Returns: Json }
       recalc_alerts_for_measurement: {
         Args: { p_measurement_id: string }
+        Returns: undefined
+      }
+      recalcular_percentual_financeiro: {
+        Args: { p_obra_id: string }
         Returns: undefined
       }
       recalculate_measurement_forecast: {
