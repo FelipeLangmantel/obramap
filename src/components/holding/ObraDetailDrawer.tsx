@@ -1482,6 +1482,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     const payload: any = {
       num_nf: editForm.num_nf || null,
       data_pagamento: editForm.data_pagamento,
+      data_envio_nf: editForm.data_envio_nf || null,
       status_nf: "recebido",
     };
 
