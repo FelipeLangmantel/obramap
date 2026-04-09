@@ -336,7 +336,19 @@ export default function HoldingReceitasPage() {
     if (!selectedMonth) return [];
     return medicoesFiltradasGlobal
       .filter(m => medicaoMonthMap.get(m.id) === selectedMonth)
-      .sort((a, b) => a.obra_nome.localeCompare(b.obra_nome, "pt-BR"));
+      .sort((a, b) => {
+        // Ordenar por data de previsão de envio (mais antiga primeiro)
+        // Medições sem data ficam no final
+        const da = a.data_previsao_medicao
+          ? new Date(a.data_previsao_medicao + "T12:00:00").getTime()
+          : Infinity;
+        const db = b.data_previsao_medicao
+          ? new Date(b.data_previsao_medicao + "T12:00:00").getTime()
+          : Infinity;
+        if (da !== db) return da - db;
+        // Tie-breaker: nome da obra
+        return a.obra_nome.localeCompare(b.obra_nome, "pt-BR");
+      });
   }, [selectedMonth, medicoesFiltradasGlobal, medicaoMonthMap]);
 
 

@@ -82,6 +82,14 @@ export function useNotifications() {
     };
   }, [company?.id, loadCount, loadNotifications, isOpen]);
 
+  // Polling fallback: sincroniza o contador a cada 60s
+  // Cobre eventos que não tocam system_notifications diretamente (ex: upload de documento)
+  useEffect(() => {
+    if (!company?.id) return;
+    const timer = setInterval(loadCount, 60_000);
+    return () => clearInterval(timer);
+  }, [company?.id, loadCount]);
+
   const markAsRead = useCallback(
     async (notifId: string) => {
       await supabase
