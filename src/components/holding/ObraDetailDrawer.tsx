@@ -2028,6 +2028,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
               <TableHead>Prev. Envio</TableHead>
               <TableHead>Envio</TableHead>
               <TableHead>Aprovação</TableHead>
+              <TableHead>NF Enviada</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Previsto</TableHead>
               <TableHead className="text-right">Realizado</TableHead>
