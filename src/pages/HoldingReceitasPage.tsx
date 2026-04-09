@@ -155,7 +155,7 @@ export default function HoldingReceitasPage() {
         if (!isNaN(na) && !isNaN(nb)) return na - nb;
         return (a.num_medicao || "").localeCompare(b.num_medicao || "");
       });
-      return { obras: obrasList, medicoes: joined };
+      return { obras: obrasList, medicoes: joined, restricoes: (restricoes || []) as any[] };
     },
     enabled: !!company?.id,
     refetchOnWindowFocus: true,
