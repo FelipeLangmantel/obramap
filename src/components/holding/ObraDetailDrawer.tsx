@@ -3426,6 +3426,7 @@ function HistoricoTab({ obraId }: { obraId: string }) {
     despesas_mensais: { label: "Despesas", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
     medicoes_ple: { label: "Medições", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
     aditivos_contratos: { label: "Aditivos", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+    restricoes_financeiras: { label: "Restrições", cls: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300" },
   };
 
   const ACAO_ICON: Record<string, string> = {
