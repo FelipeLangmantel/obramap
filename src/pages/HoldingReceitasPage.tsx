@@ -98,17 +98,21 @@ export default function HoldingReceitasPage() {
   const { data } = useQuery({
     queryKey: ["holding-receitas", company?.id],
     queryFn: async () => {
-      // 1. Fetch obras for this company
       const { data: obras, error: obrasError } = await supabase
         .from("obras_portfolio")
-        .select("id, nome, empresa, num_contrato, valor_contrato, parceria_scp, uh, responsavel, tipo_contrato, prazo_pagamento")
+        .select("id, nome, empresa, num_contrato, valor_contrato, parceria_scp, uh, responsavel, tipo_contrato, prazo_pagamento, valor_medido_inicial, status, aditivo_valor_total")
         .eq("company_id", company!.id);
 
       if (obrasError) throw obrasError;
       const obrasList = obras || [];
       const obraIds = obrasList.map(o => o.id);
 
-      if (obraIds.length === 0) return { obras: obrasList, medicoes: [] };
+      if (obraIds.length === 0) return { obras: obrasList, medicoes: [], restricoes: [] };
+
+      const [{ data: medicoes, error: medError }, { data: restricoes }] = await Promise.all([
+        supabase.from("medicoes_ple").select("*").in("obra_id", obraIds),
+        supabase.from("restricoes_financeiras").select("*").in("obra_id", obraIds).eq("resolvida", false),
+      ]);
 
       // 2. Fetch medicoes filtered by obra_ids (server-side filter)
       const { data: medicoes, error: medError } = await supabase
