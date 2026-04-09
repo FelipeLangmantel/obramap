@@ -270,9 +270,11 @@ export function calcHealth(
 
   // ── IDC — Índice de Desempenho de Custo ──────────────────────────────────
   // IDC compara valor medido aprovado vs valor planejado (% físico × contrato)
+  // Inclui valor_medido_inicial — faturamento anterior ao sistema é receita real
   const totalMedidoAprovado = allMedicoes
     .filter(m => m.status_medicao === "aprovada")
-    .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+    .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0)
+    + (Number(obra.valor_medido_inicial) || 0);
 
   if (pctFisico > 0.05 && valorContrato > 0) {
     const valorPlanejado = pctFisico * valorContrato;
@@ -354,9 +356,11 @@ export function calcHealthDetails(
   const pctFisico = (obra.percentual_fisico || 0) / 100;
 
   // Usa valor_acatado para IDC — valor real aceito pelo governo
+  // Inclui valor_medido_inicial — faturamento anterior ao sistema é receita real
   const totalMedidoAprovado = allMedicoes
     .filter(m => m.status_medicao === "aprovada")
-    .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+    .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0)
+    + (Number(obra.valor_medido_inicial) || 0);
 
   // ── IDC ──────────────────────────────────────────────────────────────────
   let idcValue: number | null = null;
@@ -915,7 +919,7 @@ export default function HoldingDashboardView() {
       const healthLbl = o.health === "green" ? "Verde" : o.health === "yellow" ? "Amarelo" : o.health === "red" ? "Vermelho" : "Neutro";
       const recAprov = o.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
       const vc = (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
-      const receitas = recAprov;
+      const receitas = recAprov + (Number(o.valor_medido_inicial) || 0);
       const saldo = vc - receitas;
       const pctFin = o.valor_contrato > 0 && receitas > 0 ? (receitas / o.valor_contrato * 100).toFixed(1) + "%" : "—";
       return `${o.nome};${o.empresa || "—"};${o.num_contrato || "—"};${o.parceria_scp || "—"};${o.uh || "—"};${o.tipo_contrato || "—"};${o.responsavel_nome || o.responsavel || "—"};${o.responsavel_telefone || "—"};${o.valor_contrato};${receitas};${saldo};${pctFin};${o.data_inicio || "—"};${o.prazo_dias || "—"};${fim};${statusLbl};${o.percentual_andamento}%;${o.docsCount}/${o.docsTotal};${healthLbl}`;
@@ -1119,11 +1123,11 @@ export default function HoldingDashboardView() {
     const totalMedido = base.reduce((s, o) => {
       // Usa valor_acatado quando disponível (o que foi efetivamente aceito)
       // Fallback para valor_medicao se valor_acatado for nulo
-      // Inclui Saldo Inicial — faturamento real anterior ao sistema
+      // Soma valor_medido_inicial — faturamento real anterior ao sistema
       const aprovadas = o.allMedicoes
         .filter((m) => m.status_medicao === "aprovada")
         .reduce((ss, m) => ss + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
-      return s + aprovadas;
+      return s + aprovadas + (Number(o.valor_medido_inicial) || 0);
     }, 0);
     const saldoFaturar = totalContratos - totalMedido;
     const totalMedicoesAprovadas = totalMedido;
@@ -2240,7 +2244,7 @@ function ObraTable({ obras, onObraClick }: { obras: ObraEnriched[]; onObraClick:
                 const previsaoFim = obra.data_inicio ? format(addDays(parseLocalDate(obra.data_inicio!), obra.prazo_dias + obra.aditivo_prazo_dias), "dd/MM/yy") : "—";
                 const recAprov = obra.allMedicoes.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
                 const vc = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
-                const receitas = recAprov;
+                const receitas = recAprov + (Number(obra.valor_medido_inicial) || 0);
                 return (
                   <TableRow
                     key={obra.id}
