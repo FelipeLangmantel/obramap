@@ -1,4 +1,27 @@
 -- ═══════════════════════════════════════════════════════════════
+-- PRE-FIX: Remove CHECK constraint on tipo to allow new notification types
+-- The original constraint only allowed 5 types — new types added today
+-- (medicao_previsao_vencida, restricao_financeira) would be rejected
+-- ═══════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  v_constraint_name text;
+BEGIN
+  -- Find and drop any CHECK constraint on system_notifications.tipo
+  SELECT conname INTO v_constraint_name
+  FROM pg_constraint
+  WHERE conrelid = 'public.system_notifications'::regclass
+    AND contype = 'c'
+    AND pg_get_constraintdef(oid) LIKE '%tipo%'
+  LIMIT 1;
+
+  IF v_constraint_name IS NOT NULL THEN
+    EXECUTE format('ALTER TABLE public.system_notifications DROP CONSTRAINT %I', v_constraint_name);
+  END IF;
+END;
+$$;
+
+-- ═══════════════════════════════════════════════════════════════
 -- FIX 1: get_unread_notifications_count incluía notificações resolvidas
 -- O contador do sino mostrava número maior que a lista (lista filtra resolvida=false)
 -- ═══════════════════════════════════════════════════════════════

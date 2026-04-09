@@ -637,8 +637,18 @@ export function NotificationBell() {
                 despesa_pendente_link: <AlertTriangleIcon className="h-4 w-4 text-amber-500" />,
                 medicao_aprovada_despesa: <CheckCircle2 className="h-4 w-4 text-emerald-500" />,
                 despesa_fechamento: <FileTextIcon className="h-4 w-4 text-blue-500" />,
+                medicao_previsao_vencida: <AlertTriangleIcon className="h-4 w-4 text-destructive" />,
+                restricao_financeira: <AlertTriangleIcon className="h-4 w-4 text-destructive" />,
+              };
+              const navMap: Record<string, string> = {
+                despesa_pendente_link: "/holding-despesas",
+                medicao_aprovada_despesa: "/holding-despesas",
+                despesa_fechamento: "/holding-despesas",
+                medicao_previsao_vencida: "/holding-receitas",
+                restricao_financeira: "/holding-receitas",
               };
               const icon = iconMap[n.tipo] || <ClockIcon className="h-4 w-4 text-muted-foreground" />;
+              const destino = navMap[n.tipo] || "/holding-despesas";
               const timeAgo = formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: ptBR });
               return (
                 <button
@@ -650,7 +660,7 @@ export function NotificationBell() {
                   onClick={() => {
                     notif.markAsRead(n.id);
                     notif.setIsOpen(false);
-                    navigate("/holding-despesas");
+                    navigate(destino);
                   }}
                 >
                   <div className="flex items-start gap-3">
