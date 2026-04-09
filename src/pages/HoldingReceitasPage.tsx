@@ -1205,8 +1205,25 @@ export default function HoldingReceitasPage() {
                     const pctRecebido = valorContrato > 0 ? (valorRecebido / valorContrato) * 100 : 0;
 
                     const proximaMedicao = medsDaObra
-                      .filter(m => (m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada") && m.data_previsao_medicao && m.num_medicao !== "Saldo Inicial")
-                      .sort((a, b) => a.data_previsao_medicao!.localeCompare(b.data_previsao_medicao!))
+                      .filter(m =>
+                        m.status_medicao !== "aprovada" &&
+                        m.status_nf !== "recebido" &&
+                        m.num_medicao !== "Saldo Inicial" &&
+                        (m.data_previsao_medicao || m.data_envio || m.data_aprovacao)
+                      )
+                      .sort((a, b) => {
+                        // Sort by most advanced stage first, then by date
+                        const stageOrder: Record<string, number> = {
+                          aguardando_aprovacao: 0, aprovada: 1, enviada: 2,
+                          prevista: 3, nao_iniciada: 4,
+                        };
+                        const sa = stageOrder[a.status_medicao] ?? 5;
+                        const sb = stageOrder[b.status_medicao] ?? 5;
+                        if (sa !== sb) return sa - sb;
+                        const da = a.data_previsao_medicao || a.data_envio || "9999";
+                        const db = b.data_previsao_medicao || b.data_envio || "9999";
+                        return da.localeCompare(db);
+                      })
                       [0] || null;
 
                     const impactoRestricoes = restrDaObra
@@ -1222,8 +1239,11 @@ export default function HoldingReceitasPage() {
                     const hasVencidas = restrDaObra.some((r: any) => r.data_limite && new Date(r.data_limite + "T23:59:59") < now);
 
                     const statusColor = !proximaMedicao ? "bg-muted" :
-                      proximaMedicao.status_medicao === "prevista" || proximaMedicao.status_medicao === "nao_iniciada" ? "bg-amber-500" :
-                      proximaMedicao.status_medicao === "enviada" ? "bg-blue-500" : "bg-emerald-500";
+                      (proximaMedicao.status_medicao === "prevista" || proximaMedicao.status_medicao === "nao_iniciada") ? "bg-amber-500" :
+                      proximaMedicao.status_medicao === "enviada" ? "bg-blue-500" :
+                      proximaMedicao.status_medicao === "aprovada" ? "bg-emerald-400" :
+                      proximaMedicao.status_nf === "aguardando_aprovacao" ? "bg-emerald-600" :
+                      "bg-slate-400";
 
                     return { obra, valorContrato, valorRecebido, pctRecebido, proximaMedicao, valorPrevAjustado, impactoRestricoes, dataEntradaProjetada, saldoReceber, restrDaObra, hasVencidas, statusColor };
                   }).sort((a, b) => {
@@ -1238,7 +1258,7 @@ export default function HoldingReceitasPage() {
                   // KPIs
                   const totalReceber = obraCards.reduce((s, c) => s + c.saldoReceber, 0);
                   const recebidoMes = medicoes
-                    .filter(m => m.status_nf === "recebido" && m.data_pagamento && m.data_pagamento.startsWith(mesAtual.replace("-0", "-").length === 6 ? mesAtual : mesAtual))
+                    .filter(m => m.status_nf === "recebido" && m.data_pagamento && m.data_pagamento.startsWith(mesAtual))
                     .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
                   const prox30 = obraCards.reduce((s, c) => {
                     if (c.dataEntradaProjetada && c.dataEntradaProjetada.getTime() <= now.getTime() + 30 * 86400000) return s + c.valorPrevAjustado;
