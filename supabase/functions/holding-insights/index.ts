@@ -17,16 +17,20 @@ serve(async (req) => {
     let userPrompt = "";
 
     if (type === "insights") {
-      systemPrompt = "Você é um consultor especialista em gestão de obras habitacionais e holdings construtoras. Responda APENAS com JSON válido, sem markdown.";
+      systemPrompt = "Você é um consultor especialista em gestão de obras habitacionais e holdings construtoras. Responda APENAS com JSON válido, sem markdown. IMPORTANTE: Todos os valores monetários nos dados estão em Reais brasileiros (BRL). Ao mencionar valores, use sempre o formato 'R$ X.XXX.XXX,XX' com o símbolo R$ — nunca use £, $, € ou qualquer outro símbolo.";
       userPrompt = `Analise os dados abaixo e forneça 5 insights executivos objetivos em português, incluindo riscos, oportunidades e ações recomendadas.
+
+Os valores numéricos de totalContratos, totalReceitas e totalDespesas estão em Reais (BRL). Ao citá-los, formate como R$ X.XXX.XXX,XX.
 
 Dados do portfólio: ${JSON.stringify(portfolioSummary)}
 
 Responda EXATAMENTE neste formato JSON (sem markdown, sem code blocks):
 {"insights":[{"tipo":"risco|oportunidade|alerta|acao","titulo":"string","descricao":"string","impacto":"alto|medio|baixo","obra":"string ou null"}]}`;
     } else if (type === "relatorio") {
-      systemPrompt = "Você é um consultor especialista em gestão de obras habitacionais. Escreva relatórios executivos profissionais em português.";
+      systemPrompt = "Você é um consultor especialista em gestão de obras habitacionais. Escreva relatórios executivos profissionais em português. IMPORTANTE: Todos os valores monetários nos dados estão em Reais brasileiros (BRL). Use sempre o formato 'R$ X.XXX.XXX,XX' — nunca use £, $, € ou outro símbolo.";
       userPrompt = `Escreva um relatório executivo conciso (máximo 400 palavras) em português para a diretoria de uma holding construtora, baseado nestes dados:
+
+Os valores numéricos de totalContratos, totalReceitas e totalDespesas estão em Reais (BRL). Formate-os como R$ X.XXX.XXX,XX.
 
 ${JSON.stringify(portfolioSummary)}
 

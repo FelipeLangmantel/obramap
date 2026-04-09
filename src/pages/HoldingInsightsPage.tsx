@@ -43,7 +43,7 @@ export default function HoldingInsightsPage() {
       const [obrasRes, medRes, despRes, docsRes] = await Promise.all([
         supabase.from("obras_portfolio").select("*").eq("company_id", company!.id),
         supabase.from("medicoes_ple").select("id, obra_id, status_medicao, valor_medicao, valor_acatado, data_previsao_medicao, data_aprovacao"),
-        supabase.from("despesas_mensais").select("id, obra_id, valor, mes_referencia, ano_referencia"),
+        supabase.from("despesas_mensais").select("id, obra_id, valor, mes_referencia, ano_referencia, tipo_despesa"),
         supabase.from("documentos_obra").select("id, obra_id, ata, ois, art, cno, impl, scp"),
       ]);
 
@@ -90,8 +90,8 @@ export default function HoldingInsightsPage() {
       const obraDesps = despesas.filter((d: any) => d.obra_id === o.id);
       const obraDocs = docs.find((d: any) => d.obra_id === o.id);
       const docsCount = obraDocs ? DOC_FIELDS.filter(f => (obraDocs as any)[f] === true).length : 0;
-      const totalReceitas = obraMeds.filter((m: any) => m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
-      const totalDesp = obraDesps.reduce((s: number, d: any) => s + (d.valor || 0), 0);
+      const totalReceitas = obraMeds.filter((m: any) => m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0) + (Number((o as any).valor_medido_inicial) || 0);
+      const totalDesp = obraDesps.filter((d: any) => d.tipo_despesa === "real").reduce((s: number, d: any) => s + (d.valor || 0), 0);
       const diasRestantes = o.data_inicio && o.prazo_dias
         ? differenceInDays(addDays(parseLocalDate(o.data_inicio!), o.prazo_dias + (o.aditivo_prazo_dias || 0)), new Date())
         : null;
@@ -104,9 +104,10 @@ export default function HoldingInsightsPage() {
   const portfolioSummary = useMemo(() => ({
     totalObras: enrichedObras.length,
     obrasAtivas: enrichedObras.filter((o: any) => o.status === "em_andamento").length,
-    totalContratos: BRL.format(enrichedObras.reduce((s: number, o: any) => s + (o.valor_contrato || 0), 0)),
-    totalReceitas: BRL.format(enrichedObras.reduce((s: number, o: any) => s + o.totalReceitas, 0)),
-    totalDespesas: BRL.format(enrichedObras.reduce((s: number, o: any) => s + o.totalDesp, 0)),
+    totalContratos: enrichedObras.reduce((s: number, o: any) => s + (o.valor_contrato || 0) + (o.aditivo_valor_total || 0), 0),
+    totalReceitas: enrichedObras.reduce((s: number, o: any) => s + o.totalReceitas, 0),
+    totalDespesas: enrichedObras.reduce((s: number, o: any) => s + o.totalDesp, 0),
+    moeda: "BRL",
     alertasCriticos: enrichedObras.filter((o: any) => o.health === "red").length,
     obrasCriticas: enrichedObras.filter((o: any) => o.health === "red").map((o: any) => ({ nome: o.nome, docsCount: o.docsCount, diasRestantes: o.diasRestantes })),
     prazosVencendo: enrichedObras.filter((o: any) => o.diasRestantes !== null && o.diasRestantes > 0 && o.diasRestantes <= 30).map((o: any) => ({ nome: o.nome, diasRestantes: o.diasRestantes })),
@@ -143,7 +144,7 @@ export default function HoldingInsightsPage() {
         return dt.getMonth() === d.getMonth() && dt.getFullYear() === d.getFullYear() && m.status_medicao === "aprovada";
       }).reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
       const desp = despesas.filter((dp: any) => {
-        return dp.ano_referencia === ano && dp.mes_referencia?.toLowerCase()?.startsWith(mes.slice(0, 3));
+        return dp.tipo_despesa === "real" && dp.ano_referencia === ano && dp.mes_referencia?.toLowerCase()?.startsWith(mes.slice(0, 3));
       }).reduce((s: number, dp: any) => s + (dp.valor || 0), 0);
       months.push({ label, receitas: rec, despesas: desp });
     }
@@ -227,7 +228,7 @@ export default function HoldingInsightsPage() {
 
   const kpiCards = [
     { label: "Obras no Portfólio", value: portfolioSummary.totalObras, color: "text-primary", icon: <Building2 className="h-5 w-5" /> },
-    { label: "Valor Total Contratos", value: portfolioSummary.totalContratos, color: "text-emerald-600", icon: <DollarSign className="h-5 w-5" /> },
+    { label: "Valor Total Contratos", value: BRL.format(portfolioSummary.totalContratos), color: "text-emerald-600", icon: <DollarSign className="h-5 w-5" /> },
     { label: "Alertas Críticos", value: portfolioSummary.alertasCriticos, color: "text-red-600", icon: <AlertTriangle className="h-5 w-5" /> },
     { label: "Medições Pendentes", value: portfolioSummary.medicoesPendentes, color: "text-amber-600", icon: <Clock className="h-5 w-5" /> },
   ];

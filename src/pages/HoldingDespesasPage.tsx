@@ -143,7 +143,7 @@ export default function HoldingDespesasPage() {
     const totalFechado = despesas.filter(d => d.tipo_despesa === "real" && d.status === "fechado").reduce((s, d) => s + d.valor, 0);
     const totalEmFechamento = despesas.filter(d => d.tipo_despesa === "real" && d.status === "em_fechamento").reduce((s, d) => s + d.valor, 0);
     const totalNaoIniciado = despesas.filter(d => d.tipo_despesa === "real" && d.status === "nao_iniciado").reduce((s, d) => s + d.valor, 0);
-    const countObrasComDespesa = new Set(despesas.map(d => d.obra_id)).size;
+    const countObrasComDespesa = new Set(despesas.filter(d => d.tipo_despesa === "real").map(d => d.obra_id)).size;
     return { totalDespesas, totalFechado, totalEmFechamento, totalNaoIniciado, countObrasComDespesa };
   }, [despesas]);
 
@@ -214,7 +214,7 @@ export default function HoldingDespesasPage() {
 
   // ─── Summary Stats ───
   const summaryStats = useMemo(() => {
-    const obrasComDespesa = new Set(despesas.map(d => d.obra_id));
+    const obrasComDespesa = new Set(despesas.filter(d => d.tipo_despesa === "real").map(d => d.obra_id));
     const media = obrasComDespesa.size > 0 ? kpis.totalDespesas / obrasComDespesa.size : 0;
     const maiorGastoObra = topObrasDespesa[0] || null;
     const monthMap = new Map<string, number>();
