@@ -2077,6 +2077,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
                   <TableCell>{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                   <TableCell>{m.data_envio ? format(new Date(m.data_envio + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                   <TableCell>{m.data_aprovacao ? format(new Date(m.data_aprovacao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                  <TableCell>{m.data_envio_nf ? format(new Date(m.data_envio_nf + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                   <TableCell>
                     <Badge variant="secondary" className={`text-[10px] ${displayStatus.cls}`}>{displayStatus.label}</Badge>
                     {displayStatus.isOverdue && (
