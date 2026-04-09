@@ -180,6 +180,7 @@ export default function HoldingReceitasPage() {
 
   const obras = data?.obras || [];
   const medicoes = data?.medicoes || [];
+  const restricoes = (data as any)?.restricoes || [] as any[];
 
   // ─── Global filter (empresa + tipo contrato only) for all tabs ───
   const medicoesFiltradasGlobal = useMemo(() => {
