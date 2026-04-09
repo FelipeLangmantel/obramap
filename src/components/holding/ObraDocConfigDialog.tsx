@@ -39,10 +39,15 @@ export function ObraDocConfigDialog({ open, onOpenChange, obraId, obraNome }: Pr
       .from("obra_doc_config")
       .select("tipo_doc, obrigatorio")
       .eq("obra_id", obraId)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) {
+          toast.error("Erro ao carregar configuração de documentos.");
+          setLoading(false);
+          return;
+        }
         const map: Record<string, boolean> = {};
         DOC_TYPES.forEach(d => { map[d.key] = false; });
-        (data || []).forEach((d: any) => { map[d.tipo_doc] = true; });
+        (data || []).forEach((d: any) => { map[d.tipo_doc] = !!d.obrigatorio; });
         setSelected(map);
         setLoading(false);
       });

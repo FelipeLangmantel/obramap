@@ -25,6 +25,10 @@ export function EditRequestDialog({ open, onOpenChange, obraId, obraNome }: Prop
       toast.error("Justificativa é obrigatória.");
       return;
     }
+    if (!user?.id) {
+      toast.error("Sessão expirada. Faça login novamente antes de enviar.");
+      return;
+    }
     setSending(true);
     const { error } = await supabase.from("edit_requests").insert({
       obra_id: obraId,
