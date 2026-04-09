@@ -57,39 +57,10 @@ function useInvalidateHolding() {
  */
 async function recalcularPercentualAndamento(
   obraId: string,
-  valorContrato: number
+  _valorContrato: number   // mantido para compatibilidade de assinatura
 ): Promise<void> {
-  if (valorContrato <= 0) return;
   try {
-    const { data: meds } = await supabase
-      .from("medicoes_ple")
-      .select("valor_medicao, valor_acatado, status_medicao")
-      .eq("obra_id", obraId)
-      .eq("status_medicao", "aprovada");
-
-    const totalAprovado = (meds || []).reduce(
-      (s, m) => s + (Number((m as any).valor_acatado ?? m.valor_medicao) || 0), 0
-    );
-
-    // Buscar valor_medido_inicial da obra (faturamento anterior ao sistema)
-    // Deve ser somado ao acatado real para refletir o percentual financeiro correto
-    const { data: obraData } = await supabase
-      .from("obras_portfolio")
-      .select("valor_medido_inicial")
-      .eq("id", obraId)
-      .single();
-
-    const valorMedidoInicial = Number((obraData as any)?.valor_medido_inicial) || 0;
-    const totalFinanceiro = totalAprovado + valorMedidoInicial;
-    const novoPercentual = Math.min(100, (totalFinanceiro / valorContrato) * 100);
-    const rounded = Math.round(novoPercentual * 10) / 10;
-
-    // Atualiza apenas percentual_financeiro — percentual_andamento (físico) é
-    // inserido manualmente pelo engenheiro e não deve ser sobrescrito automaticamente
-    await supabase
-      .from("obras_portfolio")
-      .update({ percentual_financeiro: rounded })
-      .eq("id", obraId);
+    await supabase.rpc("recalcular_percentual_financeiro", { p_obra_id: obraId });
   } catch (e) {
     console.error("[recalcularPercentualAndamento] Erro:", e);
   }
