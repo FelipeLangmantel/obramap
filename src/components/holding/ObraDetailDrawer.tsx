@@ -471,7 +471,7 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
           <TabsTrigger value="medicoes">Medições</TabsTrigger>
           <TabsTrigger value="financeiro">Despesas</TabsTrigger>
           <TabsTrigger value="aditivos">Aditivos</TabsTrigger>
-          <TabsTrigger value="pendencias">Pendências</TabsTrigger>
+          <TabsTrigger value="restricoes">Restrições</TabsTrigger>
           <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
         <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -480,7 +480,7 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
           <TabsContent value="medicoes" className="mt-0"><MedicoesTab obraId={obra.id} valorContrato={(obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0)} hasInitialBalance={obra.has_initial_balance || false} valorMedidoInicial={obra.valor_medido_inicial || 0} obra={obra} /></TabsContent>
           <TabsContent value="financeiro" className="mt-0"><FinanceiroTab obraId={obra.id} /></TabsContent>
           <TabsContent value="aditivos" className="mt-0"><AditivosTab obraId={obra.id} /></TabsContent>
-          <TabsContent value="pendencias" className="mt-0"><PendenciasTab obraId={obra.id} /></TabsContent>
+          <TabsContent value="restricoes" className="mt-0"><RestricoesTab obraId={obra.id} /></TabsContent>
           <TabsContent value="historico" className="mt-0"><HistoricoTab obraId={obra.id} /></TabsContent>
         </div>
       </Tabs>
