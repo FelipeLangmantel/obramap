@@ -1821,6 +1821,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
               <>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div><label className="text-xs text-muted-foreground">Nº NF</label><Input value={editForm.num_nf || ""} onChange={(e) => setEditForm({ ...editForm, num_nf: e.target.value })} disabled={!canEditPagamento} /></div>
+                  <ClearableDateInput label="Data Envio NF" value={editForm.data_envio_nf || ""} onChange={(v) => setEditForm({ ...editForm, data_envio_nf: v })} disabled={!canEditPagamento} />
                   <ClearableDateInput label="Data Pagamento" value={editForm.data_pagamento || ""} onChange={(v) => setEditForm({ ...editForm, data_pagamento: v })} disabled={!canEditPagamento} />
                   <div className="flex items-end">
                     {editForm.status_nf !== "recebido" ? (
