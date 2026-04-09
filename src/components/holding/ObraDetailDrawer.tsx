@@ -1604,6 +1604,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       data_envio: m.data_envio || "",
       data_aprovacao: m.data_aprovacao || "",
       data_pagamento: m.data_pagamento || "",
+      data_envio_nf: m.data_envio_nf || "",
       valor_previsto_medicao: Number(m.valor_previsto_medicao) || 0,
       valor_medicao: Number(m.valor_medicao) || 0,
       valor_acatado: Number(m.valor_acatado) || 0,
