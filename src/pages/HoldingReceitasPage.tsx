@@ -114,12 +114,6 @@ export default function HoldingReceitasPage() {
         supabase.from("restricoes_financeiras").select("*").in("obra_id", obraIds).eq("resolvida", false),
       ]);
 
-      // 2. Fetch medicoes filtered by obra_ids (server-side filter)
-      const { data: medicoes, error: medError } = await supabase
-        .from("medicoes_ple")
-        .select("*")
-        .in("obra_id", obraIds);
-
       if (medError) throw medError;
 
       const obrasMap = new Map(obrasList.map(o => [o.id, o]));
