@@ -92,7 +92,7 @@ export default function HoldingReceitasPage() {
   const [filterTipoContrato, setFilterTipoContrato] = useState("all");
   const [agrupamento, setAgrupamento] = useState<"semanal" | "quinzenal" | "mensal">("mensal");
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
-  const [restricoesAbertas, setRestricoesAbertas] = useState<any[]>([]);
+  
 
   // ─── Data Fetching ───
   const { data } = useQuery({
