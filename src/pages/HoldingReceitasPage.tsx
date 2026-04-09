@@ -92,28 +92,27 @@ export default function HoldingReceitasPage() {
   const [filterTipoContrato, setFilterTipoContrato] = useState("all");
   const [agrupamento, setAgrupamento] = useState<"semanal" | "quinzenal" | "mensal">("mensal");
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  
 
   // ─── Data Fetching ───
   const { data } = useQuery({
     queryKey: ["holding-receitas", company?.id],
     queryFn: async () => {
-      // 1. Fetch obras for this company
       const { data: obras, error: obrasError } = await supabase
         .from("obras_portfolio")
-        .select("id, nome, empresa, num_contrato, valor_contrato, parceria_scp, uh, responsavel, tipo_contrato, prazo_pagamento")
+        .select("id, nome, empresa, num_contrato, valor_contrato, parceria_scp, uh, responsavel, tipo_contrato, prazo_pagamento, valor_medido_inicial, status, aditivo_valor_total")
         .eq("company_id", company!.id);
 
       if (obrasError) throw obrasError;
       const obrasList = obras || [];
       const obraIds = obrasList.map(o => o.id);
 
-      if (obraIds.length === 0) return { obras: obrasList, medicoes: [] };
+      if (obraIds.length === 0) return { obras: obrasList, medicoes: [], restricoes: [] };
 
-      // 2. Fetch medicoes filtered by obra_ids (server-side filter)
-      const { data: medicoes, error: medError } = await supabase
-        .from("medicoes_ple")
-        .select("*")
-        .in("obra_id", obraIds);
+      const [{ data: medicoes, error: medError }, { data: restricoes }] = await Promise.all([
+        supabase.from("medicoes_ple").select("*").in("obra_id", obraIds),
+        supabase.from("restricoes_financeiras").select("*").in("obra_id", obraIds).eq("resolvida", false),
+      ]);
 
       if (medError) throw medError;
 
@@ -156,7 +155,7 @@ export default function HoldingReceitasPage() {
         if (!isNaN(na) && !isNaN(nb)) return na - nb;
         return (a.num_medicao || "").localeCompare(b.num_medicao || "");
       });
-      return { obras: obrasList, medicoes: joined };
+      return { obras: obrasList, medicoes: joined, restricoes: (restricoes || []) as any[] };
     },
     enabled: !!company?.id,
     refetchOnWindowFocus: true,
@@ -181,6 +180,7 @@ export default function HoldingReceitasPage() {
 
   const obras = data?.obras || [];
   const medicoes = data?.medicoes || [];
+  const restricoes = (data as any)?.restricoes || [] as any[];
 
   // ─── Global filter (empresa + tipo contrato only) for all tabs ───
   const medicoesFiltradasGlobal = useMemo(() => {
@@ -590,11 +590,12 @@ export default function HoldingReceitasPage() {
 
             {/* TABS */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList className="grid w-full grid-cols-4 max-w-lg">
+              <TabsList className="grid w-full grid-cols-5 max-w-2xl">
                 <TabsTrigger value="resumo">📊 Resumo</TabsTrigger>
                 <TabsTrigger value="tabela">📋 Tabela</TabsTrigger>
                 <TabsTrigger value="previsao">📅 Previsão</TabsTrigger>
                 <TabsTrigger value="programacao">💰 Programação</TabsTrigger>
+                <TabsTrigger value="financeiro">💳 Financeiro</TabsTrigger>
               </TabsList>
 
               {/* ═══ TAB RESUMO ═══ */}
@@ -1183,6 +1184,131 @@ export default function HoldingReceitasPage() {
                     </div>
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              {/* ═══ TAB FINANCEIRO ═══ */}
+              <TabsContent value="financeiro" className="space-y-4 mt-4">
+                {(() => {
+                  const obrasAndamento = obras.filter((o: any) => o.status === "em_andamento");
+                  const now = new Date();
+                  const mesAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+                  const obraCards = obrasAndamento.map((obra: any) => {
+                    const valorContrato = (Number(obra.valor_contrato) || 0) + (Number(obra.aditivo_valor_total) || 0);
+                    const medsDaObra = medicoes.filter(m => m.obra_id === obra.id);
+                    const restrDaObra = restricoes.filter((r: any) => r.obra_id === obra.id);
+
+                    const valorMedidoInicial = Number(obra.valor_medido_inicial) || 0;
+                    const valorRecebido = valorMedidoInicial + medsDaObra
+                      .filter(m => m.status_nf === "recebido" && m.data_pagamento)
+                      .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                    const pctRecebido = valorContrato > 0 ? (valorRecebido / valorContrato) * 100 : 0;
+
+                    const proximaMedicao = medsDaObra
+                      .filter(m => (m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada") && m.data_previsao_medicao && m.num_medicao !== "Saldo Inicial")
+                      .sort((a, b) => a.data_previsao_medicao!.localeCompare(b.data_previsao_medicao!))
+                      [0] || null;
+
+                    const impactoRestricoes = restrDaObra
+                      .filter((r: any) => r.medicao_id === proximaMedicao?.id || !r.medicao_id)
+                      .reduce((s: number, r: any) => s + (Number(r.impacto_medicao) || 0), 0);
+                    const valorPrevAjustado = Math.max(0, (Number(proximaMedicao?.valor_previsto_medicao) || 0) - impactoRestricoes);
+
+                    const dataEntradaProjetada = proximaMedicao?.data_previsao_medicao
+                      ? addDays(new Date(proximaMedicao.data_previsao_medicao + "T12:00:00"), 30)
+                      : null;
+
+                    const saldoReceber = Math.max(0, valorContrato - valorRecebido);
+                    const hasVencidas = restrDaObra.some((r: any) => r.data_limite && new Date(r.data_limite + "T23:59:59") < now);
+
+                    const statusColor = !proximaMedicao ? "bg-muted" :
+                      proximaMedicao.status_medicao === "prevista" || proximaMedicao.status_medicao === "nao_iniciada" ? "bg-amber-500" :
+                      proximaMedicao.status_medicao === "enviada" ? "bg-blue-500" : "bg-emerald-500";
+
+                    return { obra, valorContrato, valorRecebido, pctRecebido, proximaMedicao, valorPrevAjustado, impactoRestricoes, dataEntradaProjetada, saldoReceber, restrDaObra, hasVencidas, statusColor };
+                  }).sort((a, b) => {
+                    if (a.hasVencidas && !b.hasVencidas) return -1;
+                    if (!a.hasVencidas && b.hasVencidas) return 1;
+                    const da = a.proximaMedicao?.data_previsao_medicao || "9999";
+                    const db = b.proximaMedicao?.data_previsao_medicao || "9999";
+                    if (da !== db) return da.localeCompare(db);
+                    return b.saldoReceber - a.saldoReceber;
+                  });
+
+                  // KPIs
+                  const totalReceber = obraCards.reduce((s, c) => s + c.saldoReceber, 0);
+                  const recebidoMes = medicoes
+                    .filter(m => m.status_nf === "recebido" && m.data_pagamento && m.data_pagamento.startsWith(mesAtual.replace("-0", "-").length === 6 ? mesAtual : mesAtual))
+                    .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                  const prox30 = obraCards.reduce((s, c) => {
+                    if (c.dataEntradaProjetada && c.dataEntradaProjetada.getTime() <= now.getTime() + 30 * 86400000) return s + c.valorPrevAjustado;
+                    return s;
+                  }, 0);
+                  const totalRestrAberto = restricoes.length;
+                  const totalRestrImpacto = restricoes.reduce((s: number, r: any) => s + (Number(r.impacto_medicao) || 0), 0);
+
+                  return (
+                    <>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Total a Receber</p><p className="text-lg font-bold">{BRL_SHORT(totalReceber)}</p></CardContent></Card>
+                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Recebido no Mês</p><p className="text-lg font-bold">{BRL_SHORT(recebidoMes)}</p></CardContent></Card>
+                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Próximo 30 dias</p><p className="text-lg font-bold">{BRL_SHORT(prox30)}</p></CardContent></Card>
+                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Restrições Abertas</p><p className="text-lg font-bold">{totalRestrAberto} <span className="text-xs font-normal text-muted-foreground">({BRL_SHORT(totalRestrImpacto)})</span></p></CardContent></Card>
+                      </div>
+
+                      <div className="space-y-3">
+                        {obraCards.map(({ obra, valorContrato, valorRecebido, pctRecebido, proximaMedicao, valorPrevAjustado, impactoRestricoes, dataEntradaProjetada, restrDaObra, hasVencidas, statusColor }) => (
+                          <Card key={obra.id} className={hasVencidas ? "border-destructive/50" : ""}>
+                            <CardContent className="p-4 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <h4 className="font-semibold text-sm">{obra.nome}</h4>
+                                <Badge variant="outline" className="text-[10px]">Em Andamento</Badge>
+                              </div>
+
+                              {/* Barra 1 — Recebido */}
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-xs text-muted-foreground">
+                                  <span>Recebido</span>
+                                  <span>{pctRecebido.toFixed(1)}%</span>
+                                </div>
+                                <div className="h-3 w-full rounded-full bg-secondary overflow-hidden">
+                                  <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${Math.min(100, pctRecebido)}%` }} />
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {BRL.format(valorRecebido)} de {BRL.format(valorContrato)}
+                                </p>
+                              </div>
+
+                              {/* Barra 2 — Próxima entrada */}
+                              {proximaMedicao ? (
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-xs text-muted-foreground">
+                                    <span>Próxima entrada: {BRL.format(valorPrevAjustado)} (Med {proximaMedicao.num_medicao})</span>
+                                    <span>{dataEntradaProjetada ? format(dataEntradaProjetada, "dd/MM/yy") : "—"}</span>
+                                  </div>
+                                  <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                                    <div className={`h-full rounded-full transition-all ${statusColor}`} style={{ width: "100%" }} />
+                                  </div>
+                                  {impactoRestricoes > 0 && (
+                                    <p className="text-xs text-amber-600 flex items-center gap-1">
+                                      <AlertCircle className="h-3 w-3" />
+                                      {restrDaObra.length} restrição(ões) aberta(s) — impacto: {BRL.format(impactoRestricoes)} na medição
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">Nenhuma medição prevista pendente.</p>
+                              )}
+                            </CardContent>
+                          </Card>
+                        ))}
+                        {obraCards.length === 0 && (
+                          <div className="text-center py-8 text-muted-foreground text-sm">Nenhuma obra em andamento.</div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               </TabsContent>
             </Tabs>
           </div>
