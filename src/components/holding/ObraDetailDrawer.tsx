@@ -3080,7 +3080,6 @@ function RestricoesTab({ obraId }: { obraId: string }) {
     medicao_id: "", data_limite: "",
   });
 
-  const { data: companyData } = useAuth() as any;
   const companyId = profile?.company_id || "";
 
   const load = useCallback(async () => {
