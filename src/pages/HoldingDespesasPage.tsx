@@ -74,6 +74,9 @@ export default function HoldingDespesasPage() {
   // ─── Data Fetching ───
   const { data, isLoading } = useQuery({
     queryKey: ["holding-despesas", company?.id],
+    staleTime: 30_000,
+    gcTime: 120_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       // Buscar obras primeiro para ter os IDs (evita buscar dados de outras empresas)
       const { data: obrasRaw } = await supabase
@@ -117,19 +120,23 @@ export default function HoldingDespesasPage() {
   // ─── Realtime: auto-update on data changes ───
   useEffect(() => {
     if (!company?.id) return;
+    let realtimeTimer: ReturnType<typeof setTimeout>;
     const channel = supabase
       .channel(`holding-despesas-${company.id}`)
         .on("postgres_changes", { event: "*", schema: "public", table: "despesas_mensais" }, () => {
-          queryClient.invalidateQueries({ queryKey: ["holding-despesas", company?.id] });
+          clearTimeout(realtimeTimer);
+          realtimeTimer = setTimeout(() => queryClient.invalidateQueries({ queryKey: ["holding-despesas", company?.id] }), 2000);
         })
         .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, () => {
-          queryClient.invalidateQueries({ queryKey: ["holding-despesas", company?.id] });
+          clearTimeout(realtimeTimer);
+          realtimeTimer = setTimeout(() => queryClient.invalidateQueries({ queryKey: ["holding-despesas", company?.id] }), 2000);
         })
         .on("postgres_changes", { event: "*", schema: "public", table: "obras_portfolio" }, () => {
-          queryClient.invalidateQueries({ queryKey: ["holding-despesas", company?.id] });
+          clearTimeout(realtimeTimer);
+          realtimeTimer = setTimeout(() => queryClient.invalidateQueries({ queryKey: ["holding-despesas", company?.id] }), 2000);
         })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { clearTimeout(realtimeTimer); supabase.removeChannel(channel); };
   }, [queryClient, company?.id]);
 
   const obras = data?.obras || [];

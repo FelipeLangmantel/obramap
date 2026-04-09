@@ -47,6 +47,9 @@ export default function HoldingPrdPage() {
 
   const { data, isLoading } = useQuery({
     queryKey: ["holding-prd", company?.id],
+    staleTime: 30_000,
+    gcTime: 120_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const [obrasRes, medRes, despRes] = await Promise.all([
         supabase.from("obras_portfolio").select("id, nome, empresa, valor_contrato, aditivo_valor_total, data_inicio, prazo_dias, uh, status, obramap_project_id, valor_medido_inicial").eq("company_id", company!.id),
@@ -145,19 +148,23 @@ export default function HoldingPrdPage() {
   // ─── Realtime: auto-update on data changes ───
   useEffect(() => {
     if (!company?.id) return;
+    let realtimeTimer: ReturnType<typeof setTimeout>;
     const channel = supabase
       .channel(`holding-prd-${company.id}`)
         .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, () => {
-          queryClient.invalidateQueries({ queryKey: ["holding-prd", company?.id] });
+          clearTimeout(realtimeTimer);
+          realtimeTimer = setTimeout(() => queryClient.invalidateQueries({ queryKey: ["holding-prd", company?.id] }), 2000);
         })
         .on("postgres_changes", { event: "*", schema: "public", table: "despesas_mensais" }, () => {
-          queryClient.invalidateQueries({ queryKey: ["holding-prd", company?.id] });
+          clearTimeout(realtimeTimer);
+          realtimeTimer = setTimeout(() => queryClient.invalidateQueries({ queryKey: ["holding-prd", company?.id] }), 2000);
         })
         .on("postgres_changes", { event: "*", schema: "public", table: "obras_portfolio" }, () => {
-          queryClient.invalidateQueries({ queryKey: ["holding-prd", company?.id] });
+          clearTimeout(realtimeTimer);
+          realtimeTimer = setTimeout(() => queryClient.invalidateQueries({ queryKey: ["holding-prd", company?.id] }), 2000);
         })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { clearTimeout(realtimeTimer); supabase.removeChannel(channel); };
   }, [queryClient, company?.id]);
 
   const obras = data?.obras || [];

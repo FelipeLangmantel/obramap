@@ -158,8 +158,9 @@ export default function HoldingReceitasPage() {
       return { obras: obrasList, medicoes: joined, restricoes: (restricoes || []) as any[] };
     },
     enabled: !!company?.id,
-    refetchOnWindowFocus: true,
-    staleTime: 10000,
+    refetchOnWindowFocus: false, // realtime cobre mudanças de outros usuários
+    staleTime: 30_000,
+    gcTime: 120_000,
   });
 
   // ─── Realtime: auto-update when medicoes_ple changes ───

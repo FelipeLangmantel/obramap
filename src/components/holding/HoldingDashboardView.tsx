@@ -962,6 +962,9 @@ export default function HoldingDashboardView() {
 
   const { data: obras = [], isLoading } = useQuery({
     queryKey: ["holding-portfolio", company?.id],
+    staleTime: 30_000,          // 30s — realtime já atualiza quando há mudanças reais
+    gcTime: 120_000,            // 2min em cache após desmonte
+    refetchOnWindowFocus: false, // realtime cobre mudanças de outros usuários
     queryFn: async () => {
       if (!company?.id) return [];
       // 1. Buscar obras primeiro para ter os IDs
@@ -975,7 +978,9 @@ export default function HoldingDashboardView() {
           ? supabase.from("documentos_obra").select("*").in("obra_id", obraIds)
           : Promise.resolve({ data: [] as any[], error: null }),
         obraIds.length > 0
-          ? supabase.from("medicoes_ple").select("*").in("obra_id", obraIds).order("ano_referencia", { ascending: false })
+          ? supabase.from("medicoes_ple").select(
+              "id, obra_id, num_medicao, status_medicao, valor_medicao, valor_acatado, valor_previsto_medicao, data_previsao_medicao, data_envio, data_aprovacao, status_nf, data_pagamento"
+            ).in("obra_id", obraIds).order("ano_referencia", { ascending: false })
           : Promise.resolve({ data: [] as any[], error: null }),
         obraIds.length > 0
           ? supabase.from("system_notifications").select("obra_id").in("obra_id", obraIds).eq("resolvida", false).eq("lida", false)
@@ -1022,18 +1027,26 @@ export default function HoldingDashboardView() {
   });
 
   // Realtime: auto-refresh portfolio when medicoes or obras change
+  // Debounced 2s to avoid 787KB re-fetch cascade when multiple users work simultaneously
   useEffect(() => {
     if (!company?.id) return;
+    let realtimeTimer: ReturnType<typeof setTimeout>;
     const channel = supabase
       .channel(`holding-dashboard-${company.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+        clearTimeout(realtimeTimer);
+        realtimeTimer = setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+        }, 2000); // debounce 2s — evita re-fetch em cascata com múltiplos usuários
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "obras_portfolio" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+        clearTimeout(realtimeTimer);
+        realtimeTimer = setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company.id] });
+        }, 2000);
       })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { clearTimeout(realtimeTimer); supabase.removeChannel(channel); };
   }, [company?.id, queryClient]);
 
   // Manter selectedObra sincronizada quando obras re-fetcha após invalidate
