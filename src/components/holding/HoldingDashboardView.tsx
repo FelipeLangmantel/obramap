@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect, memo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -300,17 +300,20 @@ export function calcHealth(
     const pctTempo = Math.min(1, diasDecorridos / prazoTotal);
 
     if (pctTempo > 0.15) {
-      if (pctFinanceiro === 0 && nMedicoesAprovadas === 0) {
-        // Sem nenhum dado financeiro real após 15% do prazo → gray, não penalizar
+      // Evidência financeira real = medições aprovadas no sistema OU faturamento pré-sistema
+      // "Sem dados" só quando ambos são zero — obras novas que ainda não têm nenhuma execução registrada
+      const hasFinancialEvidence = nMedicoesAprovadas > 0 || (Number(obra.valor_medido_inicial) > 0);
+
+      if (!hasFinancialEvidence) {
+        // Nenhum dado após fase de mobilização → gray, não penalizar
         return "gray";
       }
-      if (pctFinanceiro > 0 && nMedicoesAprovadas > 0) {
-        // Obra com prazo 100% consumido e sem conclusão → sempre vermelho
-        if (pctTempo >= 1 && pctFinanceiro < 1) return "red";
-        const idp = pctTempo > 0 ? pctFinanceiro / pctTempo : 1;
-        if (idp < T.idp_red) return "red";
-        if (idp < T.idp_yellow) return "yellow";
-      }
+      // Tem evidência financeira — avaliar IDP normalmente
+      // Obra com prazo 100% consumido e sem conclusão → sempre vermelho
+      if (pctTempo >= 1 && pctFinanceiro < 1) return "red";
+      const idp = pctTempo > 0 ? pctFinanceiro / pctTempo : 1;
+      if (idp < T.idp_red) return "red";
+      if (idp < T.idp_yellow) return "yellow";
     }
   }
 
@@ -403,10 +406,10 @@ export function calcHealthDetails(
     idpDiasDecorridos = differenceInDays(now, inicio);
     idpPctTempo = Math.min(1, idpDiasDecorridos / idpPrazoTotal);
     if (idpPctTempo > 0.15) {
-      if (pctFinanceiro === 0 && nMedicoesAprovadas === 0) {
-        // Sem dados reais após fase de mobilização → não avaliado
-        idpStatus = "na";
-      } else if (pctFinanceiro > 0 && nMedicoesAprovadas > 0) {
+      const hasFinancialEvidence = nMedicoesAprovadas > 0 || (Number(obra.valor_medido_inicial) > 0);
+      if (!hasFinancialEvidence) {
+        idpStatus = "na"; // sem dados reais após mobilização
+      } else {
         idpValue = idpPctTempo > 0 ? pctFinanceiro / idpPctTempo : 1;
         idpStatus = idpValue < T.idp_red ? "red" : idpValue < T.idp_yellow ? "yellow" : "green";
       }
@@ -1984,7 +1987,7 @@ function KpiCard({ icon: Icon, label, value, sub, borderColor, valueColor }: {
    Obra Card (redesigned, denser)
    ══════════════════════════════════════════════ */
 
-function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onClick: () => void; onEdit: () => void; onDelete: () => void }) {
+const ObraCard = memo(function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onClick: () => void; onEdit: () => void; onDelete: () => void }) {
   const { isCompanyAdmin, canEdit } = useAuth();
   const [healthOpen, setHealthOpen] = useState(false);
   const [expandedIndicator, setExpandedIndicator] = useState<string | null>(null);
@@ -2240,7 +2243,7 @@ function ObraCard({ obra, onClick, onEdit, onDelete }: { obra: ObraEnriched; onC
       </CardContent>
     </Card>
   );
-}
+}); // memo(ObraCard)
 
 /* ══════════════════════════════════════════════
    Obra Table (full data table view)
