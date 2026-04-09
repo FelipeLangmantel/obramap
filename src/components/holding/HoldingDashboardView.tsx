@@ -267,16 +267,20 @@ export function calcHealth(
 
   const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
   const pctFisico = (obra.percentual_fisico || 0) / 100;
+  const pctFinanceiro = (obra.percentual_financeiro || 0) / 100;
+  const nMedicoesAprovadas = allMedicoes.filter(m => m.status_medicao === "aprovada").length;
 
   // ── IDC — Índice de Desempenho de Custo ──────────────────────────────────
   // IDC compara valor medido aprovado vs valor planejado (% físico × contrato)
   // Inclui valor_medido_inicial — faturamento anterior ao sistema é receita real
+  // Só avalia se: (a) físico > 5%, (b) existe discrepância entre físico e financeiro
+  // porque no domínio Previbras físico ≈ financeiro — IDC sempre ~1 quando iguais
   const totalMedidoAprovado = allMedicoes
     .filter(m => m.status_medicao === "aprovada")
     .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0)
     + (Number(obra.valor_medido_inicial) || 0);
 
-  if (pctFisico > 0.05 && valorContrato > 0) {
+  if (pctFisico > 0.05 && valorContrato > 0 && Math.abs(pctFisico - pctFinanceiro) > 0.05) {
     const valorPlanejado = pctFisico * valorContrato;
     const idc = totalMedidoAprovado / valorPlanejado;
     if (idc < T.idc_red) return "red";
@@ -284,22 +288,35 @@ export function calcHealth(
   }
 
   // ── IDP — Índice de Desempenho de Prazo ──────────────────────────────────
+  // Guards obrigatórios para evitar falsos alarmes:
+  // 1. pctTempo > 15%: fase de mobilização (~10-15% do prazo) nunca é penalizada
+  // 2. percentual_financeiro > 0: precisa de dado real, não apenas cadastro
+  // 3. pelo menos 1 medição aprovada: confirma que o sistema tem dados da obra
+  // Se percentual_financeiro = 0 com > 15% do prazo → gray (sem dados suficientes)
   if (obra.data_inicio && obra.prazo_dias > 0) {
     const inicio = new Date(obra.data_inicio + "T12:00:00");
     const prazoTotal = obra.prazo_dias + (obra.aditivo_prazo_dias || 0);
     const diasDecorridos = differenceInDays(now, inicio);
-    const pctTempo = Math.min(1, diasDecorridos / prazoTotal); // % do prazo consumido
+    const pctTempo = Math.min(1, diasDecorridos / prazoTotal);
 
-    if (pctTempo > 0.05 && pctFisico >= 0) {
-      // Obra com prazo 100% consumido e execução física incompleta → sempre vermelho
-      if (pctTempo >= 1 && pctFisico < 1) return "red";
-      const idp = pctTempo > 0 ? pctFisico / pctTempo : 1;
-      if (idp < T.idp_red) return "red";
-      if (idp < T.idp_yellow) return "yellow";
+    if (pctTempo > 0.15) {
+      if (pctFinanceiro === 0 && nMedicoesAprovadas === 0) {
+        // Sem nenhum dado financeiro real após 15% do prazo → gray, não penalizar
+        return "gray";
+      }
+      if (pctFinanceiro > 0 && nMedicoesAprovadas > 0) {
+        // Obra com prazo 100% consumido e sem conclusão → sempre vermelho
+        if (pctTempo >= 1 && pctFinanceiro < 1) return "red";
+        const idp = pctTempo > 0 ? pctFinanceiro / pctTempo : 1;
+        if (idp < T.idp_red) return "red";
+        if (idp < T.idp_yellow) return "yellow";
+      }
     }
   }
 
   // ── Dias sem medição aprovada ─────────────────────────────────────────────
+  // Só avalia se já houve pelo menos 1 medição aprovada anteriormente.
+  // Obras que nunca foram medidas não são penalizadas por "dias sem medição".
   const ultimaAprovada = allMedicoes
     .filter(m => m.status_medicao === "aprovada" && m.data_aprovacao)
     .sort((a, b) => new Date(b.data_aprovacao!).getTime() - new Date(a.data_aprovacao!).getTime())[0];
@@ -308,11 +325,8 @@ export function calcHealth(
     const diasSemMedicao = differenceInDays(now, new Date(ultimaAprovada.data_aprovacao + "T12:00:00"));
     if (diasSemMedicao > T.dias_sem_medicao_red) return "red";
     if (diasSemMedicao > T.dias_sem_medicao_yellow) return "yellow";
-  } else if (pctFisico > 0.1 && !(obra.valor_medido_inicial > 0)) {
-    // Obra com >10% de andamento mas sem nenhuma medição aprovada E sem saldo inicial
-    // Se tem valor_medido_inicial, o faturamento é pré-sistema — não é alerta
-    return "yellow";
   }
+  // Removido: else if (pctFisico > 0.1) → gerava falsos amarelos em obras sem dados
 
   // ── Glosa acumulada ───────────────────────────────────────────────────────
   const totalGlosa = allMedicoes
@@ -355,6 +369,8 @@ export function calcHealthDetails(
   const now = new Date();
   const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
   const pctFisico = (obra.percentual_fisico || 0) / 100;
+  const pctFinanceiro = (obra.percentual_financeiro || 0) / 100;
+  const nMedicoesAprovadas = allMedicoes.filter(m => m.status_medicao === "aprovada").length;
 
   // Usa valor_acatado para IDC — valor real aceito pelo governo
   // Inclui valor_medido_inicial — faturamento anterior ao sistema é receita real
@@ -364,15 +380,18 @@ export function calcHealthDetails(
     + (Number(obra.valor_medido_inicial) || 0);
 
   // ── IDC ──────────────────────────────────────────────────────────────────
+  // Só avalia se há discrepância entre físico e financeiro (> 5%)
+  // Quando físico ≈ financeiro, IDC ≈ 1.0 — não gera alarme
   let idcValue: number | null = null;
   let idcStatus: HealthIndicator["status"] = "na";
-  if (pctFisico > 0.05 && valorContrato > 0) {
+  if (pctFisico > 0.05 && valorContrato > 0 && Math.abs(pctFisico - pctFinanceiro) > 0.05) {
     const valorPlanejado = pctFisico * valorContrato;
     idcValue = totalMedidoAprovado / valorPlanejado;
     idcStatus = idcValue < T.idc_red ? "red" : idcValue < T.idc_yellow ? "yellow" : "green";
   }
 
   // ── IDP ──────────────────────────────────────────────────────────────────
+  // Guard: pctTempo > 15%, percentual_financeiro > 0, pelo menos 1 medição aprovada
   let idpValue: number | null = null;
   let idpStatus: HealthIndicator["status"] = "na";
   let idpPctTempo = 0;
@@ -383,13 +402,19 @@ export function calcHealthDetails(
     idpPrazoTotal = obra.prazo_dias + (obra.aditivo_prazo_dias || 0);
     idpDiasDecorridos = differenceInDays(now, inicio);
     idpPctTempo = Math.min(1, idpDiasDecorridos / idpPrazoTotal);
-    if (idpPctTempo > 0.05) {
-      idpValue = idpPctTempo > 0 ? pctFisico / idpPctTempo : 1;
-      idpStatus = idpValue < T.idp_red ? "red" : idpValue < T.idp_yellow ? "yellow" : "green";
+    if (idpPctTempo > 0.15) {
+      if (pctFinanceiro === 0 && nMedicoesAprovadas === 0) {
+        // Sem dados reais após fase de mobilização → não avaliado
+        idpStatus = "na";
+      } else if (pctFinanceiro > 0 && nMedicoesAprovadas > 0) {
+        idpValue = idpPctTempo > 0 ? pctFinanceiro / idpPctTempo : 1;
+        idpStatus = idpValue < T.idp_red ? "red" : idpValue < T.idp_yellow ? "yellow" : "green";
+      }
     }
   }
 
   // ── Dias sem medição ─────────────────────────────────────────────────────
+  // Só avalia se já houve pelo menos 1 medição aprovada anteriormente
   const ultimaAprovada = allMedicoes
     .filter(m => m.status_medicao === "aprovada" && m.data_aprovacao)
     .sort((a, b) => new Date(b.data_aprovacao!).getTime() - new Date(a.data_aprovacao!).getTime())[0];
@@ -398,9 +423,8 @@ export function calcHealthDetails(
   if (ultimaAprovada?.data_aprovacao) {
     diasValue = differenceInDays(now, new Date(ultimaAprovada.data_aprovacao + "T12:00:00"));
     diasStatus = diasValue > T.dias_sem_medicao_red ? "red" : diasValue > T.dias_sem_medicao_yellow ? "yellow" : "green";
-  } else if (pctFisico > 0.1 && !(obra.valor_medido_inicial > 0)) {
-    diasStatus = "yellow";
   }
+  // Removido: else if (pctFisico > 0.1) → gerava falsos amarelos em obras sem dados
 
   // ── Glosa ────────────────────────────────────────────────────────────────
   const totalGlosa = allMedicoes
