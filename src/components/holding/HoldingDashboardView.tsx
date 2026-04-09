@@ -2059,7 +2059,7 @@ const ObraCard = memo(function ObraCard({ obra, onClick, onEdit, onDelete }: { o
 
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Andamento</span>
+            <span className="text-muted-foreground">Evolução Financeira</span>
             <span className="font-medium text-foreground">{percentualFinanceiro.toFixed(1)}%</span>
           </div>
           <Progress value={percentualFinanceiro} className="h-1.5" />
