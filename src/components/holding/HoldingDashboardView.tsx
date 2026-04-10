@@ -1012,7 +1012,7 @@ export default function HoldingDashboardView() {
     toast.success("CSV exportado!");
   };
 
-  const { data: obras = [], isLoading } = useQuery({
+  const { data: obras = [], isLoading, isError } = useQuery({
     queryKey: ["holding-portfolio", company?.id],
     staleTime: 30_000,          // 30s — realtime já atualiza quando há mudanças reais
     gcTime: 120_000,            // 2min em cache após desmonte
@@ -1339,6 +1339,20 @@ export default function HoldingDashboardView() {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <p className="text-muted-foreground text-sm">Erro ao carregar dados.</p>
+          <Button variant="outline" size="sm"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company?.id] })}>
+            Tentar novamente
+          </Button>
+        </div>
       </div>
     );
   }

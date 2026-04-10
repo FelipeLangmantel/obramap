@@ -73,7 +73,7 @@ export default function HoldingDespesasPage() {
   const [searchText, setSearchText] = useState("");
 
   // ─── Data Fetching ───
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["holding-despesas", company?.id],
     staleTime: 30_000,
     gcTime: 120_000,
