@@ -8950,6 +8950,7 @@ export type Database = {
           lida_em: string | null
           medicao_id: string | null
           mensagem: string
+          modulo: string | null
           obra_id: string
           resolvida: boolean
           resolvida_em: string | null
@@ -8964,6 +8965,7 @@ export type Database = {
           lida_em?: string | null
           medicao_id?: string | null
           mensagem: string
+          modulo?: string | null
           obra_id: string
           resolvida?: boolean
           resolvida_em?: string | null
@@ -8978,6 +8980,7 @@ export type Database = {
           lida_em?: string | null
           medicao_id?: string | null
           mensagem?: string
+          modulo?: string | null
           obra_id?: string
           resolvida?: boolean
           resolvida_em?: string | null
@@ -10025,6 +10028,7 @@ export type Database = {
           lida_em: string | null
           medicao_id: string | null
           mensagem: string
+          modulo: string | null
           obra_id: string
           resolvida: boolean
           resolvida_em: string | null
