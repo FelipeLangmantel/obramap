@@ -573,6 +573,7 @@ export default function HoldingDespesasPage() {
                   <TableHead className="text-xs text-right">Valor Contrato</TableHead>
                   <TableHead className="text-xs text-right">Medições Aprovadas</TableHead>
                   <TableHead className="text-xs text-right">Despesas</TableHead>
+                  <TableHead className="text-xs text-right">Desp. Orçada</TableHead>
                   <TableHead className="text-xs text-right">Saldo</TableHead>
                   <TableHead className="text-xs text-right">ROI%</TableHead>
                 </TableRow>
@@ -585,6 +586,7 @@ export default function HoldingDespesasPage() {
                     <TableCell className="text-xs text-right font-mono">{BRL.format(p.previsto)}</TableCell>
                     <TableCell className="text-xs text-right font-mono">{BRL.format(p.realizado)}</TableCell>
                     <TableCell className="text-xs text-right font-mono">{BRL.format(p.despesas)}</TableCell>
+                    <TableCell className="text-xs text-right font-mono text-amber-600">{BRL.format(p.despOrcada)}</TableCell>
                     <TableCell className={`text-xs text-right font-mono font-semibold ${p.saldo >= 0 ? "text-emerald-600" : "text-red-600"}`}>{BRL.format(p.saldo)}</TableCell>
                     <TableCell className={`text-xs text-right font-semibold ${p.roi >= 0 ? "text-emerald-600" : "text-red-600"}`}>{p.roi.toFixed(1)}%</TableCell>
                   </TableRow>
@@ -596,6 +598,7 @@ export default function HoldingDespesasPage() {
                   <TableCell className="text-xs text-right font-mono">{BRL.format(prdTotals.previsto)}</TableCell>
                   <TableCell className="text-xs text-right font-mono">{BRL.format(prdTotals.realizado)}</TableCell>
                   <TableCell className="text-xs text-right font-mono">{BRL.format(prdTotals.despesas)}</TableCell>
+                  <TableCell className="text-xs text-right font-mono text-amber-600">{BRL.format(prdData.reduce((s, p) => s + p.despOrcada, 0))}</TableCell>
                   <TableCell className={`text-xs text-right font-mono ${prdTotals.saldo >= 0 ? "text-emerald-600" : "text-red-600"}`}>{BRL.format(prdTotals.saldo)}</TableCell>
                   <TableCell className="text-xs text-right">—</TableCell>
                 </TableRow>
