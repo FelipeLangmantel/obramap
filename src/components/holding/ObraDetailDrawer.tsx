@@ -2461,11 +2461,15 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
   const handleEditDespesa = async () => {
     if (!editingDespesa || !requireEdit()) return;
     setSavingDespesa(true);
+    // Recalculate tipo_despesa based on linked measurement status
+    const medVinculada = allMedicoes.find(m => m.id === editingDespesa.medicao_id);
+    const novoTipo = medVinculada?.status_medicao === "aprovada" ? "real" : "prevista";
     const { error } = await supabase.from("despesas_mensais").update({
       valor: Number(editForm.valor),
       categoria: editForm.categoria,
       descricao: editForm.descricao || null,
       status: editForm.status as any,
+      tipo_despesa: novoTipo,
       updated_by_user_id: userId,
       updated_by_name: userName,
       updated_at: new Date().toISOString(),
@@ -2512,21 +2516,31 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
 
   if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
 
-  // Chart data
-  const monthMap = new Map<string, { despesa: number; receita: number }>();
+  // KPI calculations
+  const totalOrcado = despesas.filter(d => d.tipo_despesa === "prevista").reduce((s,d) => s+(d.valor||0), 0);
+  const totalReal   = despesas.filter(d => d.tipo_despesa === "real").reduce((s,d) => s+(d.valor||0), 0);
+  const totalReceita = medicoesAprovadas.reduce((s,m) => s+(Number(m.valor_acatado ?? m.valor_medicao)||0), 0);
+  const totalFechado = despesas.filter(d => d.tipo_despesa === "real" && d.status === "fechado").reduce((s,d) => s+(d.valor||0), 0);
+  const pendenteFechamento = despesas.filter(d => d.tipo_despesa === "real" && d.status !== "fechado").length;
+
+  // Chart data — split prevista × real × receita
+  const monthMap = new Map<string, { despesaReal: number; despesaPrevista: number; receita: number }>();
   despesas.forEach((d) => {
     const key = `${d.mes_referencia}/${d.ano_referencia}`;
-    const entry = monthMap.get(key) || { despesa: 0, receita: 0 };
-    entry.despesa += d.valor || 0;
+    const entry = monthMap.get(key) || { despesaReal: 0, despesaPrevista: 0, receita: 0 };
+    if (d.tipo_despesa === "real") entry.despesaReal += d.valor || 0;
+    else entry.despesaPrevista += d.valor || 0;
     monthMap.set(key, entry);
   });
   medicoesAprovadas.forEach((m) => {
     const key = `${m.mes_referencia}/${m.ano_referencia}`;
-    const entry = monthMap.get(key) || { despesa: 0, receita: 0 };
+    const entry = monthMap.get(key) || { despesaReal: 0, despesaPrevista: 0, receita: 0 };
     entry.receita += Number(m.valor_acatado ?? m.valor_medicao) || 0;
     monthMap.set(key, entry);
   });
-  const chartData = Array.from(monthMap.entries()).map(([month, v]) => ({ month, ...v }));
+  const chartData = Array.from(monthMap.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([month, v]) => ({ month, ...v }));
 
   return (
     <div className="space-y-6">
@@ -2542,19 +2556,51 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
         </Alert>
       )}
 
-      {/* Chart */}
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 gap-3">
+        <Card className="border-b-2 border-b-amber-500">
+          <CardContent className="p-3">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Orçado</p>
+            <p className="text-lg font-bold">{BRL.format(totalOrcado)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-b-2 border-b-destructive">
+          <CardContent className="p-3">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Custo Real</p>
+            <p className="text-lg font-bold">{BRL.format(totalReal)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-b-2 border-b-emerald-500">
+          <CardContent className="p-3">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Fechado</p>
+            <p className="text-lg font-bold">{BRL.format(totalFechado)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-b-2 border-b-orange-500">
+          <CardContent className="p-3">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pendente Fechamento</p>
+            <p className="text-lg font-bold flex items-center gap-2">
+              {pendenteFechamento}
+              {pendenteFechamento > 0 && <Badge variant="destructive" className="text-[10px]">{pendenteFechamento}</Badge>}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Chart — Custo Real × Orçado × Receita */}
       {chartData.length > 0 && (
         <Card>
           <CardContent className="p-4">
-            <h4 className="font-semibold text-sm mb-3">Despesas × Receitas</h4>
+            <h4 className="font-semibold text-sm mb-3">Custo Real × Orçado × Receita</h4>
             <ResponsiveContainer width="100%" height={250}>
               <ComposedChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: number) => BRL.format(v)} />
-                <Bar dataKey="despesa" fill="hsl(var(--destructive))" name="Despesas" radius={[4, 4, 0, 0]} />
-                <Line dataKey="receita" stroke="hsl(var(--primary))" strokeWidth={2} name="Receitas" dot={{ r: 3 }} />
+                <Bar dataKey="despesaReal" fill="hsl(var(--destructive))" name="Custo Real" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="despesaPrevista" fill="#f59e0b" fillOpacity={0.5} name="Orçado" radius={[4, 4, 0, 0]} />
+                <Line dataKey="receita" stroke="hsl(var(--primary))" strokeWidth={2} name="Receita" dot={{ r: 3 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </CardContent>
@@ -2675,10 +2721,12 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
               const tipo = TIPO_DESPESA_BADGE[d.tipo_despesa] || TIPO_DESPESA_BADGE.prevista;
               const locked = d.is_locked;
               const editable = canEditDespesa(d);
+              const medVinculada = d.medicao_id ? allMedicoes.find((m: any) => m.id === d.medicao_id) : null;
+              const isInconsistent = d.tipo_despesa === "prevista" && medVinculada?.status_medicao === "aprovada";
               return (
                 <TableRow key={d.id}>
                   <TableCell className="text-xs">
-                    {d.medicao_id ? `Nº ${allMedicoes.find((m: any) => m.id === d.medicao_id)?.num_medicao || "—"}` : "—"}
+                    {d.medicao_id ? `Nº ${medVinculada?.num_medicao || "—"}` : "—"}
                   </TableCell>
                   <TableCell className="text-xs">
                     <span>{d.mes_referencia}/{d.ano_referencia}</span>
@@ -2687,7 +2735,14 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={`text-[10px] ${tipo.cls}`}>{tipo.label}</Badge>
+                    <div className="flex items-center gap-1">
+                      <Badge variant="outline" className={`text-[10px] ${tipo.cls}`}>{tipo.label}</Badge>
+                      {isInconsistent && (
+                        <span title="Medição aprovada — esta despesa será convertida para real">
+                          <AlertTriangle className="h-3 w-3 text-amber-500" />
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-xs">{d.categoria || "Geral"}</TableCell>
                   <TableCell className="text-right font-mono text-xs">{BRL.format(d.valor)}</TableCell>
