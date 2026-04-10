@@ -176,13 +176,19 @@ export default function HoldingReceitasPage() {
   useEffect(() => {
     if (!company?.id) return;
     const channelName = `holding-receitas-${company.id}`;
+    let realtimeTimer: ReturnType<typeof setTimeout>;
+    const invalidate = () => {
+      clearTimeout(realtimeTimer);
+      realtimeTimer = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["holding-receitas", company.id] });
+      }, 2000);
+    };
     const channel = supabase
       .channel(channelName)
-      .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["holding-receitas", company.id] });
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "restricoes_financeiras" }, invalidate)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { clearTimeout(realtimeTimer); supabase.removeChannel(channel); };
   }, [queryClient, company?.id]);
 
   const obras = data?.obras || [];

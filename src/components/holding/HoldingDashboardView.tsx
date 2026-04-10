@@ -972,7 +972,17 @@ export default function HoldingDashboardView() {
       if (!company?.id) return [];
       // 1. Buscar obras primeiro para ter os IDs
       const { data: obrasRaw } = await supabase
-        .from("obras_portfolio").select("*").eq("company_id", company.id).order("nome");
+        .from("obras_portfolio").select(
+          "id, nome, empresa, num_contrato, parceria_scp, municipio, estado, uh, " +
+          "tipo_contrato, status, valor_contrato, aditivo_valor_total, aditivo_prazo_dias, " +
+          "data_inicio, prazo_dias, periodo_medicao, prazo_pagamento, " +
+          "percentual_andamento, percentual_fisico, percentual_financeiro, " +
+          "valor_medido_inicial, has_initial_balance, " +
+          "responsavel, responsavel_nome, responsavel_telefone, " +
+          "coordenador_nome, coordenador_telefone, " +
+          "planejador_nome, planejador_telefone, " +
+          "obramap_project_id, company_id"
+        ).eq("company_id", company.id).order("nome");
       const obraIds = (obrasRaw || []).map(o => o.id);
 
       // 2. Buscar docs, medições e notificações em paralelo
