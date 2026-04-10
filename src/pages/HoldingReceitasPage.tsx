@@ -1285,7 +1285,7 @@ export default function HoldingReceitasPage() {
 
                       <div className="space-y-3">
                         {obraCards.map(({ obra, valorContrato, valorRecebido, pctRecebido, proximaMedicao, valorPrevAjustado, impactoRestricoes, dataEntradaProjetada, restrDaObra, hasVencidas, statusColor }) => (
-                          <Card key={obra.id} className={hasVencidas ? "border-destructive/50" : ""}>
+                          <Card key={obra.id} className={`cursor-pointer hover:border-primary/40 transition-all ${hasVencidas ? "border-destructive/50" : ""}`} onClick={() => setSelectedObraId(obra.id)}>
                             <CardContent className="p-4 space-y-3">
                               <div className="flex items-center justify-between">
                                 <h4 className="font-semibold text-sm">{obra.nome}</h4>
