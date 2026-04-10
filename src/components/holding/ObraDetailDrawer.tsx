@@ -2721,10 +2721,12 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
               const tipo = TIPO_DESPESA_BADGE[d.tipo_despesa] || TIPO_DESPESA_BADGE.prevista;
               const locked = d.is_locked;
               const editable = canEditDespesa(d);
+              const medVinculada = d.medicao_id ? allMedicoes.find((m: any) => m.id === d.medicao_id) : null;
+              const isInconsistent = d.tipo_despesa === "prevista" && medVinculada?.status_medicao === "aprovada";
               return (
                 <TableRow key={d.id}>
                   <TableCell className="text-xs">
-                    {d.medicao_id ? `Nº ${allMedicoes.find((m: any) => m.id === d.medicao_id)?.num_medicao || "—"}` : "—"}
+                    {d.medicao_id ? `Nº ${medVinculada?.num_medicao || "—"}` : "—"}
                   </TableCell>
                   <TableCell className="text-xs">
                     <span>{d.mes_referencia}/{d.ano_referencia}</span>
@@ -2733,7 +2735,14 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={`text-[10px] ${tipo.cls}`}>{tipo.label}</Badge>
+                    <div className="flex items-center gap-1">
+                      <Badge variant="outline" className={`text-[10px] ${tipo.cls}`}>{tipo.label}</Badge>
+                      {isInconsistent && (
+                        <span title="Medição aprovada — esta despesa será convertida para real">
+                          <AlertTriangle className="h-3 w-3 text-amber-500" />
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-xs">{d.categoria || "Geral"}</TableCell>
                   <TableCell className="text-right font-mono text-xs">{BRL.format(d.valor)}</TableCell>
