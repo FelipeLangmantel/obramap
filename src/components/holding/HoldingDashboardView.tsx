@@ -139,6 +139,8 @@ interface MedicaoPle {
   status_medicao: "aprovada" | "enviada" | "pendente" | "nao_iniciada" | "prevista";
   valor_medicao: number;
   valor_acatado: number | null;
+  valor_previsto_medicao: number | null;
+  data_previsao_medicao: string | null;
   num_nf: string | null;
   data_pagamento: string | null;
   status_nf: "recebido" | "aguardando_aprovacao" | "pendente";
@@ -253,6 +255,15 @@ export let HEALTH_THRESHOLDS = { ...DEFAULT_HEALTH_THRESHOLDS };
  *
  * Obras não iniciadas ou sem dados suficientes retornam amarelo (neutro).
  */
+function getThresholdsDiasPorPeriodo(periodo: string | null): { yellow: number; red: number } {
+  switch (periodo?.toLowerCase()) {
+    case "semanal":   return { yellow: 10, red: 21 };
+    case "quinzenal": return { yellow: 20, red: 45 };
+    case "mensal":    return { yellow: 35, red: 75 };
+    default:          return { yellow: 30, red: 60 };
+  }
+}
+
 export function calcHealth(
   obra: ObraPortfolio,
   allMedicoes: MedicaoPle[]
@@ -326,8 +337,9 @@ export function calcHealth(
 
   if (ultimaAprovada?.data_aprovacao) {
     const diasSemMedicao = differenceInDays(now, new Date(ultimaAprovada.data_aprovacao + "T12:00:00"));
-    if (diasSemMedicao > T.dias_sem_medicao_red) return "red";
-    if (diasSemMedicao > T.dias_sem_medicao_yellow) return "yellow";
+    const diasT = getThresholdsDiasPorPeriodo(obra.periodo_medicao);
+    if (diasSemMedicao > diasT.red) return "red";
+    if (diasSemMedicao > diasT.yellow) return "yellow";
   }
   // Removido: else if (pctFisico > 0.1) → gerava falsos amarelos em obras sem dados
 
@@ -342,12 +354,23 @@ export function calcHealth(
     if (pctGlosa > T.glosa_yellow) return "yellow";
   }
 
+  // ── Sem previsão de medição futura ────────────────────────────────────────
+  const temPrevisaoFutura = allMedicoes.some(
+    m => m.data_previsao_medicao &&
+         new Date(m.data_previsao_medicao + "T12:00:00") > now &&
+         m.status_medicao !== "aprovada"
+  );
+  const hasEvidence = nMedicoesAprovadas > 0 || (Number(obra.valor_medido_inicial) > 0);
+  if (!temPrevisaoFutura && hasEvidence && pctFinanceiro < 0.95) {
+    return "yellow";
+  }
+
   // ── Verde: todos os indicadores dentro do limite ──────────────────────────
   return "green";
 }
 
 export interface HealthIndicator {
-  id: "idc" | "idp" | "dias_medicao" | "glosa";
+  id: "idc" | "idp" | "dias_medicao" | "glosa" | "sem_previsao";
   label: string;
   description: string;
   value: number | null;       // valor calculado (ex: 0.92 para IDC)
@@ -424,8 +447,9 @@ export function calcHealthDetails(
   let diasValue: number | null = null;
   let diasStatus: HealthIndicator["status"] = "na";
   if (ultimaAprovada?.data_aprovacao) {
+    const diasT = getThresholdsDiasPorPeriodo(obra.periodo_medicao);
     diasValue = differenceInDays(now, new Date(ultimaAprovada.data_aprovacao + "T12:00:00"));
-    diasStatus = diasValue > T.dias_sem_medicao_red ? "red" : diasValue > T.dias_sem_medicao_yellow ? "yellow" : "green";
+    diasStatus = diasValue > diasT.red ? "red" : diasValue > diasT.yellow ? "yellow" : "green";
   }
   // Removido: else if (pctFisico > 0.1) → gerava falsos amarelos em obras sem dados
 
@@ -441,6 +465,18 @@ export function calcHealthDetails(
   }
 
   const valorPlanejado = pctFisico * valorContrato;
+
+  // ── Sem previsão ─────────────────────────────────────────────────────────
+  const temPrevisaoFutura = allMedicoes.some(
+    m => m.data_previsao_medicao &&
+         new Date(m.data_previsao_medicao + "T12:00:00") > now &&
+         m.status_medicao !== "aprovada"
+  );
+  const hasEvidence = nMedicoesAprovadas > 0 || (Number(obra.valor_medido_inicial) > 0);
+  const semPrevisaoStatus: HealthIndicator["status"] =
+    (!temPrevisaoFutura && hasEvidence && pctFinanceiro < 0.95) ? "yellow" : "green";
+
+  const diasT = getThresholdsDiasPorPeriodo(obra.periodo_medicao);
 
   return [
     {
@@ -472,15 +508,15 @@ export function calcHealthDetails(
     {
       id: "dias_medicao",
       label: "Dias sem Medição",
-      description: "Dias desde a última medição aprovada. Obras em andamento sem medição recente indicam risco de fluxo.",
+      description: `Dias desde a última medição aprovada. Thresholds ajustados pelo período: ${obra.periodo_medicao || "padrão"}.`,
       value: diasValue,
       displayValue: diasValue !== null ? `${diasValue}d` : "—",
       status: diasStatus,
-      threshold_yellow: T.dias_sem_medicao_yellow,
-      threshold_red: T.dias_sem_medicao_red,
+      threshold_yellow: diasT.yellow,
+      threshold_red: diasT.red,
       unit: "dias",
       higherIsBetter: false,
-      rawValues: { ultimaAprovadaDate: ultimaAprovada?.data_aprovacao || '' },
+      rawValues: { ultimaAprovadaDate: ultimaAprovada?.data_aprovacao || '', periodo: obra.periodo_medicao || 'padrão' },
     },
     {
       id: "glosa",
@@ -494,6 +530,19 @@ export function calcHealthDetails(
       unit: "%",
       higherIsBetter: false,
       rawValues: { totalGlosa, totalMedidoAprovado },
+    },
+    {
+      id: "sem_previsao",
+      label: "Sem Previsão de Medição",
+      description: "Nenhuma medição futura planejada. Cadastre a previsão da próxima medição.",
+      value: null,
+      displayValue: temPrevisaoFutura ? "Planejada" : "Sem previsão",
+      status: semPrevisaoStatus,
+      threshold_yellow: 0,
+      threshold_red: 0,
+      unit: "",
+      higherIsBetter: false,
+      rawValues: {},
     },
   ];
 }
@@ -963,7 +1012,7 @@ export default function HoldingDashboardView() {
     toast.success("CSV exportado!");
   };
 
-  const { data: obras = [], isLoading } = useQuery({
+  const { data: obras = [], isLoading, isError } = useQuery({
     queryKey: ["holding-portfolio", company?.id],
     staleTime: 30_000,          // 30s — realtime já atualiza quando há mudanças reais
     gcTime: 120_000,            // 2min em cache após desmonte
@@ -983,7 +1032,8 @@ export default function HoldingDashboardView() {
           "planejador_nome, planejador_telefone, " +
           "obramap_project_id, company_id"
         ).eq("company_id", company.id).order("nome");
-      const obraIds = (obrasRaw || []).map(o => o.id);
+      const obrasTyped = (obrasRaw || []) as unknown as ObraPortfolio[];
+      const obraIds = obrasTyped.map(o => o.id);
 
       // 2. Buscar docs, medições e notificações em paralelo
       const [docsRes, medicoesRes, notifRes] = await Promise.all([
@@ -999,7 +1049,7 @@ export default function HoldingDashboardView() {
           ? supabase.from("system_notifications").select("obra_id").in("obra_id", obraIds).eq("resolvida", false).eq("lida", false)
           : Promise.resolve({ data: [] as any[], error: null }),
       ]);
-      const obrasData = (obrasRaw || []) as ObraPortfolio[];
+      const obrasData = obrasTyped;
       const docsData = (docsRes.data || []) as DocumentosObra[];
       const medicoesData = (medicoesRes.data || []) as MedicaoPle[];
 
@@ -1289,6 +1339,20 @@ export default function HoldingDashboardView() {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <p className="text-muted-foreground text-sm">Erro ao carregar dados.</p>
+          <Button variant="outline" size="sm"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-portfolio", company?.id] })}>
+            Tentar novamente
+          </Button>
+        </div>
       </div>
     );
   }

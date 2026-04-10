@@ -552,84 +552,87 @@ function DocumentosTab({ obraId }: { obraId: string }) {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!company?.id) return;
+    try {
+      setLoading(true);
+      if (!company?.id) return;
 
-    const { data: tipos } = await supabase
-      .from("holding_doc_tipos")
-      .select("id, nome, categoria, obrigatorio")
-      .eq("company_id", company.id)
-      .eq("ativo", true)
-      .order("categoria")
-      .order("ordem");
+      const { data: tipos } = await supabase
+        .from("holding_doc_tipos")
+        .select("id, nome, categoria, obrigatorio")
+        .eq("company_id", company.id)
+        .eq("ativo", true)
+        .order("categoria")
+        .order("ordem");
 
-    setDocTipos(tipos || []);
+      setDocTipos(tipos || []);
 
-    const { data: obraDocs } = await supabase
-      .from("holding_obra_docs")
-      .select("*")
-      .eq("obra_id", obraId);
+      const { data: obraDocs } = await supabase
+        .from("holding_obra_docs")
+        .select("*")
+        .eq("obra_id", obraId);
 
-    const map = new Map<string, any>();
-    (obraDocs || []).forEach((d: any) => map.set(d.doc_tipo_id, d));
-    setObraDocsMap(map);
+      const map = new Map<string, any>();
+      (obraDocs || []).forEach((d: any) => map.set(d.doc_tipo_id, d));
+      setObraDocsMap(map);
 
-    if (tipos && tipos.length > 0) {
-      const missingTipos = tipos.filter(t => !map.has(t.id));
-      if (missingTipos.length > 0) {
-        const { data: created } = await supabase
-          .from("holding_obra_docs")
-          .insert(missingTipos.map(t => ({ obra_id: obraId, doc_tipo_id: t.id, checked: false })) as any)
-          .select();
-        if (created) {
-          created.forEach((d: any) => map.set(d.doc_tipo_id, d));
+      if (tipos && tipos.length > 0) {
+        const missingTipos = tipos.filter(t => !map.has(t.id));
+        if (missingTipos.length > 0) {
+          const { data: created } = await supabase
+            .from("holding_obra_docs")
+            .insert(missingTipos.map(t => ({ obra_id: obraId, doc_tipo_id: t.id })))
+            .select();
+          (created || []).forEach((d: any) => map.set(d.doc_tipo_id, d));
           setObraDocsMap(new Map(map));
         }
       }
-    }
 
-    // Load files for all obra docs
-    const obraDocIds = Array.from(map.values()).map((d: any) => d.id).filter(Boolean);
-    if (obraDocIds.length > 0) {
-      const { data: files } = await supabase
-        .from("holding_doc_files")
-        .select("*")
-        .in("obra_doc_id", obraDocIds)
-        .order("created_at", { ascending: false });
-
-      const filesMap = new Map<string, DocFile[]>();
-      (files || []).forEach((f: any) => {
-        const list = filesMap.get(f.obra_doc_id) || [];
-        list.push(f);
-        filesMap.set(f.obra_doc_id, list);
-      });
-      setDocFilesMap(filesMap);
-    }
-
-    // Legacy
-    const { data: legacy } = await supabase
-      .from("documentos_obra")
-      .select("*")
-      .eq("obra_id", obraId)
-      .maybeSingle();
-
-    if (legacy) {
-      setLegacyDocId(legacy.id);
-      const { id: _id, obra_id: _oid, ...fields } = legacy as any;
-      setLegacyDocs(fields);
-    } else {
-      const { data: created } = await supabase
-        .from("documentos_obra")
-        .insert({ obra_id: obraId } as any)
-        .select()
-        .single();
-      if (created) {
-        setLegacyDocId(created.id);
-        const { id: _id2, obra_id: _oid2, ...fields } = created as any;
-        setLegacyDocs(fields);
+      // Files
+      const allDocIds = Array.from(map.values()).map((d: any) => d.id).filter(Boolean);
+      if (allDocIds.length > 0) {
+        const { data: files } = await supabase
+          .from("holding_doc_files")
+          .select("*")
+          .in("obra_doc_id", allDocIds)
+          .order("created_at", { ascending: false });
+        const filesMap = new Map<string, DocFile[]>();
+        (files || []).forEach((f: any) => {
+          const list = filesMap.get(f.obra_doc_id) || [];
+          list.push(f);
+          filesMap.set(f.obra_doc_id, list);
+        });
+        setDocFilesMap(filesMap);
       }
-    }
 
-    setLoading(false);
+      // Legacy
+      const { data: legacy } = await supabase
+        .from("documentos_obra")
+        .select("*")
+        .eq("obra_id", obraId)
+        .maybeSingle();
+
+      if (legacy) {
+        setLegacyDocId(legacy.id);
+        const { id: _id, obra_id: _oid, ...fields } = legacy as any;
+        setLegacyDocs(fields);
+      } else {
+        const { data: created } = await supabase
+          .from("documentos_obra")
+          .insert({ obra_id: obraId } as any)
+          .select()
+          .single();
+        if (created) {
+          setLegacyDocId(created.id);
+          const { id: _id2, obra_id: _oid2, ...fields } = created as any;
+          setLegacyDocs(fields);
+        }
+      }
+    } catch (e) {
+      console.error("[DocumentosTab] Erro ao carregar:", e);
+      toast.error("Erro ao carregar documentos. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
   }, [obraId, company?.id]);
 
   useEffect(() => { load(); }, [load]);
@@ -1138,15 +1141,22 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
 
   const loadRef = useRef(0); // prevent race conditions on concurrent loads
   const load = useCallback(async () => {
-    const seq = ++loadRef.current;
-    const [medRes, reqRes] = await Promise.all([
-      supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).order("num_medicao", { ascending: true }),
-      supabase.from("medicao_correction_requests").select("*").eq("obra_id", obraId).eq("status", "pending").order("created_at", { ascending: false }),
-    ]);
-    if (seq !== loadRef.current) return; // stale response, skip
-    setMedicoes(sortMedicoes(medRes.data || []));
-    setPendingRequests(reqRes.data || []);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const seq = ++loadRef.current;
+      const [medRes, reqRes] = await Promise.all([
+        supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).order("num_medicao", { ascending: true }),
+        supabase.from("medicao_correction_requests").select("*").eq("obra_id", obraId).eq("status", "pending").order("created_at", { ascending: false }),
+      ]);
+      if (seq !== loadRef.current) return; // stale response, skip
+      setMedicoes(sortMedicoes(medRes.data || []));
+      setPendingRequests(reqRes.data || []);
+    } catch (e) {
+      console.error("[MedicoesTab] Erro ao carregar:", e);
+      toast.error("Erro ao carregar medições. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
   }, [obraId, sortMedicoes]);
 
   useEffect(() => { load(); }, [load]);
@@ -2388,21 +2398,27 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
   const tipoDespesa = selectedMedicao?.status_medicao === "aprovada" ? "real" : "prevista";
 
   const loadData = useCallback(async () => {
-    setLoading(true);
-    const [dRes, mAllRes, notifRes] = await Promise.all([
-      supabase.from("despesas_mensais").select("*").eq("obra_id", obraId).order("ano_referencia").order("mes_referencia"),
-      supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).order("num_medicao"),
-      supabase.from("system_notifications").select("id, tipo, titulo, mensagem, medicao_id").eq("obra_id", obraId).eq("resolvida", false),
-    ]);
-    setDespesas(dRes.data || []);
-    const meds = mAllRes.data || [];
-    setAllMedicoes(meds);
-    setMedicoesAprovadas(meds.filter((m: any) => m.status_medicao === "aprovada"));
-    // Filtrar apenas notificações relevantes para despesas — excluir tipos de outras abas
-    // como medicao_previsao_vencida (MedicoesTab) e restricao_financeira (RestricoesTab)
-    const DESPESA_NOTIF_TIPOS = ["despesa_pendente_link", "medicao_aprovada_despesa", "despesa_fechamento", "despesa_sem_fechamento"];
-    setPendingNotifs((notifRes.data || []).filter((n: any) => DESPESA_NOTIF_TIPOS.includes(n.tipo)));
-    setLoading(false);
+    try {
+      setLoading(true);
+      const [dRes, mAllRes, notifRes] = await Promise.all([
+        supabase.from("despesas_mensais").select("*").eq("obra_id", obraId).order("ano_referencia").order("mes_referencia"),
+        supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).order("num_medicao"),
+        supabase.from("system_notifications").select("id, tipo, titulo, mensagem, medicao_id").eq("obra_id", obraId).eq("resolvida", false),
+      ]);
+      setDespesas(dRes.data || []);
+      const meds = mAllRes.data || [];
+      setAllMedicoes(meds);
+      setMedicoesAprovadas(meds.filter((m: any) => m.status_medicao === "aprovada"));
+      // Filtrar apenas notificações relevantes para despesas — excluir tipos de outras abas
+      // como medicao_previsao_vencida (MedicoesTab) e restricao_financeira (RestricoesTab)
+      const DESPESA_NOTIF_TIPOS = ["despesa_pendente_link", "medicao_aprovada_despesa", "despesa_fechamento", "despesa_sem_fechamento"];
+      setPendingNotifs((notifRes.data || []).filter((n: any) => DESPESA_NOTIF_TIPOS.includes(n.tipo)));
+    } catch (e) {
+      console.error("[FinanceiroTab] Erro ao carregar:", e);
+      toast.error("Erro ao carregar despesas. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
   }, [obraId]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -2930,9 +2946,16 @@ function AditivosTab({ obraId }: { obraId: string }) {
   });
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from("aditivos_contratos").select("*").eq("obra_id", obraId).order("data");
-    setAditivos(data || []);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const { data } = await supabase.from("aditivos_contratos").select("*").eq("obra_id", obraId).order("data");
+      setAditivos(data || []);
+    } catch (e) {
+      console.error("[AditivosTab] Erro ao carregar:", e);
+      toast.error("Erro ao carregar aditivos. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
   }, [obraId]);
 
   useEffect(() => { load(); }, [load]);
@@ -3141,13 +3164,20 @@ function RestricoesTab({ obraId }: { obraId: string }) {
   const companyId = profile?.company_id || "";
 
   const load = useCallback(async () => {
-    const [{ data: restricoes }, { data: meds }] = await Promise.all([
-      supabase.from("restricoes_financeiras").select("*").eq("obra_id", obraId).order("resolvida").order("data_limite"),
-      supabase.from("medicoes_ple").select("id, num_medicao, status_medicao, data_previsao_medicao").eq("obra_id", obraId),
-    ]);
-    setItems(restricoes || []);
-    setMedicoes((meds || []).filter((m: any) => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada" || m.status_medicao === "enviada"));
-    setLoading(false);
+    try {
+      setLoading(true);
+      const [{ data: restricoes }, { data: meds }] = await Promise.all([
+        supabase.from("restricoes_financeiras").select("*").eq("obra_id", obraId).order("resolvida").order("data_limite"),
+        supabase.from("medicoes_ple").select("id, num_medicao, status_medicao, data_previsao_medicao").eq("obra_id", obraId),
+      ]);
+      setItems(restricoes || []);
+      setMedicoes((meds || []).filter((m: any) => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada" || m.status_medicao === "enviada"));
+    } catch (e) {
+      console.error("[RestricoesTab] Erro ao carregar:", e);
+      toast.error("Erro ao carregar restrições. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
   }, [obraId]);
 
   useEffect(() => { load(); }, [load]);

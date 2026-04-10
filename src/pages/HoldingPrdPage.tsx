@@ -383,7 +383,7 @@ export default function HoldingPrdPage() {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <SidebarTrigger className="md:hidden p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors" />
-          <NotificationBell />
+          <NotificationBell modulo="holding" />
           <div>
             <h1 className="text-lg font-semibold flex items-center gap-2">
               <BarChart2 className="h-5 w-5 text-primary" /> PRD — Previsto × Realizado × Despesas
