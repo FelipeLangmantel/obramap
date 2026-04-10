@@ -2398,7 +2398,10 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
     const meds = mAllRes.data || [];
     setAllMedicoes(meds);
     setMedicoesAprovadas(meds.filter((m: any) => m.status_medicao === "aprovada"));
-    setPendingNotifs(notifRes.data || []);
+    // Filtrar apenas notificações relevantes para despesas — excluir tipos de outras abas
+    // como medicao_previsao_vencida (MedicoesTab) e restricao_financeira (RestricoesTab)
+    const DESPESA_NOTIF_TIPOS = ["despesa_pendente_link", "medicao_aprovada_despesa", "despesa_fechamento", "despesa_sem_fechamento"];
+    setPendingNotifs((notifRes.data || []).filter((n: any) => DESPESA_NOTIF_TIPOS.includes(n.tipo)));
     setLoading(false);
   }, [obraId]);
 
