@@ -3110,7 +3110,7 @@ function RestricoesTab({ obraId }: { obraId: string }) {
       valor: form.valor || 0,
       impacto_medicao: form.impacto_medicao || 0,
       data_limite: form.data_limite,
-      medicao_id: form.medicao_id || null,
+      medicao_id: form.medicao_id && form.medicao_id !== "none" ? form.medicao_id : null,
       created_by: userId,
       created_by_name: userName,
     };
