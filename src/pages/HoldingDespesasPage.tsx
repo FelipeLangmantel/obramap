@@ -447,6 +447,14 @@ export default function HoldingDespesasPage() {
                 {Object.entries(STATUS_DESP).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
               </SelectContent>
             </Select>
+            <Select value={filterTipo} onValueChange={(v) => setFilterTipo(v as any)}>
+              <SelectTrigger className="h-9 w-36 text-xs"><SelectValue placeholder="Tipo" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos Tipos</SelectItem>
+                <SelectItem value="prevista">Prevista</SelectItem>
+                <SelectItem value="real">Real</SelectItem>
+              </SelectContent>
+            </Select>
             {hasFilter && (
               <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={clearFilters}>
                 <X className="h-3.5 w-3.5 mr-1" /> Limpar
@@ -465,13 +473,14 @@ export default function HoldingDespesasPage() {
                   <TableHead className="text-xs">Contrato</TableHead>
                   <TableHead className="text-xs">UH</TableHead>
                   <TableHead className="text-xs">Mês/Ano</TableHead>
+                  <TableHead className="text-xs">Tipo</TableHead>
                   <TableHead className="text-xs text-right">Valor</TableHead>
                   <TableHead className="text-xs">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {despesasFiltradas.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma despesa encontrada</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Nenhuma despesa encontrada</TableCell></TableRow>
                 ) : despesasFiltradas.map((d, i) => {
                   const st = STATUS_DESP[d.status] || STATUS_DESP.nao_iniciado;
                   return (
@@ -482,6 +491,11 @@ export default function HoldingDespesasPage() {
                       <TableCell className="text-xs">{d.obra_contrato || "—"}</TableCell>
                       <TableCell className="text-xs">{d.obra_uh || "—"}</TableCell>
                       <TableCell className="text-xs">{d.mes_referencia && d.ano_referencia ? `${d.mes_referencia}/${d.ano_referencia}` : "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`text-[10px] ${d.tipo_despesa === "real" ? "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300"}`}>
+                          {d.tipo_despesa === "real" ? "Real" : "Prevista"}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-xs text-right font-mono">{BRL.format(d.valor)}</TableCell>
                       <TableCell><Badge className={`text-[10px] ${st.cls}`}>{st.label}</Badge></TableCell>
                     </TableRow>
