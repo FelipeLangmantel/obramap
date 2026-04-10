@@ -69,6 +69,7 @@ export default function HoldingDespesasPage() {
   const [filterObra, setFilterObra] = useState("all");
   const [filterEmpresa, setFilterEmpresa] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterTipo, setFilterTipo] = useState<"all" | "prevista" | "real">("all");
   const [searchText, setSearchText] = useState("");
 
   // ─── Data Fetching ───
@@ -151,7 +152,8 @@ export default function HoldingDespesasPage() {
     const totalEmFechamento = despesas.filter(d => d.tipo_despesa === "real" && d.status === "em_fechamento").reduce((s, d) => s + d.valor, 0);
     const totalNaoIniciado = despesas.filter(d => d.tipo_despesa === "real" && d.status === "nao_iniciado").reduce((s, d) => s + d.valor, 0);
     const countObrasComDespesa = new Set(despesas.filter(d => d.tipo_despesa === "real").map(d => d.obra_id)).size;
-    return { totalDespesas, totalFechado, totalEmFechamento, totalNaoIniciado, countObrasComDespesa };
+    const totalOrcado = despesas.filter(d => d.tipo_despesa === "prevista").reduce((s, d) => s + d.valor, 0);
+    return { totalDespesas, totalFechado, totalEmFechamento, totalNaoIniciado, countObrasComDespesa, totalOrcado };
   }, [despesas]);
 
   // ─── Filters ───
@@ -160,35 +162,34 @@ export default function HoldingDespesasPage() {
       if (filterObra !== "all" && d.obra_id !== filterObra) return false;
       if (filterEmpresa !== "all" && d.obra_empresa !== filterEmpresa) return false;
       if (filterStatus !== "all" && d.status !== filterStatus) return false;
+      if (filterTipo !== "all" && d.tipo_despesa !== filterTipo) return false;
       if (searchText) {
         const s = searchText.toLowerCase();
         if (!d.obra_nome.toLowerCase().includes(s) && !(d.obra_contrato || "").toLowerCase().includes(s)) return false;
       }
       return true;
     });
-  }, [despesas, filterObra, filterEmpresa, filterStatus, searchText]);
+  }, [despesas, filterObra, filterEmpresa, filterStatus, filterTipo, searchText]);
 
   const uniqueObras = useMemo(() => [...new Map(despesas.map(d => [d.obra_id, { id: d.obra_id, nome: d.obra_nome }])).values()], [despesas]);
   const uniqueEmpresas = useMemo(() => [...new Set(despesas.map(d => d.obra_empresa).filter(Boolean))], [despesas]);
-  const hasFilter = filterObra !== "all" || filterEmpresa !== "all" || filterStatus !== "all" || !!searchText;
+  const hasFilter = filterObra !== "all" || filterEmpresa !== "all" || filterStatus !== "all" || filterTipo !== "all" || !!searchText;
 
   // ─── Monthly Flow ───
   const fluxoData = useMemo(() => {
-    const map = new Map<string, { fechado: number; em_fechamento: number; nao_iniciado: number }>();
+    const map = new Map<string, { real: number; previsto: number }>();
     despesas.forEach(d => {
       if (!d.mes_referencia || !d.ano_referencia) return;
-      if (d.tipo_despesa !== "real") return; // apenas custos confirmados no fluxo mensal
       const mi = MONTHS.findIndex(mn => mn.toLowerCase() === (d.mes_referencia || "").substring(0,3).toLowerCase());
       const key = `${d.ano_referencia}-${String(mi >= 0 ? mi + 1 : 1).padStart(2, "0")}`;
-      const cur = map.get(key) || { fechado: 0, em_fechamento: 0, nao_iniciado: 0 };
-      if (d.status === "fechado") cur.fechado += d.valor;
-      else if (d.status === "em_fechamento") cur.em_fechamento += d.valor;
-      else cur.nao_iniciado += d.valor;
+      const cur = map.get(key) || { real: 0, previsto: 0 };
+      if (d.tipo_despesa === "real") cur.real += d.valor;
+      else cur.previsto += d.valor;
       map.set(key, cur);
     });
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => {
       const [y, m] = k.split("-");
-      return { name: `${MONTHS[Number(m) - 1]}/${y.slice(2)}`, ...v, total: v.fechado + v.em_fechamento + v.nao_iniciado };
+      return { name: `${MONTHS[Number(m) - 1]}/${y.slice(2)}`, ...v, total: v.real + v.previsto };
     });
   }, [despesas]);
 
@@ -199,9 +200,10 @@ export default function HoldingDespesasPage() {
       const realizadoMedicoes = medicoes.filter((m: any) => m.obra_id === o.id && m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
       const realizado = realizadoMedicoes + (Number(o.valor_medido_inicial) || 0);
       const desp = despesas.filter(d => d.obra_id === o.id && d.tipo_despesa === "real").reduce((s, d) => s + d.valor, 0);
+      const despOrcada = despesas.filter(d => d.obra_id === o.id && d.tipo_despesa === "prevista").reduce((s, d) => s + d.valor, 0);
       const saldo = realizado - desp;
       const roi = desp > 0 ? ((realizado - desp) / desp) * 100 : 0;
-      return { nome: o.nome.length > 14 ? o.nome.slice(0, 12) + "…" : o.nome, fullName: o.nome, uh: o.uh || 0, previsto, realizado, despesas: desp, saldo, roi, id: o.id };
+      return { nome: o.nome.length > 14 ? o.nome.slice(0, 12) + "…" : o.nome, fullName: o.nome, uh: o.uh || 0, previsto, realizado, despesas: desp, despOrcada, saldo, roi, id: o.id };
     }).filter(o => o.previsto > 0 || o.realizado > 0 || o.despesas > 0);
   }, [obras, medicoes, despesas]);
 
@@ -272,7 +274,7 @@ export default function HoldingDespesasPage() {
   };
 
   const clearFilters = () => {
-    setFilterObra("all"); setFilterEmpresa("all"); setFilterStatus("all"); setSearchText("");
+    setFilterObra("all"); setFilterEmpresa("all"); setFilterStatus("all"); setFilterTipo("all"); setSearchText("");
   };
 
   if (isLoading) {
