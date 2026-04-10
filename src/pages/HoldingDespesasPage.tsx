@@ -292,9 +292,9 @@ export default function HoldingDespesasPage() {
 
   const kpiCards = [
     { label: "Total Lançado", value: BRL.format(kpis.totalDespesas), border: "border-b-muted-foreground/30", icon: DollarSign },
+    { label: "Total Orçado", value: BRL.format(kpis.totalOrcado), border: "border-b-amber-500", icon: Clock },
     { label: "Fechado", value: BRL.format(kpis.totalFechado), border: "border-b-emerald-500", icon: CheckCircle2 },
-    { label: "Em Fechamento", value: BRL.format(kpis.totalEmFechamento), border: "border-b-amber-500", icon: Clock },
-    { label: "Não Iniciado", value: BRL.format(kpis.totalNaoIniciado), border: "border-b-muted-foreground/20", icon: AlertCircle },
+    { label: "Em Fechamento", value: BRL.format(kpis.totalEmFechamento), border: "border-b-amber-500", icon: AlertCircle },
     { label: "Obras com Despesa", value: String(kpis.countObrasComDespesa), border: "border-b-primary", icon: Receipt },
   ];
 
@@ -366,9 +366,8 @@ export default function HoldingDespesasPage() {
                       <YAxis fontSize={9} tickFormatter={(v) => BRL_SHORT(v)} />
                       <Tooltip formatter={(v: number) => BRL.format(v)} />
                       <Legend />
-                      <Area type="monotone" dataKey="fechado" name="Fechado" stroke="#22c55e" fill="#22c55e" fillOpacity={0.2} />
-                      <Area type="monotone" dataKey="em_fechamento" name="Em Fechamento" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.15} />
-                      <Area type="monotone" dataKey="nao_iniciado" name="Não Iniciado" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.1} />
+                      <Area type="monotone" dataKey="real" name="Custo Real" stroke="#ef4444" fill="#ef4444" fillOpacity={0.3} />
+                      <Area type="monotone" dataKey="previsto" name="Orçado" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.15} strokeDasharray="4 2" />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : <p className="text-sm text-muted-foreground text-center py-10">Nenhuma despesa lançada</p>}
