@@ -612,6 +612,11 @@ export function NotificationBell({ modulo }: { modulo?: string } = {}) {
             <SheetTitle className="flex items-center justify-between">
               <span className="flex items-center gap-2">
                 Notificações
+                {modulo && (
+                  <span className="text-xs text-muted-foreground font-normal ml-1">
+                    {modulo === "holding" ? "Módulo Holding" : modulo}
+                  </span>
+                )}
                 {notif.count > 0 && (
                   <Badge variant="destructive" className="text-[10px] px-1.5 h-5">
                     {notif.count}
