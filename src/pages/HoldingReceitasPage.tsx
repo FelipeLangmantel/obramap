@@ -1341,6 +1341,356 @@ export default function HoldingReceitasPage() {
           </div>
         </main>
       </div>
+      <FinanceiroObraSheet
+        obraId={selectedObraId}
+        obras={obras}
+        medicoes={medicoes}
+        restricoes={restricoes}
+        onClose={() => setSelectedObraId(null)}
+        onUpdate={() => {
+          queryClient.invalidateQueries({ queryKey: ["holding-receitas"], exact: false });
+          queryClient.invalidateQueries({ queryKey: ["holding-portfolio"], exact: false });
+        }}
+      />
     </SidebarProvider>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   FinanceiroObraSheet — Decision point for financial team
+   ══════════════════════════════════════════════ */
+
+const TIPO_BADGE: Record<string, { label: string; cls: string }> = {
+  material: { label: "Material", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
+  mao_de_obra: { label: "Mão de Obra", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  administrativa: { label: "Administrativa", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+};
+
+const FORMA_RESOLUCAO_OPTIONS = [
+  { value: "pago", label: "Pago" },
+  { value: "documento_enviado", label: "Documento enviado" },
+  { value: "negociado", label: "Negociado" },
+  { value: "waiver", label: "Waiver" },
+  { value: "outro", label: "Outro" },
+];
+
+function FinanceiroObraSheet({
+  obraId, obras, medicoes, restricoes: restricoesGlobais, onClose, onUpdate,
+}: {
+  obraId: string | null;
+  obras: any[];
+  medicoes: any[];
+  restricoes: any[];
+  onClose: () => void;
+  onUpdate: () => void;
+}) {
+  const { user, profile } = useAuth();
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [recusandoId, setRecusandoId] = useState<string | null>(null);
+  const [resolveForm, setResolveForm] = useState({ valor_pago: 0, forma_resolucao: "pago" });
+  const [motivoRecusa, setMotivoRecusa] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const obra = obras.find((o: any) => o.id === obraId);
+
+  const medsDaObra = useMemo(() => {
+    if (!obraId) return [];
+    return medicoes.filter((m: any) => m.obra_id === obraId)
+      .sort((a: any, b: any) => {
+        if (a.num_medicao === "Saldo Inicial") return -1;
+        if (b.num_medicao === "Saldo Inicial") return 1;
+        return parseInt(a.num_medicao || "0") - parseInt(b.num_medicao || "0");
+      });
+  }, [medicoes, obraId]);
+
+  const restrDaObra = useMemo(() => {
+    if (!obraId) return [];
+    return restricoesGlobais.filter((r: any) => r.obra_id === obraId);
+  }, [restricoesGlobais, obraId]);
+
+  const valorContrato = obra ? (Number(obra.valor_contrato) || 0) + (Number(obra.aditivo_valor_total) || 0) : 0;
+  const valorMedidoInicial = obra ? Number(obra.valor_medido_inicial) || 0 : 0;
+  const valorRecebido = valorMedidoInicial + medsDaObra
+    .filter((m: any) => m.status_nf === "recebido" && m.data_pagamento)
+    .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+  const saldoReceber = Math.max(0, valorContrato - valorRecebido);
+  const pctRecebido = valorContrato > 0 ? (valorRecebido / valorContrato) * 100 : 0;
+
+  const now = new Date();
+  const restrVencidas = restrDaObra.filter((r: any) => r.data_limite && new Date(r.data_limite + "T23:59:59") < now);
+  const impactoTotal = restrDaObra.reduce((s: number, r: any) => s + (Number(r.impacto_medicao) || 0), 0);
+
+  const prazoFim = obra?.data_inicio && obra?.prazo_dias
+    ? addDays(new Date(obra.data_inicio + "T12:00:00"), (obra.prazo_dias || 0) + (obra.aditivo_prazo_dias || 0))
+    : null;
+  const diasParaFim = prazoFim ? Math.ceil((prazoFim.getTime() - now.getTime()) / 86400000) : null;
+
+  const handleResolver = async () => {
+    if (!resolvingId) return;
+    setSaving(true);
+    try {
+      await supabase.from("restricoes_financeiras").update({
+        resolvida: true,
+        resolvida_em: new Date().toISOString(),
+        resolvida_por: user?.id,
+        resolvida_por_nome: (profile as any)?.display_name || user?.email || "Financeiro",
+        valor_pago: resolveForm.valor_pago,
+        forma_resolucao: resolveForm.forma_resolucao,
+      }).eq("id", resolvingId);
+      toast.success("Restrição resolvida — impacto removido da medição.");
+      onUpdate();
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao resolver restrição.");
+    } finally {
+      setSaving(false);
+      setResolvingId(null);
+      setResolveForm({ valor_pago: 0, forma_resolucao: "pago" });
+    }
+  };
+
+  const handleRecusar = async () => {
+    if (!recusandoId) return;
+    setSaving(true);
+    try {
+      await supabase.from("restricoes_financeiras").update({
+        resolvida: true,
+        resolvida_em: new Date().toISOString(),
+        resolvida_por: user?.id,
+        resolvida_por_nome: (profile as any)?.display_name || user?.email || "Financeiro",
+        forma_resolucao: "recusada",
+        valor_pago: 0,
+      }).eq("id", recusandoId);
+      toast.success("Restrição recusada — impacto removido.");
+      onUpdate();
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao recusar restrição.");
+    } finally {
+      setSaving(false);
+      setRecusandoId(null);
+      setMotivoRecusa("");
+    }
+  };
+
+  // Pre-fill resolver form when opening
+  const openResolver = (r: any) => {
+    setResolveForm({ valor_pago: Number(r.impacto_medicao) || 0, forma_resolucao: "pago" });
+    setResolvingId(r.id);
+  };
+
+  return (
+    <>
+      <Sheet open={!!obraId} onOpenChange={(open) => { if (!open) onClose(); }}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto p-0">
+          {obra && (
+            <div className="p-5 space-y-5">
+              {/* Header */}
+              <SheetHeader className="p-0">
+                <SheetTitle className="text-base font-bold">{obra.nome}</SheetTitle>
+                <div className="flex gap-1.5 flex-wrap mt-1">
+                  {obra.empresa && <Badge variant="outline" className="text-[10px]">{obra.empresa}</Badge>}
+                  {obra.num_contrato && <Badge variant="outline" className="text-[10px]">{obra.num_contrato}</Badge>}
+                  {obra.uh && <Badge variant="outline" className="text-[10px]">{obra.uh} UH</Badge>}
+                </div>
+              </SheetHeader>
+
+              {/* Alerts */}
+              {restrVencidas.length > 0 && (
+                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span><strong>{restrVencidas.length} restrição(ões) vencida(s)</strong> — prazo expirado sem resolução.</span>
+                </div>
+              )}
+              {diasParaFim !== null && diasParaFim < 0 && (
+                <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span><strong>Prazo contratual vencido</strong> há {Math.abs(diasParaFim)} dias.</span>
+                </div>
+              )}
+              {diasParaFim !== null && diasParaFim >= 0 && diasParaFim <= 30 && (
+                <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                  <Clock className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span><strong>{diasParaFim} dias</strong> para o fim do prazo contratual.</span>
+                </div>
+              )}
+
+              <Separator />
+
+              {/* KPIs */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border p-3">
+                  <p className="text-[10px] text-muted-foreground">Valor Contrato</p>
+                  <p className="text-sm font-bold">{BRL.format(valorContrato)}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-[10px] text-muted-foreground">Recebido Total</p>
+                  <p className="text-sm font-bold text-emerald-600">{BRL.format(valorRecebido)}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-[10px] text-muted-foreground">Saldo a Receber</p>
+                  <p className="text-sm font-bold">{BRL.format(saldoReceber)}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-[10px] text-muted-foreground">% Recebido</p>
+                  <p className="text-sm font-bold">{pctRecebido.toFixed(1)}%</p>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="space-y-1">
+                <div className="h-3 w-full rounded-full bg-secondary overflow-hidden">
+                  <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${Math.min(100, pctRecebido)}%` }} />
+                </div>
+                {prazoFim && (
+                  <p className="text-[10px] text-muted-foreground text-right">
+                    Fim: {format(prazoFim, "dd/MM/yyyy")} {diasParaFim !== null && (diasParaFim >= 0 ? `(${diasParaFim}d restantes)` : `(${Math.abs(diasParaFim)}d atraso)`)}
+                  </p>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Medições */}
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Medições ({medsDaObra.length})</h3>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {medsDaObra.map((m: any) => {
+                    const ms = STATUS_MED_CONFIG[m.status_medicao] || STATUS_MED_CONFIG.nao_iniciada;
+                    return (
+                      <div key={m.id} className="flex items-center justify-between text-xs border rounded-md px-3 py-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{m.num_medicao === "Saldo Inicial" ? "Saldo Ini." : `Nº ${m.num_medicao}`}</span>
+                          <Badge className={`text-[9px] ${ms.cls}`} variant="secondary">{ms.label}</Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{BRL.format(Number(m.valor_acatado ?? m.valor_medicao) || 0)}</span>
+                          {m.data_pagamento && <span className="text-muted-foreground">{format(new Date(m.data_pagamento + "T12:00:00"), "dd/MM/yy")}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {medsDaObra.length === 0 && <p className="text-xs text-muted-foreground text-center py-3">Nenhuma medição registrada.</p>}
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Restrições Financeiras */}
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Restrições Financeiras</h3>
+
+                {/* Mini KPIs */}
+                <div className="flex gap-3 mb-3">
+                  <Badge variant="secondary" className="text-xs">Abertas: {restrDaObra.length}</Badge>
+                  <Badge variant="secondary" className="text-xs">Impacto: {BRL.format(impactoTotal)}</Badge>
+                  {restrVencidas.length > 0 && <Badge variant="destructive" className="text-xs">Vencidas: {restrVencidas.length}</Badge>}
+                </div>
+
+                {restrDaObra.length === 0 ? (
+                  <div className="text-xs text-muted-foreground text-center py-4 border rounded-lg bg-muted/20">
+                    <CheckCircle2 className="h-5 w-5 mx-auto mb-1 text-emerald-500" />
+                    Nenhuma restrição aberta — medição sem impacto.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {restrDaObra.map((r: any) => {
+                      const tipo = TIPO_BADGE[r.tipo] || TIPO_BADGE.administrativa;
+                      const isVencida = r.data_limite && new Date(r.data_limite + "T23:59:59") < now;
+                      return (
+                        <Card key={r.id} className={`${isVencida ? "border-destructive/60" : ""}`}>
+                          <CardContent className="p-3 space-y-2">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Badge className={`text-[10px] ${tipo.cls}`}>{tipo.label}</Badge>
+                              {isVencida && <Badge variant="destructive" className="text-[10px]">Vencida</Badge>}
+                            </div>
+                            <p className="text-xs">{r.descricao}</p>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              <span>Prazo: <strong>{r.data_limite ? format(new Date(r.data_limite + "T12:00:00"), "dd/MM/yy") : "—"}</strong></span>
+                            </div>
+                            <div className="flex items-center gap-4 text-xs">
+                              <div>
+                                <span className="text-muted-foreground">Valor: </span>
+                                <span className="font-semibold">{BRL.format(Number(r.valor) || 0)}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Impacto medição: </span>
+                                <span className="font-semibold text-amber-600">{BRL.format(Number(r.impacto_medicao) || 0)}</span>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 pt-1">
+                              <Button size="sm" variant="outline" className="text-xs h-7 border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={(e) => { e.stopPropagation(); openResolver(r); }}>
+                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Resolver
+                              </Button>
+                              <Button size="sm" variant="outline" className="text-xs h-7 border-destructive text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); setRecusandoId(r.id); setMotivoRecusa(""); }}>
+                                <Ban className="h-3.5 w-3.5 mr-1" />Recusar
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* Dialog: Resolver */}
+      <Dialog open={!!resolvingId} onOpenChange={(open) => { if (!open) setResolvingId(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Resolver Restrição</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs text-muted-foreground">Valor pago (R$)</label>
+              <Input type="number" min={0} step={0.01} value={resolveForm.valor_pago} onChange={(e) => setResolveForm({ ...resolveForm, valor_pago: Number(e.target.value) || 0 })} />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Forma de resolução</label>
+              <Select value={resolveForm.forma_resolucao} onValueChange={(v) => setResolveForm({ ...resolveForm, forma_resolucao: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FORMA_RESOLUCAO_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResolvingId(null)}>Cancelar</Button>
+            <Button onClick={handleResolver} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+              Confirmar Resolução
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Recusar */}
+      <Dialog open={!!recusandoId} onOpenChange={(open) => { if (!open) setRecusandoId(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Recusar Restrição</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">A restrição será marcada como resolvida sem pagamento. O impacto será removido da medição.</p>
+            <div>
+              <label className="text-xs text-muted-foreground">Motivo (opcional)</label>
+              <Textarea value={motivoRecusa} onChange={(e) => setMotivoRecusa(e.target.value)} placeholder="Descreva o motivo da recusa..." rows={3} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRecusandoId(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleRecusar} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Ban className="h-4 w-4 mr-1" />}
+              Confirmar Recusa
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
