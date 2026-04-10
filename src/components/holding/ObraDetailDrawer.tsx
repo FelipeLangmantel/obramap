@@ -3292,7 +3292,7 @@ function RestricoesTab({ obraId }: { obraId: string }) {
                   <Select value={form.medicao_id} onValueChange={(v) => setForm({ ...form, medicao_id: v })}>
                     <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Nenhuma</SelectItem>
+                      <SelectItem value="none">Nenhuma</SelectItem>
                       {medicoes.map((m: any) => (
                         <SelectItem key={m.id} value={m.id}>Nº {m.num_medicao} — {m.status_medicao}</SelectItem>
                       ))}
