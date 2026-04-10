@@ -587,9 +587,9 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
    Exported NotificationBell — standalone
    ═══════════════════════════════════════ */
 
-export function NotificationBell() {
+export function NotificationBell({ modulo }: { modulo?: string } = {}) {
   const navigate = useNavigate();
-  const notif = useNotifications();
+  const notif = useNotifications(modulo);
 
   return (
     <>
