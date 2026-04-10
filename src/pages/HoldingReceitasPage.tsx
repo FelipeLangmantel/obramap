@@ -1429,7 +1429,7 @@ function FinanceiroObraSheet({
     if (!resolvingId) return;
     setSaving(true);
     try {
-      await supabase.from("restricoes_financeiras").update({
+      const { error } = await supabase.from("restricoes_financeiras").update({
         resolvida: true,
         resolvida_em: new Date().toISOString(),
         resolvida_por: user?.id,
@@ -1437,8 +1437,10 @@ function FinanceiroObraSheet({
         valor_pago: resolveForm.valor_pago,
         forma_resolucao: resolveForm.forma_resolucao,
       }).eq("id", resolvingId);
+      if (error) { toast.error("Sem permissão ou erro ao resolver restrição."); return; }
       toast.success("Restrição resolvida — impacto removido da medição.");
-      onUpdate();
+      onClose();   // fecha o sheet imediatamente — evita stale data visível
+      onUpdate();  // refetch em background
     } catch (e) {
       console.error(e);
       toast.error("Erro ao resolver restrição.");
@@ -1453,16 +1455,18 @@ function FinanceiroObraSheet({
     if (!recusandoId) return;
     setSaving(true);
     try {
-      await supabase.from("restricoes_financeiras").update({
+      const { error } = await supabase.from("restricoes_financeiras").update({
         resolvida: true,
         resolvida_em: new Date().toISOString(),
         resolvida_por: user?.id,
         resolvida_por_nome: (profile as any)?.display_name || user?.email || "Financeiro",
-        forma_resolucao: "recusada",
+        forma_resolucao: motivoRecusa.trim() ? `recusada: ${motivoRecusa.trim()}` : "recusada",
         valor_pago: 0,
       }).eq("id", recusandoId);
+      if (error) { toast.error("Sem permissão ou erro ao recusar restrição."); return; }
       toast.success("Restrição recusada — impacto removido.");
-      onUpdate();
+      onClose();   // fecha o sheet imediatamente — evita stale data visível
+      onUpdate();  // refetch em background
     } catch (e) {
       console.error(e);
       toast.error("Erro ao recusar restrição.");
@@ -1564,7 +1568,7 @@ function FinanceiroObraSheet({
                           <Badge className={`text-[9px] ${ms.cls}`} variant="secondary">{ms.label}</Badge>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{BRL.format(Number(m.valor_acatado ?? m.valor_medicao) || 0)}</span>
+                          <span className="font-medium">{BRL.format(m.status_medicao === "aprovada" ? (Number(m.valor_acatado ?? m.valor_medicao) || 0) : (Number(m.valor_previsto_medicao) || 0))}</span>
                           {m.data_pagamento && <span className="text-muted-foreground">{format(new Date(m.data_pagamento + "T12:00:00"), "dd/MM/yy")}</span>}
                         </div>
                       </div>
