@@ -140,21 +140,7 @@ export default function ObraDetailDrawer({ obra, onClose }: ObraDetailDrawerProp
    RESUMO TAB — Mini Dashboard
    ══════════════════════════════════════════════ */
 
-function ResumoTab({ obra }: { obra: ObraDrawerData }) {
-  const [medicoes, setMedicoes] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from("medicoes_ple")
-        .select("*")
-        .eq("obra_id", obra.id)
-        .order("ano_referencia", { ascending: true });
-      setMedicoes(data || []);
-      setLoading(false);
-    })();
-  }, [obra.id]);
+function ResumoTab({ obra, medicoes, loading }: { obra: ObraDrawerData; medicoes: any[]; loading: boolean }) {
 
   const kpis = useMemo(() => {
     const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
@@ -435,6 +421,23 @@ function MiniKpi({ icon, label, value, sub, color }: { icon: ReactNode; label: s
 }
 
 function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
+  // Fetch único de medicoes — compartilhado entre ResumoTab e FinanceiroTab
+  // Elimina 2 dos 3 fetches redundantes de medicoes_ple ao abrir o drawer
+  const [sharedMedicoes, setSharedMedicoes] = useState<any[]>([]);
+  const [sharedMedicoesLoading, setSharedMedicoesLoading] = useState(true);
+
+  useEffect(() => {
+    setSharedMedicoesLoading(true);
+    supabase.from("medicoes_ple")
+      .select("*")
+      .eq("obra_id", obra.id)
+      .order("num_medicao", { ascending: true })
+      .then(({ data }) => {
+        setSharedMedicoes(data || []);
+        setSharedMedicoesLoading(false);
+      });
+  }, [obra.id]);
+
   return (
     <div className="flex flex-col h-full">
       <SheetHeader className="px-6 pt-6 pb-4">
@@ -475,10 +478,10 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
           <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <TabsContent value="resumo" className="mt-0"><ResumoTab obra={obra} /></TabsContent>
+          <TabsContent value="resumo" className="mt-0"><ResumoTab obra={obra} medicoes={sharedMedicoes} loading={sharedMedicoesLoading} /></TabsContent>
           <TabsContent value="documentos" className="mt-0"><DocumentosTab obraId={obra.id} /></TabsContent>
           <TabsContent value="medicoes" className="mt-0"><MedicoesTab obraId={obra.id} valorContrato={(obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0)} hasInitialBalance={obra.has_initial_balance || false} valorMedidoInicial={obra.valor_medido_inicial || 0} obra={obra} /></TabsContent>
-          <TabsContent value="financeiro" className="mt-0"><FinanceiroTab obraId={obra.id} /></TabsContent>
+          <TabsContent value="financeiro" className="mt-0"><FinanceiroTab obraId={obra.id} sharedMedicoes={sharedMedicoes} /></TabsContent>
           <TabsContent value="aditivos" className="mt-0"><AditivosTab obraId={obra.id} /></TabsContent>
           <TabsContent value="restricoes" className="mt-0"><RestricoesTab obraId={obra.id} /></TabsContent>
           <TabsContent value="historico" className="mt-0"><HistoricoTab obraId={obra.id} /></TabsContent>
@@ -2336,14 +2339,17 @@ const TIPO_DESPESA_BADGE: Record<string, { label: string; cls: string }> = {
 
 const CATEGORIAS = ["Pessoal", "Material", "Equipamento", "Serviço", "Administrativo", "Financeiro", "Geral"];
 
-function FinanceiroTab({ obraId }: { obraId: string }) {
+function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedicoes?: any[] }) {
   const { user, profile, requireEdit, isAdmin, isCompanyAdmin } = useAuth();
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
   const [despesas, setDespesas] = useState<any[]>([]);
-  const [allMedicoes, setAllMedicoes] = useState<any[]>([]);
-  const [medicoesAprovadas, setMedicoesAprovadas] = useState<any[]>([]);
+  // Inicializa com sharedMedicoes do ObraDetailContent — evita fetch duplicado
+  const [allMedicoes, setAllMedicoes] = useState<any[]>(sharedMedicoes || []);
+  const [medicoesAprovadas, setMedicoesAprovadas] = useState<any[]>(
+    (sharedMedicoes || []).filter((m: any) => m.status_medicao === "aprovada")
+  );
   const [loading, setLoading] = useState(true);
   const [showNewDespesa, setShowNewDespesa] = useState(false);
   const [savingDespesa, setSavingDespesa] = useState(false);

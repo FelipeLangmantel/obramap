@@ -102,14 +102,16 @@ export function useNotifications(modulo?: string) {
 
   const markAllAsRead = useCallback(async () => {
     if (!company?.id) return;
-    await supabase
+    let q = supabase
       .from("system_notifications")
       .update({ lida: true, lida_em: new Date().toISOString() } as any)
       .eq("company_id", company.id)
       .eq("lida", false);
+    if (modulo) q = (q as any).eq("modulo", modulo);
+    await q;
     loadCount();
     loadNotifications();
-  }, [company?.id, loadCount, loadNotifications]);
+  }, [company?.id, modulo, loadCount, loadNotifications]);
 
   return {
     count,
