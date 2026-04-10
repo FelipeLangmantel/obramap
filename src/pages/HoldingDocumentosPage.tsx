@@ -235,7 +235,7 @@ export default function HoldingDocumentosPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <SidebarTrigger className="md:hidden p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors" />
-          <NotificationBell />
+          <NotificationBell modulo="holding" />
           <div>
             <h1 className="text-lg font-semibold flex items-center gap-2">
               <FolderOpen className="h-5 w-5 text-primary" /> Documentação das Obras
