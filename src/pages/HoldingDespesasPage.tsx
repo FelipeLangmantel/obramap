@@ -549,6 +549,7 @@ export default function HoldingDespesasPage() {
                         <Bar yAxisId="left" dataKey="previsto" name="Previsto" fill="#3b82f6" radius={[2, 2, 0, 0]} />
                         <Bar yAxisId="left" dataKey="realizado" name="Realizado" fill="#22c55e" radius={[2, 2, 0, 0]} />
                         <Bar yAxisId="left" dataKey="despesas" name="Despesas" fill="#ef4444" radius={[2, 2, 0, 0]} />
+                        <Bar yAxisId="left" dataKey="despOrcada" name="Desp. Orçada" fill="#f59e0b" fillOpacity={0.5} radius={[2, 2, 0, 0]} />
                         <Line yAxisId="right" type="monotone" dataKey="roi" name="ROI %" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
                       </ComposedChart>
                     </ResponsiveContainer>
