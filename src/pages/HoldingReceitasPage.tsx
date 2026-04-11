@@ -1383,66 +1383,57 @@ export default function HoldingReceitasPage() {
                                 <Badge className="text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 shrink-0" variant="secondary">Em Andamento</Badge>
                               </div>
 
-                              {/* Evolução Financeira */}
-                              <div className="space-y-1">
+                              {/* Medido — barra full-width */}
+                              <div className="space-y-0.5">
                                 <div className="flex items-center justify-between text-xs">
-                                  <span className="text-muted-foreground">Evolução Financeira</span>
+                                  <span className="text-muted-foreground">Medido</span>
                                   <span className="font-medium text-foreground">{pctMedido.toFixed(1)}%</span>
                                 </div>
-                                <Progress value={pctMedido} className="h-1.5" />
-                              </div>
-
-                              {/* Grid */}
-                              <div className="text-xs">
-                                <span className="text-muted-foreground">Valor Contrato</span>
-                                <p className="font-semibold text-foreground">{BRL.format(valorContrato)}</p>
-                              </div>
-
-                              {/* Medido/Faturado + Saldo */}
-                              <div className="flex items-center justify-between border-t border-border/40 pt-2">
-                                <div>
-                                  <p className="text-[10px] text-muted-foreground">Medido/Faturado</p>
-                                  <p className="text-xs font-semibold text-emerald-600">{BRL_SHORT(totalMedido)}</p>
+                                <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                                  <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${pctMedido}%` }} />
                                 </div>
-                                <div className="text-right">
-                                  <p className="text-[10px] text-muted-foreground">Saldo a Faturar</p>
-                                  <p className="text-xs font-semibold text-blue-600">{BRL_SHORT(Math.max(0, valorContrato - totalMedido))}</p>
-                                </div>
+                                <p className="text-[10px] text-muted-foreground">{BRL.format(totalMedido)} de {BRL.format(valorContrato)}</p>
                               </div>
 
-                              {/* Próxima entrada com restrição sobreposta */}
+                              {/* Próxima entrada — barra full-width */}
                               {proximaMedicao ? (() => {
                                 const valorBruto = Number(proximaMedicao.valor_previsto_medicao) || 0;
                                 const pctBruto = valorContrato > 0 ? Math.min(100, (valorBruto / valorContrato) * 100) : 0;
-                                const pctRestr = valorBruto > 0 && impactoRestricoes > 0
-                                  ? Math.min(100, (impactoRestricoes / valorBruto) * 100) : 0;
                                 return (
-                                  <div className="space-y-0.5 border-t border-border/40 pt-2">
-                                    <div className="flex justify-between text-[10px] text-muted-foreground">
-                                      <span>
-                                        Próxima — Med {proximaMedicao.num_medicao}:{" "}
-                                        <span className={impactoRestricoes > 0 ? "text-amber-600 font-medium" : "font-medium text-foreground"}>
-                                          {BRL.format(valorPrevAjustado)}
-                                        </span>
-                                        {impactoRestricoes > 0 && <span className="text-destructive ml-1">(−{BRL.format(impactoRestricoes)})</span>}
-                                      </span>
+                                  <div className="space-y-0.5">
+                                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                                      <span>Próxima entrada — Med {proximaMedicao.num_medicao}: <span className="font-medium text-foreground">{BRL.format(valorPrevAjustado)}</span></span>
                                       <span>{dataEntradaProjetada ? format(dataEntradaProjetada, "dd/MM/yy") : "—"}</span>
                                     </div>
-                                    <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden relative" style={{ width: `${pctBruto}%`, minWidth: pctBruto > 0 ? "4px" : "0" }}>
-                                      <div className={`h-full w-full ${statusColor}`} />
-                                      {pctRestr > 0 && <div className="absolute right-0 top-0 h-full bg-destructive/60" style={{ width: `${pctRestr}%` }} />}
+                                    <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                                      <div className={`h-full rounded-full transition-all ${statusColor}`} style={{ width: `${pctBruto}%` }} />
                                     </div>
-                                    {impactoRestricoes > 0 && (
-                                      <p className="text-[10px] text-destructive flex items-center justify-between">
-                                        <span className="flex items-center gap-1"><AlertCircle className="h-3 w-3 shrink-0" />Restrição: −{BRL.format(impactoRestricoes)} ({((impactoRestricoes / Math.max(valorBruto, 1)) * 100).toFixed(0)}%)</span>
-                                        <span>{restrDaObra.filter((r: any) => !r.resolvida).length} aberta(s)</span>
-                                      </p>
-                                    )}
                                   </div>
                                 );
                               })() : (
-                                <p className="text-[10px] text-muted-foreground border-t border-border/40 pt-2">Sem medição prevista pendente.</p>
+                                <p className="text-[10px] text-muted-foreground">Sem medição prevista pendente.</p>
                               )}
+
+                              {/* Restrição financeira — barra full-width */}
+                              {impactoRestricoes > 0 && (() => {
+                                const valorBruto = proximaMedicao ? (Number(proximaMedicao.valor_previsto_medicao) || 0) : 0;
+                                const pctRestr = valorBruto > 0 ? Math.min(100, (impactoRestricoes / valorBruto) * 100) : 0;
+                                const qtdAbertas = restrDaObra.filter((r: any) => !r.resolvida).length;
+                                return (
+                                  <div className="space-y-0.5">
+                                    <div className="flex items-center justify-between text-[10px]">
+                                      <span className="text-destructive flex items-center gap-1">
+                                        <AlertCircle className="h-3 w-3 shrink-0" />
+                                        Restrição financeira: −{BRL.format(impactoRestricoes)} ({pctRestr.toFixed(0)}% da medição)
+                                      </span>
+                                      <span className="text-destructive font-medium">{qtdAbertas} aberta(s)</span>
+                                    </div>
+                                    <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                                      <div className="h-full bg-destructive rounded-full transition-all" style={{ width: `${pctRestr}%` }} />
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </CardContent>
                           </Card>
                         ))}
