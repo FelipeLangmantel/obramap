@@ -581,8 +581,15 @@ function DocumentosTab({ obraId }: { obraId: string }) {
       (obraDocs || []).forEach((d: any) => map.set(d.doc_tipo_id, d));
       setObraDocsMap(map);
 
+      // Load deleted doc IDs to avoid re-creating them
+      const { data: deletedDocs } = await supabase
+        .from("holding_obra_docs_deleted")
+        .select("doc_tipo_id")
+        .eq("obra_id", obraId);
+      const deletedSet = new Set((deletedDocs || []).map((d: any) => d.doc_tipo_id));
+
       if (tipos && tipos.length > 0) {
-        const missingTipos = tipos.filter(t => !map.has(t.id));
+        const missingTipos = tipos.filter(t => !map.has(t.id) && !deletedSet.has(t.id));
         if (missingTipos.length > 0) {
           const { data: created } = await supabase
             .from("holding_obra_docs")
