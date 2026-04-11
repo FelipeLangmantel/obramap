@@ -1641,6 +1641,8 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     load();
   };
 
+  const editFormRef = useRef<HTMLDivElement>(null);
+
   const startEdit = (m: any) => {
     setEditingMedicao(m);
     setEditForm({
@@ -1656,6 +1658,10 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       num_nf: m.num_nf || "",
     });
     setShowForm(false);
+    // Auto-scroll to edit form after state update
+    setTimeout(() => {
+      editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   };
 
   if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
