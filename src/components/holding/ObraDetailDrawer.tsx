@@ -1688,6 +1688,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     const hasPendingRequest = pendingRequests.some(r => r.medicao_id === editingMedicao.id);
 
     return (
+      <div ref={editFormRef}>
       <Card className="border-primary">
         <CardContent className="p-4 space-y-4">
           <div className="flex items-center justify-between">
