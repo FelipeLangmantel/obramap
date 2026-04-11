@@ -1919,6 +1919,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
           )}
         </CardContent>
       </Card>
+      </div>
     );
   };
 
