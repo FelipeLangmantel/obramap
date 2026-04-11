@@ -1392,19 +1392,21 @@ export default function HoldingDashboardView() {
         </div>
       )}
 
-      {/* KPI Row — 8 cards em 2 linhas */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {/* KPI Row — 10 cards em 2 linhas */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {/* Linha 1 — Financeiro */}
-        <KpiCard icon={DollarSign} label="Total em Contratos" value={BRL.format(kpis.totalContratos)} sub={kpis.totalUH > 0 ? `${kpis.totalUH} UH` : ""} borderColor="border-b-emerald-500" valueColor="text-emerald-600 dark:text-emerald-400" />
-        <KpiCard icon={ClipboardCheck} label="Total Medido / Faturado" value={BRL.format(kpis.totalMedido)} sub={kpis.totalContratos > 0 ? `${((kpis.totalMedido / kpis.totalContratos) * 100).toFixed(1)}% do portfólio` : ""} borderColor="border-b-cyan-500" valueColor="text-cyan-600 dark:text-cyan-400" />
-        <KpiCard icon={Wallet} label="Saldo a Faturar" value={BRL.format(Math.max(0, kpis.saldoFaturar))} sub={kpis.totalContratos > 0 ? `${((Math.max(0, kpis.saldoFaturar) / kpis.totalContratos) * 100).toFixed(1)}% restante` : ""} borderColor="border-b-blue-500" valueColor="text-blue-600 dark:text-blue-400" />
-        <KpiCard icon={TrendingUp} label="Andamento Médio" value={`${kpis.andamentoMedio}%`} sub="obras em andamento" borderColor="border-b-violet-500" valueColor="text-violet-600 dark:text-violet-400" />
+        <KpiCard icon={DollarSign} label="Total em Contratos" value={BRL.format(kpis.totalContratos)} sub={`${kpis.totalUH} UH total`} borderColor="border-b-emerald-500" valueColor="text-emerald-600 dark:text-emerald-400" />
+        <KpiCard icon={ClipboardCheck} label="Contratos Ativos" value={BRL.format(kpis.totalContratosAtivos)} sub={`${kpis.obrasAtivas} obras · ${kpis.uhAtivas} UH`} borderColor="border-b-cyan-500" valueColor="text-cyan-600 dark:text-cyan-400" />
+        <KpiCard icon={Pause} label="Contratos Não Iniciados" value={BRL.format(kpis.totalContratosNaoIniciados)} sub={`${kpis.obrasNaoIniciadas} obras · ${kpis.uhNaoIniciadas} UH`} borderColor="border-b-gray-400" valueColor="text-muted-foreground" />
+        <KpiCard icon={Wallet} label="Saldo a Faturar" value={BRL.format(Math.max(0, kpis.saldoFaturar))} sub={kpis.totalContratosAtivos > 0 ? `${((Math.max(0, kpis.saldoFaturar) / kpis.totalContratosAtivos) * 100).toFixed(1)}% restante (ativos)` : ""} borderColor="border-b-blue-500" valueColor="text-blue-600 dark:text-blue-400" />
+        <KpiCard icon={TrendingUp} label="Andamento Médio" value={`${kpis.andamentoMedio}%`} sub="obras ativas" borderColor="border-b-violet-500" valueColor="text-violet-600 dark:text-violet-400" />
 
         {/* Linha 2 — Operacional */}
         <KpiCard icon={Building2} label="Obras Ativas" value={String(kpis.obrasAtivas)} sub="em andamento" borderColor="border-b-blue-400" valueColor="text-blue-600 dark:text-blue-400" />
         <KpiCard icon={Pause} label="Não Iniciadas" value={String(kpis.obrasNaoIniciadas)} sub="aguardando início" borderColor="border-b-gray-400" valueColor="text-muted-foreground" />
+        <KpiCard icon={Home} label="UH Ativas" value={kpis.uhAtivas > 0 ? kpis.uhAtivas.toLocaleString("pt-BR") : "—"} sub="em andamento" borderColor="border-b-amber-500" valueColor="text-amber-600 dark:text-amber-400" />
+        <KpiCard icon={Home} label="UH Não Iniciadas" value={kpis.uhNaoIniciadas > 0 ? kpis.uhNaoIniciadas.toLocaleString("pt-BR") : "—"} sub="aguardando início" borderColor="border-b-orange-400" valueColor="text-orange-600 dark:text-orange-400" />
         <KpiCard icon={AlertTriangle} label="Alertas Críticos" value={String(kpis.alertasCriticos)} sub={kpis.alertasCriticos > 0 ? "requerem atenção" : "tudo sob controle"} borderColor={kpis.alertasCriticos > 0 ? "border-b-red-500" : "border-b-gray-300"} valueColor={kpis.alertasCriticos > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground"} />
-        <KpiCard icon={Home} label="Total UH" value={kpis.totalUH > 0 ? kpis.totalUH.toLocaleString("pt-BR") : "—"} sub="unidades habitacionais" borderColor="border-b-amber-500" valueColor="text-amber-600 dark:text-amber-400" />
       </div>
 
       {/* Main View Tabs + Actions */}
