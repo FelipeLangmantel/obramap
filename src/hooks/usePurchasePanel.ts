@@ -101,27 +101,16 @@ export function usePurchasePanel() {
       }
 
       // Fetch all data + company KPIs in parallel
-      const [alertsRes, requestsRes, ordersRes, kpisRes] = await Promise.all([
-        supabase
-          .from("supply_alerts")
-          .select(`
-            id, project_id, required_date, order_by_date, planned_use_date,
-            actual_delivery_date, delay_days, is_critical, status,
-            total_quantity, total_value, notes, family_id, scope_item_id,
-            projects(name),
-            material_families(name, color),
-            scope_items(name, input_code)
-          `)
-          .in("project_id", projectIds),
-
+      const [requestsRes, ordersRes, kpisRes] = await Promise.all([
         supabase
           .from("supply_requests")
           .select(`
             id, project_id, item_name, item_unit, quantity, unit_value,
             total_value, status, required_date, order_by_date, is_critical,
-            supplier_id,
+            supplier_id, family_id, purchase_overdue, days_overdue,
             projects(name),
-            suppliers(name)
+            suppliers(name),
+            material_families(name, color)
           `)
           .in("project_id", projectIds),
 
