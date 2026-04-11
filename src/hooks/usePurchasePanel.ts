@@ -105,7 +105,7 @@ export function usePurchasePanel() {
         supabase
           .from("supply_requests")
           .select(`
-            id, project_id, item_name, item_unit, quantity, unit_value,
+            id, project_id, item_name, item_unit, item_id, quantity, unit_value,
             total_value, status, required_date, order_by_date, is_critical,
             supplier_id, family_id, purchase_overdue, days_overdue,
             projects(name),
@@ -128,6 +128,26 @@ export function usePurchasePanel() {
         supabase.rpc("get_company_supply_kpis", { p_company_id: companyId }),
       ]);
 
+      // Fetch scope_item codes for requests that have item_id
+      let scopeItemCodes: Record<string, string> = {};
+      if (requestsRes.data) {
+        const itemIds = requestsRes.data
+          .map((r: any) => r.item_id)
+          .filter((id: string | null): id is string => !!id);
+        if (itemIds.length > 0) {
+          const uniqueIds = [...new Set(itemIds)];
+          const { data: scopeData } = await supabase
+            .from("scope_items")
+            .select("id, input_code")
+            .in("id", uniqueIds);
+          if (scopeData) {
+            for (const s of scopeData) {
+              if (s.input_code) scopeItemCodes[s.id] = s.input_code;
+            }
+          }
+        }
+      }
+
       if (requestsRes.data) {
         const mappedRequests = requestsRes.data.map((r: any) => ({
           id: r.id,
@@ -145,6 +165,7 @@ export function usePurchasePanel() {
           supplier_name: r.suppliers?.name || null,
           family_name: r.material_families?.name || null,
           family_color: r.material_families?.color || null,
+          scope_item_code: (r.item_id && scopeItemCodes[r.item_id]) || null,
           purchase_overdue: r.purchase_overdue ?? false,
           days_overdue: r.days_overdue ?? 0,
         }));
@@ -169,7 +190,7 @@ export function usePurchasePanel() {
             family_name: r.family_name,
             family_color: r.family_color,
             scope_item_name: r.item_name,
-            scope_item_code: null,
+            scope_item_code: r.scope_item_code || null,
             scope_item_id: null,
           }))
         );

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { usePurchasePanel, PurchaseAlert } from "@/hooks/usePurchasePanel";
 import { ALERT_STATUS_LABELS, ALERT_STATUS_COLORS } from "@/components/supplies/types";
 import type { SupplyAlertStatus } from "@/components/supplies/types";
@@ -67,16 +68,21 @@ interface CompanyFamily {
 }
 
 export default function PurchasePanelPage() {
+  const navigate = useNavigate();
   const {
     isLoading, overdueCount, todayCount, inTransitCount,
     totalPendingValue, criticalAlerts, calendarMap,
     alertsByProject, orders,
   } = usePurchasePanel();
 
+  const handleViewChange = (view: string) => {
+    navigate("/?view=" + view);
+  };
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
-        <AppSidebar activeView={"purchase-panel" as any} onViewChange={() => {}} />
+        <AppSidebar activeView={"purchase-panel" as any} onViewChange={handleViewChange as any} />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-3 flex items-center gap-3">
             <SidebarTrigger className="shrink-0" />
@@ -661,7 +667,7 @@ function LeadTimeTab() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="max-h-[400px]">
+          <ScrollArea className="max-h-[50vh]">
             <div className="space-y-2">
               {materialFamilies.map(renderFamilyRow)}
               {materialFamilies.length === 0 && (
@@ -686,7 +692,7 @@ function LeadTimeTab() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="max-h-[400px]">
+          <ScrollArea className="max-h-[50vh]">
             <div className="space-y-2">
               {laborFamilies.map(renderFamilyRow)}
               {laborFamilies.length === 0 && (
