@@ -1365,76 +1365,89 @@ export default function HoldingReceitasPage() {
 
                       <div className="space-y-2">
                         {obraCards.map(({ obra, valorContrato, valorRecebido, pctRecebido, totalMedido, pctMedido, proximaMedicao, valorPrevAjustado, impactoRestricoes, dataEntradaProjetada, restrDaObra, hasVencidas, statusColor }) => (
-                          <Card key={obra.id} className={`cursor-pointer hover:border-primary/40 transition-all w-full ${hasVencidas ? "border-destructive/50" : ""}`} onClick={() => setSelectedObraId(obra.id)}>
+                          <Card
+                            key={obra.id}
+                            className={`border-l-4 cursor-pointer hover:border-primary/40 hover:shadow-md transition-all ${hasVencidas ? "border-l-destructive" : impactoRestricoes > 0 ? "border-l-amber-500" : "border-l-emerald-500/60"}`}
+                            onClick={() => setSelectedObraId(obra.id)}
+                          >
                             <CardContent className="p-4 space-y-2.5">
-                              <div className="flex items-center justify-between">
-                                <h4 className="font-semibold text-sm">{obra.nome}</h4>
-                                <Badge variant="outline" className="text-[10px]">Em Andamento</Badge>
+                              {/* Header */}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${pctMedido >= 100 ? "bg-emerald-500" : pctMedido > 0 ? "bg-blue-500" : "bg-gray-400"}`} />
+                                    <h3 className="font-semibold text-sm text-foreground truncate">{obra.nome}</h3>
+                                  </div>
+                                  {obra.empresa && <p className="text-xs text-muted-foreground truncate ml-4">{obra.empresa}</p>}
+                                </div>
+                                <Badge className="text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 shrink-0" variant="secondary">Em Andamento</Badge>
                               </div>
 
-                              {/* Barra 1 — Acumulado Medido (inclui valor_medido_inicial + aprovadas) */}
-                              <div className="space-y-0.5">
-                                <div className="flex justify-between text-xs text-muted-foreground">
-                                  <span>Medido</span>
-                                  <span>{pctMedido.toFixed(1)}%</span>
+                              {/* Evolução Financeira */}
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-muted-foreground">Evolução Financeira</span>
+                                  <span className="font-medium text-foreground">{pctMedido.toFixed(1)}%</span>
                                 </div>
-                                <div className="h-3 w-full rounded-full bg-secondary overflow-hidden">
-                                  <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${Math.min(100, pctMedido)}%` }} />
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                  {BRL.format(totalMedido)} de {BRL.format(valorContrato)}
-                                </p>
+                                <Progress value={pctMedido} className="h-1.5" />
                               </div>
 
-                              {/* Barra 2 — Próxima entrada com restrição sobreposta */}
+                              {/* Grid */}
+                              <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-xs">
+                                <div className="col-span-2">
+                                  <span className="text-muted-foreground">Valor Contrato</span>
+                                  <p className="font-semibold text-foreground">{BRL.format(valorContrato)}</p>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground">UH</span>
+                                  <p className="font-medium text-foreground">{obra.uh || "—"}</p>
+                                </div>
+                              </div>
+
+                              {/* Medido/Faturado + Saldo */}
+                              <div className="flex items-center justify-between border-t border-border/40 pt-2">
+                                <div>
+                                  <p className="text-[10px] text-muted-foreground">Medido/Faturado</p>
+                                  <p className="text-xs font-semibold text-emerald-600">{BRL_SHORT(totalMedido)}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-[10px] text-muted-foreground">Saldo a Faturar</p>
+                                  <p className="text-xs font-semibold text-blue-600">{BRL_SHORT(Math.max(0, valorContrato - totalMedido))}</p>
+                                </div>
+                              </div>
+
+                              {/* Próxima entrada com restrição sobreposta */}
                               {proximaMedicao ? (() => {
                                 const valorBruto = Number(proximaMedicao.valor_previsto_medicao) || 0;
-                                // pct do valor BRUTO (sem descontar restrição) — barra âmbar total
                                 const pctBruto = valorContrato > 0 ? Math.min(100, (valorBruto / valorContrato) * 100) : 0;
-                                // pct da restrição dentro da barra (sobreposto no final em vermelho)
                                 const pctRestr = valorBruto > 0 && impactoRestricoes > 0
-                                  ? Math.min(100, (impactoRestricoes / valorBruto) * 100)
-                                  : 0;
+                                  ? Math.min(100, (impactoRestricoes / valorBruto) * 100) : 0;
                                 return (
-                                  <div className="space-y-0.5">
-                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                  <div className="space-y-0.5 border-t border-border/40 pt-2">
+                                    <div className="flex justify-between text-[10px] text-muted-foreground">
                                       <span>
-                                        Próxima entrada — Med {proximaMedicao.num_medicao}:{" "}
-                                        <span className={impactoRestricoes > 0 ? "text-amber-600 font-medium" : ""}>
+                                        Próxima — Med {proximaMedicao.num_medicao}:{" "}
+                                        <span className={impactoRestricoes > 0 ? "text-amber-600 font-medium" : "font-medium text-foreground"}>
                                           {BRL.format(valorPrevAjustado)}
                                         </span>
-                                        {impactoRestricoes > 0 && (
-                                          <span className="text-destructive ml-1 text-[10px]">
-                                            (−{BRL.format(impactoRestricoes)} restrição)
-                                          </span>
-                                        )}
+                                        {impactoRestricoes > 0 && <span className="text-destructive ml-1">(−{BRL.format(impactoRestricoes)})</span>}
                                       </span>
                                       <span>{dataEntradaProjetada ? format(dataEntradaProjetada, "dd/MM/yy") : "—"}</span>
                                     </div>
-                                    {/* Barra única: âmbar com segmento vermelho sobreposto no final */}
-                                    <div className="h-2 w-full rounded-full bg-secondary overflow-hidden relative" style={{ width: `${pctBruto}%`, minWidth: pctBruto > 0 ? "4px" : "0" }}>
+                                    <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden relative" style={{ width: `${pctBruto}%`, minWidth: pctBruto > 0 ? "4px" : "0" }}>
                                       <div className={`h-full w-full ${statusColor}`} />
-                                      {pctRestr > 0 && (
-                                        <div
-                                          className="absolute right-0 top-0 h-full bg-destructive/60"
-                                          style={{ width: `${pctRestr}%` }}
-                                          title={`Restrição: −${BRL.format(impactoRestricoes)}`}
-                                        />
-                                      )}
+                                      {pctRestr > 0 && <div className="absolute right-0 top-0 h-full bg-destructive/60" style={{ width: `${pctRestr}%` }} />}
                                     </div>
                                     {impactoRestricoes > 0 && (
                                       <p className="text-[10px] text-destructive flex items-center justify-between">
-                                        <span className="flex items-center gap-1">
-                                          <AlertCircle className="h-3 w-3 shrink-0" />
-                                          Restrição: −{BRL.format(impactoRestricoes)} ({((impactoRestricoes / Math.max(valorBruto, 1)) * 100).toFixed(0)}% da medição)
-                                        </span>
+                                        <span className="flex items-center gap-1"><AlertCircle className="h-3 w-3 shrink-0" />Restrição: −{BRL.format(impactoRestricoes)} ({((impactoRestricoes / Math.max(valorBruto, 1)) * 100).toFixed(0)}%)</span>
                                         <span>{restrDaObra.filter((r: any) => !r.resolvida).length} aberta(s)</span>
                                       </p>
                                     )}
                                   </div>
                                 );
                               })() : (
-                                <p className="text-xs text-muted-foreground">Nenhuma medição prevista pendente.</p>
+                                <p className="text-[10px] text-muted-foreground border-t border-border/40 pt-2">Sem medição prevista pendente.</p>
                               )}
                             </CardContent>
                           </Card>
