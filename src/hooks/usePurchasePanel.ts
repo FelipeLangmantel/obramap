@@ -128,47 +128,49 @@ export function usePurchasePanel() {
         supabase.rpc("get_company_supply_kpis", { p_company_id: companyId }),
       ]);
 
-      if (alertsRes.data) {
-        setAlerts(
-          alertsRes.data.map((a: any) => ({
-            id: a.id,
-            project_id: a.project_id,
-            project_name: a.projects?.name || "—",
-            required_date: a.required_date,
-            order_by_date: a.order_by_date,
-            planned_use_date: a.planned_use_date,
-            actual_delivery_date: a.actual_delivery_date,
-            delay_days: a.delay_days ?? 0,
-            is_critical: a.is_critical ?? false,
-            status: a.status as SupplyAlertStatus,
-            total_quantity: a.total_quantity ?? 0,
-            total_value: a.total_value ?? 0,
-            notes: a.notes,
-            family_name: a.material_families?.name || null,
-            family_color: a.material_families?.color || null,
-            scope_item_name: a.scope_items?.name || null,
-            scope_item_code: a.scope_items?.input_code || null,
-            scope_item_id: a.scope_item_id,
-          }))
-        );
-      }
-
       if (requestsRes.data) {
-        setRequests(
-          requestsRes.data.map((r: any) => ({
+        const mappedRequests = requestsRes.data.map((r: any) => ({
+          id: r.id,
+          project_id: r.project_id,
+          project_name: r.projects?.name || "—",
+          item_name: r.item_name,
+          item_unit: r.item_unit,
+          quantity: r.quantity ?? 0,
+          unit_value: r.unit_value ?? 0,
+          total_value: r.total_value ?? 0,
+          status: r.status,
+          required_date: r.required_date,
+          order_by_date: r.order_by_date,
+          is_critical: r.is_critical ?? false,
+          supplier_name: r.suppliers?.name || null,
+          family_name: r.material_families?.name || null,
+          family_color: r.material_families?.color || null,
+          purchase_overdue: r.purchase_overdue ?? false,
+          days_overdue: r.days_overdue ?? 0,
+        }));
+        setRequests(mappedRequests);
+
+        // Derive alerts from supply_requests for panel KPIs/calendar/critical views
+        setAlerts(
+          mappedRequests.map((r: any) => ({
             id: r.id,
             project_id: r.project_id,
-            project_name: r.projects?.name || "—",
-            item_name: r.item_name,
-            item_unit: r.item_unit,
-            quantity: r.quantity ?? 0,
-            unit_value: r.unit_value ?? 0,
-            total_value: r.total_value ?? 0,
-            status: r.status,
+            project_name: r.project_name,
             required_date: r.required_date,
             order_by_date: r.order_by_date,
-            is_critical: r.is_critical ?? false,
-            supplier_name: r.suppliers?.name || null,
+            planned_use_date: null,
+            actual_delivery_date: null,
+            delay_days: r.days_overdue,
+            is_critical: r.is_critical,
+            status: r.status as SupplyAlertStatus,
+            total_quantity: r.quantity,
+            total_value: r.total_value,
+            notes: null,
+            family_name: r.family_name,
+            family_color: r.family_color,
+            scope_item_name: r.item_name,
+            scope_item_code: null,
+            scope_item_id: null,
           }))
         );
       }
