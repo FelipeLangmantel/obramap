@@ -1220,8 +1220,7 @@ export default function HoldingReceitasPage() {
                     const medsDaObra = medicoes.filter(m => m.obra_id === obra.id);
                     const restrDaObra = restricoes.filter((r: any) => r.obra_id === obra.id);
 
-                    const valorMedidoInicial = Number(obra.valor_medido_inicial) || 0;
-                    const valorRecebido = valorMedidoInicial + medsDaObra
+                    const valorRecebido = medsDaObra
                       .filter(m => m.status_nf === "recebido" && m.data_pagamento)
                       .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
                     const pctRecebido = valorContrato > 0 ? (valorRecebido / valorContrato) * 100 : 0;
@@ -1424,8 +1423,7 @@ function FinanceiroObraSheet({
   }, [restricoesGlobais, obraId]);
 
   const valorContrato = obra ? (Number(obra.valor_contrato) || 0) + (Number(obra.aditivo_valor_total) || 0) : 0;
-  const valorMedidoInicial = obra ? Number(obra.valor_medido_inicial) || 0 : 0;
-  const valorRecebido = valorMedidoInicial + medsDaObra
+  const valorRecebido = medsDaObra
     .filter((m: any) => m.status_nf === "recebido" && m.data_pagamento)
     .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
   const saldoReceber = Math.max(0, valorContrato - valorRecebido);
@@ -1501,7 +1499,7 @@ function FinanceiroObraSheet({
   return (
     <>
       <Sheet open={!!obraId} onOpenChange={(open) => { if (!open) onClose(); }}>
-        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto p-0">
+        <SheetContent side="right" className="w-full sm:max-w-3xl overflow-y-auto p-0">
           {obra && (
             <div className="p-5 space-y-5">
               {/* Header */}
