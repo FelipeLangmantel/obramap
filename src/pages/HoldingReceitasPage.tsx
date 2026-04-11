@@ -1324,17 +1324,17 @@ export default function HoldingReceitasPage() {
                         <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Restrições Abertas</p><p className="text-lg font-bold">{totalRestrAberto} <span className="text-xs font-normal text-muted-foreground">({BRL_SHORT(totalRestrImpacto)})</span></p></CardContent></Card>
                       </div>
 
-                      <div className="space-y-3">
+                      <div className="space-y-2">
                         {obraCards.map(({ obra, valorContrato, valorRecebido, pctRecebido, proximaMedicao, valorPrevAjustado, impactoRestricoes, dataEntradaProjetada, restrDaObra, hasVencidas, statusColor }) => (
-                          <Card key={obra.id} className={`cursor-pointer hover:border-primary/40 transition-all ${hasVencidas ? "border-destructive/50" : ""}`} onClick={() => setSelectedObraId(obra.id)}>
-                            <CardContent className="p-4 space-y-3">
+                          <Card key={obra.id} className={`cursor-pointer hover:border-primary/40 transition-all w-full ${hasVencidas ? "border-destructive/50" : ""}`} onClick={() => setSelectedObraId(obra.id)}>
+                            <CardContent className="p-4 space-y-2.5">
                               <div className="flex items-center justify-between">
                                 <h4 className="font-semibold text-sm">{obra.nome}</h4>
                                 <Badge variant="outline" className="text-[10px]">Em Andamento</Badge>
                               </div>
 
                               {/* Barra 1 — Recebido */}
-                              <div className="space-y-1">
+                              <div className="space-y-0.5">
                                 <div className="flex justify-between text-xs text-muted-foreground">
                                   <span>Recebido</span>
                                   <span>{pctRecebido.toFixed(1)}%</span>
@@ -1347,46 +1347,44 @@ export default function HoldingReceitasPage() {
                                 </p>
                               </div>
 
-                              {/* Barra 2 — Próxima entrada */}
+                              {/* Barra 2 — Próxima entrada (proporcional ao contrato) */}
                               {proximaMedicao ? (() => {
                                 const valorBruto = Number(proximaMedicao.valor_previsto_medicao) || 0;
-                                const pctLiquido = valorContrato > 0 ? Math.min(100, (valorPrevAjustado / valorContrato) * 100) : 0;
-                                const pctRestricao = valorContrato > 0 ? Math.min(100 - pctLiquido, (impactoRestricoes / valorContrato) * 100) : 0;
+                                const pctProxima = valorContrato > 0 ? Math.min(100, (valorPrevAjustado / valorContrato) * 100) : 0;
                                 return (
-                                  <div className="space-y-1">
+                                  <div className="space-y-0.5">
                                     <div className="flex justify-between text-xs text-muted-foreground">
-                                      <span className="font-medium">
-                                        Próxima entrada: {BRL.format(valorPrevAjustado)}
-                                        {impactoRestricoes > 0 && <span className="text-destructive ml-1">(−{BRL.format(impactoRestricoes)} restrição)</span>}
-                                        {" "}(Med {proximaMedicao.num_medicao})
-                                      </span>
+                                      <span>Próxima entrada — Med {proximaMedicao.num_medicao}: {BRL.format(valorPrevAjustado)}</span>
                                       <span>{dataEntradaProjetada ? format(dataEntradaProjetada, "dd/MM/yy") : "—"}</span>
                                     </div>
-                                    {/* Barra composta: líquido + restrição */}
-                                    <div className="h-2.5 w-full rounded-full bg-secondary overflow-hidden flex">
-                                      <div
-                                        className={`h-full transition-all ${statusColor}`}
-                                        style={{ width: `${pctLiquido}%` }}
-                                      />
-                                      {pctRestricao > 0 && (
-                                        <div
-                                          className="h-full bg-destructive/70 transition-all"
-                                          style={{ width: `${pctRestricao}%` }}
-                                          title={`Impacto de restrição: ${BRL.format(impactoRestricoes)}`}
-                                        />
-                                      )}
+                                    <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                                      <div className={`h-full transition-all ${statusColor}`} style={{ width: `${pctProxima}%` }} />
                                     </div>
-                                    {impactoRestricoes > 0 && (
-                                      <p className="text-xs text-destructive flex items-center gap-1 font-medium">
-                                        <AlertCircle className="h-3 w-3 shrink-0" />
-                                        {restrDaObra.length} restrição(ões) — impacto financeiro: {BRL.format(impactoRestricoes)} ({((impactoRestricoes / valorBruto) * 100).toFixed(1)}% da medição)
-                                      </p>
-                                    )}
                                   </div>
                                 );
                               })() : (
                                 <p className="text-xs text-muted-foreground">Nenhuma medição prevista pendente.</p>
                               )}
+
+                              {/* Barra 3 — Impacto de restrição (separada, em vermelho) */}
+                              {impactoRestricoes > 0 && (() => {
+                                const valorBruto = Number(proximaMedicao?.valor_previsto_medicao) || 1;
+                                const pctImpacto = valorContrato > 0 ? Math.min(100, (impactoRestricoes / valorContrato) * 100) : 0;
+                                return (
+                                  <div className="space-y-0.5">
+                                    <div className="flex justify-between text-xs text-destructive font-medium">
+                                      <span className="flex items-center gap-1">
+                                        <AlertCircle className="h-3 w-3 shrink-0" />
+                                        Restrição financeira: −{BRL.format(impactoRestricoes)} ({((impactoRestricoes / valorBruto) * 100).toFixed(0)}% da medição)
+                                      </span>
+                                      <span>{restrDaObra.length} aberta(s)</span>
+                                    </div>
+                                    <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                                      <div className="h-full bg-destructive transition-all" style={{ width: `${pctImpacto}%` }} />
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                             </CardContent>
                           </Card>
                         ))}
@@ -1589,15 +1587,54 @@ function FinanceiroObraSheet({
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-[10px] text-muted-foreground">Total Medido</p>
-                  <p className="text-sm font-bold">{BRL.format(medsDaObra.reduce((s: number, m: any) => s + (m.status_medicao === "aprovada" ? (Number(m.valor_acatado ?? m.valor_medicao) || 0) : 0), 0))}</p>
+                  {(() => {
+                    // Inclui valor_medido_inicial (faturamento pré-sistema) + medições aprovadas
+                    const acatadoReal = medsDaObra
+                      .filter((m: any) => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial")
+                      .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                    const saldoInicialMed = medsDaObra
+                      .filter((m: any) => m.num_medicao === "Saldo Inicial" && m.status_medicao === "aprovada")
+                      .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                    const valorMedIni = saldoInicialMed > 0 ? saldoInicialMed : (Number(obra?.valor_medido_inicial) || 0);
+                    const totalMedido = acatadoReal + valorMedIni;
+                    const pct = valorContrato > 0 ? (totalMedido / valorContrato * 100).toFixed(1) : "0.0";
+                    return (
+                      <>
+                        <p className="text-sm font-bold text-emerald-600">{BRL.format(totalMedido)}</p>
+                        {valorMedIni > 0 && <p className="text-[10px] text-muted-foreground">inclui {BRL.format(valorMedIni)} pré-sistema</p>}
+                        <p className="text-[10px] text-muted-foreground">{pct}% do contrato</p>
+                      </>
+                    );
+                  })()}
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-[10px] text-muted-foreground">Saldo a Medir</p>
-                  <p className="text-sm font-bold">{BRL.format(Math.max(0, valorContrato - medsDaObra.reduce((s: number, m: any) => s + (m.status_medicao === "aprovada" ? (Number(m.valor_acatado ?? m.valor_medicao) || 0) : 0), 0)))}</p>
+                  {(() => {
+                    const acatadoReal = medsDaObra
+                      .filter((m: any) => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial")
+                      .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                    const saldoInicialMed = medsDaObra
+                      .filter((m: any) => m.num_medicao === "Saldo Inicial" && m.status_medicao === "aprovada")
+                      .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                    const valorMedIni = saldoInicialMed > 0 ? saldoInicialMed : (Number(obra?.valor_medido_inicial) || 0);
+                    const totalMedido = acatadoReal + valorMedIni;
+                    return <p className="text-sm font-bold">{BRL.format(Math.max(0, valorContrato - totalMedido))}</p>;
+                  })()}
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-[10px] text-muted-foreground">% Andamento Financeiro</p>
-                  <p className="text-sm font-bold">{valorContrato > 0 ? ((medsDaObra.reduce((s: number, m: any) => s + (m.status_medicao === "aprovada" ? (Number(m.valor_acatado ?? m.valor_medicao) || 0) : 0), 0) / valorContrato) * 100).toFixed(1) : "0.0"}%</p>
+                  {(() => {
+                    const acatadoReal = medsDaObra
+                      .filter((m: any) => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial")
+                      .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                    const saldoInicialMed = medsDaObra
+                      .filter((m: any) => m.num_medicao === "Saldo Inicial" && m.status_medicao === "aprovada")
+                      .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                    const valorMedIni = saldoInicialMed > 0 ? saldoInicialMed : (Number(obra?.valor_medido_inicial) || 0);
+                    const totalMedido = acatadoReal + valorMedIni;
+                    const pct = valorContrato > 0 ? (totalMedido / valorContrato * 100).toFixed(1) : "0.0";
+                    return <p className="text-sm font-bold">{pct}%</p>;
+                  })()}
                 </div>
               </div>
 
@@ -1676,7 +1713,7 @@ function FinanceiroObraSheet({
                     <TableBody>
                       {medsDaObra.map((m: any) => {
                         const ms = STATUS_MED_CONFIG[m.status_medicao] || STATUS_MED_CONFIG.nao_iniciada;
-                        const desvio = m.valor_acatado != null && m.valor_previsto_medicao > 0
+                        const desvio = m.status_medicao === "aprovada" && m.valor_acatado != null && m.valor_acatado > 0 && m.valor_previsto_medicao > 0
                           ? m.valor_acatado - m.valor_previsto_medicao : null;
                         return (
                           <TableRow key={m.id} className="text-[11px]">
