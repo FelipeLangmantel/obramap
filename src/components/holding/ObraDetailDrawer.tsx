@@ -582,7 +582,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
       setObraDocsMap(map);
 
       // Load deleted doc IDs to avoid re-creating them
-      const { data: deletedDocs } = await supabase
+      const { data: deletedDocs } = await (supabase as any)
         .from("holding_obra_docs_deleted")
         .select("doc_tipo_id")
         .eq("obra_id", obraId);
