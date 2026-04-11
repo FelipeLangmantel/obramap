@@ -1766,8 +1766,9 @@ function FinanceiroObraSheet({
                         <TableHead className="text-[10px]">Nº</TableHead>
                         <TableHead className="text-[10px]">Status</TableHead>
                         <TableHead className="text-[10px] text-right">Previsto</TableHead>
+                        <TableHead className="text-[10px] text-right text-destructive">Impacto Restrição</TableHead>
+                        <TableHead className="text-[10px] text-right">Prev. Líquido</TableHead>
                         <TableHead className="text-[10px] text-right">Acatado</TableHead>
-                        <TableHead className="text-[10px] text-right">Desvio</TableHead>
                         <TableHead className="text-[10px]">Prev. Envio</TableHead>
                         <TableHead className="text-[10px]">NF</TableHead>
                         <TableHead className="text-[10px]">Pagamento</TableHead>
@@ -1776,34 +1777,34 @@ function FinanceiroObraSheet({
                     <TableBody>
                       {medsDaObra.map((m: any) => {
                         const ms = STATUS_MED_CONFIG[m.status_medicao] || STATUS_MED_CONFIG.nao_iniciada;
-                        const desvio = m.status_medicao === "aprovada" && m.valor_acatado != null && m.valor_acatado > 0 && m.valor_previsto_medicao > 0
-                          ? m.valor_acatado - m.valor_previsto_medicao : null;
+                        const prevBruto = Number(m.valor_previsto_medicao) || 0;
+                        const impacto = restrImpactoSheetMap.get(m.id) || 0;
+                        const prevLiquido = m.status_medicao === "aprovada" ? prevBruto : Math.max(0, prevBruto - impacto);
                         return (
                           <TableRow key={m.id} className="text-[11px]">
                             <TableCell className="py-1">{m.num_medicao || "—"}</TableCell>
                             <TableCell className="py-1"><Badge className={`text-[9px] ${ms.cls}`} variant="secondary">{ms.label}</Badge></TableCell>
+                            <TableCell className="py-1 text-right">{prevBruto > 0 ? BRL.format(prevBruto) : "—"}</TableCell>
                             <TableCell className="py-1 text-right">
-                              {m.valor_previsto_medicao > 0 ? (() => {
-                                const liq = valorPrevLiquidoSheet(m);
-                                const temRestr = liq < m.valor_previsto_medicao;
-                                return (
-                                  <span className={temRestr ? "text-amber-600" : ""} title={temRestr ? `Bruto: ${BRL.format(m.valor_previsto_medicao)} — Restrição: −${BRL.format(m.valor_previsto_medicao - liq)}` : undefined}>
-                                    {BRL.format(liq)}
-                                  </span>
-                                );
-                              })() : "—"}
+                              {impacto > 0 && m.status_medicao !== "aprovada"
+                                ? <span className="text-destructive font-medium">−{BRL.format(impacto)}</span>
+                                : "—"}
                             </TableCell>
-                            <TableCell className="py-1 text-right">{m.valor_acatado != null ? BRL.format(m.valor_acatado) : "—"}</TableCell>
                             <TableCell className="py-1 text-right">
-                              {desvio != null ? <span className={desvio >= 0 ? "text-emerald-600" : "text-destructive"}>{desvio >= 0 ? "+" : ""}{BRL.format(desvio)}</span> : "—"}
+                              {prevBruto > 0 ? (
+                                <span className={impacto > 0 && m.status_medicao !== "aprovada" ? "text-amber-600 font-medium" : ""}>
+                                  {BRL.format(prevLiquido)}
+                                </span>
+                              ) : "—"}
                             </TableCell>
+                            <TableCell className="py-1 text-right">{m.valor_acatado != null && m.valor_acatado > 0 ? BRL.format(m.valor_acatado) : "—"}</TableCell>
                             <TableCell className="py-1">{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                             <TableCell className="py-1">{m.num_nf || "—"}</TableCell>
                             <TableCell className="py-1">{m.data_pagamento ? format(new Date(m.data_pagamento + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                           </TableRow>
                         );
                       })}
-                      {medsDaObra.length === 0 && <TableRow><TableCell colSpan={8} className="text-center py-3 text-muted-foreground text-xs">Nenhuma medição.</TableCell></TableRow>}
+                      {medsDaObra.length === 0 && <TableRow><TableCell colSpan={9} className="text-center py-3 text-muted-foreground text-xs">Nenhuma medição.</TableCell></TableRow>}
                     </TableBody>
                   </Table>
                 </div>
