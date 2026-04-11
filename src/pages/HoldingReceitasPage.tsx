@@ -90,7 +90,7 @@ export default function HoldingReceitasPage() {
   const queryClient = useQueryClient();
   const { company } = useAuth();
 
-  const [activeTab, setActiveTab] = useState("resumo");
+  const [activeTab, setActiveTab] = useState("financeiro");
   const [filterObra, setFilterObra] = useState("all");
   const [filterEmpresa, setFilterEmpresa] = useState("all");
   const [filterStatusMed, setFilterStatusMed] = useState("all");
@@ -639,11 +639,11 @@ export default function HoldingReceitasPage() {
             {/* TABS */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-5 max-w-2xl">
+                <TabsTrigger value="financeiro">💳 Financeiro</TabsTrigger>
                 <TabsTrigger value="resumo">📊 Resumo</TabsTrigger>
                 <TabsTrigger value="tabela">📋 Tabela</TabsTrigger>
                 <TabsTrigger value="previsao">📅 Previsão</TabsTrigger>
                 <TabsTrigger value="programacao">💰 Programação</TabsTrigger>
-                <TabsTrigger value="financeiro">💳 Financeiro</TabsTrigger>
               </TabsList>
 
               {/* ═══ TAB RESUMO ═══ */}
@@ -1386,44 +1386,56 @@ export default function HoldingReceitasPage() {
                                 </p>
                               </div>
 
-                              {/* Barra 2 — Próxima entrada (proporcional ao contrato) */}
+                              {/* Barra 2 — Próxima entrada com restrição sobreposta */}
                               {proximaMedicao ? (() => {
                                 const valorBruto = Number(proximaMedicao.valor_previsto_medicao) || 0;
-                                const pctProxima = valorContrato > 0 ? Math.min(100, (valorPrevAjustado / valorContrato) * 100) : 0;
+                                // pct do valor BRUTO (sem descontar restrição) — barra âmbar total
+                                const pctBruto = valorContrato > 0 ? Math.min(100, (valorBruto / valorContrato) * 100) : 0;
+                                // pct da restrição dentro da barra (sobreposto no final em vermelho)
+                                const pctRestr = valorBruto > 0 && impactoRestricoes > 0
+                                  ? Math.min(100, (impactoRestricoes / valorBruto) * 100)
+                                  : 0;
                                 return (
                                   <div className="space-y-0.5">
                                     <div className="flex justify-between text-xs text-muted-foreground">
-                                      <span>Próxima entrada — Med {proximaMedicao.num_medicao}: {BRL.format(valorPrevAjustado)}</span>
+                                      <span>
+                                        Próxima entrada — Med {proximaMedicao.num_medicao}:{" "}
+                                        <span className={impactoRestricoes > 0 ? "text-amber-600 font-medium" : ""}>
+                                          {BRL.format(valorPrevAjustado)}
+                                        </span>
+                                        {impactoRestricoes > 0 && (
+                                          <span className="text-destructive ml-1 text-[10px]">
+                                            (−{BRL.format(impactoRestricoes)} restrição)
+                                          </span>
+                                        )}
+                                      </span>
                                       <span>{dataEntradaProjetada ? format(dataEntradaProjetada, "dd/MM/yy") : "—"}</span>
                                     </div>
-                                    <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
-                                      <div className={`h-full transition-all ${statusColor}`} style={{ width: `${pctProxima}%` }} />
+                                    {/* Barra única: âmbar com segmento vermelho sobreposto no final */}
+                                    <div className="h-2 w-full rounded-full bg-secondary overflow-hidden relative" style={{ width: `${pctBruto}%`, minWidth: pctBruto > 0 ? "4px" : "0" }}>
+                                      <div className={`h-full w-full ${statusColor}`} />
+                                      {pctRestr > 0 && (
+                                        <div
+                                          className="absolute right-0 top-0 h-full bg-destructive/60"
+                                          style={{ width: `${pctRestr}%` }}
+                                          title={`Restrição: −${BRL.format(impactoRestricoes)}`}
+                                        />
+                                      )}
                                     </div>
+                                    {impactoRestricoes > 0 && (
+                                      <p className="text-[10px] text-destructive flex items-center justify-between">
+                                        <span className="flex items-center gap-1">
+                                          <AlertCircle className="h-3 w-3 shrink-0" />
+                                          Restrição: −{BRL.format(impactoRestricoes)} ({((impactoRestricoes / Math.max(valorBruto, 1)) * 100).toFixed(0)}% da medição)
+                                        </span>
+                                        <span>{restrDaObra.filter((r: any) => !r.resolvida).length} aberta(s)</span>
+                                      </p>
+                                    )}
                                   </div>
                                 );
                               })() : (
                                 <p className="text-xs text-muted-foreground">Nenhuma medição prevista pendente.</p>
                               )}
-
-                              {/* Barra 3 — Impacto de restrição (separada, em vermelho) */}
-                              {impactoRestricoes > 0 && (() => {
-                                const valorBruto = Number(proximaMedicao?.valor_previsto_medicao) || 1;
-                                const pctImpacto = valorContrato > 0 ? Math.min(100, (impactoRestricoes / valorContrato) * 100) : 0;
-                                return (
-                                  <div className="space-y-0.5">
-                                    <div className="flex justify-between text-xs text-destructive font-medium">
-                                      <span className="flex items-center gap-1">
-                                        <AlertCircle className="h-3 w-3 shrink-0" />
-                                        Restrição financeira: −{BRL.format(impactoRestricoes)} ({((impactoRestricoes / valorBruto) * 100).toFixed(0)}% da medição)
-                                      </span>
-                                      <span>{restrDaObra.length} aberta(s)</span>
-                                    </div>
-                                    <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
-                                      <div className="h-full bg-destructive transition-all" style={{ width: `${pctImpacto}%` }} />
-                                    </div>
-                                  </div>
-                                );
-                              })()}
                             </CardContent>
                           </Card>
                         ))}
@@ -1743,34 +1755,6 @@ function FinanceiroObraSheet({
                   </div>
                 );
               })()}
-
-              {/* Recebido / Saldo a Receber */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg border p-3">
-                  <p className="text-[10px] text-muted-foreground">Recebido Total</p>
-                  <p className="text-sm font-bold text-emerald-600">{BRL.format(valorRecebido)}</p>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-[10px] text-muted-foreground">Saldo a Receber</p>
-                  <p className="text-sm font-bold">{BRL.format(saldoReceber)}</p>
-                </div>
-              </div>
-
-              {/* Progress bar */}
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>% Recebido</span>
-                  <span>{pctRecebido.toFixed(1)}%</span>
-                </div>
-                <div className="h-3 w-full rounded-full bg-secondary overflow-hidden">
-                  <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${Math.min(100, pctRecebido)}%` }} />
-                </div>
-                {prazoFim && (
-                  <p className="text-[10px] text-muted-foreground text-right">
-                    Fim: {format(prazoFim, "dd/MM/yyyy")} {diasParaFim !== null && (diasParaFim >= 0 ? `(${diasParaFim}d restantes)` : `(${Math.abs(diasParaFim)}d atraso)`)}
-                  </p>
-                )}
-              </div>
 
               <Separator />
 
