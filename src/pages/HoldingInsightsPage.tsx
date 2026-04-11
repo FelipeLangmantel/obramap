@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,7 +36,7 @@ export default function HoldingInsightsPage() {
   const [relatorioLoading, setRelatorioLoading] = useState(false);
   const [lastGenerated, setLastGenerated] = useState<Date | null>(null);
 
-  const { data } = useQuery({
+  const { data, isError } = useQuery({
     queryKey: ["holding-insights-data", company?.id],
     enabled: !!company?.id,
     staleTime: 30_000,
@@ -254,6 +255,13 @@ export default function HoldingInsightsPage() {
         <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
         <main className="flex-1 min-w-0 h-full overflow-auto">
     <div className="space-y-6 p-6">
+      {isError && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Erro ao carregar dados</AlertTitle>
+          <AlertDescription>Recarregue a página ou tente novamente mais tarde.</AlertDescription>
+        </Alert>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2">

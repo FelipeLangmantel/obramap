@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -101,7 +102,7 @@ export default function HoldingReceitasPage() {
   
 
   // ─── Data Fetching ───
-  const { data } = useQuery({
+  const { data, isError } = useQuery({
     queryKey: ["holding-receitas", company?.id],
     queryFn: async () => {
       const { data: obras, error: obrasError } = await supabase
@@ -116,7 +117,7 @@ export default function HoldingReceitasPage() {
       if (obraIds.length === 0) return { obras: obrasList, medicoes: [], restricoes: [] };
 
       const [{ data: medicoes, error: medError }, { data: restricoes }] = await Promise.all([
-        supabase.from("medicoes_ple").select("*").in("obra_id", obraIds),
+        supabase.from("medicoes_ple").select("id, obra_id, num_medicao, mes_referencia, ano_referencia, data_previsao_medicao, data_envio, data_envio_nf, data_aprovacao, status_medicao, valor_previsto_medicao, valor_medicao, valor_acatado, num_nf, data_pagamento, status_nf").in("obra_id", obraIds),
         supabase.from("restricoes_financeiras").select("*").in("obra_id", obraIds).eq("resolvida", false),
       ]);
 
@@ -194,6 +195,7 @@ export default function HoldingReceitasPage() {
   const obras = data?.obras || [];
   const medicoes = data?.medicoes || [];
   const restricoes = (data as any)?.restricoes || [] as any[];
+  
 
   // ─── Global filter (empresa + tipo contrato only) for all tabs ───
   const medicoesFiltradasGlobal = useMemo(() => {
@@ -539,6 +541,13 @@ export default function HoldingReceitasPage() {
         <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
         <main className="flex-1 min-w-0 h-full overflow-auto">
     <div className="space-y-4 p-4 md:p-6">
+      {isError && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Erro ao carregar dados</AlertTitle>
+          <AlertDescription>Recarregue a página ou tente novamente mais tarde.</AlertDescription>
+        </Alert>
+      )}
       {/* HEADER */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
