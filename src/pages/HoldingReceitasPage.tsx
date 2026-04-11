@@ -808,7 +808,21 @@ export default function HoldingReceitasPage() {
                             <TableCell className="py-2">{m.mes_referencia || "—"}</TableCell>
                             <TableCell className="py-2">{m.ano_referencia || "—"}</TableCell>
                              <TableCell className="py-2">{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
-                             <TableCell className="py-2 text-right">{m.valor_previsto_medicao > 0 ? BRL.format(m.valor_previsto_medicao) : "—"}</TableCell>
+                             <TableCell className="py-2 text-right">
+                               {m.valor_previsto_medicao > 0 ? (
+                                 m.status_medicao === "aprovada"
+                                   ? BRL.format(m.valor_previsto_medicao)
+                                   : (() => {
+                                       const liq = valorPrevLiquido(m);
+                                       const temRestr = liq < m.valor_previsto_medicao;
+                                       return (
+                                         <span className={temRestr ? "text-amber-600" : ""} title={temRestr ? `Bruto: ${BRL.format(m.valor_previsto_medicao)} — Restrição: −${BRL.format(m.valor_previsto_medicao - liq)}` : undefined}>
+                                           {BRL.format(liq)}
+                                         </span>
+                                       );
+                                     })()
+                               ) : "—"}
+                             </TableCell>
                              <TableCell className="py-2">{m.data_envio ? format(new Date(m.data_envio + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                              <TableCell className="py-2">{m.data_aprovacao ? format(new Date(m.data_aprovacao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                              <TableCell className="py-2"><Badge className={`text-[10px] ${ms.cls}`} variant="secondary">{ms.label}</Badge></TableCell>
@@ -924,7 +938,21 @@ export default function HoldingReceitasPage() {
                                          <TableCell className="py-1.5 text-center">
                                            <Badge className={`text-[9px] px-1.5 py-0 ${statusCfg.cls}`}>{statusCfg.label}</Badge>
                                          </TableCell>
-                                         <TableCell className="py-1.5 text-right">{m.valor_previsto_medicao > 0 ? BRL.format(m.valor_previsto_medicao) : "—"}</TableCell>
+                                         <TableCell className="py-1.5 text-right">
+                                           {m.valor_previsto_medicao > 0 ? (
+                                             m.status_medicao === "aprovada"
+                                               ? BRL.format(m.valor_previsto_medicao)
+                                               : (() => {
+                                                   const liq = valorPrevLiquido(m);
+                                                   const temRestr = liq < m.valor_previsto_medicao;
+                                                   return (
+                                                     <span className={temRestr ? "text-amber-600" : ""} title={temRestr ? `Bruto: ${BRL.format(m.valor_previsto_medicao)} — Restrição: −${BRL.format(m.valor_previsto_medicao - liq)}` : undefined}>
+                                                       {BRL.format(liq)}
+                                                     </span>
+                                                   );
+                                                 })()
+                                           ) : "—"}
+                                         </TableCell>
                                          <TableCell className="py-1.5 text-right">{(m.valor_acatado != null && m.valor_acatado > 0) ? BRL.format(m.valor_acatado) : "—"}</TableCell>
                                          <TableCell className="py-1.5 text-right">
                                            {desvio != null ? (
@@ -939,7 +967,8 @@ export default function HoldingReceitasPage() {
                                    })}
                                    {/* Drill-down footer totals */}
                                     {(() => {
-                                      const sumPrevisto = drillDownMedicoes.reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0);
+                                      const sumPrevisto = drillDownMedicoes.reduce((s, m) =>
+                                        s + (m.status_medicao === "aprovada" ? (m.valor_previsto_medicao || 0) : valorPrevLiquido(m)), 0);
                                       const medsComAcatado = drillDownMedicoes.filter(m => m.valor_acatado != null && m.valor_acatado > 0);
                                       const sumAcatado = medsComAcatado.reduce((s, m) => s + (m.valor_acatado ?? 0), 0);
                                       const hasAcatado = medsComAcatado.length > 0;
@@ -1481,6 +1510,20 @@ function FinanceiroObraSheet({
   const restrResolvidas = restrDaObra.filter((r: any) => r.resolvida)
     .sort((a: any, b: any) => (b.resolvida_em || "").localeCompare(a.resolvida_em || ""));
 
+  // Mapa de impacto por medicao_id (apenas restrições abertas)
+  const restrImpactoSheetMap = useMemo(() => {
+    const map = new Map<string, number>();
+    restrAbertas.forEach((r: any) => {
+      if (r.medicao_id) map.set(r.medicao_id, (map.get(r.medicao_id) || 0) + (Number(r.impacto_medicao) || 0));
+    });
+    return map;
+  }, [restrAbertas]);
+
+  const valorPrevLiquidoSheet = (m: any): number =>
+    m.status_medicao === "aprovada"
+      ? (Number(m.valor_previsto_medicao) || 0)
+      : Math.max(0, (Number(m.valor_previsto_medicao) || 0) - (restrImpactoSheetMap.get(m.id) || 0));
+
   const valorContrato = obra ? (Number(obra.valor_contrato) || 0) + (Number(obra.aditivo_valor_total) || 0) : 0;
   const valorRecebido = medsDaObra
     .filter((m: any) => m.status_nf === "recebido" && m.data_pagamento)
@@ -1490,7 +1533,7 @@ function FinanceiroObraSheet({
 
   const now = new Date();
   const restrVencidas = restrDaObra.filter((r: any) => r.data_limite && new Date(r.data_limite + "T23:59:59") < now);
-  const impactoTotal = restrDaObra.reduce((s: number, r: any) => s + (Number(r.impacto_medicao) || 0), 0);
+  const impactoTotal = restrAbertas.reduce((s: number, r: any) => s + (Number(r.impacto_medicao) || 0), 0);
 
   const prazoFim = obra?.data_inicio && obra?.prazo_dias
     ? addDays(new Date(obra.data_inicio + "T12:00:00"), (obra.prazo_dias || 0) + (obra.aditivo_prazo_dias || 0))
@@ -1665,7 +1708,7 @@ function FinanceiroObraSheet({
                 const enviado = medsDaObra.filter((m: any) => m.status_medicao === "enviada").reduce((s: number, m: any) => s + (Number(m.valor_medicao) || 0), 0);
                 const previsto = medsDaObra.filter((m: any) => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada").reduce((s: number, m: any) => s + (Number(m.valor_previsto_medicao) || 0), 0);
                 const saldo = Math.max(0, valorContrato - aprovado - enviado - previsto);
-                const impactoTotal = restrDaObra.reduce((s: number, r: any) => s + (Number(r.impacto_medicao) || 0), 0);
+                const impactoTotal = restrAbertas.reduce((s: number, r: any) => s + (Number(r.impacto_medicao) || 0), 0);
                 const total = valorContrato || 1;
                 return (
                   <div className="space-y-2">
@@ -1757,7 +1800,17 @@ function FinanceiroObraSheet({
                           <TableRow key={m.id} className="text-[11px]">
                             <TableCell className="py-1">{m.num_medicao || "—"}</TableCell>
                             <TableCell className="py-1"><Badge className={`text-[9px] ${ms.cls}`} variant="secondary">{ms.label}</Badge></TableCell>
-                            <TableCell className="py-1 text-right">{m.valor_previsto_medicao > 0 ? BRL.format(m.valor_previsto_medicao) : "—"}</TableCell>
+                            <TableCell className="py-1 text-right">
+                              {m.valor_previsto_medicao > 0 ? (() => {
+                                const liq = valorPrevLiquidoSheet(m);
+                                const temRestr = liq < m.valor_previsto_medicao;
+                                return (
+                                  <span className={temRestr ? "text-amber-600" : ""} title={temRestr ? `Bruto: ${BRL.format(m.valor_previsto_medicao)} — Restrição: −${BRL.format(m.valor_previsto_medicao - liq)}` : undefined}>
+                                    {BRL.format(liq)}
+                                  </span>
+                                );
+                              })() : "—"}
+                            </TableCell>
                             <TableCell className="py-1 text-right">{m.valor_acatado != null ? BRL.format(m.valor_acatado) : "—"}</TableCell>
                             <TableCell className="py-1 text-right">
                               {desvio != null ? <span className={desvio >= 0 ? "text-emerald-600" : "text-destructive"}>{desvio >= 0 ? "+" : ""}{BRL.format(desvio)}</span> : "—"}
