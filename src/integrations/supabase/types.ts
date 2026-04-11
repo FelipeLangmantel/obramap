@@ -9782,6 +9782,7 @@ export type Database = {
         }
         Returns: number
       }
+      fn_gerar_alertas_operacionais: { Args: never; Returns: undefined }
       generate_all_supply_requirements_for_project: {
         Args: { p_project_id: string }
         Returns: Json
