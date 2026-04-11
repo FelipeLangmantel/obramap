@@ -45,7 +45,7 @@ export default function HoldingPrdPage() {
   const [filterObra, setFilterObra] = useState("all");
   const [selectedObra, setSelectedObra] = useState("all");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["holding-prd", company?.id],
     staleTime: 30_000,
     gcTime: 120_000,
@@ -351,13 +351,23 @@ export default function HoldingPrdPage() {
     toast.success("CSV exportado!");
   };
 
-  if (isLoading) {
+  if (isLoading || isError) {
     return (
       <SidebarProvider defaultOpen={true}>
         <div className="h-screen flex w-full overflow-hidden">
           <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
           <main className="flex-1 min-w-0 h-full overflow-auto flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            {isError ? (
+              <div className="text-center space-y-3">
+                <p className="text-muted-foreground text-sm">Erro ao carregar dados.</p>
+                <Button variant="outline" size="sm"
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-prd", company?.id] })}>
+                  Tentar novamente
+                </Button>
+              </div>
+            ) : (
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            )}
           </main>
         </div>
       </SidebarProvider>

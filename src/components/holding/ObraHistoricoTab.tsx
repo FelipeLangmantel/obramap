@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export function ObraHistoricoTab({ obraId }: { obraId: string }) {
   const [logs, setLogs] = useState<any[]>([]);
@@ -14,7 +15,19 @@ export function ObraHistoricoTab({ obraId }: { obraId: string }) {
       .eq("obra_id", obraId)
       .order("realizado_em", { ascending: false })
       .limit(100)
-      .then(({ data }) => { setLogs(data || []); setLoading(false); });
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("[HistoricoTab] Erro ao carregar:", error);
+          toast.error("Erro ao carregar dados. Tente novamente.");
+        }
+        setLogs(data || []);
+        setLoading(false);
+      })
+      .catch((e) => {
+        console.error("[HistoricoTab] Erro ao carregar:", e);
+        toast.error("Erro ao carregar dados. Tente novamente.");
+        setLoading(false);
+      });
   }, [obraId]);
 
   const TABELA_BADGE: Record<string, { label: string; cls: string }> = {

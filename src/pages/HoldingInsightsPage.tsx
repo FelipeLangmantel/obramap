@@ -35,7 +35,7 @@ export default function HoldingInsightsPage() {
   const [relatorioLoading, setRelatorioLoading] = useState(false);
   const [lastGenerated, setLastGenerated] = useState<Date | null>(null);
 
-  const { data } = useQuery({
+  const { data, isError } = useQuery({
     queryKey: ["holding-insights-data", company?.id],
     enabled: !!company?.id,
     staleTime: 30_000,
