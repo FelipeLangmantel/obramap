@@ -2412,7 +2412,7 @@ function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedic
 
   // Form state
   const [selectedMedicaoId, setSelectedMedicaoId] = useState("");
-  const [valor, setValor] = useState("");
+  const [valor, setValor] = useState(0);
   const [categoria, setCategoria] = useState("Geral");
   const [descricao, setDescricao] = useState("");
   const [statusDespesa, setStatusDespesa] = useState("nao_iniciado");
@@ -2424,7 +2424,7 @@ function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedic
 
   // Editing state
   const [editingDespesa, setEditingDespesa] = useState<any | null>(null);
-  const [editForm, setEditForm] = useState({ valor: "", categoria: "", descricao: "", status: "" });
+  const [editForm, setEditForm] = useState({ valor: 0, categoria: "", descricao: "", status: "" });
 
   // Admin unlock confirm
   const [confirmUnlockId, setConfirmUnlockId] = useState<string | null>(null);
@@ -2488,13 +2488,13 @@ function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedic
   useEffect(() => {
     if (selectedMedicao) {
       const suggestedVal = Number(selectedMedicao.valor_acatado ?? selectedMedicao.valor_medicao) || 0;
-      setValor(String(suggestedVal));
+      setValor(suggestedVal);
     }
   }, [selectedMedicaoId, selectedMedicao]);
 
   const resetForm = () => {
     setSelectedMedicaoId("");
-    setValor("");
+    setValor(0);
     setCategoria("Geral");
     setDescricao("");
     setStatusDespesa("nao_iniciado");
@@ -2514,7 +2514,7 @@ function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedic
       medicao_id: selectedMedicaoId,
       mes_referencia: med?.mes_referencia || "",
       ano_referencia: Number(med?.ano_referencia) || new Date().getFullYear(),
-      valor: Number(valor),
+      valor: valor,
       tipo_despesa: tipoDespesa,
       categoria,
       descricao: descricao || null,
@@ -2545,7 +2545,7 @@ function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedic
     const medVinculada = allMedicoes.find(m => m.id === editingDespesa.medicao_id);
     const novoTipo = medVinculada?.status_medicao === "aprovada" ? "real" : "prevista";
     const { error } = await supabase.from("despesas_mensais").update({
-      valor: Number(editForm.valor),
+      valor: editForm.valor,
       categoria: editForm.categoria,
       descricao: editForm.descricao || null,
       status: editForm.status as any,
@@ -2737,7 +2737,7 @@ function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedic
               </div>
               <div>
                 <label className="text-xs font-medium">Valor (R$) *</label>
-                <Input type="number" value={valor} onChange={(e) => setValor(e.target.value)} className="h-9 text-xs" placeholder="0,00" />
+                <CurrencyInput value={valor} onChange={setValor} className="h-9 text-xs" placeholder="0,00" />
               </div>
               <div>
                 <label className="text-xs font-medium">Categoria</label>
@@ -2839,7 +2839,7 @@ function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedic
                           setConfirmUnlockId(d.id);
                         } else {
                           setEditingDespesa(d);
-                          setEditForm({ valor: String(d.valor), categoria: d.categoria || "Geral", descricao: d.descricao || "", status: d.status });
+                          setEditForm({ valor: Number(d.valor) || 0, categoria: d.categoria || "Geral", descricao: d.descricao || "", status: d.status });
                         }
                       }}>
                         <Pencil className="h-3 w-3" />
@@ -2881,7 +2881,7 @@ function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedic
                 <div className="space-y-3 pt-2">
                   <div>
                     <label className="text-xs font-medium">Valor (R$)</label>
-                    <Input type="number" value={editForm.valor} onChange={(e) => setEditForm(p => ({ ...p, valor: e.target.value }))} className="h-9 text-xs" />
+                    <CurrencyInput value={editForm.valor} onChange={(v) => setEditForm(p => ({ ...p, valor: v }))} className="h-9 text-xs" />
                   </div>
                   <div>
                     <label className="text-xs font-medium">Categoria</label>

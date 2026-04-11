@@ -29,6 +29,7 @@ import {
 import { format, addMonths, startOfMonth, startOfWeek, endOfWeek, addWeeks, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { CurrencyInput } from "@/components/holding/CurrencyInput";
 
 // ─── Types ───
 interface MedicaoCompleta {
@@ -1252,6 +1253,17 @@ export default function HoldingReceitasPage() {
                       .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
                     const pctRecebido = valorContrato > 0 ? (valorRecebido / valorContrato) * 100 : 0;
 
+                    // Acumulado financeiro: medições aprovadas + valor_medido_inicial (pré-sistema)
+                    const acatadoAprovadas = medsDaObra
+                      .filter(m => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial")
+                      .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                    const saldoInicialMed = medsDaObra
+                      .filter(m => m.num_medicao === "Saldo Inicial" && m.status_medicao === "aprovada")
+                      .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                    const valorMedIni = saldoInicialMed > 0 ? saldoInicialMed : (Number(obra.valor_medido_inicial) || 0);
+                    const totalMedido = acatadoAprovadas + valorMedIni;
+                    const pctMedido = valorContrato > 0 ? Math.min(100, (totalMedido / valorContrato) * 100) : 0;
+
                     const proximaMedicao = medsDaObra
                       .filter(m =>
                         m.status_medicao !== "aprovada" &&
@@ -1293,7 +1305,7 @@ export default function HoldingReceitasPage() {
                       proximaMedicao.status_nf === "aguardando_aprovacao" ? "bg-emerald-600" :
                       "bg-slate-400";
 
-                    return { obra, valorContrato, valorRecebido, pctRecebido, proximaMedicao, valorPrevAjustado, impactoRestricoes, dataEntradaProjetada, saldoReceber, restrDaObra, hasVencidas, statusColor };
+                    return { obra, valorContrato, valorRecebido, pctRecebido, totalMedido, pctMedido, proximaMedicao, valorPrevAjustado, impactoRestricoes, dataEntradaProjetada, saldoReceber, restrDaObra, hasVencidas, statusColor };
                   }).sort((a, b) => {
                     if (a.hasVencidas && !b.hasVencidas) return -1;
                     if (!a.hasVencidas && b.hasVencidas) return 1;
@@ -1325,7 +1337,7 @@ export default function HoldingReceitasPage() {
                       </div>
 
                       <div className="space-y-2">
-                        {obraCards.map(({ obra, valorContrato, valorRecebido, pctRecebido, proximaMedicao, valorPrevAjustado, impactoRestricoes, dataEntradaProjetada, restrDaObra, hasVencidas, statusColor }) => (
+                        {obraCards.map(({ obra, valorContrato, valorRecebido, pctRecebido, totalMedido, pctMedido, proximaMedicao, valorPrevAjustado, impactoRestricoes, dataEntradaProjetada, restrDaObra, hasVencidas, statusColor }) => (
                           <Card key={obra.id} className={`cursor-pointer hover:border-primary/40 transition-all w-full ${hasVencidas ? "border-destructive/50" : ""}`} onClick={() => setSelectedObraId(obra.id)}>
                             <CardContent className="p-4 space-y-2.5">
                               <div className="flex items-center justify-between">
@@ -1333,17 +1345,17 @@ export default function HoldingReceitasPage() {
                                 <Badge variant="outline" className="text-[10px]">Em Andamento</Badge>
                               </div>
 
-                              {/* Barra 1 — Recebido */}
+                              {/* Barra 1 — Acumulado Medido (inclui valor_medido_inicial + aprovadas) */}
                               <div className="space-y-0.5">
                                 <div className="flex justify-between text-xs text-muted-foreground">
-                                  <span>Recebido</span>
-                                  <span>{pctRecebido.toFixed(1)}%</span>
+                                  <span>Medido</span>
+                                  <span>{pctMedido.toFixed(1)}%</span>
                                 </div>
                                 <div className="h-3 w-full rounded-full bg-secondary overflow-hidden">
-                                  <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${Math.min(100, pctRecebido)}%` }} />
+                                  <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${Math.min(100, pctMedido)}%` }} />
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                  {BRL.format(valorRecebido)} de {BRL.format(valorContrato)}
+                                  {BRL.format(totalMedido)} de {BRL.format(valorContrato)}
                                 </p>
                               </div>
 
@@ -1640,25 +1652,49 @@ function FinanceiroObraSheet({
 
               {/* Status bars */}
               {(() => {
-                const aprovado = medsDaObra.filter((m: any) => m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                const acatadoAprovadas = medsDaObra
+                  .filter((m: any) => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial")
+                  .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                const saldoInicialMed = medsDaObra
+                  .filter((m: any) => m.num_medicao === "Saldo Inicial" && m.status_medicao === "aprovada")
+                  .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                const valorMedIniSheet = saldoInicialMed > 0 ? saldoInicialMed : (Number(obra?.valor_medido_inicial) || 0);
+                const aprovado = acatadoAprovadas + valorMedIniSheet;
                 const enviado = medsDaObra.filter((m: any) => m.status_medicao === "enviada").reduce((s: number, m: any) => s + (Number(m.valor_medicao) || 0), 0);
                 const previsto = medsDaObra.filter((m: any) => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada").reduce((s: number, m: any) => s + (Number(m.valor_previsto_medicao) || 0), 0);
                 const saldo = Math.max(0, valorContrato - aprovado - enviado - previsto);
+                const impactoTotal = restrDaObra.reduce((s: number, r: any) => s + (Number(r.impacto_medicao) || 0), 0);
                 const total = valorContrato || 1;
                 return (
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     <p className="text-xs font-semibold text-muted-foreground">Progresso por Status</p>
+                    {/* Barra principal: aprovado + enviado + previsto */}
                     <div className="h-4 w-full rounded-full bg-secondary overflow-hidden flex">
-                      {aprovado > 0 && <div className="h-full bg-emerald-500" style={{ width: `${(aprovado / total) * 100}%` }} title={`Aprovado: ${BRL.format(aprovado)}`} />}
+                      {aprovado > 0 && <div className="h-full bg-emerald-500" style={{ width: `${(aprovado / total) * 100}%` }} title={`Medido/Aprovado: ${BRL.format(aprovado)}`} />}
                       {enviado > 0 && <div className="h-full bg-blue-500" style={{ width: `${(enviado / total) * 100}%` }} title={`Enviado: ${BRL.format(enviado)}`} />}
                       {previsto > 0 && <div className="h-full bg-amber-400" style={{ width: `${(previsto / total) * 100}%` }} title={`Previsto: ${BRL.format(previsto)}`} />}
                     </div>
                     <div className="flex gap-3 text-[10px] text-muted-foreground flex-wrap">
-                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />Aprovado {BRL.format(aprovado)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />Medido {BRL.format(aprovado)}{valorMedIniSheet > 0 && <span className="text-[9px] opacity-70">(incl. {BRL.format(valorMedIniSheet)} pré-sist.)</span>}</span>
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" />Enviado {BRL.format(enviado)}</span>
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />Previsto {BRL.format(previsto)}</span>
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-secondary" />Saldo {BRL.format(saldo)}</span>
                     </div>
+                    {/* Barra de restrição — separada, em vermelho semi-transparente */}
+                    {impactoTotal > 0 && (
+                      <div className="space-y-0.5 pt-1">
+                        <div className="flex justify-between text-[10px] text-destructive font-medium">
+                          <span className="flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            Impacto de restrições: −{BRL.format(impactoTotal)}
+                          </span>
+                          <span>{restrDaObra.length} aberta(s)</span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                          <div className="h-full bg-destructive/50 transition-all" style={{ width: `${Math.min(100, (impactoTotal / total) * 100)}%` }} />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -1860,7 +1896,7 @@ function FinanceiroObraSheet({
           <div className="space-y-4 py-2">
             <div>
               <label className="text-xs text-muted-foreground">Valor pago (R$)</label>
-              <Input type="number" min={0} step={0.01} value={resolveForm.valor_pago} onChange={(e) => setResolveForm({ ...resolveForm, valor_pago: Number(e.target.value) || 0 })} />
+              <CurrencyInput value={resolveForm.valor_pago} onChange={(v) => setResolveForm({ ...resolveForm, valor_pago: v })} />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">Forma de resolução</label>

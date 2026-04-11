@@ -18,6 +18,7 @@ import HoldingAnalyticsView from "./HoldingAnalyticsView";
 import HoldingManualView from "./HoldingManualView";
 import { OnboardingDialog } from "./OnboardingDialog";
 import { ObraDocConfigDialog } from "./ObraDocConfigDialog";
+import { CurrencyInput } from "./CurrencyInput";
 import { EditRequestDialog } from "./EditRequestDialog";
 import { useOnboarding } from "@/hooks/useOnboarding";
 import { geocodeMunicipio } from "@/lib/geocode";
@@ -1701,7 +1702,7 @@ export default function HoldingDashboardView() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-xs">Parceria SCP</Label><Input value={newObraForm.parceria_scp} onChange={(e) => setNewObraForm(p => ({ ...p, parceria_scp: e.target.value }))} disabled={editingObra && isEditorRestricted} /></div>
-              <div><Label className="text-xs">Valor Contrato (R$)</Label><Input type="number" value={newObraForm.valor_contrato} onChange={(e) => setNewObraForm(p => ({ ...p, valor_contrato: e.target.value }))} disabled={editingObra && isEditorRestricted} /></div>
+              <div><Label className="text-xs">Valor Contrato (R$)</Label><CurrencyInput value={Number(newObraForm.valor_contrato) || 0} onChange={(v) => setNewObraForm(p => ({ ...p, valor_contrato: String(v) }))} disabled={!!(editingObra && isEditorRestricted)} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -1763,13 +1764,11 @@ export default function HoldingDashboardView() {
             {(newObraForm.status === "em_andamento" || (editingObra && editingObra.status === "em_andamento")) && (
               <div>
                 <Label className="text-xs">Valor já faturado fora do sistema (R$)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={newObraForm.valor_medido_inicial || ""}
-                  onChange={(e) => setNewObraForm(p => ({ ...p, valor_medido_inicial: Number(e.target.value) || 0 }))}
+                <CurrencyInput
+                  value={newObraForm.valor_medido_inicial || 0}
+                  onChange={(v) => setNewObraForm(p => ({ ...p, valor_medido_inicial: v }))}
                   disabled={!isCompanyAdmin}
-                  placeholder="0"
+                  placeholder="0,00"
                 />
                 <p className="text-[10px] text-muted-foreground mt-1">
                   Execução medida antes de entrar no ObraMap. Usado apenas para calcular o saldo a faturar e o % financeiro. Não entra nos relatórios de receitas.
