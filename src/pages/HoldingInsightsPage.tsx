@@ -254,6 +254,13 @@ export default function HoldingInsightsPage() {
         <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
         <main className="flex-1 min-w-0 h-full overflow-auto">
     <div className="space-y-6 p-6">
+      {isError && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Erro ao carregar dados</AlertTitle>
+          <AlertDescription>Recarregue a página ou tente novamente mais tarde.</AlertDescription>
+        </Alert>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2">

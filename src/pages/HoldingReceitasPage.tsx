@@ -194,7 +194,7 @@ export default function HoldingReceitasPage() {
   const obras = data?.obras || [];
   const medicoes = data?.medicoes || [];
   const restricoes = (data as any)?.restricoes || [] as any[];
-  const hasLoadError = isError;
+  
 
   // ─── Global filter (empresa + tipo contrato only) for all tabs ───
   const medicoesFiltradasGlobal = useMemo(() => {
@@ -540,6 +540,13 @@ export default function HoldingReceitasPage() {
         <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
         <main className="flex-1 min-w-0 h-full overflow-auto">
     <div className="space-y-4 p-4 md:p-6">
+      {isError && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Erro ao carregar dados</AlertTitle>
+          <AlertDescription>Recarregue a página ou tente novamente mais tarde.</AlertDescription>
+        </Alert>
+      )}
       {/* HEADER */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
