@@ -2135,7 +2135,9 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       })()}
 
       {/* STAGED EDIT FORM */}
-      {renderStagedEditForm()}
+      <div ref={editFormRef}>
+        {renderStagedEditForm()}
+      </div>
 
       {/* TABLE */}
       <div className="overflow-x-auto">
