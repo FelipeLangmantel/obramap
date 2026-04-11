@@ -1537,9 +1537,50 @@ function FinanceiroObraSheet({
               {/* KPIs */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border p-3">
-                  <p className="text-[10px] text-muted-foreground">Valor Contrato</p>
+                  <p className="text-[10px] text-muted-foreground">Total Contratado</p>
                   <p className="text-sm font-bold">{BRL.format(valorContrato)}</p>
                 </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-[10px] text-muted-foreground">Total Medido</p>
+                  <p className="text-sm font-bold">{BRL.format(medsDaObra.reduce((s: number, m: any) => s + (m.status_medicao === "aprovada" ? (Number(m.valor_acatado ?? m.valor_medicao) || 0) : 0), 0))}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-[10px] text-muted-foreground">Saldo a Medir</p>
+                  <p className="text-sm font-bold">{BRL.format(Math.max(0, valorContrato - medsDaObra.reduce((s: number, m: any) => s + (m.status_medicao === "aprovada" ? (Number(m.valor_acatado ?? m.valor_medicao) || 0) : 0), 0)))}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-[10px] text-muted-foreground">% Andamento Financeiro</p>
+                  <p className="text-sm font-bold">{valorContrato > 0 ? ((medsDaObra.reduce((s: number, m: any) => s + (m.status_medicao === "aprovada" ? (Number(m.valor_acatado ?? m.valor_medicao) || 0) : 0), 0) / valorContrato) * 100).toFixed(1) : "0.0"}%</p>
+                </div>
+              </div>
+
+              {/* Status bars */}
+              {(() => {
+                const aprovado = medsDaObra.filter((m: any) => m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                const enviado = medsDaObra.filter((m: any) => m.status_medicao === "enviada").reduce((s: number, m: any) => s + (Number(m.valor_medicao) || 0), 0);
+                const previsto = medsDaObra.filter((m: any) => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada").reduce((s: number, m: any) => s + (Number(m.valor_previsto_medicao) || 0), 0);
+                const saldo = Math.max(0, valorContrato - aprovado - enviado - previsto);
+                const total = valorContrato || 1;
+                return (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold text-muted-foreground">Progresso por Status</p>
+                    <div className="h-4 w-full rounded-full bg-secondary overflow-hidden flex">
+                      {aprovado > 0 && <div className="h-full bg-emerald-500" style={{ width: `${(aprovado / total) * 100}%` }} title={`Aprovado: ${BRL.format(aprovado)}`} />}
+                      {enviado > 0 && <div className="h-full bg-blue-500" style={{ width: `${(enviado / total) * 100}%` }} title={`Enviado: ${BRL.format(enviado)}`} />}
+                      {previsto > 0 && <div className="h-full bg-amber-400" style={{ width: `${(previsto / total) * 100}%` }} title={`Previsto: ${BRL.format(previsto)}`} />}
+                    </div>
+                    <div className="flex gap-3 text-[10px] text-muted-foreground flex-wrap">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />Aprovado {BRL.format(aprovado)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" />Enviado {BRL.format(enviado)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />Previsto {BRL.format(previsto)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-secondary" />Saldo {BRL.format(saldo)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Recebido / Saldo a Receber */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border p-3">
                   <p className="text-[10px] text-muted-foreground">Recebido Total</p>
                   <p className="text-sm font-bold text-emerald-600">{BRL.format(valorRecebido)}</p>
@@ -1548,14 +1589,14 @@ function FinanceiroObraSheet({
                   <p className="text-[10px] text-muted-foreground">Saldo a Receber</p>
                   <p className="text-sm font-bold">{BRL.format(saldoReceber)}</p>
                 </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-[10px] text-muted-foreground">% Recebido</p>
-                  <p className="text-sm font-bold">{pctRecebido.toFixed(1)}%</p>
-                </div>
               </div>
 
               {/* Progress bar */}
               <div className="space-y-1">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>% Recebido</span>
+                  <span>{pctRecebido.toFixed(1)}%</span>
+                </div>
                 <div className="h-3 w-full rounded-full bg-secondary overflow-hidden">
                   <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${Math.min(100, pctRecebido)}%` }} />
                 </div>
