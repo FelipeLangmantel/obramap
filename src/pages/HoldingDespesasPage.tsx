@@ -153,8 +153,10 @@ export default function HoldingDespesasPage() {
     const totalNaoIniciado = despesas.filter(d => d.tipo_despesa === "real" && d.status === "nao_iniciado").reduce((s, d) => s + d.valor, 0);
     const countObrasComDespesa = new Set(despesas.filter(d => d.tipo_despesa === "real").map(d => d.obra_id)).size;
     const totalOrcado = despesas.filter(d => d.tipo_despesa === "prevista").reduce((s, d) => s + d.valor, 0);
-    return { totalDespesas, totalFechado, totalEmFechamento, totalNaoIniciado, countObrasComDespesa, totalOrcado };
-  }, [despesas]);
+    const totalMedido = medicoes.filter((m: any) => m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+    const margemEstimada = totalMedido - totalDespesas;
+    return { totalDespesas, totalFechado, totalEmFechamento, totalNaoIniciado, countObrasComDespesa, totalOrcado, margemEstimada };
+  }, [despesas, medicoes]);
 
   // ─── Filters ───
   const despesasFiltradas = useMemo(() => {
@@ -301,11 +303,12 @@ export default function HoldingDespesasPage() {
   }
 
   const kpiCards = [
-    { label: "Total Lançado", value: BRL.format(kpis.totalDespesas), border: "border-b-muted-foreground/30", icon: DollarSign },
-    { label: "Total Orçado", value: BRL.format(kpis.totalOrcado), border: "border-b-amber-500", icon: Clock },
-    { label: "Fechado", value: BRL.format(kpis.totalFechado), border: "border-b-emerald-500", icon: CheckCircle2 },
+    { label: "Total Desp. Reais", value: BRL.format(kpis.totalDespesas), border: "border-b-red-500", icon: DollarSign },
+    { label: "Total Desp. Previstas", value: BRL.format(kpis.totalOrcado), border: "border-b-amber-500", icon: Clock },
+    { label: "Total Fechado", value: BRL.format(kpis.totalFechado), border: "border-b-emerald-500", icon: CheckCircle2 },
     { label: "Em Fechamento", value: BRL.format(kpis.totalEmFechamento), border: "border-b-amber-500", icon: AlertCircle },
     { label: "Obras com Despesa", value: String(kpis.countObrasComDespesa), border: "border-b-primary", icon: Receipt },
+    { label: "Margem Estimada", value: BRL.format(kpis.margemEstimada), border: kpis.margemEstimada >= 0 ? "border-b-emerald-500" : "border-b-red-500", icon: TrendingUp },
   ];
 
   const prdTotals = {
