@@ -1221,40 +1221,57 @@ export default function HoldingDashboardView() {
 
   const kpis = useMemo(() => {
     const base = obrasFiltradas;
+    const emAndamento = base.filter((o) => o.status === "em_andamento");
+    const naoIniciadas = base.filter((o) => o.status === "nao_iniciada");
+
+    // Total de todos os contratos (ativos + não iniciados + concluídos)
     const totalContratos = base.reduce((s, o) => s + (o.valor_contrato || 0) + (o.aditivo_valor_total || 0), 0);
-    const totalMedido = base.reduce((s, o) => {
-      // Usa valor_acatado quando disponível (o que foi efetivamente aceito)
-      // Fallback para valor_medicao se valor_acatado for nulo
-      // Soma valor_medido_inicial — faturamento real anterior ao sistema
+    // Total apenas de contratos ativos
+    const totalContratosAtivos = emAndamento.reduce((s, o) => s + (o.valor_contrato || 0) + (o.aditivo_valor_total || 0), 0);
+    // Total contratos não iniciados
+    const totalContratosNaoIniciados = naoIniciadas.reduce((s, o) => s + (o.valor_contrato || 0) + (o.aditivo_valor_total || 0), 0);
+
+    // Total medido (apenas obras ativas)
+    const totalMedido = emAndamento.reduce((s, o) => {
       const aprovadas = o.allMedicoes
         .filter((m) => m.status_medicao === "aprovada")
         .reduce((ss, m) => ss + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
       return s + aprovadas + (Number(o.valor_medido_inicial) || 0);
     }, 0);
-    const saldoFaturar = totalContratos - totalMedido;
+
+    // Saldo a faturar = contratos ativos - medido ativo
+    const saldoFaturar = totalContratosAtivos - totalMedido;
     const totalMedicoesAprovadas = totalMedido;
-    const obrasAtivas = base.filter((o) => o.status === "em_andamento").length;
-    const obrasNaoIniciadas = base.filter((o) => o.status === "nao_iniciada").length;
+
+    const obrasAtivas = emAndamento.length;
+    const obrasNaoIniciadas = naoIniciadas.length;
     const alertasCriticos = base.filter((o) => o.health === "red").length;
-    const emAndamento = base.filter((o) => o.status === "em_andamento");
-    // Andamento médio calculado pelo % financeiro real (medições aprovadas / contrato)
-    // Atualiza automaticamente a cada medição aprovada — sem necessidade de input manual
+
+    // Andamento médio apenas sobre obras ativas
     const andamentoMedio = emAndamento.length > 0 ? Math.round(
       emAndamento.reduce((s, o) => {
         const vc = (o.valor_contrato || 0) + (o.aditivo_valor_total || 0);
-        if (vc <= 0) return s + (o.percentual_andamento || 0); // fallback se sem contrato
+        if (vc <= 0) return s + (o.percentual_andamento || 0);
         const aprovadas = o.allMedicoes
           .filter((m) => m.status_medicao === "aprovada")
           .reduce((ss, m) => ss + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
-        // Soma valor_medido_inicial (faturamento anterior ao sistema) para percentual correto
         const totalFinanceiro = aprovadas + (o.valor_medido_inicial || 0);
-        // Se há dados financeiros reais, usa-os; senão usa o percentual manual
         const pct = totalFinanceiro > 0 ? (totalFinanceiro / vc) * 100 : (o.percentual_andamento || 0);
         return s + Math.min(100, pct);
       }, 0) / emAndamento.length
     ) : 0;
+
+    // UH separadas
     const totalUH = base.reduce((s, o) => s + (o.uh || 0), 0);
-    return { totalContratos, totalMedido, saldoFaturar, totalMedicoesAprovadas, obrasAtivas, obrasNaoIniciadas, alertasCriticos, andamentoMedio, totalUH };
+    const uhAtivas = emAndamento.reduce((s, o) => s + (o.uh || 0), 0);
+    const uhNaoIniciadas = naoIniciadas.reduce((s, o) => s + (o.uh || 0), 0);
+
+    return {
+      totalContratos, totalContratosAtivos, totalContratosNaoIniciados,
+      totalMedido, saldoFaturar, totalMedicoesAprovadas,
+      obrasAtivas, obrasNaoIniciadas, alertasCriticos, andamentoMedio,
+      totalUH, uhAtivas, uhNaoIniciadas,
+    };
   }, [obrasFiltradas]);
 
   const alerts = useMemo((): HoldingAlert[] => {
