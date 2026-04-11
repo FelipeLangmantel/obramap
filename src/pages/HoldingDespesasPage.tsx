@@ -342,7 +342,7 @@ export default function HoldingDespesasPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {kpiCards.map((k, i) => (
           <Card key={i} className={`border-b-2 ${k.border}`}>
             <CardContent className="p-4 flex items-center gap-3">
