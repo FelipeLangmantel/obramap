@@ -1351,8 +1351,9 @@ export default function HoldingReceitasPage() {
                     if (c.dataEntradaProjetada && c.dataEntradaProjetada.getTime() <= now.getTime() + 30 * 86400000) return s + c.valorPrevAjustado;
                     return s;
                   }, 0);
-                  const totalRestrAberto = restricoes.length;
-                  const totalRestrImpacto = restricoes.reduce((s: number, r: any) => s + (Number(r.impacto_medicao) || 0), 0);
+                  const restrAbertasGlobal = restricoes.filter((r: any) => !r.resolvida);
+                  const totalRestrAberto = restrAbertasGlobal.length;
+                  const totalRestrImpacto = restrAbertasGlobal.reduce((s: number, r: any) => s + (Number(r.impacto_medicao) || 0), 0);
 
                   return (
                     <>
