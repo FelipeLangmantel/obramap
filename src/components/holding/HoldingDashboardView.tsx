@@ -1262,16 +1262,6 @@ export default function HoldingDashboardView() {
     const now = new Date();
 
     for (const obra of obrasFiltradas) {
-      const docObraFields = ["ata", "ois", "art", "cno", "impl", "scp"];
-      const docObraCount = obra.docs ? docObraFields.filter((f) => (obra.docs as any)?.[f]).length : 0;
-      if (docObraCount < 4) {
-        result.push({
-          id: `doc-${obra.id}`, obraId: obra.id, obraNome: obra.nome,
-          severity: docObraCount < 2 ? "critical" : "warning",
-          icon: FileWarning,
-          message: `${obra.nome} — faltam ${6 - docObraCount} documentos obrigatórios`,
-        });
-      }
 
       if (obra.latestMedicao?.status_medicao === "enviada" && obra.latestMedicao.data_envio) {
         const days = differenceInDays(now, new Date(obra.latestMedicao.data_envio));
