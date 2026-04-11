@@ -17,7 +17,7 @@ import {
   ResponsiveContainer, ComposedChart, Line
 } from "recharts";
 import {
-  Receipt, DollarSign, CheckCircle2, Clock, AlertCircle, Download, RefreshCw,
+  Receipt, DollarSign, CheckCircle2, Clock, AlertCircle, Download, TrendingUp,
   Search, X, Info
 } from "lucide-react";
 import { format } from "date-fns";
