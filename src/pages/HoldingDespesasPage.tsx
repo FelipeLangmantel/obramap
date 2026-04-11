@@ -17,7 +17,7 @@ import {
   ResponsiveContainer, ComposedChart, Line
 } from "recharts";
 import {
-  Receipt, DollarSign, CheckCircle2, Clock, AlertCircle, Download, RefreshCw,
+  Receipt, DollarSign, CheckCircle2, Clock, AlertCircle, Download, TrendingUp,
   Search, X, Info
 } from "lucide-react";
 import { format } from "date-fns";
@@ -153,8 +153,10 @@ export default function HoldingDespesasPage() {
     const totalNaoIniciado = despesas.filter(d => d.tipo_despesa === "real" && d.status === "nao_iniciado").reduce((s, d) => s + d.valor, 0);
     const countObrasComDespesa = new Set(despesas.filter(d => d.tipo_despesa === "real").map(d => d.obra_id)).size;
     const totalOrcado = despesas.filter(d => d.tipo_despesa === "prevista").reduce((s, d) => s + d.valor, 0);
-    return { totalDespesas, totalFechado, totalEmFechamento, totalNaoIniciado, countObrasComDespesa, totalOrcado };
-  }, [despesas]);
+    const totalMedido = medicoes.filter((m: any) => m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+    const margemEstimada = totalMedido - totalDespesas;
+    return { totalDespesas, totalFechado, totalEmFechamento, totalNaoIniciado, countObrasComDespesa, totalOrcado, margemEstimada };
+  }, [despesas, medicoes]);
 
   // ─── Filters ───
   const despesasFiltradas = useMemo(() => {
@@ -177,14 +179,24 @@ export default function HoldingDespesasPage() {
 
   // ─── Monthly Flow ───
   const fluxoData = useMemo(() => {
-    const map = new Map<string, { real: number; previsto: number }>();
+    const map = new Map<string, { real: number; previsto: number; medPrevisto: number }>();
     despesas.forEach(d => {
       if (!d.mes_referencia || !d.ano_referencia) return;
       const mi = MONTHS.findIndex(mn => mn.toLowerCase() === (d.mes_referencia || "").substring(0,3).toLowerCase());
       const key = `${d.ano_referencia}-${String(mi >= 0 ? mi + 1 : 1).padStart(2, "0")}`;
-      const cur = map.get(key) || { real: 0, previsto: 0 };
+      const cur = map.get(key) || { real: 0, previsto: 0, medPrevisto: 0 };
       if (d.tipo_despesa === "real") cur.real += d.valor;
       else cur.previsto += d.valor;
+      map.set(key, cur);
+    });
+    // Add medicao previsto per month
+    medicoes.forEach((m: any) => {
+      if (!m.mes_referencia || !m.ano_referencia) return;
+      if (m.status_medicao !== "prevista" && m.status_medicao !== "nao_iniciada") return;
+      const mi = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0,3).toLowerCase());
+      const key = `${m.ano_referencia}-${String(mi >= 0 ? mi + 1 : 1).padStart(2, "0")}`;
+      const cur = map.get(key) || { real: 0, previsto: 0, medPrevisto: 0 };
+      cur.medPrevisto += Number(m.valor_previsto_medicao) || 0;
       map.set(key, cur);
     });
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => {
@@ -301,11 +313,12 @@ export default function HoldingDespesasPage() {
   }
 
   const kpiCards = [
-    { label: "Total Lançado", value: BRL.format(kpis.totalDespesas), border: "border-b-muted-foreground/30", icon: DollarSign },
-    { label: "Total Orçado", value: BRL.format(kpis.totalOrcado), border: "border-b-amber-500", icon: Clock },
-    { label: "Fechado", value: BRL.format(kpis.totalFechado), border: "border-b-emerald-500", icon: CheckCircle2 },
+    { label: "Total Desp. Reais", value: BRL.format(kpis.totalDespesas), border: "border-b-red-500", icon: DollarSign },
+    { label: "Total Desp. Previstas", value: BRL.format(kpis.totalOrcado), border: "border-b-amber-500", icon: Clock },
+    { label: "Total Fechado", value: BRL.format(kpis.totalFechado), border: "border-b-emerald-500", icon: CheckCircle2 },
     { label: "Em Fechamento", value: BRL.format(kpis.totalEmFechamento), border: "border-b-amber-500", icon: AlertCircle },
     { label: "Obras com Despesa", value: String(kpis.countObrasComDespesa), border: "border-b-primary", icon: Receipt },
+    { label: "Margem Estimada", value: BRL.format(kpis.margemEstimada), border: kpis.margemEstimada >= 0 ? "border-b-emerald-500" : "border-b-red-500", icon: TrendingUp },
   ];
 
   const prdTotals = {
@@ -339,7 +352,7 @@ export default function HoldingDespesasPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {kpiCards.map((k, i) => (
           <Card key={i} className={`border-b-2 ${k.border}`}>
             <CardContent className="p-4 flex items-center gap-3">
@@ -378,6 +391,7 @@ export default function HoldingDespesasPage() {
                       <Legend />
                       <Area type="monotone" dataKey="real" name="Custo Real" stroke="#ef4444" fill="#ef4444" fillOpacity={0.3} />
                       <Area type="monotone" dataKey="previsto" name="Orçado" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.15} strokeDasharray="4 2" />
+                      <Area type="monotone" dataKey="medPrevisto" name="Previsto (Medição)" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.1} strokeDasharray="6 3" />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : <p className="text-sm text-muted-foreground text-center py-10">Nenhuma despesa lançada</p>}

@@ -1247,8 +1247,7 @@ export default function HoldingReceitasPage() {
                     const medsDaObra = medicoes.filter(m => m.obra_id === obra.id);
                     const restrDaObra = restricoes.filter((r: any) => r.obra_id === obra.id);
 
-                    const valorMedidoInicial = Number(obra.valor_medido_inicial) || 0;
-                    const valorRecebido = valorMedidoInicial + medsDaObra
+                    const valorRecebido = medsDaObra
                       .filter(m => m.status_nf === "recebido" && m.data_pagamento)
                       .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
                     const pctRecebido = valorContrato > 0 ? (valorRecebido / valorContrato) * 100 : 0;
@@ -1471,8 +1470,7 @@ function FinanceiroObraSheet({
   }, [restricoesGlobais, obraId]);
 
   const valorContrato = obra ? (Number(obra.valor_contrato) || 0) + (Number(obra.aditivo_valor_total) || 0) : 0;
-  const valorMedidoInicial = obra ? Number(obra.valor_medido_inicial) || 0 : 0;
-  const valorRecebido = valorMedidoInicial + medsDaObra
+  const valorRecebido = medsDaObra
     .filter((m: any) => m.status_nf === "recebido" && m.data_pagamento)
     .reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
   const saldoReceber = Math.max(0, valorContrato - valorRecebido);
@@ -1548,7 +1546,7 @@ function FinanceiroObraSheet({
   return (
     <>
       <Sheet open={!!obraId} onOpenChange={(open) => { if (!open) onClose(); }}>
-        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto p-0">
+        <SheetContent side="right" className="w-full sm:max-w-3xl overflow-y-auto p-0">
           {obra && (
             <div className="p-5 space-y-5">
               {/* Header */}
@@ -1586,9 +1584,50 @@ function FinanceiroObraSheet({
               {/* KPIs */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border p-3">
-                  <p className="text-[10px] text-muted-foreground">Valor Contrato</p>
+                  <p className="text-[10px] text-muted-foreground">Total Contratado</p>
                   <p className="text-sm font-bold">{BRL.format(valorContrato)}</p>
                 </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-[10px] text-muted-foreground">Total Medido</p>
+                  <p className="text-sm font-bold">{BRL.format(medsDaObra.reduce((s: number, m: any) => s + (m.status_medicao === "aprovada" ? (Number(m.valor_acatado ?? m.valor_medicao) || 0) : 0), 0))}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-[10px] text-muted-foreground">Saldo a Medir</p>
+                  <p className="text-sm font-bold">{BRL.format(Math.max(0, valorContrato - medsDaObra.reduce((s: number, m: any) => s + (m.status_medicao === "aprovada" ? (Number(m.valor_acatado ?? m.valor_medicao) || 0) : 0), 0)))}</p>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <p className="text-[10px] text-muted-foreground">% Andamento Financeiro</p>
+                  <p className="text-sm font-bold">{valorContrato > 0 ? ((medsDaObra.reduce((s: number, m: any) => s + (m.status_medicao === "aprovada" ? (Number(m.valor_acatado ?? m.valor_medicao) || 0) : 0), 0) / valorContrato) * 100).toFixed(1) : "0.0"}%</p>
+                </div>
+              </div>
+
+              {/* Status bars */}
+              {(() => {
+                const aprovado = medsDaObra.filter((m: any) => m.status_medicao === "aprovada").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
+                const enviado = medsDaObra.filter((m: any) => m.status_medicao === "enviada").reduce((s: number, m: any) => s + (Number(m.valor_medicao) || 0), 0);
+                const previsto = medsDaObra.filter((m: any) => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada").reduce((s: number, m: any) => s + (Number(m.valor_previsto_medicao) || 0), 0);
+                const saldo = Math.max(0, valorContrato - aprovado - enviado - previsto);
+                const total = valorContrato || 1;
+                return (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold text-muted-foreground">Progresso por Status</p>
+                    <div className="h-4 w-full rounded-full bg-secondary overflow-hidden flex">
+                      {aprovado > 0 && <div className="h-full bg-emerald-500" style={{ width: `${(aprovado / total) * 100}%` }} title={`Aprovado: ${BRL.format(aprovado)}`} />}
+                      {enviado > 0 && <div className="h-full bg-blue-500" style={{ width: `${(enviado / total) * 100}%` }} title={`Enviado: ${BRL.format(enviado)}`} />}
+                      {previsto > 0 && <div className="h-full bg-amber-400" style={{ width: `${(previsto / total) * 100}%` }} title={`Previsto: ${BRL.format(previsto)}`} />}
+                    </div>
+                    <div className="flex gap-3 text-[10px] text-muted-foreground flex-wrap">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />Aprovado {BRL.format(aprovado)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" />Enviado {BRL.format(enviado)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />Previsto {BRL.format(previsto)}</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-secondary" />Saldo {BRL.format(saldo)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Recebido / Saldo a Receber */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border p-3">
                   <p className="text-[10px] text-muted-foreground">Recebido Total</p>
                   <p className="text-sm font-bold text-emerald-600">{BRL.format(valorRecebido)}</p>
@@ -1597,14 +1636,14 @@ function FinanceiroObraSheet({
                   <p className="text-[10px] text-muted-foreground">Saldo a Receber</p>
                   <p className="text-sm font-bold">{BRL.format(saldoReceber)}</p>
                 </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-[10px] text-muted-foreground">% Recebido</p>
-                  <p className="text-sm font-bold">{pctRecebido.toFixed(1)}%</p>
-                </div>
               </div>
 
               {/* Progress bar */}
               <div className="space-y-1">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>% Recebido</span>
+                  <span>{pctRecebido.toFixed(1)}%</span>
+                </div>
                 <div className="h-3 w-full rounded-full bg-secondary overflow-hidden">
                   <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${Math.min(100, pctRecebido)}%` }} />
                 </div>
@@ -1617,28 +1656,99 @@ function FinanceiroObraSheet({
 
               <Separator />
 
-              {/* Medições */}
+              {/* Medições — Full table */}
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Medições ({medsDaObra.length})</h3>
-                <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                  {medsDaObra.map((m: any) => {
-                    const ms = STATUS_MED_CONFIG[m.status_medicao] || STATUS_MED_CONFIG.nao_iniciada;
-                    return (
-                      <div key={m.id} className="flex items-center justify-between text-xs border rounded-md px-3 py-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{m.num_medicao === "Saldo Inicial" ? "Saldo Ini." : `Nº ${m.num_medicao}`}</span>
-                          <Badge className={`text-[9px] ${ms.cls}`} variant="secondary">{ms.label}</Badge>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{BRL.format(m.status_medicao === "aprovada" ? (Number(m.valor_acatado ?? m.valor_medicao) || 0) : (Number(m.valor_previsto_medicao) || 0))}</span>
-                          {m.data_pagamento && <span className="text-muted-foreground">{format(new Date(m.data_pagamento + "T12:00:00"), "dd/MM/yy")}</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {medsDaObra.length === 0 && <p className="text-xs text-muted-foreground text-center py-3">Nenhuma medição registrada.</p>}
+                <div className="border rounded-lg overflow-x-auto max-h-60 overflow-y-auto">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background z-10">
+                      <TableRow>
+                        <TableHead className="text-[10px]">Nº</TableHead>
+                        <TableHead className="text-[10px]">Status</TableHead>
+                        <TableHead className="text-[10px] text-right">Previsto</TableHead>
+                        <TableHead className="text-[10px] text-right">Acatado</TableHead>
+                        <TableHead className="text-[10px] text-right">Desvio</TableHead>
+                        <TableHead className="text-[10px]">Prev. Envio</TableHead>
+                        <TableHead className="text-[10px]">NF</TableHead>
+                        <TableHead className="text-[10px]">Pagamento</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {medsDaObra.map((m: any) => {
+                        const ms = STATUS_MED_CONFIG[m.status_medicao] || STATUS_MED_CONFIG.nao_iniciada;
+                        const desvio = m.valor_acatado != null && m.valor_previsto_medicao > 0
+                          ? m.valor_acatado - m.valor_previsto_medicao : null;
+                        return (
+                          <TableRow key={m.id} className="text-[11px]">
+                            <TableCell className="py-1">{m.num_medicao || "—"}</TableCell>
+                            <TableCell className="py-1"><Badge className={`text-[9px] ${ms.cls}`} variant="secondary">{ms.label}</Badge></TableCell>
+                            <TableCell className="py-1 text-right">{m.valor_previsto_medicao > 0 ? BRL.format(m.valor_previsto_medicao) : "—"}</TableCell>
+                            <TableCell className="py-1 text-right">{m.valor_acatado != null ? BRL.format(m.valor_acatado) : "—"}</TableCell>
+                            <TableCell className="py-1 text-right">
+                              {desvio != null ? <span className={desvio >= 0 ? "text-emerald-600" : "text-destructive"}>{desvio >= 0 ? "+" : ""}{BRL.format(desvio)}</span> : "—"}
+                            </TableCell>
+                            <TableCell className="py-1">{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                            <TableCell className="py-1">{m.num_nf || "—"}</TableCell>
+                            <TableCell className="py-1">{m.data_pagamento ? format(new Date(m.data_pagamento + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {medsDaObra.length === 0 && <TableRow><TableCell colSpan={8} className="text-center py-3 text-muted-foreground text-xs">Nenhuma medição.</TableCell></TableRow>}
+                    </TableBody>
+                  </Table>
                 </div>
               </div>
+
+              <Separator />
+
+              {/* Histórico — timeline das aprovadas */}
+              {(() => {
+                const aprovadas = medsDaObra.filter((m: any) => m.status_medicao === "aprovada" && m.data_aprovacao)
+                  .sort((a: any, b: any) => (a.data_aprovacao || "").localeCompare(b.data_aprovacao || ""));
+                if (aprovadas.length === 0) return null;
+                return (
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Histórico de Aprovações</h3>
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                      {aprovadas.map((m: any) => (
+                        <div key={m.id} className="flex items-center gap-2 text-[11px] border-l-2 border-l-emerald-500 pl-3 py-1">
+                          <span className="text-muted-foreground">{format(new Date(m.data_aprovacao + "T12:00:00"), "dd/MM/yy")}</span>
+                          <span className="font-medium">Med {m.num_medicao}</span>
+                          <span className="font-semibold">{BRL.format(Number(m.valor_acatado ?? m.valor_medicao) || 0)}</span>
+                          {m.status_nf === "recebido" && <Badge className="text-[8px] bg-emerald-100 text-emerald-700" variant="secondary">NF OK</Badge>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Gráfico acumulado */}
+              {(() => {
+                const aprovadas = medsDaObra
+                  .filter((m: any) => m.status_medicao === "aprovada" && m.data_aprovacao)
+                  .sort((a: any, b: any) => (a.data_aprovacao || "").localeCompare(b.data_aprovacao || ""));
+                if (aprovadas.length < 2) return null;
+                let acum = 0;
+                const chartData = aprovadas.map((m: any) => {
+                  acum += Number(m.valor_acatado ?? m.valor_medicao) || 0;
+                  return { name: `Med ${m.num_medicao}`, acumulado: acum };
+                });
+                return (
+                  <div>
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Progresso Acumulado</h3>
+                    <ResponsiveContainer width="100%" height={160}>
+                      <AreaChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                        <XAxis dataKey="name" fontSize={9} />
+                        <YAxis fontSize={9} tickFormatter={(v) => BRL_SHORT(v)} />
+                        <Tooltip formatter={(v: number) => BRL.format(v)} />
+                        <Area type="monotone" dataKey="acumulado" name="Acumulado" stroke="#22c55e" fill="#22c55e" fillOpacity={0.2} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                );
+              })()}
 
               <Separator />
 
