@@ -110,8 +110,7 @@ export function usePurchasePanel() {
             supplier_id, family_id, purchase_overdue, days_overdue,
             projects(name),
             suppliers(name),
-            material_families(name, color),
-            scope_items!supply_requests_item_id_fkey(input_code)
+            material_families(name, color)
           `)
           .in("project_id", projectIds),
 
@@ -128,6 +127,26 @@ export function usePurchasePanel() {
 
         supabase.rpc("get_company_supply_kpis", { p_company_id: companyId }),
       ]);
+
+      // Fetch scope_item codes for requests that have item_id
+      let scopeItemCodes: Record<string, string> = {};
+      if (requestsRes.data) {
+        const itemIds = requestsRes.data
+          .map((r: any) => r.item_id)
+          .filter((id: string | null): id is string => !!id);
+        if (itemIds.length > 0) {
+          const uniqueIds = [...new Set(itemIds)];
+          const { data: scopeData } = await supabase
+            .from("scope_items")
+            .select("id, input_code")
+            .in("id", uniqueIds);
+          if (scopeData) {
+            for (const s of scopeData) {
+              if (s.input_code) scopeItemCodes[s.id] = s.input_code;
+            }
+          }
+        }
+      }
 
       if (requestsRes.data) {
         const mappedRequests = requestsRes.data.map((r: any) => ({
