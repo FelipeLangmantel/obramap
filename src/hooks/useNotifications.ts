@@ -45,6 +45,7 @@ export function useNotifications(modulo?: string) {
       .select("*, obras_portfolio!system_notifications_obra_id_fkey(nome)")
       .eq("company_id", company.id)
       .eq("resolvida", false)
+      .not("tipo", "like", "%documento%")
       .order("lida", { ascending: true })
       .order("created_at", { ascending: false })
       .limit(30);
