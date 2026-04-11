@@ -179,14 +179,24 @@ export default function HoldingDespesasPage() {
 
   // ─── Monthly Flow ───
   const fluxoData = useMemo(() => {
-    const map = new Map<string, { real: number; previsto: number }>();
+    const map = new Map<string, { real: number; previsto: number; medPrevisto: number }>();
     despesas.forEach(d => {
       if (!d.mes_referencia || !d.ano_referencia) return;
       const mi = MONTHS.findIndex(mn => mn.toLowerCase() === (d.mes_referencia || "").substring(0,3).toLowerCase());
       const key = `${d.ano_referencia}-${String(mi >= 0 ? mi + 1 : 1).padStart(2, "0")}`;
-      const cur = map.get(key) || { real: 0, previsto: 0 };
+      const cur = map.get(key) || { real: 0, previsto: 0, medPrevisto: 0 };
       if (d.tipo_despesa === "real") cur.real += d.valor;
       else cur.previsto += d.valor;
+      map.set(key, cur);
+    });
+    // Add medicao previsto per month
+    medicoes.forEach((m: any) => {
+      if (!m.mes_referencia || !m.ano_referencia) return;
+      if (m.status_medicao !== "prevista" && m.status_medicao !== "nao_iniciada") return;
+      const mi = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0,3).toLowerCase());
+      const key = `${m.ano_referencia}-${String(mi >= 0 ? mi + 1 : 1).padStart(2, "0")}`;
+      const cur = map.get(key) || { real: 0, previsto: 0, medPrevisto: 0 };
+      cur.medPrevisto += Number(m.valor_previsto_medicao) || 0;
       map.set(key, cur);
     });
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => {
