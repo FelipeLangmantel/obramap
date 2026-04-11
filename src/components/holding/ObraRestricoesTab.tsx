@@ -221,9 +221,9 @@ export function ObraRestricoesTab({ obraId }: { obraId: string }) {
                     </Button>
                   </>
                 )}
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setResolvingId(item.id)}>
-                  <CheckCircle2 className="h-3 w-3 mr-1" /> Resolver
-                </Button>
+                <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  <span>💡 Para resolver, use o Painel Financeiro</span>
+                </p>
               </div>
             )}
           </div>

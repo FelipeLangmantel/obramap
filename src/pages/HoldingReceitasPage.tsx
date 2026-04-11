@@ -119,7 +119,7 @@ export default function HoldingReceitasPage() {
 
       const [{ data: medicoes, error: medError }, { data: restricoes }] = await Promise.all([
         supabase.from("medicoes_ple").select("id, obra_id, num_medicao, mes_referencia, ano_referencia, data_previsao_medicao, data_envio, data_envio_nf, data_aprovacao, status_medicao, valor_previsto_medicao, valor_medicao, valor_acatado, num_nf, data_pagamento, status_nf").in("obra_id", obraIds),
-        supabase.from("restricoes_financeiras").select("*").in("obra_id", obraIds).eq("resolvida", false),
+        supabase.from("restricoes_financeiras").select("*").in("obra_id", obraIds),
       ]);
 
       if (medError) throw medError;
@@ -198,12 +198,10 @@ export default function HoldingReceitasPage() {
   const restricoes = (data as any)?.restricoes || [] as any[];
   
 
-  // ─── Mapa de impacto financeiro por medição (restrições não resolvidas) ───
-  // restricaoImpactoMap[medicao_id] = soma de impacto_medicao das restrições vinculadas
-  // restricaoImpactoObraMap[obra_id]  = soma total de impacto de obra (para medições sem medicao_id específico)
+  // ─── Mapa de impacto financeiro por medição (apenas restrições NÃO resolvidas) ───
   const restricaoImpactoMap = useMemo(() => {
     const map = new Map<string, number>();
-    (restricoes as any[]).forEach((r: any) => {
+    (restricoes as any[]).filter((r: any) => !r.resolvida).forEach((r: any) => {
       if (r.medicao_id) {
         map.set(r.medicao_id, (map.get(r.medicao_id) || 0) + (Number(r.impacto_medicao) || 0));
       }
@@ -1246,7 +1244,7 @@ export default function HoldingReceitasPage() {
                   const obraCards = obrasAndamento.map((obra: any) => {
                     const valorContrato = (Number(obra.valor_contrato) || 0) + (Number(obra.aditivo_valor_total) || 0);
                     const medsDaObra = medicoes.filter(m => m.obra_id === obra.id);
-                    const restrDaObra = restricoes.filter((r: any) => r.obra_id === obra.id);
+                    const restrDaObra = restricoes.filter((r: any) => r.obra_id === obra.id && !r.resolvida);
 
                     const valorRecebido = medsDaObra
                       .filter(m => m.status_nf === "recebido" && m.data_pagamento)
@@ -1478,6 +1476,10 @@ function FinanceiroObraSheet({
     if (!obraId) return [];
     return restricoesGlobais.filter((r: any) => r.obra_id === obraId);
   }, [restricoesGlobais, obraId]);
+
+  const restrAbertas = restrDaObra.filter((r: any) => !r.resolvida);
+  const restrResolvidas = restrDaObra.filter((r: any) => r.resolvida)
+    .sort((a: any, b: any) => (b.resolvida_em || "").localeCompare(a.resolvida_em || ""));
 
   const valorContrato = obra ? (Number(obra.valor_contrato) || 0) + (Number(obra.aditivo_valor_total) || 0) : 0;
   const valorRecebido = medsDaObra
@@ -1831,54 +1833,88 @@ function FinanceiroObraSheet({
 
                 {/* Mini KPIs */}
                 <div className="flex gap-3 mb-3">
-                  <Badge variant="secondary" className="text-xs">Abertas: {restrDaObra.length}</Badge>
+                  <Badge variant="secondary" className="text-xs">Abertas: {restrAbertas.length}</Badge>
                   <Badge variant="secondary" className="text-xs">Impacto: {BRL.format(impactoTotal)}</Badge>
                   {restrVencidas.length > 0 && <Badge variant="destructive" className="text-xs">Vencidas: {restrVencidas.length}</Badge>}
+                  {restrResolvidas.length > 0 && <Badge className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">Resolvidas: {restrResolvidas.length}</Badge>}
                 </div>
 
-                {restrDaObra.length === 0 ? (
+                {restrAbertas.length === 0 && restrResolvidas.length === 0 ? (
                   <div className="text-xs text-muted-foreground text-center py-4 border rounded-lg bg-muted/20">
                     <CheckCircle2 className="h-5 w-5 mx-auto mb-1 text-emerald-500" />
-                    Nenhuma restrição aberta — medição sem impacto.
+                    Nenhuma restrição registrada para esta obra.
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {restrDaObra.map((r: any) => {
-                      const tipo = TIPO_BADGE[r.tipo] || TIPO_BADGE.administrativa;
-                      const isVencida = r.data_limite && new Date(r.data_limite + "T23:59:59") < now;
-                      return (
-                        <Card key={r.id} className={`${isVencida ? "border-destructive/60" : ""}`}>
-                          <CardContent className="p-3 space-y-2">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <Badge className={`text-[10px] ${tipo.cls}`}>{tipo.label}</Badge>
-                              {isVencida && <Badge variant="destructive" className="text-[10px]">Vencida</Badge>}
-                            </div>
-                            <p className="text-xs">{r.descricao}</p>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                              <span>Prazo: <strong>{r.data_limite ? format(new Date(r.data_limite + "T12:00:00"), "dd/MM/yy") : "—"}</strong></span>
-                            </div>
-                            <div className="flex items-center gap-4 text-xs">
-                              <div>
-                                <span className="text-muted-foreground">Valor: </span>
-                                <span className="font-semibold">{BRL.format(Number(r.valor) || 0)}</span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Impacto medição: </span>
-                                <span className="font-semibold text-amber-600">{BRL.format(Number(r.impacto_medicao) || 0)}</span>
-                              </div>
-                            </div>
-                            <div className="flex gap-2 pt-1">
-                              <Button size="sm" variant="outline" className="text-xs h-7 border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={(e) => { e.stopPropagation(); openResolver(r); }}>
-                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Resolver
-                              </Button>
-                              <Button size="sm" variant="outline" className="text-xs h-7 border-destructive text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); setRecusandoId(r.id); setMotivoRecusa(""); }}>
-                                <Ban className="h-3.5 w-3.5 mr-1" />Recusar
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
+                  <div className="space-y-3">
+                    {/* Abertas */}
+                    {restrAbertas.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] uppercase font-semibold tracking-wider text-muted-foreground">Abertas ({restrAbertas.length})</p>
+                        {restrAbertas.map((r: any) => {
+                          const tipo = TIPO_BADGE[r.tipo] || TIPO_BADGE.administrativa;
+                          const isVencida = r.data_limite && new Date(r.data_limite + "T23:59:59") < now;
+                          return (
+                            <Card key={r.id} className={`${isVencida ? "border-destructive/60" : ""}`}>
+                              <CardContent className="p-3 space-y-2">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <Badge className={`text-[10px] ${tipo.cls}`}>{tipo.label}</Badge>
+                                  {isVencida && <Badge variant="destructive" className="text-[10px]">Vencida</Badge>}
+                                </div>
+                                <p className="text-xs">{r.descricao}</p>
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                  <span>Prazo: <strong>{r.data_limite ? format(new Date(r.data_limite + "T12:00:00"), "dd/MM/yy") : "—"}</strong></span>
+                                </div>
+                                <div className="flex items-center gap-4 text-xs">
+                                  <div><span className="text-muted-foreground">Valor: </span><span className="font-semibold">{BRL.format(Number(r.valor) || 0)}</span></div>
+                                  <div><span className="text-muted-foreground">Impacto medição: </span><span className="font-semibold text-amber-600">{BRL.format(Number(r.impacto_medicao) || 0)}</span></div>
+                                </div>
+                                <div className="flex gap-2 pt-1">
+                                  <Button size="sm" variant="outline" className="text-xs h-7 border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={(e) => { e.stopPropagation(); openResolver(r); }}>
+                                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Resolver
+                                  </Button>
+                                  <Button size="sm" variant="outline" className="text-xs h-7 border-destructive text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); setRecusandoId(r.id); setMotivoRecusa(""); }}>
+                                    <Ban className="h-3.5 w-3.5 mr-1" />Recusar
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Histórico de resolvidas */}
+                    {restrResolvidas.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-[10px] uppercase font-semibold tracking-wider text-muted-foreground">Histórico — Resolvidas ({restrResolvidas.length})</p>
+                        {restrResolvidas.map((r: any) => {
+                          const tipo = TIPO_BADGE[r.tipo] || TIPO_BADGE.administrativa;
+                          return (
+                            <Card key={r.id} className="opacity-70 border-emerald-500/30">
+                              <CardContent className="p-3 space-y-1.5">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <Badge className={`text-[10px] ${tipo.cls}`}>{tipo.label}</Badge>
+                                  <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">Resolvida</Badge>
+                                </div>
+                                <p className="text-xs">{r.descricao}</p>
+                                <div className="flex items-center gap-4 text-xs">
+                                  <div><span className="text-muted-foreground">Valor: </span><span className="font-semibold">{BRL.format(Number(r.valor) || 0)}</span></div>
+                                  <div><span className="text-muted-foreground">Impacto: </span><span className="font-semibold">{BRL.format(Number(r.impacto_medicao) || 0)}</span></div>
+                                  {r.valor_pago > 0 && <div><span className="text-muted-foreground">Pago: </span><span className="font-semibold text-emerald-600">{BRL.format(Number(r.valor_pago) || 0)}</span></div>}
+                                </div>
+                                {r.resolvida_em && (
+                                  <p className="text-[10px] text-muted-foreground">
+                                    Resolvida em {format(new Date(r.resolvida_em), "dd/MM/yy HH:mm")}
+                                    {r.resolvida_por_nome ? ` por ${r.resolvida_por_nome}` : ""}
+                                    {r.forma_resolucao ? ` — ${r.forma_resolucao}` : ""}
+                                  </p>
+                                )}
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
