@@ -391,6 +391,7 @@ export default function HoldingDespesasPage() {
                       <Legend />
                       <Area type="monotone" dataKey="real" name="Custo Real" stroke="#ef4444" fill="#ef4444" fillOpacity={0.3} />
                       <Area type="monotone" dataKey="previsto" name="Orçado" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.15} strokeDasharray="4 2" />
+                      <Area type="monotone" dataKey="medPrevisto" name="Previsto (Medição)" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.1} strokeDasharray="6 3" />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : <p className="text-sm text-muted-foreground text-center py-10">Nenhuma despesa lançada</p>}
