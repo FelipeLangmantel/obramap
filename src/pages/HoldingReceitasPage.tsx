@@ -1363,7 +1363,7 @@ export default function HoldingReceitasPage() {
                         <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Restrições Abertas</p><p className="text-lg font-bold">{totalRestrAberto} <span className="text-xs font-normal text-muted-foreground">({BRL_SHORT(totalRestrImpacto)})</span></p></CardContent></Card>
                       </div>
 
-                      <div className="space-y-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                         {obraCards.map(({ obra, valorContrato, valorRecebido, pctRecebido, totalMedido, pctMedido, proximaMedicao, valorPrevAjustado, impactoRestricoes, dataEntradaProjetada, restrDaObra, hasVencidas, statusColor }) => (
                           <Card
                             key={obra.id}
@@ -1392,16 +1392,10 @@ export default function HoldingReceitasPage() {
                                 <Progress value={pctMedido} className="h-1.5" />
                               </div>
 
-                              {/* Grid */}
-                              <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-xs">
-                                <div className="col-span-2">
-                                  <span className="text-muted-foreground">Valor Contrato</span>
-                                  <p className="font-semibold text-foreground">{BRL.format(valorContrato)}</p>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">UH</span>
-                                  <p className="font-medium text-foreground">{obra.uh || "—"}</p>
-                                </div>
+                              {/* Valor Contrato */}
+                              <div className="text-xs">
+                                <span className="text-muted-foreground">Valor Contrato</span>
+                                <p className="font-semibold text-foreground">{BRL.format(valorContrato)}</p>
                               </div>
 
                               {/* Medido/Faturado + Saldo */}
