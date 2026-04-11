@@ -105,12 +105,13 @@ export function usePurchasePanel() {
         supabase
           .from("supply_requests")
           .select(`
-            id, project_id, item_name, item_unit, quantity, unit_value,
+            id, project_id, item_name, item_unit, item_id, quantity, unit_value,
             total_value, status, required_date, order_by_date, is_critical,
             supplier_id, family_id, purchase_overdue, days_overdue,
             projects(name),
             suppliers(name),
-            material_families(name, color)
+            material_families(name, color),
+            scope_items!supply_requests_item_id_fkey(input_code)
           `)
           .in("project_id", projectIds),
 
