@@ -69,10 +69,11 @@ export default function HoldingDespesasPage() {
   const [filterObra, setFilterObra] = useState("all");
   const [filterEmpresa, setFilterEmpresa] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterTipo, setFilterTipo] = useState<"all" | "prevista" | "real">("all");
   const [searchText, setSearchText] = useState("");
 
   // ─── Data Fetching ───
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["holding-despesas", company?.id],
     staleTime: 30_000,
     gcTime: 120_000,
@@ -151,7 +152,8 @@ export default function HoldingDespesasPage() {
     const totalEmFechamento = despesas.filter(d => d.tipo_despesa === "real" && d.status === "em_fechamento").reduce((s, d) => s + d.valor, 0);
     const totalNaoIniciado = despesas.filter(d => d.tipo_despesa === "real" && d.status === "nao_iniciado").reduce((s, d) => s + d.valor, 0);
     const countObrasComDespesa = new Set(despesas.filter(d => d.tipo_despesa === "real").map(d => d.obra_id)).size;
-    return { totalDespesas, totalFechado, totalEmFechamento, totalNaoIniciado, countObrasComDespesa };
+    const totalOrcado = despesas.filter(d => d.tipo_despesa === "prevista").reduce((s, d) => s + d.valor, 0);
+    return { totalDespesas, totalFechado, totalEmFechamento, totalNaoIniciado, countObrasComDespesa, totalOrcado };
   }, [despesas]);
 
   // ─── Filters ───
@@ -160,35 +162,34 @@ export default function HoldingDespesasPage() {
       if (filterObra !== "all" && d.obra_id !== filterObra) return false;
       if (filterEmpresa !== "all" && d.obra_empresa !== filterEmpresa) return false;
       if (filterStatus !== "all" && d.status !== filterStatus) return false;
+      if (filterTipo !== "all" && d.tipo_despesa !== filterTipo) return false;
       if (searchText) {
         const s = searchText.toLowerCase();
         if (!d.obra_nome.toLowerCase().includes(s) && !(d.obra_contrato || "").toLowerCase().includes(s)) return false;
       }
       return true;
     });
-  }, [despesas, filterObra, filterEmpresa, filterStatus, searchText]);
+  }, [despesas, filterObra, filterEmpresa, filterStatus, filterTipo, searchText]);
 
   const uniqueObras = useMemo(() => [...new Map(despesas.map(d => [d.obra_id, { id: d.obra_id, nome: d.obra_nome }])).values()], [despesas]);
   const uniqueEmpresas = useMemo(() => [...new Set(despesas.map(d => d.obra_empresa).filter(Boolean))], [despesas]);
-  const hasFilter = filterObra !== "all" || filterEmpresa !== "all" || filterStatus !== "all" || !!searchText;
+  const hasFilter = filterObra !== "all" || filterEmpresa !== "all" || filterStatus !== "all" || filterTipo !== "all" || !!searchText;
 
   // ─── Monthly Flow ───
   const fluxoData = useMemo(() => {
-    const map = new Map<string, { fechado: number; em_fechamento: number; nao_iniciado: number }>();
+    const map = new Map<string, { real: number; previsto: number }>();
     despesas.forEach(d => {
       if (!d.mes_referencia || !d.ano_referencia) return;
-      if (d.tipo_despesa !== "real") return; // apenas custos confirmados no fluxo mensal
       const mi = MONTHS.findIndex(mn => mn.toLowerCase() === (d.mes_referencia || "").substring(0,3).toLowerCase());
       const key = `${d.ano_referencia}-${String(mi >= 0 ? mi + 1 : 1).padStart(2, "0")}`;
-      const cur = map.get(key) || { fechado: 0, em_fechamento: 0, nao_iniciado: 0 };
-      if (d.status === "fechado") cur.fechado += d.valor;
-      else if (d.status === "em_fechamento") cur.em_fechamento += d.valor;
-      else cur.nao_iniciado += d.valor;
+      const cur = map.get(key) || { real: 0, previsto: 0 };
+      if (d.tipo_despesa === "real") cur.real += d.valor;
+      else cur.previsto += d.valor;
       map.set(key, cur);
     });
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => {
       const [y, m] = k.split("-");
-      return { name: `${MONTHS[Number(m) - 1]}/${y.slice(2)}`, ...v, total: v.fechado + v.em_fechamento + v.nao_iniciado };
+      return { name: `${MONTHS[Number(m) - 1]}/${y.slice(2)}`, ...v, total: v.real + v.previsto };
     });
   }, [despesas]);
 
@@ -199,9 +200,10 @@ export default function HoldingDespesasPage() {
       const realizadoMedicoes = medicoes.filter((m: any) => m.obra_id === o.id && m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial").reduce((s: number, m: any) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
       const realizado = realizadoMedicoes + (Number(o.valor_medido_inicial) || 0);
       const desp = despesas.filter(d => d.obra_id === o.id && d.tipo_despesa === "real").reduce((s, d) => s + d.valor, 0);
+      const despOrcada = despesas.filter(d => d.obra_id === o.id && d.tipo_despesa === "prevista").reduce((s, d) => s + d.valor, 0);
       const saldo = realizado - desp;
       const roi = desp > 0 ? ((realizado - desp) / desp) * 100 : 0;
-      return { nome: o.nome.length > 14 ? o.nome.slice(0, 12) + "…" : o.nome, fullName: o.nome, uh: o.uh || 0, previsto, realizado, despesas: desp, saldo, roi, id: o.id };
+      return { nome: o.nome.length > 14 ? o.nome.slice(0, 12) + "…" : o.nome, fullName: o.nome, uh: o.uh || 0, previsto, realizado, despesas: desp, despOrcada, saldo, roi, id: o.id };
     }).filter(o => o.previsto > 0 || o.realizado > 0 || o.despesas > 0);
   }, [obras, medicoes, despesas]);
 
@@ -272,16 +274,26 @@ export default function HoldingDespesasPage() {
   };
 
   const clearFilters = () => {
-    setFilterObra("all"); setFilterEmpresa("all"); setFilterStatus("all"); setSearchText("");
+    setFilterObra("all"); setFilterEmpresa("all"); setFilterStatus("all"); setFilterTipo("all"); setSearchText("");
   };
 
-  if (isLoading) {
+  if (isLoading || isError) {
     return (
       <SidebarProvider defaultOpen={true}>
         <div className="h-screen flex w-full overflow-hidden">
           <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
           <main className="flex-1 min-w-0 h-full overflow-auto flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            {isError ? (
+              <div className="text-center space-y-3">
+                <p className="text-muted-foreground text-sm">Erro ao carregar dados.</p>
+                <Button variant="outline" size="sm"
+                  onClick={() => queryClient.invalidateQueries({ queryKey: ["holding-despesas", company?.id] })}>
+                  Tentar novamente
+                </Button>
+              </div>
+            ) : (
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            )}
           </main>
         </div>
       </SidebarProvider>
@@ -290,9 +302,9 @@ export default function HoldingDespesasPage() {
 
   const kpiCards = [
     { label: "Total Lançado", value: BRL.format(kpis.totalDespesas), border: "border-b-muted-foreground/30", icon: DollarSign },
+    { label: "Total Orçado", value: BRL.format(kpis.totalOrcado), border: "border-b-amber-500", icon: Clock },
     { label: "Fechado", value: BRL.format(kpis.totalFechado), border: "border-b-emerald-500", icon: CheckCircle2 },
-    { label: "Em Fechamento", value: BRL.format(kpis.totalEmFechamento), border: "border-b-amber-500", icon: Clock },
-    { label: "Não Iniciado", value: BRL.format(kpis.totalNaoIniciado), border: "border-b-muted-foreground/20", icon: AlertCircle },
+    { label: "Em Fechamento", value: BRL.format(kpis.totalEmFechamento), border: "border-b-amber-500", icon: AlertCircle },
     { label: "Obras com Despesa", value: String(kpis.countObrasComDespesa), border: "border-b-primary", icon: Receipt },
   ];
 
@@ -313,7 +325,7 @@ export default function HoldingDespesasPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <SidebarTrigger className="md:hidden p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors" />
-          <NotificationBell />
+          <NotificationBell modulo="holding" />
           <div>
             <h1 className="text-lg font-semibold flex items-center gap-2">
               <Receipt className="h-5 w-5 text-primary" /> Despesas & Custos
@@ -364,9 +376,8 @@ export default function HoldingDespesasPage() {
                       <YAxis fontSize={9} tickFormatter={(v) => BRL_SHORT(v)} />
                       <Tooltip formatter={(v: number) => BRL.format(v)} />
                       <Legend />
-                      <Area type="monotone" dataKey="fechado" name="Fechado" stroke="#22c55e" fill="#22c55e" fillOpacity={0.2} />
-                      <Area type="monotone" dataKey="em_fechamento" name="Em Fechamento" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.15} />
-                      <Area type="monotone" dataKey="nao_iniciado" name="Não Iniciado" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.1} />
+                      <Area type="monotone" dataKey="real" name="Custo Real" stroke="#ef4444" fill="#ef4444" fillOpacity={0.3} />
+                      <Area type="monotone" dataKey="previsto" name="Orçado" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.15} strokeDasharray="4 2" />
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : <p className="text-sm text-muted-foreground text-center py-10">Nenhuma despesa lançada</p>}
@@ -446,6 +457,14 @@ export default function HoldingDespesasPage() {
                 {Object.entries(STATUS_DESP).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
               </SelectContent>
             </Select>
+            <Select value={filterTipo} onValueChange={(v) => setFilterTipo(v as any)}>
+              <SelectTrigger className="h-9 w-36 text-xs"><SelectValue placeholder="Tipo" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos Tipos</SelectItem>
+                <SelectItem value="prevista">Prevista</SelectItem>
+                <SelectItem value="real">Real</SelectItem>
+              </SelectContent>
+            </Select>
             {hasFilter && (
               <Button variant="ghost" size="sm" className="h-9 text-xs" onClick={clearFilters}>
                 <X className="h-3.5 w-3.5 mr-1" /> Limpar
@@ -464,13 +483,14 @@ export default function HoldingDespesasPage() {
                   <TableHead className="text-xs">Contrato</TableHead>
                   <TableHead className="text-xs">UH</TableHead>
                   <TableHead className="text-xs">Mês/Ano</TableHead>
+                  <TableHead className="text-xs">Tipo</TableHead>
                   <TableHead className="text-xs text-right">Valor</TableHead>
                   <TableHead className="text-xs">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {despesasFiltradas.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhuma despesa encontrada</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Nenhuma despesa encontrada</TableCell></TableRow>
                 ) : despesasFiltradas.map((d, i) => {
                   const st = STATUS_DESP[d.status] || STATUS_DESP.nao_iniciado;
                   return (
@@ -481,6 +501,11 @@ export default function HoldingDespesasPage() {
                       <TableCell className="text-xs">{d.obra_contrato || "—"}</TableCell>
                       <TableCell className="text-xs">{d.obra_uh || "—"}</TableCell>
                       <TableCell className="text-xs">{d.mes_referencia && d.ano_referencia ? `${d.mes_referencia}/${d.ano_referencia}` : "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`text-[10px] ${d.tipo_despesa === "real" ? "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300"}`}>
+                          {d.tipo_despesa === "real" ? "Real" : "Prevista"}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="text-xs text-right font-mono">{BRL.format(d.valor)}</TableCell>
                       <TableCell><Badge className={`text-[10px] ${st.cls}`}>{st.label}</Badge></TableCell>
                     </TableRow>
@@ -534,6 +559,7 @@ export default function HoldingDespesasPage() {
                         <Bar yAxisId="left" dataKey="previsto" name="Previsto" fill="#3b82f6" radius={[2, 2, 0, 0]} />
                         <Bar yAxisId="left" dataKey="realizado" name="Realizado" fill="#22c55e" radius={[2, 2, 0, 0]} />
                         <Bar yAxisId="left" dataKey="despesas" name="Despesas" fill="#ef4444" radius={[2, 2, 0, 0]} />
+                        <Bar yAxisId="left" dataKey="despOrcada" name="Desp. Orçada" fill="#f59e0b" fillOpacity={0.5} radius={[2, 2, 0, 0]} />
                         <Line yAxisId="right" type="monotone" dataKey="roi" name="ROI %" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
                       </ComposedChart>
                     </ResponsiveContainer>
@@ -557,6 +583,7 @@ export default function HoldingDespesasPage() {
                   <TableHead className="text-xs text-right">Valor Contrato</TableHead>
                   <TableHead className="text-xs text-right">Medições Aprovadas</TableHead>
                   <TableHead className="text-xs text-right">Despesas</TableHead>
+                  <TableHead className="text-xs text-right">Desp. Orçada</TableHead>
                   <TableHead className="text-xs text-right">Saldo</TableHead>
                   <TableHead className="text-xs text-right">ROI%</TableHead>
                 </TableRow>
@@ -569,6 +596,7 @@ export default function HoldingDespesasPage() {
                     <TableCell className="text-xs text-right font-mono">{BRL.format(p.previsto)}</TableCell>
                     <TableCell className="text-xs text-right font-mono">{BRL.format(p.realizado)}</TableCell>
                     <TableCell className="text-xs text-right font-mono">{BRL.format(p.despesas)}</TableCell>
+                    <TableCell className="text-xs text-right font-mono text-amber-600">{BRL.format(p.despOrcada)}</TableCell>
                     <TableCell className={`text-xs text-right font-mono font-semibold ${p.saldo >= 0 ? "text-emerald-600" : "text-red-600"}`}>{BRL.format(p.saldo)}</TableCell>
                     <TableCell className={`text-xs text-right font-semibold ${p.roi >= 0 ? "text-emerald-600" : "text-red-600"}`}>{p.roi.toFixed(1)}%</TableCell>
                   </TableRow>
@@ -580,6 +608,7 @@ export default function HoldingDespesasPage() {
                   <TableCell className="text-xs text-right font-mono">{BRL.format(prdTotals.previsto)}</TableCell>
                   <TableCell className="text-xs text-right font-mono">{BRL.format(prdTotals.realizado)}</TableCell>
                   <TableCell className="text-xs text-right font-mono">{BRL.format(prdTotals.despesas)}</TableCell>
+                  <TableCell className="text-xs text-right font-mono text-amber-600">{BRL.format(prdData.reduce((s, p) => s + p.despOrcada, 0))}</TableCell>
                   <TableCell className={`text-xs text-right font-mono ${prdTotals.saldo >= 0 ? "text-emerald-600" : "text-red-600"}`}>{BRL.format(prdTotals.saldo)}</TableCell>
                   <TableCell className="text-xs text-right">—</TableCell>
                 </TableRow>

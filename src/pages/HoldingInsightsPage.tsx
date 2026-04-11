@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,16 +36,32 @@ export default function HoldingInsightsPage() {
   const [relatorioLoading, setRelatorioLoading] = useState(false);
   const [lastGenerated, setLastGenerated] = useState<Date | null>(null);
 
-  const { data } = useQuery({
+  const { data, isError } = useQuery({
     queryKey: ["holding-insights-data", company?.id],
     enabled: !!company?.id,
+    staleTime: 30_000,
+    gcTime: 120_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       // 1 round trip paralelo — RLS garante isolamento por empresa
-      const [obrasRes, medRes, despRes, docsRes] = await Promise.all([
-        supabase.from("obras_portfolio").select("*").eq("company_id", company!.id),
-        supabase.from("medicoes_ple").select("id, obra_id, status_medicao, valor_medicao, valor_acatado, data_previsao_medicao, data_aprovacao"),
-        supabase.from("despesas_mensais").select("id, obra_id, valor, mes_referencia, ano_referencia, tipo_despesa"),
-        supabase.from("documentos_obra").select("id, obra_id, ata, ois, art, cno, impl, scp"),
+      const obrasRes = await supabase
+        .from("obras_portfolio").select("*").eq("company_id", company!.id);
+      const obraIds = (obrasRes.data || []).map((o: any) => o.id);
+
+      if (obraIds.length === 0) {
+        return { obras: [], medicoes: [], despesas: [], docs: [] };
+      }
+
+      const [medRes, despRes, docsRes] = await Promise.all([
+        supabase.from("medicoes_ple")
+          .select("id, obra_id, status_medicao, valor_medicao, valor_acatado, data_previsao_medicao, data_aprovacao")
+          .in("obra_id", obraIds),
+        supabase.from("despesas_mensais")
+          .select("id, obra_id, valor, mes_referencia, ano_referencia, tipo_despesa")
+          .in("obra_id", obraIds),
+        supabase.from("documentos_obra")
+          .select("id, obra_id, ata, ois, art, cno, impl, scp")
+          .in("obra_id", obraIds),
       ]);
 
       return {
@@ -59,22 +76,21 @@ export default function HoldingInsightsPage() {
   // ─── Realtime: auto-update on data changes ───
   useEffect(() => {
     if (!company?.id) return;
+    let realtimeTimer: ReturnType<typeof setTimeout>;
+    const invalidate = () => {
+      clearTimeout(realtimeTimer);
+      realtimeTimer = setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["holding-insights-data", company?.id] });
+      }, 2000);
+    };
     const channel = supabase
       .channel(`holding-insights-${company.id}`)
-        .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, () => {
-          queryClient.invalidateQueries({ queryKey: ["holding-insights-data", company?.id] });
-        })
-        .on("postgres_changes", { event: "*", schema: "public", table: "despesas_mensais" }, () => {
-          queryClient.invalidateQueries({ queryKey: ["holding-insights-data", company?.id] });
-        })
-        .on("postgres_changes", { event: "*", schema: "public", table: "obras_portfolio" }, () => {
-          queryClient.invalidateQueries({ queryKey: ["holding-insights-data", company?.id] });
-        })
-        .on("postgres_changes", { event: "*", schema: "public", table: "documentos_obra" }, () => {
-          queryClient.invalidateQueries({ queryKey: ["holding-insights-data", company?.id] });
-        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, invalidate)
+        .on("postgres_changes", { event: "*", schema: "public", table: "despesas_mensais" }, invalidate)
+        .on("postgres_changes", { event: "*", schema: "public", table: "obras_portfolio" }, invalidate)
+        .on("postgres_changes", { event: "*", schema: "public", table: "documentos_obra" }, invalidate)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { clearTimeout(realtimeTimer); supabase.removeChannel(channel); };
   }, [queryClient, company?.id]);
 
   const obras = data?.obras || [];
@@ -239,11 +255,18 @@ export default function HoldingInsightsPage() {
         <AppSidebar activeView="holding-dashboard" onViewChange={() => navigate("/dashboard")} />
         <main className="flex-1 min-w-0 h-full overflow-auto">
     <div className="space-y-6 p-6">
+      {isError && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Erro ao carregar dados</AlertTitle>
+          <AlertDescription>Recarregue a página ou tente novamente mais tarde.</AlertDescription>
+        </Alert>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2">
           <SidebarTrigger className="md:hidden p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors" />
-          <NotificationBell />
+          <NotificationBell modulo="holding" />
           <div>
             <div className="flex items-center gap-2">
               <Sparkles className="h-6 w-6 text-primary" />

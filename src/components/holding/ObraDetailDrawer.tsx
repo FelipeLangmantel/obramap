@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef, ReactNode } from "react";
+import { ObraHistoricoTab } from "./ObraHistoricoTab";
+import { ObraAditivosTab } from "./ObraAditivosTab";
+import { ObraRestricoesTab } from "./ObraRestricoesTab";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -140,21 +143,7 @@ export default function ObraDetailDrawer({ obra, onClose }: ObraDetailDrawerProp
    RESUMO TAB — Mini Dashboard
    ══════════════════════════════════════════════ */
 
-function ResumoTab({ obra }: { obra: ObraDrawerData }) {
-  const [medicoes, setMedicoes] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from("medicoes_ple")
-        .select("*")
-        .eq("obra_id", obra.id)
-        .order("ano_referencia", { ascending: true });
-      setMedicoes(data || []);
-      setLoading(false);
-    })();
-  }, [obra.id]);
+function ResumoTab({ obra, medicoes, loading }: { obra: ObraDrawerData; medicoes: any[]; loading: boolean }) {
 
   const kpis = useMemo(() => {
     const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
@@ -435,6 +424,23 @@ function MiniKpi({ icon, label, value, sub, color }: { icon: ReactNode; label: s
 }
 
 function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
+  // Fetch único de medicoes — compartilhado entre ResumoTab e FinanceiroTab
+  // Elimina 2 dos 3 fetches redundantes de medicoes_ple ao abrir o drawer
+  const [sharedMedicoes, setSharedMedicoes] = useState<any[]>([]);
+  const [sharedMedicoesLoading, setSharedMedicoesLoading] = useState(true);
+
+  useEffect(() => {
+    setSharedMedicoesLoading(true);
+    supabase.from("medicoes_ple")
+      .select("*")
+      .eq("obra_id", obra.id)
+      .order("num_medicao", { ascending: true })
+      .then(({ data }) => {
+        setSharedMedicoes(data || []);
+        setSharedMedicoesLoading(false);
+      });
+  }, [obra.id]);
+
   return (
     <div className="flex flex-col h-full">
       <SheetHeader className="px-6 pt-6 pb-4">
@@ -475,13 +481,13 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
           <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <TabsContent value="resumo" className="mt-0"><ResumoTab obra={obra} /></TabsContent>
+          <TabsContent value="resumo" className="mt-0"><ResumoTab obra={obra} medicoes={sharedMedicoes} loading={sharedMedicoesLoading} /></TabsContent>
           <TabsContent value="documentos" className="mt-0"><DocumentosTab obraId={obra.id} /></TabsContent>
           <TabsContent value="medicoes" className="mt-0"><MedicoesTab obraId={obra.id} valorContrato={(obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0)} hasInitialBalance={obra.has_initial_balance || false} valorMedidoInicial={obra.valor_medido_inicial || 0} obra={obra} /></TabsContent>
-          <TabsContent value="financeiro" className="mt-0"><FinanceiroTab obraId={obra.id} /></TabsContent>
-          <TabsContent value="aditivos" className="mt-0"><AditivosTab obraId={obra.id} /></TabsContent>
-          <TabsContent value="restricoes" className="mt-0"><RestricoesTab obraId={obra.id} /></TabsContent>
-          <TabsContent value="historico" className="mt-0"><HistoricoTab obraId={obra.id} /></TabsContent>
+          <TabsContent value="financeiro" className="mt-0"><FinanceiroTab obraId={obra.id} sharedMedicoes={sharedMedicoes} /></TabsContent>
+          <TabsContent value="aditivos" className="mt-0"><ObraAditivosTab obraId={obra.id} /></TabsContent>
+          <TabsContent value="restricoes" className="mt-0"><ObraRestricoesTab obraId={obra.id} /></TabsContent>
+          <TabsContent value="historico" className="mt-0"><ObraHistoricoTab obraId={obra.id} /></TabsContent>
         </div>
       </Tabs>
     </div>
@@ -552,84 +558,87 @@ function DocumentosTab({ obraId }: { obraId: string }) {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!company?.id) return;
+    try {
+      setLoading(true);
+      if (!company?.id) return;
 
-    const { data: tipos } = await supabase
-      .from("holding_doc_tipos")
-      .select("id, nome, categoria, obrigatorio")
-      .eq("company_id", company.id)
-      .eq("ativo", true)
-      .order("categoria")
-      .order("ordem");
+      const { data: tipos } = await supabase
+        .from("holding_doc_tipos")
+        .select("id, nome, categoria, obrigatorio")
+        .eq("company_id", company.id)
+        .eq("ativo", true)
+        .order("categoria")
+        .order("ordem");
 
-    setDocTipos(tipos || []);
+      setDocTipos(tipos || []);
 
-    const { data: obraDocs } = await supabase
-      .from("holding_obra_docs")
-      .select("*")
-      .eq("obra_id", obraId);
+      const { data: obraDocs } = await supabase
+        .from("holding_obra_docs")
+        .select("*")
+        .eq("obra_id", obraId);
 
-    const map = new Map<string, any>();
-    (obraDocs || []).forEach((d: any) => map.set(d.doc_tipo_id, d));
-    setObraDocsMap(map);
+      const map = new Map<string, any>();
+      (obraDocs || []).forEach((d: any) => map.set(d.doc_tipo_id, d));
+      setObraDocsMap(map);
 
-    if (tipos && tipos.length > 0) {
-      const missingTipos = tipos.filter(t => !map.has(t.id));
-      if (missingTipos.length > 0) {
-        const { data: created } = await supabase
-          .from("holding_obra_docs")
-          .insert(missingTipos.map(t => ({ obra_id: obraId, doc_tipo_id: t.id, checked: false })) as any)
-          .select();
-        if (created) {
-          created.forEach((d: any) => map.set(d.doc_tipo_id, d));
+      if (tipos && tipos.length > 0) {
+        const missingTipos = tipos.filter(t => !map.has(t.id));
+        if (missingTipos.length > 0) {
+          const { data: created } = await supabase
+            .from("holding_obra_docs")
+            .insert(missingTipos.map(t => ({ obra_id: obraId, doc_tipo_id: t.id })))
+            .select();
+          (created || []).forEach((d: any) => map.set(d.doc_tipo_id, d));
           setObraDocsMap(new Map(map));
         }
       }
-    }
 
-    // Load files for all obra docs
-    const obraDocIds = Array.from(map.values()).map((d: any) => d.id).filter(Boolean);
-    if (obraDocIds.length > 0) {
-      const { data: files } = await supabase
-        .from("holding_doc_files")
-        .select("*")
-        .in("obra_doc_id", obraDocIds)
-        .order("created_at", { ascending: false });
-
-      const filesMap = new Map<string, DocFile[]>();
-      (files || []).forEach((f: any) => {
-        const list = filesMap.get(f.obra_doc_id) || [];
-        list.push(f);
-        filesMap.set(f.obra_doc_id, list);
-      });
-      setDocFilesMap(filesMap);
-    }
-
-    // Legacy
-    const { data: legacy } = await supabase
-      .from("documentos_obra")
-      .select("*")
-      .eq("obra_id", obraId)
-      .maybeSingle();
-
-    if (legacy) {
-      setLegacyDocId(legacy.id);
-      const { id: _id, obra_id: _oid, ...fields } = legacy as any;
-      setLegacyDocs(fields);
-    } else {
-      const { data: created } = await supabase
-        .from("documentos_obra")
-        .insert({ obra_id: obraId } as any)
-        .select()
-        .single();
-      if (created) {
-        setLegacyDocId(created.id);
-        const { id: _id2, obra_id: _oid2, ...fields } = created as any;
-        setLegacyDocs(fields);
+      // Files
+      const allDocIds = Array.from(map.values()).map((d: any) => d.id).filter(Boolean);
+      if (allDocIds.length > 0) {
+        const { data: files } = await supabase
+          .from("holding_doc_files")
+          .select("*")
+          .in("obra_doc_id", allDocIds)
+          .order("created_at", { ascending: false });
+        const filesMap = new Map<string, DocFile[]>();
+        (files || []).forEach((f: any) => {
+          const list = filesMap.get(f.obra_doc_id) || [];
+          list.push(f);
+          filesMap.set(f.obra_doc_id, list);
+        });
+        setDocFilesMap(filesMap);
       }
-    }
 
-    setLoading(false);
+      // Legacy
+      const { data: legacy } = await supabase
+        .from("documentos_obra")
+        .select("*")
+        .eq("obra_id", obraId)
+        .maybeSingle();
+
+      if (legacy) {
+        setLegacyDocId(legacy.id);
+        const { id: _id, obra_id: _oid, ...fields } = legacy as any;
+        setLegacyDocs(fields);
+      } else {
+        const { data: created } = await supabase
+          .from("documentos_obra")
+          .insert({ obra_id: obraId } as any)
+          .select()
+          .single();
+        if (created) {
+          setLegacyDocId(created.id);
+          const { id: _id2, obra_id: _oid2, ...fields } = created as any;
+          setLegacyDocs(fields);
+        }
+      }
+    } catch (e) {
+      console.error("[DocumentosTab] Erro ao carregar:", e);
+      toast.error("Erro ao carregar documentos. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
   }, [obraId, company?.id]);
 
   useEffect(() => { load(); }, [load]);
@@ -1138,15 +1147,22 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
 
   const loadRef = useRef(0); // prevent race conditions on concurrent loads
   const load = useCallback(async () => {
-    const seq = ++loadRef.current;
-    const [medRes, reqRes] = await Promise.all([
-      supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).order("num_medicao", { ascending: true }),
-      supabase.from("medicao_correction_requests").select("*").eq("obra_id", obraId).eq("status", "pending").order("created_at", { ascending: false }),
-    ]);
-    if (seq !== loadRef.current) return; // stale response, skip
-    setMedicoes(sortMedicoes(medRes.data || []));
-    setPendingRequests(reqRes.data || []);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const seq = ++loadRef.current;
+      const [medRes, reqRes] = await Promise.all([
+        supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).order("num_medicao", { ascending: true }),
+        supabase.from("medicao_correction_requests").select("*").eq("obra_id", obraId).eq("status", "pending").order("created_at", { ascending: false }),
+      ]);
+      if (seq !== loadRef.current) return; // stale response, skip
+      setMedicoes(sortMedicoes(medRes.data || []));
+      setPendingRequests(reqRes.data || []);
+    } catch (e) {
+      console.error("[MedicoesTab] Erro ao carregar:", e);
+      toast.error("Erro ao carregar medições. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
   }, [obraId, sortMedicoes]);
 
   useEffect(() => { load(); }, [load]);
@@ -2378,14 +2394,17 @@ const TIPO_DESPESA_BADGE: Record<string, { label: string; cls: string }> = {
 
 const CATEGORIAS = ["Pessoal", "Material", "Equipamento", "Serviço", "Administrativo", "Financeiro", "Geral"];
 
-function FinanceiroTab({ obraId }: { obraId: string }) {
+function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedicoes?: any[] }) {
   const { user, profile, requireEdit, isAdmin, isCompanyAdmin } = useAuth();
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
   const [despesas, setDespesas] = useState<any[]>([]);
-  const [allMedicoes, setAllMedicoes] = useState<any[]>([]);
-  const [medicoesAprovadas, setMedicoesAprovadas] = useState<any[]>([]);
+  // Inicializa com sharedMedicoes do ObraDetailContent — evita fetch duplicado
+  const [allMedicoes, setAllMedicoes] = useState<any[]>(sharedMedicoes || []);
+  const [medicoesAprovadas, setMedicoesAprovadas] = useState<any[]>(
+    (sharedMedicoes || []).filter((m: any) => m.status_medicao === "aprovada")
+  );
   const [loading, setLoading] = useState(true);
   const [showNewDespesa, setShowNewDespesa] = useState(false);
   const [savingDespesa, setSavingDespesa] = useState(false);
@@ -2440,18 +2459,27 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
   const tipoDespesa = selectedMedicao?.status_medicao === "aprovada" ? "real" : "prevista";
 
   const loadData = useCallback(async () => {
-    setLoading(true);
-    const [dRes, mAllRes, notifRes] = await Promise.all([
-      supabase.from("despesas_mensais").select("*").eq("obra_id", obraId).order("ano_referencia").order("mes_referencia"),
-      supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).order("num_medicao"),
-      supabase.from("system_notifications").select("id, tipo, titulo, mensagem, medicao_id").eq("obra_id", obraId).eq("resolvida", false),
-    ]);
-    setDespesas(dRes.data || []);
-    const meds = mAllRes.data || [];
-    setAllMedicoes(meds);
-    setMedicoesAprovadas(meds.filter((m: any) => m.status_medicao === "aprovada"));
-    setPendingNotifs(notifRes.data || []);
-    setLoading(false);
+    try {
+      setLoading(true);
+      const [dRes, mAllRes, notifRes] = await Promise.all([
+        supabase.from("despesas_mensais").select("*").eq("obra_id", obraId).order("ano_referencia").order("mes_referencia"),
+        supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).order("num_medicao"),
+        supabase.from("system_notifications").select("id, tipo, titulo, mensagem, medicao_id").eq("obra_id", obraId).eq("resolvida", false),
+      ]);
+      setDespesas(dRes.data || []);
+      const meds = mAllRes.data || [];
+      setAllMedicoes(meds);
+      setMedicoesAprovadas(meds.filter((m: any) => m.status_medicao === "aprovada"));
+      // Filtrar apenas notificações relevantes para despesas — excluir tipos de outras abas
+      // como medicao_previsao_vencida (MedicoesTab) e restricao_financeira (RestricoesTab)
+      const DESPESA_NOTIF_TIPOS = ["despesa_pendente_link", "medicao_aprovada_despesa", "despesa_fechamento", "despesa_sem_fechamento"];
+      setPendingNotifs((notifRes.data || []).filter((n: any) => DESPESA_NOTIF_TIPOS.includes(n.tipo)));
+    } catch (e) {
+      console.error("[FinanceiroTab] Erro ao carregar:", e);
+      toast.error("Erro ao carregar despesas. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
   }, [obraId]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -2513,11 +2541,15 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
   const handleEditDespesa = async () => {
     if (!editingDespesa || !requireEdit()) return;
     setSavingDespesa(true);
+    // Recalculate tipo_despesa based on linked measurement status
+    const medVinculada = allMedicoes.find(m => m.id === editingDespesa.medicao_id);
+    const novoTipo = medVinculada?.status_medicao === "aprovada" ? "real" : "prevista";
     const { error } = await supabase.from("despesas_mensais").update({
       valor: Number(editForm.valor),
       categoria: editForm.categoria,
       descricao: editForm.descricao || null,
       status: editForm.status as any,
+      tipo_despesa: novoTipo,
       updated_by_user_id: userId,
       updated_by_name: userName,
       updated_at: new Date().toISOString(),
@@ -2564,21 +2596,31 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
 
   if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
 
-  // Chart data
-  const monthMap = new Map<string, { despesa: number; receita: number }>();
+  // KPI calculations
+  const totalOrcado = despesas.filter(d => d.tipo_despesa === "prevista").reduce((s,d) => s+(d.valor||0), 0);
+  const totalReal   = despesas.filter(d => d.tipo_despesa === "real").reduce((s,d) => s+(d.valor||0), 0);
+  const totalReceita = medicoesAprovadas.reduce((s,m) => s+(Number(m.valor_acatado ?? m.valor_medicao)||0), 0);
+  const totalFechado = despesas.filter(d => d.tipo_despesa === "real" && d.status === "fechado").reduce((s,d) => s+(d.valor||0), 0);
+  const pendenteFechamento = despesas.filter(d => d.tipo_despesa === "real" && d.status !== "fechado").length;
+
+  // Chart data — split prevista × real × receita
+  const monthMap = new Map<string, { despesaReal: number; despesaPrevista: number; receita: number }>();
   despesas.forEach((d) => {
     const key = `${d.mes_referencia}/${d.ano_referencia}`;
-    const entry = monthMap.get(key) || { despesa: 0, receita: 0 };
-    entry.despesa += d.valor || 0;
+    const entry = monthMap.get(key) || { despesaReal: 0, despesaPrevista: 0, receita: 0 };
+    if (d.tipo_despesa === "real") entry.despesaReal += d.valor || 0;
+    else entry.despesaPrevista += d.valor || 0;
     monthMap.set(key, entry);
   });
   medicoesAprovadas.forEach((m) => {
     const key = `${m.mes_referencia}/${m.ano_referencia}`;
-    const entry = monthMap.get(key) || { despesa: 0, receita: 0 };
+    const entry = monthMap.get(key) || { despesaReal: 0, despesaPrevista: 0, receita: 0 };
     entry.receita += Number(m.valor_acatado ?? m.valor_medicao) || 0;
     monthMap.set(key, entry);
   });
-  const chartData = Array.from(monthMap.entries()).map(([month, v]) => ({ month, ...v }));
+  const chartData = Array.from(monthMap.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([month, v]) => ({ month, ...v }));
 
   return (
     <div className="space-y-6">
@@ -2594,19 +2636,51 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
         </Alert>
       )}
 
-      {/* Chart */}
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 gap-3">
+        <Card className="border-b-2 border-b-amber-500">
+          <CardContent className="p-3">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Orçado</p>
+            <p className="text-lg font-bold">{BRL.format(totalOrcado)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-b-2 border-b-destructive">
+          <CardContent className="p-3">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Custo Real</p>
+            <p className="text-lg font-bold">{BRL.format(totalReal)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-b-2 border-b-emerald-500">
+          <CardContent className="p-3">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Fechado</p>
+            <p className="text-lg font-bold">{BRL.format(totalFechado)}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-b-2 border-b-orange-500">
+          <CardContent className="p-3">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pendente Fechamento</p>
+            <p className="text-lg font-bold flex items-center gap-2">
+              {pendenteFechamento}
+              {pendenteFechamento > 0 && <Badge variant="destructive" className="text-[10px]">{pendenteFechamento}</Badge>}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Chart — Custo Real × Orçado × Receita */}
       {chartData.length > 0 && (
         <Card>
           <CardContent className="p-4">
-            <h4 className="font-semibold text-sm mb-3">Despesas × Receitas</h4>
+            <h4 className="font-semibold text-sm mb-3">Custo Real × Orçado × Receita</h4>
             <ResponsiveContainer width="100%" height={250}>
               <ComposedChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: number) => BRL.format(v)} />
-                <Bar dataKey="despesa" fill="hsl(var(--destructive))" name="Despesas" radius={[4, 4, 0, 0]} />
-                <Line dataKey="receita" stroke="hsl(var(--primary))" strokeWidth={2} name="Receitas" dot={{ r: 3 }} />
+                <Bar dataKey="despesaReal" fill="hsl(var(--destructive))" name="Custo Real" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="despesaPrevista" fill="#f59e0b" fillOpacity={0.5} name="Orçado" radius={[4, 4, 0, 0]} />
+                <Line dataKey="receita" stroke="hsl(var(--primary))" strokeWidth={2} name="Receita" dot={{ r: 3 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </CardContent>
@@ -2727,10 +2801,12 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
               const tipo = TIPO_DESPESA_BADGE[d.tipo_despesa] || TIPO_DESPESA_BADGE.prevista;
               const locked = d.is_locked;
               const editable = canEditDespesa(d);
+              const medVinculada = d.medicao_id ? allMedicoes.find((m: any) => m.id === d.medicao_id) : null;
+              const isInconsistent = d.tipo_despesa === "prevista" && medVinculada?.status_medicao === "aprovada";
               return (
                 <TableRow key={d.id}>
                   <TableCell className="text-xs">
-                    {d.medicao_id ? `Nº ${allMedicoes.find((m: any) => m.id === d.medicao_id)?.num_medicao || "—"}` : "—"}
+                    {d.medicao_id ? `Nº ${medVinculada?.num_medicao || "—"}` : "—"}
                   </TableCell>
                   <TableCell className="text-xs">
                     <span>{d.mes_referencia}/{d.ano_referencia}</span>
@@ -2739,7 +2815,14 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={`text-[10px] ${tipo.cls}`}>{tipo.label}</Badge>
+                    <div className="flex items-center gap-1">
+                      <Badge variant="outline" className={`text-[10px] ${tipo.cls}`}>{tipo.label}</Badge>
+                      {isInconsistent && (
+                        <span title="Medição aprovada — esta despesa será convertida para real">
+                          <AlertTriangle className="h-3 w-3 text-amber-500" />
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-xs">{d.categoria || "Geral"}</TableCell>
                   <TableCell className="text-right font-mono text-xs">{BRL.format(d.valor)}</TableCell>
@@ -2908,632 +2991,3 @@ function FinanceiroTab({ obraId }: { obraId: string }) {
 /* ══════════════════════════════════════════════
    TAB 4 — ADITIVOS
    ══════════════════════════════════════════════ */
-
-function AditivosTab({ obraId }: { obraId: string }) {
-  const { user, profile, requireEdit } = useAuth();
-  const userName = profile?.display_name || user?.email || "Usuário";
-  const userId = user?.id || null;
-  const invalidateHolding = useInvalidateHolding();
-  const [deletingAditivoId, setDeletingAditivoId] = useState<string | null>(null);
-  const [aditivos, setAditivos] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    num_aditivo: "", aditivo_prazo_dias: 0, aditivo_valor: 0,
-    supressao_valor: 0, data: "", status: "pendente" as string,
-  });
-
-  const load = useCallback(async () => {
-    const { data } = await supabase.from("aditivos_contratos").select("*").eq("obra_id", obraId).order("data");
-    setAditivos(data || []);
-    setLoading(false);
-  }, [obraId]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const addAditivo = async () => {
-    if (!requireEdit()) return;
-    const payload: any = {
-      obra_id: obraId,
-      num_aditivo: form.num_aditivo || null,
-      aditivo_prazo_dias: form.aditivo_prazo_dias || 0,
-      aditivo_valor: form.aditivo_valor || 0,
-      supressao_valor: form.supressao_valor || 0,
-      status: form.status,
-    };
-    if (form.data) payload.data = form.data;
-    const { data: ins, error } = await supabase
-      .from("aditivos_contratos").insert(payload).select("id").single();
-    if (error) { toast.error("Erro ao salvar aditivo"); return; }
-
-    await registrarLog(
-      obraId, "aditivos_contratos", ins?.id || null,
-      "criou",
-      `Adicionou aditivo ${form.num_aditivo || ""} — ${BRL.format(form.aditivo_valor)} — prazo +${form.aditivo_prazo_dias} dias`,
-      userId, userName
-    );
-
-    toast.success("Aditivo adicionado!");
-    invalidateHolding();
-    setShowForm(false);
-    setForm({ num_aditivo: "", aditivo_prazo_dias: 0, aditivo_valor: 0, supressao_valor: 0, data: "", status: "pendente" });
-    load();
-  };
-
-  const deleteAditivo = async (id: string) => {
-    if (!requireEdit()) return;
-    setDeletingAditivoId(null);
-    const aditivoSnap = aditivos.find(a => a.id === id);
-    const { error } = await supabase.from("aditivos_contratos").delete().eq("id", id);
-    if (error) { toast.error("Erro ao excluir"); return; }
-
-    await registrarLog(
-      obraId, "aditivos_contratos", id,
-      "excluiu",
-      `Excluiu aditivo ${aditivoSnap?.num_aditivo || ""} — ${BRL.format(aditivoSnap?.aditivo_valor || 0)}`,
-      userId, userName,
-      { ...aditivoSnap }, {}
-    );
-
-    toast.success("Aditivo excluído.");
-    invalidateHolding();
-    load();
-  };
-
-  if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
-
-  const totalDias = aditivos.reduce((s, a) => s + (a.aditivo_prazo_dias || 0), 0);
-  const totalValor = aditivos.reduce((s, a) => s + (a.aditivo_valor || 0), 0);
-  const totalSupressao = aditivos.reduce((s, a) => s + (a.supressao_valor || 0), 0);
-
-  return (
-    <>
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4 flex-wrap">
-          <Badge variant="outline" className="text-xs">Total dias aditivados: {totalDias}</Badge>
-          <Badge variant="outline" className="text-xs">Total valor: {BRL.format(totalValor)}</Badge>
-          {totalSupressao > 0 && <Badge variant="outline" className="text-xs text-red-600">Supressão: {BRL.format(totalSupressao)}</Badge>}
-        </div>
-        <Button size="sm" variant="outline" onClick={() => setShowForm(!showForm)}>
-          <Plus className="h-4 w-4 mr-1" /> Novo Aditivo
-        </Button>
-      </div>
-
-      {showForm && (
-        <Card className="border-dashed">
-          <CardContent className="p-4 space-y-3">
-            <h4 className="font-semibold text-sm">Novo Aditivo</h4>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <div><label className="text-xs text-muted-foreground">Nº Aditivo</label><Input value={form.num_aditivo} onChange={(e) => setForm({ ...form, num_aditivo: e.target.value })} placeholder="Ex: 01" /></div>
-              <div><label className="text-xs text-muted-foreground">Prazo (dias)</label><Input type="number" value={form.aditivo_prazo_dias || ""} onChange={(e) => setForm({ ...form, aditivo_prazo_dias: Number(e.target.value) })} /></div>
-              <div><label className="text-xs text-muted-foreground">Valor Aditivo (R$)</label>
-                <CurrencyInput value={form.aditivo_valor} onChange={(v) => setForm({ ...form, aditivo_valor: v })} />
-              </div>
-              <div><label className="text-xs text-muted-foreground">Supressão (R$)</label>
-                <CurrencyInput value={form.supressao_valor} onChange={(v) => setForm({ ...form, supressao_valor: v })} />
-              </div>
-              <div><label className="text-xs text-muted-foreground">Data</label><Input type="date" value={form.data} onChange={(e) => setForm({ ...form, data: e.target.value })} /></div>
-              <div>
-                <label className="text-xs text-muted-foreground">Status</label>
-                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pendente">Pendente</SelectItem>
-                    <SelectItem value="aprovado">Aprovado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <Button size="sm" onClick={addAditivo}>Salvar Aditivo</Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nº</TableHead>
-              <TableHead>Prazo (dias)</TableHead>
-              <TableHead className="text-right">Valor</TableHead>
-              <TableHead className="text-right">Supressão</TableHead>
-              <TableHead>Data</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {aditivos.map((a) => (
-              <TableRow key={a.id}>
-                <TableCell className="font-medium">
-                  <span>{a.num_aditivo || "—"}</span>
-                  {a.created_by_name && (
-                    <span className="text-[10px] text-muted-foreground ml-1">
-                      por {a.created_by_name}
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell>{a.aditivo_prazo_dias > 0 ? `+${a.aditivo_prazo_dias}` : "—"}</TableCell>
-                <TableCell className="text-right font-mono">{a.aditivo_valor > 0 ? BRL.format(a.aditivo_valor) : "—"}</TableCell>
-                <TableCell className="text-right font-mono">{a.supressao_valor > 0 ? BRL.format(a.supressao_valor) : "—"}</TableCell>
-                <TableCell>{a.data ? format(new Date(a.data + "T12:00:00"), "dd/MM/yyyy") : "—"}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary" className={`text-[10px] ${a.status === "aprovado" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"}`}>
-                    {a.status === "aprovado" ? "Aprovado" : "Pendente"}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeletingAditivoId(a.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-            {aditivos.length === 0 && (
-              <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum aditivo.</TableCell></TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
-
-      <AlertDialog open={!!deletingAditivoId} onOpenChange={(open) => !open && setDeletingAditivoId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir aditivo</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir este aditivo? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deletingAditivoId && deleteAditivo(deletingAditivoId)}>
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
-}
-
-/* ══════════════════════════════════════════════
-   TAB 5 — RESTRIÇÕES FINANCEIRAS
-   ══════════════════════════════════════════════ */
-
-const TIPO_BADGE: Record<string, { label: string; cls: string }> = {
-  material: { label: "Material", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
-  mao_de_obra: { label: "Mão de Obra", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
-  administrativa: { label: "Administrativa", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
-};
-
-function RestricoesTab({ obraId }: { obraId: string }) {
-  const { user, profile, requireEdit, isCompanyAdmin, isSystemAdmin } = useAuth();
-  const isAdmin = isCompanyAdmin || isSystemAdmin;
-  const userName = profile?.display_name || user?.email || "Usuário";
-  const userId = user?.id || null;
-  const invalidateHolding = useInvalidateHolding();
-
-  const [items, setItems] = useState<any[]>([]);
-  const [medicoes, setMedicoes] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [confirmSave, setConfirmSave] = useState(false);
-  const [resolvingId, setResolvingId] = useState<string | null>(null);
-  const [resolveForm, setResolveForm] = useState({ valor_pago: 0, forma_resolucao: "pago" });
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-
-  const [form, setForm] = useState({
-    tipo: "", descricao: "", valor: 0, impacto_medicao: 0,
-    medicao_id: "", data_limite: "",
-  });
-
-  const companyId = profile?.company_id || "";
-
-  const load = useCallback(async () => {
-    const [{ data: restricoes }, { data: meds }] = await Promise.all([
-      supabase.from("restricoes_financeiras").select("*").eq("obra_id", obraId).order("resolvida").order("data_limite"),
-      supabase.from("medicoes_ple").select("id, num_medicao, status_medicao, data_previsao_medicao").eq("obra_id", obraId),
-    ]);
-    setItems(restricoes || []);
-    setMedicoes((meds || []).filter((m: any) => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada" || m.status_medicao === "enviada"));
-    setLoading(false);
-  }, [obraId]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const handleSave = async () => {
-    if (!requireEdit()) return;
-    setConfirmSave(false);
-    if (!form.tipo || !form.descricao.trim() || !form.data_limite) {
-      toast.warning("Preencha tipo, descrição e data limite.");
-      return;
-    }
-
-    const payload: any = {
-      obra_id: obraId,
-      company_id: companyId,
-      tipo: form.tipo,
-      descricao: form.descricao,
-      valor: form.valor || 0,
-      impacto_medicao: form.impacto_medicao || 0,
-      data_limite: form.data_limite,
-      medicao_id: form.medicao_id || null,
-      created_by: userId,
-      created_by_name: userName,
-    };
-
-    if (editingId) {
-      const { error } = await supabase.from("restricoes_financeiras").update(payload).eq("id", editingId);
-      if (error) { toast.error("Erro ao editar restrição"); return; }
-      await registrarLog(obraId, "restricoes_financeiras", editingId, "editou",
-        `Editou restrição: ${form.tipo} — ${form.descricao}`, userId, userName);
-      toast.success("Restrição atualizada!");
-    } else {
-      const { data: ins, error } = await supabase.from("restricoes_financeiras").insert(payload).select("id").single();
-      if (error) { toast.error("Erro ao salvar restrição"); return; }
-      await registrarLog(obraId, "restricoes_financeiras", ins?.id || null, "criou",
-        `Nova restrição (${form.tipo}): ${form.descricao} — Valor: ${BRL.format(form.valor)} — Impacto: ${BRL.format(form.impacto_medicao)}`,
-        userId, userName);
-      toast.success("Restrição adicionada!");
-    }
-
-    invalidateHolding();
-    setShowForm(false);
-    setEditingId(null);
-    setForm({ tipo: "", descricao: "", valor: 0, impacto_medicao: 0, medicao_id: "", data_limite: "" });
-    load();
-  };
-
-  const handleResolve = async () => {
-    if (!resolvingId || !requireEdit()) return;
-    const { error } = await supabase.from("restricoes_financeiras").update({
-      resolvida: true,
-      resolvida_em: new Date().toISOString(),
-      resolvida_por: userId,
-      resolvida_por_nome: userName,
-      valor_pago: resolveForm.valor_pago || 0,
-      forma_resolucao: resolveForm.forma_resolucao,
-    }).eq("id", resolvingId);
-    if (error) { toast.error("Erro ao resolver"); return; }
-    const item = items.find(i => i.id === resolvingId);
-    await registrarLog(obraId, "restricoes_financeiras", resolvingId, "resolveu",
-      `Resolveu restrição: ${item?.descricao || ""} — Forma: ${resolveForm.forma_resolucao} — Pago: ${BRL.format(resolveForm.valor_pago)}`,
-      userId, userName);
-    toast.success("Restrição resolvida!");
-    setResolvingId(null);
-    setResolveForm({ valor_pago: 0, forma_resolucao: "pago" });
-    invalidateHolding();
-    load();
-  };
-
-  const handleDelete = async () => {
-    if (!deletingId || !requireEdit()) return;
-    const item = items.find(i => i.id === deletingId);
-    const { error } = await supabase.from("restricoes_financeiras").delete().eq("id", deletingId);
-    if (error) { toast.error("Erro ao excluir"); return; }
-    await registrarLog(obraId, "restricoes_financeiras", deletingId, "excluiu",
-      `Excluiu restrição: ${item?.descricao || ""}`, userId, userName, { ...item }, {});
-    toast.success("Restrição excluída.");
-    setDeletingId(null);
-    invalidateHolding();
-    load();
-  };
-
-  const startEdit = (item: any) => {
-    setForm({
-      tipo: item.tipo, descricao: item.descricao, valor: item.valor || 0,
-      impacto_medicao: item.impacto_medicao || 0,
-      medicao_id: item.medicao_id || "", data_limite: item.data_limite || "",
-    });
-    setEditingId(item.id);
-    setShowForm(true);
-  };
-
-  if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
-
-  const abertas = items.filter(i => !i.resolvida);
-  const resolvidas = items.filter(i => i.resolvida);
-  const totalAberto = abertas.reduce((s, i) => s + (Number(i.valor) || 0), 0);
-  const totalImpacto = abertas.reduce((s, i) => s + (Number(i.impacto_medicao) || 0), 0);
-  const vencidas = abertas.filter(i => i.data_limite && new Date(i.data_limite + "T23:59:59") < new Date()).length;
-
-  const renderCard = (item: any) => {
-    const isVencida = !item.resolvida && item.data_limite && new Date(item.data_limite + "T23:59:59") < new Date();
-    const tipoBadge = TIPO_BADGE[item.tipo] || { label: item.tipo, cls: "bg-muted text-muted-foreground" };
-    const medVinculada = medicoes.find((m: any) => m.id === item.medicao_id);
-
-    return (
-      <Card key={item.id} className={isVencida ? "border-destructive" : ""}>
-        <CardContent className="p-3 space-y-2">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="secondary" className={`text-[10px] ${tipoBadge.cls}`}>{tipoBadge.label}</Badge>
-              {isVencida && <Badge variant="destructive" className="text-[10px]">Vencida</Badge>}
-              {item.resolvida && <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">Resolvida</Badge>}
-            </div>
-            {!item.resolvida && (
-              <div className="flex gap-1 shrink-0">
-                {isAdmin && (
-                  <>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(item)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeletingId(item.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </>
-                )}
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setResolvingId(item.id)}>
-                  <CheckCircle2 className="h-3 w-3 mr-1" /> Resolver
-                </Button>
-              </div>
-            )}
-          </div>
-          <p className="text-sm">{item.descricao}</p>
-          <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
-            <span>Valor: <strong className="text-foreground">{BRL.format(Number(item.valor) || 0)}</strong></span>
-            <span>Impacto: <strong className="text-foreground">{BRL.format(Number(item.impacto_medicao) || 0)}</strong></span>
-            <span>Prazo: <strong className={isVencida ? "text-destructive" : "text-foreground"}>{item.data_limite ? format(new Date(item.data_limite + "T12:00:00"), "dd/MM/yyyy") : "—"}</strong></span>
-            {medVinculada && <span>Medição: <strong className="text-foreground">Nº {medVinculada.num_medicao}</strong></span>}
-          </div>
-          {item.resolvida && (
-            <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2 mt-1">
-              Resolvida em {item.resolvida_em ? format(new Date(item.resolvida_em), "dd/MM/yy HH:mm") : "—"} por {item.resolvida_por_nome || "—"} | Forma: {item.forma_resolucao || "—"} | Pago: {BRL.format(Number(item.valor_pago) || 0)}
-            </div>
-          )}
-          {item.created_by_name && (
-            <p className="text-[10px] text-muted-foreground">Criada por {item.created_by_name}</p>
-          )}
-        </CardContent>
-      </Card>
-    );
-  };
-
-  return (
-    <>
-      <div className="space-y-4">
-        {/* KPIs */}
-        <div className="grid grid-cols-3 gap-3">
-          <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Total Aberto</p><p className="text-lg font-bold">{BRL.format(totalAberto)}</p></CardContent></Card>
-          <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Impacto Total</p><p className="text-lg font-bold">{BRL.format(totalImpacto)}</p></CardContent></Card>
-          <Card><CardContent className="p-3 text-center"><p className="text-xs text-muted-foreground">Vencidas</p><p className={`text-lg font-bold ${vencidas > 0 ? "text-destructive" : ""}`}>{vencidas}</p></CardContent></Card>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <h4 className="font-semibold text-sm">Restrições ({items.length})</h4>
-          <Button size="sm" variant="outline" onClick={() => { setShowForm(!showForm); setEditingId(null); setForm({ tipo: "", descricao: "", valor: 0, impacto_medicao: 0, medicao_id: "", data_limite: "" }); }}>
-            <Plus className="h-4 w-4 mr-1" /> Nova Restrição
-          </Button>
-        </div>
-
-        {showForm && (
-          <Card className="border-dashed">
-            <CardContent className="p-4 space-y-3">
-              <h4 className="font-semibold text-sm">{editingId ? "Editar Restrição" : "Nova Restrição"}</h4>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground">Tipo *</label>
-                  <Select value={form.tipo} onValueChange={(v) => setForm({ ...form, tipo: v })}>
-                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="material">Material</SelectItem>
-                      <SelectItem value="mao_de_obra">Mão de Obra</SelectItem>
-                      <SelectItem value="administrativa">Administrativa</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Valor da Restrição (R$) *</label>
-                  <CurrencyInput value={form.valor} onChange={(v) => setForm({ ...form, valor: v })} />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Impacto na Medição (R$) *</label>
-                  <CurrencyInput value={form.impacto_medicao} onChange={(v) => setForm({ ...form, impacto_medicao: v })} />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Data Limite *</label>
-                  <Input type="date" value={form.data_limite} onChange={(e) => setForm({ ...form, data_limite: e.target.value })} />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Medição Vinculada</label>
-                  <Select value={form.medicao_id} onValueChange={(v) => setForm({ ...form, medicao_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">Nenhuma</SelectItem>
-                      {medicoes.map((m: any) => (
-                        <SelectItem key={m.id} value={m.id}>Nº {m.num_medicao} — {m.status_medicao}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Descrição *</label>
-                <Textarea value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} placeholder="Descreva a restrição..." rows={2} />
-              </div>
-              <div className="flex justify-end">
-                <Button size="sm" onClick={() => setConfirmSave(true)}>
-                  {editingId ? "Salvar Alteração" : "Salvar Restrição"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Abertas */}
-        {abertas.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Abertas ({abertas.length})</p>
-            {abertas.map(renderCard)}
-          </div>
-        )}
-
-        {/* Resolvidas */}
-        {resolvidas.length > 0 && (
-          <div className="space-y-2">
-            <Separator />
-            <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Resolvidas ({resolvidas.length})</p>
-            {resolvidas.map(renderCard)}
-          </div>
-        )}
-
-        {items.length === 0 && (
-          <div className="text-center py-8 text-muted-foreground text-sm">Nenhuma restrição cadastrada.</div>
-        )}
-      </div>
-
-      {/* Confirm Save */}
-      <AlertDialog open={confirmSave} onOpenChange={setConfirmSave}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar restrição</AlertDialogTitle>
-            <AlertDialogDescription>
-              <p>Tipo: <strong>{TIPO_BADGE[form.tipo]?.label || form.tipo}</strong></p>
-              <p>Valor: <strong>{BRL.format(form.valor)}</strong> — Impacto na medição: <strong>{BRL.format(form.impacto_medicao)}</strong></p>
-              <p>Prazo: <strong>{form.data_limite}</strong></p>
-              <p className="mt-2">{form.descricao}</p>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleSave}>Confirmar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Resolve Dialog */}
-      <AlertDialog open={!!resolvingId} onOpenChange={(open) => !open && setResolvingId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Resolver Restrição</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3">
-                <div><label className="text-xs text-muted-foreground">Valor Pago (R$)</label>
-                  <CurrencyInput value={resolveForm.valor_pago} onChange={(v) => setResolveForm({ ...resolveForm, valor_pago: v })} />
-                </div>
-                <div><label className="text-xs text-muted-foreground">Forma de Resolução</label>
-                  <Select value={resolveForm.forma_resolucao} onValueChange={(v) => setResolveForm({ ...resolveForm, forma_resolucao: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pago">Pago</SelectItem>
-                      <SelectItem value="negociado">Negociado</SelectItem>
-                      <SelectItem value="dispensado">Dispensado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleResolve}>Resolver</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Delete Confirm */}
-      <AlertDialog open={!!deletingId} onOpenChange={(open) => !open && setDeletingId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir restrição</AlertDialogTitle>
-            <AlertDialogDescription>Tem certeza? Esta ação não pode ser desfeita.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleDelete}>Excluir</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
-}
-
-/* ══════════════════════════════════════════════
-   TAB 6 — HISTÓRICO (Audit Log)
-   ══════════════════════════════════════════════ */
-
-function HistoricoTab({ obraId }: { obraId: string }) {
-  const [logs, setLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    supabase
-      .from("holding_audit_log")
-      .select("*")
-      .eq("obra_id", obraId)
-      .order("realizado_em", { ascending: false })
-      .limit(100)
-      .then(({ data }) => { setLogs(data || []); setLoading(false); });
-  }, [obraId]);
-
-  const TABELA_BADGE: Record<string, { label: string; cls: string }> = {
-    obras_portfolio: { label: "Obra", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
-    holding_obra_docs: { label: "Documentos", cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300" },
-    holding_doc_files: { label: "Documentos", cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300" },
-    despesas_mensais: { label: "Despesas", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
-    medicoes_ple: { label: "Medições", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
-    aditivos_contratos: { label: "Aditivos", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
-    restricoes_financeiras: { label: "Restrições", cls: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300" },
-  };
-
-  const ACAO_ICON: Record<string, string> = {
-    criou: "✅", editou: "✏️", excluiu: "🗑️",
-    aprovou: "✔️", cancelou: "❌",
-  };
-  const ACAO_COLOR: Record<string, string> = {
-    criou: "text-emerald-600", editou: "text-amber-600",
-    excluiu: "text-destructive", aprovou: "text-blue-600", cancelou: "text-muted-foreground",
-  };
-
-  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
-
-  if (logs.length === 0) return (
-    <div className="text-center py-10 text-muted-foreground text-sm">
-      Nenhuma ação registrada ainda.
-    </div>
-  );
-
-  return (
-    <div className="space-y-1">
-      <p className="text-xs text-muted-foreground mb-3">
-        Histórico completo de alterações — {logs.length} registro{logs.length !== 1 ? "s" : ""}
-      </p>
-      <div className="relative pl-4">
-        <div className="absolute left-[7px] top-0 bottom-0 w-[2px] bg-border" />
-        {logs.map((log) => {
-          const data = new Date(log.realizado_em);
-          const dataFmt = data.toLocaleDateString("pt-BR");
-          const horaFmt = data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-          return (
-            <div key={log.id} className="relative flex gap-3 pb-4">
-              <div className="absolute left-[-9px] top-[4px] w-[10px] h-[10px] rounded-full bg-background border-2 border-border" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-xs">
-                    <span className={`font-semibold ${ACAO_COLOR[log.acao] || ""}`}>
-                      {ACAO_ICON[log.acao] || "•"} {log.realizado_por_nome}
-                    </span>
-                    {" "}<span className="text-muted-foreground">{log.descricao}</span>
-                    {log.tabela && TABELA_BADGE[log.tabela] && (
-                      <Badge variant="secondary" className={`text-[9px] ml-1.5 px-1 py-0 ${TABELA_BADGE[log.tabela].cls}`}>
-                        {TABELA_BADGE[log.tabela].label}
-                      </Badge>
-                    )}
-                  </p>
-                  <span className="text-[10px] text-muted-foreground shrink-0 whitespace-nowrap">
-                    {dataFmt} {horaFmt}
-                  </span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}

@@ -19,7 +19,7 @@ export interface SystemNotification {
   obra_nome?: string;
 }
 
-export function useNotifications() {
+export function useNotifications(modulo?: string) {
   const { company } = useAuth();
   const [count, setCount] = useState(0);
   const [notifications, setNotifications] = useState<SystemNotification[]>([]);
@@ -27,24 +27,30 @@ export function useNotifications() {
 
   const loadCount = useCallback(async () => {
     if (!company?.id) return;
-    const { data } = await supabase.rpc("get_unread_notifications_count", {
-      p_company_id: company.id,
-    });
-    setCount(data || 0);
-  }, [company?.id]);
+    let q = supabase.from("system_notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", company.id)
+      .eq("lida", false)
+      .eq("resolvida", false);
+    if (modulo) q = q.eq("modulo", modulo);
+    const { count: c } = await q;
+    setCount(c || 0);
+  }, [company?.id, modulo]);
 
   const loadNotifications = useCallback(async () => {
     if (!company?.id) return;
     // Use direct query to join obra name
-    const { data } = await supabase
+    let q = supabase
       .from("system_notifications")
       .select("*, obras_portfolio!system_notifications_obra_id_fkey(nome)")
       .eq("company_id", company.id)
-      .eq("resolvida", false)   // só pendentes — resolvidas não devem aparecer no painel
-      .order("lida", { ascending: true })   // não lidas primeiro
+      .eq("resolvida", false)
+      .order("lida", { ascending: true })
       .order("created_at", { ascending: false })
       .limit(30);
+    if (modulo) q = q.eq("modulo", modulo);
 
+    const { data } = await q;
     const mapped: SystemNotification[] = (data || []).map((n: any) => ({
       id: n.id,
       company_id: n.company_id,
@@ -61,7 +67,7 @@ export function useNotifications() {
       obra_nome: n.obras_portfolio?.nome || "",
     }));
     setNotifications(mapped);
-  }, [company?.id]);
+  }, [company?.id, modulo]);
 
   useEffect(() => {
     loadCount();
@@ -104,14 +110,16 @@ export function useNotifications() {
 
   const markAllAsRead = useCallback(async () => {
     if (!company?.id) return;
-    await supabase
+    let q = supabase
       .from("system_notifications")
       .update({ lida: true, lida_em: new Date().toISOString() } as any)
       .eq("company_id", company.id)
       .eq("lida", false);
+    if (modulo) q = (q as any).eq("modulo", modulo);
+    await q;
     loadCount();
     loadNotifications();
-  }, [company?.id, loadCount, loadNotifications]);
+  }, [company?.id, modulo, loadCount, loadNotifications]);
 
   return {
     count,
