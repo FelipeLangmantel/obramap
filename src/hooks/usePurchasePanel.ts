@@ -171,7 +171,7 @@ export function usePurchasePanel() {
             family_name: r.family_name,
             family_color: r.family_color,
             scope_item_name: r.item_name,
-            scope_item_code: null,
+            scope_item_code: r.scope_item_code || null,
             scope_item_id: null,
           }))
         );
