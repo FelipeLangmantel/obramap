@@ -1641,6 +1641,8 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     load();
   };
 
+  const editFormRef = useRef<HTMLDivElement>(null);
+
   const startEdit = (m: any) => {
     setEditingMedicao(m);
     setEditForm({
@@ -1656,6 +1658,10 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       num_nf: m.num_nf || "",
     });
     setShowForm(false);
+    // Auto-scroll to edit form after state update
+    setTimeout(() => {
+      editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
   };
 
   if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
@@ -1961,6 +1967,17 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     );
   };
 
+  // ─── KPI calculations ───
+  const medicoesNormais = medicoes.filter(m => m.num_medicao !== "Saldo Inicial");
+  const totalPrevisto = medicoesNormais.reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0);
+  const totalRealizado = medicoesNormais.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+  const totalAcatado = medicoesNormais.reduce((s, m) => s + (Number(m.valor_acatado) || 0), 0);
+  const saldoAMedir = Math.max(0, valorContrato - baseJaComprometida - totalPrevisto);
+  const totalEnviadas = medicoesNormais.filter(m => m.status_medicao === "enviada").length;
+  const totalAprovadas = medicoesNormais.filter(m => m.status_medicao === "aprovada").length;
+  const totalPrevistas = medicoesNormais.filter(m => m.status_medicao === "prevista").length;
+  const pctAndamento = valorContrato > 0 ? Math.min(100, ((baseJaComprometida + totalAcatado + totalRealizado - totalAcatado) / valorContrato) * 100) : 0;
+
   return (
     <>
     <div className="space-y-4">
@@ -1969,6 +1986,40 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
         <Button size="sm" variant="outline" onClick={() => { setShowForm(!showForm); setEditingMedicao(null); }}>
           <Plus className="h-4 w-4 mr-1" /> Nova Medição
         </Button>
+      </div>
+
+      {/* KPI CARDS */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+        <Card><CardContent className="p-3 space-y-1">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Previsto</p>
+          <p className="text-sm font-bold">{BRL_SHORT(totalPrevisto)}</p>
+          <p className="text-[10px] text-muted-foreground">{totalPrevistas} previsão(ões)</p>
+        </CardContent></Card>
+        <Card><CardContent className="p-3 space-y-1">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Realizado</p>
+          <p className="text-sm font-bold">{BRL_SHORT(totalRealizado)}</p>
+          <p className="text-[10px] text-muted-foreground">{totalEnviadas + totalAprovadas} enviada(s)</p>
+        </CardContent></Card>
+        <Card><CardContent className="p-3 space-y-1">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Acatado</p>
+          <p className="text-sm font-bold text-emerald-600">{BRL_SHORT(totalAcatado)}</p>
+          <p className="text-[10px] text-muted-foreground">{totalAprovadas} aprovada(s)</p>
+        </CardContent></Card>
+        <Card><CardContent className="p-3 space-y-1">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Saldo a Medir</p>
+          <p className={`text-sm font-bold ${saldoAMedir <= 0 ? "text-destructive" : ""}`}>{BRL_SHORT(saldoAMedir)}</p>
+          <p className="text-[10px] text-muted-foreground">do contrato</p>
+        </CardContent></Card>
+        <Card><CardContent className="p-3 space-y-1">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Valor Contrato</p>
+          <p className="text-sm font-bold">{BRL_SHORT(valorContrato)}</p>
+          {baseJaComprometida > 0 && <p className="text-[10px] text-muted-foreground">+ {BRL_SHORT(baseJaComprometida)} saldo ini.</p>}
+        </CardContent></Card>
+        <Card><CardContent className="p-3 space-y-1">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Andamento</p>
+          <p className="text-sm font-bold">{pctAndamento.toFixed(1)}%</p>
+          <Progress value={pctAndamento} className="h-1.5 mt-1" />
+        </CardContent></Card>
       </div>
 
       {/* ADMIN: Pending correction requests */}
@@ -2084,7 +2135,9 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       })()}
 
       {/* STAGED EDIT FORM */}
-      {renderStagedEditForm()}
+      <div ref={editFormRef}>
+        {renderStagedEditForm()}
+      </div>
 
       {/* TABLE */}
       <div className="overflow-x-auto">
