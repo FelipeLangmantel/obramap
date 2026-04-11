@@ -157,6 +157,16 @@ export function ObraRestricoesTab({ obraId }: { obraId: string }) {
     await registrarLog(obraId, "restricoes_financeiras", resolvingId, "resolveu",
       `Resolveu restrição: ${item?.descricao || ""} — Forma: ${resolveForm.forma_resolucao} — Pago: ${BRL.format(resolveForm.valor_pago)}`,
       userId, userName);
+    // Gerar notificação de conclusão
+    try {
+      await supabase.from("system_notifications").insert({
+        company_id: companyId,
+        obra_id: obraId,
+        tipo: "restricao_resolvida",
+        titulo: `Restrição resolvida — ${item?.descricao?.substring(0, 40) || ""}`,
+        mensagem: `Restrição "${item?.descricao || ""}" foi resolvida por ${userName}. Forma: ${resolveForm.forma_resolucao}. Valor pago: ${BRL.format(resolveForm.valor_pago)}.`,
+      });
+    } catch (e) { console.error("Erro ao criar notificação:", e); }
     toast.success("Restrição resolvida!");
     setResolvingId(null);
     setResolveForm({ valor_pago: 0, forma_resolucao: "pago" });
@@ -171,6 +181,16 @@ export function ObraRestricoesTab({ obraId }: { obraId: string }) {
     if (error) { toast.error("Erro ao excluir"); return; }
     await registrarLog(obraId, "restricoes_financeiras", deletingId, "excluiu",
       `Excluiu restrição: ${item?.descricao || ""}`, userId, userName, { ...item }, {});
+    // Gerar notificação de recusa/remoção
+    try {
+      await supabase.from("system_notifications").insert({
+        company_id: companyId,
+        obra_id: obraId,
+        tipo: "restricao_recusada",
+        titulo: `Restrição removida — ${item?.descricao?.substring(0, 40) || ""}`,
+        mensagem: `Restrição "${item?.descricao || ""}" foi removida por ${userName}.`,
+      });
+    } catch (e) { console.error("Erro ao criar notificação:", e); }
     toast.success("Restrição excluída.");
     setDeletingId(null);
     invalidateHolding();

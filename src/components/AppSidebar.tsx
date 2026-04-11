@@ -644,16 +644,32 @@ export function NotificationBell({ modulo }: { modulo?: string } = {}) {
                 despesa_fechamento: <FileTextIcon className="h-4 w-4 text-blue-500" />,
                 medicao_previsao_vencida: <AlertTriangleIcon className="h-4 w-4 text-destructive" />,
                 restricao_financeira: <AlertTriangleIcon className="h-4 w-4 text-destructive" />,
+                restricao_resolvida: <CheckCircle2 className="h-4 w-4 text-emerald-500" />,
+                restricao_recusada: <CheckCircle2 className="h-4 w-4 text-amber-500" />,
+                prazo_obra_vencido: <AlertTriangleIcon className="h-4 w-4 text-destructive" />,
+                prazo_obra_avencer: <ClockIcon className="h-4 w-4 text-amber-500" />,
+                obra_sem_medicao_no_periodo: <AlertTriangleIcon className="h-4 w-4 text-amber-500" />,
+                medicao_sem_previsao: <ClockIcon className="h-4 w-4 text-amber-500" />,
+                desvio_financeiro_relevante: <AlertTriangleIcon className="h-4 w-4 text-destructive" />,
               };
               const navMap: Record<string, string> = {
                 despesa_pendente_link: "/holding-despesas",
                 medicao_aprovada_despesa: "/holding-despesas",
                 despesa_fechamento: "/holding-despesas",
+                despesa_sem_fechamento: "/holding-despesas",
+                medicao_sem_despesa: "/holding-despesas",
                 medicao_previsao_vencida: "/holding-receitas",
                 restricao_financeira: "/holding-receitas",
+                restricao_resolvida: "/holding-receitas",
+                restricao_recusada: "/holding-receitas",
+                prazo_obra_vencido: "/holding-prd",
+                prazo_obra_avencer: "/holding-prd",
+                obra_sem_medicao_no_periodo: "/holding-receitas",
+                medicao_sem_previsao: "/holding-receitas",
+                desvio_financeiro_relevante: "/holding-receitas",
               };
               const icon = iconMap[n.tipo] || <ClockIcon className="h-4 w-4 text-muted-foreground" />;
-              const destino = navMap[n.tipo] || "/holding-despesas";
+              const destino = navMap[n.tipo] || "/holding-receitas";
               const timeAgo = formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: ptBR });
               return (
                 <button
