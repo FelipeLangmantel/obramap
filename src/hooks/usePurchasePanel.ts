@@ -210,7 +210,6 @@ export function usePurchasePanel() {
 
     const channel = supabase
       .channel(`purchase-panel-${companyId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "supply_alerts" }, () => fetchData())
       .on("postgres_changes", { event: "*", schema: "public", table: "supply_requests" }, () => fetchData())
       .on("postgres_changes", { event: "*", schema: "public", table: "purchase_orders" }, () => fetchData())
       .subscribe();
