@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { usePurchasePanel, PurchaseAlert } from "@/hooks/usePurchasePanel";
 import { ALERT_STATUS_LABELS, ALERT_STATUS_COLORS } from "@/components/supplies/types";
 import type { SupplyAlertStatus } from "@/components/supplies/types";

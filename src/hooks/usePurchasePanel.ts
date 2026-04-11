@@ -146,6 +146,7 @@ export function usePurchasePanel() {
           supplier_name: r.suppliers?.name || null,
           family_name: r.material_families?.name || null,
           family_color: r.material_families?.color || null,
+          scope_item_code: r.scope_items?.input_code || null,
           purchase_overdue: r.purchase_overdue ?? false,
           days_overdue: r.days_overdue ?? 0,
         }));
