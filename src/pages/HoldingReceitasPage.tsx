@@ -1721,13 +1721,25 @@ function FinanceiroObraSheet({
                 const impactoTotal = restrAbertas.reduce((s: number, r: any) => s + (Number(r.impacto_medicao) || 0), 0);
                 const total = valorContrato || 1;
                 return (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <p className="text-xs font-semibold text-muted-foreground">Progresso por Status</p>
-                    {/* Barra principal: aprovado + enviado + previsto */}
-                    <div className="h-4 w-full rounded-full bg-secondary overflow-hidden flex">
+                    {/* Barra única com todos os segmentos */}
+                    <div className="h-4 w-full rounded-full bg-secondary overflow-hidden flex relative">
                       {aprovado > 0 && <div className="h-full bg-emerald-500" style={{ width: `${(aprovado / total) * 100}%` }} title={`Medido/Aprovado: ${BRL.format(aprovado)}`} />}
                       {enviado > 0 && <div className="h-full bg-blue-500" style={{ width: `${(enviado / total) * 100}%` }} title={`Enviado: ${BRL.format(enviado)}`} />}
-                      {previsto > 0 && <div className="h-full bg-amber-400" style={{ width: `${(previsto / total) * 100}%` }} title={`Previsto: ${BRL.format(previsto)}`} />}
+                      {previsto > 0 && (
+                        <div className="h-full relative" style={{ width: `${(previsto / total) * 100}%` }}>
+                          <div className="h-full w-full bg-amber-400" />
+                          {/* Vermelho sobreposto no previsto para mostrar impacto da restrição */}
+                          {impactoTotal > 0 && (
+                            <div
+                              className="absolute top-0 right-0 h-full bg-destructive/70"
+                              style={{ width: `${Math.min(100, (impactoTotal / previsto) * 100)}%` }}
+                              title={`Impacto restrições: −${BRL.format(impactoTotal)}`}
+                            />
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-3 text-[10px] text-muted-foreground flex-wrap">
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />Medido {BRL.format(aprovado)}{valorMedIniSheet > 0 && <span className="text-[9px] opacity-70">(incl. {BRL.format(valorMedIniSheet)} pré-sist.)</span>}</span>
@@ -1735,19 +1747,13 @@ function FinanceiroObraSheet({
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />Previsto {BRL.format(previsto)}</span>
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-secondary" />Saldo {BRL.format(saldo)}</span>
                     </div>
-                    {/* Barra de restrição — separada, em vermelho semi-transparente */}
                     {impactoTotal > 0 && (
-                      <div className="space-y-0.5 pt-1">
-                        <div className="flex justify-between text-[10px] text-destructive font-medium">
-                          <span className="flex items-center gap-1">
-                            <AlertCircle className="h-3 w-3" />
-                            Impacto de restrições: −{BRL.format(impactoTotal)}
-                          </span>
-                          <span>{restrDaObra.length} aberta(s)</span>
-                        </div>
-                        <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
-                          <div className="h-full bg-destructive/50 transition-all" style={{ width: `${Math.min(100, (impactoTotal / total) * 100)}%` }} />
-                        </div>
+                      <div className="flex justify-between text-[10px] text-destructive font-medium">
+                        <span className="flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          Impacto de restrições: −{BRL.format(impactoTotal)}
+                        </span>
+                        <span>{restrAbertas.length} aberta(s)</span>
                       </div>
                     )}
                   </div>
