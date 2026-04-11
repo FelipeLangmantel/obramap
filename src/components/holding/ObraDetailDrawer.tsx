@@ -1474,15 +1474,41 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     load();
   };
 
-  // ─── REGISTER RECEBIMENTO (NF + pagamento) ───
+  // ─── STEP 1: REGISTRAR ENVIO DA NF (aprovada → aguardando_aprovacao) ───
+  const handleRegistrarEnvioNF = async () => {
+    if (!requireEdit() || !editingMedicao) return;
+    if (!editForm.num_nf?.trim()) { toast.warning("Informe o Nº da NF antes de registrar o envio."); return; }
+    if (!editForm.data_envio_nf) { toast.warning("Informe a data de envio da NF."); return; }
+
+    const payload: any = {
+      num_nf: editForm.num_nf.trim(),
+      data_envio_nf: editForm.data_envio_nf,
+      status_nf: "aguardando_aprovacao",
+    };
+
+    const { error } = await supabase.from("medicoes_ple").update(payload).eq("id", editingMedicao.id);
+    if (error) { toast.error("Erro ao registrar envio da NF."); return; }
+
+    await supabase.from("medicoes_ple").update({
+      updated_by_user_id: userId, updated_by_name: userName, updated_at: new Date().toISOString(),
+    }).eq("id", editingMedicao.id);
+
+    await registrarLog(obraId, "medicoes_ple", editingMedicao.id, "enviou_nf",
+      `Envio NF ${editForm.num_nf} em ${editForm.data_envio_nf}`,
+      userId, userName, { status_nf: editingMedicao.status_nf }, payload);
+
+    toast.success("Envio da NF registrado! Aguardando confirmação do pagamento.");
+    invalidateHolding();
+    load();
+  };
+
+  // ─── STEP 2: CONFIRMAR PAGAMENTO RECEBIDO (aguardando_aprovacao → recebido) ───
   const doRegistrarRecebimento = async () => {
     if (!requireEdit() || !editingMedicao) return;
     setConfirmRecebimento(false);
 
     const payload: any = {
-      num_nf: editForm.num_nf || null,
       data_pagamento: editForm.data_pagamento,
-      data_envio_nf: editForm.data_envio_nf || null,
       status_nf: "recebido",
     };
 
@@ -1494,19 +1520,21 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     }).eq("id", editingMedicao.id);
 
     await registrarLog(obraId, "medicoes_ple", editingMedicao.id, "recebeu",
-      `Recebimento NF ${editForm.num_nf || "—"} — Pgto: ${editForm.data_pagamento}`,
+      `Pagamento recebido — NF ${editForm.num_nf || "—"} — Data: ${editForm.data_pagamento}`,
       userId, userName, { status_nf: editingMedicao.status_nf }, payload);
 
-    toast.success("Recebimento registrado! Medição completamente bloqueada.");
+    toast.success("Pagamento confirmado! Medição completamente bloqueada.");
     invalidateHolding();
     setEditingMedicao(null);
     load();
   };
 
-  const handleRegistrarRecebimento = () => {
+  const handleConfirmarPagamento = () => {
     if (!editForm.data_pagamento) { toast.warning("Informe a data de pagamento."); return; }
-    if (editForm.data_pagamento < editForm.data_aprovacao) { toast.error("❌ Data de pagamento não pode ser anterior à aprovação."); return; }
-    if (!editForm.num_nf) { toast.info("💡 Recomendamos informar o Nº da NF."); }
+    if (editForm.data_aprovacao && editForm.data_pagamento < editForm.data_aprovacao) {
+      toast.error("❌ Data de pagamento não pode ser anterior à aprovação.");
+      return;
+    }
     setConfirmRecebimento(true);
   };
 
@@ -1819,18 +1847,42 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div><label className="text-xs text-muted-foreground">Nº NF</label><Input value={editForm.num_nf || ""} onChange={(e) => setEditForm({ ...editForm, num_nf: e.target.value })} disabled={!canEditPagamento} /></div>
+                {/* Step 1 — Envio da NF */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div><label className="text-xs text-muted-foreground">Nº NF</label><Input value={editForm.num_nf || ""} onChange={(e) => setEditForm({ ...editForm, num_nf: e.target.value })} disabled={!canEditPagamento} placeholder="Ex: 001234" /></div>
                   <ClearableDateInput label="Data Envio NF" value={editForm.data_envio_nf || ""} onChange={(v) => setEditForm({ ...editForm, data_envio_nf: v })} disabled={!canEditPagamento} />
-                  <ClearableDateInput label="Data Pagamento" value={editForm.data_pagamento || ""} onChange={(v) => setEditForm({ ...editForm, data_pagamento: v })} disabled={!canEditPagamento} />
                   <div className="flex items-end">
-                    {editForm.status_nf !== "recebido" ? (
-                      <Button size="sm" onClick={handleRegistrarRecebimento}>Confirmar Recebimento</Button>
-                    ) : (
-                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">✓ Recebido</Badge>
+                    {editForm.status_nf === "pendente" && (
+                      <Button size="sm" variant="outline" className="w-full" onClick={handleRegistrarEnvioNF}>
+                        📤 Registrar Envio NF
+                      </Button>
+                    )}
+                    {editForm.status_nf === "aguardando_aprovacao" && (
+                      <div className="flex items-center gap-1 text-xs text-amber-600 font-medium">
+                        <span>⏳ NF enviada — aguardando pagamento</span>
+                      </div>
+                    )}
+                    {editForm.status_nf === "recebido" && (
+                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">✓ NF Enviada</Badge>
                     )}
                   </div>
                 </div>
+
+                {/* Step 2 — Confirmar Pagamento (só disponível após envio da NF) */}
+                {(editForm.status_nf === "aguardando_aprovacao" || editForm.status_nf === "recebido") && (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 pt-2 border-t border-border/50">
+                    <ClearableDateInput label="Data Pagamento" value={editForm.data_pagamento || ""} onChange={(v) => setEditForm({ ...editForm, data_pagamento: v })} disabled={editForm.status_nf === "recebido" && !isAdmin} />
+                    <div className="flex items-end col-span-2">
+                      {editForm.status_nf !== "recebido" ? (
+                        <Button size="sm" className="gap-1" onClick={handleConfirmarPagamento}>
+                          💰 Confirmar Recebimento
+                        </Button>
+                      ) : (
+                        <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">✓ Pagamento Recebido</Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

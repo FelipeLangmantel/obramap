@@ -183,6 +183,23 @@ export default function HoldingReceitasPage() {
   const medicoes = data?.medicoes || [];
   const restricoes = (data as any)?.restricoes || [] as any[];
 
+  // ─── Mapa de impacto financeiro por medição (restrições não resolvidas) ───
+  // restricaoImpactoMap[medicao_id] = soma de impacto_medicao das restrições vinculadas
+  // restricaoImpactoObraMap[obra_id]  = soma total de impacto de obra (para medições sem medicao_id específico)
+  const restricaoImpactoMap = useMemo(() => {
+    const map = new Map<string, number>();
+    (restricoes as any[]).forEach((r: any) => {
+      if (r.medicao_id) {
+        map.set(r.medicao_id, (map.get(r.medicao_id) || 0) + (Number(r.impacto_medicao) || 0));
+      }
+    });
+    return map;
+  }, [restricoes]);
+
+  // Helper: valor previsto líquido (descontado o impacto das restrições vinculadas)
+  const valorPrevLiquido = (m: { id: string; valor_previsto_medicao: number }) =>
+    Math.max(0, m.valor_previsto_medicao - (restricaoImpactoMap.get(m.id) || 0));
+
   // ─── Global filter (empresa + tipo contrato only) for all tabs ───
   const medicoesFiltradasGlobal = useMemo(() => {
     return medicoes.filter(m => {
@@ -206,18 +223,18 @@ export default function HoldingReceitasPage() {
         .reduce((s, m) => {
           if (m.status_medicao === "aprovada") return s + (Number(m.valor_acatado ?? m.valor_medicao) || 0);
           if (m.status_medicao === "enviada") return s + (Number(m.valor_medicao) || 0);
-          return s + (Number(m.valor_previsto_medicao) || 0);
+          return s + valorPrevLiquido(m);
         }, 0),
       totalAprovado: aprovadas.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
       totalEnviado: enviadas.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-      totalPendente: pendentes.reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
+      totalPendente: pendentes.reduce((s, m) => s + valorPrevLiquido(m), 0),
       totalNFRecebida: nfRecebida.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
       totalAguardandoNF: src.filter(m => m.status_nf === "aguardando_aprovacao").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
       countAprovadas: aprovadas.length,
       countEnviadas: enviadas.length,
       countPendentes: pendentes.length,
     };
-  }, [medicoesFiltradasGlobal]);
+  }, [medicoesFiltradasGlobal, valorPrevLiquido]);
 
   // ─── Fluxo Mensal ───
   const fluxoData = useMemo(() => {
@@ -231,13 +248,11 @@ export default function HoldingReceitasPage() {
       if (!monthMap[key]) monthMap[key] = { mes: label, aprovado: 0, enviado: 0, pendente: 0, nf_recebido: 0 };
       if (m.status_medicao === "aprovada") monthMap[key].aprovado += Number(m.valor_acatado ?? m.valor_medicao) || 0;
       if (m.status_medicao === "enviada") monthMap[key].enviado += Number(m.valor_medicao) || 0;
-      if (m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada") monthMap[key].pendente += Number(m.valor_previsto_medicao) || 0;
+      if (m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada") monthMap[key].pendente += valorPrevLiquido(m);
       if (m.status_nf === "recebido") monthMap[key].nf_recebido += Number(m.valor_acatado ?? m.valor_medicao) || 0;
     });
     return Object.entries(monthMap).sort(([a], [b]) => a.localeCompare(b)).map(([, v]) => v);
-  }, [medicoesFiltradasGlobal]);
-
-  // ─── Filters ───
+  }, [medicoesFiltradasGlobal, valorPrevLiquido]);
   const medicoesFiltradas = useMemo(() => {
     return medicoes.filter(m => {
       if (filterObra !== "all" && m.obra_id !== filterObra) return false;
@@ -319,17 +334,17 @@ export default function HoldingReceitasPage() {
         obrasCount,
         aprovado: medsInMonth.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
         enviado: medsInMonth.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-        pendente: medsInMonth.filter(m => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
+        pendente: medsInMonth.filter(m => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada").reduce((s, m) => s + valorPrevLiquido(m), 0),
         nfRecebido: medsInMonth.filter(m => m.status_nf === "recebido").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
         total: medsInMonth.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
-        previsto: medsInMonth.reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0),
+        previsto: medsInMonth.reduce((s, m) => s + (m.status_medicao === "aprovada" ? (m.valor_previsto_medicao || 0) : valorPrevLiquido(m)), 0),
         // previstoDasAprovadas: valor previsto apenas das medições já aprovadas no mês
         // Usado no desvio para comparar realizado vs o que era esperado para AQUELAS medições
         previstoDasAprovadas: medsInMonth.filter(m => m.status_medicao === "aprovada").reduce((s, m) => s + (m.valor_previsto_medicao || 0), 0),
         countPrevistas: medsInMonth.length,
       };
     });
-  }, [medicoesFiltradasGlobal, previsaoMonths, medicaoMonthMap]);
+  }, [medicoesFiltradasGlobal, previsaoMonths, medicaoMonthMap, valorPrevLiquido]);
 
   // ─── Drill-down: medições do mês selecionado na previsão ───
   const drillDownMedicoes = useMemo(() => {
@@ -412,13 +427,13 @@ export default function HoldingReceitasPage() {
           recebido: medsInWeek.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           aprovado: medsInWeek.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           enviado: medsInWeek.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-          pendente: medsInWeek.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
+          pendente: medsInWeek.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + valorPrevLiquido(m), 0),
           total: medsInWeek.reduce((s, m) => s + (
             m.statusEntrada === "recebido" || m.statusEntrada === "aprovado"
               ? (Number(m.valor_acatado ?? m.valor_medicao) || 0)
               : m.statusEntrada === "enviado"
               ? (Number(m.valor_medicao) || 0)
-              : (Number(m.valor_previsto_medicao) || 0)
+              : valorPrevLiquido(m)
           ), 0),
           medicoes: medsInWeek,
         });
@@ -440,13 +455,13 @@ export default function HoldingReceitasPage() {
           recebido: medsInPeriod.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           aprovado: medsInPeriod.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           enviado: medsInPeriod.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-          pendente: medsInPeriod.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
+          pendente: medsInPeriod.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + valorPrevLiquido(m), 0),
           total: medsInPeriod.reduce((s, m) => s + (
             m.statusEntrada === "recebido" || m.statusEntrada === "aprovado"
               ? (Number(m.valor_acatado ?? m.valor_medicao) || 0)
               : m.statusEntrada === "enviado"
               ? (Number(m.valor_medicao) || 0)
-              : (Number(m.valor_previsto_medicao) || 0)
+              : valorPrevLiquido(m)
           ), 0),
           medicoes: medsInPeriod,
         });
@@ -467,19 +482,19 @@ export default function HoldingReceitasPage() {
           recebido: medsInMonth.filter(m => m.statusEntrada === "recebido").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           aprovado: medsInMonth.filter(m => m.statusEntrada === "aprovado").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0),
           enviado: medsInMonth.filter(m => m.statusEntrada === "enviado").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0),
-          pendente: medsInMonth.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0),
+          pendente: medsInMonth.filter(m => m.statusEntrada === "previsto" || m.statusEntrada === "estimado" || m.statusEntrada === "pendente").reduce((s, m) => s + valorPrevLiquido(m), 0),
           total: medsInMonth.reduce((s, m) => s + (
             m.statusEntrada === "recebido" || m.statusEntrada === "aprovado"
               ? (Number(m.valor_acatado ?? m.valor_medicao) || 0)
               : m.statusEntrada === "enviado"
               ? (Number(m.valor_medicao) || 0)
-              : (Number(m.valor_previsto_medicao) || 0)
+              : valorPrevLiquido(m)
           ), 0),
           medicoes: medsInMonth,
         };
       });
     }
-  }, [medicoesFiltradasGlobal, agrupamento]);
+  }, [medicoesFiltradasGlobal, agrupamento, valorPrevLiquido]);
 
   // ─── Insights ───
   const insights = useMemo(() => {
@@ -493,11 +508,11 @@ export default function HoldingReceitasPage() {
         const d = new Date(m.data_previsao_medicao + "T12:00:00");
         return d >= now3 && d <= in3months;
       })
-      .reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0);
+      .reduce((s, m) => s + valorPrevLiquido(m), 0);
     const obraIds = new Set(medicoes.map(m => m.obra_id));
     const obrasSem = obras.filter(o => !obraIds.has(o.id));
     return { proximaEntrada: first, totalProx3Meses: next3, obrasSemMedicao: obrasSem };
-  }, [medicoes, obras, previsaoData]);
+  }, [medicoes, obras, previsaoData, valorPrevLiquido]);
 
   // ─── CSV Export ───
   const exportarCSV = () => {
@@ -1313,23 +1328,43 @@ export default function HoldingReceitasPage() {
                               </div>
 
                               {/* Barra 2 — Próxima entrada */}
-                              {proximaMedicao ? (
-                                <div className="space-y-1">
-                                  <div className="flex justify-between text-xs text-muted-foreground">
-                                    <span>Próxima entrada: {BRL.format(valorPrevAjustado)} (Med {proximaMedicao.num_medicao})</span>
-                                    <span>{dataEntradaProjetada ? format(dataEntradaProjetada, "dd/MM/yy") : "—"}</span>
+                              {proximaMedicao ? (() => {
+                                const valorBruto = Number(proximaMedicao.valor_previsto_medicao) || 0;
+                                const pctLiquido = valorContrato > 0 ? Math.min(100, (valorPrevAjustado / valorContrato) * 100) : 0;
+                                const pctRestricao = valorContrato > 0 ? Math.min(100 - pctLiquido, (impactoRestricoes / valorContrato) * 100) : 0;
+                                return (
+                                  <div className="space-y-1">
+                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                      <span className="font-medium">
+                                        Próxima entrada: {BRL.format(valorPrevAjustado)}
+                                        {impactoRestricoes > 0 && <span className="text-destructive ml-1">(−{BRL.format(impactoRestricoes)} restrição)</span>}
+                                        {" "}(Med {proximaMedicao.num_medicao})
+                                      </span>
+                                      <span>{dataEntradaProjetada ? format(dataEntradaProjetada, "dd/MM/yy") : "—"}</span>
+                                    </div>
+                                    {/* Barra composta: líquido + restrição */}
+                                    <div className="h-2.5 w-full rounded-full bg-secondary overflow-hidden flex">
+                                      <div
+                                        className={`h-full transition-all ${statusColor}`}
+                                        style={{ width: `${pctLiquido}%` }}
+                                      />
+                                      {pctRestricao > 0 && (
+                                        <div
+                                          className="h-full bg-destructive/70 transition-all"
+                                          style={{ width: `${pctRestricao}%` }}
+                                          title={`Impacto de restrição: ${BRL.format(impactoRestricoes)}`}
+                                        />
+                                      )}
+                                    </div>
+                                    {impactoRestricoes > 0 && (
+                                      <p className="text-xs text-destructive flex items-center gap-1 font-medium">
+                                        <AlertCircle className="h-3 w-3 shrink-0" />
+                                        {restrDaObra.length} restrição(ões) — impacto financeiro: {BRL.format(impactoRestricoes)} ({((impactoRestricoes / valorBruto) * 100).toFixed(1)}% da medição)
+                                      </p>
+                                    )}
                                   </div>
-                                  <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
-                                    <div className={`h-full rounded-full transition-all ${statusColor}`} style={{ width: "100%" }} />
-                                  </div>
-                                  {impactoRestricoes > 0 && (
-                                    <p className="text-xs text-amber-600 flex items-center gap-1">
-                                      <AlertCircle className="h-3 w-3" />
-                                      {restrDaObra.length} restrição(ões) aberta(s) — impacto: {BRL.format(impactoRestricoes)} na medição
-                                    </p>
-                                  )}
-                                </div>
-                              ) : (
+                                );
+                              })() : (
                                 <p className="text-xs text-muted-foreground">Nenhuma medição prevista pendente.</p>
                               )}
                             </CardContent>
