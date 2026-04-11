@@ -62,7 +62,7 @@ export interface CompanySupplyKPIs {
   total_pending_value: number;
 }
 
-const FINISHED_STATUSES = ["delivered", "contracted"];
+const FINISHED_STATUSES = ["delivered", "cancelled"];
 
 export function usePurchasePanel() {
   const { company } = useAuth();
