@@ -36,7 +36,7 @@ import {
   GanttChart,
   BarChart3,
   Eye,
-  FileWarning,
+  
   ChevronDown,
   ChevronUp,
   Clock,
