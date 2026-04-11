@@ -667,7 +667,7 @@ function LeadTimeTab() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="max-h-[400px]">
+          <ScrollArea className="max-h-[50vh]">
             <div className="space-y-2">
               {materialFamilies.map(renderFamilyRow)}
               {materialFamilies.length === 0 && (
@@ -692,7 +692,7 @@ function LeadTimeTab() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="max-h-[400px]">
+          <ScrollArea className="max-h-[50vh]">
             <div className="space-y-2">
               {laborFamilies.map(renderFamilyRow)}
               {laborFamilies.length === 0 && (
