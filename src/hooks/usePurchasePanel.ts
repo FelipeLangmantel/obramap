@@ -62,7 +62,7 @@ export interface CompanySupplyKPIs {
   total_pending_value: number;
 }
 
-const FINISHED_STATUSES = ["delivered", "contracted"];
+const FINISHED_STATUSES = ["delivered", "cancelled"];
 
 export function usePurchasePanel() {
   const { company } = useAuth();
@@ -101,27 +101,16 @@ export function usePurchasePanel() {
       }
 
       // Fetch all data + company KPIs in parallel
-      const [alertsRes, requestsRes, ordersRes, kpisRes] = await Promise.all([
-        supabase
-          .from("supply_alerts")
-          .select(`
-            id, project_id, required_date, order_by_date, planned_use_date,
-            actual_delivery_date, delay_days, is_critical, status,
-            total_quantity, total_value, notes, family_id, scope_item_id,
-            projects(name),
-            material_families(name, color),
-            scope_items(name, input_code)
-          `)
-          .in("project_id", projectIds),
-
+      const [requestsRes, ordersRes, kpisRes] = await Promise.all([
         supabase
           .from("supply_requests")
           .select(`
             id, project_id, item_name, item_unit, quantity, unit_value,
             total_value, status, required_date, order_by_date, is_critical,
-            supplier_id,
+            supplier_id, family_id, purchase_overdue, days_overdue,
             projects(name),
-            suppliers(name)
+            suppliers(name),
+            material_families(name, color)
           `)
           .in("project_id", projectIds),
 
@@ -139,47 +128,49 @@ export function usePurchasePanel() {
         supabase.rpc("get_company_supply_kpis", { p_company_id: companyId }),
       ]);
 
-      if (alertsRes.data) {
-        setAlerts(
-          alertsRes.data.map((a: any) => ({
-            id: a.id,
-            project_id: a.project_id,
-            project_name: a.projects?.name || "—",
-            required_date: a.required_date,
-            order_by_date: a.order_by_date,
-            planned_use_date: a.planned_use_date,
-            actual_delivery_date: a.actual_delivery_date,
-            delay_days: a.delay_days ?? 0,
-            is_critical: a.is_critical ?? false,
-            status: a.status as SupplyAlertStatus,
-            total_quantity: a.total_quantity ?? 0,
-            total_value: a.total_value ?? 0,
-            notes: a.notes,
-            family_name: a.material_families?.name || null,
-            family_color: a.material_families?.color || null,
-            scope_item_name: a.scope_items?.name || null,
-            scope_item_code: a.scope_items?.input_code || null,
-            scope_item_id: a.scope_item_id,
-          }))
-        );
-      }
-
       if (requestsRes.data) {
-        setRequests(
-          requestsRes.data.map((r: any) => ({
+        const mappedRequests = requestsRes.data.map((r: any) => ({
+          id: r.id,
+          project_id: r.project_id,
+          project_name: r.projects?.name || "—",
+          item_name: r.item_name,
+          item_unit: r.item_unit,
+          quantity: r.quantity ?? 0,
+          unit_value: r.unit_value ?? 0,
+          total_value: r.total_value ?? 0,
+          status: r.status,
+          required_date: r.required_date,
+          order_by_date: r.order_by_date,
+          is_critical: r.is_critical ?? false,
+          supplier_name: r.suppliers?.name || null,
+          family_name: r.material_families?.name || null,
+          family_color: r.material_families?.color || null,
+          purchase_overdue: r.purchase_overdue ?? false,
+          days_overdue: r.days_overdue ?? 0,
+        }));
+        setRequests(mappedRequests);
+
+        // Derive alerts from supply_requests for panel KPIs/calendar/critical views
+        setAlerts(
+          mappedRequests.map((r: any) => ({
             id: r.id,
             project_id: r.project_id,
-            project_name: r.projects?.name || "—",
-            item_name: r.item_name,
-            item_unit: r.item_unit,
-            quantity: r.quantity ?? 0,
-            unit_value: r.unit_value ?? 0,
-            total_value: r.total_value ?? 0,
-            status: r.status,
+            project_name: r.project_name,
             required_date: r.required_date,
             order_by_date: r.order_by_date,
-            is_critical: r.is_critical ?? false,
-            supplier_name: r.suppliers?.name || null,
+            planned_use_date: null,
+            actual_delivery_date: null,
+            delay_days: r.days_overdue,
+            is_critical: r.is_critical,
+            status: r.status as SupplyAlertStatus,
+            total_quantity: r.quantity,
+            total_value: r.total_value,
+            notes: null,
+            family_name: r.family_name,
+            family_color: r.family_color,
+            scope_item_name: r.item_name,
+            scope_item_code: null,
+            scope_item_id: null,
           }))
         );
       }
@@ -219,7 +210,6 @@ export function usePurchasePanel() {
 
     const channel = supabase
       .channel(`purchase-panel-${companyId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "supply_alerts" }, () => fetchData())
       .on("postgres_changes", { event: "*", schema: "public", table: "supply_requests" }, () => fetchData())
       .on("postgres_changes", { event: "*", schema: "public", table: "purchase_orders" }, () => fetchData())
       .subscribe();
