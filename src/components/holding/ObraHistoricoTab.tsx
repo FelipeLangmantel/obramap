@@ -9,25 +9,24 @@ export function ObraHistoricoTab({ obraId }: { obraId: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase
-      .from("holding_audit_log")
-      .select("*")
-      .eq("obra_id", obraId)
-      .order("realizado_em", { ascending: false })
-      .limit(100)
-      .then(({ data, error }) => {
-        if (error) {
-          console.error("[HistoricoTab] Erro ao carregar:", error);
-          toast.error("Erro ao carregar dados. Tente novamente.");
-        }
+    const fetchLogs = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("holding_audit_log")
+          .select("*")
+          .eq("obra_id", obraId)
+          .order("realizado_em", { ascending: false })
+          .limit(100);
+        if (error) throw error;
         setLogs(data || []);
-        setLoading(false);
-      })
-      .catch((e) => {
+      } catch (e) {
         console.error("[HistoricoTab] Erro ao carregar:", e);
         toast.error("Erro ao carregar dados. Tente novamente.");
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+    fetchLogs();
   }, [obraId]);
 
   const TABELA_BADGE: Record<string, { label: string; cls: string }> = {
