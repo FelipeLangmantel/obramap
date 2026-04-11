@@ -581,8 +581,15 @@ function DocumentosTab({ obraId }: { obraId: string }) {
       (obraDocs || []).forEach((d: any) => map.set(d.doc_tipo_id, d));
       setObraDocsMap(map);
 
+      // Load deleted doc IDs to avoid re-creating them
+      const { data: deletedDocs } = await (supabase as any)
+        .from("holding_obra_docs_deleted")
+        .select("doc_tipo_id")
+        .eq("obra_id", obraId);
+      const deletedSet = new Set((deletedDocs || []).map((d: any) => d.doc_tipo_id));
+
       if (tipos && tipos.length > 0) {
-        const missingTipos = tipos.filter(t => !map.has(t.id));
+        const missingTipos = tipos.filter(t => !map.has(t.id) && !deletedSet.has(t.id));
         if (missingTipos.length > 0) {
           const { data: created } = await supabase
             .from("holding_obra_docs")
@@ -946,13 +953,32 @@ function DocumentosTab({ obraId }: { obraId: string }) {
             <AlertDialogFooter>
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
               <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={async () => {
+                // Find the doc_tipo_id before deleting
+                const docEntry = Array.from(obraDocsMap.entries()).find(([, v]) => v.id === deletingDocId);
+                const docTipoId = docEntry?.[0];
+                
                 await supabase.from("holding_doc_files").delete().eq("obra_doc_id", deletingDocId);
                 await supabase.from("holding_obra_docs").delete().eq("id", deletingDocId);
+                
+                // Record deletion so load() won't re-create it
+                if (docTipoId) {
+                  await (supabase as any).from("holding_obra_docs_deleted").insert({
+                    obra_id: obraId,
+                    doc_tipo_id: docTipoId,
+                    deleted_by: userName || user?.email || null,
+                  });
+                  // Remove from local map
+                  setObraDocsMap(prev => {
+                    const next = new Map(prev);
+                    next.delete(docTipoId);
+                    return next;
+                  });
+                }
+                
                 await registrarLog(obraId, "holding_obra_docs", deletingDocId, "excluiu", `Excluiu documento e ${deletingDocFileCount} arquivo(s)`, userId, userName);
                 setDeletingDocId(null);
                 toast.success("Documento excluído.");
                 invalidateHolding();
-                load();
               }}>Excluir</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

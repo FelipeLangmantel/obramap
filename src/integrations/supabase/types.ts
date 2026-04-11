@@ -2022,6 +2022,38 @@ export type Database = {
           },
         ]
       }
+      holding_obra_docs_deleted: {
+        Row: {
+          created_at: string
+          deleted_by: string | null
+          doc_tipo_id: string
+          id: string
+          obra_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_by?: string | null
+          doc_tipo_id: string
+          id?: string
+          obra_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_by?: string | null
+          doc_tipo_id?: string
+          id?: string
+          obra_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "holding_obra_docs_deleted_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       houses: {
         Row: {
           area: number
