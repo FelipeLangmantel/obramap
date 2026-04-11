@@ -1110,16 +1110,6 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingMedicao, setEditingMedicao] = useState<any | null>(null);
-  const editFormRef = useRef<HTMLDivElement>(null);
-
-  // Scroll para o form de edição automaticamente quando uma medição é selecionada
-  useEffect(() => {
-    if (editingMedicao && editFormRef.current) {
-      setTimeout(() => {
-        editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 80);
-    }
-  }, [editingMedicao]);
 
   // New measurement form (Step 1 only)
   const [newForm, setNewForm] = useState({
@@ -1692,7 +1682,6 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     const hasPendingRequest = pendingRequests.some(r => r.medicao_id === editingMedicao.id);
 
     return (
-      <div ref={editFormRef}>
       <Card className="border-primary">
         <CardContent className="p-4 space-y-4">
           <div className="flex items-center justify-between">
@@ -1969,50 +1958,12 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
           })}
         </CardContent>
       </Card>
-      </div>
     );
   };
 
   return (
     <>
     <div className="space-y-4">
-      {/* KPIs da aba Medições */}
-      {(() => {
-        const aprovadas = medicoes.filter(m => m.status_medicao === "aprovada" && m.num_medicao !== "Saldo Inicial");
-        const acatadoReal = aprovadas.reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
-        const saldoInicialMed = medicoes.filter(m => m.num_medicao === "Saldo Inicial" && m.status_medicao === "aprovada").reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
-        const totalMedido = acatadoReal + (saldoInicialMed > 0 ? saldoInicialMed : valorMedidoInicial);
-        const totalPrevisto = medicoes.filter(m => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada").reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0);
-        const totalEnviado = medicoes.filter(m => m.status_medicao === "enviada").reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
-        const saldoAMedir = Math.max(0, valorContrato - totalMedido - totalEnviado - totalPrevisto);
-        const pct = valorContrato > 0 ? (totalMedido / valorContrato * 100) : 0;
-        const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-        const SHORT = (v: number) => v >= 1_000_000 ? `R$ ${(v / 1_000_000).toFixed(1)}M` : v >= 1_000 ? `R$ ${(v / 1_000).toFixed(0)}k` : BRL.format(v);
-        return (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Contrato</p>
-              <p className="text-sm font-bold text-foreground">{SHORT(valorContrato)}</p>
-            </div>
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Medido</p>
-              <p className="text-sm font-bold text-emerald-600">{SHORT(totalMedido)}</p>
-              <p className="text-[10px] text-muted-foreground">{pct.toFixed(1)}% do contrato</p>
-            </div>
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Previsto/Enviado</p>
-              <p className="text-sm font-bold text-amber-600">{SHORT(totalPrevisto + totalEnviado)}</p>
-              <p className="text-[10px] text-muted-foreground">{medicoes.filter(m => m.status_medicao !== "aprovada").length} medições</p>
-            </div>
-            <div className="rounded-lg border bg-muted/30 p-3">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Saldo a Medir</p>
-              <p className={`text-sm font-bold ${saldoAMedir <= 0 ? "text-destructive" : "text-blue-600"}`}>{SHORT(saldoAMedir)}</p>
-              <p className="text-[10px] text-muted-foreground">{valorContrato > 0 ? (saldoAMedir / valorContrato * 100).toFixed(1) : 0}% restante</p>
-            </div>
-          </div>
-        );
-      })()}
-
       <div className="flex items-center justify-between">
         <h4 className="font-semibold text-sm">Medições ({medicoes.length})</h4>
         <Button size="sm" variant="outline" onClick={() => { setShowForm(!showForm); setEditingMedicao(null); }}>
@@ -2177,11 +2128,7 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
               const dataPrevisaoFormatted = m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yyyy") : "";
 
               return (
-                <TableRow
-                  key={m.id}
-                  className={`cursor-pointer hover:bg-accent/40 transition-colors ${editingMedicao?.id === m.id ? "bg-primary/5 border-l-2 border-l-primary" : ""} ${displayStatus.isOverdue ? "bg-red-50/50 dark:bg-red-900/10" : ""}`}
-                  onClick={() => { if (editingMedicao?.id !== m.id) startEdit(m); }}
-                >
+                <TableRow key={m.id} className={displayStatus.isOverdue ? "bg-red-50/50 dark:bg-red-900/10" : ""}>
                   <TableCell className="font-medium">
                     {m.num_medicao || "—"}
                     {isLocked && !isAdmin && <Lock className="h-3 w-3 text-amber-500 inline ml-1" />}
