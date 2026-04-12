@@ -236,6 +236,7 @@ export function UserPermissionsPanel() {
           allowed_project_ids: p.allowed_project_ids,
           visible_menus: (p.visible_menus as string[]) || [],
           visible_management_sections: (p.visible_management_sections as string[]) || [],
+          holding_permissions: (p as any).holding_permissions || {},
         };
       });
 
@@ -424,7 +425,7 @@ export function UserPermissionsPanel() {
     const existingPermission = permissions[userId];
     const user = users.find(u => u.user_id === userId);
     const defaults = user ? getDefaultPermissions(user.role as 'admin' | 'editor' | 'viewer') : { visible_menus: [], visible_management_sections: [] };
-    setEditingPermission(existingPermission || { id: '', user_id: userId, department: 'geral', allowed_project_ids: null, ...defaults });
+    setEditingPermission(existingPermission || { id: '', user_id: userId, department: 'geral', allowed_project_ids: null, holding_permissions: {}, ...defaults });
     setIsPermissionDialogOpen(true);
   };
 
