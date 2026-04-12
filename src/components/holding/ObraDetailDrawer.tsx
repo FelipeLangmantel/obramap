@@ -2773,9 +2773,11 @@ function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedic
       {/* Header + New Button */}
       <div className="flex items-center justify-between">
         <h4 className="font-semibold text-sm">Despesas</h4>
+        {holdingCan('lancar_despesas') && (
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowNewDespesa(!showNewDespesa)}>
           <Plus className="h-3.5 w-3.5 mr-1" /> Nova Despesa
         </Button>
+        )}
       </div>
 
       {/* New Despesa Form */}

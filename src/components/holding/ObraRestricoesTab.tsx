@@ -280,9 +280,11 @@ export function ObraRestricoesTab({ obraId }: { obraId: string }) {
 
         <div className="flex items-center justify-between">
           <h4 className="font-semibold text-sm">Restrições ({items.length})</h4>
+          {canCreateRestriction && (
           <Button size="sm" variant="outline" onClick={() => { setShowForm(!showForm); setEditingId(null); setForm({ tipo: "", descricao: "", valor: 0, impacto_medicao: 0, medicao_id: "", data_limite: "" }); }}>
             <Plus className="h-4 w-4 mr-1" /> Nova Restrição
           </Button>
+          )}
         </div>
 
         {showForm && (
