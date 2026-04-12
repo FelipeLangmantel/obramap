@@ -1177,8 +1177,8 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       setLoading(true);
       const seq = ++loadRef.current;
       const [medRes, reqRes] = await Promise.all([
-        supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).order("num_medicao", { ascending: true }),
-        supabase.from("medicao_correction_requests").select("*").eq("obra_id", obraId).eq("status", "pending").order("created_at", { ascending: false }),
+        supabase.from("medicoes_ple").select("id, obra_id, num_medicao, mes_referencia, ano_referencia, data_previsao_medicao, data_envio, data_envio_nf, data_aprovacao, status_medicao, valor_previsto_medicao, valor_medicao, valor_acatado, num_nf, data_pagamento, status_nf, created_by_name, updated_by_name, unlocked_section, unlocked_until, unlocked_by").eq("obra_id", obraId).order("num_medicao", { ascending: true }),
+        supabase.from("medicao_correction_requests").select("id, medicao_id, obra_id, section, reason, status, requested_by, requested_by_name, created_at").eq("obra_id", obraId).eq("status", "pending").order("created_at", { ascending: false }),
       ]);
       if (seq !== loadRef.current) return; // stale response, skip
       setMedicoes(sortMedicoes(medRes.data || []));
@@ -2543,8 +2543,8 @@ function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedic
     try {
       setLoading(true);
       const [dRes, mAllRes, notifRes] = await Promise.all([
-        supabase.from("despesas_mensais").select("*").eq("obra_id", obraId).order("ano_referencia").order("mes_referencia"),
-        supabase.from("medicoes_ple").select("*").eq("obra_id", obraId).order("num_medicao"),
+        supabase.from("despesas_mensais").select("id, obra_id, medicao_id, mes_referencia, ano_referencia, valor, tipo_despesa, categoria, descricao, status, is_locked").eq("obra_id", obraId).order("ano_referencia").order("mes_referencia"),
+        supabase.from("medicoes_ple").select("id, obra_id, num_medicao, mes_referencia, ano_referencia, status_medicao, valor_previsto_medicao, valor_medicao, valor_acatado, data_aprovacao").eq("obra_id", obraId).order("num_medicao"),
         supabase.from("system_notifications").select("id, tipo, titulo, mensagem, medicao_id").eq("obra_id", obraId).eq("resolvida", false),
       ]);
       setDespesas(dRes.data || []);

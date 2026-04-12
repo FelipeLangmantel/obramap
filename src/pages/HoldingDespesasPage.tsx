@@ -89,12 +89,15 @@ export default function HoldingDespesasPage() {
       const obrasMap = new Map(obras.map(o => [o.id, o]));
       const obraIds = obras.map(o => o.id);
 
-      const [despesasRes, medicoesRes] = await Promise.all([
+      const [despesasRes, medicoesRes, restricoesRes] = await Promise.all([
         obraIds.length > 0
           ? supabase.from("despesas_mensais").select("*").in("obra_id", obraIds)
           : Promise.resolve({ data: [] as any[], error: null }),
         obraIds.length > 0
-          ? supabase.from("medicoes_ple").select("*").in("obra_id", obraIds)
+          ? supabase.from("medicoes_ple").select("id, obra_id, num_medicao, mes_referencia, ano_referencia, status_medicao, valor_previsto_medicao, valor_medicao, valor_acatado").in("obra_id", obraIds)
+          : Promise.resolve({ data: [] as any[], error: null }),
+        obraIds.length > 0
+          ? supabase.from("restricoes_financeiras").select("id, obra_id, medicao_id, impacto_medicao, resolvida").in("obra_id", obraIds).eq("resolvida", false)
           : Promise.resolve({ data: [] as any[], error: null }),
       ]);
 
@@ -112,8 +115,9 @@ export default function HoldingDespesasPage() {
         });
 
       const medicoes = (medicoesRes.data || []).filter((m: any) => obrasMap.has(m.obra_id));
+      const restricoes = (restricoesRes.data || []).filter((r: any) => obrasMap.has(r.obra_id));
 
-      return { obras, despesas, medicoes, obrasMap };
+      return { obras, despesas, medicoes, restricoes, obrasMap };
     },
     enabled: !!company?.id,
   });
@@ -143,7 +147,20 @@ export default function HoldingDespesasPage() {
   const obras = data?.obras || [];
   const despesas = data?.despesas || [];
   const medicoes = data?.medicoes || [];
+  const restricoes = (data as any)?.restricoes || [] as any[];
   const obrasMap = data?.obrasMap || new Map();
+
+  // Mapa de impacto por medicao_id (só restrições não resolvidas)
+  const restricaoImpactoMap = useMemo(() => {
+    const map = new Map<string, number>();
+    restricoes.forEach((r: any) => {
+      if (r.medicao_id) map.set(r.medicao_id, (map.get(r.medicao_id) || 0) + (Number(r.impacto_medicao) || 0));
+    });
+    return map;
+  }, [restricoes]);
+
+  const valorPrevLiquidoDespesas = (m: any): number =>
+    Math.max(0, (Number(m.valor_previsto_medicao) || 0) - (restricaoImpactoMap.get(m.id) || 0));
 
   // ─── KPIs ───
   const kpis = useMemo(() => {
@@ -196,7 +213,7 @@ export default function HoldingDespesasPage() {
       const mi = MONTHS.findIndex(mn => mn.toLowerCase() === (m.mes_referencia || "").substring(0,3).toLowerCase());
       const key = `${m.ano_referencia}-${String(mi >= 0 ? mi + 1 : 1).padStart(2, "0")}`;
       const cur = map.get(key) || { real: 0, previsto: 0, medPrevisto: 0 };
-      cur.medPrevisto += Number(m.valor_previsto_medicao) || 0;
+      cur.medPrevisto += valorPrevLiquidoDespesas(m);
       map.set(key, cur);
     });
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => {
