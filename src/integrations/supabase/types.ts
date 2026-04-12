@@ -9109,6 +9109,7 @@ export type Database = {
           can_edit: boolean | null
           created_at: string
           department: string | null
+          holding_permissions: Json
           id: string
           updated_at: string
           user_id: string
@@ -9120,6 +9121,7 @@ export type Database = {
           can_edit?: boolean | null
           created_at?: string
           department?: string | null
+          holding_permissions?: Json
           id?: string
           updated_at?: string
           user_id: string
@@ -9131,6 +9133,7 @@ export type Database = {
           can_edit?: boolean | null
           created_at?: string
           department?: string | null
+          holding_permissions?: Json
           id?: string
           updated_at?: string
           user_id?: string

@@ -57,8 +57,9 @@ function useInvalidateHolding() {
 }
 
 export function ObraRestricoesTab({ obraId }: { obraId: string }) {
-  const { user, profile, requireEdit, isCompanyAdmin, isSystemAdmin } = useAuth();
+  const { user, profile, requireEdit, isCompanyAdmin, isSystemAdmin, holdingCan } = useAuth();
   const isAdmin = isCompanyAdmin || isSystemAdmin;
+  const canCreateRestriction = holdingCan('ver_restricoes');
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
@@ -279,9 +280,11 @@ export function ObraRestricoesTab({ obraId }: { obraId: string }) {
 
         <div className="flex items-center justify-between">
           <h4 className="font-semibold text-sm">Restrições ({items.length})</h4>
+          {canCreateRestriction && (
           <Button size="sm" variant="outline" onClick={() => { setShowForm(!showForm); setEditingId(null); setForm({ tipo: "", descricao: "", valor: 0, impacto_medicao: 0, medicao_id: "", data_limite: "" }); }}>
             <Plus className="h-4 w-4 mr-1" /> Nova Restrição
           </Button>
+          )}
         </div>
 
         {showForm && (

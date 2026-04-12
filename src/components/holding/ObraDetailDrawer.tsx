@@ -537,7 +537,7 @@ function formatFileSize(bytes: number) {
 }
 
 function DocumentosTab({ obraId }: { obraId: string }) {
-  const { company, user, isCompanyAdmin } = useAuth();
+  const { company, user, isCompanyAdmin, holdingCan } = useAuth();
   const invalidateHolding = useInvalidateHolding();
   const userName = user?.email?.split("@")[0] || "Usuário";
   const userId = user?.id || null;
@@ -824,7 +824,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
                     <div className="flex items-center justify-between">
                       <span className="text-sm">{item.nome}</span>
                       <div className="flex items-center gap-2">
-                        {obraDoc && (
+                        {obraDoc && holdingCan('anexar_documentos') && (
                           <label className="cursor-pointer">
                             <input
                               type="file"
@@ -1126,7 +1126,7 @@ function ClearableDateInput({ value, onChange, label, disabled }: { value: strin
 }
 
 function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInicial, obra }: { obraId: string; valorContrato: number; hasInitialBalance: boolean; valorMedidoInicial: number; obra: ObraDrawerData }) {
-  const { user, profile, requireEdit, isCompanyAdmin, isSystemAdmin } = useAuth();
+  const { user, profile, requireEdit, isCompanyAdmin, isSystemAdmin, holdingCan } = useAuth();
   const isAdmin = isCompanyAdmin || isSystemAdmin;
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
@@ -2011,9 +2011,11 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h4 className="font-semibold text-sm">Medições ({medicoes.length})</h4>
+        {holdingCan('lancar_medicoes') && (
         <Button size="sm" variant="outline" onClick={() => { setShowForm(!showForm); setEditingMedicao(null); }}>
           <Plus className="h-4 w-4 mr-1" /> Nova Medição
         </Button>
+        )}
       </div>
 
       {/* KPI CARDS */}
@@ -2476,7 +2478,7 @@ const TIPO_DESPESA_BADGE: Record<string, { label: string; cls: string }> = {
 const CATEGORIAS = ["Pessoal", "Material", "Equipamento", "Serviço", "Administrativo", "Financeiro", "Geral"];
 
 function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedicoes?: any[] }) {
-  const { user, profile, requireEdit, isAdmin, isCompanyAdmin } = useAuth();
+  const { user, profile, requireEdit, isAdmin, isCompanyAdmin, holdingCan } = useAuth();
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
@@ -2771,9 +2773,11 @@ function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedic
       {/* Header + New Button */}
       <div className="flex items-center justify-between">
         <h4 className="font-semibold text-sm">Despesas</h4>
+        {holdingCan('lancar_despesas') && (
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowNewDespesa(!showNewDespesa)}>
           <Plus className="h-3.5 w-3.5 mr-1" /> Nova Despesa
         </Button>
+        )}
       </div>
 
       {/* New Despesa Form */}

@@ -31,6 +31,7 @@ interface UserPermission {
   visible_menus: string[];
   visible_management_sections: string[];
   can_edit: boolean | null; // null = herda do departamento
+  holding_permissions: Record<string, boolean>;
 }
 
 interface AuthContextType {
@@ -51,6 +52,7 @@ interface AuthContextType {
   canAccessMenu: (menuId: string) => boolean;
   canAccessManagement: (sectionId: string) => boolean;
   canAccessProject: (projectId: string) => boolean;
+  holdingCan: (acao: string) => boolean;
   requireEdit: () => boolean;
   refreshPermissions: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
@@ -200,6 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           visible_menus: effectiveMenus,
           visible_management_sections: effectiveMgmt,
           can_edit: effectiveCanEdit,
+          holding_permissions: (permData as any)?.holding_permissions || {},
         });
       } else {
         setPermissions(null);
@@ -607,6 +610,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return permissions.visible_management_sections.includes(sectionId);
   }, [isSystemAdmin, isCompanyAdmin, isAdmin, permissions]);
 
+  const holdingCan = useCallback((acao: string): boolean => {
+    if (isCompanyAdmin || isSystemAdmin) return true;
+    return permissions?.holding_permissions?.[acao] === true;
+  }, [isCompanyAdmin, isSystemAdmin, permissions]);
+
   const canAccessProject = useCallback((projectId: string): boolean => {
     if (isSystemAdmin) return false;
     if (isCompanyAdmin) return true;
@@ -635,6 +643,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         canAccessMenu,
         canAccessManagement,
         canAccessProject,
+        holdingCan,
         requireEdit,
         refreshPermissions,
         signIn,
