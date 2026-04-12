@@ -1913,12 +1913,16 @@ function FinanceiroObraSheet({
                                   <div><span className="text-muted-foreground">Impacto medição: </span><span className="font-semibold text-amber-600">{BRL.format(Number(r.impacto_medicao) || 0)}</span></div>
                                 </div>
                                 <div className="flex gap-2 pt-1">
+                                  {canResolve && (
+                                  <>
                                   <Button size="sm" variant="outline" className="text-xs h-7 border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={(e) => { e.stopPropagation(); openResolver(r); }}>
                                     <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Resolver
                                   </Button>
                                   <Button size="sm" variant="outline" className="text-xs h-7 border-destructive text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); setRecusandoId(r.id); setMotivoRecusa(""); }}>
                                     <Ban className="h-3.5 w-3.5 mr-1" />Recusar
                                   </Button>
+                                  </>
+                                  )}
                                 </div>
                               </CardContent>
                             </Card>
