@@ -610,6 +610,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return permissions.visible_management_sections.includes(sectionId);
   }, [isSystemAdmin, isCompanyAdmin, isAdmin, permissions]);
 
+  const holdingCan = useCallback((acao: string): boolean => {
+    if (isCompanyAdmin || isSystemAdmin) return true;
+    return permissions?.holding_permissions?.[acao] === true;
+  }, [isCompanyAdmin, isSystemAdmin, permissions]);
+
   const canAccessProject = useCallback((projectId: string): boolean => {
     if (isSystemAdmin) return false;
     if (isCompanyAdmin) return true;
@@ -638,6 +643,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         canAccessMenu,
         canAccessManagement,
         canAccessProject,
+        holdingCan,
         requireEdit,
         refreshPermissions,
         signIn,
