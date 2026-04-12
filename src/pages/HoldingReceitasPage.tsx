@@ -1493,7 +1493,8 @@ function FinanceiroObraSheet({
   onClose: () => void;
   onUpdate: () => void;
 }) {
-  const { user, profile } = useAuth();
+  const { user, profile, holdingCan } = useAuth();
+  const canResolve = holdingCan('resolver_restricoes');
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [recusandoId, setRecusandoId] = useState<string | null>(null);
   const [resolveForm, setResolveForm] = useState({ valor_pago: 0, forma_resolucao: "pago" });
