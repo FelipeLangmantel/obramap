@@ -824,7 +824,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
                     <div className="flex items-center justify-between">
                       <span className="text-sm">{item.nome}</span>
                       <div className="flex items-center gap-2">
-                        {obraDoc && (
+                        {obraDoc && holdingCan('anexar_documentos') && (
                           <label className="cursor-pointer">
                             <input
                               type="file"
