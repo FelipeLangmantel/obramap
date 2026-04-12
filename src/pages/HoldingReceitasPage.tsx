@@ -133,7 +133,7 @@ export default function HoldingReceitasPage() {
 
       const [{ data: medicoes, error: medError }, { data: restricoes }] = await Promise.all([
         supabase.from("medicoes_ple").select("id, obra_id, num_medicao, mes_referencia, ano_referencia, data_previsao_medicao, data_envio, data_envio_nf, data_aprovacao, status_medicao, valor_previsto_medicao, valor_medicao, valor_acatado, num_nf, data_pagamento, status_nf").in("obra_id", obraIds),
-        supabase.from("restricoes_financeiras").select("*").in("obra_id", obraIds),
+        supabase.from("restricoes_financeiras").select("id, obra_id, medicao_id, company_id, tipo, descricao, valor, impacto_medicao, data_limite, resolvida, resolvida_em, resolvida_por_nome, valor_pago, forma_resolucao, created_by_name, created_at").in("obra_id", obraIds),
       ]);
 
       if (medError) throw medError;

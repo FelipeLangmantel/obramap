@@ -362,7 +362,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
 
-    const INACTIVITY_LIMIT_MS = 20 * 60 * 1000; // 20 minutos
+    const INACTIVITY_LIMIT_MS = 30 * 60 * 1000; // 30 minutos — alinhado com pg_cron cleanup
     const HEARTBEAT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos (era 2min — reduzido para diminuir tráfego Realtime)
     let lastActivity = Date.now();
 
