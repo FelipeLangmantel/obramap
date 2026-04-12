@@ -202,6 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           visible_menus: effectiveMenus,
           visible_management_sections: effectiveMgmt,
           can_edit: effectiveCanEdit,
+          holding_permissions: (permData as any)?.holding_permissions || {},
         });
       } else {
         setPermissions(null);
