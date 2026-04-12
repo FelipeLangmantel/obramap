@@ -1336,6 +1336,52 @@ export function UserPermissionsPanel() {
                   })}
                 </div>
               </div>
+
+              {/* Holding Permissions */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Shield className="h-3.5 w-3.5" />
+                  Módulo Holding — Permissões de Ação
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Controle granular das ações que este usuário pode executar dentro do módulo Holding.
+                </p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {HOLDING_PERMISSION_OPTIONS.map((opt) => {
+                    const isChecked = editingPermission?.holding_permissions?.[opt.id] === true;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          if (!editingPermission) return;
+                          setEditingPermission({
+                            ...editingPermission,
+                            holding_permissions: {
+                              ...editingPermission.holding_permissions,
+                              [opt.id]: !isChecked,
+                            },
+                          });
+                        }}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2.5 rounded-md border text-sm text-left transition-colors",
+                          isChecked
+                            ? "border-primary bg-primary/5 text-foreground font-medium"
+                            : "border-border bg-background text-muted-foreground hover:border-muted-foreground/30"
+                        )}
+                      >
+                        <div className={cn(
+                          "h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors",
+                          isChecked ? "bg-primary border-primary" : "border-muted-foreground/30"
+                        )}>
+                          {isChecked && <Settings className="h-2.5 w-2.5 text-primary-foreground" />}
+                        </div>
+                        <span className="truncate">{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </ScrollArea>
 
