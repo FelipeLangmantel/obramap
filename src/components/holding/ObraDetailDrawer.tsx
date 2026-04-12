@@ -2478,7 +2478,7 @@ const TIPO_DESPESA_BADGE: Record<string, { label: string; cls: string }> = {
 const CATEGORIAS = ["Pessoal", "Material", "Equipamento", "Serviço", "Administrativo", "Financeiro", "Geral"];
 
 function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedicoes?: any[] }) {
-  const { user, profile, requireEdit, isAdmin, isCompanyAdmin } = useAuth();
+  const { user, profile, requireEdit, isAdmin, isCompanyAdmin, holdingCan } = useAuth();
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();
