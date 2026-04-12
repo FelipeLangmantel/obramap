@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -87,6 +87,7 @@ const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "
 
 export default function HoldingReceitasPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { company } = useAuth();
 
@@ -99,7 +100,20 @@ export default function HoldingReceitasPage() {
   const [filterTipoContrato, setFilterTipoContrato] = useState("all");
   const [agrupamento, setAgrupamento] = useState<"semanal" | "quinzenal" | "mensal">("mensal");
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
-  const [selectedObraId, setSelectedObraId] = useState<string | null>(null);
+  const [selectedObraId, setSelectedObraId] = useState<string | null>(
+    (location.state as any)?.obraId || null
+  );
+
+  // Abrir aba correta quando vindo de notificação
+  useEffect(() => {
+    const state = location.state as any;
+    if (state?.tab) setActiveTab(state.tab);
+    if (state?.obraId) setSelectedObraId(state.obraId);
+    // Limpar state para não re-abrir ao navegar de volta
+    if (state?.obraId || state?.tab) {
+      window.history.replaceState({}, "", location.pathname);
+    }
+  }, [location.state]);
   
 
   // ─── Data Fetching ───

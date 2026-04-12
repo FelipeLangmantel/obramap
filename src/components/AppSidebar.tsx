@@ -668,9 +668,20 @@ export function NotificationBell({ modulo }: { modulo?: string } = {}) {
                 medicao_sem_previsao: "/holding-receitas",
                 desvio_financeiro_relevante: "/holding-receitas",
               };
-              const icon = iconMap[n.tipo] || <ClockIcon className="h-4 w-4 text-muted-foreground" />;
               const destino = navMap[n.tipo] || "/holding-receitas";
               const timeAgo = formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: ptBR });
+
+              // Para notificações com obra_id, navegamos com state para abrir direto
+              const navState: Record<string, string> = {};
+              if (n.obra_id) {
+                if (["restricao_financeira", "restricao_resolvida", "restricao_recusada",
+                     "medicao_previsao_vencida", "obra_sem_medicao_no_periodo",
+                     "medicao_sem_previsao", "desvio_financeiro_relevante"].includes(n.tipo)) {
+                  navState.obraId = n.obra_id;
+                  navState.tab = "financeiro";
+                }
+              }
+              const icon = iconMap[n.tipo] || <ClockIcon className="h-4 w-4 text-muted-foreground" />;
               return (
                 <button
                   key={n.id}
@@ -681,7 +692,7 @@ export function NotificationBell({ modulo }: { modulo?: string } = {}) {
                   onClick={() => {
                     notif.markAsRead(n.id);
                     notif.setIsOpen(false);
-                    navigate(destino);
+                    navigate(destino, Object.keys(navState).length > 0 ? { state: navState } : undefined);
                   }}
                 >
                   <div className="flex items-start gap-3">
