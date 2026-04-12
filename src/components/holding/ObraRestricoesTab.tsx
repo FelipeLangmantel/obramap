@@ -57,8 +57,9 @@ function useInvalidateHolding() {
 }
 
 export function ObraRestricoesTab({ obraId }: { obraId: string }) {
-  const { user, profile, requireEdit, isCompanyAdmin, isSystemAdmin } = useAuth();
+  const { user, profile, requireEdit, isCompanyAdmin, isSystemAdmin, holdingCan } = useAuth();
   const isAdmin = isCompanyAdmin || isSystemAdmin;
+  const canCreateRestriction = holdingCan('ver_restricoes');
   const userName = profile?.display_name || user?.email || "Usuário";
   const userId = user?.id || null;
   const invalidateHolding = useInvalidateHolding();

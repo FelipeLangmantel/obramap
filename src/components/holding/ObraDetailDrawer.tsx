@@ -2011,9 +2011,11 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h4 className="font-semibold text-sm">Medições ({medicoes.length})</h4>
+        {holdingCan('lancar_medicoes') && (
         <Button size="sm" variant="outline" onClick={() => { setShowForm(!showForm); setEditingMedicao(null); }}>
           <Plus className="h-4 w-4 mr-1" /> Nova Medição
         </Button>
+        )}
       </div>
 
       {/* KPI CARDS */}
