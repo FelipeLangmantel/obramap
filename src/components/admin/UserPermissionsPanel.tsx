@@ -93,7 +93,17 @@ interface UserPermission {
   allowed_project_ids: string[] | null;
   visible_menus: string[];
   visible_management_sections: string[];
+  holding_permissions: Record<string, boolean>;
 }
+
+const HOLDING_PERMISSION_OPTIONS = [
+  { id: "lancar_medicoes", label: "Lançar medições" },
+  { id: "lancar_financeiro", label: "Lançar financeiro" },
+  { id: "lancar_despesas", label: "Lançar despesas" },
+  { id: "anexar_documentos", label: "Anexar documentos" },
+  { id: "ver_restricoes", label: "Ver restrições" },
+  { id: "resolver_restricoes", label: "Resolver restrições" },
+];
 
 interface Department {
   id: string;
