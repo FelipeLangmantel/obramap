@@ -31,6 +31,7 @@ interface UserPermission {
   visible_menus: string[];
   visible_management_sections: string[];
   can_edit: boolean | null; // null = herda do departamento
+  holding_permissions: Record<string, boolean>;
 }
 
 interface AuthContextType {
@@ -51,6 +52,7 @@ interface AuthContextType {
   canAccessMenu: (menuId: string) => boolean;
   canAccessManagement: (sectionId: string) => boolean;
   canAccessProject: (projectId: string) => boolean;
+  holdingCan: (acao: string) => boolean;
   requireEdit: () => boolean;
   refreshPermissions: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
