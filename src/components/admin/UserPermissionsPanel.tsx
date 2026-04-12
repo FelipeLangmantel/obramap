@@ -442,6 +442,7 @@ export function UserPermissionsPanel() {
           : null,
         visible_menus: editingPermission.visible_menus,
         visible_management_sections: editingPermission.visible_management_sections,
+        holding_permissions: editingPermission.holding_permissions || {},
         updated_at: new Date().toISOString(),
       };
 
