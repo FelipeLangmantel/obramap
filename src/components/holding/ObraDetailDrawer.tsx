@@ -1136,6 +1136,8 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingMedicao, setEditingMedicao] = useState<any | null>(null);
+  const [showOverBudgetAlert, setShowOverBudgetAlert] = useState(false);
+  const [overBudgetMedicaoId, setOverBudgetMedicaoId] = useState<string | null>(null);
 
   // New measurement form (Step 1 only)
   const [newForm, setNewForm] = useState({
