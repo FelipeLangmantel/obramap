@@ -37,8 +37,8 @@ function MiniGLTFModel({ url, onLoaded }: { url: string; onLoaded: () => void })
 }
 
 // Mini OBJ model
-function MiniOBJModel({ url, mtlUrl, onLoaded }: { url: string; mtlUrl?: string; onLoaded: () => void }) {
-  const materials = mtlUrl ? useLoader(MTLLoader, mtlUrl) : null;
+function MiniOBJModelWithMtl({ url, mtlUrl, onLoaded }: { url: string; mtlUrl: string; onLoaded: () => void }) {
+  const materials = useLoader(MTLLoader, mtlUrl);
   const obj = useLoader(OBJLoader, url, (loader) => {
     if (materials) { materials.preload(); loader.setMaterials(materials); }
   });
@@ -50,6 +50,25 @@ function MiniOBJModel({ url, mtlUrl, onLoaded }: { url: string; mtlUrl?: string;
     }
   }, [obj, onLoaded]);
   return <primitive object={obj} />;
+}
+
+function MiniOBJModelNoMtl({ url, onLoaded }: { url: string; onLoaded: () => void }) {
+  const obj = useLoader(OBJLoader, url);
+  const calledRef = useRef(false);
+  useEffect(() => {
+    if (obj && !calledRef.current) {
+      calledRef.current = true;
+      requestAnimationFrame(() => requestAnimationFrame(() => onLoaded()));
+    }
+  }, [obj, onLoaded]);
+  return <primitive object={obj} />;
+}
+
+function MiniOBJModel({ url, mtlUrl, onLoaded }: { url: string; mtlUrl?: string; onLoaded: () => void }) {
+  if (mtlUrl) {
+    return <MiniOBJModelWithMtl url={url} mtlUrl={mtlUrl} onLoaded={onLoaded} />;
+  }
+  return <MiniOBJModelNoMtl url={url} onLoaded={onLoaded} />;
 }
 
 // Auto-fit camera for mini scene
