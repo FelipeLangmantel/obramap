@@ -1136,6 +1136,8 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingMedicao, setEditingMedicao] = useState<any | null>(null);
+  const [showOverBudgetAlert, setShowOverBudgetAlert] = useState(false);
+  const [overBudgetMedicaoId, setOverBudgetMedicaoId] = useState<string | null>(null);
 
   // New measurement form (Step 1 only)
   const [newForm, setNewForm] = useState({
@@ -2000,14 +2002,73 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
   const totalPrevisto = medicoesNormais.reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0);
   const totalRealizado = medicoesNormais.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
   const totalAcatado = medicoesNormais.reduce((s, m) => s + (Number(m.valor_acatado) || 0), 0);
-  const saldoAMedir = Math.max(0, valorContrato - baseJaComprometida - totalPrevisto);
+  // Saldo a Medir: contrato - base já comprometida - max(previsto, realizado, acatado) por medição
+  const totalComprometidoMedicoes = medicoesNormais.reduce((s, m) => {
+    const prev = Number(m.valor_previsto_medicao) || 0;
+    const real = Number(m.valor_medicao) || 0;
+    const acat = Number(m.valor_acatado) || 0;
+    return s + Math.max(prev, real, acat);
+  }, 0);
+  const saldoAMedir = valorContrato - baseJaComprometida - totalComprometidoMedicoes;
   const totalEnviadas = medicoesNormais.filter(m => m.status_medicao === "enviada").length;
   const totalAprovadas = medicoesNormais.filter(m => m.status_medicao === "aprovada").length;
   const totalPrevistas = medicoesNormais.filter(m => m.status_medicao === "prevista").length;
-  const pctAndamento = valorContrato > 0 ? Math.min(100, ((baseJaComprometida + totalAcatado + totalRealizado - totalAcatado) / valorContrato) * 100) : 0;
+
+
+
+
+  // Check for over-budget on saldoAMedir change
+  useEffect(() => {
+    if (saldoAMedir < 0 && medicoesNormais.length > 0) {
+      // Find the next active measurement to offer adjustment
+      const nextActive = medicoesNormais.find(m => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada");
+      if (nextActive) {
+        setOverBudgetMedicaoId(nextActive.id);
+        setShowOverBudgetAlert(true);
+      }
+    }
+  }, [saldoAMedir]);
+
+  const handleAdjustOverBudget = async () => {
+    if (!overBudgetMedicaoId || saldoAMedir >= 0) return;
+    const med = medicoes.find(m => m.id === overBudgetMedicaoId);
+    if (!med) return;
+    const currentPrev = Number(med.valor_previsto_medicao) || 0;
+    const adjustedValue = Math.max(0, currentPrev + saldoAMedir); // saldoAMedir is negative
+    try {
+      await supabase.from("medicoes_ple").update({ valor_previsto_medicao: adjustedValue }).eq("id", overBudgetMedicaoId);
+      toast.success(`Medição ${med.num_medicao} ajustada para ${BRL.format(adjustedValue)}`);
+      setShowOverBudgetAlert(false);
+      load();
+    } catch {
+      toast.error("Erro ao ajustar medição.");
+    }
+  };
 
   return (
     <>
+    {/* Over-budget alert dialog */}
+    <AlertDialog open={showOverBudgetAlert} onOpenChange={setShowOverBudgetAlert}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-5 w-5" /> Saldo do Contrato Excedido
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            O valor lançado nas medições ultrapassa o saldo disponível do contrato em <strong className="text-destructive">{BRL.format(Math.abs(saldoAMedir))}</strong>.
+            <br /><br />
+            Deseja remover a diferença da próxima medição ativa (Medição {medicoes.find(m => m.id === overBudgetMedicaoId)?.num_medicao})?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Ignorar</AlertDialogCancel>
+          <AlertDialogAction onClick={handleAdjustOverBudget} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            Ajustar Medição
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h4 className="font-semibold text-sm">Medições ({medicoes.length})</h4>
@@ -2019,36 +2080,32 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
       </div>
 
       {/* KPI CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
         <Card><CardContent className="p-3 space-y-1">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Previsto</p>
-          <p className="text-sm font-bold">{BRL_SHORT(totalPrevisto)}</p>
+          <p className="text-sm font-bold">{BRL.format(totalPrevisto)}</p>
           <p className="text-[10px] text-muted-foreground">{totalPrevistas} previsão(ões)</p>
         </CardContent></Card>
         <Card><CardContent className="p-3 space-y-1">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Realizado</p>
-          <p className="text-sm font-bold">{BRL_SHORT(totalRealizado)}</p>
+          <p className="text-sm font-bold">{BRL.format(totalRealizado)}</p>
           <p className="text-[10px] text-muted-foreground">{totalEnviadas + totalAprovadas} enviada(s)</p>
         </CardContent></Card>
         <Card><CardContent className="p-3 space-y-1">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Acatado</p>
-          <p className="text-sm font-bold text-emerald-600">{BRL_SHORT(totalAcatado)}</p>
+          <p className="text-sm font-bold text-emerald-600">{BRL.format(totalAcatado)}</p>
           <p className="text-[10px] text-muted-foreground">{totalAprovadas} aprovada(s)</p>
         </CardContent></Card>
-        <Card><CardContent className="p-3 space-y-1">
+        <Card className={saldoAMedir < 0 ? "border-destructive" : ""}><CardContent className="p-3 space-y-1">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Saldo a Medir</p>
-          <p className={`text-sm font-bold ${saldoAMedir <= 0 ? "text-destructive" : ""}`}>{BRL_SHORT(saldoAMedir)}</p>
-          <p className="text-[10px] text-muted-foreground">do contrato</p>
+          <p className={`text-sm font-bold ${saldoAMedir < 0 ? "text-destructive" : ""}`}>{BRL.format(saldoAMedir)}</p>
+          {saldoAMedir < 0 && <p className="text-[10px] text-destructive font-medium">⚠ Excede contrato</p>}
+          {saldoAMedir >= 0 && <p className="text-[10px] text-muted-foreground">do contrato</p>}
         </CardContent></Card>
         <Card><CardContent className="p-3 space-y-1">
           <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Valor Contrato</p>
-          <p className="text-sm font-bold">{BRL_SHORT(valorContrato)}</p>
-          {baseJaComprometida > 0 && <p className="text-[10px] text-muted-foreground">+ {BRL_SHORT(baseJaComprometida)} saldo ini.</p>}
-        </CardContent></Card>
-        <Card><CardContent className="p-3 space-y-1">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Andamento</p>
-          <p className="text-sm font-bold">{pctAndamento.toFixed(1)}%</p>
-          <Progress value={pctAndamento} className="h-1.5 mt-1" />
+          <p className="text-sm font-bold">{BRL.format(valorContrato)}</p>
+          {baseJaComprometida > 0 && <p className="text-[10px] text-muted-foreground">+ {BRL.format(baseJaComprometida)} saldo ini.</p>}
         </CardContent></Card>
       </div>
 
