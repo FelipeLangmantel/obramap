@@ -1627,7 +1627,7 @@ function FinanceiroObraSheet({
   return (
     <>
       <Sheet open={!!obraId} onOpenChange={(open) => { if (!open) onClose(); }}>
-        <SheetContent side="right" className="w-full sm:max-w-3xl overflow-y-auto p-0">
+        <SheetContent side="right" className="w-full sm:max-w-[75vw] overflow-y-auto p-0">
           {obra && (
             <div className="p-5 space-y-5">
               {/* Header */}
