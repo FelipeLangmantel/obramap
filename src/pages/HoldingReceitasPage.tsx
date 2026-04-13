@@ -203,6 +203,8 @@ export default function HoldingReceitasPage() {
       .channel(channelName)
       .on("postgres_changes", { event: "*", schema: "public", table: "medicoes_ple" }, invalidate)
       .on("postgres_changes", { event: "*", schema: "public", table: "restricoes_financeiras" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "obras_portfolio" }, invalidate)
+      .on("postgres_changes", { event: "*", schema: "public", table: "aditivos_contratos" }, invalidate)
       .subscribe();
     return () => { clearTimeout(realtimeTimer); supabase.removeChannel(channel); };
   }, [queryClient, company?.id]);
@@ -1372,10 +1374,10 @@ export default function HoldingReceitasPage() {
                   return (
                     <>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Total a Receber</p><p className="text-lg font-bold">{BRL_SHORT(totalReceber)}</p></CardContent></Card>
-                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Recebido no Mês</p><p className="text-lg font-bold">{BRL_SHORT(recebidoMes)}</p></CardContent></Card>
-                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Próximo 30 dias</p><p className="text-lg font-bold">{BRL_SHORT(prox30)}</p></CardContent></Card>
-                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Restrições Abertas</p><p className="text-lg font-bold">{totalRestrAberto} <span className="text-xs font-normal text-muted-foreground">({BRL_SHORT(totalRestrImpacto)})</span></p></CardContent></Card>
+                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Total a Receber</p><p className="text-lg font-bold">{BRL.format(totalReceber)}</p></CardContent></Card>
+                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Recebido no Mês</p><p className="text-lg font-bold">{BRL.format(recebidoMes)}</p></CardContent></Card>
+                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Próximo 30 dias</p><p className="text-lg font-bold">{BRL.format(prox30)}</p></CardContent></Card>
+                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Restrições Abertas</p><p className="text-lg font-bold">{totalRestrAberto} <span className="text-xs font-normal text-muted-foreground">({BRL.format(totalRestrImpacto)})</span></p></CardContent></Card>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
