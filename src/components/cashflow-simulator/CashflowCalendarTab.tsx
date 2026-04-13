@@ -3,8 +3,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isSameMonth } from "date-fns";
+import { ChevronLeft, ChevronRight, DollarSign } from "lucide-react";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { formatCurrency, getFamilyColor } from "./utils";
 import type { useCashflowSimulator } from "@/hooks/useCashflowSimulator";
@@ -25,7 +25,7 @@ export function CashflowCalendarTab({ simulator }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const days = eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) });
-  const startPad = getDay(startOfMonth(currentMonth)); // 0=Sun
+  const startPad = getDay(startOfMonth(currentMonth));
 
   const maxDayValue = useMemo(() => {
     let max = 0;
@@ -46,32 +46,40 @@ export function CashflowCalendarTab({ simulator }: Props) {
   const selectedItems = selectedDay ? (dailyMap.get(selectedDay) || []) : [];
   const selectedTotal = selectedItems.reduce((s, i) => s + i.installment_value, 0);
 
+  const formatCompact = (value: number) => {
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+    if (value >= 1_000) return `${(value / 1_000).toFixed(0)}k`;
+    return value.toFixed(0);
+  };
+
   return (
     <>
-      <Card className="border-border">
-        <CardContent className="p-4">
+      <Card className="border-border overflow-hidden">
+        <CardContent className="p-5">
           {/* Month navigation */}
-          <div className="flex items-center justify-between mb-4">
-            <Button variant="ghost" size="icon" onClick={() => setCurrentMonth(prev => subMonths(prev, 1))}>
+          <div className="flex items-center justify-between mb-5">
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => setCurrentMonth(prev => subMonths(prev, 1))}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <h3 className="text-sm font-semibold text-foreground capitalize">
+            <h3 className="text-base font-bold text-foreground capitalize tracking-wide">
               {format(currentMonth, "MMMM yyyy", { locale: ptBR })}
             </h3>
-            <Button variant="ghost" size="icon" onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}>
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => setCurrentMonth(prev => addMonths(prev, 1))}>
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
 
           {/* Day headers */}
-          <div className="grid grid-cols-7 gap-1 mb-1">
+          <div className="grid grid-cols-7 gap-2 mb-2">
             {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map(d => (
-              <div key={d} className="text-center text-[10px] font-medium text-muted-foreground py-1">{d}</div>
+              <div key={d} className="text-center text-xs font-semibold text-muted-foreground uppercase tracking-wider py-2">
+                {d}
+              </div>
             ))}
           </div>
 
           {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-2">
             {Array.from({ length: startPad }).map((_, i) => <div key={`pad-${i}`} />)}
             {days.map(day => {
               const dayKey = format(day, "yyyy-MM-dd");
@@ -79,34 +87,71 @@ export function CashflowCalendarTab({ simulator }: Props) {
               const total = dayItems ? dayItems.reduce((s, i) => s + i.installment_value, 0) : 0;
               const families = dayItems ? [...new Set(dayItems.map(i => i.family))] : [];
               const intensity = maxDayValue > 0 ? Math.min(total / maxDayValue, 1) : 0;
+              const today = isToday(day);
+              const hasData = !!dayItems;
+              const itemCount = dayItems?.length || 0;
 
               return (
                 <button
                   key={dayKey}
                   onClick={() => handleDayClick(dayKey)}
-                  className={`relative rounded-md p-1 min-h-[60px] flex flex-col items-center transition-colors border
-                    ${dayItems ? "cursor-pointer hover:border-primary/50 border-border" : "border-transparent"}
+                  className={`
+                    relative rounded-xl p-2 min-h-[90px] flex flex-col transition-all duration-200 border-2
+                    ${hasData
+                      ? "cursor-pointer hover:scale-[1.03] hover:shadow-lg hover:border-primary/60 border-primary/20 bg-card"
+                      : "border-transparent bg-muted/30 hover:bg-muted/50"
+                    }
+                    ${today ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}
                   `}
-                  style={{
-                    backgroundColor: dayItems ? `hsl(210 70% 55% / ${0.08 + intensity * 0.25})` : undefined,
-                  }}
                 >
-                  <span className="text-xs text-foreground">{format(day, "d")}</span>
+                  {/* Date badge */}
+                  <div className={`
+                    self-start rounded-lg w-8 h-8 flex items-center justify-center text-sm font-bold mb-1
+                    ${today
+                      ? "bg-primary text-primary-foreground shadow-md"
+                      : hasData
+                        ? "bg-accent text-accent-foreground"
+                        : "bg-transparent text-muted-foreground"
+                    }
+                  `}>
+                    {format(day, "d")}
+                  </div>
+
+                  {/* Value display */}
                   {total > 0 && (
-                    <span className="text-[9px] font-semibold text-primary mt-0.5">
-                      {total >= 1000 ? `${(total / 1000).toFixed(0)}k` : total.toFixed(0)}
-                    </span>
+                    <div className="flex items-center gap-1 mt-auto">
+                      <DollarSign className="h-3 w-3 text-primary flex-shrink-0" />
+                      <span className="text-xs font-bold text-primary truncate">
+                        {formatCompact(total)}
+                      </span>
+                    </div>
                   )}
-                  {families.length > 0 && (
-                    <div className="flex gap-0.5 mt-auto">
-                      {families.slice(0, 3).map(f => (
-                        <div
-                          key={f}
-                          className="w-1.5 h-1.5 rounded-full"
-                          style={{ backgroundColor: getFamilyColor(f) }}
-                        />
-                      ))}
-                      {families.length > 3 && <span className="text-[7px] text-muted-foreground">+{families.length - 3}</span>}
+
+                  {/* Family dots + count */}
+                  {hasData && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <div className="flex -space-x-0.5">
+                        {families.slice(0, 4).map(f => (
+                          <div
+                            key={f}
+                            className="w-2 h-2 rounded-full border border-background"
+                            style={{ backgroundColor: getFamilyColor(f) }}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-[10px] text-muted-foreground font-medium">
+                        {itemCount} {itemCount === 1 ? "item" : "itens"}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Intensity bar */}
+                  {hasData && (
+                    <div className="absolute bottom-0 left-2 right-2 h-1 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-primary/70 transition-all duration-500"
+                        style={{ width: `${Math.max(intensity * 100, 8)}%` }}
+                      />
                     </div>
                   )}
                 </button>
