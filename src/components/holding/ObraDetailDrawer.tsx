@@ -2014,9 +2014,8 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
   const totalAprovadas = medicoesNormais.filter(m => m.status_medicao === "aprovada").length;
   const totalPrevistas = medicoesNormais.filter(m => m.status_medicao === "prevista").length;
 
-  // Alert state for over-budget
-  const [showOverBudgetAlert, setShowOverBudgetAlert] = useState(false);
-  const [overBudgetMedicaoId, setOverBudgetMedicaoId] = useState<string | null>(null);
+
+
 
   // Check for over-budget on saldoAMedir change
   useEffect(() => {
