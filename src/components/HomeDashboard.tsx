@@ -52,10 +52,7 @@ function MiniOBJModelWithMtl({ url, mtlUrl, onLoaded }: { url: string; mtlUrl: s
   return <primitive object={obj} />;
 }
 
-function MiniOBJModel({ url, mtlUrl, onLoaded }: { url: string; mtlUrl?: string; onLoaded: () => void }) {
-  if (mtlUrl) {
-    return <MiniOBJModelWithMtl url={url} mtlUrl={mtlUrl} onLoaded={onLoaded} />;
-  }
+function MiniOBJModelNoMtl({ url, onLoaded }: { url: string; onLoaded: () => void }) {
   const obj = useLoader(OBJLoader, url);
   const calledRef = useRef(false);
   useEffect(() => {
@@ -65,6 +62,13 @@ function MiniOBJModel({ url, mtlUrl, onLoaded }: { url: string; mtlUrl?: string;
     }
   }, [obj, onLoaded]);
   return <primitive object={obj} />;
+}
+
+function MiniOBJModel({ url, mtlUrl, onLoaded }: { url: string; mtlUrl?: string; onLoaded: () => void }) {
+  if (mtlUrl) {
+    return <MiniOBJModelWithMtl url={url} mtlUrl={mtlUrl} onLoaded={onLoaded} />;
+  }
+  return <MiniOBJModelNoMtl url={url} onLoaded={onLoaded} />;
 }
 
 // Auto-fit camera for mini scene
