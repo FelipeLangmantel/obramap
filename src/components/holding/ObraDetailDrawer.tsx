@@ -1692,6 +1692,48 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     }, 100);
   };
 
+  // ─── KPI calculations (must be before early returns to preserve hook order) ───
+  const medicoesNormais = medicoes.filter(m => m.num_medicao !== "Saldo Inicial");
+  const totalPrevisto = medicoesNormais.reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0);
+  const totalRealizado = medicoesNormais.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
+  const totalAcatado = medicoesNormais.reduce((s, m) => s + (Number(m.valor_acatado) || 0), 0);
+  const totalComprometidoMedicoes = medicoesNormais.reduce((s, m) => {
+    const prev = Number(m.valor_previsto_medicao) || 0;
+    const real = Number(m.valor_medicao) || 0;
+    const acat = Number(m.valor_acatado) || 0;
+    return s + Math.max(prev, real, acat);
+  }, 0);
+  const saldoAMedir = valorContrato - baseJaComprometida - totalComprometidoMedicoes;
+  const totalEnviadas = medicoesNormais.filter(m => m.status_medicao === "enviada").length;
+  const totalAprovadas = medicoesNormais.filter(m => m.status_medicao === "aprovada").length;
+  const totalPrevistas = medicoesNormais.filter(m => m.status_medicao === "prevista").length;
+
+  useEffect(() => {
+    if (saldoAMedir < 0 && medicoesNormais.length > 0) {
+      const nextActive = medicoesNormais.find(m => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada");
+      if (nextActive) {
+        setOverBudgetMedicaoId(nextActive.id);
+        setShowOverBudgetAlert(true);
+      }
+    }
+  }, [saldoAMedir]);
+
+  const handleAdjustOverBudget = async () => {
+    if (!overBudgetMedicaoId || saldoAMedir >= 0) return;
+    const med = medicoes.find(m => m.id === overBudgetMedicaoId);
+    if (!med) return;
+    const currentPrev = Number(med.valor_previsto_medicao) || 0;
+    const adjustedValue = Math.max(0, currentPrev + saldoAMedir);
+    try {
+      await supabase.from("medicoes_ple").update({ valor_previsto_medicao: adjustedValue }).eq("id", overBudgetMedicaoId);
+      toast.success(`Medição ${med.num_medicao} ajustada para ${BRL.format(adjustedValue)}`);
+      setShowOverBudgetAlert(false);
+      load();
+    } catch {
+      toast.error("Erro ao ajustar medição.");
+    }
+  };
+
   if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
 
   const status = editForm.status_medicao || "prevista";
@@ -1997,53 +2039,6 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
     );
   };
 
-  // ─── KPI calculations ───
-  const medicoesNormais = medicoes.filter(m => m.num_medicao !== "Saldo Inicial");
-  const totalPrevisto = medicoesNormais.reduce((s, m) => s + (Number(m.valor_previsto_medicao) || 0), 0);
-  const totalRealizado = medicoesNormais.reduce((s, m) => s + (Number(m.valor_medicao) || 0), 0);
-  const totalAcatado = medicoesNormais.reduce((s, m) => s + (Number(m.valor_acatado) || 0), 0);
-  // Saldo a Medir: contrato - base já comprometida - max(previsto, realizado, acatado) por medição
-  const totalComprometidoMedicoes = medicoesNormais.reduce((s, m) => {
-    const prev = Number(m.valor_previsto_medicao) || 0;
-    const real = Number(m.valor_medicao) || 0;
-    const acat = Number(m.valor_acatado) || 0;
-    return s + Math.max(prev, real, acat);
-  }, 0);
-  const saldoAMedir = valorContrato - baseJaComprometida - totalComprometidoMedicoes;
-  const totalEnviadas = medicoesNormais.filter(m => m.status_medicao === "enviada").length;
-  const totalAprovadas = medicoesNormais.filter(m => m.status_medicao === "aprovada").length;
-  const totalPrevistas = medicoesNormais.filter(m => m.status_medicao === "prevista").length;
-
-
-
-
-  // Check for over-budget on saldoAMedir change
-  useEffect(() => {
-    if (saldoAMedir < 0 && medicoesNormais.length > 0) {
-      // Find the next active measurement to offer adjustment
-      const nextActive = medicoesNormais.find(m => m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada");
-      if (nextActive) {
-        setOverBudgetMedicaoId(nextActive.id);
-        setShowOverBudgetAlert(true);
-      }
-    }
-  }, [saldoAMedir]);
-
-  const handleAdjustOverBudget = async () => {
-    if (!overBudgetMedicaoId || saldoAMedir >= 0) return;
-    const med = medicoes.find(m => m.id === overBudgetMedicaoId);
-    if (!med) return;
-    const currentPrev = Number(med.valor_previsto_medicao) || 0;
-    const adjustedValue = Math.max(0, currentPrev + saldoAMedir); // saldoAMedir is negative
-    try {
-      await supabase.from("medicoes_ple").update({ valor_previsto_medicao: adjustedValue }).eq("id", overBudgetMedicaoId);
-      toast.success(`Medição ${med.num_medicao} ajustada para ${BRL.format(adjustedValue)}`);
-      setShowOverBudgetAlert(false);
-      load();
-    } catch {
-      toast.error("Erro ao ajustar medição.");
-    }
-  };
 
   return (
     <>
