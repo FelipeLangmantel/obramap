@@ -17,14 +17,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Progress } from "@/components/ui/progress";
+
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer
 } from "recharts";
 import {
-  TrendingUp, DollarSign, Clock, CheckCircle2, AlertCircle, Download, RefreshCw,
-  Search, Calendar, FileText, X, Wallet, ChevronRight, ChevronDown, AlertTriangle, Check, Ban, Loader2
+  TrendingUp, DollarSign, Clock, CheckCircle2, AlertCircle, Download,
+  Search, Calendar, FileText, X, Wallet, ChevronRight, ChevronDown, AlertTriangle, Ban, Loader2, RotateCcw
 } from "lucide-react";
 import { format, addMonths, startOfMonth, startOfWeek, endOfWeek, addWeeks, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -89,7 +89,7 @@ export default function HoldingReceitasPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { company } = useAuth();
+  const { company, user, profile } = useAuth();
 
   const [activeTab, setActiveTab] = useState("financeiro");
   const [filterObra, setFilterObra] = useState("all");
@@ -103,6 +103,10 @@ export default function HoldingReceitasPage() {
   const [selectedObraId, setSelectedObraId] = useState<string | null>(
     (location.state as any)?.obraId || null
   );
+  const [expandedProgPeriods, setExpandedProgPeriods] = useState<Set<number>>(new Set());
+  const [reprogramarMedicao, setReprogramarMedicao] = useState<MedicaoCompleta | null>(null);
+  const [reprogramarForm, setReprogramarForm] = useState({ motivo: "", novaData: "", novoValor: 0 });
+  const [savingReprogramar, setSavingReprogramar] = useState(false);
 
   // Abrir aba correta quando vindo de notificação
   useEffect(() => {
@@ -567,6 +571,53 @@ export default function HoldingReceitasPage() {
     setFilterObra("all"); setFilterEmpresa("all"); setFilterStatusMed("all"); setFilterStatusNF("all"); setFilterTipoContrato("all"); setSearchText("");
   };
 
+  // ─── Reprogramar Previsão ───
+  const handleReprogramar = async () => {
+    if (!reprogramarMedicao || !reprogramarForm.motivo.trim()) return;
+    setSavingReprogramar(true);
+    try {
+      // 1. Save history
+      await supabase.from("medicao_previsao_historico").insert({
+        medicao_id: reprogramarMedicao.id,
+        obra_id: reprogramarMedicao.obra_id,
+        data_previsao_anterior: reprogramarMedicao.data_previsao_medicao,
+        valor_previsto_anterior: reprogramarMedicao.valor_previsto_medicao,
+        data_previsao_nova: reprogramarForm.novaData || null,
+        valor_previsto_novo: reprogramarForm.novoValor || reprogramarMedicao.valor_previsto_medicao,
+        motivo: reprogramarForm.motivo.trim(),
+        created_by: user?.id,
+        created_by_name: (profile as any)?.display_name || user?.email || "—",
+      });
+
+      // 2. Update medicao with new forecast
+      const updatePayload: any = {};
+      if (reprogramarForm.novaData) updatePayload.data_previsao_medicao = reprogramarForm.novaData;
+      if (reprogramarForm.novoValor > 0) updatePayload.valor_previsto_medicao = reprogramarForm.novoValor;
+      
+      if (Object.keys(updatePayload).length > 0) {
+        await supabase.from("medicoes_ple").update(updatePayload).eq("id", reprogramarMedicao.id);
+      }
+
+      toast.success("Previsão reprogramada com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["holding-receitas"], exact: false });
+      setReprogramarMedicao(null);
+      setReprogramarForm({ motivo: "", novaData: "", novoValor: 0 });
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao reprogramar previsão.");
+    } finally {
+      setSavingReprogramar(false);
+    }
+  };
+
+  const toggleProgPeriod = (idx: number) => {
+    setExpandedProgPeriods(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+  };
+
   // ─── Programação summary KPIs ───
   const progSummary = useMemo(() => {
     const totalRecebido = programacaoData.reduce((s, p) => s + p.recebido, 0);
@@ -823,7 +874,7 @@ export default function HoldingReceitasPage() {
                              <TableCell className="py-2">{m.num_medicao || "—"}</TableCell>
                             <TableCell className="py-2">{m.mes_referencia || "—"}</TableCell>
                             <TableCell className="py-2">{m.ano_referencia || "—"}</TableCell>
-                             <TableCell className="py-2">{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                             <TableCell className={`py-2 ${m.data_previsao_medicao && m.status_medicao !== "aprovada" && m.status_medicao !== "enviada" && new Date(m.data_previsao_medicao + "T12:00:00") < new Date() ? "text-destructive font-semibold" : ""}`}>{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                              <TableCell className="py-2 text-right">
                                {m.valor_previsto_medicao > 0 ? (
                                  m.status_medicao === "aprovada"
@@ -937,7 +988,8 @@ export default function HoldingReceitasPage() {
                                      <TableCell className="py-1.5 text-[10px] font-semibold text-muted-foreground text-right">Previsto</TableCell>
                                      <TableCell className="py-1.5 text-[10px] font-semibold text-muted-foreground text-right">Acatado</TableCell>
                                      <TableCell className="py-1.5 text-[10px] font-semibold text-muted-foreground text-right">Desvio</TableCell>
-                                     <TableCell colSpan={2} className="py-1.5 text-[10px] font-semibold text-muted-foreground text-right">Prev. Envio</TableCell>
+                                      <TableCell className="py-1.5 text-[10px] font-semibold text-muted-foreground text-right">Prev. Envio</TableCell>
+                                      <TableCell className="py-1.5 text-[10px] font-semibold text-muted-foreground text-center">Ação</TableCell>
                                    </TableRow>
                                    {/* Drill-down rows */}
                                    {drillDownMedicoes.map(m => {
@@ -977,8 +1029,28 @@ export default function HoldingReceitasPage() {
                                              </span>
                                            ) : <span className="text-muted-foreground">—</span>}
                                          </TableCell>
-                                         <TableCell colSpan={2} className="py-1.5 text-right">{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
-                                       </TableRow>
+                                          <TableCell className={`py-1.5 text-right ${m.data_previsao_medicao && m.status_medicao !== "aprovada" && m.status_medicao !== "enviada" && new Date(m.data_previsao_medicao + "T12:00:00") < new Date() ? "text-destructive font-semibold" : ""}`}>{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                                          <TableCell className="py-1.5 text-center">
+                                            {m.status_medicao !== "aprovada" && (
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="h-6 px-2 text-[10px] text-primary hover:text-primary"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setReprogramarMedicao(m);
+                                                  setReprogramarForm({
+                                                    motivo: "",
+                                                    novaData: m.data_previsao_medicao || "",
+                                                    novoValor: m.valor_previsto_medicao || 0,
+                                                  });
+                                                }}
+                                              >
+                                                <RotateCcw className="h-3 w-3 mr-1" />Reprogramar
+                                              </Button>
+                                            )}
+                                          </TableCell>
+                                        </TableRow>
                                      );
                                    })}
                                    {/* Drill-down footer totals */}
@@ -1208,12 +1280,23 @@ export default function HoldingReceitasPage() {
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-3">
-                            {programacaoData.filter(p => p.medicoes.length > 0).map((p, i) => (
-                              <div key={i}>
-                                <p className="text-xs font-semibold mb-1">{p.label} — {BRL.format(p.total)}</p>
-                                <div className="space-y-1">
+                            {programacaoData.filter(p => p.medicoes.length > 0).map((p, i) => {
+                              const isExpProg = expandedProgPeriods.has(i);
+                              return (
+                              <div key={i} className="border rounded-lg overflow-hidden">
+                                <button
+                                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold hover:bg-accent/50 transition-colors"
+                                  onClick={() => toggleProgPeriod(i)}
+                                >
+                                  <span className="flex items-center gap-1.5">
+                                    {isExpProg ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                                    {p.label} — {BRL.format(p.total)}
+                                  </span>
+                                  <Badge variant="secondary" className="text-[10px]">{p.medicoes.length} medições</Badge>
+                                </button>
+                                {isExpProg && (
+                                <div className="space-y-1 px-3 pb-3">
                                   {p.medicoes.map((m: any) => {
-                                    // No contexto de projeção, usa statusEntrada (calculado) — não status do banco
                                     const STATUS_ENTRADA_BADGE: Record<string, { label: string; cls: string }> = {
                                       recebido: { label: "NF Recebida", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
                                       aprovado: { label: "Medição Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
@@ -1257,8 +1340,10 @@ export default function HoldingReceitasPage() {
                                     );
                                   })}
                                 </div>
+                                )}
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </CardContent>
                       </Card>
@@ -1282,9 +1367,8 @@ export default function HoldingReceitasPage() {
               {/* ═══ TAB FINANCEIRO ═══ */}
               <TabsContent value="financeiro" className="space-y-4 mt-4">
                 {(() => {
-                  const obrasAndamento = obras.filter((o: any) => o.status === "em_andamento");
+                  const obrasAndamento = obras.filter((o: any) => o.status === "em_andamento" && (filterEmpresa === "all" || o.empresa === filterEmpresa));
                   const now = new Date();
-                  const mesAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
                   const obraCards = obrasAndamento.map((obra: any) => {
                     const valorContrato = (Number(obra.valor_contrato) || 0) + (Number(obra.aditivo_valor_total) || 0);
@@ -1358,27 +1442,10 @@ export default function HoldingReceitasPage() {
                     return b.saldoReceber - a.saldoReceber;
                   });
 
-                  // KPIs
-                  const totalReceber = obraCards.reduce((s, c) => s + c.saldoReceber, 0);
-                  const recebidoMes = medicoes
-                    .filter(m => m.status_nf === "recebido" && m.data_pagamento && m.data_pagamento.startsWith(mesAtual))
-                    .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
-                  const prox30 = obraCards.reduce((s, c) => {
-                    if (c.dataEntradaProjetada && c.dataEntradaProjetada.getTime() <= now.getTime() + 30 * 86400000) return s + c.valorPrevAjustado;
-                    return s;
-                  }, 0);
-                  const restrAbertasGlobal = restricoes.filter((r: any) => !r.resolvida);
-                  const totalRestrAberto = restrAbertasGlobal.length;
-                  const totalRestrImpacto = restrAbertasGlobal.reduce((s: number, r: any) => s + (Number(r.impacto_medicao) || 0), 0);
+                  // KPIs removed — only top-level KPIs remain
 
-                  return (
+                    return (
                     <>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Total a Receber</p><p className="text-lg font-bold">{BRL.format(totalReceber)}</p></CardContent></Card>
-                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Recebido no Mês</p><p className="text-lg font-bold">{BRL.format(recebidoMes)}</p></CardContent></Card>
-                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Próximo 30 dias</p><p className="text-lg font-bold">{BRL.format(prox30)}</p></CardContent></Card>
-                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Restrições Abertas</p><p className="text-lg font-bold">{totalRestrAberto} <span className="text-xs font-normal text-muted-foreground">({BRL.format(totalRestrImpacto)})</span></p></CardContent></Card>
-                      </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                         {obraCards.map(({ obra, valorContrato, valorRecebido, pctRecebido, totalMedido, pctMedido, proximaMedicao, valorPrevAjustado, impactoRestricoes, dataEntradaProjetada, restrDaObra, hasVencidas, statusColor }) => (
@@ -1477,6 +1544,67 @@ export default function HoldingReceitasPage() {
           queryClient.invalidateQueries({ queryKey: ["holding-portfolio"], exact: false });
         }}
       />
+
+      {/* Dialog: Reprogramar Previsão */}
+      <Dialog open={!!reprogramarMedicao} onOpenChange={(open) => { if (!open) setReprogramarMedicao(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-4 w-4" />
+              Reprogramar Previsão
+            </DialogTitle>
+          </DialogHeader>
+          {reprogramarMedicao && (
+            <div className="space-y-4 py-2">
+              <div className="rounded-lg border p-3 bg-muted/30 space-y-1">
+                <p className="text-sm font-medium">{reprogramarMedicao.obra_nome}</p>
+                <p className="text-xs text-muted-foreground">Medição Nº {reprogramarMedicao.num_medicao || "—"}</p>
+                <div className="flex gap-4 text-xs">
+                  <span>Data atual: <strong>{reprogramarMedicao.data_previsao_medicao ? format(new Date(reprogramarMedicao.data_previsao_medicao + "T12:00:00"), "dd/MM/yyyy") : "—"}</strong></span>
+                  <span>Valor atual: <strong>{BRL.format(reprogramarMedicao.valor_previsto_medicao)}</strong></span>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground font-medium">Motivo da reprogramação *</label>
+                <Textarea
+                  value={reprogramarForm.motivo}
+                  onChange={(e) => setReprogramarForm(f => ({ ...f, motivo: e.target.value }))}
+                  placeholder="Descreva o motivo da reprogramação..."
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium">Nova data de previsão</label>
+                  <Input
+                    type="date"
+                    value={reprogramarForm.novaData}
+                    onChange={(e) => setReprogramarForm(f => ({ ...f, novaData: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium">Novo valor previsto (R$)</label>
+                  <CurrencyInput
+                    value={reprogramarForm.novoValor}
+                    onChange={(v) => setReprogramarForm(f => ({ ...f, novoValor: v }))}
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Os dados anteriores serão salvos no histórico. O novo valor e data passarão a alimentar todos os módulos.</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReprogramarMedicao(null)}>Cancelar</Button>
+            <Button
+              onClick={handleReprogramar}
+              disabled={savingReprogramar || !reprogramarForm.motivo.trim()}
+            >
+              {savingReprogramar ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-1" />}
+              Confirmar Reprogramação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   );
 }
