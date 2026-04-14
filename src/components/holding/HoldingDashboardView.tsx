@@ -317,8 +317,8 @@ export function calcHealth(
       const hasFinancialEvidence = nMedicoesAprovadas > 0 || (Number(obra.valor_medido_inicial) > 0);
 
       if (!hasFinancialEvidence) {
-        // Nenhum dado após fase de mobilização → gray, não penalizar
-        return "gray";
+        // Nenhum dado após fase de mobilização → green (obra em andamento, sem penalizar)
+        return "green";
       }
       // Tem evidência financeira — avaliar IDP normalmente
       // Obra com prazo 100% consumido e sem conclusão → sempre vermelho
@@ -355,23 +355,14 @@ export function calcHealth(
     if (pctGlosa > T.glosa_yellow) return "yellow";
   }
 
-  // ── Sem previsão de medição futura ────────────────────────────────────────
-  const temPrevisaoFutura = allMedicoes.some(
-    m => m.data_previsao_medicao &&
-         new Date(m.data_previsao_medicao + "T12:00:00") > now &&
-         m.status_medicao !== "aprovada"
-  );
-  const hasEvidence = nMedicoesAprovadas > 0 || (Number(obra.valor_medido_inicial) > 0);
-  if (!temPrevisaoFutura && hasEvidence && pctFinanceiro < 0.95) {
-    return "yellow";
-  }
+  // "Sem previsão de medição" removido — saúde baseada apenas em IDC, IDP, dias sem medição e glosa
 
   // ── Verde: todos os indicadores dentro do limite ──────────────────────────
   return "green";
 }
 
 export interface HealthIndicator {
-  id: "idc" | "idp" | "dias_medicao" | "glosa" | "sem_previsao";
+  id: "idc" | "idp" | "dias_medicao" | "glosa";
   label: string;
   description: string;
   value: number | null;       // valor calculado (ex: 0.92 para IDC)
@@ -467,21 +458,11 @@ export function calcHealthDetails(
 
   const valorPlanejado = pctFisico * valorContrato;
 
-  // ── Sem previsão ─────────────────────────────────────────────────────────
-  const temPrevisaoFutura = allMedicoes.some(
-    m => m.data_previsao_medicao &&
-         new Date(m.data_previsao_medicao + "T12:00:00") > now &&
-         m.status_medicao !== "aprovada"
-  );
-  const hasEvidence = nMedicoesAprovadas > 0 || (Number(obra.valor_medido_inicial) > 0);
-  const semPrevisaoStatus: HealthIndicator["status"] =
-    (!temPrevisaoFutura && hasEvidence && pctFinanceiro < 0.95) ? "yellow" : "green";
-
   const diasT = getThresholdsDiasPorPeriodo(obra.periodo_medicao);
 
   return [
     {
-      id: "idc",
+      id: "idc" as const,
       label: "IDC — Desempenho de Custo",
       description: "Compara o valor medido com o esperado dado o andamento físico. IDC < 1 significa que a obra está medindo menos do que deveria.",
       value: idcValue,
@@ -494,7 +475,7 @@ export function calcHealthDetails(
       rawValues: { medidoAprovado: totalMedidoAprovado, planejado: valorPlanejado },
     },
     {
-      id: "idp",
+      id: "idp" as const,
       label: "IDP — Desempenho de Prazo",
       description: "Compara o % de execução física com o % do prazo contratual consumido. IDP < 1 indica atraso.",
       value: idpValue,
@@ -507,7 +488,7 @@ export function calcHealthDetails(
       rawValues: { pctFisico: pctFisico * 100, pctTempo: idpPctTempo * 100, diasDecorridos: idpDiasDecorridos, prazoTotal: idpPrazoTotal },
     },
     {
-      id: "dias_medicao",
+      id: "dias_medicao" as const,
       label: "Dias sem Medição",
       description: `Dias desde a última medição aprovada. Thresholds ajustados pelo período: ${obra.periodo_medicao || "padrão"}.`,
       value: diasValue,
@@ -520,7 +501,7 @@ export function calcHealthDetails(
       rawValues: { ultimaAprovadaDate: ultimaAprovada?.data_aprovacao || '', periodo: obra.periodo_medicao || 'padrão' },
     },
     {
-      id: "glosa",
+      id: "glosa" as const,
       label: "Glosa Acumulada",
       description: "Percentual do valor medido que foi glosado (não acatado). Alta glosa indica conflito com o contratante.",
       value: glosaValue,
@@ -531,19 +512,6 @@ export function calcHealthDetails(
       unit: "%",
       higherIsBetter: false,
       rawValues: { totalGlosa, totalMedidoAprovado },
-    },
-    {
-      id: "sem_previsao",
-      label: "Sem Previsão de Medição",
-      description: "Nenhuma medição futura planejada. Cadastre a previsão da próxima medição.",
-      value: null,
-      displayValue: temPrevisaoFutura ? "Planejada" : "Sem previsão",
-      status: semPrevisaoStatus,
-      threshold_yellow: 0,
-      threshold_red: 0,
-      unit: "",
-      higherIsBetter: false,
-      rawValues: {},
     },
   ];
 }
