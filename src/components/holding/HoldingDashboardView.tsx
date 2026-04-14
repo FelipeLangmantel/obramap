@@ -317,8 +317,8 @@ export function calcHealth(
       const hasFinancialEvidence = nMedicoesAprovadas > 0 || (Number(obra.valor_medido_inicial) > 0);
 
       if (!hasFinancialEvidence) {
-        // Nenhum dado após fase de mobilização → gray, não penalizar
-        return "gray";
+        // Nenhum dado após fase de mobilização → green (obra em andamento, sem penalizar)
+        return "green";
       }
       // Tem evidência financeira — avaliar IDP normalmente
       // Obra com prazo 100% consumido e sem conclusão → sempre vermelho
@@ -355,23 +355,14 @@ export function calcHealth(
     if (pctGlosa > T.glosa_yellow) return "yellow";
   }
 
-  // ── Sem previsão de medição futura ────────────────────────────────────────
-  const temPrevisaoFutura = allMedicoes.some(
-    m => m.data_previsao_medicao &&
-         new Date(m.data_previsao_medicao + "T12:00:00") > now &&
-         m.status_medicao !== "aprovada"
-  );
-  const hasEvidence = nMedicoesAprovadas > 0 || (Number(obra.valor_medido_inicial) > 0);
-  if (!temPrevisaoFutura && hasEvidence && pctFinanceiro < 0.95) {
-    return "yellow";
-  }
+  // "Sem previsão de medição" removido — saúde baseada apenas em IDC, IDP, dias sem medição e glosa
 
   // ── Verde: todos os indicadores dentro do limite ──────────────────────────
   return "green";
 }
 
 export interface HealthIndicator {
-  id: "idc" | "idp" | "dias_medicao" | "glosa" | "sem_previsao";
+  id: "idc" | "idp" | "dias_medicao" | "glosa";
   label: string;
   description: string;
   value: number | null;       // valor calculado (ex: 0.92 para IDC)
