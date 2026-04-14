@@ -57,6 +57,8 @@ Deno.serve(async (req) => {
     const body: TransitionRequest = await req.json();
     const { request_id, new_status, notes } = body;
 
+    console.log(`[transition-supply-status] Request: request_id=${request_id}, new_status=${new_status}`);
+
     if (!request_id || !new_status) {
       return new Response(
         JSON.stringify({ success: false, error: 'request_id e new_status são obrigatórios' }),
