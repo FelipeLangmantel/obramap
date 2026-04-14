@@ -988,7 +988,8 @@ export default function HoldingReceitasPage() {
                                      <TableCell className="py-1.5 text-[10px] font-semibold text-muted-foreground text-right">Previsto</TableCell>
                                      <TableCell className="py-1.5 text-[10px] font-semibold text-muted-foreground text-right">Acatado</TableCell>
                                      <TableCell className="py-1.5 text-[10px] font-semibold text-muted-foreground text-right">Desvio</TableCell>
-                                     <TableCell colSpan={2} className="py-1.5 text-[10px] font-semibold text-muted-foreground text-right">Prev. Envio</TableCell>
+                                      <TableCell className="py-1.5 text-[10px] font-semibold text-muted-foreground text-right">Prev. Envio</TableCell>
+                                      <TableCell className="py-1.5 text-[10px] font-semibold text-muted-foreground text-center">Ação</TableCell>
                                    </TableRow>
                                    {/* Drill-down rows */}
                                    {drillDownMedicoes.map(m => {
@@ -1028,8 +1029,28 @@ export default function HoldingReceitasPage() {
                                              </span>
                                            ) : <span className="text-muted-foreground">—</span>}
                                          </TableCell>
-                                         <TableCell colSpan={2} className={`py-1.5 text-right ${m.data_previsao_medicao && m.status_medicao !== "aprovada" && m.status_medicao !== "enviada" && new Date(m.data_previsao_medicao + "T12:00:00") < new Date() ? "text-destructive font-semibold" : ""}`}>{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
-                                       </TableRow>
+                                          <TableCell className={`py-1.5 text-right ${m.data_previsao_medicao && m.status_medicao !== "aprovada" && m.status_medicao !== "enviada" && new Date(m.data_previsao_medicao + "T12:00:00") < new Date() ? "text-destructive font-semibold" : ""}`}>{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                                          <TableCell className="py-1.5 text-center">
+                                            {m.status_medicao !== "aprovada" && (
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="h-6 px-2 text-[10px] text-primary hover:text-primary"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setReprogramarMedicao(m);
+                                                  setReprogramarForm({
+                                                    motivo: "",
+                                                    novaData: m.data_previsao_medicao || "",
+                                                    novoValor: m.valor_previsto_medicao || 0,
+                                                  });
+                                                }}
+                                              >
+                                                <RotateCcw className="h-3 w-3 mr-1" />Reprogramar
+                                              </Button>
+                                            )}
+                                          </TableCell>
+                                        </TableRow>
                                      );
                                    })}
                                    {/* Drill-down footer totals */}
