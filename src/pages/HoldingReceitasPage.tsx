@@ -103,6 +103,10 @@ export default function HoldingReceitasPage() {
   const [selectedObraId, setSelectedObraId] = useState<string | null>(
     (location.state as any)?.obraId || null
   );
+  const [expandedProgPeriods, setExpandedProgPeriods] = useState<Set<number>>(new Set());
+  const [reprogramarMedicao, setReprogramarMedicao] = useState<MedicaoCompleta | null>(null);
+  const [reprogramarForm, setReprogramarForm] = useState({ motivo: "", novaData: "", novoValor: 0 });
+  const [savingReprogramar, setSavingReprogramar] = useState(false);
 
   // Abrir aba correta quando vindo de notificação
   useEffect(() => {
