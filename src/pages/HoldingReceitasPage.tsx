@@ -17,7 +17,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer
@@ -1369,7 +1369,6 @@ export default function HoldingReceitasPage() {
                 {(() => {
                   const obrasAndamento = obras.filter((o: any) => o.status === "em_andamento" && (filterEmpresa === "all" || o.empresa === filterEmpresa));
                   const now = new Date();
-                  const mesAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
                   const obraCards = obrasAndamento.map((obra: any) => {
                     const valorContrato = (Number(obra.valor_contrato) || 0) + (Number(obra.aditivo_valor_total) || 0);
@@ -1545,6 +1544,67 @@ export default function HoldingReceitasPage() {
           queryClient.invalidateQueries({ queryKey: ["holding-portfolio"], exact: false });
         }}
       />
+
+      {/* Dialog: Reprogramar Previsão */}
+      <Dialog open={!!reprogramarMedicao} onOpenChange={(open) => { if (!open) setReprogramarMedicao(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcw className="h-4 w-4" />
+              Reprogramar Previsão
+            </DialogTitle>
+          </DialogHeader>
+          {reprogramarMedicao && (
+            <div className="space-y-4 py-2">
+              <div className="rounded-lg border p-3 bg-muted/30 space-y-1">
+                <p className="text-sm font-medium">{reprogramarMedicao.obra_nome}</p>
+                <p className="text-xs text-muted-foreground">Medição Nº {reprogramarMedicao.num_medicao || "—"}</p>
+                <div className="flex gap-4 text-xs">
+                  <span>Data atual: <strong>{reprogramarMedicao.data_previsao_medicao ? format(new Date(reprogramarMedicao.data_previsao_medicao + "T12:00:00"), "dd/MM/yyyy") : "—"}</strong></span>
+                  <span>Valor atual: <strong>{BRL.format(reprogramarMedicao.valor_previsto_medicao)}</strong></span>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground font-medium">Motivo da reprogramação *</label>
+                <Textarea
+                  value={reprogramarForm.motivo}
+                  onChange={(e) => setReprogramarForm(f => ({ ...f, motivo: e.target.value }))}
+                  placeholder="Descreva o motivo da reprogramação..."
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium">Nova data de previsão</label>
+                  <Input
+                    type="date"
+                    value={reprogramarForm.novaData}
+                    onChange={(e) => setReprogramarForm(f => ({ ...f, novaData: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground font-medium">Novo valor previsto (R$)</label>
+                  <CurrencyInput
+                    value={reprogramarForm.novoValor}
+                    onChange={(v) => setReprogramarForm(f => ({ ...f, novoValor: v }))}
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Os dados anteriores serão salvos no histórico. O novo valor e data passarão a alimentar todos os módulos.</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReprogramarMedicao(null)}>Cancelar</Button>
+            <Button
+              onClick={handleReprogramar}
+              disabled={savingReprogramar || !reprogramarForm.motivo.trim()}
+            >
+              {savingReprogramar ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-1" />}
+              Confirmar Reprogramação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   );
 }
