@@ -204,35 +204,39 @@ export default function SystemUserManagement() {
       // Gerar senha temporária
       const password = generateTempPassword();
 
-      // Usar signup normal
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: formData.email.trim().toLowerCase(),
-        password: password,
-        options: {
-          data: {
-            display_name: formData.display_name.trim(),
-          },
+      // Usar edge function para não alterar a sessão atual
+      const { data, error: fnError } = await supabase.functions.invoke("create-user", {
+        body: {
+          email: formData.email.trim().toLowerCase(),
+          password: password,
+          display_name: formData.display_name.trim(),
+          role: formData.system_role === "admin" ? "admin" : formData.system_role === "editor" ? "editor" : "viewer",
+          company_id: formData.company_id,
         },
       });
 
-      if (signUpError) throw signUpError;
-      if (!signUpData.user) throw new Error("Falha ao criar usuário");
+      if (fnError) throw fnError;
+      if (data?.error) throw new Error(data.error);
 
-      // Aguardar um pouco para o trigger criar o profile
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const newUserId = data?.user_id;
 
-      // Atualizar o profile com os dados corretos
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({
-          company_id: formData.company_id,
-          system_role: formData.system_role,
-          must_change_password: true,
-          status: 'active',
-        } as any)
-        .eq("user_id", signUpData.user.id);
+      if (newUserId) {
+        // Aguardar trigger criar o profile
+        await new Promise((resolve) => setTimeout(resolve, 800));
 
-      if (updateError) throw updateError;
+        // Atualizar o profile com system_role correto
+        const { error: updateError } = await supabase
+          .from("profiles")
+          .update({
+            company_id: formData.company_id,
+            system_role: formData.system_role,
+            must_change_password: true,
+            status: 'active',
+          } as any)
+          .eq("user_id", newUserId);
+
+        if (updateError) console.error("Error updating profile:", updateError);
+      }
 
       setTempPassword(password);
       toast.success("Usuário criado com sucesso!");
