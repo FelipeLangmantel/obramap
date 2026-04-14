@@ -4946,6 +4946,63 @@ export type Database = {
           },
         ]
       }
+      medicao_previsao_historico: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          created_by_name: string | null
+          data_previsao_anterior: string | null
+          data_previsao_nova: string | null
+          id: string
+          medicao_id: string
+          motivo: string
+          obra_id: string
+          valor_previsto_anterior: number | null
+          valor_previsto_novo: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          created_by_name?: string | null
+          data_previsao_anterior?: string | null
+          data_previsao_nova?: string | null
+          id?: string
+          medicao_id: string
+          motivo: string
+          obra_id: string
+          valor_previsto_anterior?: number | null
+          valor_previsto_novo?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          created_by_name?: string | null
+          data_previsao_anterior?: string | null
+          data_previsao_nova?: string | null
+          id?: string
+          medicao_id?: string
+          motivo?: string
+          obra_id?: string
+          valor_previsto_anterior?: number | null
+          valor_previsto_novo?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medicao_previsao_historico_medicao_id_fkey"
+            columns: ["medicao_id"]
+            isOneToOne: false
+            referencedRelation: "medicoes_ple"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "medicao_previsao_historico_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras_portfolio"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       medicoes_ple: {
         Row: {
           ano_referencia: number | null
