@@ -571,6 +571,53 @@ export default function HoldingReceitasPage() {
     setFilterObra("all"); setFilterEmpresa("all"); setFilterStatusMed("all"); setFilterStatusNF("all"); setFilterTipoContrato("all"); setSearchText("");
   };
 
+  // ─── Reprogramar Previsão ───
+  const handleReprogramar = async () => {
+    if (!reprogramarMedicao || !reprogramarForm.motivo.trim()) return;
+    setSavingReprogramar(true);
+    try {
+      // 1. Save history
+      await supabase.from("medicao_previsao_historico").insert({
+        medicao_id: reprogramarMedicao.id,
+        obra_id: reprogramarMedicao.obra_id,
+        data_previsao_anterior: reprogramarMedicao.data_previsao_medicao,
+        valor_previsto_anterior: reprogramarMedicao.valor_previsto_medicao,
+        data_previsao_nova: reprogramarForm.novaData || null,
+        valor_previsto_novo: reprogramarForm.novoValor || reprogramarMedicao.valor_previsto_medicao,
+        motivo: reprogramarForm.motivo.trim(),
+        created_by: user?.id,
+        created_by_name: (profile as any)?.display_name || user?.email || "—",
+      });
+
+      // 2. Update medicao with new forecast
+      const updatePayload: any = {};
+      if (reprogramarForm.novaData) updatePayload.data_previsao_medicao = reprogramarForm.novaData;
+      if (reprogramarForm.novoValor > 0) updatePayload.valor_previsto_medicao = reprogramarForm.novoValor;
+      
+      if (Object.keys(updatePayload).length > 0) {
+        await supabase.from("medicoes_ple").update(updatePayload).eq("id", reprogramarMedicao.id);
+      }
+
+      toast.success("Previsão reprogramada com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["holding-receitas"], exact: false });
+      setReprogramarMedicao(null);
+      setReprogramarForm({ motivo: "", novaData: "", novoValor: 0 });
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao reprogramar previsão.");
+    } finally {
+      setSavingReprogramar(false);
+    }
+  };
+
+  const toggleProgPeriod = (idx: number) => {
+    setExpandedProgPeriods(prev => {
+      const next = new Set(prev);
+      next.has(idx) ? next.delete(idx) : next.add(idx);
+      return next;
+    });
+  };
+
   // ─── Programação summary KPIs ───
   const progSummary = useMemo(() => {
     const totalRecebido = programacaoData.reduce((s, p) => s + p.recebido, 0);
