@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
@@ -12,7 +11,6 @@ interface TransitionRequest {
   notes?: string;
 }
 
-// Valid status transitions
 const VALID_TRANSITIONS: Record<string, string[]> = {
   alert: ['quoted', 'cancelled'],
   quoted: ['ordered', 'cancelled'],
@@ -21,8 +19,7 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   cancelled: [],
 };
 
-serve(async (req) => {
-  // Handle CORS preflight
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -30,40 +27,36 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
-    // Get user from auth header
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+
     const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
         JSON.stringify({ success: false, error: 'Não autorizado' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Create admin client for operations
+    // Use admin client to verify the token via getClaims
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     
-    // Create user client to get user info
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { authorization: authHeader } }
-    });
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseAdmin.auth.getClaims(token);
     
-    const { data: { user }, error: authError } = await supabaseUser.auth.getUser();
-    if (authError || !user) {
-      console.error('Auth error:', authError);
+    if (claimsError || !claimsData?.claims) {
+      console.error('Auth error:', claimsError);
       return new Response(
         JSON.stringify({ success: false, error: 'Token inválido' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    const userId = claimsData.claims.sub as string;
+    console.log(`[transition-supply-status] User ${userId} authenticated`);
+
     const body: TransitionRequest = await req.json();
     const { request_id, new_status, notes } = body;
 
-    console.log(`[transition-supply-status] User ${user.id} transitioning ${request_id} to ${new_status}`);
-
-    // Validate input
     if (!request_id || !new_status) {
       return new Response(
         JSON.stringify({ success: false, error: 'request_id e new_status são obrigatórios' }),
@@ -71,7 +64,6 @@ serve(async (req) => {
       );
     }
 
-    // Validate new_status is valid
     const validStatuses = ['alert', 'quoted', 'ordered', 'delivered', 'cancelled'];
     if (!validStatuses.includes(new_status)) {
       return new Response(
@@ -80,7 +72,6 @@ serve(async (req) => {
       );
     }
 
-    // Get current request
     const { data: currentRequest, error: fetchError } = await supabaseAdmin
       .from('supply_requests')
       .select('id, status, project_id, item_name')
@@ -88,7 +79,6 @@ serve(async (req) => {
       .single();
 
     if (fetchError || !currentRequest) {
-      console.error('Fetch error:', fetchError);
       return new Response(
         JSON.stringify({ success: false, error: 'Requisição não encontrada' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -96,11 +86,8 @@ serve(async (req) => {
     }
 
     const currentStatus = currentRequest.status;
-
-    // Validate transition
     const allowedTransitions = VALID_TRANSITIONS[currentStatus] || [];
     if (!allowedTransitions.includes(new_status)) {
-      console.log(`Invalid transition: ${currentStatus} -> ${new_status}`);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -110,11 +97,10 @@ serve(async (req) => {
       );
     }
 
-    // Execute transition via RPC for atomic operation with audit log
     const { data: result, error: rpcError } = await supabaseAdmin.rpc('transition_supply_status', {
       p_request_id: request_id,
       p_new_status: new_status,
-      p_user_id: user.id,
+      p_user_id: userId,
       p_notes: notes || null
     });
 
@@ -125,8 +111,6 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    console.log(`[transition-supply-status] Success:`, result);
 
     return new Response(
       JSON.stringify(result),
