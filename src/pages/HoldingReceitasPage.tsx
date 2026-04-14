@@ -17,14 +17,14 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Progress } from "@/components/ui/progress";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer
 } from "recharts";
 import {
-  TrendingUp, DollarSign, Clock, CheckCircle2, AlertCircle, Download, RefreshCw,
-  Search, Calendar, FileText, X, Wallet, ChevronRight, ChevronDown, AlertTriangle, Check, Ban, Loader2
+  TrendingUp, DollarSign, Clock, CheckCircle2, AlertCircle, Download,
+  Search, Calendar, FileText, X, Wallet, ChevronRight, ChevronDown, AlertTriangle, Ban, Loader2, RotateCcw
 } from "lucide-react";
 import { format, addMonths, startOfMonth, startOfWeek, endOfWeek, addWeeks, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
