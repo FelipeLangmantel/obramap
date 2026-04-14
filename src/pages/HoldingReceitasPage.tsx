@@ -89,7 +89,7 @@ export default function HoldingReceitasPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { company } = useAuth();
+  const { company, user, profile } = useAuth();
 
   const [activeTab, setActiveTab] = useState("financeiro");
   const [filterObra, setFilterObra] = useState("all");
@@ -613,7 +613,7 @@ export default function HoldingReceitasPage() {
   const toggleProgPeriod = (idx: number) => {
     setExpandedProgPeriods(prev => {
       const next = new Set(prev);
-      next.has(idx) ? next.delete(idx) : next.add(idx);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
       return next;
     });
   };
