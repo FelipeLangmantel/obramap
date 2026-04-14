@@ -1259,12 +1259,23 @@ export default function HoldingReceitasPage() {
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-3">
-                            {programacaoData.filter(p => p.medicoes.length > 0).map((p, i) => (
-                              <div key={i}>
-                                <p className="text-xs font-semibold mb-1">{p.label} — {BRL.format(p.total)}</p>
-                                <div className="space-y-1">
+                            {programacaoData.filter(p => p.medicoes.length > 0).map((p, i) => {
+                              const isExpProg = expandedProgPeriods.has(i);
+                              return (
+                              <div key={i} className="border rounded-lg overflow-hidden">
+                                <button
+                                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold hover:bg-accent/50 transition-colors"
+                                  onClick={() => toggleProgPeriod(i)}
+                                >
+                                  <span className="flex items-center gap-1.5">
+                                    {isExpProg ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                                    {p.label} — {BRL.format(p.total)}
+                                  </span>
+                                  <Badge variant="secondary" className="text-[10px]">{p.medicoes.length} medições</Badge>
+                                </button>
+                                {isExpProg && (
+                                <div className="space-y-1 px-3 pb-3">
                                   {p.medicoes.map((m: any) => {
-                                    // No contexto de projeção, usa statusEntrada (calculado) — não status do banco
                                     const STATUS_ENTRADA_BADGE: Record<string, { label: string; cls: string }> = {
                                       recebido: { label: "NF Recebida", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
                                       aprovado: { label: "Medição Aprovada", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
@@ -1308,8 +1319,10 @@ export default function HoldingReceitasPage() {
                                     );
                                   })}
                                 </div>
+                                )}
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </CardContent>
                       </Card>
