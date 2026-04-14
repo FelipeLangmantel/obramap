@@ -1358,18 +1358,7 @@ export default function HoldingReceitasPage() {
                     return b.saldoReceber - a.saldoReceber;
                   });
 
-                  // KPIs
-                  const totalReceber = obraCards.reduce((s, c) => s + c.saldoReceber, 0);
-                  const recebidoMes = medicoes
-                    .filter(m => m.status_nf === "recebido" && m.data_pagamento && m.data_pagamento.startsWith(mesAtual))
-                    .reduce((s, m) => s + (Number(m.valor_acatado ?? m.valor_medicao) || 0), 0);
-                  const prox30 = obraCards.reduce((s, c) => {
-                    if (c.dataEntradaProjetada && c.dataEntradaProjetada.getTime() <= now.getTime() + 30 * 86400000) return s + c.valorPrevAjustado;
-                    return s;
-                  }, 0);
-                  const restrAbertasGlobal = restricoes.filter((r: any) => !r.resolvida);
-                  const totalRestrAberto = restrAbertasGlobal.length;
-                  const totalRestrImpacto = restrAbertasGlobal.reduce((s: number, r: any) => s + (Number(r.impacto_medicao) || 0), 0);
+                  // KPIs removed — only top-level KPIs remain
 
                     return (
                     <>
