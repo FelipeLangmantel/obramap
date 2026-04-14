@@ -823,7 +823,7 @@ export default function HoldingReceitasPage() {
                              <TableCell className="py-2">{m.num_medicao || "—"}</TableCell>
                             <TableCell className="py-2">{m.mes_referencia || "—"}</TableCell>
                             <TableCell className="py-2">{m.ano_referencia || "—"}</TableCell>
-                             <TableCell className="py-2">{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                             <TableCell className={`py-2 ${m.data_previsao_medicao && m.status_medicao !== "aprovada" && m.status_medicao !== "enviada" && new Date(m.data_previsao_medicao + "T12:00:00") < new Date() ? "text-destructive font-semibold" : ""}`}>{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                              <TableCell className="py-2 text-right">
                                {m.valor_previsto_medicao > 0 ? (
                                  m.status_medicao === "aprovada"
@@ -977,7 +977,7 @@ export default function HoldingReceitasPage() {
                                              </span>
                                            ) : <span className="text-muted-foreground">—</span>}
                                          </TableCell>
-                                         <TableCell colSpan={2} className="py-1.5 text-right">{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
+                                         <TableCell colSpan={2} className={`py-1.5 text-right ${m.data_previsao_medicao && m.status_medicao !== "aprovada" && m.status_medicao !== "enviada" && new Date(m.data_previsao_medicao + "T12:00:00") < new Date() ? "text-destructive font-semibold" : ""}`}>{m.data_previsao_medicao ? format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yy") : "—"}</TableCell>
                                        </TableRow>
                                      );
                                    })}
@@ -1282,7 +1282,7 @@ export default function HoldingReceitasPage() {
               {/* ═══ TAB FINANCEIRO ═══ */}
               <TabsContent value="financeiro" className="space-y-4 mt-4">
                 {(() => {
-                  const obrasAndamento = obras.filter((o: any) => o.status === "em_andamento");
+                  const obrasAndamento = obras.filter((o: any) => o.status === "em_andamento" && (filterEmpresa === "all" || o.empresa === filterEmpresa));
                   const now = new Date();
                   const mesAtual = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
@@ -1371,14 +1371,8 @@ export default function HoldingReceitasPage() {
                   const totalRestrAberto = restrAbertasGlobal.length;
                   const totalRestrImpacto = restrAbertasGlobal.reduce((s: number, r: any) => s + (Number(r.impacto_medicao) || 0), 0);
 
-                  return (
+                    return (
                     <>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Total a Receber</p><p className="text-lg font-bold">{BRL.format(totalReceber)}</p></CardContent></Card>
-                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Recebido no Mês</p><p className="text-lg font-bold">{BRL.format(recebidoMes)}</p></CardContent></Card>
-                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Próximo 30 dias</p><p className="text-lg font-bold">{BRL.format(prox30)}</p></CardContent></Card>
-                        <Card><CardContent className="p-3"><p className="text-xs text-muted-foreground">Restrições Abertas</p><p className="text-lg font-bold">{totalRestrAberto} <span className="text-xs font-normal text-muted-foreground">({BRL.format(totalRestrImpacto)})</span></p></CardContent></Card>
-                      </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                         {obraCards.map(({ obra, valorContrato, valorRecebido, pctRecebido, totalMedido, pctMedido, proximaMedicao, valorPrevAjustado, impactoRestricoes, dataEntradaProjetada, restrDaObra, hasVencidas, statusColor }) => (
