@@ -551,6 +551,10 @@ export default function HoldingDashboardView() {
   const [savingObra, setSavingObra] = useState(false);
   const [editingObra, setEditingObra] = useState<ObraEnriched | null>(null);
   const [deletingObraId, setDeletingObraId] = useState<string | null>(null);
+  const [deleteStep, setDeleteStep] = useState(1);
+  const [deleteNameConfirm, setDeleteNameConfirm] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteVerifying, setDeleteVerifying] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importText, setImportText] = useState("");
