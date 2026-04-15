@@ -155,6 +155,7 @@ export interface ObraEnriched extends ObraPortfolio {
   docsTotal: number;
   health: "green" | "yellow" | "red" | "gray";
   pendingNotifCount?: number;
+  despesasDaObra?: { id: string; obra_id: string; valor: number; tipo_despesa: string }[];
 }
 
 export interface HoldingAlert {
