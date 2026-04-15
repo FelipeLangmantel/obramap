@@ -1896,19 +1896,59 @@ export default function HoldingDashboardView() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!deletingObraId} onOpenChange={(o) => !o && setDeletingObraId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir obra?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita. Todos os dados serão removidos.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteObra} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Delete Confirmation — 3-step */}
+      <Dialog open={!!deletingObraId} onOpenChange={(o) => { if (!o) { setDeletingObraId(null); setDeleteStep(1); setDeleteNameConfirm(""); setDeletePassword(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">⚠️ Excluir Obra</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Step 1 — Warning */}
+            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-sm text-destructive">
+              ⚠️ <strong>ATENÇÃO: Esta ação é irreversível.</strong> Todos os dados da obra serão permanentemente excluídos, incluindo medições, documentos, despesas, restrições e histórico.
+            </div>
+
+            {/* Step 2 — Type name */}
+            <div className="space-y-2">
+              <Label className="text-xs">Digite o nome exato da obra para confirmar:</Label>
+              <p className="text-xs font-medium text-muted-foreground">"{obras.find(o => o.id === deletingObraId)?.nome}"</p>
+              <Input value={deleteNameConfirm} onChange={(e) => setDeleteNameConfirm(e.target.value)} placeholder="Digite o nome da obra..." />
+            </div>
+
+            {/* Step 3 — Password */}
+            <div className="space-y-2">
+              <Label className="text-xs">Confirme com sua senha de acesso:</Label>
+              <Input type="password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} placeholder="Sua senha..." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeletingObraId(null); setDeleteStep(1); setDeleteNameConfirm(""); setDeletePassword(""); }}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={
+                deleteVerifying ||
+                deleteNameConfirm !== (obras.find(o => o.id === deletingObraId)?.nome || "") ||
+                !deletePassword
+              }
+              onClick={async () => {
+                if (!deletingObraId || !user?.email) return;
+                setDeleteVerifying(true);
+                try {
+                  const { error: authErr } = await supabase.auth.signInWithPassword({ email: user.email, password: deletePassword });
+                  if (authErr) { toast.error("Senha incorreta. Exclusão bloqueada."); setDeleteVerifying(false); return; }
+                  await handleDeleteObra();
+                  toast.success("Obra excluída. Os logs de auditoria serão mantidos por 90 dias.");
+                  setDeleteStep(1); setDeleteNameConfirm(""); setDeletePassword("");
+                } catch { toast.error("Erro ao excluir obra."); }
+                setDeleteVerifying(false);
+              }}
+            >
+              {deleteVerifying && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+              Confirmar Exclusão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Import Dialog */}
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
