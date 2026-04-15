@@ -471,13 +471,14 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
         </div>
       </SheetHeader>
       <Tabs defaultValue="resumo" className="flex-1 flex flex-col">
-        <TabsList className="mx-6 w-fit">
+        <TabsList className="mx-6 w-fit flex-wrap">
           <TabsTrigger value="resumo">Resumo</TabsTrigger>
           <TabsTrigger value="documentos">Documentos</TabsTrigger>
           <TabsTrigger value="medicoes">Medições</TabsTrigger>
           <TabsTrigger value="financeiro">Despesas</TabsTrigger>
           <TabsTrigger value="aditivos">Aditivos</TabsTrigger>
           <TabsTrigger value="restricoes">Restrições</TabsTrigger>
+          <TabsTrigger value="reprogramacao">📋 Reprogramação</TabsTrigger>
           <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
         <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -487,6 +488,10 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
           <TabsContent value="financeiro" className="mt-0"><FinanceiroTab obraId={obra.id} sharedMedicoes={sharedMedicoes} /></TabsContent>
           <TabsContent value="aditivos" className="mt-0"><ObraAditivosTab obraId={obra.id} /></TabsContent>
           <TabsContent value="restricoes" className="mt-0"><ObraRestricoesTab obraId={obra.id} /></TabsContent>
+          <TabsContent value="reprogramacao" className="mt-0"><ReprogramacaoTab obraId={obra.id} medicoes={sharedMedicoes} onRefresh={() => {
+            setSharedMedicoesLoading(true);
+            supabase.from("medicoes_ple").select("*").eq("obra_id", obra.id).order("num_medicao", { ascending: true }).then(({ data }) => { setSharedMedicoes(data || []); setSharedMedicoesLoading(false); });
+          }} /></TabsContent>
           <TabsContent value="historico" className="mt-0"><ObraHistoricoTab obraId={obra.id} /></TabsContent>
         </div>
       </Tabs>
