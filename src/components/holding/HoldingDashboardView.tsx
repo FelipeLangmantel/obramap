@@ -1004,8 +1004,8 @@ export default function HoldingDashboardView() {
       const obrasTyped = (obrasRaw || []) as unknown as ObraPortfolio[];
       const obraIds = obrasTyped.map(o => o.id);
 
-      // 2. Buscar docs, medições e notificações em paralelo
-      const [docsRes, medicoesRes, notifRes] = await Promise.all([
+      // 2. Buscar docs, medições, notificações e despesas em paralelo
+      const [docsRes, medicoesRes, notifRes, despesasRes] = await Promise.all([
         obraIds.length > 0
           ? supabase.from("documentos_obra").select("*").in("obra_id", obraIds)
           : Promise.resolve({ data: [] as any[], error: null }),
@@ -1017,10 +1017,14 @@ export default function HoldingDashboardView() {
         obraIds.length > 0
           ? supabase.from("system_notifications").select("obra_id").in("obra_id", obraIds).eq("resolvida", false).eq("lida", false)
           : Promise.resolve({ data: [] as any[], error: null }),
+        obraIds.length > 0
+          ? supabase.from("despesas_mensais").select("id, obra_id, valor, tipo_despesa").in("obra_id", obraIds)
+          : Promise.resolve({ data: [] as any[], error: null }),
       ]);
       const obrasData = obrasTyped;
       const docsData = (docsRes.data || []) as DocumentosObra[];
       const medicoesData = (medicoesRes.data || []) as MedicaoPle[];
+      const despesasData = (despesasRes.data || []) as { id: string; obra_id: string; valor: number; tipo_despesa: string }[];
 
       // Build notification count map
       const notifCountMap = new Map<string, number>();
@@ -1038,6 +1042,14 @@ export default function HoldingDashboardView() {
         medicoesMap.set(m.obra_id, arr);
       });
 
+      // Build despesas map
+      const despesasMap = new Map<string, typeof despesasData>();
+      despesasData.forEach((d) => {
+        const arr = despesasMap.get(d.obra_id) || [];
+        arr.push(d);
+        despesasMap.set(d.obra_id, arr);
+      });
+
       return obrasData.map((obra): ObraEnriched => {
         const docs = docsMap.get(obra.id) || null;
         const allMedicoes = (medicoesMap.get(obra.id) || []).sort((a, b) => {
@@ -1052,7 +1064,8 @@ export default function HoldingDashboardView() {
         const { count: docsCount, total: docsTotal } = countDocs(docs);
         const health = calcHealth(obra, allMedicoes);
         const pendingNotifCount = notifCountMap.get(obra.id) || 0;
-        return { ...obra, docs, latestMedicao, allMedicoes, docsCount, docsTotal, health, pendingNotifCount };
+        const despesasDaObra = despesasMap.get(obra.id) || [];
+        return { ...obra, docs, latestMedicao, allMedicoes, docsCount, docsTotal, health, pendingNotifCount, despesasDaObra };
       });
     },
     enabled: !!company?.id,
