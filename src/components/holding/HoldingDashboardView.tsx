@@ -2189,6 +2189,31 @@ const ObraCard = memo(function ObraCard({ obra, onClick, onEdit, onDelete }: { o
           <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">✓ {BRL_SHORT(receitas)} recebido</p>
         )}
 
+        {/* ── Resultado Projetado ── */}
+        {(() => {
+          const despesas = obra.despesasDaObra || [];
+          if (despesas.length === 0 || valorContrato <= 0) return null;
+          const receitaProjetada = valorContrato;
+          const custoProjetado = despesas.reduce((s, d) => s + (d.valor || 0), 0);
+          const resultadoProjetado = receitaProjetada - custoProjetado;
+          const margemPct = receitaProjetada > 0 ? (resultadoProjetado / receitaProjetada) * 100 : 0;
+          const margemColor = margemPct < 0 ? "text-destructive" : margemPct < 5 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400";
+          return (
+            <div className="space-y-1.5 border-t border-border/40 pt-2">
+              <div className="grid grid-cols-2 gap-2 text-[10px]">
+                <div>
+                  <span className="text-muted-foreground">Resultado Projetado</span>
+                  <p className={`font-medium ${margemColor}`}>{BRL_SHORT(resultadoProjetado)}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Margem</span>
+                  <p className={`font-medium ${margemColor}`}>{margemPct.toFixed(1)}%</p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ── Health Indicators Expandable Section ── */}
         <div className="border-t border-border/40 pt-1.5">
           <button
