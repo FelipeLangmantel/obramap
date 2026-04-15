@@ -471,13 +471,14 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
         </div>
       </SheetHeader>
       <Tabs defaultValue="resumo" className="flex-1 flex flex-col">
-        <TabsList className="mx-6 w-fit">
+        <TabsList className="mx-6 w-fit flex-wrap">
           <TabsTrigger value="resumo">Resumo</TabsTrigger>
           <TabsTrigger value="documentos">Documentos</TabsTrigger>
           <TabsTrigger value="medicoes">Medições</TabsTrigger>
           <TabsTrigger value="financeiro">Despesas</TabsTrigger>
           <TabsTrigger value="aditivos">Aditivos</TabsTrigger>
           <TabsTrigger value="restricoes">Restrições</TabsTrigger>
+          <TabsTrigger value="reprogramacao">📋 Reprogramação</TabsTrigger>
           <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
         <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -487,6 +488,10 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
           <TabsContent value="financeiro" className="mt-0"><FinanceiroTab obraId={obra.id} sharedMedicoes={sharedMedicoes} /></TabsContent>
           <TabsContent value="aditivos" className="mt-0"><ObraAditivosTab obraId={obra.id} /></TabsContent>
           <TabsContent value="restricoes" className="mt-0"><ObraRestricoesTab obraId={obra.id} /></TabsContent>
+          <TabsContent value="reprogramacao" className="mt-0"><ReprogramacaoTab obraId={obra.id} medicoes={sharedMedicoes} onRefresh={() => {
+            setSharedMedicoesLoading(true);
+            supabase.from("medicoes_ple").select("*").eq("obra_id", obra.id).order("num_medicao", { ascending: true }).then(({ data }) => { setSharedMedicoes(data || []); setSharedMedicoesLoading(false); });
+          }} /></TabsContent>
           <TabsContent value="historico" className="mt-0"><ObraHistoricoTab obraId={obra.id} /></TabsContent>
         </div>
       </Tabs>
@@ -3121,6 +3126,195 @@ function FinanceiroTab({ obraId, sharedMedicoes }: { obraId: string; sharedMedic
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   TAB — REPROGRAMAÇÃO DE MEDIÇÕES
+   ══════════════════════════════════════════════ */
+
+function ReprogramacaoTab({ obraId, medicoes, onRefresh }: { obraId: string; medicoes: any[]; onRefresh: () => void }) {
+  const { user, profile, holdingCan } = useAuth();
+  const userName = profile?.display_name || user?.email || "Usuário";
+  const userId = user?.id || null;
+  const canReprogramar = holdingCan('lancar_medicoes');
+
+  const [selectedMedicaoId, setSelectedMedicaoId] = useState("");
+  const [novaData, setNovaData] = useState("");
+  const [novoValor, setNovoValor] = useState(0);
+  const [motivo, setMotivo] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [historico, setHistorico] = useState<any[]>([]);
+  const [loadingHist, setLoadingHist] = useState(true);
+
+  const reprogramaveis = medicoes.filter(m =>
+    m.num_medicao !== "Saldo Inicial" &&
+    (m.status_medicao === "prevista" || m.status_medicao === "nao_iniciada")
+  );
+
+  const loadHistorico = useCallback(async () => {
+    setLoadingHist(true);
+    const { data } = await supabase
+      .from("medicao_previsao_historico")
+      .select("*")
+      .eq("obra_id", obraId)
+      .order("created_at", { ascending: false });
+    setHistorico(data || []);
+    setLoadingHist(false);
+  }, [obraId]);
+
+  useEffect(() => { loadHistorico(); }, [loadHistorico]);
+
+  const handleReprogramar = async () => {
+    if (!selectedMedicaoId || !motivo || motivo.trim().length < 10) {
+      toast.error("Preencha o motivo (mínimo 10 caracteres).");
+      return;
+    }
+    if (!novaData && novoValor <= 0) {
+      toast.error("Informe uma nova data ou novo valor.");
+      return;
+    }
+    const med = medicoes.find(m => m.id === selectedMedicaoId);
+    if (!med) return;
+
+    setSaving(true);
+    try {
+      // 1. Inserir histórico
+      await supabase.from("medicao_previsao_historico").insert({
+        medicao_id: med.id,
+        obra_id: obraId,
+        data_previsao_anterior: med.data_previsao_medicao || null,
+        valor_previsto_anterior: Number(med.valor_previsto_medicao) || 0,
+        data_previsao_nova: novaData || med.data_previsao_medicao || null,
+        valor_previsto_novo: novoValor > 0 ? novoValor : Number(med.valor_previsto_medicao) || 0,
+        motivo: motivo.trim(),
+        created_by: userId,
+        created_by_name: userName,
+      });
+
+      // 2. Atualizar medição
+      const updatePayload: any = {};
+      if (novaData) updatePayload.data_previsao_medicao = novaData;
+      if (novoValor > 0) updatePayload.valor_previsto_medicao = novoValor;
+      if (Object.keys(updatePayload).length > 0) {
+        await supabase.from("medicoes_ple").update(updatePayload).eq("id", med.id);
+      }
+
+      toast.success("Reprogramação registrada com sucesso!");
+      setSelectedMedicaoId("");
+      setNovaData("");
+      setNovoValor(0);
+      setMotivo("");
+      onRefresh();
+      loadHistorico();
+    } catch (e: any) {
+      toast.error("Erro ao reprogramar: " + (e.message || ""));
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Seção 1 — Reprogramar */}
+      {canReprogramar && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-1.5">
+              <CalendarDays className="h-4 w-4" /> Reprogramar Medição
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {reprogramaveis.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Nenhuma medição disponível para reprogramação (apenas previstas/não iniciadas).</p>
+            ) : (
+              <>
+                <div>
+                  <label className="text-xs text-muted-foreground">Medição</label>
+                  <Select value={selectedMedicaoId} onValueChange={setSelectedMedicaoId}>
+                    <SelectTrigger><SelectValue placeholder="Selecione a medição..." /></SelectTrigger>
+                    <SelectContent>
+                      {reprogramaveis.map(m => (
+                        <SelectItem key={m.id} value={m.id}>
+                          Nº {m.num_medicao || "—"} — {m.mes_referencia}/{m.ano_referencia}
+                          {m.data_previsao_medicao ? ` (${format(new Date(m.data_previsao_medicao + "T12:00:00"), "dd/MM/yyyy")})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <ClearableDateInput label="Nova data de previsão" value={novaData} onChange={setNovaData} />
+                  <div>
+                    <label className="text-xs text-muted-foreground">Novo valor previsto (opcional)</label>
+                    <CurrencyInput value={novoValor} onChange={setNovoValor} />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Motivo da reprogramação *</label>
+                  <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Mínimo 10 caracteres..." className="mt-1" />
+                  {motivo.length > 0 && motivo.length < 10 && (
+                    <p className="text-[10px] text-destructive mt-0.5">{10 - motivo.length} caracteres restantes</p>
+                  )}
+                </div>
+                <div className="flex justify-end">
+                  <Button size="sm" onClick={handleReprogramar} disabled={saving || !selectedMedicaoId || motivo.trim().length < 10}>
+                    {saving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+                    Salvar Reprogramação
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Seção 2 — Histórico */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-1.5">
+            <Clock className="h-4 w-4" /> Histórico de Reprogramações
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loadingHist ? (
+            <Loader2 className="h-5 w-5 animate-spin text-primary mx-auto" />
+          ) : historico.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-4">Nenhuma reprogramação registrada.</p>
+          ) : (
+            <div className="space-y-3 relative before:absolute before:left-3 before:top-0 before:bottom-0 before:w-0.5 before:bg-border">
+              {historico.map((h) => {
+                const med = medicoes.find(m => m.id === h.medicao_id);
+                const dataAnterior = h.data_previsao_anterior ? format(new Date(h.data_previsao_anterior + "T12:00:00"), "dd/MM/yyyy") : "—";
+                const dataNova = h.data_previsao_nova ? format(new Date(h.data_previsao_nova + "T12:00:00"), "dd/MM/yyyy") : "—";
+                return (
+                  <div key={h.id} className="pl-8 relative">
+                    <div className="absolute left-1.5 top-1.5 w-3 h-3 rounded-full bg-primary border-2 border-background" />
+                    <div className="bg-muted/50 rounded-lg p-3 space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                        <span>{h.created_at ? format(new Date(h.created_at), "dd/MM/yyyy HH:mm") : "—"}</span>
+                        <span>por {h.created_by_name || "—"}</span>
+                      </div>
+                      <p className="text-xs font-medium">
+                        Medição Nº {med?.num_medicao || "—"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Data: <span className="text-destructive line-through">{dataAnterior}</span> → <span className="text-emerald-600 font-medium">{dataNova}</span>
+                      </p>
+                      {h.valor_previsto_anterior !== h.valor_previsto_novo && (h.valor_previsto_anterior > 0 || h.valor_previsto_novo > 0) && (
+                        <p className="text-xs text-muted-foreground">
+                          Valor: <span className="text-destructive line-through">{BRL.format(h.valor_previsto_anterior || 0)}</span> → <span className="text-emerald-600 font-medium">{BRL.format(h.valor_previsto_novo || 0)}</span>
+                        </p>
+                      )}
+                      <p className="text-xs italic text-muted-foreground">"{h.motivo}"</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

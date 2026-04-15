@@ -10462,6 +10462,7 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: number
       }
+      reset_user_temp_password: { Args: { p_user_id: string }; Returns: string }
       resolve_risk_alert: {
         Args: { p_alert_id: string; p_resolved_by?: string }
         Returns: undefined

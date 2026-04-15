@@ -155,6 +155,7 @@ export interface ObraEnriched extends ObraPortfolio {
   docsTotal: number;
   health: "green" | "yellow" | "red" | "gray";
   pendingNotifCount?: number;
+  despesasDaObra?: { id: string; obra_id: string; valor: number; tipo_despesa: string }[];
 }
 
 export interface HoldingAlert {
@@ -550,6 +551,10 @@ export default function HoldingDashboardView() {
   const [savingObra, setSavingObra] = useState(false);
   const [editingObra, setEditingObra] = useState<ObraEnriched | null>(null);
   const [deletingObraId, setDeletingObraId] = useState<string | null>(null);
+  const [deleteStep, setDeleteStep] = useState(1);
+  const [deleteNameConfirm, setDeleteNameConfirm] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteVerifying, setDeleteVerifying] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importText, setImportText] = useState("");
@@ -1004,8 +1009,8 @@ export default function HoldingDashboardView() {
       const obrasTyped = (obrasRaw || []) as unknown as ObraPortfolio[];
       const obraIds = obrasTyped.map(o => o.id);
 
-      // 2. Buscar docs, medições e notificações em paralelo
-      const [docsRes, medicoesRes, notifRes] = await Promise.all([
+      // 2. Buscar docs, medições, notificações e despesas em paralelo
+      const [docsRes, medicoesRes, notifRes, despesasRes] = await Promise.all([
         obraIds.length > 0
           ? supabase.from("documentos_obra").select("*").in("obra_id", obraIds)
           : Promise.resolve({ data: [] as any[], error: null }),
@@ -1017,10 +1022,14 @@ export default function HoldingDashboardView() {
         obraIds.length > 0
           ? supabase.from("system_notifications").select("obra_id").in("obra_id", obraIds).eq("resolvida", false).eq("lida", false)
           : Promise.resolve({ data: [] as any[], error: null }),
+        obraIds.length > 0
+          ? supabase.from("despesas_mensais").select("id, obra_id, valor, tipo_despesa").in("obra_id", obraIds)
+          : Promise.resolve({ data: [] as any[], error: null }),
       ]);
       const obrasData = obrasTyped;
       const docsData = (docsRes.data || []) as DocumentosObra[];
       const medicoesData = (medicoesRes.data || []) as MedicaoPle[];
+      const despesasData = (despesasRes.data || []) as { id: string; obra_id: string; valor: number; tipo_despesa: string }[];
 
       // Build notification count map
       const notifCountMap = new Map<string, number>();
@@ -1038,6 +1047,14 @@ export default function HoldingDashboardView() {
         medicoesMap.set(m.obra_id, arr);
       });
 
+      // Build despesas map
+      const despesasMap = new Map<string, typeof despesasData>();
+      despesasData.forEach((d) => {
+        const arr = despesasMap.get(d.obra_id) || [];
+        arr.push(d);
+        despesasMap.set(d.obra_id, arr);
+      });
+
       return obrasData.map((obra): ObraEnriched => {
         const docs = docsMap.get(obra.id) || null;
         const allMedicoes = (medicoesMap.get(obra.id) || []).sort((a, b) => {
@@ -1052,7 +1069,8 @@ export default function HoldingDashboardView() {
         const { count: docsCount, total: docsTotal } = countDocs(docs);
         const health = calcHealth(obra, allMedicoes);
         const pendingNotifCount = notifCountMap.get(obra.id) || 0;
-        return { ...obra, docs, latestMedicao, allMedicoes, docsCount, docsTotal, health, pendingNotifCount };
+        const despesasDaObra = despesasMap.get(obra.id) || [];
+        return { ...obra, docs, latestMedicao, allMedicoes, docsCount, docsTotal, health, pendingNotifCount, despesasDaObra };
       });
     },
     enabled: !!company?.id,
@@ -1878,19 +1896,59 @@ export default function HoldingDashboardView() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete Confirmation */}
-      <AlertDialog open={!!deletingObraId} onOpenChange={(o) => !o && setDeletingObraId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir obra?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação não pode ser desfeita. Todos os dados serão removidos.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteObra} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Delete Confirmation — 3-step */}
+      <Dialog open={!!deletingObraId} onOpenChange={(o) => { if (!o) { setDeletingObraId(null); setDeleteStep(1); setDeleteNameConfirm(""); setDeletePassword(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">⚠️ Excluir Obra</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Step 1 — Warning */}
+            <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-sm text-destructive">
+              ⚠️ <strong>ATENÇÃO: Esta ação é irreversível.</strong> Todos os dados da obra serão permanentemente excluídos, incluindo medições, documentos, despesas, restrições e histórico.
+            </div>
+
+            {/* Step 2 — Type name */}
+            <div className="space-y-2">
+              <Label className="text-xs">Digite o nome exato da obra para confirmar:</Label>
+              <p className="text-xs font-medium text-muted-foreground">"{obras.find(o => o.id === deletingObraId)?.nome}"</p>
+              <Input value={deleteNameConfirm} onChange={(e) => setDeleteNameConfirm(e.target.value)} placeholder="Digite o nome da obra..." />
+            </div>
+
+            {/* Step 3 — Password */}
+            <div className="space-y-2">
+              <Label className="text-xs">Confirme com sua senha de acesso:</Label>
+              <Input type="password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} placeholder="Sua senha..." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeletingObraId(null); setDeleteStep(1); setDeleteNameConfirm(""); setDeletePassword(""); }}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={
+                deleteVerifying ||
+                deleteNameConfirm !== (obras.find(o => o.id === deletingObraId)?.nome || "") ||
+                !deletePassword
+              }
+              onClick={async () => {
+                if (!deletingObraId || !user?.email) return;
+                setDeleteVerifying(true);
+                try {
+                  const { error: authErr } = await supabase.auth.signInWithPassword({ email: user.email, password: deletePassword });
+                  if (authErr) { toast.error("Senha incorreta. Exclusão bloqueada."); setDeleteVerifying(false); return; }
+                  await handleDeleteObra();
+                  toast.success("Obra excluída. Os logs de auditoria serão mantidos por 90 dias.");
+                  setDeleteStep(1); setDeleteNameConfirm(""); setDeletePassword("");
+                } catch { toast.error("Erro ao excluir obra."); }
+                setDeleteVerifying(false);
+              }}
+            >
+              {deleteVerifying && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+              Confirmar Exclusão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Import Dialog */}
       <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
@@ -2174,6 +2232,31 @@ const ObraCard = memo(function ObraCard({ obra, onClick, onEdit, onDelete }: { o
         {valorContrato === 0 && receitas > 0 && (
           <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">✓ {BRL_SHORT(receitas)} recebido</p>
         )}
+
+        {/* ── Resultado Projetado ── */}
+        {(() => {
+          const despesas = obra.despesasDaObra || [];
+          if (despesas.length === 0 || valorContrato <= 0) return null;
+          const receitaProjetada = valorContrato;
+          const custoProjetado = despesas.reduce((s, d) => s + (d.valor || 0), 0);
+          const resultadoProjetado = receitaProjetada - custoProjetado;
+          const margemPct = receitaProjetada > 0 ? (resultadoProjetado / receitaProjetada) * 100 : 0;
+          const margemColor = margemPct < 0 ? "text-destructive" : margemPct < 5 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400";
+          return (
+            <div className="space-y-1.5 border-t border-border/40 pt-2">
+              <div className="grid grid-cols-2 gap-2 text-[10px]">
+                <div>
+                  <span className="text-muted-foreground">Resultado Projetado</span>
+                  <p className={`font-medium ${margemColor}`}>{BRL_SHORT(resultadoProjetado)}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Margem</span>
+                  <p className={`font-medium ${margemColor}`}>{margemPct.toFixed(1)}%</p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Health Indicators Expandable Section ── */}
         <div className="border-t border-border/40 pt-1.5">
