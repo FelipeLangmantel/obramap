@@ -819,7 +819,7 @@ function DocumentosTab({ obraId }: { obraId: string }) {
             </p>
           )}
           {useFlexible
-            ? flexibleItems.map(item => {
+            ? flexibleItems.filter(item => obraDocsMap.has(item.id)).map(item => {
                 const obraDoc = obraDocsMap.get(item.id);
                 const files = obraDoc ? (docFilesMap.get(obraDoc.id) || []) : [];
                 const isUploading = uploadingDocId === item.id;
