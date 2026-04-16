@@ -1626,6 +1626,171 @@ export type Database = {
           },
         ]
       }
+      diary_entries: {
+        Row: {
+          clima: string | null
+          company_id: string
+          created_at: string | null
+          engineer_id: string
+          engineer_name: string
+          entry_date: string
+          equipe_presente: number | null
+          id: string
+          observacao_geral: string | null
+          project_id: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          clima?: string | null
+          company_id: string
+          created_at?: string | null
+          engineer_id: string
+          engineer_name: string
+          entry_date?: string
+          equipe_presente?: number | null
+          id?: string
+          observacao_geral?: string | null
+          project_id: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          clima?: string | null
+          company_id?: string
+          created_at?: string | null
+          engineer_id?: string
+          engineer_name?: string
+          entry_date?: string
+          equipe_presente?: number | null
+          id?: string
+          observacao_geral?: string | null
+          project_id?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_entries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_entries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diary_items: {
+        Row: {
+          created_at: string | null
+          diary_entry_id: string
+          house_ids: number[]
+          houses_count: number
+          id: string
+          macro_color: string
+          macro_id: string
+          macro_name: string
+          observacao: string | null
+          percentual_executado: number
+          production_id: string | null
+          scope_id: string
+          scope_name: string
+        }
+        Insert: {
+          created_at?: string | null
+          diary_entry_id: string
+          house_ids?: number[]
+          houses_count?: number
+          id?: string
+          macro_color?: string
+          macro_id: string
+          macro_name: string
+          observacao?: string | null
+          percentual_executado?: number
+          production_id?: string | null
+          scope_id: string
+          scope_name: string
+        }
+        Update: {
+          created_at?: string | null
+          diary_entry_id?: string
+          house_ids?: number[]
+          houses_count?: number
+          id?: string
+          macro_color?: string
+          macro_id?: string
+          macro_name?: string
+          observacao?: string | null
+          percentual_executado?: number
+          production_id?: string | null
+          scope_id?: string
+          scope_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_items_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_items_production_id_fkey"
+            columns: ["production_id"]
+            isOneToOne: false
+            referencedRelation: "productions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diary_photos: {
+        Row: {
+          created_at: string | null
+          diary_entry_id: string
+          diary_item_id: string | null
+          id: string
+          legenda: string | null
+          storage_path: string
+        }
+        Insert: {
+          created_at?: string | null
+          diary_entry_id: string
+          diary_item_id?: string | null
+          id?: string
+          legenda?: string | null
+          storage_path: string
+        }
+        Update: {
+          created_at?: string | null
+          diary_entry_id?: string
+          diary_item_id?: string | null
+          id?: string
+          legenda?: string | null
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_photos_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_photos_diary_item_id_fkey"
+            columns: ["diary_item_id"]
+            isOneToOne: false
+            referencedRelation: "diary_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documentos_obra: {
         Row: {
           art: boolean

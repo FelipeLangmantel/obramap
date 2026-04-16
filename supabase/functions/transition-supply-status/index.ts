@@ -37,21 +37,21 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Use admin client to verify the token via getClaims
+    // Use admin client to verify the token
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     
     const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await supabaseAdmin.auth.getClaims(token);
+    const { data: { user: authUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
     
-    if (claimsError || !claimsData?.claims) {
-      console.error('Auth error:', claimsError);
+    if (authError || !authUser) {
+      console.error('Auth error:', authError);
       return new Response(
         JSON.stringify({ success: false, error: 'Token inválido' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const userId = claimsData.claims.sub as string;
+    const userId = authUser.id;
     console.log(`[transition-supply-status] User ${userId} authenticated`);
 
     const body: TransitionRequest = await req.json();

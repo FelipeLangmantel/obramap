@@ -27,6 +27,7 @@ import { ServiceProductivityView } from "@/components/productivity/ServiceProduc
 import ContractorsModuleView from "@/components/contractors/ContractorsModuleView";
 import IndustrializationModuleView from "@/components/industrialization/IndustrializationModuleView";
 import HoldingDashboardView from "@/components/holding/HoldingDashboardView";
+import DiarioObraView from "@/components/DiarioObraView";
 import { Loader2, Menu, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -39,7 +40,7 @@ function SidebarTriggerButton() {
   );
 }
 
-type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard";
+type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard" | "diario-obra";
 
 /**
  * ✅ Index agora é puro - sem redirects
@@ -168,6 +169,7 @@ function Index() {
     charts:             "graficos",
     "board-decisions":  "diretoria",
     production:         "producao",
+    "diario-obra":      "producao",
     productivity:       "productivity",
     planning:           "planejamento_semanal",
     "smart-planning":   "smart_planning",
@@ -235,6 +237,7 @@ function Index() {
     "contractors": "Empreiteiros",
     "industrialization": "Industrialização & Logística",
     "holding-dashboard": "Painel da Holding",
+    "diario-obra": "Diário de Obras",
   };
 
   return (
@@ -425,6 +428,12 @@ function Index() {
                 {activeView === "holding-dashboard" && (
                   <div className="flex-1">
                     <HoldingDashboardView />
+                  </div>
+                )}
+
+                {activeView === "diario-obra" && (
+                  <div className="flex-1">
+                    <DiarioObraView />
                   </div>
                 )}
               </div>
