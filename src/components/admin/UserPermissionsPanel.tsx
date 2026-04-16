@@ -84,6 +84,7 @@ interface UserWithRole {
   email: string;
   role: AppRole;
   created_at: string;
+  must_change_password: boolean;
 }
 
 interface UserPermission {
@@ -166,9 +167,9 @@ export function UserPermissionsPanel() {
   const [companyModules, setCompanyModules] = useState<{module_key: string; status: string}[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("users");
-  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
-  const [selectedUserForPassword, setSelectedUserForPassword] = useState<string | null>(null);
-  const [newPassword, setNewPassword] = useState("");
+  const [isTempPasswordDialogOpen, setIsTempPasswordDialogOpen] = useState(false);
+  const [tempPasswordResult, setTempPasswordResult] = useState("");
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [sessionUserFilter, setSessionUserFilter] = useState<string>("all");
   // Dialog states
@@ -224,6 +225,7 @@ export function UserPermissionsPanel() {
           email: profile.email,
           role: (userRole?.role as AppRole) || "viewer",
           created_at: profile.created_at,
+          must_change_password: (profile as any).must_change_password || false,
         };
       });
 
@@ -419,6 +421,21 @@ export function UserPermissionsPanel() {
     }
   };
 
+  const handleResendTempPassword = async (userId: string) => {
+    setIsResettingPassword(true);
+    try {
+      const { data, error } = await supabase.rpc("reset_user_temp_password", { p_user_id: userId });
+      if (error) throw error;
+      const newPass = data as string;
+      setTempPasswordResult(newPass);
+      setIsTempPasswordDialogOpen(true);
+      toast.success("Nova senha temporária gerada!");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao resetar senha");
+    }
+    setIsResettingPassword(false);
+  };
 
   const openPermissionDialog = (userId: string) => {
     setSelectedUserId(userId);
@@ -682,10 +699,12 @@ export function UserPermissionsPanel() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Função</TableHead>
-                    <TableHead>Departamento</TableHead>
+                     <TableHead>Nome</TableHead>
+                     <TableHead>Email</TableHead>
+                     <TableHead>Função</TableHead>
+                     <TableHead>Senha</TableHead>
+                     <TableHead>Departamento</TableHead>
+                     <TableHead className="text-right">Ações</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -694,12 +713,19 @@ export function UserPermissionsPanel() {
                     <TableRow key={u.id}>
                       <TableCell className="font-medium">{u.display_name}</TableCell>
                       <TableCell>{u.email}</TableCell>
-                      <TableCell>{getRoleBadge(u.role)}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {permissions[u.user_id]?.department || "Geral"}
-                        </Badge>
-                      </TableCell>
+                       <TableCell>{getRoleBadge(u.role)}</TableCell>
+                       <TableCell>
+                         {u.must_change_password ? (
+                           <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px]">Aguardando troca</Badge>
+                         ) : (
+                           <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 text-[10px]">Ativa</Badge>
+                         )}
+                       </TableCell>
+                       <TableCell>
+                         <Badge variant="outline">
+                           {permissions[u.user_id]?.department || "Geral"}
+                         </Badge>
+                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Select
@@ -717,22 +743,35 @@ export function UserPermissionsPanel() {
                             </SelectContent>
                           </Select>
                           <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => openPermissionDialog(u.user_id)}
-                            title="Configurar permissões"
-                          >
-                            <Settings className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteUser(u.user_id, u.email)}
-                            disabled={u.user_id === user?.id}
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                             variant="outline"
+                             size="icon"
+                             onClick={() => openPermissionDialog(u.user_id)}
+                             title="Configurar permissões"
+                           >
+                             <Settings className="h-4 w-4" />
+                           </Button>
+                           {u.must_change_password && (
+                             <Button
+                               variant="outline"
+                               size="sm"
+                               className="text-xs gap-1"
+                               disabled={isResettingPassword}
+                               onClick={() => handleResendTempPassword(u.user_id)}
+                               title="Reenviar senha temporária"
+                             >
+                               <RefreshCw className={cn("h-3 w-3", isResettingPassword && "animate-spin")} />
+                               Reenviar
+                             </Button>
+                           )}
+                           <Button
+                             variant="ghost"
+                             size="icon"
+                             onClick={() => handleDeleteUser(u.user_id, u.email)}
+                             disabled={u.user_id === user?.id}
+                             className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                           >
+                             <Trash2 className="h-4 w-4" />
+                           </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -1488,6 +1527,31 @@ export function UserPermissionsPanel() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeptPermDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSaveDeptPermission}>Salvar Permissões</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para exibir senha temporária gerada */}
+      <Dialog open={isTempPasswordDialogOpen} onOpenChange={setIsTempPasswordDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova Senha Temporária</DialogTitle>
+            <DialogDescription>
+              Copie a senha abaixo e envie manualmente ao usuário. Ela será válida até o primeiro login.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div className="flex items-center gap-2">
+              <Input value={tempPasswordResult} readOnly className="font-mono text-lg tracking-wider" />
+              <Button variant="outline" size="sm" onClick={() => {
+                navigator.clipboard.writeText(tempPasswordResult);
+                toast.success("Senha copiada!");
+              }}>Copiar</Button>
+            </div>
+            <p className="text-xs text-muted-foreground">O usuário deverá trocar a senha no próximo login.</p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsTempPasswordDialogOpen(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
