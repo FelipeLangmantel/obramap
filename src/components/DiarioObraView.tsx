@@ -43,6 +43,7 @@ interface DiaryItem {
 
 export default function DiarioObraView() {
   const { currentProject, updateBatchScopeProgress } = useConstruction();
+  const { user, profile, company } = useAuth();
   const houses = currentProject?.houses || [];
   const queryClient = useQueryClient();
 
