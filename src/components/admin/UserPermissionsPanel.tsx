@@ -167,9 +167,10 @@ export function UserPermissionsPanel() {
   const [companyModules, setCompanyModules] = useState<{module_key: string; status: string}[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("users");
-  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [isTempPasswordDialogOpen, setIsTempPasswordDialogOpen] = useState(false);
   const [tempPasswordResult, setTempPasswordResult] = useState("");
   const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [showAllSessions, setShowAllSessions] = useState(false);
   const [sessionUserFilter, setSessionUserFilter] = useState<string>("all");
   // Dialog states
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
