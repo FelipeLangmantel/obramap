@@ -1530,6 +1530,31 @@ export function UserPermissionsPanel() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog para exibir senha temporária gerada */}
+      <Dialog open={isTempPasswordDialogOpen} onOpenChange={setIsTempPasswordDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova Senha Temporária</DialogTitle>
+            <DialogDescription>
+              Copie a senha abaixo e envie manualmente ao usuário. Ela será válida até o primeiro login.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div className="flex items-center gap-2">
+              <Input value={tempPasswordResult} readOnly className="font-mono text-lg tracking-wider" />
+              <Button variant="outline" size="sm" onClick={() => {
+                navigator.clipboard.writeText(tempPasswordResult);
+                toast.success("Senha copiada!");
+              }}>Copiar</Button>
+            </div>
+            <p className="text-xs text-muted-foreground">O usuário deverá trocar a senha no próximo login.</p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsTempPasswordDialogOpen(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
