@@ -2081,8 +2081,13 @@ function MedicoesTab({ obraId, valorContrato, hasInitialBalance, valorMedidoInic
 
       {/* KPI CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-        <Card><CardContent className="p-3 space-y-1">
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total Previsto</p>
+        <Card className={valorContrato > 0 && (totalPrevisto + totalRealizado + totalAcatado) > valorContrato ? "border-amber-500" : ""}><CardContent className="p-3 space-y-1">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+            Total Previsto
+            {valorContrato > 0 && (totalPrevisto + totalRealizado + totalAcatado) > valorContrato && (
+              <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[8px] px-1 py-0">⚠️ Excede contrato</Badge>
+            )}
+          </p>
           <p className="text-sm font-bold">{BRL.format(totalPrevisto)}</p>
           <p className="text-[10px] text-muted-foreground">{totalPrevistas} previsão(ões)</p>
         </CardContent></Card>
