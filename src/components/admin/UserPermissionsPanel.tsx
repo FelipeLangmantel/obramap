@@ -721,10 +721,11 @@ export function UserPermissionsPanel() {
                            <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 text-[10px]">Ativa</Badge>
                          )}
                        </TableCell>
-                        <Badge variant="outline">
-                          {permissions[u.user_id]?.department || "Geral"}
-                        </Badge>
-                      </TableCell>
+                       <TableCell>
+                         <Badge variant="outline">
+                           {permissions[u.user_id]?.department || "Geral"}
+                         </Badge>
+                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Select
