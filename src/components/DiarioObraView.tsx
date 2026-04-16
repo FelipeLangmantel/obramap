@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import {
   Save, Trash2, ClipboardList, Sun, Cloud, CloudRain, CloudLightning, Wind,
   CheckCircle2, ChevronRight, Users, Loader2
@@ -43,8 +42,8 @@ interface DiaryItem {
 }
 
 export default function DiarioObraView() {
-  const { currentProject, houses, updateBatchScopeProgress } = useConstruction();
-  const { user, profile, company } = useAuth();
+  const { currentProject, updateBatchScopeProgress } = useConstruction();
+  const houses = currentProject?.houses || [];
   const queryClient = useQueryClient();
 
   // Header state
