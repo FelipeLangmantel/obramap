@@ -421,6 +421,21 @@ export function UserPermissionsPanel() {
     }
   };
 
+  const handleResendTempPassword = async (userId: string) => {
+    setIsResettingPassword(true);
+    try {
+      const { data, error } = await supabase.rpc("reset_user_temp_password", { p_user_id: userId });
+      if (error) throw error;
+      const newPass = data as string;
+      setTempPasswordResult(newPass);
+      setIsTempPasswordDialogOpen(true);
+      toast.success("Nova senha temporária gerada!");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao resetar senha");
+    }
+    setIsResettingPassword(false);
+  };
 
   const openPermissionDialog = (userId: string) => {
     setSelectedUserId(userId);
