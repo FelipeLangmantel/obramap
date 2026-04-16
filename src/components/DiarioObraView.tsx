@@ -195,7 +195,7 @@ export default function DiarioObraView() {
     const quadras = currentProject.quadras || [];
     return quadras.map(q => ({
       name: q.name,
-      houses: houses.filter(h => q.houseIds.includes(h.id)).sort((a, b) => a.id - b.id),
+      houses: houses.filter(h => q.houses.includes(h.id)).sort((a, b) => a.id - b.id),
     })).filter(g => g.houses.length > 0);
   }, [currentProject, houses]);
 
