@@ -84,6 +84,7 @@ interface UserWithRole {
   email: string;
   role: AppRole;
   created_at: string;
+  must_change_password: boolean;
 }
 
 interface UserPermission {
@@ -224,6 +225,7 @@ export function UserPermissionsPanel() {
           email: profile.email,
           role: (userRole?.role as AppRole) || "viewer",
           created_at: profile.created_at,
+          must_change_password: (profile as any).must_change_password || false,
         };
       });
 
