@@ -83,7 +83,7 @@ export default function DiarioObraView() {
     
     const { data } = await supabase
       .from("diary_entries")
-      .select("*")
+      .select("id, clima, equipe_presente, observacao_geral")
       .eq("project_id", currentProject.id)
       .eq("engineer_id", user.id)
       .eq("entry_date", entryDate)
@@ -108,7 +108,7 @@ export default function DiarioObraView() {
     setLoadingItems(true);
     const { data } = await supabase
       .from("diary_items")
-      .select("*")
+      .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, house_ids, houses_count, percentual_executado, observacao, production_id")
       .eq("diary_entry_id", eId)
       .order("created_at", { ascending: true });
     
