@@ -196,7 +196,7 @@ export function UserPermissionsPanel() {
     setIsLoading(true);
     try {
       const [profilesRes, rolesRes, permissionsRes, departmentsRes, deptPermRes] = await Promise.all([
-        supabase.from("profiles").select("*").eq("company_id", company!.id).order("created_at", { ascending: false }),
+        supabase.from("profiles").select("id, user_id, display_name, email, must_change_password, company_id, created_at").eq("company_id", company!.id).order("created_at", { ascending: false }),
         supabase.from("user_roles").select("*"),
         supabase.from("user_permissions").select("*"),
         supabase.from("departments").select("*").order("display_order"),
