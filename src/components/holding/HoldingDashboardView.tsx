@@ -318,8 +318,10 @@ export function calcHealth(
       const hasFinancialEvidence = nMedicoesAprovadas > 0 || (Number(obra.valor_medido_inicial) > 0);
 
       if (!hasFinancialEvidence) {
-        // Nenhum dado após fase de mobilização → green (obra em andamento, sem penalizar)
-        return "green";
+        // Sem nenhum registro financeiro após fase de mobilização
+        // Penalizar proporcionalmente ao prazo consumido — obra não pode ficar verde sem dados
+        if (pctTempo >= 0.40) return "red";   // >40% do prazo sem nenhum lançamento → crítico
+        return "yellow";                       // 15–40% sem lançamento → atenção
       }
       // Tem evidência financeira — avaliar IDP normalmente
       // Obra com prazo 100% consumido e sem conclusão → sempre vermelho
@@ -424,7 +426,8 @@ export function calcHealthDetails(
     if (idpPctTempo > 0.15) {
       const hasFinancialEvidence = nMedicoesAprovadas > 0 || (Number(obra.valor_medido_inicial) > 0);
       if (!hasFinancialEvidence) {
-        idpStatus = "na"; // sem dados reais após mobilização
+        idpStatus = pctTempo >= 0.40 ? "red" : "yellow"; // mesmo critério do calcHealth
+        // idpValue permanece null — sem dado suficiente para calcular IDP
       } else {
         idpValue = idpPctTempo > 0 ? pctFinanceiro / idpPctTempo : 1;
         idpStatus = idpValue < T.idp_red ? "red" : idpValue < T.idp_yellow ? "yellow" : "green";

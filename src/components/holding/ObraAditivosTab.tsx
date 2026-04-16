@@ -129,18 +129,19 @@ export function ObraAditivosTab({ obraId }: { obraId: string }) {
 
   if (loading) return <Loader2 className="h-6 w-6 animate-spin text-primary mx-auto mt-8" />;
 
-  const totalDias = aditivos.reduce((s, a) => s + (a.aditivo_prazo_dias || 0), 0);
-  const totalValor = aditivos.reduce((s, a) => s + (a.aditivo_valor || 0), 0);
-  const totalSupressao = aditivos.reduce((s, a) => s + (a.supressao_valor || 0), 0);
+  const aprovados = aditivos.filter(a => a.status === 'aprovado');
+  const totalDias = aprovados.reduce((s, a) => s + (a.aditivo_prazo_dias || 0), 0);
+  const totalValor = aprovados.reduce((s, a) => s + (a.aditivo_valor || 0), 0);
+  const totalSupressao = aprovados.reduce((s, a) => s + (a.supressao_valor || 0), 0);
 
   return (
     <>
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4 flex-wrap">
-          <Badge variant="outline" className="text-xs">Total dias aditivados: {totalDias}</Badge>
-          <Badge variant="outline" className="text-xs">Total valor: {BRL.format(totalValor)}</Badge>
-          {totalSupressao > 0 && <Badge variant="outline" className="text-xs text-red-600">Supressão: {BRL.format(totalSupressao)}</Badge>}
+          <Badge variant="outline" className="text-xs">Prazo aprovado: +{totalDias} dias</Badge>
+          <Badge variant="outline" className="text-xs">Valor aprovado: {BRL.format(totalValor)}</Badge>
+          {totalSupressao > 0 && <Badge variant="outline" className="text-xs text-red-600">Supressão aprovada: {BRL.format(totalSupressao)}</Badge>}
         </div>
         <Button size="sm" variant="outline" onClick={() => setShowForm(!showForm)}>
           <Plus className="h-4 w-4 mr-1" /> Novo Aditivo
