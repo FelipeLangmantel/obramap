@@ -699,10 +699,12 @@ export function UserPermissionsPanel() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Função</TableHead>
-                    <TableHead>Departamento</TableHead>
+                     <TableHead>Nome</TableHead>
+                     <TableHead>Email</TableHead>
+                     <TableHead>Função</TableHead>
+                     <TableHead>Senha</TableHead>
+                     <TableHead>Departamento</TableHead>
+                     <TableHead className="text-right">Ações</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -711,8 +713,14 @@ export function UserPermissionsPanel() {
                     <TableRow key={u.id}>
                       <TableCell className="font-medium">{u.display_name}</TableCell>
                       <TableCell>{u.email}</TableCell>
-                      <TableCell>{getRoleBadge(u.role)}</TableCell>
-                      <TableCell>
+                       <TableCell>{getRoleBadge(u.role)}</TableCell>
+                       <TableCell>
+                         {u.must_change_password ? (
+                           <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px]">Aguardando troca</Badge>
+                         ) : (
+                           <Badge className="bg-emerald-500/20 text-emerald-600 border-emerald-500/30 text-[10px]">Ativa</Badge>
+                         )}
+                       </TableCell>
                         <Badge variant="outline">
                           {permissions[u.user_id]?.department || "Geral"}
                         </Badge>
@@ -734,22 +742,35 @@ export function UserPermissionsPanel() {
                             </SelectContent>
                           </Select>
                           <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => openPermissionDialog(u.user_id)}
-                            title="Configurar permissões"
-                          >
-                            <Settings className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDeleteUser(u.user_id, u.email)}
-                            disabled={u.user_id === user?.id}
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                             variant="outline"
+                             size="icon"
+                             onClick={() => openPermissionDialog(u.user_id)}
+                             title="Configurar permissões"
+                           >
+                             <Settings className="h-4 w-4" />
+                           </Button>
+                           {u.must_change_password && (
+                             <Button
+                               variant="outline"
+                               size="sm"
+                               className="text-xs gap-1"
+                               disabled={isResettingPassword}
+                               onClick={() => handleResendTempPassword(u.user_id)}
+                               title="Reenviar senha temporária"
+                             >
+                               <RefreshCw className={cn("h-3 w-3", isResettingPassword && "animate-spin")} />
+                               Reenviar
+                             </Button>
+                           )}
+                           <Button
+                             variant="ghost"
+                             size="icon"
+                             onClick={() => handleDeleteUser(u.user_id, u.email)}
+                             disabled={u.user_id === user?.id}
+                             className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                           >
+                             <Trash2 className="h-4 w-4" />
+                           </Button>
                         </div>
                       </TableCell>
                     </TableRow>
