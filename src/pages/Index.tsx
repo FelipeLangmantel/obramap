@@ -439,6 +439,12 @@ function Index() {
                     <DiarioObraView />
                   </div>
                 )}
+
+                {activeView === "relatorio-obra" && (
+                  <div className="flex-1">
+                    <RelatorioObraView />
+                  </div>
+                )}
               </div>
             )}
           </main>
