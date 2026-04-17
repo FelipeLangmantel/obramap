@@ -39,6 +39,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { EditProductionDialog } from "./EditProductionDialog";
+import DiarioTabContent from "./weekly-production/DiarioTabContent";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Maximize2, Clock, User } from "lucide-react";
 import { format, startOfWeek, endOfWeek, subWeeks, parseISO, isWithinInterval, addWeeks, startOfMonth, endOfMonth, subMonths } from "date-fns";
