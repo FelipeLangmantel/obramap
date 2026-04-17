@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MeasurementSelector } from "./production/MeasurementSelector";
 import { useMeasurements, MeasurementWithServices, MeasurementService } from "@/hooks/useMeasurements";
+import DiarioTabContent from "./weekly-production/DiarioTabContent";
 
 interface WeeklyProduction {
   id: string;
