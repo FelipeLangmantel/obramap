@@ -84,7 +84,7 @@ import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import obraMapLogoDark from "@/assets/obramap-logo-new.png";
 import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 
-type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard" | "diario-obra";
+type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard" | "diario-obra" | "relatorio-obra";
 
 type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements" | "holding-receitas" | "holding-despesas" | "holding-documentos" | "holding-prd" | "holding-insights" | "holding-config" | "cashflow-simulator" | "purchase-panel";
 type MenuViewType = ViewType | RouteViewType;
@@ -235,6 +235,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       items: [
         { title: "Produção Semanal", view: "production", icon: ClipboardList, permissionId: "producao" },
         { title: "Diário de Obras", view: "diario-obra", icon: ClipboardCheck, permissionId: "producao" },
+        { title: "Relatório de Obra", view: "relatorio-obra", icon: FileText, permissionId: "producao" },
         { title: "Produtividade e Equipes", view: "productivity", icon: Users, permissionId: "productivity" },
         { title: "Planej. Semanal", view: "planning", icon: Target, permissionId: "planejamento_semanal" },
         { title: "Planej. Período", view: "measurement-planning", icon: Calculator, permissionId: "planejamento_periodo" },

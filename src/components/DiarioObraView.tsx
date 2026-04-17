@@ -500,25 +500,29 @@ export default function DiarioObraView() {
                         Selecionar quadra
                       </Button>
                     </div>
-                    <div className="grid grid-cols-4 md:grid-cols-6 gap-1.5">
+                    <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5">
                       {group.houses.map(house => {
                         const prog = getHouseProgress(house.id);
                         const isSelected = selectedHouses.includes(house.id);
-                        const isComplete = prog >= 100;
                         return (
                           <Button
                             key={house.id}
                             variant="outline"
                             className={cn(
-                              "h-12 w-12 p-0 text-xs font-bold relative",
-                              isSelected && "ring-2 ring-primary bg-primary text-primary-foreground",
-                              isComplete && !isSelected && "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700"
+                              "h-14 w-full p-0 flex flex-col items-center justify-center gap-0 text-xs font-bold relative",
+                              isSelected && "ring-2 ring-primary bg-primary/20 border-primary",
+                              !isSelected && prog === 0 && "bg-background",
+                              !isSelected && prog > 0 && prog < 100 && "bg-amber-50 dark:bg-amber-900/20 border-amber-400 text-amber-800 dark:text-amber-300",
+                              !isSelected && prog >= 100 && "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-400 text-emerald-700 dark:text-emerald-300"
                             )}
                             onClick={() => toggleHouse(house.id)}
                           >
-                            {house.id}
-                            {isComplete && (
-                              <CheckCircle2 className="absolute -top-1 -right-1 h-3 w-3 text-green-500" />
+                            <span className="text-xs font-bold leading-tight">{String(house.id).padStart(2, "0")}</span>
+                            {prog > 0 && prog < 100 && (
+                              <span className="text-[9px] font-medium leading-tight text-amber-600 dark:text-amber-400">{prog}%</span>
+                            )}
+                            {prog >= 100 && (
+                              <CheckCircle2 className="h-3 w-3 text-emerald-500" />
                             )}
                           </Button>
                         );

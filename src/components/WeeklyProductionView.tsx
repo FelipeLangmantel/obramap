@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MeasurementSelector } from "./production/MeasurementSelector";
 import { useMeasurements, MeasurementWithServices, MeasurementService } from "@/hooks/useMeasurements";
+import DiarioTabContent from "./weekly-production/DiarioTabContent";
 
 interface WeeklyProduction {
   id: string;
@@ -178,10 +179,10 @@ export function WeeklyProductionView() {
   const { canEdit, profile } = useAuth();
   
   // Load saved tab from localStorage
-  const [activeTab, setActiveTab] = useState<"register" | "analysis">(() => {
+  const [activeTab, setActiveTab] = useState<"register" | "analysis" | "diario">(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(TAB_STORAGE_KEY);
-      if (saved === "register" || saved === "analysis") {
+      if (saved === "register" || saved === "analysis" || saved === "diario") {
         return saved;
       }
     }
@@ -949,7 +950,7 @@ export function WeeklyProductionView() {
 
   // Handle tab change with persistence
   const handleTabChange = (value: string) => {
-    const tab = value as "register" | "analysis";
+    const tab = value as "register" | "analysis" | "diario";
     setActiveTab(tab);
     localStorage.setItem(TAB_STORAGE_KEY, tab);
   };
@@ -1011,10 +1012,13 @@ export function WeeklyProductionView() {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2 h-10">
+        <TabsList className="grid w-full max-w-xl grid-cols-3 h-10">
           <TabsTrigger value="register" className="gap-2 text-sm">
             <ClipboardList className="w-4 h-4" />
             Registrar
+          </TabsTrigger>
+          <TabsTrigger value="diario" className="gap-2 text-sm">
+            📓 Do Diário
           </TabsTrigger>
           <TabsTrigger value="analysis" className="gap-2 text-sm">
             <TrendingUp className="w-4 h-4" />

@@ -28,6 +28,7 @@ import ContractorsModuleView from "@/components/contractors/ContractorsModuleVie
 import IndustrializationModuleView from "@/components/industrialization/IndustrializationModuleView";
 import HoldingDashboardView from "@/components/holding/HoldingDashboardView";
 import DiarioObraView from "@/components/DiarioObraView";
+import RelatorioObraView from "@/components/RelatorioObraView";
 import { Loader2, Menu, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -40,7 +41,7 @@ function SidebarTriggerButton() {
   );
 }
 
-type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard" | "diario-obra";
+type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard" | "diario-obra" | "relatorio-obra";
 
 /**
  * ✅ Index agora é puro - sem redirects
@@ -180,6 +181,7 @@ function Index() {
     contractors:        "empreiteiros",
     industrialization:  "industrializacao",
     "holding-dashboard":"holding",
+    "relatorio-obra":   "producao",
   };
 
   // ─── Proteção de view restaurada ─────────────────────────────────────────
@@ -238,6 +240,7 @@ function Index() {
     "industrialization": "Industrialização & Logística",
     "holding-dashboard": "Painel da Holding",
     "diario-obra": "Diário de Obras",
+    "relatorio-obra": "Relatório de Obra",
   };
 
   return (
@@ -434,6 +437,12 @@ function Index() {
                 {activeView === "diario-obra" && (
                   <div className="flex-1">
                     <DiarioObraView />
+                  </div>
+                )}
+
+                {activeView === "relatorio-obra" && (
+                  <div className="flex-1">
+                    <RelatorioObraView />
                   </div>
                 )}
               </div>
