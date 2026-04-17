@@ -426,7 +426,7 @@ export function calcHealthDetails(
     if (idpPctTempo > 0.15) {
       const hasFinancialEvidence = nMedicoesAprovadas > 0 || (Number(obra.valor_medido_inicial) > 0);
       if (!hasFinancialEvidence) {
-        idpStatus = pctTempo >= 0.40 ? "red" : "yellow"; // mesmo critério do calcHealth
+        idpStatus = idpPctTempo >= 0.40 ? "red" : "yellow"; // mesmo critério do calcHealth
         // idpValue permanece null — sem dado suficiente para calcular IDP
       } else {
         idpValue = idpPctTempo > 0 ? pctFinanceiro / idpPctTempo : 1;
