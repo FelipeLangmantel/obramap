@@ -240,6 +240,7 @@ function Index() {
     "industrialization": "Industrialização & Logística",
     "holding-dashboard": "Painel da Holding",
     "diario-obra": "Diário de Obras",
+    "relatorio-obra": "Relatório de Obra",
   };
 
   return (
