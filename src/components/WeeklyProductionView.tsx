@@ -179,10 +179,10 @@ export function WeeklyProductionView() {
   const { canEdit, profile } = useAuth();
   
   // Load saved tab from localStorage
-  const [activeTab, setActiveTab] = useState<"register" | "analysis">(() => {
+  const [activeTab, setActiveTab] = useState<"register" | "analysis" | "diario">(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(TAB_STORAGE_KEY);
-      if (saved === "register" || saved === "analysis") {
+      if (saved === "register" || saved === "analysis" || saved === "diario") {
         return saved;
       }
     }
