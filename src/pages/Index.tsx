@@ -181,6 +181,7 @@ function Index() {
     contractors:        "empreiteiros",
     industrialization:  "industrializacao",
     "holding-dashboard":"holding",
+    "relatorio-obra":   "producao",
   };
 
   // ─── Proteção de view restaurada ─────────────────────────────────────────
