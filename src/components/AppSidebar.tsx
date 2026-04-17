@@ -235,6 +235,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       items: [
         { title: "Produção Semanal", view: "production", icon: ClipboardList, permissionId: "producao" },
         { title: "Diário de Obras", view: "diario-obra", icon: ClipboardCheck, permissionId: "producao" },
+        { title: "Relatório de Obra", view: "relatorio-obra", icon: FileText, permissionId: "producao" },
         { title: "Produtividade e Equipes", view: "productivity", icon: Users, permissionId: "productivity" },
         { title: "Planej. Semanal", view: "planning", icon: Target, permissionId: "planejamento_semanal" },
         { title: "Planej. Período", view: "measurement-planning", icon: Calculator, permissionId: "planejamento_periodo" },
