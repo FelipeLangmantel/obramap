@@ -1012,10 +1012,13 @@ export function WeeklyProductionView() {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2 h-10">
+        <TabsList className="grid w-full max-w-xl grid-cols-3 h-10">
           <TabsTrigger value="register" className="gap-2 text-sm">
             <ClipboardList className="w-4 h-4" />
             Registrar
+          </TabsTrigger>
+          <TabsTrigger value="diario" className="gap-2 text-sm">
+            📓 Do Diário
           </TabsTrigger>
           <TabsTrigger value="analysis" className="gap-2 text-sm">
             <TrendingUp className="w-4 h-4" />
