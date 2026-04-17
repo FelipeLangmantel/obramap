@@ -730,24 +730,80 @@ export function WeeklyProductionView() {
     
     setIsDeleting(true);
     try {
-      // Revert progress for all houses in this production
+      // Bug fix: subtrair percentual correto em vez de zerar (progress=0 sobrescrevia tudo)
+      // Buscar progresso atual de cada casa e subtrair apenas a contribuição deste registro
+      const { data: housesData } = await supabase
+        .from('houses')
+        .select('house_number, macros')
+        .eq('project_id', currentProject.id)
+        .in('house_number', productionToDelete.house_ids);
+
+      // Calcular outros registros do mesmo scope para estimar percentual deste lançamento
+      const { data: outrosRegistros } = await supabase
+        .from('weekly_productions')
+        .select('house_ids, houses_count')
+        .eq('project_id', currentProject.id)
+        .eq('scope_id', productionToDelete.scope_id)
+        .neq('id', productionToDelete.id);
+
+      const revertMap: Record<number, number> = {};
+      for (const house of housesData || []) {
+        const hMacros = (house.macros as any[]) || [];
+        const hMacro = hMacros.find((m: any) => m.id === productionToDelete.macro_id);
+        const hScope = hMacro?.scopes?.find((s: any) => s.id === productionToDelete.scope_id);
+        const currentProgress = hScope?.progress || 0;
+
+        // Verificar se outras produções cobrem esta casa
+        const outrasCobrindo = (outrosRegistros || []).filter(r =>
+          (r.house_ids as number[]).includes(house.house_number)
+        ).length;
+
+        // Se nenhum outro registro cobre esta casa → zera; senão mantém progresso dos outros
+        const newProgress = outrasCobrindo > 0
+          ? Math.max(0, currentProgress - Math.round(currentProgress / (outrasCobrindo + 1)))
+          : 0;
+
+        revertMap[house.house_number] = newProgress;
+      }
+
       await updateBatchScopeProgress(
-        productionToDelete.house_ids, 
-        productionToDelete.macro_id, 
-        productionToDelete.scope_id, 
-        0
+        productionToDelete.house_ids,
+        productionToDelete.macro_id,
+        productionToDelete.scope_id,
+        0,
+        revertMap
       );
 
-      // Delete the production record
-      const { error } = await supabase
-        .from('weekly_productions')
-        .delete()
-        .eq('id', productionToDelete.id);
+      // Bug fix: deletar da tabela weekly_productions
+      await supabase.from('weekly_productions').delete().eq('id', productionToDelete.id);
 
-      if (error) throw error;
+      // Bug fix: deletar também da tabela productions (fonte de verdade do Diário)
+      await supabase
+        .from('productions')
+        .delete()
+        .eq('project_id', currentProject.id)
+        .eq('macro_id', productionToDelete.macro_id)
+        .eq('scope_id', productionToDelete.scope_id)
+        .eq('production_date', productionToDelete.week_start)
+        .contains('house_ids', productionToDelete.house_ids);
+
+      // Bug fix: deletar diary_items vinculados (para Diário refletir a exclusão)
+      const { data: diaryItems } = await supabase
+        .from('diary_items')
+        .select('id, diary_entry_id')
+        .eq('macro_id', productionToDelete.macro_id)
+        .eq('scope_id', productionToDelete.scope_id)
+        .overlaps('house_ids', productionToDelete.house_ids);
+
+      if (diaryItems && diaryItems.length > 0) {
+        await supabase
+          .from('diary_items')
+          .delete()
+          .in('id', diaryItems.map(d => d.id));
+      }
 
       await reloadProductions();
-      toast.success(`Registro excluído. ${productionToDelete.houses_count} casas tiveram o progresso de "${productionToDelete.scope_name}" revertido para 0%.`);
+      toast.success(`Registro excluído. Progresso das ${productionToDelete.houses_count} casas revertido.`);
       setDeleteDialogOpen(false);
       setProductionToDelete(null);
     } catch (error) {

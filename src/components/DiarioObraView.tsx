@@ -143,9 +143,17 @@ export default function DiarioObraView() {
           setRealtimeCount(prev => prev + 1);
         }
       })
+      .on("postgres_changes", {
+        event: "DELETE",
+        schema: "public",
+        table: "diary_items",
+      }, () => {
+        // Recarregar itens quando diary_items são deletados externamente
+        if (entryId) loadItems(entryId);
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [currentProject?.id, user?.id]);
+  }, [currentProject?.id, user?.id, entryId, loadItems]);
 
   // Save header
   const handleSaveHeader = async () => {
@@ -189,6 +197,46 @@ export default function DiarioObraView() {
     return macro?.scopes || [];
   }, [selectedMacro, macros]);
 
+  // Calcular progresso médio de todas as casas por macro e por scope
+  // Para esconder macros/scopes onde TODAS as casas já estão a 100%
+  const macroProgress = useMemo(() => {
+    const result: Record<string, { allComplete: boolean; pctMedio: number }> = {};
+    macros.forEach(macro => {
+      let total = 0, sum = 0;
+      houses.forEach(house => {
+        const hMacros = (house.macros as any[]) || [];
+        const hMacro = hMacros.find((m: any) => m.id === macro.id);
+        if (!hMacro) return;
+        const scopeProgs = (hMacro.scopes || []).map((s: any) => s.progress || 0);
+        if (scopeProgs.length === 0) return;
+        const avg = scopeProgs.reduce((a: number, b: number) => a + b, 0) / scopeProgs.length;
+        sum += avg; total++;
+      });
+      const pctMedio = total > 0 ? sum / total : 0;
+      result[macro.id] = { allComplete: total > 0 && pctMedio >= 100, pctMedio };
+    });
+    return result;
+  }, [macros, houses]);
+
+  const scopeProgress = useMemo(() => {
+    if (!selectedMacro) return {};
+    const result: Record<string, { allComplete: boolean; pctMedio: number }> = {};
+    const macro = macros.find(m => m.id === selectedMacro.id);
+    (macro?.scopes || []).forEach(scope => {
+      let total = 0, sum = 0;
+      houses.forEach(house => {
+        const hMacros = (house.macros as any[]) || [];
+        const hMacro = hMacros.find((m: any) => m.id === selectedMacro.id);
+        const hScope = hMacro?.scopes?.find((s: any) => s.id === scope.id);
+        const prog = hScope?.progress || 0;
+        sum += prog; total++;
+      });
+      const pctMedio = total > 0 ? sum / total : 0;
+      result[scope.id] = { allComplete: total > 0 && pctMedio >= 100, pctMedio };
+    });
+    return result;
+  }, [selectedMacro, macros, houses]);
+
   // Houses grouped by quadra
   const housesGroupedByQuadra = useMemo(() => {
     if (!currentProject) return [];
@@ -226,8 +274,33 @@ export default function DiarioObraView() {
 
   // Register item
   const handleRegister = async () => {
-    if (!entryId || !selectedMacro || !selectedScope || selectedHouses.length === 0 || !currentProject?.id) {
-      toast.error("Salve o cabeçalho e selecione etapa, serviço e casas.");
+    if (!selectedMacro || !selectedScope || selectedHouses.length === 0 || !currentProject?.id) {
+      toast.error("Selecione etapa, serviço e ao menos uma casa.");
+      return;
+    }
+
+    // Auto-salvar o cabeçalho se ainda não existe — sem exigir que o usuário clique em "Salvar"
+    let activeEntryId = entryId;
+    if (!activeEntryId) {
+      if (!user?.id || !company?.id) { toast.error("Sessão inválida."); return; }
+      const { data: newEntry, error: entryErr } = await supabase
+        .from("diary_entries")
+        .insert({
+          company_id: company.id,
+          project_id: currentProject.id,
+          engineer_id: user.id,
+          engineer_name: profile?.display_name || user.email || "Engenheiro",
+          entry_date: entryDate,
+          clima: clima || null,
+          equipe_presente: equipePres || 0,
+          observacao_geral: obsGeral || null,
+        })
+        .select("id")
+        .single();
+      if (entryErr) { toast.error("Erro ao criar diário: " + entryErr.message); return; }
+      activeEntryId = newEntry.id;
+      setEntryId(activeEntryId);
+    }
       return;
     }
     setRegistering(true);
@@ -272,7 +345,7 @@ export default function DiarioObraView() {
 
       // 3. Insert into diary_items
       await supabase.from("diary_items").insert({
-        diary_entry_id: entryId,
+        diary_entry_id: activeEntryId,
         production_id: prod.id,
         macro_id: selectedMacro.id,
         macro_name: selectedMacro.name,
@@ -438,11 +511,17 @@ export default function DiarioObraView() {
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-2 block">1. Selecionar Etapa</label>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {macros.map(macro => (
+                {macros.map(macro => {
+                  const mp = macroProgress[macro.id];
+                  const isComplete = mp?.allComplete;
+                  const pct = mp?.pctMedio || 0;
+                  // Ocultar macros 100% concluídos
+                  if (isComplete) return null;
+                  return (
                   <Button
                     key={macro.id}
                     variant={selectedMacro?.id === macro.id ? "default" : "outline"}
-                    className={cn("min-h-[48px] justify-start gap-2 text-sm font-medium", selectedMacro?.id === macro.id && "ring-2")}
+                    className={cn("min-h-[48px] justify-start gap-2 text-sm font-medium flex-col items-start py-2", selectedMacro?.id === macro.id && "ring-2")}
                     style={{
                       backgroundColor: selectedMacro?.id === macro.id ? macro.color : undefined,
                       borderColor: macro.color,
@@ -454,10 +533,17 @@ export default function DiarioObraView() {
                       setSelectedHouses([]);
                     }}
                   >
-                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: macro.color }} />
-                    {macro.name}
+                    <div className="flex items-center gap-2 w-full">
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: macro.color }} />
+                      <span className="flex-1 truncate">{macro.name}</span>
+                    </div>
+                    {pct > 0 && (
+                      <span className="text-[10px] opacity-70">{pct.toFixed(0)}% médio</span>
+                    )}
                   </Button>
-                ))}
+                  );
+                })}
+              </div>
               </div>
             </div>
 
@@ -466,19 +552,26 @@ export default function DiarioObraView() {
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-2 block">2. Selecionar Serviço</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {scopesForMacro.map(scope => (
+                  {scopesForMacro.map(scope => {
+                    const sp = scopeProgress[scope.id];
+                    if (sp?.allComplete) return null;
+                    return (
                     <Button
                       key={scope.id}
                       variant={selectedScope?.id === scope.id ? "default" : "outline"}
-                      className="min-h-[48px] justify-start text-sm"
+                      className="min-h-[48px] justify-start text-sm flex-col items-start py-2"
                       onClick={() => {
                         setSelectedScope(selectedScope?.id === scope.id ? null : { id: scope.id, name: scope.name });
                         setSelectedHouses([]);
                       }}
                     >
-                      {scope.name}
+                      <span>{scope.name}</span>
+                      {sp && sp.pctMedio > 0 && (
+                        <span className="text-[10px] text-muted-foreground">{sp.pctMedio.toFixed(0)}% médio</span>
+                      )}
                     </Button>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
