@@ -950,7 +950,7 @@ export function WeeklyProductionView() {
 
   // Handle tab change with persistence
   const handleTabChange = (value: string) => {
-    const tab = value as "register" | "analysis";
+    const tab = value as "register" | "analysis" | "diario";
     setActiveTab(tab);
     localStorage.setItem(TAB_STORAGE_KEY, tab);
   };
