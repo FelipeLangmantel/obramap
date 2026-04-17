@@ -28,6 +28,7 @@ import ContractorsModuleView from "@/components/contractors/ContractorsModuleVie
 import IndustrializationModuleView from "@/components/industrialization/IndustrializationModuleView";
 import HoldingDashboardView from "@/components/holding/HoldingDashboardView";
 import DiarioObraView from "@/components/DiarioObraView";
+import RelatorioObraView from "@/components/RelatorioObraView";
 import { Loader2, Menu, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
