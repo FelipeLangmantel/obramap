@@ -301,8 +301,6 @@ export default function DiarioObraView() {
       activeEntryId = newEntry.id;
       setEntryId(activeEntryId);
     }
-      return;
-    }
     setRegistering(true);
     try {
       // 1. Insert into productions
