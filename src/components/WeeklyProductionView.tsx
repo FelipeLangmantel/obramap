@@ -1778,6 +1778,10 @@ export function WeeklyProductionView() {
           </div>
         </TabsContent>
 
+        <TabsContent value="diario" className="flex-1 overflow-auto mt-4">
+          <DiarioTabContent />
+        </TabsContent>
+
         <TabsContent value="analysis" className="flex-1 overflow-auto mt-4 space-y-4">
           <Tabs defaultValue="evolution" className="w-full">
             <TabsList className="mb-4">
