@@ -178,10 +178,43 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
 
       if (error) throw error;
 
-      // Update map: Remove progress from removed houses (batch)
+      // Update map: Remove progress from removed houses (proportional revert)
       const removedHouses = getRemovedHouses();
       if (removedHouses.length > 0) {
-        await updateBatchScopeProgress(removedHouses, production.macro_id, production.scope_id, 0);
+        const { data: outros } = await supabase
+          .from('weekly_productions')
+          .select('house_ids')
+          .eq('project_id', currentProject.id)
+          .eq('scope_id', production.scope_id)
+          .neq('id', production.id);
+
+        const revertMap: Record<number, number> = {};
+        for (const hId of removedHouses) {
+          const currentProg = getHouseProgress(hId);
+          const outrasCobrindo = (outros || []).filter(r =>
+            (r.house_ids as number[]).includes(hId)
+          ).length;
+          revertMap[hId] = outrasCobrindo > 0
+            ? Math.max(0, currentProg - Math.round(currentProg / (outrasCobrindo + 1)))
+            : 0;
+        }
+        await updateBatchScopeProgress(removedHouses, production.macro_id, production.scope_id, 0, revertMap);
+
+        // Sync productions table — remove houses or delete records
+        const { data: prodsVinculadas } = await supabase
+          .from('productions')
+          .select('id, house_ids')
+          .eq('project_id', currentProject.id)
+          .eq('scope_id', production.scope_id)
+          .eq('macro_id', production.macro_id);
+        for (const prod of prodsVinculadas || []) {
+          const novasCasas = (prod.house_ids as number[]).filter(h => !removedHouses.includes(h));
+          if (novasCasas.length === 0) {
+            await supabase.from('productions').delete().eq('id', prod.id);
+          } else if (novasCasas.length !== (prod.house_ids as number[]).length) {
+            await supabase.from('productions').update({ house_ids: novasCasas, houses_count: novasCasas.length }).eq('id', prod.id);
+          }
+        }
       }
 
       // Update map: Add progress to added houses (batch)
@@ -222,9 +255,42 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
     if (!production || !currentProject) return;
 
     try {
-      // Revert progress first: Set all houses back to 0% (batch)
+      // Revert progress: check if other records still cover each house
       if (production.house_ids.length > 0) {
-        await updateBatchScopeProgress(production.house_ids, production.macro_id, production.scope_id, 0);
+        const { data: outros } = await supabase
+          .from('weekly_productions')
+          .select('house_ids')
+          .eq('project_id', currentProject.id)
+          .eq('scope_id', production.scope_id)
+          .neq('id', production.id);
+
+        const revertMap: Record<number, number> = {};
+        for (const hId of production.house_ids) {
+          const currentProg = getHouseProgress(hId);
+          const outrasCobrindo = (outros || []).filter(r =>
+            (r.house_ids as number[]).includes(hId)
+          ).length;
+          revertMap[hId] = outrasCobrindo > 0
+            ? Math.max(0, currentProg - Math.round(currentProg / (outrasCobrindo + 1)))
+            : 0;
+        }
+        await updateBatchScopeProgress(production.house_ids, production.macro_id, production.scope_id, 0, revertMap);
+
+        // Sync productions table — remove houses or delete records
+        const { data: prodsVinculadas } = await supabase
+          .from('productions')
+          .select('id, house_ids')
+          .eq('project_id', currentProject.id)
+          .eq('scope_id', production.scope_id)
+          .eq('macro_id', production.macro_id);
+        for (const prod of prodsVinculadas || []) {
+          const novasCasas = (prod.house_ids as number[]).filter(h => !production.house_ids.includes(h));
+          if (novasCasas.length === 0) {
+            await supabase.from('productions').delete().eq('id', prod.id);
+          } else if (novasCasas.length !== (prod.house_ids as number[]).length) {
+            await supabase.from('productions').update({ house_ids: novasCasas, houses_count: novasCasas.length }).eq('id', prod.id);
+          }
+        }
       }
 
       // Delete production record
