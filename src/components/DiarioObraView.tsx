@@ -53,6 +53,7 @@ export default function DiarioObraView() {
   const [equipePres, setEquipePres] = useState(0);
   const [obsGeral, setObsGeral] = useState("");
   const [entryId, setEntryId] = useState<string | null>(null);
+  const [entryStatus, setEntryStatus] = useState<string>("rascunho");
   const [savingHeader, setSavingHeader] = useState(false);
 
   // Service steps
@@ -83,7 +84,7 @@ export default function DiarioObraView() {
     
     const { data } = await supabase
       .from("diary_entries")
-      .select("id, clima, equipe_presente, observacao_geral")
+      .select("id, clima, equipe_presente, observacao_geral, status")
       .eq("project_id", currentProject.id)
       .eq("engineer_id", user.id)
       .eq("entry_date", entryDate)
@@ -94,12 +95,14 @@ export default function DiarioObraView() {
       setClima((data.clima as ClimaType) || null);
       setEquipePres(data.equipe_presente || 0);
       setObsGeral(data.observacao_geral || "");
+      setEntryStatus(data.status || "rascunho");
       loadItems(data.id);
     } else {
       setEntryId(null);
       setClima(null);
       setEquipePres(0);
       setObsGeral("");
+      setEntryStatus("rascunho");
       setDiaryItems([]);
     }
   };
@@ -421,6 +424,24 @@ export default function DiarioObraView() {
             {savingHeader ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
             Salvar Cabeçalho
           </Button>
+          {entryId && (
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {entryStatus === "finalizado" ? (
+                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 text-[11px]">
+                  ✅ Semana finalizada
+                </Badge>
+              ) : (
+                <>
+                  <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 text-[11px]">
+                    📝 Rascunho
+                  </Badge>
+                  <span className="text-[11px] text-muted-foreground">
+                    Para finalizar: <strong>Produção Semanal → Do Diário → Fechar Semana</strong>
+                  </span>
+                </>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

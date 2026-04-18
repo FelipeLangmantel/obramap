@@ -95,9 +95,10 @@ const FILTER_STORAGE_KEY = "obramap_production_filters";
 const TAB_STORAGE_KEY = "obramap_production_tab";
 const INITIAL_DB_STORAGE_KEY = "obramap_initial_database_mode";
 
-function ProductionRecordItem({ prod, canEdit, onEdit, onDelete, showFullDetails = false }: {
+function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, showFullDetails = false }: {
   prod: WeeklyProduction;
   canEdit: boolean;
+  podeExcluir: boolean;
   onEdit: () => void;
   onDelete: () => void;
   showFullDetails?: boolean;
@@ -150,24 +151,24 @@ function ProductionRecordItem({ prod, canEdit, onEdit, onDelete, showFullDetails
           )}
         </div>
         {canEdit && (
-          <>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-primary hover:text-primary"
-              onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-destructive hover:text-destructive"
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-primary hover:text-primary"
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
+        {podeExcluir && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive hover:text-destructive"
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         )}
       </div>
     </div>
@@ -176,7 +177,8 @@ function ProductionRecordItem({ prod, canEdit, onEdit, onDelete, showFullDetails
 
 export function WeeklyProductionView() {
   const { currentProject, updateBatchScopeProgress } = useConstruction();
-  const { canEdit, profile } = useAuth();
+  const { canEdit, profile, isCompanyAdmin, isSystemAdmin, user } = useAuth();
+  const podeExcluir = isCompanyAdmin || isSystemAdmin;
   
   // Load saved tab from localStorage
   const [activeTab, setActiveTab] = useState<"register" | "analysis" | "diario">(() => {
@@ -227,6 +229,8 @@ export function WeeklyProductionView() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productionToDelete, setProductionToDelete] = useState<WeeklyProduction | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [justificativaExclusao, setJustificativaExclusao] = useState("");
+  const [deletionLog, setDeletionLog] = useState<any[]>([]);
   const [showAllRecords, setShowAllRecords] = useState(false);
   // Custom percentage mode
   const [customPercentMode, setCustomPercentMode] = useState(false);
@@ -724,38 +728,127 @@ export function WeeklyProductionView() {
     await reloadProductions();
   };
 
-  // Handle delete production with map revert
+  // Handle delete production with map revert + audit log
   const handleDeleteProduction = async () => {
-    if (!productionToDelete || !currentProject) return;
-    
+    if (!productionToDelete || !currentProject || !podeExcluir) return;
+    if (justificativaExclusao.trim().length < 20) return;
+
     setIsDeleting(true);
     try {
-      // Revert progress for all houses in this production
-      await updateBatchScopeProgress(
-        productionToDelete.house_ids, 
-        productionToDelete.macro_id, 
-        productionToDelete.scope_id, 
-        0
-      );
+      // 1. Calcular revertMap proporcional
+      const { data: housesData } = await supabase
+        .from('houses')
+        .select('house_number, macros')
+        .eq('project_id', currentProject.id)
+        .in('house_number', productionToDelete.house_ids);
 
-      // Delete the production record
+      const { data: outrosRegistros } = await supabase
+        .from('weekly_productions')
+        .select('house_ids')
+        .eq('project_id', currentProject.id)
+        .eq('scope_id', productionToDelete.scope_id)
+        .neq('id', productionToDelete.id);
+
+      const revertMap: Record<number, number> = {};
+      for (const house of housesData || []) {
+        const hMacros = (house.macros as any[]) || [];
+        const hMacro = hMacros.find((m: any) => m.id === productionToDelete.macro_id);
+        const hScope = hMacro?.scopes?.find((s: any) => s.id === productionToDelete.scope_id);
+        const currentProgress = hScope?.progress || 0;
+        const outrasCobrindo = (outrosRegistros || [])
+          .filter(r => ((r.house_ids as number[]) || []).includes(house.house_number)).length;
+        revertMap[house.house_number] = outrasCobrindo > 0
+          ? Math.max(0, currentProgress - Math.round(currentProgress / (outrasCobrindo + 1)))
+          : 0;
+      }
+      await updateBatchScopeProgress(productionToDelete.house_ids, productionToDelete.macro_id, productionToDelete.scope_id, 0, revertMap);
+
+      // 2. Deletar desvios vinculados
+      const { data: desviosRemovidos } = await supabase
+        .from('production_deviations')
+        .select('id')
+        .eq('project_id', currentProject.id)
+        .eq('scope_id', productionToDelete.scope_id)
+        .eq('macro_id', productionToDelete.macro_id)
+        .eq('week_start', productionToDelete.week_start);
+      if (desviosRemovidos && desviosRemovidos.length > 0) {
+        await supabase.from('production_deviations').delete().in('id', desviosRemovidos.map(d => d.id));
+      }
+
+      // 3. Deletar diary_items vinculados
+      const { data: diaryItemsRemovidos } = await supabase
+        .from('diary_items')
+        .select('id')
+        .eq('macro_id', productionToDelete.macro_id)
+        .eq('scope_id', productionToDelete.scope_id)
+        .overlaps('house_ids', productionToDelete.house_ids);
+      if (diaryItemsRemovidos && diaryItemsRemovidos.length > 0) {
+        await supabase.from('diary_items').delete().in('id', diaryItemsRemovidos.map(d => d.id));
+      }
+
+      // 4. Deletar de productions (legacy)
+      await supabase.from('productions')
+        .delete()
+        .eq('project_id', currentProject.id)
+        .eq('macro_id', productionToDelete.macro_id)
+        .eq('scope_id', productionToDelete.scope_id)
+        .contains('house_ids', productionToDelete.house_ids);
+
+      // 5. Deletar de weekly_productions
       const { error } = await supabase
         .from('weekly_productions')
         .delete()
         .eq('id', productionToDelete.id);
-
       if (error) throw error;
 
+      // 6. Gravar auditoria
+      await supabase.from('production_deletion_log').insert({
+        company_id: profile?.company_id,
+        project_id: currentProject.id,
+        deleted_by: user?.id,
+        deleted_by_nome: profile?.display_name || user?.email || 'Admin',
+        justificativa: justificativaExclusao.trim(),
+        weekly_production_id: productionToDelete.id,
+        macro_name: productionToDelete.macro_name,
+        scope_name: productionToDelete.scope_name,
+        house_ids: productionToDelete.house_ids,
+        houses_count: productionToDelete.houses_count,
+        week_start: productionToDelete.week_start,
+        week_end: productionToDelete.week_end,
+        created_by_original: productionToDelete.created_by_name || null,
+        desvios_removidos: desviosRemovidos?.length || 0,
+        diary_items_removidos: diaryItemsRemovidos?.length || 0,
+      });
+
       await reloadProductions();
-      toast.success(`Registro excluído. ${productionToDelete.houses_count} casas tiveram o progresso de "${productionToDelete.scope_name}" revertido para 0%.`);
+      await loadDeletionLog();
+      toast.success("Registro excluído. Auditoria registrada.");
       setDeleteDialogOpen(false);
       setProductionToDelete(null);
+      setJustificativaExclusao("");
     } catch (error) {
       console.error('Error deleting production:', error);
       toast.error("Erro ao excluir registro");
     }
     setIsDeleting(false);
   };
+
+  // Carrega histórico de exclusões para admins
+  const loadDeletionLog = useCallback(async () => {
+    if (!currentProject?.id || !podeExcluir) return;
+    const { data } = await supabase
+      .from('production_deletion_log')
+      .select('*')
+      .eq('project_id', currentProject.id)
+      .order('created_at', { ascending: false })
+      .limit(30);
+    setDeletionLog(data || []);
+  }, [currentProject?.id, podeExcluir]);
+
+  useEffect(() => {
+    loadDeletionLog();
+  }, [loadDeletionLog]);
+
 
   // Drag selection handlers
   const handleMouseDown = useCallback((houseId: number, isCompleted: boolean, event: React.MouseEvent) => {
@@ -2112,8 +2205,9 @@ export function WeeklyProductionView() {
                           key={prod.id} 
                           prod={prod} 
                           canEdit={canEdit} 
+                          podeExcluir={podeExcluir}
                           onEdit={() => { setEditingProduction(prod); setEditDialogOpen(true); }}
-                          onDelete={() => { setProductionToDelete(prod); setDeleteDialogOpen(true); }}
+                          onDelete={() => { setProductionToDelete(prod); setJustificativaExclusao(""); setDeleteDialogOpen(true); }}
                         />
                       ))}
                       {allFilteredProductions.length > 10 && (
@@ -2153,8 +2247,9 @@ export function WeeklyProductionView() {
                         key={prod.id} 
                         prod={prod} 
                         canEdit={canEdit} 
+                        podeExcluir={podeExcluir}
                         onEdit={() => { setEditingProduction(prod); setEditDialogOpen(true); setShowAllRecords(false); }}
-                        onDelete={() => { setProductionToDelete(prod); setDeleteDialogOpen(true); setShowAllRecords(false); }}
+                        onDelete={() => { setProductionToDelete(prod); setJustificativaExclusao(""); setDeleteDialogOpen(true); setShowAllRecords(false); }}
                         showFullDetails
                       />
                     ))}
@@ -2279,8 +2374,34 @@ export function WeeklyProductionView() {
                   ))}
                 </div>
               )}
+
+              {/* Histórico de exclusões — apenas admins */}
+              {podeExcluir && deletionLog.length > 0 && (
+                <Card className="mt-4">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                      Histórico de Exclusões ({deletionLog.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {deletionLog.map((log: any) => (
+                      <div key={log.id} className="text-xs p-3 rounded-md border bg-muted/30">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-muted-foreground">[{format(parseISO(log.created_at), "dd/MM HH:mm", { locale: ptBR })}]</span>
+                          <strong>{log.deleted_by_nome}</strong>
+                          <span className="text-muted-foreground">— {log.macro_name} / {log.scope_name}</span>
+                        </div>
+                        <div className="text-muted-foreground mt-0.5">
+                          Semana {format(parseISO(log.week_start), "dd/MM", { locale: ptBR })}–{format(parseISO(log.week_end), "dd/MM", { locale: ptBR })} · {log.houses_count} casas · {log.desvios_removidos} desvios removidos · {log.diary_items_removidos} itens de diário removidos
+                        </div>
+                        <div className="mt-1 italic">"{log.justificativa}"</div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
-          </Tabs>
 
           {/* Reason Dialog */}
           <Dialog open={reasonDialogOpen} onOpenChange={setReasonDialogOpen}>
@@ -2352,48 +2473,52 @@ export function WeeklyProductionView() {
         onSave={handleEditSave}
       />
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
+      {/* Delete Confirmation Dialog with justification */}
+      <Dialog open={deleteDialogOpen} onOpenChange={(o) => { setDeleteDialogOpen(o); if (!o) setJustificativaExclusao(""); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              Confirmar Exclusão
-            </AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3">
-                <p>Tem certeza que deseja excluir este registro de produção?</p>
-                {productionToDelete && (
-                  <>
-                    <p className="font-medium text-foreground">
-                      {productionToDelete.scope_name} - {productionToDelete.houses_count} casas
-                    </p>
-                    <div className="flex items-start gap-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-md">
-                      <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-                      <p className="text-sm text-amber-700 dark:text-amber-400">
-                        O mapa de obras será atualizado: todas as {productionToDelete.houses_count} casas terão o progresso do serviço "{productionToDelete.scope_name}" revertido para 0%.
-                      </p>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Esta ação não pode ser desfeita.
-                    </p>
-                  </>
-                )}
+              ⚠️ Excluir Registro de Produção
+            </DialogTitle>
+          </DialogHeader>
+          {productionToDelete && (
+            <div className="space-y-3">
+              <div className="p-3 rounded-md border bg-muted/40 text-sm space-y-1">
+                <div><span className="text-muted-foreground">Serviço:</span> <strong>{productionToDelete.macro_name} / {productionToDelete.scope_name}</strong></div>
+                <div><span className="text-muted-foreground">Semana:</span> {format(parseISO(productionToDelete.week_start), "dd/MM", { locale: ptBR })}–{format(parseISO(productionToDelete.week_end), "dd/MM/yyyy", { locale: ptBR })}</div>
+                <div><span className="text-muted-foreground">Casas:</span> {productionToDelete.houses_count} ({productionToDelete.house_ids.slice(0, 8).join(", ")}{productionToDelete.house_ids.length > 8 ? "..." : ""})</div>
+                {productionToDelete.created_by_name && <div><span className="text-muted-foreground">Lançado por:</span> {productionToDelete.created_by_name}</div>}
               </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
+              <div className="p-3 rounded-md border border-destructive/40 bg-destructive/10 text-xs text-destructive">
+                Esta exclusão é irreversível. O progresso das casas será revertido, os desvios vinculados serão removidos e um registro de auditoria será criado.
+              </div>
+              <div>
+                <Label className="text-xs mb-1 block">Justificativa (mínimo 20 caracteres)</Label>
+                <Textarea
+                  value={justificativaExclusao}
+                  onChange={(e) => setJustificativaExclusao(e.target.value)}
+                  placeholder="Descreva por que este registro está sendo excluído (ex: lançamento duplicado, casa errada, serviço incorreto...)"
+                  className="min-h-[90px]"
+                />
+                <div className="text-[11px] text-muted-foreground mt-1 text-right">
+                  {justificativaExclusao.trim().length}/20
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={isDeleting}>Cancelar</Button>
+            <Button
+              variant="destructive"
               onClick={handleDeleteProduction}
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting || justificativaExclusao.trim().length < 20}
             >
-              {isDeleting ? "Excluindo..." : "Excluir e Reverter Mapa"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+              {isDeleting ? "Excluindo..." : "Confirmar Exclusão"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
