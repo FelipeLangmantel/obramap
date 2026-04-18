@@ -1686,6 +1686,98 @@ export type Database = {
           },
         ]
       }
+      diary_item_corrections: {
+        Row: {
+          company_id: string
+          corrigido_por: string
+          corrigido_por_nome: string
+          created_at: string | null
+          diary_entry_id: string
+          diary_item_id: string | null
+          house_ids_anterior: number[]
+          house_ids_posterior: number[] | null
+          id: string
+          justificativa: string
+          macro_id: string
+          macro_name: string
+          percentual_anterior: number
+          percentual_posterior: number | null
+          project_id: string
+          scope_id: string
+          scope_name: string
+          tipo: string
+        }
+        Insert: {
+          company_id: string
+          corrigido_por: string
+          corrigido_por_nome: string
+          created_at?: string | null
+          diary_entry_id: string
+          diary_item_id?: string | null
+          house_ids_anterior?: number[]
+          house_ids_posterior?: number[] | null
+          id?: string
+          justificativa: string
+          macro_id: string
+          macro_name: string
+          percentual_anterior?: number
+          percentual_posterior?: number | null
+          project_id: string
+          scope_id: string
+          scope_name: string
+          tipo: string
+        }
+        Update: {
+          company_id?: string
+          corrigido_por?: string
+          corrigido_por_nome?: string
+          created_at?: string | null
+          diary_entry_id?: string
+          diary_item_id?: string | null
+          house_ids_anterior?: number[]
+          house_ids_posterior?: number[] | null
+          id?: string
+          justificativa?: string
+          macro_id?: string
+          macro_name?: string
+          percentual_anterior?: number
+          percentual_posterior?: number | null
+          project_id?: string
+          scope_id?: string
+          scope_name?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_item_corrections_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_item_corrections_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_item_corrections_diary_item_id_fkey"
+            columns: ["diary_item_id"]
+            isOneToOne: false
+            referencedRelation: "diary_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_item_corrections_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       diary_items: {
         Row: {
           created_at: string | null
@@ -6669,6 +6761,81 @@ export type Database = {
             columns: ["obras_portfolio_id"]
             isOneToOne: false
             referencedRelation: "obras_portfolio"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_deletion_log: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          created_by_original: string | null
+          deleted_by: string
+          deleted_by_nome: string
+          desvios_removidos: number
+          diary_items_removidos: number
+          house_ids: number[]
+          houses_count: number
+          id: string
+          justificativa: string
+          macro_name: string
+          project_id: string
+          scope_name: string
+          week_end: string
+          week_start: string
+          weekly_production_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          created_by_original?: string | null
+          deleted_by: string
+          deleted_by_nome: string
+          desvios_removidos?: number
+          diary_items_removidos?: number
+          house_ids?: number[]
+          houses_count?: number
+          id?: string
+          justificativa: string
+          macro_name: string
+          project_id: string
+          scope_name: string
+          week_end: string
+          week_start: string
+          weekly_production_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          created_by_original?: string | null
+          deleted_by?: string
+          deleted_by_nome?: string
+          desvios_removidos?: number
+          diary_items_removidos?: number
+          house_ids?: number[]
+          houses_count?: number
+          id?: string
+          justificativa?: string
+          macro_name?: string
+          project_id?: string
+          scope_name?: string
+          week_end?: string
+          week_start?: string
+          weekly_production_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_deletion_log_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_deletion_log_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
