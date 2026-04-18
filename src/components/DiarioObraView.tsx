@@ -151,11 +151,11 @@ export default function DiarioObraView() {
         schema: "public",
         table: "diary_items",
       }, () => {
-        if (entryId) loadItems(entryId);
+        loadEntry();
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [currentProject?.id, user?.id, entryId]);
+  }, [currentProject?.id, user?.id]);
 
   // Save header
   const handleSaveHeader = async () => {
