@@ -76,7 +76,8 @@ const CLIMA_LABEL: Record<string, string> = {
 };
 
 export default function DiarioTabContent() {
-  const { currentProject, houses, updateBatchScopeProgress } = useConstruction();
+  const { currentProject, updateBatchScopeProgress } = useConstruction();
+  const houses = currentProject?.houses || [];
   const { user, profile, isCompanyAdmin, isSystemAdmin } = useAuth();
   const queryClient = useQueryClient();
   const podeCorrigir = isCompanyAdmin || isSystemAdmin;
