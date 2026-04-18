@@ -581,28 +581,46 @@ export function WeeklyProductionView() {
       const measurementId = selectedMeasurementNew?.id || null;
       const measurementServiceId = selectedServiceNew?.id || null;
 
-      // 1. Save to new productions table
-      const { error: newProductionError } = await supabase
-        .from('productions')
-        .insert({
-          project_id: currentProject.id,
-          measurement_id: measurementId,
-          measurement_service_id: measurementServiceId,
-          macro_id: macro.id,
-          macro_name: macro.name,
-          macro_color: macro.color,
-          scope_id: scope.id,
-          scope_name: scope.name,
-          house_ids: selectedHouses,
-          houses_count: selectedHouses.length,
-          production_date: format(new Date(), 'yyyy-MM-dd'),
-          is_initial_database: isInitialDatabase,
-          is_unplanned: isUnplanned,
-          notes: null
-        });
+      // Duplicate-check: warn if Initial Database overlaps with Diary entries
+      if (isInitialDatabase) {
+        const { data: jaNoDiario } = await supabase
+          .from('productions')
+          .select('house_ids')
+          .eq('project_id', currentProject.id)
+          .eq('macro_id', macro.id)
+          .eq('scope_id', scope.id)
+          .eq('is_initial_database', false);
+        const casasJaLancadas = (jaNoDiario || []).flatMap(p => (p.house_ids as number[]) || []);
+        const duplicatas = selectedHouses.filter(h => casasJaLancadas.includes(h));
+        if (duplicatas.length > 0) {
+          toast.warning(`⚠️ Casas ${duplicatas.join(', ')} já lançadas pelo Diário de Obras. Lançar no Banco Inicial pode causar duplicidade.`);
+        }
+      }
 
-      if (newProductionError) {
-        console.error('Error saving to new productions table:', newProductionError);
+      // 1. Save to new productions table — SKIP when Initial Database to avoid double-counting
+      if (!isInitialDatabase) {
+        const { error: newProductionError } = await supabase
+          .from('productions')
+          .insert({
+            project_id: currentProject.id,
+            measurement_id: measurementId,
+            measurement_service_id: measurementServiceId,
+            macro_id: macro.id,
+            macro_name: macro.name,
+            macro_color: macro.color,
+            scope_id: scope.id,
+            scope_name: scope.name,
+            house_ids: selectedHouses,
+            houses_count: selectedHouses.length,
+            production_date: format(new Date(), 'yyyy-MM-dd'),
+            is_initial_database: isInitialDatabase,
+            is_unplanned: isUnplanned,
+            notes: null
+          });
+
+        if (newProductionError) {
+          console.error('Error saving to new productions table:', newProductionError);
+        }
       }
 
       // 2. Also save to legacy weekly_productions for backward compatibility
