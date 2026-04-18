@@ -491,7 +491,7 @@ export default function DiarioTabContent() {
                       <TableCell className="text-right font-bold">{c.pctMedio}%</TableCell>
                       {podeCorrigir && (
                         <TableCell className="text-right">
-                          {!hasOpenEntries ? (
+                          {hasOpenEntries ? (
                             <Button
                               size="sm"
                               variant="outline"
@@ -510,7 +510,7 @@ export default function DiarioTabContent() {
                                     </Button>
                                   </span>
                                 </TooltipTrigger>
-                                <TooltipContent>Feche a semana antes de corrigir.</TooltipContent>
+                                <TooltipContent>Semana fechada. Solicite ao administrador para corrigir.</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                           )}

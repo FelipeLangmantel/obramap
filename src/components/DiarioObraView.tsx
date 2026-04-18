@@ -636,6 +636,8 @@ export default function DiarioObraView() {
                       size="icon"
                       className="shrink-0 text-destructive hover:text-destructive min-h-[48px] min-w-[48px]"
                       onClick={() => handleDeleteItem(item)}
+                      disabled={entryStatus === "finalizado"}
+                      title={entryStatus === "finalizado" ? "Semana fechada — use o botão Corrigir na aba Do Diário" : "Remover item"}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
