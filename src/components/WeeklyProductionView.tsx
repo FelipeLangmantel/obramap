@@ -795,15 +795,38 @@ export function WeeklyProductionView() {
         await supabase.from('production_deviations').delete().in('id', desviosRemovidos.map(d => d.id));
       }
 
-      // 3. Deletar diary_items vinculados
-      const { data: diaryItemsRemovidos } = await supabase
-        .from('diary_items')
+      // 3. Deletar diary_items vinculados (via diary_entries do projeto)
+      const { data: entryIds } = await supabase
+        .from('diary_entries')
         .select('id')
-        .eq('macro_id', productionToDelete.macro_id)
-        .eq('scope_id', productionToDelete.scope_id)
-        .overlaps('house_ids', productionToDelete.house_ids);
-      if (diaryItemsRemovidos && diaryItemsRemovidos.length > 0) {
-        await supabase.from('diary_items').delete().in('id', diaryItemsRemovidos.map(d => d.id));
+        .eq('project_id', currentProject.id);
+      const validEntryIds = (entryIds || []).map(e => e.id);
+      let diaryItemsRemovidos: { id: string }[] = [];
+      if (validEntryIds.length > 0) {
+        const { data: foundItems } = await supabase
+          .from('diary_items')
+          .select('id')
+          .in('diary_entry_id', validEntryIds)
+          .eq('macro_id', productionToDelete.macro_id)
+          .eq('scope_id', productionToDelete.scope_id);
+        diaryItemsRemovidos = (foundItems || []).filter(item => {
+          // confirmar apenas items que contenham ao menos uma das casas do registro
+          return true; // RLS já restringe por empresa; filtragem por house_ids abaixo
+        });
+        // Filtrar por house_ids manualmente (overlaps não disponível via JS client)
+        if (diaryItemsRemovidos.length > 0) {
+          const { data: itemsComHouses } = await supabase
+            .from('diary_items')
+            .select('id, house_ids')
+            .in('id', diaryItemsRemovidos.map(d => d.id));
+          const houseSet = new Set(productionToDelete.house_ids);
+          diaryItemsRemovidos = (itemsComHouses || []).filter(d =>
+            ((d.house_ids as number[]) || []).some(h => houseSet.has(h))
+          );
+        }
+        if (diaryItemsRemovidos.length > 0) {
+          await supabase.from('diary_items').delete().in('id', diaryItemsRemovidos.map(d => d.id));
+        }
       }
 
       // 4. Deletar de productions (legacy)
