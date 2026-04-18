@@ -25,7 +25,7 @@ export function QuadraCard({ quadraId }: QuadraCardProps) {
     const quadraHouses = houses.filter(h => h.quadra === quadra.id);
     const template = currentProject.macrosTemplate;
     const progresses = quadraHouses.map(h => calculateHouseProgress(h, template));
-    const avg = progresses.length > 0 ? Math.round(progresses.reduce((a, b) => a + b, 0) / progresses.length) : 0;
+    const avg = progresses.length > 0 ? Math.round((progresses.reduce((a, b) => a + b, 0) / progresses.length) * 10) / 10 : 0;
     
     let filtered = quadra.houses;
     if (filterStatus !== "all") {

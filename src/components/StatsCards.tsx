@@ -36,7 +36,7 @@ export function StatsCards() {
         return weightedProgress / totalWeight;
       });
       
-      avgProgress = Math.round(macroProgresses.reduce((a, b) => a + b, 0) / total);
+      avgProgress = Math.round((macroProgresses.reduce((a, b) => a + b, 0) / total) * 10) / 10;
       completed = macroProgresses.filter(p => p === 100).length;
       inProgress = macroProgresses.filter(p => p > 0 && p < 100).length;
       
@@ -65,7 +65,7 @@ export function StatsCards() {
         return 0;
       });
       
-      avgProgress = Math.round(scopeProgresses.reduce((a, b) => a + b, 0) / total);
+      avgProgress = Math.round((scopeProgresses.reduce((a, b) => a + b, 0) / total) * 10) / 10;
       completed = scopeProgresses.filter(p => p === 100).length;
       inProgress = scopeProgresses.filter(p => p > 0 && p < 100).length;
       
@@ -73,7 +73,7 @@ export function StatsCards() {
       // Default: calculate overall house progress using template weights
       const template = currentProject.macrosTemplate;
       const progresses = houses.map(h => calculateHouseProgress(h, template));
-      avgProgress = Math.round(progresses.reduce((a, b) => a + b, 0) / total);
+      avgProgress = Math.round((progresses.reduce((a, b) => a + b, 0) / total) * 10) / 10;
       completed = progresses.filter(p => p === 100).length;
       inProgress = progresses.filter(p => p > 0 && p < 100).length;
     }
