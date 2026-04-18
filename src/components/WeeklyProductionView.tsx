@@ -95,9 +95,10 @@ const FILTER_STORAGE_KEY = "obramap_production_filters";
 const TAB_STORAGE_KEY = "obramap_production_tab";
 const INITIAL_DB_STORAGE_KEY = "obramap_initial_database_mode";
 
-function ProductionRecordItem({ prod, canEdit, onEdit, onDelete, showFullDetails = false }: {
+function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, showFullDetails = false }: {
   prod: WeeklyProduction;
   canEdit: boolean;
+  podeExcluir: boolean;
   onEdit: () => void;
   onDelete: () => void;
   showFullDetails?: boolean;
@@ -150,24 +151,24 @@ function ProductionRecordItem({ prod, canEdit, onEdit, onDelete, showFullDetails
           )}
         </div>
         {canEdit && (
-          <>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-primary hover:text-primary"
-              onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-destructive hover:text-destructive"
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-primary hover:text-primary"
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
+        {podeExcluir && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive hover:text-destructive"
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
         )}
       </div>
     </div>
@@ -176,7 +177,8 @@ function ProductionRecordItem({ prod, canEdit, onEdit, onDelete, showFullDetails
 
 export function WeeklyProductionView() {
   const { currentProject, updateBatchScopeProgress } = useConstruction();
-  const { canEdit, profile } = useAuth();
+  const { canEdit, profile, isCompanyAdmin, isSystemAdmin, user } = useAuth();
+  const podeExcluir = isCompanyAdmin || isSystemAdmin;
   
   // Load saved tab from localStorage
   const [activeTab, setActiveTab] = useState<"register" | "analysis" | "diario">(() => {
@@ -227,6 +229,8 @@ export function WeeklyProductionView() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productionToDelete, setProductionToDelete] = useState<WeeklyProduction | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [justificativaExclusao, setJustificativaExclusao] = useState("");
+  const [deletionLog, setDeletionLog] = useState<any[]>([]);
   const [showAllRecords, setShowAllRecords] = useState(false);
   // Custom percentage mode
   const [customPercentMode, setCustomPercentMode] = useState(false);
