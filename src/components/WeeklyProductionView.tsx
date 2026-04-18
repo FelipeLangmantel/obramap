@@ -2461,6 +2461,7 @@ export function WeeklyProductionView() {
               </div>
             </DialogContent>
           </Dialog>
+          </Tabs>
         </TabsContent>
 
 
