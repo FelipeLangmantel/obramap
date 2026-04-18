@@ -2116,8 +2116,9 @@ export function WeeklyProductionView() {
                           key={prod.id} 
                           prod={prod} 
                           canEdit={canEdit} 
+                          podeExcluir={podeExcluir}
                           onEdit={() => { setEditingProduction(prod); setEditDialogOpen(true); }}
-                          onDelete={() => { setProductionToDelete(prod); setDeleteDialogOpen(true); }}
+                          onDelete={() => { setProductionToDelete(prod); setJustificativaExclusao(""); setDeleteDialogOpen(true); }}
                         />
                       ))}
                       {allFilteredProductions.length > 10 && (
@@ -2157,8 +2158,9 @@ export function WeeklyProductionView() {
                         key={prod.id} 
                         prod={prod} 
                         canEdit={canEdit} 
+                        podeExcluir={podeExcluir}
                         onEdit={() => { setEditingProduction(prod); setEditDialogOpen(true); setShowAllRecords(false); }}
-                        onDelete={() => { setProductionToDelete(prod); setDeleteDialogOpen(true); setShowAllRecords(false); }}
+                        onDelete={() => { setProductionToDelete(prod); setJustificativaExclusao(""); setDeleteDialogOpen(true); setShowAllRecords(false); }}
                         showFullDetails
                       />
                     ))}
