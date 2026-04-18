@@ -53,6 +53,7 @@ export default function DiarioObraView() {
   const [equipePres, setEquipePres] = useState(0);
   const [obsGeral, setObsGeral] = useState("");
   const [entryId, setEntryId] = useState<string | null>(null);
+  const [entryStatus, setEntryStatus] = useState<string>("rascunho");
   const [savingHeader, setSavingHeader] = useState(false);
 
   // Service steps
