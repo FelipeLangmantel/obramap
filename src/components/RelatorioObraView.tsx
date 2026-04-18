@@ -77,6 +77,32 @@ export default function RelatorioObraView() {
     loadData();
   }, [currentProject?.id, dataInicio, dataFim]);
 
+  // Realtime: recarregar quando diary_items, diary_entries ou desvios mudam
+  useEffect(() => {
+    if (!currentProject?.id) return;
+    const channel = supabase
+      .channel(`relatorio-obra-${currentProject.id}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "diary_items",
+      }, () => loadData())
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "diary_entries",
+        filter: `project_id=eq.${currentProject.id}`,
+      }, () => loadData())
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "production_deviations",
+        filter: `project_id=eq.${currentProject.id}`,
+      }, () => loadData())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [currentProject?.id]);
+
   const loadData = async () => {
     if (!currentProject?.id) return;
     setLoading(true);

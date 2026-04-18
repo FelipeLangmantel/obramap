@@ -56,6 +56,7 @@ import {
 import { MeasurementSelector } from "./production/MeasurementSelector";
 import { useMeasurements, MeasurementWithServices, MeasurementService } from "@/hooks/useMeasurements";
 import DiarioTabContent from "./weekly-production/DiarioTabContent";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface WeeklyProduction {
   id: string;
@@ -176,7 +177,8 @@ function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, sh
 }
 
 export function WeeklyProductionView() {
-  const { currentProject, updateBatchScopeProgress } = useConstruction();
+  const { currentProject, updateBatchScopeProgress, refreshHousesFromDB } = useConstruction();
+  const queryClient = useQueryClient();
   const { canEdit, profile, isCompanyAdmin, isSystemAdmin, user } = useAuth();
   const podeExcluir = isCompanyAdmin || isSystemAdmin;
   
@@ -840,6 +842,10 @@ export function WeeklyProductionView() {
 
       await reloadProductions();
       await loadDeletionLog();
+      await refreshHousesFromDB();
+      queryClient.invalidateQueries({ queryKey: ["productions"] });
+      queryClient.invalidateQueries({ queryKey: ["weekly_productions"] });
+      queryClient.invalidateQueries({ queryKey: ["houses"] });
       toast.success("Registro excluído. Auditoria registrada.");
       setDeleteDialogOpen(false);
       setProductionToDelete(null);
