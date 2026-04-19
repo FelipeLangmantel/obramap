@@ -589,7 +589,142 @@ export function WeeklyProductionView() {
       const measurementId = selectedMeasurementNew?.id || null;
       const measurementServiceId = selectedServiceNew?.id || null;
 
-      // Duplicate-check: warn if Initial Database overlaps with Diary entries
+      // Função interna que executa a inserção propriamente dita
+      const executarInsercao = async () => {
+        // 1. Save to new productions table — SKIP when Initial Database to avoid double-counting
+        if (!isInitialDatabase) {
+          const { error: newProductionError } = await supabase
+            .from('productions')
+            .insert({
+              project_id: currentProject.id,
+              measurement_id: measurementId,
+              measurement_service_id: measurementServiceId,
+              macro_id: macro.id,
+              macro_name: macro.name,
+              macro_color: macro.color,
+              scope_id: scope.id,
+              scope_name: scope.name,
+              house_ids: selectedHouses,
+              houses_count: selectedHouses.length,
+              production_date: format(new Date(), 'yyyy-MM-dd'),
+              is_initial_database: isInitialDatabase,
+              is_unplanned: isUnplanned,
+              notes: null
+            });
+
+          if (newProductionError) {
+            console.error('Error saving to new productions table:', newProductionError);
+          }
+        }
+
+        // 2. Also save to legacy weekly_productions for backward compatibility
+        const { error } = await supabase
+          .from('weekly_productions')
+          .insert({
+            project_id: currentProject.id,
+            week_start: measurementStartDate,
+            week_end: measurementEndDate,
+            scope_id: scope.id,
+            scope_name: scope.name,
+            macro_id: macro.id,
+            macro_name: macro.name,
+            macro_color: macro.color,
+            house_ids: selectedHouses,
+            houses_count: selectedHouses.length,
+            is_initial_database: isInitialDatabase,
+            created_by_user_id: profile?.user_id || null,
+            created_by_name: profile?.display_name || null,
+          });
+
+        if (error) throw error;
+
+        // Build percentage map - add to existing progress instead of replacing
+        const progressMap: Record<number, number> = {};
+        for (const houseId of selectedHouses) {
+          const house = houses.find(h => h.id === houseId);
+          const houseMacros = (house?.macros as any[]) || [];
+          const houseMacro = houseMacros.find(m => m.id === macro.id);
+          const houseScope = houseMacro?.scopes?.find((s: any) => s.id === scope.id);
+          const currentProgress = houseScope?.progress || 0;
+          const remainingPercent = 100 - currentProgress;
+
+          const percentToAdd = customPercentMode
+            ? Math.min(housePercentages[houseId] ?? massPercentage, remainingPercent)
+            : remainingPercent;
+
+          progressMap[houseId] = Math.min(100, currentProgress + percentToAdd);
+        }
+
+        await updateBatchScopeProgress(selectedHouses, macro.id, scope.id, 100, progressMap);
+
+        const message = isInitialDatabase
+          ? `Banco de atividades atualizado: ${scope.name} em ${selectedHouses.length} casas.`
+          : `Produção registrada: ${scope.name} em ${selectedHouses.length} casas. Mapa atualizado!`;
+        toast.success(message);
+
+        await reloadProductions();
+
+        // C2: Deviation tracking after save
+        if (selectedReleasedService && !isInitialDatabase) {
+          try {
+            const plannedIds: number[] = selectedReleasedService.planned_house_ids || [];
+            const missingIds = plannedIds.filter(id => !selectedHouses.includes(id));
+            const unplannedIds = selectedHouses.filter(id => !plannedIds.includes(id));
+
+            await supabase.from('weekly_productions')
+              .update({
+                weekly_plan_service_id: selectedReleasedService.id,
+                contractor_id: selectedReleasedService.contractor_id || null,
+              })
+              .eq('project_id', currentProject.id)
+              .eq('scope_id', scope.id)
+              .eq('macro_id', macro.id)
+              .eq('week_start', measurementStartDate)
+              .is('weekly_plan_service_id', null)
+              .order('created_at', { ascending: false })
+              .limit(1);
+
+            if (missingIds.length > 0) {
+              const pct = (missingIds.length / plannedIds.length) * 100;
+              await supabase.from('production_deviations').insert({
+                project_id: currentProject.id,
+                company_id: profile?.company_id,
+                week_start: measurementStartDate,
+                week_end: measurementEndDate,
+                scope_id: scope.id,
+                scope_name: scope.name,
+                macro_id: macro.id,
+                macro_name: macro.name,
+                weekly_plan_service_id: selectedReleasedService.id,
+                planned_count: plannedIds.length,
+                actual_count: selectedHouses.length,
+                deviation: selectedHouses.length - plannedIds.length,
+                planned_house_ids: plannedIds,
+                actual_house_ids: [...selectedHouses],
+                missing_house_ids: missingIds,
+                unplanned_house_ids: unplannedIds,
+                severity: pct > 40 ? 'critical' : pct > 20 ? 'warning' : 'info',
+                status: 'open',
+              });
+              toast.warning(`${missingIds.length} casa(s) não executadas — alerta gerado.`);
+            }
+          } catch (devErr) {
+            console.error('Error tracking deviation:', devErr);
+          }
+          setSelectedReleasedService(null);
+          setSelectedReleasedWeek(null);
+          setReleasedWeekServices([]);
+        }
+
+        setSelectedHouses([]);
+        setSelectedScope("");
+        setHousePercentages({});
+        setMassPercentage(100);
+        setSelectedMeasurementNew(null);
+        setSelectedServiceNew(null);
+      };
+
+      // Duplicate-check: BLOCK if Initial Database overlaps with Diary entries
       if (isInitialDatabase) {
         const { data: jaNoDiario } = await supabase
           .from('productions')
@@ -601,147 +736,15 @@ export function WeeklyProductionView() {
         const casasJaLancadas = (jaNoDiario || []).flatMap(p => (p.house_ids as number[]) || []);
         const duplicatas = selectedHouses.filter(h => casasJaLancadas.includes(h));
         if (duplicatas.length > 0) {
-          toast.warning(`⚠️ Casas ${duplicatas.join(', ')} já lançadas pelo Diário de Obras. Lançar no Banco Inicial pode causar duplicidade.`);
+          setCasasDuplicatas(duplicatas);
+          setPendingInsert(() => executarInsercao);
+          setDuplicataDialogOpen(true);
+          setIsSaving(false);
+          return; // PARAR — não inserir até confirmação
         }
       }
 
-      // 1. Save to new productions table — SKIP when Initial Database to avoid double-counting
-      if (!isInitialDatabase) {
-        const { error: newProductionError } = await supabase
-          .from('productions')
-          .insert({
-            project_id: currentProject.id,
-            measurement_id: measurementId,
-            measurement_service_id: measurementServiceId,
-            macro_id: macro.id,
-            macro_name: macro.name,
-            macro_color: macro.color,
-            scope_id: scope.id,
-            scope_name: scope.name,
-            house_ids: selectedHouses,
-            houses_count: selectedHouses.length,
-            production_date: format(new Date(), 'yyyy-MM-dd'),
-            is_initial_database: isInitialDatabase,
-            is_unplanned: isUnplanned,
-            notes: null
-          });
-
-        if (newProductionError) {
-          console.error('Error saving to new productions table:', newProductionError);
-        }
-      }
-
-      // 2. Also save to legacy weekly_productions for backward compatibility
-      const { error } = await supabase
-        .from('weekly_productions')
-        .insert({
-          project_id: currentProject.id,
-          week_start: measurementStartDate,
-          week_end: measurementEndDate,
-          scope_id: scope.id,
-          scope_name: scope.name,
-          macro_id: macro.id,
-          macro_name: macro.name,
-          macro_color: macro.color,
-          house_ids: selectedHouses,
-          houses_count: selectedHouses.length,
-          is_initial_database: isInitialDatabase,
-          created_by_user_id: profile?.user_id || null,
-          created_by_name: profile?.display_name || null,
-        });
-
-      if (error) throw error;
-
-      // Build percentage map - add to existing progress instead of replacing
-      const progressMap: Record<number, number> = {};
-      for (const houseId of selectedHouses) {
-        // Get current progress for this house
-        const house = houses.find(h => h.id === houseId);
-        const houseMacros = (house?.macros as any[]) || [];
-        const houseMacro = houseMacros.find(m => m.id === macro.id);
-        const houseScope = houseMacro?.scopes?.find((s: any) => s.id === scope.id);
-        const currentProgress = houseScope?.progress || 0;
-        const remainingPercent = 100 - currentProgress;
-        
-        // Get the percentage to add (from custom mode or default to remaining)
-        const percentToAdd = customPercentMode 
-          ? Math.min(housePercentages[houseId] ?? massPercentage, remainingPercent)
-          : remainingPercent;
-        
-        // Sum to existing progress
-        progressMap[houseId] = Math.min(100, currentProgress + percentToAdd);
-      }
-
-      // Update progress for all selected houses at once - batch update for performance
-      await updateBatchScopeProgress(selectedHouses, macro.id, scope.id, 100, progressMap);
-
-      const message = isInitialDatabase 
-        ? `Banco de atividades atualizado: ${scope.name} em ${selectedHouses.length} casas.`
-        : `Produção registrada: ${scope.name} em ${selectedHouses.length} casas. Mapa atualizado!`;
-      toast.success(message);
-      
-      // Reload productions
-      await reloadProductions();
-
-      // C2: Deviation tracking after save
-      if (selectedReleasedService && !isInitialDatabase) {
-        try {
-          const plannedIds: number[] = selectedReleasedService.planned_house_ids || [];
-          const missingIds = plannedIds.filter(id => !selectedHouses.includes(id));
-          const unplannedIds = selectedHouses.filter(id => !plannedIds.includes(id));
-
-          // Link production to weekly plan service
-          await supabase.from('weekly_productions')
-            .update({ 
-              weekly_plan_service_id: selectedReleasedService.id,
-              contractor_id: selectedReleasedService.contractor_id || null,
-            })
-            .eq('project_id', currentProject.id)
-            .eq('scope_id', scope.id)
-            .eq('macro_id', macro.id)
-            .eq('week_start', measurementStartDate)
-            .is('weekly_plan_service_id', null)
-            .order('created_at', { ascending: false })
-            .limit(1);
-
-          if (missingIds.length > 0) {
-            const pct = (missingIds.length / plannedIds.length) * 100;
-            await supabase.from('production_deviations').insert({
-              project_id: currentProject.id,
-              company_id: profile?.company_id,
-              week_start: measurementStartDate,
-              week_end: measurementEndDate,
-              scope_id: scope.id,
-              scope_name: scope.name,
-              macro_id: macro.id,
-              macro_name: macro.name,
-              weekly_plan_service_id: selectedReleasedService.id,
-              planned_count: plannedIds.length,
-              actual_count: selectedHouses.length,
-              deviation: selectedHouses.length - plannedIds.length,
-              planned_house_ids: plannedIds,
-              actual_house_ids: [...selectedHouses],
-              missing_house_ids: missingIds,
-              unplanned_house_ids: unplannedIds,
-              severity: pct > 40 ? 'critical' : pct > 20 ? 'warning' : 'info',
-              status: 'open',
-            });
-            toast.warning(`${missingIds.length} casa(s) não executadas — alerta gerado.`);
-          }
-        } catch (devErr) {
-          console.error('Error tracking deviation:', devErr);
-        }
-        setSelectedReleasedService(null);
-        setSelectedReleasedWeek(null);
-        setReleasedWeekServices([]);
-      }
-
-      setSelectedHouses([]);
-      setSelectedScope("");
-      setHousePercentages({});
-      setMassPercentage(100);
-      setSelectedMeasurementNew(null);
-      setSelectedServiceNew(null);
+      await executarInsercao();
     } catch (error) {
       console.error('Error saving production:', error);
       toast.error("Erro ao salvar produção");
