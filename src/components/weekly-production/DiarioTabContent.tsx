@@ -289,75 +289,70 @@ export default function DiarioTabContent() {
   };
 
   const handleCorrecao = async () => {
-    if (!correcaoItem || justificativa.trim().length < 20 || !currentProject) return;
+    if (!correcaoItem || !itemSelecionado || justificativa.trim().length < 20 || !currentProject) return;
     setCorrigindo(true);
     try {
-      const { data: itemsReais } = await supabase
-        .from("diary_items")
-        .select("id, diary_entry_id, house_ids, percentual_executado, production_id")
-        .in("diary_entry_id", entries.map(e => e.id))
-        .eq("macro_id", correcaoItem.macroId)
-        .eq("scope_id", correcaoItem.scopeId);
+      const item = itemSelecionado;
+      const houseIdsAnterior: number[] = item.house_ids;
 
-      for (const item of itemsReais || []) {
-        const houseIdsAnterior: number[] = (item.house_ids as number[]) || [];
-        await supabase.from("diary_item_corrections").insert({
-          company_id: profile?.company_id,
-          project_id: currentProject.id,
-          diary_entry_id: item.diary_entry_id,
-          diary_item_id: item.id,
-          tipo: tipoCorrecao,
-          house_ids_anterior: houseIdsAnterior,
-          percentual_anterior: item.percentual_executado,
-          house_ids_posterior: tipoCorrecao === "exclusao" ? null : novasCasas,
-          percentual_posterior: tipoCorrecao === "exclusao" ? null : novoPercentual,
-          macro_id: correcaoItem.macroId,
-          macro_name: correcaoItem.macro,
-          scope_id: correcaoItem.scopeId,
-          scope_name: correcaoItem.scope,
-          justificativa: justificativa.trim(),
-          corrigido_por: user?.id,
-          corrigido_por_nome: profile?.display_name || user?.email || "Coordenador",
-        });
+      // 1. Gravar auditoria
+      await supabase.from("diary_item_corrections").insert({
+        company_id: profile?.company_id,
+        project_id: currentProject.id,
+        diary_entry_id: item.diary_entry_id,
+        diary_item_id: item.id,
+        tipo: tipoCorrecao,
+        house_ids_anterior: houseIdsAnterior,
+        percentual_anterior: item.percentual_executado,
+        house_ids_posterior: tipoCorrecao === "exclusao" ? null : novasCasas,
+        percentual_posterior: tipoCorrecao === "exclusao" ? null : novoPercentual,
+        macro_id: correcaoItem.macroId,
+        macro_name: correcaoItem.macro,
+        scope_id: correcaoItem.scopeId,
+        scope_name: correcaoItem.scope,
+        justificativa: justificativa.trim(),
+        corrigido_por: user?.id,
+        corrigido_por_nome: profile?.display_name || user?.email || "Coordenador",
+      });
 
-        if (tipoCorrecao === "exclusao") {
-          if (item.production_id) await supabase.from("productions").delete().eq("id", item.production_id);
-          await supabase.from("diary_items").delete().eq("id", item.id);
+      // 2. Aplicar correção no item
+      if (tipoCorrecao === "exclusao") {
+        if (item.production_id) await supabase.from("productions").delete().eq("id", item.production_id);
+        await supabase.from("diary_items").delete().eq("id", item.id);
+        const revertMap: Record<number, number> = {};
+        for (const hId of houseIdsAnterior) {
+          const h = houses.find(h => h.id === hId);
+          const hMacro = (h?.macros as any[])?.find(m => m.id === correcaoItem.macroId);
+          const hScope = hMacro?.scopes?.find((s: any) => s.id === correcaoItem.scopeId);
+          revertMap[hId] = Math.max(0, (hScope?.progress || 0) - Number(item.percentual_executado));
+        }
+        await updateBatchScopeProgress(houseIdsAnterior, correcaoItem.macroId, correcaoItem.scopeId, 100, revertMap);
+
+      } else if (tipoCorrecao === "ajuste_casas") {
+        const removidas = houseIdsAnterior.filter(h => !novasCasas.includes(h));
+        await supabase.from("diary_items").update({ house_ids: novasCasas, houses_count: novasCasas.length }).eq("id", item.id);
+        if (removidas.length > 0) {
           const revertMap: Record<number, number> = {};
-          for (const hId of houseIdsAnterior) {
+          for (const hId of removidas) {
             const h = houses.find(h => h.id === hId);
             const hMacro = (h?.macros as any[])?.find(m => m.id === correcaoItem.macroId);
             const hScope = hMacro?.scopes?.find((s: any) => s.id === correcaoItem.scopeId);
             revertMap[hId] = Math.max(0, (hScope?.progress || 0) - Number(item.percentual_executado));
           }
-          await updateBatchScopeProgress(houseIdsAnterior, correcaoItem.macroId, correcaoItem.scopeId, 100, revertMap);
-
-        } else if (tipoCorrecao === "ajuste_casas") {
-          const removidas = houseIdsAnterior.filter(h => !novasCasas.includes(h));
-          await supabase.from("diary_items").update({ house_ids: novasCasas, houses_count: novasCasas.length }).eq("id", item.id);
-          if (removidas.length > 0) {
-            const revertMap: Record<number, number> = {};
-            for (const hId of removidas) {
-              const h = houses.find(h => h.id === hId);
-              const hMacro = (h?.macros as any[])?.find(m => m.id === correcaoItem.macroId);
-              const hScope = hMacro?.scopes?.find((s: any) => s.id === correcaoItem.scopeId);
-              revertMap[hId] = Math.max(0, (hScope?.progress || 0) - Number(item.percentual_executado));
-            }
-            await updateBatchScopeProgress(removidas, correcaoItem.macroId, correcaoItem.scopeId, 100, revertMap);
-          }
-
-        } else if (tipoCorrecao === "ajuste_percentual") {
-          const delta = novoPercentual - Number(item.percentual_executado);
-          await supabase.from("diary_items").update({ percentual_executado: novoPercentual }).eq("id", item.id);
-          const adjustMap: Record<number, number> = {};
-          for (const hId of houseIdsAnterior) {
-            const h = houses.find(h => h.id === hId);
-            const hMacro = (h?.macros as any[])?.find(m => m.id === correcaoItem.macroId);
-            const hScope = hMacro?.scopes?.find((s: any) => s.id === correcaoItem.scopeId);
-            adjustMap[hId] = Math.min(100, Math.max(0, (hScope?.progress || 0) + delta));
-          }
-          await updateBatchScopeProgress(houseIdsAnterior, correcaoItem.macroId, correcaoItem.scopeId, 100, adjustMap);
+          await updateBatchScopeProgress(removidas, correcaoItem.macroId, correcaoItem.scopeId, 100, revertMap);
         }
+
+      } else if (tipoCorrecao === "ajuste_percentual") {
+        const delta = novoPercentual - Number(item.percentual_executado);
+        await supabase.from("diary_items").update({ percentual_executado: novoPercentual }).eq("id", item.id);
+        const adjustMap: Record<number, number> = {};
+        for (const hId of houseIdsAnterior) {
+          const h = houses.find(h => h.id === hId);
+          const hMacro = (h?.macros as any[])?.find(m => m.id === correcaoItem.macroId);
+          const hScope = hMacro?.scopes?.find((s: any) => s.id === correcaoItem.scopeId);
+          adjustMap[hId] = Math.min(100, Math.max(0, (hScope?.progress || 0) + delta));
+        }
+        await updateBatchScopeProgress(houseIdsAnterior, correcaoItem.macroId, correcaoItem.scopeId, 100, adjustMap);
       }
 
       queryClient.invalidateQueries({ queryKey: ["productions"] });
@@ -365,6 +360,7 @@ export default function DiarioTabContent() {
       queryClient.invalidateQueries({ queryKey: ["houses"] });
       toast.success("Correção aplicada — mapa atualizado.");
       setCorrecaoItem(null);
+      setItemSelecionado(null);
       setJustificativa("");
       loadData();
     } catch (err: any) {
