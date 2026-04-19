@@ -742,7 +742,7 @@ export default function DiarioTabContent() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCorrecaoItem(null)} disabled={corrigindo}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setCorrecaoItem(null); setItemSelecionado(null); }} disabled={corrigindo}>Cancelar</Button>
             <Button
               onClick={handleCorrecao}
               disabled={corrigindo || justificativa.trim().length < 20}
