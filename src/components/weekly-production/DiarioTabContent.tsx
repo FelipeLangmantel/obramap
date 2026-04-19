@@ -510,7 +510,17 @@ export default function DiarioTabContent() {
                               size="sm"
                               variant="outline"
                               className="h-7 text-xs gap-1"
-                              onClick={() => setCorrecaoItem(c)}
+                              onClick={() => {
+                                setCorrecaoItem(c);
+                                if (c.itensIndividuais.length === 1) {
+                                  const only = c.itensIndividuais[0];
+                                  setItemSelecionado(only);
+                                  setNovasCasas(only.house_ids);
+                                  setNovoPercentual(only.percentual_executado);
+                                } else {
+                                  setSelecionarItemOpen(true);
+                                }
+                              }}
                             >
                               ✏️ Corrigir
                             </Button>
