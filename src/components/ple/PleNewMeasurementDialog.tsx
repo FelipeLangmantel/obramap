@@ -35,9 +35,31 @@ export function PleNewMeasurementDialog({ open, onClose, nextNumber, previousEnd
   const handleSave = async () => {
     if (!form.period_label) return;
     setSaving(true);
-    await onSave(form);
-    setSaving(false);
-    onClose();
+    try {
+      const result: any = await onSave(form);
+      // Trata erro 23505 (unique violation) propagado pelo hook
+      if (result?.error) {
+        const code = result.error.code || result.error?.cause?.code;
+        if (code === "23505") {
+          const { toast } = await import("sonner");
+          toast.error("Já existe medição com este número para esta obra.");
+          setSaving(false);
+          return;
+        }
+      }
+      onClose();
+    } catch (err: any) {
+      const code = err?.code || err?.cause?.code;
+      if (code === "23505") {
+        const { toast } = await import("sonner");
+        toast.error("Já existe medição com este número para esta obra.");
+      } else {
+        const { toast } = await import("sonner");
+        toast.error("Erro ao criar medição: " + (err?.message || "desconhecido"));
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
