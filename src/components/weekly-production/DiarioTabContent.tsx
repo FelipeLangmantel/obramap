@@ -44,6 +44,7 @@ interface ItemRow {
   scope_name: string;
   house_ids: number[];
   percentual_executado: number;
+  production_id: string | null;
 }
 
 interface ConsolidadoRow {
@@ -54,6 +55,13 @@ interface ConsolidadoRow {
   casasCount: number;
   pctMedio: number;
   casasList: number[];
+  itensIndividuais: {
+    id: string;
+    diary_entry_id: string;
+    house_ids: number[];
+    percentual_executado: number;
+    production_id: string | null;
+  }[];
 }
 
 interface CorrecaoRow {
@@ -101,6 +109,8 @@ export default function DiarioTabContent() {
   const [justificativa, setJustificativa] = useState("");
   const [corrigindo, setCorrigindo] = useState(false);
   const [historicoOpen, setHistoricoOpen] = useState(false);
+  const [itemSelecionado, setItemSelecionado] = useState<ConsolidadoRow["itensIndividuais"][0] | null>(null);
+  const [selecionarItemOpen, setSelecionarItemOpen] = useState(false);
 
   useEffect(() => {
     if (!currentProject?.id) return;
@@ -139,7 +149,7 @@ export default function DiarioTabContent() {
         const [{ data: itemsRes }, { data: corrRes }] = await Promise.all([
           supabase
             .from("diary_items")
-            .select("id, diary_entry_id, macro_id, macro_name, scope_id, scope_name, house_ids, percentual_executado")
+            .select("id, diary_entry_id, macro_id, macro_name, scope_id, scope_name, house_ids, percentual_executado, production_id")
             .in("diary_entry_id", ids),
           supabase
             .from("diary_item_corrections")
@@ -176,15 +186,22 @@ export default function DiarioTabContent() {
 
   // Consolidado por serviço
   const consolidado = useMemo<ConsolidadoRow[]>(() => {
-    const map = new Map<string, { macroId: string; scopeId: string; macro: string; scope: string; casas: Set<number>; pcts: number[] }>();
+    const map = new Map<string, { macroId: string; scopeId: string; macro: string; scope: string; casas: Set<number>; pcts: number[]; itensIndividuais: ConsolidadoRow["itensIndividuais"] }>();
     for (const it of items) {
       const key = `${it.macro_id}|${it.scope_id}`;
       if (!map.has(key)) {
-        map.set(key, { macroId: it.macro_id, scopeId: it.scope_id, macro: it.macro_name, scope: it.scope_name, casas: new Set(), pcts: [] });
+        map.set(key, { macroId: it.macro_id, scopeId: it.scope_id, macro: it.macro_name, scope: it.scope_name, casas: new Set(), pcts: [], itensIndividuais: [] });
       }
       const entry = map.get(key)!;
       it.house_ids.forEach(h => entry.casas.add(h));
       entry.pcts.push(it.percentual_executado);
+      entry.itensIndividuais.push({
+        id: it.id,
+        diary_entry_id: it.diary_entry_id,
+        house_ids: it.house_ids,
+        percentual_executado: it.percentual_executado,
+        production_id: it.production_id,
+      });
     }
     return Array.from(map.values()).map(g => ({
       macroId: g.macroId,
@@ -194,6 +211,7 @@ export default function DiarioTabContent() {
       casasCount: g.casas.size,
       pctMedio: g.pcts.length > 0 ? Math.round(g.pcts.reduce((s, p) => s + p, 0) / g.pcts.length) : 0,
       casasList: [...g.casas].sort((a, b) => a - b),
+      itensIndividuais: g.itensIndividuais,
     }));
   }, [items]);
 
