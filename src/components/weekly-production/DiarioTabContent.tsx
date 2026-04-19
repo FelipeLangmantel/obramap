@@ -619,8 +619,47 @@ export default function DiarioTabContent() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Dialog de seleção de item (quando há múltiplos lançamentos) */}
+      <Dialog open={selecionarItemOpen} onOpenChange={setSelecionarItemOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Qual lançamento corrigir?</DialogTitle>
+            <DialogDescription>
+              {correcaoItem?.macro} — {correcaoItem?.scope}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            {correcaoItem?.itensIndividuais.map((item, idx) => {
+              const entry = entries.find(e => e.id === item.diary_entry_id);
+              return (
+                <Button
+                  key={item.id}
+                  variant="outline"
+                  className="w-full justify-start text-left h-auto py-3"
+                  onClick={() => {
+                    setItemSelecionado(item);
+                    setNovasCasas(item.house_ids);
+                    setNovoPercentual(item.percentual_executado);
+                    setSelecionarItemOpen(false);
+                  }}
+                >
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium">
+                      {entry ? format(parseISO(entry.entry_date), "EEE dd/MM", { locale: ptBR }) : `Lançamento ${idx + 1}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Casas: {item.house_ids.join(", ")} — {item.percentual_executado}%
+                    </p>
+                  </div>
+                </Button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog de correção */}
-      <Dialog open={!!correcaoItem} onOpenChange={(o) => !o && setCorrecaoItem(null)}>
+      <Dialog open={!!correcaoItem && !!itemSelecionado && !selecionarItemOpen} onOpenChange={(o) => { if (!o) { setCorrecaoItem(null); setItemSelecionado(null); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Corrigir lançamento — {correcaoItem?.macro} / {correcaoItem?.scope}</DialogTitle>
