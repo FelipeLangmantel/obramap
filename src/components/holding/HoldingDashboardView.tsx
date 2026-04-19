@@ -279,7 +279,7 @@ export function calcHealth(
   if (obra.status === "concluida") return "green";
 
   const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
-  const pctFisico = (obra.percentual_fisico || 0) / 100;
+  const pctFisico = (obra.percentual_andamento || 0) / 100;
   const pctFinanceiro = (obra.percentual_financeiro || 0) / 100;
   const nMedicoesAprovadas = allMedicoes.filter(m => m.status_medicao === "aprovada").length;
 
@@ -389,7 +389,7 @@ export function calcHealthDetails(
   const T = HEALTH_THRESHOLDS;
   const now = new Date();
   const valorContrato = (obra.valor_contrato || 0) + (obra.aditivo_valor_total || 0);
-  const pctFisico = (obra.percentual_fisico || 0) / 100;
+  const pctFisico = (obra.percentual_andamento || 0) / 100;
   const pctFinanceiro = (obra.percentual_financeiro || 0) / 100;
   const nMedicoesAprovadas = allMedicoes.filter(m => m.status_medicao === "aprovada").length;
 
@@ -1727,17 +1727,17 @@ export default function HoldingDashboardView() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs">% Físico (inserido pelo engenheiro)</Label>
+              <Label className="text-xs">% Andamento Físico (inserido pelo engenheiro)</Label>
               <div className="flex items-center gap-3 mt-2">
                 <Slider
-                  value={[newObraForm.percentual_fisico]}
-                  onValueChange={([v]) => setNewObraForm(p => ({ ...p, percentual_fisico: v }))}
+                  value={[newObraForm.percentual_andamento]}
+                  onValueChange={([v]) => setNewObraForm(p => ({ ...p, percentual_andamento: v }))}
                   max={100} step={0.5} className="flex-1"
                   disabled={editingObra && isEditorRestricted}
                 />
                 <div className="flex items-center gap-1">
-                  <Input type="number" min={0} max={100} step={0.5} value={newObraForm.percentual_fisico}
-                    onChange={(e) => { const v = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)); setNewObraForm(p => ({ ...p, percentual_fisico: v })); }}
+                  <Input type="number" min={0} max={100} step={0.5} value={newObraForm.percentual_andamento}
+                    onChange={(e) => { const v = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)); setNewObraForm(p => ({ ...p, percentual_andamento: v })); }}
                     className="w-20 text-sm text-right" disabled={editingObra && isEditorRestricted}
                   />
                   <span className="text-xs text-muted-foreground">%</span>
@@ -1745,7 +1745,7 @@ export default function HoldingDashboardView() {
               </div>
               {newObraForm.valor_contrato && Number(newObraForm.valor_contrato) > 0 && (
                 <p className="text-[10px] text-muted-foreground mt-1">
-                  Valor executado estimado: <span className="font-medium text-foreground">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(newObraForm.valor_contrato) * newObraForm.percentual_fisico / 100)}</span>
+                  Valor executado estimado: <span className="font-medium text-foreground">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(newObraForm.valor_contrato) * newObraForm.percentual_andamento / 100)}</span>
                 </p>
               )}
             </div>
