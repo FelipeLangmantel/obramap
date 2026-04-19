@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { cn } from "@/lib/utils";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -233,7 +234,12 @@ export function WeeklyProductionView() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [justificativaExclusao, setJustificativaExclusao] = useState("");
   const [deletionLog, setDeletionLog] = useState<any[]>([]);
+  const [correcaoLog, setCorrecaoLog] = useState<any[]>([]);
+  const [filtroHistorico, setFiltroHistorico] = useState<"todos"|"exclusoes"|"correcoes">("todos");
   const [showAllRecords, setShowAllRecords] = useState(false);
+  const [duplicataDialogOpen, setDuplicataDialogOpen] = useState(false);
+  const [casasDuplicatas, setCasasDuplicatas] = useState<number[]>([]);
+  const [pendingInsert, setPendingInsert] = useState<(() => Promise<void>) | null>(null);
   // Custom percentage mode
   const [customPercentMode, setCustomPercentMode] = useState(false);
   const [massPercentage, setMassPercentage] = useState(100);
