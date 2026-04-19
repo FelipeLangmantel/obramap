@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
 
 interface Props {
   open: boolean;
@@ -37,11 +38,9 @@ export function PleNewMeasurementDialog({ open, onClose, nextNumber, previousEnd
     setSaving(true);
     try {
       const result: any = await onSave(form);
-      // Trata erro 23505 (unique violation) propagado pelo hook
       if (result?.error) {
         const code = result.error.code || result.error?.cause?.code;
         if (code === "23505") {
-          const { toast } = await import("sonner");
           toast.error("Já existe medição com este número para esta obra.");
           setSaving(false);
           return;
@@ -51,10 +50,8 @@ export function PleNewMeasurementDialog({ open, onClose, nextNumber, previousEnd
     } catch (err: any) {
       const code = err?.code || err?.cause?.code;
       if (code === "23505") {
-        const { toast } = await import("sonner");
         toast.error("Já existe medição com este número para esta obra.");
       } else {
-        const { toast } = await import("sonner");
         toast.error("Erro ao criar medição: " + (err?.message || "desconhecido"));
       }
     } finally {
