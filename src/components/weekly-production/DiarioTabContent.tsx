@@ -118,13 +118,13 @@ export default function DiarioTabContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProject?.id, semanaInicio, semanaFim]);
 
-  // Reset form quando item de correção muda
+  // Reset form quando item de correção muda (apenas tipo + justificativa; casas/% vêm do item selecionado)
   useEffect(() => {
     if (correcaoItem) {
       setTipoCorrecao("exclusao");
-      setNovasCasas(correcaoItem.casasList);
-      setNovoPercentual(Math.round(correcaoItem.pctMedio));
       setJustificativa("");
+    } else {
+      setItemSelecionado(null);
     }
   }, [correcaoItem]);
 
