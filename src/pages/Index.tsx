@@ -225,7 +225,7 @@ function Index() {
     "interactive-map": "Mapa Interativo",
     "3d-map": "Mapa 3D",
     charts: "Gráficos e Análises",
-    production: "Produção Semanal",
+    production: "Produção",
     planning: "Planejamento Semanal",
     costs: "Custos da Obra",
     supplies: "Suprimentos",

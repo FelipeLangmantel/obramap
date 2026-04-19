@@ -55,6 +55,7 @@ export default function DiarioObraView() {
   const [entryId, setEntryId] = useState<string | null>(null);
   const [entryStatus, setEntryStatus] = useState<string>("rascunho");
   const [savingHeader, setSavingHeader] = useState(false);
+  const [correcoesDoDia, setCorrecoesDoDia] = useState<any[]>([]);
 
   // Service steps
   const [selectedMacro, setSelectedMacro] = useState<{ id: string; name: string; color: string } | null>(null);
@@ -96,6 +97,12 @@ export default function DiarioObraView() {
       setEquipePres(data.equipe_presente || 0);
       setObsGeral(data.observacao_geral || "");
       setEntryStatus(data.status || "rascunho");
+      const { data: correcoes } = await supabase
+        .from("diary_item_corrections")
+        .select("tipo, macro_name, scope_name, house_ids_anterior, house_ids_posterior, percentual_anterior, percentual_posterior, justificativa, corrigido_por_nome, created_at")
+        .eq("diary_entry_id", data.id)
+        .order("created_at", { ascending: false });
+      setCorrecoesDoDia(correcoes || []);
       loadItems(data.id);
     } else {
       setEntryId(null);
@@ -104,6 +111,7 @@ export default function DiarioObraView() {
       setObsGeral("");
       setEntryStatus("rascunho");
       setDiaryItems([]);
+      setCorrecoesDoDia([]);
     }
   };
 
@@ -440,20 +448,52 @@ export default function DiarioObraView() {
               ) : (
                 <>
                   <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 text-[11px]">
-                    📝 Rascunho
+                    📝 Rascunho{correcoesDoDia.length > 0 ? ` — ${correcoesDoDia.length} correção(ões)` : ""}
                   </Badge>
                   <span className="text-[11px] text-muted-foreground">
-                    Para finalizar: <strong>Produção Semanal → Do Diário → Fechar Semana</strong>
+                    Para finalizar: <strong>Produção → Do Diário → Fechar Semana</strong>
                   </span>
                 </>
               )}
+            </div>
+          )}
+          {entryId && correcoesDoDia.length > 0 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 space-y-2 mt-2">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                ⚠️ {correcoesDoDia.length} correção(ões) aplicada(s) pelo coordenador neste diário:
+              </p>
+              {correcoesDoDia.map((c, i) => (
+                <div key={i} className="text-xs text-amber-700 dark:text-amber-400 border-t border-amber-200 dark:border-amber-800 pt-2">
+                  <span className="font-medium">{c.corrigido_por_nome}</span>
+                  {" — "}{c.macro_name} / {c.scope_name}
+                  <br />
+                  {c.tipo === "exclusao" && `Itens removidos das casas: ${(c.house_ids_anterior as number[])?.join(", ")}`}
+                  {c.tipo === "ajuste_casas" && `Casas: ${(c.house_ids_anterior as number[])?.join(", ")} → ${(c.house_ids_posterior as number[])?.join(", ")}`}
+                  {c.tipo === "ajuste_percentual" && `Percentual: ${c.percentual_anterior}% → ${c.percentual_posterior}%`}
+                  <br />
+                  <span className="italic text-amber-600 dark:text-amber-500">"{c.justificativa}"</span>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
       </Card>
 
       {/* SEÇÃO 2 — Lançar Serviço */}
-      {entryId && (
+      {entryId && entryStatus === "finalizado" && (
+        <Card>
+          <CardContent className="py-8 text-center space-y-2">
+            <p className="text-2xl">🔒</p>
+            <p className="text-sm font-medium text-muted-foreground">
+              Semana aprovada — diário fechado pelo coordenador.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Para solicitar correções, contate o administrador.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+      {entryId && entryStatus !== "finalizado" && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">

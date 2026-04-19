@@ -44,6 +44,7 @@ interface ItemRow {
   scope_name: string;
   house_ids: number[];
   percentual_executado: number;
+  production_id: string | null;
 }
 
 interface ConsolidadoRow {
@@ -54,6 +55,13 @@ interface ConsolidadoRow {
   casasCount: number;
   pctMedio: number;
   casasList: number[];
+  itensIndividuais: {
+    id: string;
+    diary_entry_id: string;
+    house_ids: number[];
+    percentual_executado: number;
+    production_id: string | null;
+  }[];
 }
 
 interface CorrecaoRow {
@@ -101,6 +109,8 @@ export default function DiarioTabContent() {
   const [justificativa, setJustificativa] = useState("");
   const [corrigindo, setCorrigindo] = useState(false);
   const [historicoOpen, setHistoricoOpen] = useState(false);
+  const [itemSelecionado, setItemSelecionado] = useState<ConsolidadoRow["itensIndividuais"][0] | null>(null);
+  const [selecionarItemOpen, setSelecionarItemOpen] = useState(false);
 
   useEffect(() => {
     if (!currentProject?.id) return;
@@ -108,13 +118,13 @@ export default function DiarioTabContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProject?.id, semanaInicio, semanaFim]);
 
-  // Reset form quando item de correção muda
+  // Reset form quando item de correção muda (apenas tipo + justificativa; casas/% vêm do item selecionado)
   useEffect(() => {
     if (correcaoItem) {
       setTipoCorrecao("exclusao");
-      setNovasCasas(correcaoItem.casasList);
-      setNovoPercentual(Math.round(correcaoItem.pctMedio));
       setJustificativa("");
+    } else {
+      setItemSelecionado(null);
     }
   }, [correcaoItem]);
 
@@ -139,7 +149,7 @@ export default function DiarioTabContent() {
         const [{ data: itemsRes }, { data: corrRes }] = await Promise.all([
           supabase
             .from("diary_items")
-            .select("id, diary_entry_id, macro_id, macro_name, scope_id, scope_name, house_ids, percentual_executado")
+            .select("id, diary_entry_id, macro_id, macro_name, scope_id, scope_name, house_ids, percentual_executado, production_id")
             .in("diary_entry_id", ids),
           supabase
             .from("diary_item_corrections")
@@ -176,15 +186,22 @@ export default function DiarioTabContent() {
 
   // Consolidado por serviço
   const consolidado = useMemo<ConsolidadoRow[]>(() => {
-    const map = new Map<string, { macroId: string; scopeId: string; macro: string; scope: string; casas: Set<number>; pcts: number[] }>();
+    const map = new Map<string, { macroId: string; scopeId: string; macro: string; scope: string; casas: Set<number>; pcts: number[]; itensIndividuais: ConsolidadoRow["itensIndividuais"] }>();
     for (const it of items) {
       const key = `${it.macro_id}|${it.scope_id}`;
       if (!map.has(key)) {
-        map.set(key, { macroId: it.macro_id, scopeId: it.scope_id, macro: it.macro_name, scope: it.scope_name, casas: new Set(), pcts: [] });
+        map.set(key, { macroId: it.macro_id, scopeId: it.scope_id, macro: it.macro_name, scope: it.scope_name, casas: new Set(), pcts: [], itensIndividuais: [] });
       }
       const entry = map.get(key)!;
       it.house_ids.forEach(h => entry.casas.add(h));
       entry.pcts.push(it.percentual_executado);
+      entry.itensIndividuais.push({
+        id: it.id,
+        diary_entry_id: it.diary_entry_id,
+        house_ids: it.house_ids,
+        percentual_executado: it.percentual_executado,
+        production_id: it.production_id,
+      });
     }
     return Array.from(map.values()).map(g => ({
       macroId: g.macroId,
@@ -194,6 +211,7 @@ export default function DiarioTabContent() {
       casasCount: g.casas.size,
       pctMedio: g.pcts.length > 0 ? Math.round(g.pcts.reduce((s, p) => s + p, 0) / g.pcts.length) : 0,
       casasList: [...g.casas].sort((a, b) => a - b),
+      itensIndividuais: g.itensIndividuais,
     }));
   }, [items]);
 
@@ -271,75 +289,70 @@ export default function DiarioTabContent() {
   };
 
   const handleCorrecao = async () => {
-    if (!correcaoItem || justificativa.trim().length < 20 || !currentProject) return;
+    if (!correcaoItem || !itemSelecionado || justificativa.trim().length < 20 || !currentProject) return;
     setCorrigindo(true);
     try {
-      const { data: itemsReais } = await supabase
-        .from("diary_items")
-        .select("id, diary_entry_id, house_ids, percentual_executado, production_id")
-        .in("diary_entry_id", entries.map(e => e.id))
-        .eq("macro_id", correcaoItem.macroId)
-        .eq("scope_id", correcaoItem.scopeId);
+      const item = itemSelecionado;
+      const houseIdsAnterior: number[] = item.house_ids;
 
-      for (const item of itemsReais || []) {
-        const houseIdsAnterior: number[] = (item.house_ids as number[]) || [];
-        await supabase.from("diary_item_corrections").insert({
-          company_id: profile?.company_id,
-          project_id: currentProject.id,
-          diary_entry_id: item.diary_entry_id,
-          diary_item_id: item.id,
-          tipo: tipoCorrecao,
-          house_ids_anterior: houseIdsAnterior,
-          percentual_anterior: item.percentual_executado,
-          house_ids_posterior: tipoCorrecao === "exclusao" ? null : novasCasas,
-          percentual_posterior: tipoCorrecao === "exclusao" ? null : novoPercentual,
-          macro_id: correcaoItem.macroId,
-          macro_name: correcaoItem.macro,
-          scope_id: correcaoItem.scopeId,
-          scope_name: correcaoItem.scope,
-          justificativa: justificativa.trim(),
-          corrigido_por: user?.id,
-          corrigido_por_nome: profile?.display_name || user?.email || "Coordenador",
-        });
+      // 1. Gravar auditoria
+      await supabase.from("diary_item_corrections").insert({
+        company_id: profile?.company_id,
+        project_id: currentProject.id,
+        diary_entry_id: item.diary_entry_id,
+        diary_item_id: item.id,
+        tipo: tipoCorrecao,
+        house_ids_anterior: houseIdsAnterior,
+        percentual_anterior: item.percentual_executado,
+        house_ids_posterior: tipoCorrecao === "exclusao" ? null : novasCasas,
+        percentual_posterior: tipoCorrecao === "exclusao" ? null : novoPercentual,
+        macro_id: correcaoItem.macroId,
+        macro_name: correcaoItem.macro,
+        scope_id: correcaoItem.scopeId,
+        scope_name: correcaoItem.scope,
+        justificativa: justificativa.trim(),
+        corrigido_por: user?.id,
+        corrigido_por_nome: profile?.display_name || user?.email || "Coordenador",
+      });
 
-        if (tipoCorrecao === "exclusao") {
-          if (item.production_id) await supabase.from("productions").delete().eq("id", item.production_id);
-          await supabase.from("diary_items").delete().eq("id", item.id);
+      // 2. Aplicar correção no item
+      if (tipoCorrecao === "exclusao") {
+        if (item.production_id) await supabase.from("productions").delete().eq("id", item.production_id);
+        await supabase.from("diary_items").delete().eq("id", item.id);
+        const revertMap: Record<number, number> = {};
+        for (const hId of houseIdsAnterior) {
+          const h = houses.find(h => h.id === hId);
+          const hMacro = (h?.macros as any[])?.find(m => m.id === correcaoItem.macroId);
+          const hScope = hMacro?.scopes?.find((s: any) => s.id === correcaoItem.scopeId);
+          revertMap[hId] = Math.max(0, (hScope?.progress || 0) - Number(item.percentual_executado));
+        }
+        await updateBatchScopeProgress(houseIdsAnterior, correcaoItem.macroId, correcaoItem.scopeId, 100, revertMap);
+
+      } else if (tipoCorrecao === "ajuste_casas") {
+        const removidas = houseIdsAnterior.filter(h => !novasCasas.includes(h));
+        await supabase.from("diary_items").update({ house_ids: novasCasas, houses_count: novasCasas.length }).eq("id", item.id);
+        if (removidas.length > 0) {
           const revertMap: Record<number, number> = {};
-          for (const hId of houseIdsAnterior) {
+          for (const hId of removidas) {
             const h = houses.find(h => h.id === hId);
             const hMacro = (h?.macros as any[])?.find(m => m.id === correcaoItem.macroId);
             const hScope = hMacro?.scopes?.find((s: any) => s.id === correcaoItem.scopeId);
             revertMap[hId] = Math.max(0, (hScope?.progress || 0) - Number(item.percentual_executado));
           }
-          await updateBatchScopeProgress(houseIdsAnterior, correcaoItem.macroId, correcaoItem.scopeId, 100, revertMap);
-
-        } else if (tipoCorrecao === "ajuste_casas") {
-          const removidas = houseIdsAnterior.filter(h => !novasCasas.includes(h));
-          await supabase.from("diary_items").update({ house_ids: novasCasas, houses_count: novasCasas.length }).eq("id", item.id);
-          if (removidas.length > 0) {
-            const revertMap: Record<number, number> = {};
-            for (const hId of removidas) {
-              const h = houses.find(h => h.id === hId);
-              const hMacro = (h?.macros as any[])?.find(m => m.id === correcaoItem.macroId);
-              const hScope = hMacro?.scopes?.find((s: any) => s.id === correcaoItem.scopeId);
-              revertMap[hId] = Math.max(0, (hScope?.progress || 0) - Number(item.percentual_executado));
-            }
-            await updateBatchScopeProgress(removidas, correcaoItem.macroId, correcaoItem.scopeId, 100, revertMap);
-          }
-
-        } else if (tipoCorrecao === "ajuste_percentual") {
-          const delta = novoPercentual - Number(item.percentual_executado);
-          await supabase.from("diary_items").update({ percentual_executado: novoPercentual }).eq("id", item.id);
-          const adjustMap: Record<number, number> = {};
-          for (const hId of houseIdsAnterior) {
-            const h = houses.find(h => h.id === hId);
-            const hMacro = (h?.macros as any[])?.find(m => m.id === correcaoItem.macroId);
-            const hScope = hMacro?.scopes?.find((s: any) => s.id === correcaoItem.scopeId);
-            adjustMap[hId] = Math.min(100, Math.max(0, (hScope?.progress || 0) + delta));
-          }
-          await updateBatchScopeProgress(houseIdsAnterior, correcaoItem.macroId, correcaoItem.scopeId, 100, adjustMap);
+          await updateBatchScopeProgress(removidas, correcaoItem.macroId, correcaoItem.scopeId, 100, revertMap);
         }
+
+      } else if (tipoCorrecao === "ajuste_percentual") {
+        const delta = novoPercentual - Number(item.percentual_executado);
+        await supabase.from("diary_items").update({ percentual_executado: novoPercentual }).eq("id", item.id);
+        const adjustMap: Record<number, number> = {};
+        for (const hId of houseIdsAnterior) {
+          const h = houses.find(h => h.id === hId);
+          const hMacro = (h?.macros as any[])?.find(m => m.id === correcaoItem.macroId);
+          const hScope = hMacro?.scopes?.find((s: any) => s.id === correcaoItem.scopeId);
+          adjustMap[hId] = Math.min(100, Math.max(0, (hScope?.progress || 0) + delta));
+        }
+        await updateBatchScopeProgress(houseIdsAnterior, correcaoItem.macroId, correcaoItem.scopeId, 100, adjustMap);
       }
 
       queryClient.invalidateQueries({ queryKey: ["productions"] });
@@ -347,6 +360,7 @@ export default function DiarioTabContent() {
       queryClient.invalidateQueries({ queryKey: ["houses"] });
       toast.success("Correção aplicada — mapa atualizado.");
       setCorrecaoItem(null);
+      setItemSelecionado(null);
       setJustificativa("");
       loadData();
     } catch (err: any) {
@@ -496,7 +510,17 @@ export default function DiarioTabContent() {
                               size="sm"
                               variant="outline"
                               className="h-7 text-xs gap-1"
-                              onClick={() => setCorrecaoItem(c)}
+                              onClick={() => {
+                                setCorrecaoItem(c);
+                                if (c.itensIndividuais.length === 1) {
+                                  const only = c.itensIndividuais[0];
+                                  setItemSelecionado(only);
+                                  setNovasCasas(only.house_ids);
+                                  setNovoPercentual(only.percentual_executado);
+                                } else {
+                                  setSelecionarItemOpen(true);
+                                }
+                              }}
                             >
                               ✏️ Corrigir
                             </Button>
@@ -595,8 +619,47 @@ export default function DiarioTabContent() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Dialog de seleção de item (quando há múltiplos lançamentos) */}
+      <Dialog open={selecionarItemOpen} onOpenChange={setSelecionarItemOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Qual lançamento corrigir?</DialogTitle>
+            <DialogDescription>
+              {correcaoItem?.macro} — {correcaoItem?.scope}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            {correcaoItem?.itensIndividuais.map((item, idx) => {
+              const entry = entries.find(e => e.id === item.diary_entry_id);
+              return (
+                <Button
+                  key={item.id}
+                  variant="outline"
+                  className="w-full justify-start text-left h-auto py-3"
+                  onClick={() => {
+                    setItemSelecionado(item);
+                    setNovasCasas(item.house_ids);
+                    setNovoPercentual(item.percentual_executado);
+                    setSelecionarItemOpen(false);
+                  }}
+                >
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium">
+                      {entry ? format(parseISO(entry.entry_date), "EEE dd/MM", { locale: ptBR }) : `Lançamento ${idx + 1}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Casas: {item.house_ids.join(", ")} — {item.percentual_executado}%
+                    </p>
+                  </div>
+                </Button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Dialog de correção */}
-      <Dialog open={!!correcaoItem} onOpenChange={(o) => !o && setCorrecaoItem(null)}>
+      <Dialog open={!!correcaoItem && !!itemSelecionado && !selecionarItemOpen} onOpenChange={(o) => { if (!o) { setCorrecaoItem(null); setItemSelecionado(null); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Corrigir lançamento — {correcaoItem?.macro} / {correcaoItem?.scope}</DialogTitle>
@@ -679,7 +742,7 @@ export default function DiarioTabContent() {
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCorrecaoItem(null)} disabled={corrigindo}>Cancelar</Button>
+            <Button variant="outline" onClick={() => { setCorrecaoItem(null); setItemSelecionado(null); }} disabled={corrigindo}>Cancelar</Button>
             <Button
               onClick={handleCorrecao}
               disabled={corrigindo || justificativa.trim().length < 20}
