@@ -5396,6 +5396,7 @@ export type Database = {
           id: string
           latitude: number | null
           longitude: number | null
+          modo_integracao: string
           municipio: string | null
           nome: string
           num_contrato: string | null
@@ -5434,6 +5435,7 @@ export type Database = {
           id?: string
           latitude?: number | null
           longitude?: number | null
+          modo_integracao?: string
           municipio?: string | null
           nome: string
           num_contrato?: string | null
@@ -5472,6 +5474,7 @@ export type Database = {
           id?: string
           latitude?: number | null
           longitude?: number | null
+          modo_integracao?: string
           municipio?: string | null
           nome?: string
           num_contrato?: string | null
