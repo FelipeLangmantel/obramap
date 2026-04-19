@@ -899,7 +899,46 @@ export function WeeklyProductionView() {
       .order('created_at', { ascending: false })
       .limit(30);
     setDeletionLog(data || []);
+
+    const { data: corrLog } = await supabase
+      .from("diary_item_corrections")
+      .select("id, macro_name, scope_name, tipo, house_ids_anterior, house_ids_posterior, percentual_anterior, percentual_posterior, justificativa, corrigido_por_nome, created_at")
+      .eq("project_id", currentProject.id)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    setCorrecaoLog(corrLog || []);
   }, [currentProject?.id, podeExcluir]);
+
+  const historicoUnificado = useMemo(() => {
+    const exclusoes = (deletionLog || []).map((d: any) => ({
+      tipo: "exclusao",
+      macro_name: d.macro_name || "—",
+      scope_name: d.scope_name || "—",
+      descricao: `Casas removidas: ${(d.house_ids as number[])?.join(", ") || "—"}`,
+      feito_por: d.deleted_by_nome || "—",
+      justificativa: d.justificativa,
+      created_at: d.created_at,
+    }));
+    const correcoes = (correcaoLog || []).map((c: any) => ({
+      tipo: "correcao",
+      macro_name: c.macro_name || "—",
+      scope_name: c.scope_name || "—",
+      descricao: c.tipo === "ajuste_casas"
+        ? `Casas: ${(c.house_ids_anterior as number[])?.join(", ")} → ${(c.house_ids_posterior as number[])?.join(", ")}`
+        : c.tipo === "ajuste_percentual"
+        ? `Percentual: ${c.percentual_anterior}% → ${c.percentual_posterior}%`
+        : `Itens removidos das casas: ${(c.house_ids_anterior as number[])?.join(", ")}`,
+      feito_por: c.corrigido_por_nome || "—",
+      justificativa: c.justificativa,
+      created_at: c.created_at,
+    }));
+    const todos = [...exclusoes, ...correcoes].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    if (filtroHistorico === "exclusoes") return exclusoes;
+    if (filtroHistorico === "correcoes") return correcoes;
+    return todos;
+  }, [deletionLog, correcaoLog, filtroHistorico]);
 
   useEffect(() => {
     loadDeletionLog();
@@ -1161,7 +1200,7 @@ export function WeeklyProductionView() {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full">
-        <TabsList className="grid w-full max-w-xl grid-cols-3 h-10">
+        <TabsList className="grid w-full max-w-2xl grid-cols-4 h-10">
           <TabsTrigger value="register" className="gap-2 text-sm">
             <ClipboardList className="w-4 h-4" />
             Registrar
@@ -1172,6 +1211,9 @@ export function WeeklyProductionView() {
           <TabsTrigger value="analysis" className="gap-2 text-sm">
             <TrendingUp className="w-4 h-4" />
             Análise
+          </TabsTrigger>
+          <TabsTrigger value="historico" className="gap-2 text-sm">
+            📋 Histórico
           </TabsTrigger>
         </TabsList>
 
