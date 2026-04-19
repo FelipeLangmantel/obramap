@@ -234,10 +234,20 @@ export default function DiarioTabContent() {
         .gte("week_start", semanaInicio)
         .lte("week_end", semanaFim);
 
+      // Busca diary_items frescos do banco — evita state stale após correções recentes
+      const { data: freshRaw } = await supabase
+        .from("diary_items")
+        .select("id, scope_id, house_ids")
+        .in("diary_entry_id", entries.map(e => e.id));
+      const freshItems = (freshRaw || []).map(d => ({
+        ...d,
+        house_ids: (d.house_ids as number[]) || [],
+      }));
+
       let deviationsCount = 0;
       for (const plan of planejados || []) {
         const executedHouseIds = [...new Set(
-          items
+          freshItems
             .filter(i => i.scope_id === plan.scope_id)
             .flatMap(i => i.house_ids)
         )];
