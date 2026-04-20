@@ -160,20 +160,47 @@ export function PlannedVsActualView({
 
   const handleDeleteUnplanned = async (productionId: string) => {
     if (!productionId) return;
-    
+
+    // Pedir justificativa simples (mínimo 20 caracteres) para usar a RPC atômica
+    const justificativa = window.prompt(
+      "Justificativa da exclusão (mínimo 20 caracteres):",
+      ""
+    );
+    if (!justificativa || justificativa.trim().length < 20) {
+      toast.error("Justificativa obrigatória (mínimo 20 caracteres).");
+      return;
+    }
+
     try {
-      const { error } = await supabase
-        .from('weekly_productions')
-        .delete()
-        .eq('id', productionId);
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+      if (!userId) { toast.error("Sessão expirada."); return; }
+
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('display_name')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      const { data, error } = await supabase.rpc('delete_production_safe', {
+        p_weekly_production_id: productionId,
+        p_justificativa: justificativa.trim(),
+        p_deleted_by: userId,
+        p_deleted_by_nome: profileData?.display_name || userData?.user?.email || 'Admin',
+      });
 
       if (error) throw error;
+      const result = data as { success: boolean; error?: string };
+      if (!result?.success) {
+        toast.error("Erro ao excluir: " + (result?.error || 'desconhecido'));
+        return;
+      }
 
-      toast.success("Produção não planejada removida");
+      toast.success("Produção não planejada removida (auditoria registrada).");
       onProductionDeleted?.();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting production:', error);
-      toast.error("Erro ao remover produção");
+      toast.error("Erro ao remover produção: " + (error?.message || 'desconhecido'));
     }
   };
 
