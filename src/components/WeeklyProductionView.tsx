@@ -2391,32 +2391,6 @@ export function WeeklyProductionView() {
                 </div>
               )}
 
-              {/* Histórico de exclusões — apenas admins */}
-              {podeExcluir && deletionLog.length > 0 && (
-                <Card className="mt-4">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                      Histórico de Exclusões ({deletionLog.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {deletionLog.map((log: any) => (
-                      <div key={log.id} className="text-xs p-3 rounded-md border bg-muted/30">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-muted-foreground">[{format(parseISO(log.created_at), "dd/MM HH:mm", { locale: ptBR })}]</span>
-                          <strong>{log.deleted_by_nome}</strong>
-                          <span className="text-muted-foreground">— {log.macro_name} / {log.scope_name}</span>
-                        </div>
-                        <div className="text-muted-foreground mt-0.5">
-                          Semana {format(parseISO(log.week_start), "dd/MM", { locale: ptBR })}–{format(parseISO(log.week_end), "dd/MM", { locale: ptBR })} · {log.houses_count} casas · {log.desvios_removidos} desvios removidos · {log.diary_items_removidos} itens de diário removidos
-                        </div>
-                        <div className="mt-1 italic">"{log.justificativa}"</div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
             </TabsContent>
 
           {/* Reason Dialog */}
