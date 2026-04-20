@@ -102,11 +102,12 @@ export function useMeasurements({ projectId }: UseMeasurementsOptions) {
         servicesData = servicesResult.data || [];
       }
       
-      // Fetch productions
+      // Fetch productions (somente registros ativos — soft-deleted são ignorados)
       const productionsResult = await supabase
         .from('productions')
         .select('*')
         .eq('project_id', projectId)
+        .is('deleted_at', null)
         .order('production_date', { ascending: false });
 
       if (productionsResult.error) throw productionsResult.error;

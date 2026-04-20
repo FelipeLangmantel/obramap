@@ -284,7 +284,8 @@ export function PlannedProductionTab() {
         .from('weekly_productions')
         .select('id, scope_id, scope_name, macro_id, macro_name, week_start, week_end, houses_count, house_ids, is_initial_database')
         .eq('project_id', currentProject.id)
-        .eq('is_initial_database', false);
+        .eq('is_initial_database', false)
+        .is('deleted_at', null);
       
       const { data: deviationData } = await supabase
         .from('production_deviations')
@@ -311,7 +312,8 @@ export function PlannedProductionTab() {
             .from('weekly_productions')
             .select('id, scope_id, scope_name, macro_id, macro_name, week_start, week_end, houses_count, house_ids, is_initial_database')
             .eq('project_id', currentProject.id)
-            .eq('is_initial_database', false);
+            .eq('is_initial_database', false)
+            .is('deleted_at', null);
           setActualProductions((actualData || []) as ActualProduction[]);
         }
       )
@@ -762,7 +764,8 @@ export function PlannedProductionTab() {
               const { data: actualData } = await supabase
                 .from('weekly_productions')
                 .select('id, scope_id, scope_name, macro_id, macro_name, week_start, week_end, houses_count, house_ids')
-                .eq('project_id', currentProject.id);
+                .eq('project_id', currentProject.id)
+                .is('deleted_at', null);
               setActualProductions((actualData || []) as ActualProduction[]);
             }}
           />

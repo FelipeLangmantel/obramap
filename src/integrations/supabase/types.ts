@@ -7563,12 +7563,16 @@ export type Database = {
           created_at: string
           custom_legend_items: Json
           display_order: number
+          estado: string | null
           expected_end_date: string
           financial_categories: Json | null
           id: string
+          lat: number | null
           legend_follow_macros: boolean
+          lng: number | null
           location: string
           macros_template: Json
+          municipio: string | null
           name: string
           project_type: string
           setup_complete: boolean
@@ -7585,12 +7589,16 @@ export type Database = {
           created_at?: string
           custom_legend_items?: Json
           display_order?: number
+          estado?: string | null
           expected_end_date: string
           financial_categories?: Json | null
           id?: string
+          lat?: number | null
           legend_follow_macros?: boolean
+          lng?: number | null
           location: string
           macros_template?: Json
+          municipio?: string | null
           name: string
           project_type?: string
           setup_complete?: boolean
@@ -7607,12 +7615,16 @@ export type Database = {
           created_at?: string
           custom_legend_items?: Json
           display_order?: number
+          estado?: string | null
           expected_end_date?: string
           financial_categories?: Json | null
           id?: string
+          lat?: number | null
           legend_follow_macros?: boolean
+          lng?: number | null
           location?: string
           macros_template?: Json
+          municipio?: string | null
           name?: string
           project_type?: string
           setup_complete?: boolean

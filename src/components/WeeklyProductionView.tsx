@@ -337,7 +337,8 @@ export function WeeklyProductionView() {
       const { data: prods } = await supabase
         .from('weekly_productions')
         .select('weekly_plan_service_id')
-        .in('weekly_plan_service_id', serviceIds);
+        .in('weekly_plan_service_id', serviceIds)
+        .is('deleted_at', null);
       registeredServiceIds = (prods || []).map(p => p.weekly_plan_service_id).filter(Boolean) as string[];
     }
     setReleasedWeekServices((data || []).map(s => ({
@@ -466,6 +467,7 @@ export function WeeklyProductionView() {
           .from('weekly_productions')
           .select('*')
           .eq('project_id', currentProject.id)
+          .is('deleted_at', null)
           .order('week_start', { ascending: false }),
         supabase
           .from('planned_productions')
@@ -537,6 +539,7 @@ export function WeeklyProductionView() {
       .from('weekly_productions')
       .select('*')
       .eq('project_id', currentProject.id)
+      .is('deleted_at', null)
       .order('week_start', { ascending: false });
     
     setProductions(newData || []);
@@ -732,7 +735,8 @@ export function WeeklyProductionView() {
           .eq('project_id', currentProject.id)
           .eq('macro_id', macro.id)
           .eq('scope_id', scope.id)
-          .eq('is_initial_database', false);
+          .eq('is_initial_database', false)
+          .is('deleted_at', null);
         const casasJaLancadas = (jaNoDiario || []).flatMap(p => (p.house_ids as number[]) || []);
         const duplicatas = selectedHouses.filter(h => casasJaLancadas.includes(h));
         if (duplicatas.length > 0) {
@@ -2387,32 +2391,6 @@ export function WeeklyProductionView() {
                 </div>
               )}
 
-              {/* Histórico de exclusões — apenas admins */}
-              {podeExcluir && deletionLog.length > 0 && (
-                <Card className="mt-4">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                      Histórico de Exclusões ({deletionLog.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {deletionLog.map((log: any) => (
-                      <div key={log.id} className="text-xs p-3 rounded-md border bg-muted/30">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-muted-foreground">[{format(parseISO(log.created_at), "dd/MM HH:mm", { locale: ptBR })}]</span>
-                          <strong>{log.deleted_by_nome}</strong>
-                          <span className="text-muted-foreground">— {log.macro_name} / {log.scope_name}</span>
-                        </div>
-                        <div className="text-muted-foreground mt-0.5">
-                          Semana {format(parseISO(log.week_start), "dd/MM", { locale: ptBR })}–{format(parseISO(log.week_end), "dd/MM", { locale: ptBR })} · {log.houses_count} casas · {log.desvios_removidos} desvios removidos · {log.diary_items_removidos} itens de diário removidos
-                        </div>
-                        <div className="mt-1 italic">"{log.justificativa}"</div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
             </TabsContent>
 
           {/* Reason Dialog */}
@@ -2476,8 +2454,78 @@ export function WeeklyProductionView() {
           </Tabs>
         </TabsContent>
 
+        <TabsContent value="historico" className="flex-1 overflow-auto mt-4 space-y-4">
+          {podeExcluir ? (
+            <div className="space-y-4">
+              <div className="flex gap-2 flex-wrap">
+                {(["todos","exclusoes","correcoes"] as const).map(f => (
+                  <Button key={f} size="sm"
+                    variant={filtroHistorico === f ? "default" : "outline"}
+                    onClick={() => setFiltroHistorico(f)}>
+                    {f === "todos" ? "Todos" : f === "exclusoes" ? "Exclusões" : "Correções"}
+                  </Button>
+                ))}
+              </div>
+              {historicoUnificado.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Nenhum registro encontrado.</p>
+              ) : (
+                <div className="space-y-2">
+                  {historicoUnificado.map((item: any, i: number) => (
+                    <div key={i} className="rounded-lg border p-3 text-sm space-y-1">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full",
+                          item.tipo === "exclusao"
+                            ? "bg-destructive/15 text-destructive"
+                            : "bg-amber-500/15 text-amber-700 dark:text-amber-400")}>
+                          {item.tipo === "exclusao" ? "Exclusão" : "Correção"}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(item.created_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"})}
+                        </span>
+                      </div>
+                      <p className="font-medium">{item.macro_name} — {item.scope_name}</p>
+                      <p className="text-xs text-muted-foreground">{item.descricao}</p>
+                      <p className="text-xs"><span className="text-muted-foreground">Por: </span><span className="font-medium">{item.feito_por}</span></p>
+                      {item.justificativa && <p className="text-xs italic text-muted-foreground">"{item.justificativa}"</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">Acesso restrito a administradores.</p>
+          )}
+        </TabsContent>
 
       </Tabs>
+
+      {/* AlertDialog de duplicidade — confirma inserção de Banco Inicial sobre casas já lançadas */}
+      <AlertDialog open={duplicataDialogOpen} onOpenChange={setDuplicataDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>⚠️ Casas já lançadas no Diário</AlertDialogTitle>
+            <AlertDialogDescription>
+              As casas <strong>{casasDuplicatas.join(", ")}</strong> já foram lançadas
+              pelo Diário de Obras para este serviço nesta semana.
+              Continuar criará dupla contagem no Planejamento Estratégico.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setDuplicataDialogOpen(false); setPendingInsert(null); }}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                setDuplicataDialogOpen(false);
+                if (pendingInsert) await pendingInsert();
+                setPendingInsert(null);
+              }}>
+              Continuar mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <EditProductionDialog
         open={editDialogOpen}
