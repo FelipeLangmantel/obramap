@@ -757,121 +757,35 @@ export function WeeklyProductionView() {
     await reloadProductions();
   };
 
-  // Handle delete production with map revert + audit log
+  // Handle delete production via atomic RPC (soft delete + cascade + revert no banco)
   const handleDeleteProduction = async () => {
     if (!productionToDelete || !currentProject || !podeExcluir) return;
     if (justificativaExclusao.trim().length < 20) return;
 
     setIsDeleting(true);
     try {
-      // 1. Calcular revertMap proporcional
-      const { data: housesData } = await supabase
-        .from('houses')
-        .select('house_number, macros')
-        .eq('project_id', currentProject.id)
-        .in('house_number', productionToDelete.house_ids);
-
-      const { data: outrosRegistros } = await supabase
-        .from('weekly_productions')
-        .select('house_ids')
-        .eq('project_id', currentProject.id)
-        .eq('scope_id', productionToDelete.scope_id)
-        .neq('id', productionToDelete.id);
-
-      const revertMap: Record<number, number> = {};
-      for (const house of housesData || []) {
-        const hMacros = (house.macros as any[]) || [];
-        const hMacro = hMacros.find((m: any) => m.id === productionToDelete.macro_id);
-        const hScope = hMacro?.scopes?.find((s: any) => s.id === productionToDelete.scope_id);
-        const currentProgress = hScope?.progress || 0;
-        const outrasCobrindo = (outrosRegistros || [])
-          .filter(r => ((r.house_ids as number[]) || []).includes(house.house_number)).length;
-        revertMap[house.house_number] = outrasCobrindo > 0
-          ? Math.max(0, currentProgress - Math.round(currentProgress / (outrasCobrindo + 1)))
-          : 0;
-      }
-      await updateBatchScopeProgress(productionToDelete.house_ids, productionToDelete.macro_id, productionToDelete.scope_id, 0, revertMap);
-
-      // 2. Deletar desvios vinculados
-      const { data: desviosRemovidos } = await supabase
-        .from('production_deviations')
-        .select('id')
-        .eq('project_id', currentProject.id)
-        .eq('scope_id', productionToDelete.scope_id)
-        .eq('macro_id', productionToDelete.macro_id)
-        .eq('week_start', productionToDelete.week_start);
-      if (desviosRemovidos && desviosRemovidos.length > 0) {
-        await supabase.from('production_deviations').delete().in('id', desviosRemovidos.map(d => d.id));
-      }
-
-      // 3. Deletar diary_items vinculados (via diary_entries do projeto)
-      const { data: entryIds } = await supabase
-        .from('diary_entries')
-        .select('id')
-        .eq('project_id', currentProject.id);
-      const validEntryIds = (entryIds || []).map(e => e.id);
-      let diaryItemsRemovidos: { id: string }[] = [];
-      if (validEntryIds.length > 0) {
-        const { data: foundItems } = await supabase
-          .from('diary_items')
-          .select('id')
-          .in('diary_entry_id', validEntryIds)
-          .eq('macro_id', productionToDelete.macro_id)
-          .eq('scope_id', productionToDelete.scope_id);
-        diaryItemsRemovidos = (foundItems || []).filter(item => {
-          // confirmar apenas items que contenham ao menos uma das casas do registro
-          return true; // RLS já restringe por empresa; filtragem por house_ids abaixo
-        });
-        // Filtrar por house_ids manualmente (overlaps não disponível via JS client)
-        if (diaryItemsRemovidos.length > 0) {
-          const { data: itemsComHouses } = await supabase
-            .from('diary_items')
-            .select('id, house_ids')
-            .in('id', diaryItemsRemovidos.map(d => d.id));
-          const houseSet = new Set(productionToDelete.house_ids);
-          diaryItemsRemovidos = (itemsComHouses || []).filter(d =>
-            ((d.house_ids as number[]) || []).some(h => houseSet.has(h))
-          );
-        }
-        if (diaryItemsRemovidos.length > 0) {
-          await supabase.from('diary_items').delete().in('id', diaryItemsRemovidos.map(d => d.id));
-        }
-      }
-
-      // 4. Deletar de productions (legacy)
-      await supabase.from('productions')
-        .delete()
-        .eq('project_id', currentProject.id)
-        .eq('macro_id', productionToDelete.macro_id)
-        .eq('scope_id', productionToDelete.scope_id)
-        .contains('house_ids', productionToDelete.house_ids);
-
-      // 5. Deletar de weekly_productions
-      const { error } = await supabase
-        .from('weekly_productions')
-        .delete()
-        .eq('id', productionToDelete.id);
-      if (error) throw error;
-
-      // 6. Gravar auditoria
-      await supabase.from('production_deletion_log').insert({
-        company_id: profile?.company_id,
-        project_id: currentProject.id,
-        deleted_by: user?.id,
-        deleted_by_nome: profile?.display_name || user?.email || 'Admin',
-        justificativa: justificativaExclusao.trim(),
-        weekly_production_id: productionToDelete.id,
-        macro_name: productionToDelete.macro_name,
-        scope_name: productionToDelete.scope_name,
-        house_ids: productionToDelete.house_ids,
-        houses_count: productionToDelete.houses_count,
-        week_start: productionToDelete.week_start,
-        week_end: productionToDelete.week_end,
-        created_by_original: productionToDelete.created_by_name || null,
-        desvios_removidos: desviosRemovidos?.length || 0,
-        diary_items_removidos: diaryItemsRemovidos?.length || 0,
+      const { data, error } = await supabase.rpc('delete_production_safe', {
+        p_weekly_production_id: productionToDelete.id,
+        p_justificativa: justificativaExclusao.trim(),
+        p_deleted_by: user!.id,
+        p_deleted_by_nome: profile?.display_name || user?.email || 'Admin',
       });
 
+      if (error) throw error;
+
+      const result = data as { success: boolean; error?: string };
+      if (!result?.success) {
+        if (result?.error === 'justificativa_muito_curta') {
+          toast.error('Justificativa deve ter pelo menos 20 caracteres.');
+        } else if (result?.error === 'registro_nao_encontrado') {
+          toast.error('Registro não encontrado ou já excluído.');
+        } else {
+          toast.error('Erro ao excluir: ' + (result?.error || 'desconhecido'));
+        }
+        return;
+      }
+
+      // Banco já fez tudo atomicamente (revert houses.macros, soft delete em productions/diary_items, log)
       await reloadProductions();
       await loadDeletionLog();
       await refreshHousesFromDB();
@@ -882,9 +796,9 @@ export function WeeklyProductionView() {
       setDeleteDialogOpen(false);
       setProductionToDelete(null);
       setJustificativaExclusao("");
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting production:', error);
-      toast.error("Erro ao excluir registro");
+      toast.error("Erro ao excluir: " + (error?.message || 'erro desconhecido'));
     }
     setIsDeleting(false);
   };

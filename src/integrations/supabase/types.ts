@@ -1781,6 +1781,8 @@ export type Database = {
       diary_items: {
         Row: {
           created_at: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           diary_entry_id: string
           house_ids: number[]
           houses_count: number
@@ -1796,6 +1798,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           diary_entry_id: string
           house_ids?: number[]
           houses_count?: number
@@ -1811,6 +1815,8 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           diary_entry_id?: string
           house_ids?: number[]
           houses_count?: number
@@ -7088,6 +7094,9 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
           house_ids: number[]
           houses_count: number
           id: string
@@ -7108,6 +7117,9 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           house_ids?: number[]
           houses_count?: number
           id?: string
@@ -7128,6 +7140,9 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           house_ids?: number[]
           houses_count?: number
           id?: string
@@ -9941,6 +9956,9 @@ export type Database = {
           created_at: string
           created_by_name: string | null
           created_by_user_id: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          deleted_reason: string | null
           house_ids: number[]
           houses_count: number
           id: string
@@ -9963,6 +9981,9 @@ export type Database = {
           created_at?: string
           created_by_name?: string | null
           created_by_user_id?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           house_ids?: number[]
           houses_count?: number
           id?: string
@@ -9985,6 +10006,9 @@ export type Database = {
           created_at?: string
           created_by_name?: string | null
           created_by_user_id?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
+          deleted_reason?: string | null
           house_ids?: number[]
           houses_count?: number
           id?: string
@@ -10201,6 +10225,15 @@ export type Database = {
         Returns: boolean
       }
       delete_planning_period: { Args: { p_period_id: string }; Returns: Json }
+      delete_production_safe: {
+        Args: {
+          p_deleted_by: string
+          p_deleted_by_nome: string
+          p_justificativa: string
+          p_weekly_production_id: string
+        }
+        Returns: Json
+      }
       estimate_service_duration_days: {
         Args: {
           p_planned_houses: number
