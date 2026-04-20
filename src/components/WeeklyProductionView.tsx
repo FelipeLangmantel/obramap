@@ -337,7 +337,8 @@ export function WeeklyProductionView() {
       const { data: prods } = await supabase
         .from('weekly_productions')
         .select('weekly_plan_service_id')
-        .in('weekly_plan_service_id', serviceIds);
+        .in('weekly_plan_service_id', serviceIds)
+        .is('deleted_at', null);
       registeredServiceIds = (prods || []).map(p => p.weekly_plan_service_id).filter(Boolean) as string[];
     }
     setReleasedWeekServices((data || []).map(s => ({
@@ -466,6 +467,7 @@ export function WeeklyProductionView() {
           .from('weekly_productions')
           .select('*')
           .eq('project_id', currentProject.id)
+          .is('deleted_at', null)
           .order('week_start', { ascending: false }),
         supabase
           .from('planned_productions')
@@ -537,6 +539,7 @@ export function WeeklyProductionView() {
       .from('weekly_productions')
       .select('*')
       .eq('project_id', currentProject.id)
+      .is('deleted_at', null)
       .order('week_start', { ascending: false });
     
     setProductions(newData || []);
@@ -732,7 +735,8 @@ export function WeeklyProductionView() {
           .eq('project_id', currentProject.id)
           .eq('macro_id', macro.id)
           .eq('scope_id', scope.id)
-          .eq('is_initial_database', false);
+          .eq('is_initial_database', false)
+          .is('deleted_at', null);
         const casasJaLancadas = (jaNoDiario || []).flatMap(p => (p.house_ids as number[]) || []);
         const duplicatas = selectedHouses.filter(h => casasJaLancadas.includes(h));
         if (duplicatas.length > 0) {
