@@ -67,6 +67,9 @@ interface DiaryItem {
   production_id: string | null;
 }
 
+// Percentual por casa quando múltiplas casas selecionadas
+type HousePercentMap = Record<number, number>;
+
 export default function DiarioObraView() {
   const { currentProject, updateBatchScopeProgress } = useConstruction();
   const { user, profile, company } = useAuth();
@@ -88,8 +91,12 @@ export default function DiarioObraView() {
   const [selectedScope, setSelectedScope] = useState<{ id: string; name: string } | null>(null);
   const [selectedHouses, setSelectedHouses] = useState<number[]>([]);
   const [percentual, setPercentual] = useState(100);
+  const [housePercents, setHousePercents] = useState<HousePercentMap>({});
   const [obsItem, setObsItem] = useState("");
   const [registering, setRegistering] = useState(false);
+
+  // Print dialog
+  const [printOpen, setPrintOpen] = useState(false);
 
   // Summary
   const [diaryItems, setDiaryItems] = useState<DiaryItem[]>([]);
