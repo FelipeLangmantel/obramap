@@ -555,12 +555,13 @@ export default function DiarioObraView() {
         observacao: obsItem || null,
       });
 
-      // 4. Update house progress
+      // 4. Update house progress — usa percentual individual por casa
       const progressMap: Record<number, number> = {};
       for (const houseId of selectedHouses) {
+        const housePct = housePercents[houseId] ?? percentual;
         const currentProg = getHouseProgress(houseId);
         const remaining = 100 - currentProg;
-        const addPct = Math.min(percentual, remaining);
+        const addPct = Math.min(housePct, remaining);
         progressMap[houseId] = Math.min(100, currentProg + addPct);
       }
       await updateBatchScopeProgress(selectedHouses, selectedMacro.id, selectedScope.id, 100, progressMap);
@@ -590,6 +591,7 @@ export default function DiarioObraView() {
       }
 
       setSelectedHouses([]);
+      setHousePercents({});
       setObsItem("");
       setPercentual(100);
       loadItems(entryId);
