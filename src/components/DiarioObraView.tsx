@@ -96,6 +96,18 @@ export default function DiarioObraView() {
   // Realtime count from other engineers
   const [realtimeCount, setRealtimeCount] = useState(0);
 
+  // Fotos do dia
+  const [fotos, setFotos] = useState<{ id: string; url: string; storage_path: string; legenda: string | null }[]>([]);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [fotoAmpliada, setFotoAmpliada] = useState<{ id: string; url: string; legenda: string | null } | null>(null);
+
+  // Clima automático
+  const [climaAutoPreenchido, setClimaAutoPreenchido] = useState(false);
+
+  // Produtividade de referência (do scope selecionado)
+  const [produtividadeRef, setProdutividadeRef] = useState<number | null>(null);
+  const [produtividadeRefId, setProdutividadeRefId] = useState<string | null>(null);
+
   const macros = currentProject?.macrosTemplate || [];
 
   // Load existing entry for selected date
