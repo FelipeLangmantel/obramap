@@ -385,12 +385,32 @@ export default function DiarioObraView() {
     }
   };
 
-  // Scopes for selected macro
+  // Helper: progresso de uma casa em qualquer (macro, scope) — direto do dado
+  const getProgressFor = useCallback((houseId: number, macroId: string, scopeId: string): number => {
+    const house = houses.find(h => h.id === houseId);
+    if (!house) return 0;
+    const hMacros = (house.macros as any[]) || [];
+    const hMacro = hMacros.find((m: any) => m.id === macroId);
+    const hScope = hMacro?.scopes?.find((s: any) => s.id === scopeId);
+    return hScope?.progress || 0;
+  }, [houses]);
+
+  // Scopes do macro selecionado, com flag de "todas as casas a 100%"
   const scopesForMacro = useMemo(() => {
     if (!selectedMacro) return [];
     const macro = macros.find(m => m.id === selectedMacro.id);
-    return macro?.scopes || [];
-  }, [selectedMacro, macros]);
+    const scopes = macro?.scopes || [];
+    return scopes.map(scope => {
+      const totalHouses = houses.length;
+      const completedHouses = houses.filter(h => getProgressFor(h.id, selectedMacro.id, scope.id) >= 100).length;
+      return {
+        ...scope,
+        isFullyCompleted: totalHouses > 0 && completedHouses === totalHouses,
+        completedHouses,
+        totalHouses,
+      };
+    });
+  }, [selectedMacro, macros, houses, getProgressFor]);
 
   // Houses grouped by quadra
   const housesGroupedByQuadra = useMemo(() => {
@@ -402,16 +422,11 @@ export default function DiarioObraView() {
     })).filter(g => g.houses.length > 0);
   }, [currentProject, houses]);
 
-  // Check house completion for selected scope
+  // Progress da casa para o scope atualmente selecionado
   const getHouseProgress = useCallback((houseId: number): number => {
     if (!selectedMacro || !selectedScope) return 0;
-    const house = houses.find(h => h.id === houseId);
-    if (!house) return 0;
-    const hMacros = (house.macros as any[]) || [];
-    const hMacro = hMacros.find((m: any) => m.id === selectedMacro.id);
-    const hScope = hMacro?.scopes?.find((s: any) => s.id === selectedScope.id);
-    return hScope?.progress || 0;
-  }, [houses, selectedMacro, selectedScope]);
+    return getProgressFor(houseId, selectedMacro.id, selectedScope.id);
+  }, [selectedMacro, selectedScope, getProgressFor]);
 
   const toggleHouse = (houseId: number) => {
     setSelectedHouses(prev =>
