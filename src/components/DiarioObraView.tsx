@@ -116,6 +116,68 @@ export default function DiarioObraView() {
     loadEntry();
   }, [currentProject?.id, user?.id, entryDate]);
 
+  const loadFotos = async (eId: string) => {
+    const { data: fotosData } = await supabase
+      .from("diary_photos")
+      .select("id, storage_path, legenda")
+      .eq("diary_entry_id", eId)
+      .order("created_at", { ascending: true });
+
+    if (!fotosData || fotosData.length === 0) {
+      setFotos([]);
+      return;
+    }
+
+    // Bucket é privado → usar signed URL (1h)
+    const fotosComUrl = await Promise.all(
+      fotosData.map(async (f) => {
+        const { data: signed } = await supabase.storage
+          .from("diary-photos")
+          .createSignedUrl(f.storage_path, 60 * 60);
+        return {
+          id: f.id,
+          storage_path: f.storage_path,
+          legenda: f.legenda,
+          url: signed?.signedUrl || "",
+        };
+      })
+    );
+    setFotos(fotosComUrl);
+  };
+
+  const tryAutoFillClima = async (eId: string) => {
+    if (!currentProject?.id) return;
+    const { data: projData } = await supabase
+      .from("projects")
+      .select("lat, lng, municipio, estado")
+      .eq("id", currentProject.id)
+      .maybeSingle();
+
+    if (!projData) return;
+
+    let coords: { lat: number; lng: number } | null = null;
+    if (projData.lat != null && projData.lng != null) {
+      coords = { lat: Number(projData.lat), lng: Number(projData.lng) };
+    } else if (projData.municipio) {
+      coords = await geocodeMunicipio(projData.municipio, projData.estado || "RS");
+      // Persistir lat/lng para próxima execução não geocodificar de novo
+      if (coords) {
+        await supabase.from("projects")
+          .update({ lat: coords.lat, lng: coords.lng })
+          .eq("id", currentProject.id);
+      }
+    }
+
+    if (!coords) return;
+
+    const climaAuto = await fetchClimaHoje(coords.lat, coords.lng);
+    if (climaAuto) {
+      setClima(climaAuto.codigo);
+      setClimaAutoPreenchido(true);
+      await supabase.from("diary_entries").update({ clima: climaAuto.codigo }).eq("id", eId);
+    }
+  };
+
   const loadEntry = async () => {
     if (!currentProject?.id || !user?.id) return;
     
@@ -133,6 +195,7 @@ export default function DiarioObraView() {
       setEquipePres(data.equipe_presente || 0);
       setObsGeral(data.observacao_geral || "");
       setEntryStatus(data.status || "rascunho");
+      setClimaAutoPreenchido(false);
       const { data: correcoes } = await supabase
         .from("diary_item_corrections")
         .select("tipo, macro_name, scope_name, house_ids_anterior, house_ids_posterior, percentual_anterior, percentual_posterior, justificativa, corrigido_por_nome, created_at")
@@ -140,6 +203,11 @@ export default function DiarioObraView() {
         .order("created_at", { ascending: false });
       setCorrecoesDoDia(correcoes || []);
       loadItems(data.id);
+      loadFotos(data.id);
+      // Auto-preencher clima apenas se ainda não foi preenchido manualmente
+      if (!data.clima) {
+        tryAutoFillClima(data.id);
+      }
     } else {
       setEntryId(null);
       setClima(null);
@@ -148,6 +216,8 @@ export default function DiarioObraView() {
       setEntryStatus("rascunho");
       setDiaryItems([]);
       setCorrecoesDoDia([]);
+      setFotos([]);
+      setClimaAutoPreenchido(false);
     }
   };
 
