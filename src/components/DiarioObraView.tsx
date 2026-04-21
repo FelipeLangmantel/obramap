@@ -619,7 +619,12 @@ export default function DiarioObraView() {
               </div>
             </div>
             <div className="col-span-2">
-              <label className="text-xs font-medium text-muted-foreground">Clima</label>
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                Clima
+                {climaAutoPreenchido && clima && (
+                  <Badge variant="secondary" className="text-[9px] py-0 px-1.5 h-4">Auto</Badge>
+                )}
+              </label>
               <div className="flex gap-2 mt-1 flex-wrap">
                 {CLIMA_OPTIONS.map(opt => (
                   <Button
@@ -627,7 +632,10 @@ export default function DiarioObraView() {
                     type="button"
                     variant={clima === opt.value ? "default" : "outline"}
                     className={cn("min-h-[48px] min-w-[48px] flex-col gap-0.5 text-xs px-2", clima === opt.value && "ring-2 ring-primary")}
-                    onClick={() => setClima(clima === opt.value ? null : opt.value)}
+                    onClick={() => {
+                      setClima(clima === opt.value ? null : opt.value);
+                      setClimaAutoPreenchido(false);
+                    }}
                   >
                     {opt.icon}
                     <span className="hidden md:inline">{opt.label}</span>
