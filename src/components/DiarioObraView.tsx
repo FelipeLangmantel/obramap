@@ -511,6 +511,24 @@ export default function DiarioObraView() {
       queryClient.invalidateQueries({ queryKey: ["houses"] });
 
       toast.success(`Registrado: ${selectedScope.name} em ${selectedHouses.length} casas`);
+
+      // ─── Atualizar média móvel de produtividade (silencioso) ─────────
+      try {
+        if (produtividadeRefId && produtividadeRef && equipePres > 0) {
+          const produtividadeReal = selectedHouses.length / equipePres;
+          if (produtividadeReal > 0) {
+            // EMA: 80% histórico + 20% novo
+            const novaMedia = produtividadeRef * 0.8 + produtividadeReal * 0.2;
+            await supabase.from("service_productivities")
+              .update({ base_productivity: Math.round(novaMedia * 100) / 100 })
+              .eq("id", produtividadeRefId);
+            setProdutividadeRef(Math.round(novaMedia * 100) / 100);
+          }
+        }
+      } catch {
+        // silencioso — não bloquear UX
+      }
+
       setSelectedHouses([]);
       setObsItem("");
       setPercentual(100);
