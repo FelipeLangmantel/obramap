@@ -429,16 +429,52 @@ export default function DiarioObraView() {
   }, [selectedMacro, selectedScope, getProgressFor]);
 
   const toggleHouse = (houseId: number) => {
-    setSelectedHouses(prev =>
-      prev.includes(houseId) ? prev.filter(h => h !== houseId) : [...prev, houseId]
-    );
+    // Bloquear casas concluídas
+    if (getHouseProgress(houseId) >= 100) return;
+    setSelectedHouses(prev => {
+      const next = prev.includes(houseId)
+        ? prev.filter(h => h !== houseId)
+        : [...prev, houseId];
+      // Sincronizar housePercents
+      setHousePercents(prevP => {
+        const np = { ...prevP };
+        if (next.includes(houseId) && np[houseId] == null) np[houseId] = percentual;
+        if (!next.includes(houseId)) delete np[houseId];
+        return np;
+      });
+      return next;
+    });
   };
 
   const selectQuadra = (houseIds: number[]) => {
+    // Filtra casas concluídas
+    const selectableIds = houseIds.filter(id => getHouseProgress(id) < 100);
     setSelectedHouses(prev => {
-      const allSelected = houseIds.every(id => prev.includes(id));
-      if (allSelected) return prev.filter(id => !houseIds.includes(id));
-      return [...new Set([...prev, ...houseIds])];
+      const allSelected = selectableIds.every(id => prev.includes(id));
+      const next = allSelected
+        ? prev.filter(id => !selectableIds.includes(id))
+        : [...new Set([...prev, ...selectableIds])];
+      setHousePercents(prevP => {
+        const np = { ...prevP };
+        next.forEach(id => { if (np[id] == null) np[id] = percentual; });
+        Object.keys(np).forEach(k => { if (!next.includes(Number(k))) delete np[Number(k)]; });
+        return np;
+      });
+      return next;
+    });
+  };
+
+  // Atualiza % de uma casa específica
+  const setHousePercent = (houseId: number, value: number) => {
+    setHousePercents(prev => ({ ...prev, [houseId]: Math.max(0, Math.min(100, value)) }));
+  };
+
+  // Aplica % atual a todas as casas selecionadas
+  const applyPercentToAll = () => {
+    setHousePercents(prev => {
+      const np = { ...prev };
+      selectedHouses.forEach(id => { np[id] = percentual; });
+      return np;
     });
   };
 
