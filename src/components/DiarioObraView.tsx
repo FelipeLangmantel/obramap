@@ -881,19 +881,35 @@ export default function DiarioObraView() {
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-2 block">2. Selecionar Serviço</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {scopesForMacro.map(scope => (
-                    <Button
-                      key={scope.id}
-                      variant={selectedScope?.id === scope.id ? "default" : "outline"}
-                      className="min-h-[48px] justify-start text-sm"
-                      onClick={() => {
-                        setSelectedScope(selectedScope?.id === scope.id ? null : { id: scope.id, name: scope.name });
-                        setSelectedHouses([]);
-                      }}
-                    >
-                      {scope.name}
-                    </Button>
-                  ))}
+                  {scopesForMacro.map((scope: any) => {
+                    const done = scope.isFullyCompleted;
+                    return (
+                      <Button
+                        key={scope.id}
+                        variant={selectedScope?.id === scope.id ? "default" : "outline"}
+                        className={cn(
+                          "min-h-[48px] justify-start text-sm gap-2",
+                          done && "opacity-60 cursor-not-allowed"
+                        )}
+                        disabled={done}
+                        title={done ? "Serviço 100% concluído em todas as casas" : undefined}
+                        onClick={() => {
+                          if (done) return;
+                          setSelectedScope(selectedScope?.id === scope.id ? null : { id: scope.id, name: scope.name });
+                          setSelectedHouses([]);
+                          setHousePercents({});
+                        }}
+                      >
+                        <span className="flex-1 text-left truncate">{scope.name}</span>
+                        {done && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />}
+                        {!done && scope.completedHouses > 0 && (
+                          <Badge variant="secondary" className="text-[10px] h-4 px-1.5 shrink-0">
+                            {scope.completedHouses}/{scope.totalHouses}
+                          </Badge>
+                        )}
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -919,16 +935,19 @@ export default function DiarioObraView() {
                       {group.houses.map(house => {
                         const prog = getHouseProgress(house.id);
                         const isSelected = selectedHouses.includes(house.id);
+                        const isDone = prog >= 100;
                         return (
                           <Button
                             key={house.id}
                             variant="outline"
+                            disabled={isDone}
+                            title={isDone ? "Casa concluída — não selecionável" : undefined}
                             className={cn(
                               "h-14 w-full p-0 flex flex-col items-center justify-center gap-0 text-xs font-bold relative",
                               isSelected && "ring-2 ring-primary bg-primary/20 border-primary",
                               !isSelected && prog === 0 && "bg-background",
                               !isSelected && prog > 0 && prog < 100 && "bg-amber-50 dark:bg-amber-900/20 border-amber-400 text-amber-800 dark:text-amber-300",
-                              !isSelected && prog >= 100 && "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-400 text-emerald-700 dark:text-emerald-300"
+                              isDone && "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-400 text-emerald-700 dark:text-emerald-300 opacity-70 cursor-not-allowed"
                             )}
                             onClick={() => toggleHouse(house.id)}
                           >
@@ -936,7 +955,7 @@ export default function DiarioObraView() {
                             {prog > 0 && prog < 100 && (
                               <span className="text-[9px] font-medium leading-tight text-amber-600 dark:text-amber-400">{prog}%</span>
                             )}
-                            {prog >= 100 && (
+                            {isDone && (
                               <CheckCircle2 className="h-3 w-3 text-emerald-500" />
                             )}
                           </Button>
