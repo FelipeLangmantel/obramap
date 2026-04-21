@@ -9,13 +9,37 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, parseISO } from "date-fns";
 import {
   Save, Trash2, ClipboardList, Sun, Cloud, CloudRain, CloudLightning, Wind,
-  CheckCircle2, ChevronRight, Users, Loader2
+  CheckCircle2, ChevronRight, Users, Loader2, Camera, X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { geocodeMunicipio, fetchClimaHoje } from "@/lib/geocode";
+
+// Compressão simples via Canvas — reduz tamanho das fotos antes do upload
+async function comprimirImagem(file: File, maxDim = 1024, quality = 0.7): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      let w = img.width, h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("canvas")); return; }
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("blob")), "image/jpeg", quality);
+    };
+    img.onerror = () => reject(new Error("img"));
+    img.src = URL.createObjectURL(file);
+  });
+}
 
 type ClimaType = "sol" | "nublado" | "chuva_fraca" | "chuva_forte" | "vento";
 
