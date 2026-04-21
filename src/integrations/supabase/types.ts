@@ -7571,6 +7571,7 @@ export type Database = {
           legend_follow_macros: boolean
           lng: number | null
           location: string
+          logo_url: string | null
           macros_template: Json
           municipio: string | null
           name: string
@@ -7597,6 +7598,7 @@ export type Database = {
           legend_follow_macros?: boolean
           lng?: number | null
           location: string
+          logo_url?: string | null
           macros_template?: Json
           municipio?: string | null
           name: string
@@ -7623,6 +7625,7 @@ export type Database = {
           legend_follow_macros?: boolean
           lng?: number | null
           location?: string
+          logo_url?: string | null
           macros_template?: Json
           municipio?: string | null
           name?: string
