@@ -973,6 +973,24 @@ export default function DiarioObraView() {
           </CardContent>
         </Card>
       )}
+
+      {/* Dialog de foto ampliada */}
+      {fotoAmpliada && (
+        <Dialog open={!!fotoAmpliada} onOpenChange={() => setFotoAmpliada(null)}>
+          <DialogContent className="max-w-3xl p-2">
+            <img
+              src={fotoAmpliada.url}
+              alt={fotoAmpliada.legenda || "Foto do diário"}
+              className="w-full rounded-lg"
+            />
+            {fotoAmpliada.legenda && (
+              <p className="text-sm text-center text-muted-foreground mt-2">
+                {fotoAmpliada.legenda}
+              </p>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
