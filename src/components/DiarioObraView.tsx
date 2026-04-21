@@ -14,10 +14,12 @@ import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, parseISO } from "date-fns";
 import {
   Save, Trash2, ClipboardList, Sun, Cloud, CloudRain, CloudLightning, Wind,
-  CheckCircle2, ChevronRight, Users, Loader2, Camera, X
+  CheckCircle2, ChevronRight, Users, Loader2, Camera, X, Printer, BarChart3
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { geocodeMunicipio, fetchClimaHoje } from "@/lib/geocode";
+import { PrintDiarioDialog } from "./diario/PrintDiarioDialog";
+import type { DiarioPDFData } from "./diario/generateDiarioPDF";
 
 // Compressão simples via Canvas — reduz tamanho das fotos antes do upload
 async function comprimirImagem(file: File, maxDim = 1024, quality = 0.7): Promise<Blob> {
@@ -65,6 +67,9 @@ interface DiaryItem {
   production_id: string | null;
 }
 
+// Percentual por casa quando múltiplas casas selecionadas
+type HousePercentMap = Record<number, number>;
+
 export default function DiarioObraView() {
   const { currentProject, updateBatchScopeProgress } = useConstruction();
   const { user, profile, company } = useAuth();
@@ -86,8 +91,12 @@ export default function DiarioObraView() {
   const [selectedScope, setSelectedScope] = useState<{ id: string; name: string } | null>(null);
   const [selectedHouses, setSelectedHouses] = useState<number[]>([]);
   const [percentual, setPercentual] = useState(100);
+  const [housePercents, setHousePercents] = useState<HousePercentMap>({});
   const [obsItem, setObsItem] = useState("");
   const [registering, setRegistering] = useState(false);
+
+  // Print dialog
+  const [printOpen, setPrintOpen] = useState(false);
 
   // Summary
   const [diaryItems, setDiaryItems] = useState<DiaryItem[]>([]);
@@ -376,12 +385,32 @@ export default function DiarioObraView() {
     }
   };
 
-  // Scopes for selected macro
+  // Helper: progresso de uma casa em qualquer (macro, scope) — direto do dado
+  const getProgressFor = useCallback((houseId: number, macroId: string, scopeId: string): number => {
+    const house = houses.find(h => h.id === houseId);
+    if (!house) return 0;
+    const hMacros = (house.macros as any[]) || [];
+    const hMacro = hMacros.find((m: any) => m.id === macroId);
+    const hScope = hMacro?.scopes?.find((s: any) => s.id === scopeId);
+    return hScope?.progress || 0;
+  }, [houses]);
+
+  // Scopes do macro selecionado, com flag de "todas as casas a 100%"
   const scopesForMacro = useMemo(() => {
     if (!selectedMacro) return [];
     const macro = macros.find(m => m.id === selectedMacro.id);
-    return macro?.scopes || [];
-  }, [selectedMacro, macros]);
+    const scopes = macro?.scopes || [];
+    return scopes.map(scope => {
+      const totalHouses = houses.length;
+      const completedHouses = houses.filter(h => getProgressFor(h.id, selectedMacro.id, scope.id) >= 100).length;
+      return {
+        ...scope,
+        isFullyCompleted: totalHouses > 0 && completedHouses === totalHouses,
+        completedHouses,
+        totalHouses,
+      };
+    });
+  }, [selectedMacro, macros, houses, getProgressFor]);
 
   // Houses grouped by quadra
   const housesGroupedByQuadra = useMemo(() => {
@@ -393,28 +422,59 @@ export default function DiarioObraView() {
     })).filter(g => g.houses.length > 0);
   }, [currentProject, houses]);
 
-  // Check house completion for selected scope
+  // Progress da casa para o scope atualmente selecionado
   const getHouseProgress = useCallback((houseId: number): number => {
     if (!selectedMacro || !selectedScope) return 0;
-    const house = houses.find(h => h.id === houseId);
-    if (!house) return 0;
-    const hMacros = (house.macros as any[]) || [];
-    const hMacro = hMacros.find((m: any) => m.id === selectedMacro.id);
-    const hScope = hMacro?.scopes?.find((s: any) => s.id === selectedScope.id);
-    return hScope?.progress || 0;
-  }, [houses, selectedMacro, selectedScope]);
+    return getProgressFor(houseId, selectedMacro.id, selectedScope.id);
+  }, [selectedMacro, selectedScope, getProgressFor]);
 
   const toggleHouse = (houseId: number) => {
-    setSelectedHouses(prev =>
-      prev.includes(houseId) ? prev.filter(h => h !== houseId) : [...prev, houseId]
-    );
+    // Bloquear casas concluídas
+    if (getHouseProgress(houseId) >= 100) return;
+    setSelectedHouses(prev => {
+      const next = prev.includes(houseId)
+        ? prev.filter(h => h !== houseId)
+        : [...prev, houseId];
+      // Sincronizar housePercents
+      setHousePercents(prevP => {
+        const np = { ...prevP };
+        if (next.includes(houseId) && np[houseId] == null) np[houseId] = percentual;
+        if (!next.includes(houseId)) delete np[houseId];
+        return np;
+      });
+      return next;
+    });
   };
 
   const selectQuadra = (houseIds: number[]) => {
+    // Filtra casas concluídas
+    const selectableIds = houseIds.filter(id => getHouseProgress(id) < 100);
     setSelectedHouses(prev => {
-      const allSelected = houseIds.every(id => prev.includes(id));
-      if (allSelected) return prev.filter(id => !houseIds.includes(id));
-      return [...new Set([...prev, ...houseIds])];
+      const allSelected = selectableIds.every(id => prev.includes(id));
+      const next = allSelected
+        ? prev.filter(id => !selectableIds.includes(id))
+        : [...new Set([...prev, ...selectableIds])];
+      setHousePercents(prevP => {
+        const np = { ...prevP };
+        next.forEach(id => { if (np[id] == null) np[id] = percentual; });
+        Object.keys(np).forEach(k => { if (!next.includes(Number(k))) delete np[Number(k)]; });
+        return np;
+      });
+      return next;
+    });
+  };
+
+  // Atualiza % de uma casa específica
+  const setHousePercent = (houseId: number, value: number) => {
+    setHousePercents(prev => ({ ...prev, [houseId]: Math.max(0, Math.min(100, value)) }));
+  };
+
+  // Aplica % atual a todas as casas selecionadas
+  const applyPercentToAll = () => {
+    setHousePercents(prev => {
+      const np = { ...prev };
+      selectedHouses.forEach(id => { np[id] = percentual; });
+      return np;
     });
   };
 
@@ -495,12 +555,13 @@ export default function DiarioObraView() {
         observacao: obsItem || null,
       });
 
-      // 4. Update house progress
+      // 4. Update house progress — usa percentual individual por casa
       const progressMap: Record<number, number> = {};
       for (const houseId of selectedHouses) {
+        const housePct = housePercents[houseId] ?? percentual;
         const currentProg = getHouseProgress(houseId);
         const remaining = 100 - currentProg;
-        const addPct = Math.min(percentual, remaining);
+        const addPct = Math.min(housePct, remaining);
         progressMap[houseId] = Math.min(100, currentProg + addPct);
       }
       await updateBatchScopeProgress(selectedHouses, selectedMacro.id, selectedScope.id, 100, progressMap);
@@ -530,6 +591,7 @@ export default function DiarioObraView() {
       }
 
       setSelectedHouses([]);
+      setHousePercents({});
       setObsItem("");
       setPercentual(100);
       loadItems(entryId);
@@ -653,10 +715,23 @@ export default function DiarioObraView() {
               className="mt-1 min-h-[60px]"
             />
           </div>
-          <Button onClick={handleSaveHeader} disabled={savingHeader} className="min-h-[48px] w-full md:w-auto">
-            {savingHeader ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-            Salvar Cabeçalho
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={handleSaveHeader} disabled={savingHeader} className="min-h-[48px] flex-1 md:flex-none">
+              {savingHeader ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              Salvar Cabeçalho
+            </Button>
+            {entryId && (
+              <Button
+                variant="outline"
+                onClick={() => setPrintOpen(true)}
+                className="min-h-[48px]"
+                title="Imprimir diário do dia"
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimir Diário
+              </Button>
+            )}
+          </div>
           {entryId && (
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               {entryStatus === "finalizado" ? (
@@ -819,19 +894,35 @@ export default function DiarioObraView() {
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-2 block">2. Selecionar Serviço</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {scopesForMacro.map(scope => (
-                    <Button
-                      key={scope.id}
-                      variant={selectedScope?.id === scope.id ? "default" : "outline"}
-                      className="min-h-[48px] justify-start text-sm"
-                      onClick={() => {
-                        setSelectedScope(selectedScope?.id === scope.id ? null : { id: scope.id, name: scope.name });
-                        setSelectedHouses([]);
-                      }}
-                    >
-                      {scope.name}
-                    </Button>
-                  ))}
+                  {scopesForMacro.map((scope: any) => {
+                    const done = scope.isFullyCompleted;
+                    return (
+                      <Button
+                        key={scope.id}
+                        variant={selectedScope?.id === scope.id ? "default" : "outline"}
+                        className={cn(
+                          "min-h-[48px] justify-start text-sm gap-2",
+                          done && "opacity-60 cursor-not-allowed"
+                        )}
+                        disabled={done}
+                        title={done ? "Serviço 100% concluído em todas as casas" : undefined}
+                        onClick={() => {
+                          if (done) return;
+                          setSelectedScope(selectedScope?.id === scope.id ? null : { id: scope.id, name: scope.name });
+                          setSelectedHouses([]);
+                          setHousePercents({});
+                        }}
+                      >
+                        <span className="flex-1 text-left truncate">{scope.name}</span>
+                        {done && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />}
+                        {!done && scope.completedHouses > 0 && (
+                          <Badge variant="secondary" className="text-[10px] h-4 px-1.5 shrink-0">
+                            {scope.completedHouses}/{scope.totalHouses}
+                          </Badge>
+                        )}
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -857,16 +948,19 @@ export default function DiarioObraView() {
                       {group.houses.map(house => {
                         const prog = getHouseProgress(house.id);
                         const isSelected = selectedHouses.includes(house.id);
+                        const isDone = prog >= 100;
                         return (
                           <Button
                             key={house.id}
                             variant="outline"
+                            disabled={isDone}
+                            title={isDone ? "Casa concluída — não selecionável" : undefined}
                             className={cn(
                               "h-14 w-full p-0 flex flex-col items-center justify-center gap-0 text-xs font-bold relative",
                               isSelected && "ring-2 ring-primary bg-primary/20 border-primary",
                               !isSelected && prog === 0 && "bg-background",
                               !isSelected && prog > 0 && prog < 100 && "bg-amber-50 dark:bg-amber-900/20 border-amber-400 text-amber-800 dark:text-amber-300",
-                              !isSelected && prog >= 100 && "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-400 text-emerald-700 dark:text-emerald-300"
+                              isDone && "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-400 text-emerald-700 dark:text-emerald-300 opacity-70 cursor-not-allowed"
                             )}
                             onClick={() => toggleHouse(house.id)}
                           >
@@ -874,7 +968,7 @@ export default function DiarioObraView() {
                             {prog > 0 && prog < 100 && (
                               <span className="text-[9px] font-medium leading-tight text-amber-600 dark:text-amber-400">{prog}%</span>
                             )}
-                            {prog >= 100 && (
+                            {isDone && (
                               <CheckCircle2 className="h-3 w-3 text-emerald-500" />
                             )}
                           </Button>
@@ -891,17 +985,69 @@ export default function DiarioObraView() {
 
             {/* Passo 4 — Percentual */}
             {selectedHouses.length > 0 && (
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">4. Percentual Executado</label>
-                <div className="text-3xl font-bold text-primary text-center my-2">{percentual}%</div>
-                <Slider
-                  min={10}
-                  max={100}
-                  step={10}
-                  value={[percentual]}
-                  onValueChange={v => setPercentual(v[0])}
-                  className="mb-3"
-                />
+              <div className="space-y-3">
+                <label className="text-xs font-medium text-muted-foreground block">4. Percentual Executado</label>
+
+                {/* Slider geral + botão aplicar a todas */}
+                <div className="rounded-lg border p-3 bg-muted/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Padrão (aplica a todas):</span>
+                    <span className="text-xl font-bold text-primary">{percentual}%</span>
+                  </div>
+                  <Slider
+                    min={10}
+                    max={100}
+                    step={10}
+                    value={[percentual]}
+                    onValueChange={v => setPercentual(v[0])}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs h-8"
+                    onClick={applyPercentToAll}
+                  >
+                    Aplicar {percentual}% a todas as casas
+                  </Button>
+                </div>
+
+                {/* Tabela compacta por casa */}
+                {selectedHouses.length > 1 && (
+                  <div className="rounded-lg border overflow-hidden">
+                    <div className="bg-muted/50 px-3 py-2 text-xs font-semibold text-muted-foreground flex items-center justify-between">
+                      <span>% individual por casa</span>
+                      <span>{selectedHouses.length} casa(s)</span>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto divide-y">
+                      {[...selectedHouses].sort((a, b) => a - b).map(houseId => {
+                        const currentProg = getHouseProgress(houseId);
+                        const remaining = 100 - currentProg;
+                        const value = housePercents[houseId] ?? percentual;
+                        return (
+                          <div key={houseId} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+                            <span className="font-mono font-bold w-10">{String(houseId).padStart(2, "0")}</span>
+                            {currentProg > 0 && (
+                              <span className="text-[10px] text-muted-foreground">
+                                (atual {currentProg}% · resta {remaining}%)
+                              </span>
+                            )}
+                            <div className="flex-1" />
+                            <Input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={value}
+                              onChange={e => setHousePercent(houseId, Number(e.target.value))}
+                              className="h-8 w-20 text-right"
+                            />
+                            <span className="text-xs text-muted-foreground w-4">%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <Textarea
                   value={obsItem}
                   onChange={e => setObsItem(e.target.value)}
