@@ -715,10 +715,23 @@ export default function DiarioObraView() {
               className="mt-1 min-h-[60px]"
             />
           </div>
-          <Button onClick={handleSaveHeader} disabled={savingHeader} className="min-h-[48px] w-full md:w-auto">
-            {savingHeader ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-            Salvar Cabeçalho
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button onClick={handleSaveHeader} disabled={savingHeader} className="min-h-[48px] flex-1 md:flex-none">
+              {savingHeader ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+              Salvar Cabeçalho
+            </Button>
+            {entryId && (
+              <Button
+                variant="outline"
+                onClick={() => setPrintOpen(true)}
+                className="min-h-[48px]"
+                title="Imprimir diário do dia"
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimir Diário
+              </Button>
+            )}
+          </div>
           {entryId && (
             <div className="flex items-center gap-2 mt-2 flex-wrap">
               {entryStatus === "finalizado" ? (
@@ -972,17 +985,69 @@ export default function DiarioObraView() {
 
             {/* Passo 4 — Percentual */}
             {selectedHouses.length > 0 && (
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">4. Percentual Executado</label>
-                <div className="text-3xl font-bold text-primary text-center my-2">{percentual}%</div>
-                <Slider
-                  min={10}
-                  max={100}
-                  step={10}
-                  value={[percentual]}
-                  onValueChange={v => setPercentual(v[0])}
-                  className="mb-3"
-                />
+              <div className="space-y-3">
+                <label className="text-xs font-medium text-muted-foreground block">4. Percentual Executado</label>
+
+                {/* Slider geral + botão aplicar a todas */}
+                <div className="rounded-lg border p-3 bg-muted/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Padrão (aplica a todas):</span>
+                    <span className="text-xl font-bold text-primary">{percentual}%</span>
+                  </div>
+                  <Slider
+                    min={10}
+                    max={100}
+                    step={10}
+                    value={[percentual]}
+                    onValueChange={v => setPercentual(v[0])}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs h-8"
+                    onClick={applyPercentToAll}
+                  >
+                    Aplicar {percentual}% a todas as casas
+                  </Button>
+                </div>
+
+                {/* Tabela compacta por casa */}
+                {selectedHouses.length > 1 && (
+                  <div className="rounded-lg border overflow-hidden">
+                    <div className="bg-muted/50 px-3 py-2 text-xs font-semibold text-muted-foreground flex items-center justify-between">
+                      <span>% individual por casa</span>
+                      <span>{selectedHouses.length} casa(s)</span>
+                    </div>
+                    <div className="max-h-48 overflow-y-auto divide-y">
+                      {[...selectedHouses].sort((a, b) => a - b).map(houseId => {
+                        const currentProg = getHouseProgress(houseId);
+                        const remaining = 100 - currentProg;
+                        const value = housePercents[houseId] ?? percentual;
+                        return (
+                          <div key={houseId} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+                            <span className="font-mono font-bold w-10">{String(houseId).padStart(2, "0")}</span>
+                            {currentProg > 0 && (
+                              <span className="text-[10px] text-muted-foreground">
+                                (atual {currentProg}% · resta {remaining}%)
+                              </span>
+                            )}
+                            <div className="flex-1" />
+                            <Input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={value}
+                              onChange={e => setHousePercent(houseId, Number(e.target.value))}
+                              className="h-8 w-20 text-right"
+                            />
+                            <span className="text-xs text-muted-foreground w-4">%</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <Textarea
                   value={obsItem}
                   onChange={e => setObsItem(e.target.value)}
