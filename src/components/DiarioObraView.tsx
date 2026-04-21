@@ -245,7 +245,77 @@ export default function DiarioObraView() {
     setLoadingItems(false);
   };
 
-  // Realtime subscription
+  // ─── Upload de fotos ─────────────────────────────────────────────
+  const handleUploadFotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!entryId || !e.target.files?.length || !company?.id) return;
+    setUploadingFoto(true);
+    try {
+      const arquivos = Array.from(e.target.files).slice(0, 10 - fotos.length);
+      let uploaded = 0;
+      for (const arquivo of arquivos) {
+        const comprimido = await comprimirImagem(arquivo, 1024, 0.7);
+        const safeName = arquivo.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const path = `${company.id}/${entryId}/${Date.now()}_${safeName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("diary-photos")
+          .upload(path, comprimido, { contentType: "image/jpeg", upsert: false });
+        if (uploadError) throw uploadError;
+        const { error: dbError } = await supabase.from("diary_photos").insert({
+          diary_entry_id: entryId,
+          storage_path: path,
+          legenda: null,
+        });
+        if (dbError) {
+          await supabase.storage.from("diary-photos").remove([path]);
+          throw dbError;
+        }
+        uploaded++;
+      }
+      await loadFotos(entryId);
+      toast.success(`${uploaded} foto(s) enviada(s).`);
+    } catch (err: any) {
+      toast.error("Erro ao enviar foto: " + (err.message || ""));
+    } finally {
+      setUploadingFoto(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleRemoverFoto = async (fotoId: string, storagePath: string) => {
+    try {
+      await supabase.storage.from("diary-photos").remove([storagePath]);
+      await supabase.from("diary_photos").delete().eq("id", fotoId);
+      setFotos(prev => prev.filter(f => f.id !== fotoId));
+      toast.success("Foto removida.");
+    } catch {
+      toast.error("Erro ao remover foto.");
+    }
+  };
+
+  // ─── Produtividade de referência (carrega ao trocar serviço) ──────
+  useEffect(() => {
+    if (!selectedScope?.id || !company?.id) {
+      setProdutividadeRef(null);
+      setProdutividadeRefId(null);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from("service_productivities")
+        .select("id, base_productivity")
+        .eq("company_id", company.id)
+        .eq("scope_id", selectedScope.id)
+        .maybeSingle();
+      if (data) {
+        setProdutividadeRef(Number(data.base_productivity) || null);
+        setProdutividadeRefId(data.id);
+      } else {
+        setProdutividadeRef(null);
+        setProdutividadeRefId(null);
+      }
+    })();
+  }, [selectedScope?.id, company?.id]);
+
   useEffect(() => {
     if (!currentProject?.id) return;
     const channel = supabase
