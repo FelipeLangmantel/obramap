@@ -14,10 +14,12 @@ import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, parseISO } from "date-fns";
 import {
   Save, Trash2, ClipboardList, Sun, Cloud, CloudRain, CloudLightning, Wind,
-  CheckCircle2, ChevronRight, Users, Loader2, Camera, X
+  CheckCircle2, ChevronRight, Users, Loader2, Camera, X, Printer, BarChart3
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { geocodeMunicipio, fetchClimaHoje } from "@/lib/geocode";
+import { PrintDiarioDialog } from "./diario/PrintDiarioDialog";
+import type { DiarioPDFData } from "./diario/generateDiarioPDF";
 
 // Compressão simples via Canvas — reduz tamanho das fotos antes do upload
 async function comprimirImagem(file: File, maxDim = 1024, quality = 0.7): Promise<Blob> {
