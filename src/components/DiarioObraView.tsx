@@ -694,6 +694,73 @@ export default function DiarioObraView() {
               ))}
             </div>
           )}
+
+          {/* Fotos do dia */}
+          {entryId && (
+            <div className="space-y-2 pt-2 border-t">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                <Camera className="h-4 w-4" />
+                Fotos do dia
+                {fotos.length > 0 && (
+                  <Badge variant="secondary" className="text-[9px] py-0 px-1.5 h-4">
+                    {fotos.length}/10
+                  </Badge>
+                )}
+              </label>
+
+              {fotos.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {fotos.map(foto => (
+                    <div key={foto.id} className="relative group">
+                      <button
+                        type="button"
+                        onClick={() => setFotoAmpliada(foto)}
+                        className="block focus:outline-none focus:ring-2 focus:ring-ring rounded-lg"
+                      >
+                        <img
+                          src={foto.url}
+                          alt={foto.legenda || "Foto do diário"}
+                          className="w-20 h-20 object-cover rounded-lg border"
+                        />
+                      </button>
+                      {entryStatus !== "finalizado" && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoverFoto(foto.id, foto.storage_path)}
+                          className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow"
+                          aria-label="Remover foto"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {entryStatus !== "finalizado" && fotos.length < 10 && (
+                <label className={cn(
+                  "flex items-center gap-2 cursor-pointer text-sm text-muted-foreground",
+                  "border-2 border-dashed rounded-lg p-3 hover:border-primary hover:text-primary transition-colors",
+                  uploadingFoto && "opacity-50 pointer-events-none"
+                )}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    multiple
+                    className="hidden"
+                    onChange={handleUploadFotos}
+                    disabled={uploadingFoto}
+                  />
+                  {uploadingFoto
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando...</>
+                    : <><Camera className="h-4 w-4" /> Adicionar foto (máx 10)</>
+                  }
+                </label>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
