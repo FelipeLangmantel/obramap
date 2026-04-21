@@ -9,13 +9,37 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, parseISO } from "date-fns";
 import {
   Save, Trash2, ClipboardList, Sun, Cloud, CloudRain, CloudLightning, Wind,
-  CheckCircle2, ChevronRight, Users, Loader2
+  CheckCircle2, ChevronRight, Users, Loader2, Camera, X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { geocodeMunicipio, fetchClimaHoje } from "@/lib/geocode";
+
+// Compressão simples via Canvas — reduz tamanho das fotos antes do upload
+async function comprimirImagem(file: File, maxDim = 1024, quality = 0.7): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      let w = img.width, h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+        else { w = Math.round(w * maxDim / h); h = maxDim; }
+      }
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("canvas")); return; }
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("blob")), "image/jpeg", quality);
+    };
+    img.onerror = () => reject(new Error("img"));
+    img.src = URL.createObjectURL(file);
+  });
+}
 
 type ClimaType = "sol" | "nublado" | "chuva_fraca" | "chuva_forte" | "vento";
 
@@ -72,6 +96,18 @@ export default function DiarioObraView() {
   // Realtime count from other engineers
   const [realtimeCount, setRealtimeCount] = useState(0);
 
+  // Fotos do dia
+  const [fotos, setFotos] = useState<{ id: string; url: string; storage_path: string; legenda: string | null }[]>([]);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [fotoAmpliada, setFotoAmpliada] = useState<{ id: string; url: string; legenda: string | null } | null>(null);
+
+  // Clima automático
+  const [climaAutoPreenchido, setClimaAutoPreenchido] = useState(false);
+
+  // Produtividade de referência (do scope selecionado)
+  const [produtividadeRef, setProdutividadeRef] = useState<number | null>(null);
+  const [produtividadeRefId, setProdutividadeRefId] = useState<string | null>(null);
+
   const macros = currentProject?.macrosTemplate || [];
 
   // Load existing entry for selected date
@@ -79,6 +115,68 @@ export default function DiarioObraView() {
     if (!currentProject?.id || !user?.id) return;
     loadEntry();
   }, [currentProject?.id, user?.id, entryDate]);
+
+  const loadFotos = async (eId: string) => {
+    const { data: fotosData } = await supabase
+      .from("diary_photos")
+      .select("id, storage_path, legenda")
+      .eq("diary_entry_id", eId)
+      .order("created_at", { ascending: true });
+
+    if (!fotosData || fotosData.length === 0) {
+      setFotos([]);
+      return;
+    }
+
+    // Bucket é privado → usar signed URL (1h)
+    const fotosComUrl = await Promise.all(
+      fotosData.map(async (f) => {
+        const { data: signed } = await supabase.storage
+          .from("diary-photos")
+          .createSignedUrl(f.storage_path, 60 * 60);
+        return {
+          id: f.id,
+          storage_path: f.storage_path,
+          legenda: f.legenda,
+          url: signed?.signedUrl || "",
+        };
+      })
+    );
+    setFotos(fotosComUrl);
+  };
+
+  const tryAutoFillClima = async (eId: string) => {
+    if (!currentProject?.id) return;
+    const { data: projData } = await supabase
+      .from("projects")
+      .select("lat, lng, municipio, estado")
+      .eq("id", currentProject.id)
+      .maybeSingle();
+
+    if (!projData) return;
+
+    let coords: { lat: number; lng: number } | null = null;
+    if (projData.lat != null && projData.lng != null) {
+      coords = { lat: Number(projData.lat), lng: Number(projData.lng) };
+    } else if (projData.municipio) {
+      coords = await geocodeMunicipio(projData.municipio, projData.estado || "RS");
+      // Persistir lat/lng para próxima execução não geocodificar de novo
+      if (coords) {
+        await supabase.from("projects")
+          .update({ lat: coords.lat, lng: coords.lng })
+          .eq("id", currentProject.id);
+      }
+    }
+
+    if (!coords) return;
+
+    const climaAuto = await fetchClimaHoje(coords.lat, coords.lng);
+    if (climaAuto) {
+      setClima(climaAuto.codigo);
+      setClimaAutoPreenchido(true);
+      await supabase.from("diary_entries").update({ clima: climaAuto.codigo }).eq("id", eId);
+    }
+  };
 
   const loadEntry = async () => {
     if (!currentProject?.id || !user?.id) return;
@@ -97,6 +195,7 @@ export default function DiarioObraView() {
       setEquipePres(data.equipe_presente || 0);
       setObsGeral(data.observacao_geral || "");
       setEntryStatus(data.status || "rascunho");
+      setClimaAutoPreenchido(false);
       const { data: correcoes } = await supabase
         .from("diary_item_corrections")
         .select("tipo, macro_name, scope_name, house_ids_anterior, house_ids_posterior, percentual_anterior, percentual_posterior, justificativa, corrigido_por_nome, created_at")
@@ -104,6 +203,11 @@ export default function DiarioObraView() {
         .order("created_at", { ascending: false });
       setCorrecoesDoDia(correcoes || []);
       loadItems(data.id);
+      loadFotos(data.id);
+      // Auto-preencher clima apenas se ainda não foi preenchido manualmente
+      if (!data.clima) {
+        tryAutoFillClima(data.id);
+      }
     } else {
       setEntryId(null);
       setClima(null);
@@ -112,6 +216,8 @@ export default function DiarioObraView() {
       setEntryStatus("rascunho");
       setDiaryItems([]);
       setCorrecoesDoDia([]);
+      setFotos([]);
+      setClimaAutoPreenchido(false);
     }
   };
 
@@ -139,7 +245,77 @@ export default function DiarioObraView() {
     setLoadingItems(false);
   };
 
-  // Realtime subscription
+  // ─── Upload de fotos ─────────────────────────────────────────────
+  const handleUploadFotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!entryId || !e.target.files?.length || !company?.id) return;
+    setUploadingFoto(true);
+    try {
+      const arquivos = Array.from(e.target.files).slice(0, 10 - fotos.length);
+      let uploaded = 0;
+      for (const arquivo of arquivos) {
+        const comprimido = await comprimirImagem(arquivo, 1024, 0.7);
+        const safeName = arquivo.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const path = `${company.id}/${entryId}/${Date.now()}_${safeName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("diary-photos")
+          .upload(path, comprimido, { contentType: "image/jpeg", upsert: false });
+        if (uploadError) throw uploadError;
+        const { error: dbError } = await supabase.from("diary_photos").insert({
+          diary_entry_id: entryId,
+          storage_path: path,
+          legenda: null,
+        });
+        if (dbError) {
+          await supabase.storage.from("diary-photos").remove([path]);
+          throw dbError;
+        }
+        uploaded++;
+      }
+      await loadFotos(entryId);
+      toast.success(`${uploaded} foto(s) enviada(s).`);
+    } catch (err: any) {
+      toast.error("Erro ao enviar foto: " + (err.message || ""));
+    } finally {
+      setUploadingFoto(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleRemoverFoto = async (fotoId: string, storagePath: string) => {
+    try {
+      await supabase.storage.from("diary-photos").remove([storagePath]);
+      await supabase.from("diary_photos").delete().eq("id", fotoId);
+      setFotos(prev => prev.filter(f => f.id !== fotoId));
+      toast.success("Foto removida.");
+    } catch {
+      toast.error("Erro ao remover foto.");
+    }
+  };
+
+  // ─── Produtividade de referência (carrega ao trocar serviço) ──────
+  useEffect(() => {
+    if (!selectedScope?.id || !company?.id) {
+      setProdutividadeRef(null);
+      setProdutividadeRefId(null);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from("service_productivities")
+        .select("id, base_productivity")
+        .eq("company_id", company.id)
+        .eq("scope_id", selectedScope.id)
+        .maybeSingle();
+      if (data) {
+        setProdutividadeRef(Number(data.base_productivity) || null);
+        setProdutividadeRefId(data.id);
+      } else {
+        setProdutividadeRef(null);
+        setProdutividadeRefId(null);
+      }
+    })();
+  }, [selectedScope?.id, company?.id]);
+
   useEffect(() => {
     if (!currentProject?.id) return;
     const channel = supabase
@@ -248,6 +424,22 @@ export default function DiarioObraView() {
       toast.error("Salve o cabeçalho e selecione etapa, serviço e casas.");
       return;
     }
+
+    // ─── Aviso de produtividade fora do padrão (não bloqueia) ──────
+    if (produtividadeRef && produtividadeRef > 0 && equipePres > 0) {
+      const produtividadeReal = selectedHouses.length / equipePres;
+      const pct = produtividadeReal / produtividadeRef;
+      if (pct > 1.5) {
+        toast.warning(
+          `⚠️ Produtividade ${Math.round(pct * 100)}% acima do padrão. Verifique o lançamento.`
+        );
+      } else if (pct < 0.5) {
+        toast.warning(
+          `⚠️ Produtividade ${Math.round(pct * 100)}% abaixo do padrão.`
+        );
+      }
+    }
+
     setRegistering(true);
     try {
       // 1. Insert into productions
@@ -319,6 +511,24 @@ export default function DiarioObraView() {
       queryClient.invalidateQueries({ queryKey: ["houses"] });
 
       toast.success(`Registrado: ${selectedScope.name} em ${selectedHouses.length} casas`);
+
+      // ─── Atualizar média móvel de produtividade (silencioso) ─────────
+      try {
+        if (produtividadeRefId && produtividadeRef && equipePres > 0) {
+          const produtividadeReal = selectedHouses.length / equipePres;
+          if (produtividadeReal > 0) {
+            // EMA: 80% histórico + 20% novo
+            const novaMedia = produtividadeRef * 0.8 + produtividadeReal * 0.2;
+            await supabase.from("service_productivities")
+              .update({ base_productivity: Math.round(novaMedia * 100) / 100 })
+              .eq("id", produtividadeRefId);
+            setProdutividadeRef(Math.round(novaMedia * 100) / 100);
+          }
+        }
+      } catch {
+        // silencioso — não bloquear UX
+      }
+
       setSelectedHouses([]);
       setObsItem("");
       setPercentual(100);
@@ -409,7 +619,12 @@ export default function DiarioObraView() {
               </div>
             </div>
             <div className="col-span-2">
-              <label className="text-xs font-medium text-muted-foreground">Clima</label>
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                Clima
+                {climaAutoPreenchido && clima && (
+                  <Badge variant="secondary" className="text-[9px] py-0 px-1.5 h-4">Auto</Badge>
+                )}
+              </label>
               <div className="flex gap-2 mt-1 flex-wrap">
                 {CLIMA_OPTIONS.map(opt => (
                   <Button
@@ -417,7 +632,10 @@ export default function DiarioObraView() {
                     type="button"
                     variant={clima === opt.value ? "default" : "outline"}
                     className={cn("min-h-[48px] min-w-[48px] flex-col gap-0.5 text-xs px-2", clima === opt.value && "ring-2 ring-primary")}
-                    onClick={() => setClima(clima === opt.value ? null : opt.value)}
+                    onClick={() => {
+                      setClima(clima === opt.value ? null : opt.value);
+                      setClimaAutoPreenchido(false);
+                    }}
                   >
                     {opt.icon}
                     <span className="hidden md:inline">{opt.label}</span>
@@ -474,6 +692,73 @@ export default function DiarioObraView() {
                   <span className="italic text-amber-600 dark:text-amber-500">"{c.justificativa}"</span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Fotos do dia */}
+          {entryId && (
+            <div className="space-y-2 pt-2 border-t">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+                <Camera className="h-4 w-4" />
+                Fotos do dia
+                {fotos.length > 0 && (
+                  <Badge variant="secondary" className="text-[9px] py-0 px-1.5 h-4">
+                    {fotos.length}/10
+                  </Badge>
+                )}
+              </label>
+
+              {fotos.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {fotos.map(foto => (
+                    <div key={foto.id} className="relative group">
+                      <button
+                        type="button"
+                        onClick={() => setFotoAmpliada(foto)}
+                        className="block focus:outline-none focus:ring-2 focus:ring-ring rounded-lg"
+                      >
+                        <img
+                          src={foto.url}
+                          alt={foto.legenda || "Foto do diário"}
+                          className="w-20 h-20 object-cover rounded-lg border"
+                        />
+                      </button>
+                      {entryStatus !== "finalizado" && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoverFoto(foto.id, foto.storage_path)}
+                          className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow"
+                          aria-label="Remover foto"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {entryStatus !== "finalizado" && fotos.length < 10 && (
+                <label className={cn(
+                  "flex items-center gap-2 cursor-pointer text-sm text-muted-foreground",
+                  "border-2 border-dashed rounded-lg p-3 hover:border-primary hover:text-primary transition-colors",
+                  uploadingFoto && "opacity-50 pointer-events-none"
+                )}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    multiple
+                    className="hidden"
+                    onChange={handleUploadFotos}
+                    disabled={uploadingFoto}
+                  />
+                  {uploadingFoto
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando...</>
+                    : <><Camera className="h-4 w-4" /> Adicionar foto (máx 10)</>
+                  }
+                </label>
+              )}
             </div>
           )}
         </CardContent>
@@ -687,6 +972,24 @@ export default function DiarioObraView() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Dialog de foto ampliada */}
+      {fotoAmpliada && (
+        <Dialog open={!!fotoAmpliada} onOpenChange={() => setFotoAmpliada(null)}>
+          <DialogContent className="max-w-3xl p-2">
+            <img
+              src={fotoAmpliada.url}
+              alt={fotoAmpliada.legenda || "Foto do diário"}
+              className="w-full rounded-lg"
+            />
+            {fotoAmpliada.legenda && (
+              <p className="text-sm text-center text-muted-foreground mt-2">
+                {fotoAmpliada.legenda}
+              </p>
+            )}
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
