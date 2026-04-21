@@ -424,6 +424,22 @@ export default function DiarioObraView() {
       toast.error("Salve o cabeçalho e selecione etapa, serviço e casas.");
       return;
     }
+
+    // ─── Aviso de produtividade fora do padrão (não bloqueia) ──────
+    if (produtividadeRef && produtividadeRef > 0 && equipePres > 0) {
+      const produtividadeReal = selectedHouses.length / equipePres;
+      const pct = produtividadeReal / produtividadeRef;
+      if (pct > 1.5) {
+        toast.warning(
+          `⚠️ Produtividade ${Math.round(pct * 100)}% acima do padrão. Verifique o lançamento.`
+        );
+      } else if (pct < 0.5) {
+        toast.warning(
+          `⚠️ Produtividade ${Math.round(pct * 100)}% abaixo do padrão.`
+        );
+      }
+    }
+
     setRegistering(true);
     try {
       // 1. Insert into productions
