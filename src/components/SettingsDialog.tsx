@@ -87,6 +87,41 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               ))}
             </div>
           </div>
+
+          {company?.id && (
+            <>
+              <Separator />
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-sm font-medium">Logo da empresa</Label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Aparece nos diários de obra, relatórios e impressões. Cada projeto pode ter um logo próprio que sobrescreve este.
+                </p>
+                {canManageCompanyLogo ? (
+                  <LogoUploader
+                    currentLogoUrl={companyLogoUrl}
+                    pathPrefix={company.id}
+                    onChange={handleCompanyLogoChange}
+                  />
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="h-16 w-16 rounded-lg border border-border bg-muted/40 flex items-center justify-center overflow-hidden">
+                      {companyLogoUrl ? (
+                        <img src={companyLogoUrl} alt="Logo" className="w-full h-full object-contain" />
+                      ) : (
+                        <Building2 className="h-6 w-6 text-muted-foreground" />
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Apenas administradores podem alterar o logo da empresa.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         <DialogFooter>
