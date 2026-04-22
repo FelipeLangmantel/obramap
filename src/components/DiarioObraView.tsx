@@ -726,6 +726,7 @@ export default function DiarioObraView() {
     };
   }, [entryId, currentProject, company, profile, user, entryDate, clima, equipePres, obsGeral, diaryItems, correcoesDoDia, fotos]);
 
+  if (!currentProject) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
         <ClipboardList className="h-16 w-16 text-muted-foreground" />
