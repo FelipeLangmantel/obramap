@@ -1244,6 +1244,13 @@ export default function DiarioObraView() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Dialog de impressão do diário */}
+      <PrintDiarioDialog
+        open={printOpen}
+        onOpenChange={setPrintOpen}
+        buildData={buildPrintData}
+      />
     </div>
   );
 }
