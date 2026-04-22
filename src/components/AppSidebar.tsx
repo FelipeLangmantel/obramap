@@ -563,6 +563,8 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
         </SidebarFooter>
       </Sidebar>
 
+      <SettingsDialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen} />
+
       <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
