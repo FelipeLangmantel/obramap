@@ -81,6 +81,7 @@ import { ProjectsListDialog } from "@/components/ProjectsListDialog";
 import { NewProjectDialog } from "@/components/NewProjectDialog";
 import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
+import { SettingsDialog } from "@/components/SettingsDialog";
 import obraMapLogoDark from "@/assets/obramap-logo-new.png";
 import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 
@@ -155,6 +156,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const accessibleProjects = projects.filter(project => canAccessProject(project.id));
   
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [projectsListOpen, setProjectsListOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [macrosDialogOpen, setMacrosDialogOpen] = useState(false);
@@ -543,6 +545,13 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                 }
               </button>
               <button
+                onClick={() => setSettingsDialogOpen(true)}
+                className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+                title="Configurações"
+              >
+                <Settings className="h-4 w-4" />
+              </button>
+              <button
                 onClick={() => signOut()}
                 className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
                 title="Sair"
@@ -553,6 +562,8 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
           )}
         </SidebarFooter>
       </Sidebar>
+
+      <SettingsDialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen} />
 
       <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
