@@ -544,6 +544,13 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                 }
               </button>
               <button
+                onClick={() => setSettingsDialogOpen(true)}
+                className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors shrink-0"
+                title="Configurações"
+              >
+                <Settings className="h-4 w-4" />
+              </button>
+              <button
                 onClick={() => signOut()}
                 className="p-2 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
                 title="Sair"
