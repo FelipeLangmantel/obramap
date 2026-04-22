@@ -28,9 +28,31 @@ function applyTheme(_theme: Theme) {
 }
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
+  const { company, isCompanyAdmin, isSystemAdmin, refreshPermissions } = useAuth();
+  const canManageCompanyLogo = isCompanyAdmin || isSystemAdmin;
+
   const [theme, setTheme] = useState<Theme>(() => {
     return (localStorage.getItem(THEME_STORAGE_KEY) as Theme) || "light";
   });
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(company?.logo_url ?? null);
+
+  useEffect(() => {
+    setCompanyLogoUrl(company?.logo_url ?? null);
+  }, [company?.logo_url, open]);
+
+  const handleCompanyLogoChange = async (url: string | null) => {
+    if (!company?.id) return;
+    setCompanyLogoUrl(url);
+    const { error } = await supabase
+      .from("companies")
+      .update({ logo_url: url })
+      .eq("id", company.id);
+    if (error) {
+      toast.error("Erro ao salvar logo da empresa: " + error.message);
+      return;
+    }
+    await refreshPermissions();
+  };
 
   useEffect(() => {
     applyTheme(theme);
