@@ -14,12 +14,13 @@ import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, parseISO } from "date-fns";
 import {
   Save, Trash2, ClipboardList, Sun, Cloud, CloudRain, CloudLightning, Wind,
-  CheckCircle2, ChevronRight, Users, Loader2, Camera, X, Printer, BarChart3
+  CheckCircle2, ChevronRight, Users, Loader2, Camera, X, Printer
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { geocodeMunicipio, fetchClimaHoje } from "@/lib/geocode";
 import { PrintDiarioDialog } from "./diario/PrintDiarioDialog";
 import type { DiarioPDFData } from "./diario/generateDiarioPDF";
+import { DiarioSummaryPanel } from "./diario/DiarioSummaryPanel";
 
 // Compressão simples via Canvas — reduz tamanho das fotos antes do upload
 async function comprimirImagem(file: File, maxDim = 1024, quality = 0.7): Promise<Blob> {
@@ -637,6 +638,99 @@ export default function DiarioObraView() {
     }
   };
 
+  // ─── Painel de resumo: KPIs derivados ─────────────────────────────
+  const summaryStats = useMemo(() => {
+    const totalServicos = diaryItems.length;
+    const servicosConcluidos = diaryItems.filter(it => it.percentual_executado >= 100).length;
+    const casasUnicas = new Set<number>();
+    diaryItems.forEach(it => it.house_ids.forEach(h => casasUnicas.add(h)));
+    return {
+      totalServicos,
+      servicosConcluidos,
+      casasTrabalhadas: casasUnicas.size,
+      totalCasas: houses.length,
+      totalFotos: fotos.length,
+    };
+  }, [diaryItems, houses.length, fotos.length]);
+
+  // ─── Construir dados para o PDF ───────────────────────────────────
+  const buildPrintData = useCallback(async (): Promise<DiarioPDFData | null> => {
+    if (!entryId || !currentProject) return null;
+
+    // Logo: prioridade projeto > empresa
+    const [{ data: projData }, { data: companyData }] = await Promise.all([
+      supabase
+        .from("projects")
+        .select("logo_url, location, municipio, estado")
+        .eq("id", currentProject.id)
+        .maybeSingle(),
+      company?.id
+        ? supabase.from("companies").select("logo_url").eq("id", company.id).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+    const logoUrl = projData?.logo_url || (companyData as any)?.logo_url || null;
+
+    // Contratada (se houver) — pegando primeira encontrada
+    const { data: contractorData } = await supabase
+      .from("contractor_contracts")
+      .select("contractor:contractors(name)")
+      .eq("project_id", currentProject.id)
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+    const contractorName = (contractorData?.contractor as any)?.name || null;
+
+    // Nº do relatório: posição do entry no projeto (ordem cronológica)
+    const { count } = await supabase
+      .from("diary_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("project_id", currentProject.id)
+      .lte("entry_date", entryDate);
+    const reportNumber = count || null;
+
+    // Signed URLs das fotos (1h)
+    const photoUrls: string[] = [];
+    for (const f of fotos) {
+      if (f.url) photoUrls.push(f.url);
+    }
+
+    const projectLocation = projData?.location ||
+      (projData?.municipio ? `${projData.municipio}${projData.estado ? "/" + projData.estado : ""}` : null);
+
+    return {
+      logoUrl,
+      companyName: company?.name || "Empresa",
+      projectName: currentProject.name || "Projeto",
+      projectLocation,
+      contractor: contractorName,
+      engineerName: profile?.display_name || user?.email || "Engenheiro",
+      entryDate,
+      clima,
+      equipePresente: equipePres,
+      observacaoGeral: obsGeral || null,
+      items: diaryItems.map(it => ({
+        macro_name: it.macro_name,
+        scope_name: it.scope_name,
+        house_ids: it.house_ids,
+        percentual_executado: it.percentual_executado,
+        observacao: it.observacao,
+      })),
+      correcoes: correcoesDoDia.map(c => ({
+        tipo: c.tipo,
+        macro_name: c.macro_name,
+        scope_name: c.scope_name,
+        house_ids_anterior: c.house_ids_anterior,
+        house_ids_posterior: c.house_ids_posterior,
+        percentual_anterior: c.percentual_anterior,
+        percentual_posterior: c.percentual_posterior,
+        justificativa: c.justificativa,
+        corrigido_por_nome: c.corrigido_por_nome,
+      })),
+      photoUrls,
+      reportNumber,
+    };
+  }, [entryId, currentProject, company, profile, user, entryDate, clima, equipePres, obsGeral, diaryItems, correcoesDoDia, fotos]);
+
   if (!currentProject) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
@@ -648,6 +742,19 @@ export default function DiarioObraView() {
 
   return (
     <div className="space-y-4 pb-24 md:pb-4">
+      {/* PAINEL DE RESUMO — KPIs do dia */}
+      {entryId && (
+        <DiarioSummaryPanel
+          equipePresente={equipePres}
+          totalServicos={summaryStats.totalServicos}
+          servicosConcluidos={summaryStats.servicosConcluidos}
+          casasTrabalhadas={summaryStats.casasTrabalhadas}
+          totalCasas={summaryStats.totalCasas}
+          totalFotos={summaryStats.totalFotos}
+          clima={clima}
+        />
+      )}
+
       {/* SEÇÃO 1 — Cabeçalho do Dia */}
       <Card>
         <CardHeader className="pb-3">
@@ -1137,6 +1244,13 @@ export default function DiarioObraView() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Dialog de impressão do diário */}
+      <PrintDiarioDialog
+        open={printOpen}
+        onOpenChange={setPrintOpen}
+        buildData={buildPrintData}
+      />
     </div>
   );
 }
