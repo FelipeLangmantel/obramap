@@ -155,6 +155,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const accessibleProjects = projects.filter(project => canAccessProject(project.id));
   
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [projectsListOpen, setProjectsListOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [macrosDialogOpen, setMacrosDialogOpen] = useState(false);
