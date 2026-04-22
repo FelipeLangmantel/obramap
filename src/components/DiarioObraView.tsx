@@ -742,6 +742,19 @@ export default function DiarioObraView() {
 
   return (
     <div className="space-y-4 pb-24 md:pb-4">
+      {/* PAINEL DE RESUMO — KPIs do dia */}
+      {entryId && (
+        <DiarioSummaryPanel
+          equipePresente={equipePres}
+          totalServicos={summaryStats.totalServicos}
+          servicosConcluidos={summaryStats.servicosConcluidos}
+          casasTrabalhadas={summaryStats.casasTrabalhadas}
+          totalCasas={summaryStats.totalCasas}
+          totalFotos={summaryStats.totalFotos}
+          clima={clima}
+        />
+      )}
+
       {/* SEÇÃO 1 — Cabeçalho do Dia */}
       <Card>
         <CardHeader className="pb-3">
