@@ -49,6 +49,7 @@ export interface Project {
   customLegendItems: LegendItem[];
   displayOrder: number;
   weightMode: "automatic" | "manual";
+  logoUrl?: string | null;
 }
 
 interface ConstructionContextType {
@@ -306,6 +307,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
               (p.custom_legend_items as unknown as LegendItem[]) || DEFAULT_LEGEND_ITEMS,
             displayOrder: p.display_order ?? 0,
             weightMode: (p as any).weight_mode || "manual",
+            logoUrl: (p as any).logo_url ?? null,
           };
         });
 
@@ -662,6 +664,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             project_type: updatedProject.projectType,
             macros_template: macrosToJson(updatedProject.macrosTemplate),
             setup_complete: updatedProject.setupComplete,
+            ...(updates.logoUrl !== undefined ? { logo_url: updatedProject.logoUrl ?? null } : {}),
           })
           .eq('id', projectId)
           .then(({ error }) => {
