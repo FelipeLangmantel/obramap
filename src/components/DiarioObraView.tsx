@@ -658,12 +658,17 @@ export default function DiarioObraView() {
     if (!entryId || !currentProject) return null;
 
     // Logo: prioridade projeto > empresa
-    const { data: projData } = await supabase
-      .from("projects")
-      .select("logo_url, location, municipio, estado")
-      .eq("id", currentProject.id)
-      .maybeSingle();
-    const logoUrl = projData?.logo_url || company?.logo_url || null;
+    const [{ data: projData }, { data: companyData }] = await Promise.all([
+      supabase
+        .from("projects")
+        .select("logo_url, location, municipio, estado")
+        .eq("id", currentProject.id)
+        .maybeSingle(),
+      company?.id
+        ? supabase.from("companies").select("logo_url").eq("id", company.id).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+    const logoUrl = projData?.logo_url || (companyData as any)?.logo_url || null;
 
     // Contratada (se houver) — pegando primeira encontrada
     const { data: contractorData } = await supabase
