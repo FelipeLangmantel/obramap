@@ -11,6 +11,7 @@ import { Building2, Home, Grid3X3, Plus, Trash2, Edit2, Check, X, Settings, Imag
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
+import { LogoUploader } from "@/components/diario/LogoUploader";
 
 interface ProjectSettingsDialogProps {
   open: boolean;
@@ -36,7 +37,7 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
     generateHousesForProject,
     completeProjectSetup 
   } = useConstruction();
-  const { canEdit } = useAuth();
+  const { canEdit, company } = useAuth();
   
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
@@ -448,20 +449,30 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
               <div className="p-4 border rounded-lg space-y-4">
                 <div className="flex items-center gap-2">
                   <ImagePlus className="h-5 w-5 text-muted-foreground" />
-                  <Label className="font-medium">Logotipo da Empresa</Label>
+                  <Label className="font-medium">Logo do projeto</Label>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Para alterar o logotipo do sistema, entre em contato com o administrador ou envie a imagem do logotipo desejado.
+                  Este logo será usado no diário de obra e relatórios deste projeto.
+                  Se nenhum for definido, o logo da empresa{company?.name ? ` (${company.name})` : ""} será usado.
                 </p>
-                <div className="flex items-center gap-4">
-                  <div className="h-16 w-16 rounded-lg bg-primary/10 flex items-center justify-center border-2 border-dashed border-muted-foreground/30">
-                    <ImagePlus className="h-6 w-6 text-muted-foreground/50" />
+                <LogoUploader
+                  currentLogoUrl={currentProject.logoUrl ?? null}
+                  pathPrefix={`${company?.id ?? "company"}/${currentProject.id}`}
+                  onChange={(url) => {
+                    updateProject(currentProject.id, { logoUrl: url });
+                    toast.success(url ? "Logo do projeto atualizado." : "Logo do projeto removido.");
+                  }}
+                />
+                {company?.logo_url && !currentProject.logoUrl && (
+                  <div className="flex items-center gap-3 pt-2 border-t border-border">
+                    <div className="h-10 w-10 rounded border border-border bg-muted/40 flex items-center justify-center overflow-hidden">
+                      <img src={company.logo_url} alt="Logo da empresa" className="w-full h-full object-contain" />
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      Usando o logo da empresa como padrão.
+                    </span>
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    <p>Formatos aceitos: PNG, JPG, SVG</p>
-                    <p>Tamanho recomendado: 200x200px</p>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           </TabsContent>

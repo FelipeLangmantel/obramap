@@ -10,6 +10,7 @@ interface Company {
   id: string;
   name: string;
   slug: string;
+  logo_url?: string | null;
 }
 
 interface Profile {
@@ -140,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const parallelResults = await Promise.all([
         // Q2: company (precisa só de company_id do profile)
         typedProfile.company_id
-          ? supabase.from("companies").select("id, name, slug").eq("id", typedProfile.company_id).single()
+          ? supabase.from("companies").select("id, name, slug, logo_url").eq("id", typedProfile.company_id).single()
           : Promise.resolve({ data: null, error: null }),
         // Q3: role via RPC (precisa só de userId)
         supabase.rpc("get_user_role", { _user_id: userId }),
