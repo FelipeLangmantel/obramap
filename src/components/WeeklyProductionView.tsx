@@ -192,11 +192,11 @@ export function WeeklyProductionView() {
   const podeExcluir = isCompanyAdmin || isSystemAdmin;
   
   // Load saved tab from localStorage
-  const [activeTab, setActiveTab] = useState<"register" | "analysis" | "diario">(() => {
+  const [activeTab, setActiveTab] = useState<"register" | "analysis" | "diario" | "historico" | "obra">(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(TAB_STORAGE_KEY);
-      if (saved === "register" || saved === "analysis" || saved === "diario") {
-        return saved;
+      if (saved === "register" || saved === "analysis" || saved === "diario" || saved === "historico" || saved === "obra") {
+        return saved as any;
       }
     }
     return "register";
@@ -1126,7 +1126,7 @@ export function WeeklyProductionView() {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full">
-        <TabsList className="grid w-full max-w-2xl grid-cols-4 h-10">
+        <TabsList className={cn("grid w-full max-w-3xl h-10", podeExcluir ? "grid-cols-5" : "grid-cols-4")}>
           <TabsTrigger value="register" className="gap-2 text-sm">
             <ClipboardList className="w-4 h-4" />
             Registrar
@@ -1141,6 +1141,11 @@ export function WeeklyProductionView() {
           <TabsTrigger value="historico" className="gap-2 text-sm">
             📋 Histórico
           </TabsTrigger>
+          {podeExcluir && (
+            <TabsTrigger value="obra" className="gap-2 text-sm">
+              📜 Obra
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="register" className="flex-1 overflow-auto mt-4 space-y-4">
