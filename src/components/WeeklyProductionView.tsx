@@ -57,6 +57,7 @@ import {
 import { MeasurementSelector } from "./production/MeasurementSelector";
 import { useMeasurements, MeasurementWithServices, MeasurementService } from "@/hooks/useMeasurements";
 import DiarioTabContent from "./weekly-production/DiarioTabContent";
+import { ObraHistoricoPanel } from "./production/ObraHistoricoPanel";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface WeeklyProduction {
@@ -2514,6 +2515,12 @@ export function WeeklyProductionView() {
             <p className="text-sm text-muted-foreground text-center py-8">Acesso restrito a administradores.</p>
           )}
         </TabsContent>
+
+        {podeExcluir && (
+          <TabsContent value="obra" className="flex-1 overflow-auto mt-4 space-y-4">
+            {currentProject?.id && <ObraHistoricoPanel projectId={currentProject.id} />}
+          </TabsContent>
+        )}
 
       </Tabs>
 
