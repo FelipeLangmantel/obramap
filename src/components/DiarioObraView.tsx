@@ -1113,6 +1113,11 @@ export default function DiarioObraView() {
                             {isDone && (
                               <CheckCircle2 className="h-3 w-3 text-emerald-500" />
                             )}
+                            {getPctLancadoHoje(house.id) > 0 && (
+                              <span className="text-[8px] font-semibold leading-tight text-blue-600 dark:text-blue-400">
+                                +{getPctLancadoHoje(house.id)}% hoje
+                              </span>
+                            )}
                           </Button>
                         );
                       })}
