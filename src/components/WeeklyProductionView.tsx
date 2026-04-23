@@ -152,7 +152,7 @@ function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, sh
             </p>
           )}
         </div>
-        {canEdit && (
+        {canEdit && !(prod.is_initial_database && !podeExcluir) && (
           <Button
             variant="ghost"
             size="icon"
@@ -171,6 +171,14 @@ function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, sh
           >
             <Trash2 className="h-4 w-4" />
           </Button>
+        )}
+        {prod.is_initial_database && !podeExcluir && (
+          <span
+            className="text-muted-foreground inline-flex items-center"
+            title="Banco Inicial — edição restrita a administradores"
+          >
+            🔒
+          </span>
         )}
       </div>
     </div>
@@ -1500,9 +1508,14 @@ export function WeeklyProductionView() {
                       id="initial-database"
                       checked={isInitialDatabase}
                       onCheckedChange={(checked) => handleInitialDatabaseChange(checked as boolean)}
+                      disabled={!podeExcluir}
                     />
-                    <Label htmlFor="initial-database" className="text-xs cursor-pointer">
-                      Banco Inicial
+                    <Label
+                      htmlFor="initial-database"
+                      className={cn("text-xs", podeExcluir ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground")}
+                      title={!podeExcluir ? "Banco Inicial — somente administradores" : undefined}
+                    >
+                      Banco Inicial {!podeExcluir && <span className="ml-1">🔒</span>}
                     </Label>
                   </div>
                 </div>
