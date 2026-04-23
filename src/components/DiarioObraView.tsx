@@ -252,6 +252,8 @@ export default function DiarioObraView() {
       setCorrecoesDoDia([]);
       setFotos([]);
       setClimaAutoPreenchido(false);
+      // Buscar clima automático mesmo sem entrada salva
+      tryAutoFillClima(null);
     }
   };
 
