@@ -118,7 +118,21 @@ export default function DiarioObraView() {
   const [produtividadeRef, setProdutividadeRef] = useState<number | null>(null);
   const [produtividadeRefId, setProdutividadeRefId] = useState<string | null>(null);
 
-  const macros = currentProject?.macrosTemplate || [];
+  // Filtrar macros cujos scopes ainda têm pelo menos 1 casa com progresso < 100
+  const macros = useMemo(() => {
+    const template = currentProject?.macrosTemplate || [];
+    if (!houses.length) return template;
+    return template.filter(macro =>
+      (macro.scopes || []).some(scope =>
+        houses.some(house => {
+          const hMacros = (house.macros as any[]) || [];
+          const hMacro = hMacros.find((m: any) => m.id === macro.id);
+          const hScope = hMacro?.scopes?.find((s: any) => s.id === scope.id);
+          return (hScope?.progress || 0) < 100;
+        })
+      )
+    );
+  }, [currentProject, houses]);
 
   // Load existing entry for selected date
   useEffect(() => {
@@ -429,6 +443,14 @@ export default function DiarioObraView() {
     return getProgressFor(houseId, selectedMacro.id, selectedScope.id);
   }, [selectedMacro, selectedScope, getProgressFor]);
 
+  // % lançado HOJE para uma casa neste scope (soma dos diary_items do dia)
+  const getPctLancadoHoje = useCallback((houseId: number): number => {
+    if (!selectedScope) return 0;
+    return diaryItems
+      .filter(item => item.scope_id === selectedScope.id && item.house_ids.includes(houseId))
+      .reduce((sum, item) => sum + (item.percentual_executado || 0), 0);
+  }, [diaryItems, selectedScope]);
+
   const toggleHouse = (houseId: number) => {
     // Bloquear casas concluídas
     if (getHouseProgress(houseId) >= 100) return;
@@ -484,6 +506,19 @@ export default function DiarioObraView() {
     if (!entryId || !selectedMacro || !selectedScope || selectedHouses.length === 0 || !currentProject?.id) {
       toast.error("Salve o cabeçalho e selecione etapa, serviço e casas.");
       return;
+    }
+
+    // ─── Aviso quando lançamento seria limitado pelo teto de 100% ──
+    const casasLimitadas = selectedHouses.filter(hId => {
+      const housePct = housePercents[hId] ?? percentual;
+      return getHouseProgress(hId) + housePct > 100;
+    });
+    if (casasLimitadas.length > 0) {
+      const disponivel = 100 - getHouseProgress(casasLimitadas[0]);
+      toast.warning(
+        `${casasLimitadas.length} casa(s) têm apenas ${disponivel}% disponível. O sistema aplicará o máximo possível.`,
+        { duration: 5000 }
+      );
     }
 
     // ─── Aviso de produtividade fora do padrão (não bloqueia) ──────
@@ -1077,6 +1112,11 @@ export default function DiarioObraView() {
                             )}
                             {isDone && (
                               <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                            )}
+                            {getPctLancadoHoje(house.id) > 0 && (
+                              <span className="text-[8px] font-semibold leading-tight text-blue-600 dark:text-blue-400">
+                                +{getPctLancadoHoje(house.id)}% hoje
+                              </span>
                             )}
                           </Button>
                         );

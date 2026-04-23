@@ -57,6 +57,7 @@ import {
 import { MeasurementSelector } from "./production/MeasurementSelector";
 import { useMeasurements, MeasurementWithServices, MeasurementService } from "@/hooks/useMeasurements";
 import DiarioTabContent from "./weekly-production/DiarioTabContent";
+import { ObraHistoricoPanel } from "./production/ObraHistoricoPanel";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface WeeklyProduction {
@@ -152,7 +153,7 @@ function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, sh
             </p>
           )}
         </div>
-        {canEdit && (
+        {canEdit && !(prod.is_initial_database && !podeExcluir) && (
           <Button
             variant="ghost"
             size="icon"
@@ -172,6 +173,14 @@ function ProductionRecordItem({ prod, canEdit, podeExcluir, onEdit, onDelete, sh
             <Trash2 className="h-4 w-4" />
           </Button>
         )}
+        {prod.is_initial_database && !podeExcluir && (
+          <span
+            className="text-muted-foreground inline-flex items-center"
+            title="Banco Inicial — edição restrita a administradores"
+          >
+            🔒
+          </span>
+        )}
       </div>
     </div>
   );
@@ -184,11 +193,11 @@ export function WeeklyProductionView() {
   const podeExcluir = isCompanyAdmin || isSystemAdmin;
   
   // Load saved tab from localStorage
-  const [activeTab, setActiveTab] = useState<"register" | "analysis" | "diario">(() => {
+  const [activeTab, setActiveTab] = useState<"register" | "analysis" | "diario" | "historico" | "obra">(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(TAB_STORAGE_KEY);
-      if (saved === "register" || saved === "analysis" || saved === "diario") {
-        return saved;
+      if (saved === "register" || saved === "analysis" || saved === "diario" || saved === "historico" || saved === "obra") {
+        return saved as any;
       }
     }
     return "register";
@@ -1118,7 +1127,7 @@ export function WeeklyProductionView() {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full">
-        <TabsList className="grid w-full max-w-2xl grid-cols-4 h-10">
+        <TabsList className={cn("grid w-full max-w-3xl h-10", podeExcluir ? "grid-cols-5" : "grid-cols-4")}>
           <TabsTrigger value="register" className="gap-2 text-sm">
             <ClipboardList className="w-4 h-4" />
             Registrar
@@ -1133,6 +1142,11 @@ export function WeeklyProductionView() {
           <TabsTrigger value="historico" className="gap-2 text-sm">
             📋 Histórico
           </TabsTrigger>
+          {podeExcluir && (
+            <TabsTrigger value="obra" className="gap-2 text-sm">
+              📜 Obra
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="register" className="flex-1 overflow-auto mt-4 space-y-4">
@@ -1500,9 +1514,14 @@ export function WeeklyProductionView() {
                       id="initial-database"
                       checked={isInitialDatabase}
                       onCheckedChange={(checked) => handleInitialDatabaseChange(checked as boolean)}
+                      disabled={!podeExcluir}
                     />
-                    <Label htmlFor="initial-database" className="text-xs cursor-pointer">
-                      Banco Inicial
+                    <Label
+                      htmlFor="initial-database"
+                      className={cn("text-xs", podeExcluir ? "cursor-pointer" : "cursor-not-allowed text-muted-foreground")}
+                      title={!podeExcluir ? "Banco Inicial — somente administradores" : undefined}
+                    >
+                      Banco Inicial {!podeExcluir && <span className="ml-1">🔒</span>}
                     </Label>
                   </div>
                 </div>
@@ -2496,6 +2515,12 @@ export function WeeklyProductionView() {
             <p className="text-sm text-muted-foreground text-center py-8">Acesso restrito a administradores.</p>
           )}
         </TabsContent>
+
+        {podeExcluir && (
+          <TabsContent value="obra" className="flex-1 overflow-auto mt-4 space-y-4">
+            {currentProject?.id && <ObraHistoricoPanel projectId={currentProject.id} />}
+          </TabsContent>
+        )}
 
       </Tabs>
 

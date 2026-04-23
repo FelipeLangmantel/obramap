@@ -321,7 +321,7 @@ export function SuppliesView({ initialTab = "alerts" }: SuppliesViewProps) {
         supabase.from('quotation_requests').select('id, status').eq('project_id', projectId).eq('status', 'pending'),
         supabase.from('purchase_orders').select('id, status').eq('project_id', projectId).eq('status', 'in_transit'),
         supabase.from('labor_contracts').select('*').eq('project_id', projectId),
-        supabase.from('weekly_productions').select('scope_id, house_ids, is_initial_database').eq('project_id', projectId),
+        supabase.from('weekly_productions').select('scope_id, house_ids, is_initial_database').eq('project_id', projectId).is('deleted_at', null),
         supabase.from('planned_productions').select('*').eq('project_id', projectId).gte('week_start', new Date().toISOString().split('T')[0]),
         supabase.from('material_families').select('*').order('display_order'),
         supabase.rpc('get_supply_kpis', { p_project_id: projectId }),

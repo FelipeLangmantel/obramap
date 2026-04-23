@@ -178,7 +178,7 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
 
       if (error) throw error;
 
-      // Update map: Remove progress from removed houses (proportional revert)
+      // Update map: Remove progress from removed houses (correct revert logic)
       const removedHouses = getRemovedHouses();
       if (removedHouses.length > 0) {
         const { data: outros } = await supabase
@@ -186,7 +186,8 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
           .select('house_ids')
           .eq('project_id', currentProject.id)
           .eq('scope_id', production.scope_id)
-          .neq('id', production.id);
+          .neq('id', production.id)
+          .is('deleted_at', null);
 
         const revertMap: Record<number, number> = {};
         for (const hId of removedHouses) {
@@ -194,23 +195,25 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
           const outrasCobrindo = (outros || []).filter(r =>
             (r.house_ids as number[]).includes(hId)
           ).length;
-          revertMap[hId] = outrasCobrindo > 0
-            ? Math.max(0, currentProg - Math.round(currentProg / (outrasCobrindo + 1)))
-            : 0;
+          // Se há outros registros cobrindo a casa, mantém o progresso. Se era único, zera.
+          revertMap[hId] = outrasCobrindo > 0 ? currentProg : 0;
         }
         await updateBatchScopeProgress(removedHouses, production.macro_id, production.scope_id, 0, revertMap);
 
-        // Sync productions table — remove houses or delete records
+        // Sync productions table — remove houses or soft delete records
         const { data: prodsVinculadas } = await supabase
           .from('productions')
           .select('id, house_ids')
           .eq('project_id', currentProject.id)
           .eq('scope_id', production.scope_id)
-          .eq('macro_id', production.macro_id);
+          .eq('macro_id', production.macro_id)
+          .is('deleted_at', null);
         for (const prod of prodsVinculadas || []) {
           const novasCasas = (prod.house_ids as number[]).filter(h => !removedHouses.includes(h));
           if (novasCasas.length === 0) {
-            await supabase.from('productions').delete().eq('id', prod.id);
+            await supabase.from('productions')
+              .update({ deleted_at: new Date().toISOString() })
+              .eq('id', prod.id);
           } else if (novasCasas.length !== (prod.house_ids as number[]).length) {
             await supabase.from('productions').update({ house_ids: novasCasas, houses_count: novasCasas.length }).eq('id', prod.id);
           }
@@ -262,7 +265,8 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
           .select('house_ids')
           .eq('project_id', currentProject.id)
           .eq('scope_id', production.scope_id)
-          .neq('id', production.id);
+          .neq('id', production.id)
+          .is('deleted_at', null);
 
         const revertMap: Record<number, number> = {};
         for (const hId of production.house_ids) {
@@ -270,23 +274,25 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
           const outrasCobrindo = (outros || []).filter(r =>
             (r.house_ids as number[]).includes(hId)
           ).length;
-          revertMap[hId] = outrasCobrindo > 0
-            ? Math.max(0, currentProg - Math.round(currentProg / (outrasCobrindo + 1)))
-            : 0;
+          // Se há outros registros cobrindo a casa, mantém o progresso. Se era único, zera.
+          revertMap[hId] = outrasCobrindo > 0 ? currentProg : 0;
         }
         await updateBatchScopeProgress(production.house_ids, production.macro_id, production.scope_id, 0, revertMap);
 
-        // Sync productions table — remove houses or delete records
+        // Sync productions table — remove houses or soft delete records
         const { data: prodsVinculadas } = await supabase
           .from('productions')
           .select('id, house_ids')
           .eq('project_id', currentProject.id)
           .eq('scope_id', production.scope_id)
-          .eq('macro_id', production.macro_id);
+          .eq('macro_id', production.macro_id)
+          .is('deleted_at', null);
         for (const prod of prodsVinculadas || []) {
           const novasCasas = (prod.house_ids as number[]).filter(h => !production.house_ids.includes(h));
           if (novasCasas.length === 0) {
-            await supabase.from('productions').delete().eq('id', prod.id);
+            await supabase.from('productions')
+              .update({ deleted_at: new Date().toISOString() })
+              .eq('id', prod.id);
           } else if (novasCasas.length !== (prod.house_ids as number[]).length) {
             await supabase.from('productions').update({ house_ids: novasCasas, houses_count: novasCasas.length }).eq('id', prod.id);
           }
@@ -468,11 +474,17 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
                               : 'bg-background border-border text-foreground hover:border-primary/50'
                           }
                         `}
-                        title={isSelected ? `Casa ${house.id}: ${editedPercentage ?? currentProgress}%` : `Casa ${house.id}`}
+                        title={isSelected ? `Casa ${house.id}: ${editedPercentage ?? currentProgress}%` : `Casa ${house.id} — ${currentProgress}%`}
                       >
                         <span className="text-[10px]">{house.id}</span>
                         {isSelected && editPercentageMode && (
                           <span className="text-[7px] leading-none">{editedPercentage ?? currentProgress}%</span>
+                        )}
+                        {!isSelected && !editPercentageMode && currentProgress > 0 && currentProgress < 100 && (
+                          <span className="text-[7px] leading-none text-amber-600">{currentProgress}%</span>
+                        )}
+                        {!isSelected && !editPercentageMode && currentProgress >= 100 && (
+                          <span className="text-[7px] leading-none text-emerald-600">✓</span>
                         )}
                       </button>
                     );

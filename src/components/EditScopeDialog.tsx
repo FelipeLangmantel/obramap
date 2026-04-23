@@ -67,6 +67,7 @@ export function EditScopeDialog({ open, onOpenChange, houseId, macroId, scope }:
             .eq('scope_id', scope.id)
             .gte('week_start', startDate)
             .lte('week_end', endDate)
+            .is('deleted_at', null)
             .maybeSingle();
 
           if (existingProd) {

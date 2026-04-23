@@ -89,7 +89,8 @@ export function BoardDecisionsView() {
       const { data, error } = await supabase
         .from('weekly_productions')
         .select('*')
-        .eq('project_id', currentProject.id);
+        .eq('project_id', currentProject.id)
+        .is('deleted_at', null);
       if (error) throw error;
       return data || [];
     },
