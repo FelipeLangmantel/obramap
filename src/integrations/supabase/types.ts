@@ -78,6 +78,7 @@ export type Database = {
           dados_novos: Json | null
           id: string
           ip: string | null
+          project_id: string | null
           registro_id: string | null
           tabela: string
           user_id: string | null
@@ -90,6 +91,7 @@ export type Database = {
           dados_novos?: Json | null
           id?: string
           ip?: string | null
+          project_id?: string | null
           registro_id?: string | null
           tabela: string
           user_id?: string | null
@@ -102,12 +104,21 @@ export type Database = {
           dados_novos?: Json | null
           id?: string
           ip?: string | null
+          project_id?: string | null
           registro_id?: string | null
           tabela?: string
           user_id?: string | null
           user_name?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       board_decisions: {
         Row: {
