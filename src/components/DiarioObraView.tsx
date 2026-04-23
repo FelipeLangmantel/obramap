@@ -169,36 +169,46 @@ export default function DiarioObraView() {
     setFotos(fotosComUrl);
   };
 
-  const tryAutoFillClima = async (eId: string) => {
+  const tryAutoFillClima = async (eId: string | null) => {
     if (!currentProject?.id) return;
-    const { data: projData } = await supabase
-      .from("projects")
-      .select("lat, lng, municipio, estado")
-      .eq("id", currentProject.id)
-      .maybeSingle();
+    try {
+      const { data: projData } = await supabase
+        .from("projects")
+        .select("lat, lng, municipio, estado")
+        .eq("id", currentProject.id)
+        .maybeSingle();
 
-    if (!projData) return;
+      if (!projData) return;
 
-    let coords: { lat: number; lng: number } | null = null;
-    if (projData.lat != null && projData.lng != null) {
-      coords = { lat: Number(projData.lat), lng: Number(projData.lng) };
-    } else if (projData.municipio) {
-      coords = await geocodeMunicipio(projData.municipio, projData.estado || "RS");
-      // Persistir lat/lng para próxima execução não geocodificar de novo
-      if (coords) {
-        await supabase.from("projects")
-          .update({ lat: coords.lat, lng: coords.lng })
-          .eq("id", currentProject.id);
+      let coords: { lat: number; lng: number } | null = null;
+      if (projData.lat != null && projData.lng != null) {
+        coords = { lat: Number(projData.lat), lng: Number(projData.lng) };
+      } else if (projData.municipio) {
+        coords = await geocodeMunicipio(projData.municipio, projData.estado || "RS");
+        // Persistir lat/lng para próxima execução não geocodificar de novo
+        if (coords) {
+          await supabase.from("projects")
+            .update({ lat: coords.lat, lng: coords.lng })
+            .eq("id", currentProject.id);
+        }
       }
-    }
 
-    if (!coords) return;
+      if (!coords) {
+        console.warn("[DiarioObra] Sem coordenadas/município para clima automático");
+        return;
+      }
 
-    const climaAuto = await fetchClimaHoje(coords.lat, coords.lng);
-    if (climaAuto) {
-      setClima(climaAuto.codigo);
-      setClimaAutoPreenchido(true);
-      await supabase.from("diary_entries").update({ clima: climaAuto.codigo }).eq("id", eId);
+      const climaAuto = await fetchClimaHoje(coords.lat, coords.lng);
+      if (climaAuto) {
+        setClima(climaAuto.codigo);
+        setClimaAutoPreenchido(true);
+        // Só persiste se já existir entrada salva
+        if (eId) {
+          await supabase.from("diary_entries").update({ clima: climaAuto.codigo }).eq("id", eId);
+        }
+      }
+    } catch (err) {
+      console.warn("[DiarioObra] Falha clima automático:", err);
     }
   };
 
@@ -242,6 +252,8 @@ export default function DiarioObraView() {
       setCorrecoesDoDia([]);
       setFotos([]);
       setClimaAutoPreenchido(false);
+      // Buscar clima automático mesmo sem entrada salva
+      tryAutoFillClima(null);
     }
   };
 
