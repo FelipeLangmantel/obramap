@@ -148,7 +148,7 @@ export function LaborContractsView({
       const [contractsRes, suppliersRes, prodRes] = await Promise.all([
         supabase.from('labor_contracts').select('*').eq('project_id', projectId).order('created_at', { ascending: false }),
         supabase.from('suppliers').select('*').eq('project_id', projectId).eq('supplier_type', 'labor'),
-        supabase.from('weekly_productions').select('scope_id, house_ids').eq('project_id', projectId)
+        supabase.from('weekly_productions').select('scope_id, house_ids').eq('project_id', projectId).is('deleted_at', null)
       ]);
 
       if (contractsRes.data) setContracts(contractsRes.data);
