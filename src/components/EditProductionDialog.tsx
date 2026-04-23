@@ -474,11 +474,17 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
                               : 'bg-background border-border text-foreground hover:border-primary/50'
                           }
                         `}
-                        title={isSelected ? `Casa ${house.id}: ${editedPercentage ?? currentProgress}%` : `Casa ${house.id}`}
+                        title={isSelected ? `Casa ${house.id}: ${editedPercentage ?? currentProgress}%` : `Casa ${house.id} — ${currentProgress}%`}
                       >
                         <span className="text-[10px]">{house.id}</span>
                         {isSelected && editPercentageMode && (
                           <span className="text-[7px] leading-none">{editedPercentage ?? currentProgress}%</span>
+                        )}
+                        {!isSelected && !editPercentageMode && currentProgress > 0 && currentProgress < 100 && (
+                          <span className="text-[7px] leading-none text-amber-600">{currentProgress}%</span>
+                        )}
+                        {!isSelected && !editPercentageMode && currentProgress >= 100 && (
+                          <span className="text-[7px] leading-none text-emerald-600">✓</span>
                         )}
                       </button>
                     );
