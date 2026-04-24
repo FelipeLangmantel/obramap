@@ -24,7 +24,7 @@ export function RdoChecklistSection({ items, onAdd, disabled, onChanged }: Props
 
   const handleRemove = async (id: string) => {
     try {
-      await supabase.from("diary_checklist").delete().eq("id", id);
+      await supabase.from("diary_checklist").update({ deleted_at: new Date().toISOString() }).eq("id", id);
       onChanged();
     } catch (err: any) { toast.error("Erro: " + (err.message || "")); }
   };

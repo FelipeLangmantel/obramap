@@ -1751,6 +1751,8 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           descricao: string
           diary_entry_id: string
           id: string
@@ -1759,6 +1761,8 @@ export type Database = {
         Insert: {
           company_id: string
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           descricao: string
           diary_entry_id: string
           id?: string
@@ -1767,6 +1771,8 @@ export type Database = {
         Update: {
           company_id?: string
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           descricao?: string
           diary_entry_id?: string
           id?: string
@@ -1845,6 +1851,8 @@ export type Database = {
           company_id: string
           concluido: boolean | null
           created_at: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           diary_entry_id: string
           id: string
           item: string
@@ -1853,6 +1861,8 @@ export type Database = {
           company_id: string
           concluido?: boolean | null
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           diary_entry_id: string
           id?: string
           item: string
@@ -1861,6 +1871,8 @@ export type Database = {
           company_id?: string
           concluido?: boolean | null
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           diary_entry_id?: string
           id?: string
           item?: string
@@ -1888,6 +1900,8 @@ export type Database = {
           autor_nome: string | null
           company_id: string
           created_at: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           diary_entry_id: string
           id: string
           texto: string
@@ -1897,6 +1911,8 @@ export type Database = {
           autor_nome?: string | null
           company_id: string
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           diary_entry_id: string
           id?: string
           texto: string
@@ -1906,6 +1922,8 @@ export type Database = {
           autor_nome?: string | null
           company_id?: string
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           diary_entry_id?: string
           id?: string
           texto?: string
@@ -2137,6 +2155,8 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           diary_entry_id: string
           id: string
           nome: string
@@ -2145,6 +2165,8 @@ export type Database = {
         Insert: {
           company_id: string
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           diary_entry_id: string
           id?: string
           nome: string
@@ -2153,6 +2175,8 @@ export type Database = {
         Update: {
           company_id?: string
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           diary_entry_id?: string
           id?: string
           nome?: string
@@ -2344,6 +2368,8 @@ export type Database = {
           categoria: string
           company_id: string
           created_at: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           diary_entry_id: string
           id: string
           nome: string
@@ -2353,6 +2379,8 @@ export type Database = {
           categoria?: string
           company_id: string
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           diary_entry_id: string
           id?: string
           nome: string
@@ -2362,6 +2390,8 @@ export type Database = {
           categoria?: string
           company_id?: string
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           diary_entry_id?: string
           id?: string
           nome?: string
@@ -2388,6 +2418,8 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string | null
+          deleted_at: string | null
+          deleted_by: string | null
           descricao: string
           diary_entry_id: string
           id: string
@@ -2396,6 +2428,8 @@ export type Database = {
         Insert: {
           company_id: string
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           descricao: string
           diary_entry_id: string
           id?: string
@@ -2404,6 +2438,8 @@ export type Database = {
         Update: {
           company_id?: string
           created_at?: string | null
+          deleted_at?: string | null
+          deleted_by?: string | null
           descricao?: string
           diary_entry_id?: string
           id?: string
