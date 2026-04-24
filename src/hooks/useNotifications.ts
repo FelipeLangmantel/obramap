@@ -20,30 +20,32 @@ export interface SystemNotification {
 }
 
 export function useNotifications(modulo?: string) {
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const [count, setCount] = useState(0);
   const [notifications, setNotifications] = useState<SystemNotification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
   const loadCount = useCallback(async () => {
-    if (!company?.id) return;
+    if (!company?.id || !user?.id) return;
     let q = supabase.from("system_notifications")
       .select("id", { count: "exact", head: true })
       .eq("company_id", company.id)
+      .or(`user_id.is.null,user_id.eq.${user.id}`)
       .eq("lida", false)
       .eq("resolvida", false);
     if (modulo) q = q.eq("modulo", modulo);
     const { count: c } = await q;
     setCount(c || 0);
-  }, [company?.id, modulo]);
+  }, [company?.id, user?.id, modulo]);
 
   const loadNotifications = useCallback(async () => {
-    if (!company?.id) return;
+    if (!company?.id || !user?.id) return;
     // Use direct query to join obra name
     let q = supabase
       .from("system_notifications")
       .select("*, obras_portfolio!system_notifications_obra_id_fkey(nome)")
       .eq("company_id", company.id)
+      .or(`user_id.is.null,user_id.eq.${user.id}`)
       .eq("resolvida", false)
       .not("tipo", "like", "%documento%")
       .order("lida", { ascending: true })
@@ -68,7 +70,7 @@ export function useNotifications(modulo?: string) {
       obra_nome: n.obras_portfolio?.nome || "",
     }));
     setNotifications(mapped);
-  }, [company?.id, modulo]);
+  }, [company?.id, user?.id, modulo]);
 
   useEffect(() => {
     loadCount();
@@ -110,17 +112,18 @@ export function useNotifications(modulo?: string) {
   );
 
   const markAllAsRead = useCallback(async () => {
-    if (!company?.id) return;
+    if (!company?.id || !user?.id) return;
     let q = supabase
       .from("system_notifications")
       .update({ lida: true, lida_em: new Date().toISOString() } as any)
       .eq("company_id", company.id)
+      .or(`user_id.is.null,user_id.eq.${user.id}`)
       .eq("lida", false);
     if (modulo) q = (q as any).eq("modulo", modulo);
     await q;
     loadCount();
     loadNotifications();
-  }, [company?.id, modulo, loadCount, loadNotifications]);
+  }, [company?.id, user?.id, modulo, loadCount, loadNotifications]);
 
   return {
     count,
