@@ -116,9 +116,13 @@ export default function DiarioObraView() {
   const [obsGeral, setObsGeral] = useState("");
   const [entryId, setEntryId] = useState<string | null>(null);
   const [entryStatus, setEntryStatus] = useState<string>("rascunho");
+  const [statusAprovacao, setStatusAprovacao] = useState<StatusAprovacao>("preenchendo");
   const [numRelatorio, setNumRelatorio] = useState<number | null>(null);
   const [savingHeader, setSavingHeader] = useState(false);
   const [correcoesDoDia, setCorrecoesDoDia] = useState<any[]>([]);
+  const [entryMeta, setEntryMeta] = useState<{ created_at: string | null; updated_at: string | null; engineer_name: string | null }>({
+    created_at: null, updated_at: null, engineer_name: null,
+  });
 
   // Clima (novo formato)
   const [climaState, setClimaState] = useState<ClimaState>(DEFAULT_CLIMA);
