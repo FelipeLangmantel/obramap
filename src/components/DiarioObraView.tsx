@@ -173,6 +173,9 @@ export default function DiarioObraView() {
   const [addOccurOpen, setAddOccurOpen] = useState(false);
   const [addChecklistOpen, setAddChecklistOpen] = useState(false);
   const [addCommentOpen, setAddCommentOpen] = useState(false);
+  const [editRequestOpen, setEditRequestOpen] = useState(false);
+  const [pendingEditRequest, setPendingEditRequest] = useState(false);
+  const [sendingForApproval, setSendingForApproval] = useState(false);
 
   // Produtividade de referência
   const [produtividadeRef, setProdutividadeRef] = useState<number | null>(null);
