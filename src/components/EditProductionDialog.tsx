@@ -451,7 +451,33 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
               </div>
             )}
 
-            {/* Houses Selection */}
+            {/* Quantity (apenas quando unidade não é Casa/un) */}
+            {!isHouseUnit && (
+              <div className="space-y-2 p-3 rounded-lg border bg-primary/5">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  Quantidade Produzida
+                  <Badge variant="outline" className="text-xs">
+                    {effectiveUnit.label} ({effectiveUnit.symbol})
+                  </Badge>
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={quantity}
+                  placeholder={`Ex: 120 ${effectiveUnit.symbol}`}
+                  onChange={(e) =>
+                    setQuantity(e.target.value === "" ? "" : parseFloat(e.target.value))
+                  }
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  As casas selecionadas abaixo continuam sendo registradas para fins
+                  de mapa e auditoria, mas o avanço financeiro/físico considera a
+                  quantidade em {effectiveUnit.symbol}.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium flex items-center gap-2">
