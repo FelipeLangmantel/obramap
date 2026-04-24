@@ -8626,6 +8626,9 @@ export type Database = {
           macros_template: Json
           municipio: string | null
           name: string
+          production_target: number | null
+          production_unit_label: string | null
+          production_unit_symbol: string | null
           project_type: string
           setup_complete: boolean
           setup_step: string
@@ -8655,6 +8658,9 @@ export type Database = {
           macros_template?: Json
           municipio?: string | null
           name: string
+          production_target?: number | null
+          production_unit_label?: string | null
+          production_unit_symbol?: string | null
           project_type?: string
           setup_complete?: boolean
           setup_step?: string
@@ -8684,6 +8690,9 @@ export type Database = {
           macros_template?: Json
           municipio?: string | null
           name?: string
+          production_target?: number | null
+          production_unit_label?: string | null
+          production_unit_symbol?: string | null
           project_type?: string
           setup_complete?: boolean
           setup_step?: string
