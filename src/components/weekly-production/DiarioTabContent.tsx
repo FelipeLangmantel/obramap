@@ -222,7 +222,7 @@ export default function DiarioTabContent() {
     setClosing(true);
     try {
       await supabase.from("diary_entries")
-        .update({ status: "finalizado" })
+        .update({ status: "finalizado", status_aprovacao: "aprovado" })
         .eq("project_id", currentProject.id)
         .gte("entry_date", semanaInicio)
         .lte("entry_date", semanaFim);
