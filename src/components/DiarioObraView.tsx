@@ -489,6 +489,7 @@ export default function DiarioObraView() {
              : climaState.climaManha === "nublado" ? "nublado" : "sol",
       };
 
+      let savedEntryId = entryId;
       if (entryId) {
         await supabase.from("diary_entries").update({
           equipe_presente: equipePres,
@@ -509,7 +510,25 @@ export default function DiarioObraView() {
         const { data, error } = await supabase.from("diary_entries").insert(payload).select("id, num_relatorio").single();
         if (error) throw error;
         setEntryId(data.id);
+        savedEntryId = data.id;
         setNumRelatorio((data as any).num_relatorio ?? null);
+      }
+      // Registrar log de edição
+      if (savedEntryId) {
+        try {
+          const ua = navigator.userAgent;
+          const dispositivo = /Android/i.test(ua) ? "android"
+            : /iPhone|iPad|iPod/i.test(ua) ? "ios"
+            : /Tablet|iPad/i.test(ua) ? "tablet" : "web";
+          await (supabase as any).from("diary_edit_log").insert({
+            company_id: company.id,
+            diary_entry_id: savedEntryId,
+            user_id: user.id,
+            user_nome: profile?.display_name || user.email || "Usuário",
+            user_email: user.email || null,
+            dispositivo,
+          });
+        } catch { /* silencioso */ }
       }
       toast.success("Relatório salvo!");
     } catch (err: any) {
