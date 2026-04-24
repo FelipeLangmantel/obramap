@@ -350,13 +350,20 @@ export default function DiarioObraView() {
       const climaAuto = await fetchClimaHoje(coords.lat, coords.lng);
       if (climaAuto) {
         const turno = legacyToTurno(climaAuto.codigo);
-        setClimaState(prev => ({ ...prev, climaManha: turno, climaTarde: turno }));
+        setClimaState(prev => ({
+          ...prev,
+          climaManha: turno,
+          climaTarde: turno,
+          // Pré-preenche pluviometria do Open-Meteo apenas se ainda não houver leitura manual
+          mmChuva: prev.mmChuva == null ? Number(climaAuto.mm_chuva ?? 0) : prev.mmChuva,
+        }));
         setClimaAutoPreenchido(true);
         if (eId) {
           await supabase.from("diary_entries").update({
             clima: climaAuto.codigo,
             clima_manha: turno,
             clima_tarde: turno,
+            mm_chuva: climaAuto.mm_chuva ?? 0,
           }).eq("id", eId);
         }
       }
