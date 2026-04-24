@@ -109,7 +109,12 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
       setSelectedHouses(production.house_ids || []);
       setIsInitialDatabase(production.is_initial_database || false);
       setEditPercentageMode(false);
-      
+      setQuantity(
+        production.quantity !== null && production.quantity !== undefined
+          ? Number(production.quantity)
+          : ""
+      );
+
       // Initialize percentages from current house data
       const percentages: Record<number, number> = {};
       production.house_ids.forEach(houseId => {
