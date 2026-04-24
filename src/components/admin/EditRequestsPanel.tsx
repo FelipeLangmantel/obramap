@@ -30,17 +30,6 @@ type UnifiedRequest = {
   diary_entry_id?: string;
   project_id?: string;
 };
-  obra_nome: string;
-  justificativa: string;
-  status: string;
-  admin_response: string | null;
-  created_at: string;
-  resolved_at: string | null;
-  resolved_by: string | null;
-  // medicao-specific
-  medicao_id?: string;
-  section?: string;
-};
 
 export function EditRequestsPanel() {
   const { company, user } = useAuth();
