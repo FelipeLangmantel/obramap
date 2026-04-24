@@ -233,8 +233,6 @@ export default function RelatorioObraView() {
       const { jsPDF } = await import("jspdf");
       const autoTableMod = await import("jspdf-autotable");
       const autoTable = autoTableMod.default;
-      const autoTableMod = await import("jspdf-autotable");
-      const autoTable = autoTableMod.default;
 
       const doc = new jsPDF({ orientation: "portrait", format: "a4" });
 
