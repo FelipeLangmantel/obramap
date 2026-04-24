@@ -8,7 +8,7 @@ import { RdoSectionShell } from "./RdoSectionShell";
 
 interface Props {
   entryId: string | null;
-  companyId: string;
+  companyId: string | null;
   attachments: RdoAttachment[];
   disabled?: boolean;
   onChanged: () => void;
@@ -32,15 +32,27 @@ export function RdoAttachmentsSection({ entryId, companyId, attachments, disable
   const activeEntryId = entryId || ensuredEntryId;
 
   const handleOpenPicker = async () => {
-    const resolvedEntryId = activeEntryId || await onRequestCreateEntry?.();
+    if (!companyId) {
+      toast.error("Empresa não identificada para o upload.");
+      return;
+    }
+
+    if (activeEntryId) {
+      inputRef.current?.click();
+      return;
+    }
+
+    const resolvedEntryId = await onRequestCreateEntry?.();
     if (!resolvedEntryId) return;
     setEnsuredEntryId(resolvedEntryId);
-    inputRef.current?.click();
+    toast.info("Relatório iniciado. Toque novamente para selecionar o anexo.");
   };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !activeEntryId) return;
+    const resolvedEntryId = activeEntryId || ensuredEntryId || await onRequestCreateEntry?.();
+    if (!file || !resolvedEntryId || !companyId) return;
+    setEnsuredEntryId(resolvedEntryId);
     e.target.value = "";
 
     if (file.size > MAX_BYTES) { toast.error("Arquivo excede 20 MB."); return; }
@@ -48,14 +60,14 @@ export function RdoAttachmentsSection({ entryId, companyId, attachments, disable
     setUploading(true);
     try {
       const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
-      const path = `${companyId}/${activeEntryId}/anexos/${Date.now()}_${safeName}`;
+      const path = `${companyId}/${resolvedEntryId}/anexos/${Date.now()}_${safeName}`;
       const { error: upErr } = await supabase.storage
         .from("diary-attachments")
         .upload(path, file, { contentType: file.type, upsert: false });
       if (upErr) throw upErr;
       const { error: dbErr } = await supabase.from("diary_attachments").insert({
         company_id: companyId,
-        diary_entry_id: activeEntryId,
+        diary_entry_id: resolvedEntryId,
         tipo: "anexo",
         storage_path: path,
         nome_original: file.name,
