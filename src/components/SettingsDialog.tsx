@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { Moon, Sun, Monitor, Building2 } from "lucide-react";
+import { Moon, Sun, Monitor, Building2, FileText } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { LogoUploader } from "@/components/diario/LogoUploader";
+import { ContractTypesPanel } from "@/components/settings/ContractTypesPanel";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -81,7 +82,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Configurações</DialogTitle>
         </DialogHeader>
@@ -141,6 +142,19 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                     </p>
                   </div>
                 )}
+              </div>
+            </>
+          )}
+
+          {company?.id && (
+            <>
+              <Separator />
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-sm font-medium">Tipos de Contrato</Label>
+                </div>
+                <ContractTypesPanel />
               </div>
             </>
           )}

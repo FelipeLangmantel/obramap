@@ -60,6 +60,7 @@ import {
   FolderOpen,
   Sparkles,
   ShoppingCart,
+  BookOpen,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -85,7 +86,7 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import obraMapLogoDark from "@/assets/obramap-logo-new.png";
 import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 
-type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard" | "diario-obra" | "relatorio-obra";
+type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard" | "diario-obra" | "relatorio-obra" | "empresa" | "manual";
 
 type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements" | "holding-receitas" | "holding-despesas" | "holding-documentos" | "holding-prd" | "holding-insights" | "holding-config" | "cashflow-simulator" | "purchase-panel";
 type MenuViewType = ViewType | RouteViewType;
@@ -260,16 +261,16 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       ],
     },
     {
-      label: "Holding",
+      label: "Painel de Gestão",
       items: [
-        { title: "Painel da Holding", view: "holding-dashboard", icon: Crown, permissionId: "holding" },
+        { title: "Painel de Obras", view: "holding-dashboard", icon: Crown, permissionId: "holding" },
         { title: "Receitas & Medições", view: "holding-receitas", icon: TrendingUp, permissionId: "holding_receitas" },
         { title: "Medições PLE", view: "ple-measurements", icon: ClipboardList, permissionId: "ple_medicoes" },
         { title: "Despesas & Custos", view: "holding-despesas", icon: Receipt, permissionId: "holding_despesas" },
         { title: "Documentação", view: "holding-documentos", icon: FolderOpen, permissionId: "holding_documentos" },
         { title: "PRD — Cronograma", view: "holding-prd", icon: BarChart3, permissionId: "holding_prd" },
         { title: "IA — Insights", view: "holding-insights", icon: Sparkles, permissionId: "holding_insights", badge: "BETA" },
-        { title: "Configurações", view: "holding-config", icon: Settings, permissionId: "holding" },
+        { title: "Configurações Gerenciais", view: "holding-config", icon: Settings, permissionId: "holding" },
       ],
     },
   ];
@@ -411,6 +412,38 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="space-y-1">
+                {(isAdmin || isCompanyAdmin) && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => handleViewChange("empresa")}
+                      isActive={currentActiveView === "empresa"}
+                      className={cn(
+                        "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
+                        currentActiveView === "empresa"
+                          ? "bg-primary text-primary-foreground font-medium shadow-sm"
+                          : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                      )}
+                    >
+                      <Building2 className="h-5 w-5 shrink-0" />
+                      <span className="text-sm font-medium">Minha Empresa</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => handleViewChange("manual")}
+                    isActive={currentActiveView === "manual"}
+                    className={cn(
+                      "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
+                      currentActiveView === "manual"
+                        ? "bg-primary text-primary-foreground font-medium shadow-sm"
+                        : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                    )}
+                  >
+                    <BookOpen className="h-5 w-5 shrink-0" />
+                    <span className="text-sm font-medium">Manual de Configuração</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 {canEdit && canAccessManagement("projetos") && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
@@ -500,6 +533,15 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setSettingsDialogOpen(true)}
+                    className="w-full justify-start gap-3 px-3 py-3 rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-150"
+                  >
+                    <Settings className="h-5 w-5 shrink-0" />
+                    <span className="text-sm font-medium">Configurações</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

@@ -480,31 +480,96 @@ export type Database = {
         Row: {
           cnpj: string | null
           created_at: string
+          email: string | null
+          endereco_cep: string | null
+          endereco_cidade: string | null
+          endereco_estado: string | null
+          endereco_numero: string | null
+          endereco_rua: string | null
           id: string
           logo_url: string | null
           name: string
+          nome_fantasia: string | null
+          razao_social: string | null
           slug: string
+          telefone: string | null
           updated_at: string
         }
         Insert: {
           cnpj?: string | null
           created_at?: string
+          email?: string | null
+          endereco_cep?: string | null
+          endereco_cidade?: string | null
+          endereco_estado?: string | null
+          endereco_numero?: string | null
+          endereco_rua?: string | null
           id?: string
           logo_url?: string | null
           name: string
+          nome_fantasia?: string | null
+          razao_social?: string | null
           slug: string
+          telefone?: string | null
           updated_at?: string
         }
         Update: {
           cnpj?: string | null
           created_at?: string
+          email?: string | null
+          endereco_cep?: string | null
+          endereco_cidade?: string | null
+          endereco_estado?: string | null
+          endereco_numero?: string | null
+          endereco_rua?: string | null
           id?: string
           logo_url?: string | null
           name?: string
+          nome_fantasia?: string | null
+          razao_social?: string | null
           slug?: string
+          telefone?: string | null
           updated_at?: string
         }
         Relationships: []
+      }
+      company_contract_types: {
+        Row: {
+          ativo: boolean
+          company_id: string
+          created_at: string
+          descricao: string | null
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          company_id: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          company_id?: string
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_contract_types_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       company_modules: {
         Row: {
@@ -10056,6 +10121,7 @@ export type Database = {
           resolvida_em: string | null
           tipo: string
           titulo: string
+          user_id: string | null
         }
         Insert: {
           company_id: string
@@ -10071,6 +10137,7 @@ export type Database = {
           resolvida_em?: string | null
           tipo: string
           titulo: string
+          user_id?: string | null
         }
         Update: {
           company_id?: string
@@ -10086,6 +10153,7 @@ export type Database = {
           resolvida_em?: string | null
           tipo?: string
           titulo?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -11156,6 +11224,7 @@ export type Database = {
           resolvida_em: string | null
           tipo: string
           titulo: string
+          user_id: string | null
         }[]
         SetofOptions: {
           from: "*"

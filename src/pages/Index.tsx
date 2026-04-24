@@ -29,6 +29,13 @@ import IndustrializationModuleView from "@/components/industrialization/Industri
 import HoldingDashboardView from "@/components/holding/HoldingDashboardView";
 import DiarioObraView from "@/components/DiarioObraView";
 import RelatorioObraView from "@/components/RelatorioObraView";
+import { MinhaEmpresaView } from "@/components/gerenciamento/MinhaEmpresaView";
+import { ManualView } from "@/components/gerenciamento/ManualView";
+import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
+import { NewProjectDialog } from "@/components/NewProjectDialog";
+import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
+import { UserPermissionsPanel } from "@/components/admin/UserPermissionsPanel";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Loader2, Menu, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -41,7 +48,7 @@ function SidebarTriggerButton() {
   );
 }
 
-type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard" | "diario-obra" | "relatorio-obra";
+type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard" | "diario-obra" | "relatorio-obra" | "empresa" | "manual";
 
 /**
  * ✅ Index agora é puro - sem redirects
@@ -182,6 +189,20 @@ function Index() {
     industrialization:  "industrializacao",
     "holding-dashboard":"holding",
     "relatorio-obra":   "producao",
+    "empresa":          "painel_inicial",
+    "manual":           "painel_inicial",
+  };
+
+  // Estados para dialogs disparados do banner de onboarding
+  const [newObraOpen, setNewObraOpen] = useState(false);
+  const [macrosOpen, setMacrosOpen] = useState(false);
+  const [usersOpen, setUsersOpen] = useState(false);
+
+  const handleOnboardingAction = (target: "empresa" | "newObra" | "macros" | "users") => {
+    if (target === "empresa") setActiveView("empresa");
+    else if (target === "newObra") setNewObraOpen(true);
+    else if (target === "macros") setMacrosOpen(true);
+    else if (target === "users") setUsersOpen(true);
   };
 
   // ─── Proteção de view restaurada ─────────────────────────────────────────
@@ -238,9 +259,11 @@ function Index() {
     "productivity": "Produtividade e Equipes",
     "contractors": "Empreiteiros",
     "industrialization": "Industrialização & Logística",
-    "holding-dashboard": "Painel da Holding",
+    "holding-dashboard": "Painel de Obras",
     "diario-obra": "Diário de Obras",
     "relatorio-obra": "Relatório de Obra",
+    "empresa": "Minha Empresa",
+    "manual": "Manual de Configuração",
   };
 
   return (
@@ -270,17 +293,35 @@ function Index() {
           {/* Main Content */}
           <main className="flex-1 p-4 md:p-5 lg:p-6 overflow-auto">
             {projects.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 gap-4">
-                <div className="text-6xl">🏗️</div>
-                <h2 className="text-2xl font-semibold text-foreground">Nenhuma obra cadastrada</h2>
-                <p className="text-muted-foreground text-center max-w-md text-base">
-                  Clique em "Nova Obra" no menu lateral para cadastrar seu primeiro empreendimento.
-                </p>
+              <div className="max-w-3xl mx-auto py-8">
+                {activeView === "empresa" ? (
+                  <MinhaEmpresaView />
+                ) : activeView === "manual" ? (
+                  <ManualView onNavigate={(t) => {
+                    if (t === "empresa") setActiveView("empresa");
+                    else if (t === "newObra") setNewObraOpen(true);
+                    else if (t === "macros") setMacrosOpen(true);
+                    else if (t === "users") setUsersOpen(true);
+                    else if (t === "production") setActiveView("production");
+                  }} />
+                ) : (
+                  <>
+                    <OnboardingChecklist onAction={handleOnboardingAction} />
+                    <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+                      <div className="text-5xl">🏗️</div>
+                      <h2 className="text-xl font-semibold text-foreground">Nenhuma obra cadastrada</h2>
+                      <p className="text-muted-foreground max-w-md text-sm">
+                        Siga o passo a passo acima para configurar o sistema. Comece cadastrando sua empresa.
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <div className="h-full flex flex-col">
                 {activeView === "home" && (
                   <div className="flex-1">
+                    <OnboardingChecklist onAction={handleOnboardingAction} />
                     <HomeDashboard onNavigateToProject={(view) => setActiveView(view as ViewType)} />
                   </div>
                 )}
@@ -445,6 +486,24 @@ function Index() {
                     <RelatorioObraView />
                   </div>
                 )}
+
+                {activeView === "empresa" && (
+                  <div className="flex-1">
+                    <MinhaEmpresaView />
+                  </div>
+                )}
+
+                {activeView === "manual" && (
+                  <div className="flex-1">
+                    <ManualView onNavigate={(t) => {
+                      if (t === "empresa") setActiveView("empresa");
+                      else if (t === "newObra") setNewObraOpen(true);
+                      else if (t === "macros") setMacrosOpen(true);
+                      else if (t === "users") setUsersOpen(true);
+                      else if (t === "production") setActiveView("production");
+                    }} />
+                  </div>
+                )}
               </div>
             )}
           </main>
@@ -454,6 +513,18 @@ function Index() {
             <p>Desenvolvido por <span className="font-semibold text-foreground">Felipe Langmantel</span></p>
           </footer>
         </div>
+
+        {/* Dialogs disparados pelo banner de onboarding / manual */}
+        <NewProjectDialog open={newObraOpen} onOpenChange={setNewObraOpen} />
+        <ManageMacrosDialog open={macrosOpen} onOpenChange={setMacrosOpen} />
+        <Dialog open={usersOpen} onOpenChange={setUsersOpen}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Painel de Gerenciamento de Usuários</DialogTitle>
+            </DialogHeader>
+            <UserPermissionsPanel />
+          </DialogContent>
+        </Dialog>
       </div>
     </SidebarProvider>
   );
