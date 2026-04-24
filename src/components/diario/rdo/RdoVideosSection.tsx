@@ -13,6 +13,7 @@ interface Props {
   videos: RdoAttachment[];
   disabled?: boolean;
   onChanged: () => void;
+  onRequestCreateEntry?: () => Promise<string | null>;
 }
 
 const MAX_BYTES = 100 * 1024 * 1024; // 100 MB
@@ -28,16 +29,24 @@ function checkVideoDuration(file: File): Promise<number> {
   });
 }
 
-export function RdoVideosSection({ entryId, companyId, videos, disabled, onChanged }: Props) {
+export function RdoVideosSection({ entryId, companyId, videos, disabled, onChanged, onRequestCreateEntry }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [ensuredEntryId, setEnsuredEntryId] = useState<string | null>(null);
 
-  const handleAdd = () => inputRef.current?.click();
+  const activeEntryId = entryId || ensuredEntryId;
+
+  const handleAdd = async () => {
+    const resolvedEntryId = activeEntryId || await onRequestCreateEntry?.();
+    if (!resolvedEntryId) return;
+    setEnsuredEntryId(resolvedEntryId);
+    inputRef.current?.click();
+  };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !entryId) return;
+    if (!file || !activeEntryId) return;
     e.target.value = "";
 
     if (file.size > MAX_BYTES) {
@@ -58,7 +67,7 @@ export function RdoVideosSection({ entryId, companyId, videos, disabled, onChang
     setUploading(true); setProgress(10);
     try {
       const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
-      const path = `${companyId}/${entryId}/videos/${Date.now()}_${safeName}`;
+      const path = `${companyId}/${activeEntryId}/videos/${Date.now()}_${safeName}`;
       setProgress(40);
       const { error: upErr } = await supabase.storage
         .from("diary-attachments")
@@ -67,7 +76,7 @@ export function RdoVideosSection({ entryId, companyId, videos, disabled, onChang
       setProgress(80);
       const { error: dbErr } = await supabase.from("diary_attachments").insert({
         company_id: companyId,
-        diary_entry_id: entryId,
+        diary_entry_id: activeEntryId,
         tipo: "video",
         storage_path: path,
         nome_original: file.name,
@@ -104,7 +113,7 @@ export function RdoVideosSection({ entryId, companyId, videos, disabled, onChang
       id="videos"
       title="Vídeos"
       count={videos.length}
-      onAdd={entryId && !disabled ? handleAdd : undefined}
+      onAdd={!disabled ? handleAdd : undefined}
       disabled={disabled || uploading}
       emptyText="Vídeo MP4 (50 segundos) com até 100 MB"
     >
