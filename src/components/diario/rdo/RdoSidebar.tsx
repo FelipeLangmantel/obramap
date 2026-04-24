@@ -18,6 +18,7 @@ const ITEMS: { key: RdoSectionKey; label: string; icon: any; countKey?: keyof Rd
   { key: "mao-obra", label: "Mão de obra", icon: Users, countKey: "labor" },
   { key: "equipamentos", label: "Equipamentos", icon: Wrench, countKey: "equipment" },
   { key: "atividades", label: "Atividades", icon: Activity, countKey: "activities" },
+  { key: "producao", label: "Produção por casa", icon: Activity },
   { key: "ocorrencias", label: "Ocorrências", icon: AlertTriangle, countKey: "occurrences" },
   { key: "checklist", label: "Checklist", icon: CheckSquare, countKey: "checklist" },
   { key: "comentarios", label: "Comentários", icon: MessageSquare, countKey: "comments" },
