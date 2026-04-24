@@ -155,6 +155,13 @@ export function EditRequestsPanel() {
       .on("postgres_changes", { event: "*", schema: "public", table: "medicao_correction_requests" }, () => {
         queryClient.invalidateQueries({ queryKey: ["edit-requests-unified", company.id] });
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "diary_edit_requests" }, (payload: any) => {
+        queryClient.invalidateQueries({ queryKey: ["edit-requests-unified", company.id] });
+        if (payload.eventType === "INSERT") {
+          const r = payload.new;
+          toast.info(`Nova solicitação de edição de RDO de ${r.requested_by_name}.`);
+        }
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [company?.id, queryClient]);
