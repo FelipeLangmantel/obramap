@@ -60,6 +60,7 @@ import {
   FolderOpen,
   Sparkles,
   ShoppingCart,
+  BookOpen,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -85,7 +86,7 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import obraMapLogoDark from "@/assets/obramap-logo-new.png";
 import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 
-type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard" | "diario-obra" | "relatorio-obra";
+type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard" | "diario-obra" | "relatorio-obra" | "empresa" | "manual";
 
 type RouteViewType = "measurement-planning" | "long-term-planning" | "project-contract" | "ple-measurements" | "holding-receitas" | "holding-despesas" | "holding-documentos" | "holding-prd" | "holding-insights" | "holding-config" | "cashflow-simulator" | "purchase-panel";
 type MenuViewType = ViewType | RouteViewType;
