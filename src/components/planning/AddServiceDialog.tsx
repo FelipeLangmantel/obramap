@@ -220,6 +220,9 @@ export function AddServiceDialog({
           targetHouses *
           ((selectedService?.unit_revenue_value || 0) - (selectedService?.max_cost_value || 0)),
         status: "planned",
+        // Unidade customizada por serviço (null = herda da obra)
+        unit_label: unitLabel || null,
+        unit_symbol: unitSymbol || null,
         updated_at: new Date().toISOString(),
       };
 
