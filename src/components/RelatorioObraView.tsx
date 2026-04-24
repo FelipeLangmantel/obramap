@@ -14,9 +14,9 @@ import { ptBR } from "date-fns/locale";
 import { FileText, Loader2, CalendarDays, Users, ClipboardCheck, Hammer, AlertTriangle, MessageSquare, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
-type Periodo = "semanal" | "quinzenal" | "mensal";
+type Periodo = "semanal" | "quinzenal" | "mensal" | "personalizado";
 
-const PERIODO_DAYS: Record<Periodo, number> = { semanal: 7, quinzenal: 15, mensal: 30 };
+const PERIODO_DAYS: Record<Exclude<Periodo, "personalizado">, number> = { semanal: 7, quinzenal: 15, mensal: 30 };
 
 interface DiaryEntryRow {
   id: string;
@@ -26,6 +26,8 @@ interface DiaryEntryRow {
   equipe_presente: number | null;
   observacao_geral: string | null;
   status: string;
+  status_aprovacao?: string | null;
+  mm_chuva?: number | null;
 }
 interface DiaryItemRow {
   id: string;
@@ -60,6 +62,7 @@ export default function RelatorioObraView() {
   const { currentProject } = useConstruction();
   const [periodo, setPeriodo] = useState<Periodo>("semanal");
   const [dataFim, setDataFim] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [dataInicioCustom, setDataInicioCustom] = useState<string>(format(subDays(new Date(), 7), "yyyy-MM-dd"));
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -68,9 +71,10 @@ export default function RelatorioObraView() {
   const [deviations, setDeviations] = useState<DeviationRow[]>([]);
 
   const dataInicio = useMemo(() => {
+    if (periodo === "personalizado") return dataInicioCustom;
     const fim = parseISO(dataFim);
     return format(subDays(fim, PERIODO_DAYS[periodo] - 1), "yyyy-MM-dd");
-  }, [periodo, dataFim]);
+  }, [periodo, dataFim, dataInicioCustom]);
 
   useEffect(() => {
     if (!currentProject?.id) return;
@@ -110,7 +114,7 @@ export default function RelatorioObraView() {
       // 1. Diary entries
       const { data: entriesData } = await supabase
         .from("diary_entries")
-        .select("id, entry_date, engineer_name, clima, equipe_presente, observacao_geral, status")
+        .select("id, entry_date, engineer_name, clima, equipe_presente, observacao_geral, status, status_aprovacao, mm_chuva")
         .eq("project_id", currentProject.id)
         .gte("entry_date", dataInicio)
         .lte("entry_date", dataFim)
@@ -188,6 +192,40 @@ export default function RelatorioObraView() {
       .map(e => ({ data: e.entry_date, texto: e.observacao_geral!, engenheiro: e.engineer_name }));
   }, [entries]);
 
+  // IDC e clima
+  const climaStats = useMemo(() => {
+    const totalDias = entries.length;
+    const chuvosos = entries.filter(e => (e.clima || "").toLowerCase().includes("chuv")).length;
+    const praticaveis = totalDias - chuvosos;
+    const mmAcumulado = entries.reduce((s, e) => s + Number(e.mm_chuva || 0), 0);
+    const idc = totalDias > 0 ? Math.round((praticaveis / totalDias) * 100) : 0;
+    return { totalDias, chuvosos, praticaveis, mmAcumulado: Math.round(mmAcumulado * 10) / 10, idc };
+  }, [entries]);
+
+  // Status RDOs
+  const rdoStatus = useMemo(() => {
+    const aprovado = entries.filter(e => e.status_aprovacao === "aprovado").length;
+    const revisando = entries.filter(e => e.status_aprovacao === "revisando").length;
+    const preenchendo = entries.filter(e => e.status_aprovacao === "preenchendo" || !e.status_aprovacao).length;
+    return { aprovado, revisando, preenchendo, total: entries.length };
+  }, [entries]);
+
+  // Curva S — % executado acumulado por dia
+  const curvaS = useMemo(() => {
+    // Soma percentuais por dia, divididos pelo nº de casas, normalizando por casa-serviço
+    const byDay = new Map<string, number>();
+    for (const e of entries) byDay.set(e.entry_date, 0);
+    for (const it of items) {
+      const ent = entries.find(e => e.id === it.diary_entry_id);
+      if (!ent) continue;
+      const peso = (it.percentual_executado / 100) * it.house_ids.length;
+      byDay.set(ent.entry_date, (byDay.get(ent.entry_date) || 0) + peso);
+    }
+    const ordered = Array.from(byDay.entries()).sort(([a], [b]) => a.localeCompare(b));
+    let acum = 0;
+    return ordered.map(([d, v]) => ({ data: d, dia: v, acum: (acum += v) }));
+  }, [entries, items]);
+
   const handleGeneratePDF = async () => {
     if (!currentProject) return;
     setExporting(true);
@@ -221,6 +259,12 @@ export default function RelatorioObraView() {
           ["Total casas executadas", String(kpis.casasExecutadas)],
           ["Serviços distintos", String(kpis.servicos)],
           ["Equipe média/dia", String(kpis.equipeMedia)],
+          ["IDC — Índice de Dias Praticáveis", `${climaStats.idc}% (${climaStats.praticaveis}/${climaStats.totalDias})`],
+          ["Dias com chuva", String(climaStats.chuvosos)],
+          ["Pluviometria acumulada", `${climaStats.mmAcumulado} mm`],
+          ["RDOs aprovados", `${rdoStatus.aprovado} / ${rdoStatus.total}`],
+          ["RDOs em revisão", String(rdoStatus.revisando)],
+          ["RDOs em preenchimento", String(rdoStatus.preenchendo)],
         ],
         theme: "grid",
         headStyles: { fillColor: [37, 99, 235] },
@@ -335,9 +379,16 @@ export default function RelatorioObraView() {
                   <SelectItem value="semanal">Semanal (7 dias)</SelectItem>
                   <SelectItem value="quinzenal">Quinzenal (15 dias)</SelectItem>
                   <SelectItem value="mensal">Mensal (30 dias)</SelectItem>
+                  <SelectItem value="personalizado">Personalizado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {periodo === "personalizado" && (
+              <div className="flex-1 min-w-[160px]">
+                <label className="text-xs font-medium text-muted-foreground">Data Início</label>
+                <Input type="date" value={dataInicioCustom} onChange={(e) => setDataInicioCustom(e.target.value)} className="mt-1" />
+              </div>
+            )}
             <div className="flex-1 min-w-[160px]">
               <label className="text-xs font-medium text-muted-foreground">Data Fim</label>
               <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="mt-1" />
@@ -361,6 +412,51 @@ export default function RelatorioObraView() {
         <KpiCard icon={<Hammer />} label="Serviços distintos" value={kpis.servicos} color="text-amber-600" />
         <KpiCard icon={<Users />} label="Equipe média/dia" value={kpis.equipeMedia} color="text-purple-600" />
       </div>
+
+      {/* Clima/IDC + RDOs status */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Clima e Praticabilidade</CardTitle></CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <div className="flex justify-between"><span className="text-muted-foreground">IDC (Dias Praticáveis)</span><span className="font-bold">{climaStats.idc}%</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Dias praticáveis</span><span>{climaStats.praticaveis} / {climaStats.totalDias}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Dias com chuva</span><span>{climaStats.chuvosos}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Pluviometria acumulada</span><span className="font-semibold">{climaStats.mmAcumulado} mm</span></div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Status dos RDOs no período</CardTitle></CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <div className="flex justify-between"><span className="text-muted-foreground">Total de RDOs</span><span className="font-bold">{rdoStatus.total}</span></div>
+            <div className="flex justify-between"><span className="text-emerald-600">Aprovados</span><span>{rdoStatus.aprovado}</span></div>
+            <div className="flex justify-between"><span className="text-amber-600">Em revisão</span><span>{rdoStatus.revisando}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Em preenchimento</span><span>{rdoStatus.preenchendo}</span></div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Curva S — execução acumulada */}
+      {curvaS.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Curva S — Execução acumulada (casas-serviço)</CardTitle></CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow><TableHead>Data</TableHead><TableHead className="text-right">Dia</TableHead><TableHead className="text-right">Acumulado</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {curvaS.map(c => (
+                    <TableRow key={c.data}>
+                      <TableCell>{format(parseISO(c.data), "dd/MM")}</TableCell>
+                      <TableCell className="text-right">{c.dia.toFixed(2)}</TableCell>
+                      <TableCell className="text-right font-semibold">{c.acum.toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Atividades */}
       <Card>

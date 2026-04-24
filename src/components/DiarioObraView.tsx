@@ -23,6 +23,7 @@ import type { DiarioPDFData } from "./diario/generateDiarioPDF";
 import { DiarioSummaryPanel } from "./diario/DiarioSummaryPanel";
 import { ConfirmRainDialog } from "./diario/ConfirmRainDialog";
 import { ImportPreviousDayButton } from "./diario/ImportPreviousDayButton";
+import { RequestDeleteItemDialog } from "./diario/RequestDeleteItemDialog";
 
 // RDO modular components
 import { RdoSidebar } from "./diario/rdo/RdoSidebar";
@@ -933,7 +934,15 @@ export default function DiarioObraView() {
     }
   };
 
+  const [deleteRequestItem, setDeleteRequestItem] = useState<DiaryItem | null>(null);
+
   const handleDeleteItem = async (item: DiaryItem) => {
+    // Engenheiro/usuário comum: precisa abrir pedido de exclusão (governança)
+    if (!isAdmin) {
+      setDeleteRequestItem(item);
+      return;
+    }
+    // Admin/coordenador: hard-delete imediato com revert atômico
     try {
       if (item.production_id) {
         await supabase.from("productions").delete().eq("id", item.production_id);
@@ -1671,6 +1680,15 @@ export default function DiarioObraView() {
           entryDate={entryDate}
         />
       )}
+
+      {/* Solicitar exclusão de lançamento */}
+      <RequestDeleteItemDialog
+        open={!!deleteRequestItem}
+        onOpenChange={(v) => { if (!v) setDeleteRequestItem(null); }}
+        itemId={deleteRequestItem?.id || null}
+        itemDescription={deleteRequestItem ? `${deleteRequestItem.macro_name} · ${deleteRequestItem.scope_name} (${deleteRequestItem.percentual_executado}%)` : undefined}
+        onRequested={() => { if (entryId) loadItems(entryId); }}
+      />
     </div>
   );
 }
