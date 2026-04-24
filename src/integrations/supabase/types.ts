@@ -6034,6 +6034,105 @@ export type Database = {
           },
         ]
       }
+      notification_event_types: {
+        Row: {
+          created_at: string
+          descricao: string | null
+          display_order: number
+          id: string
+          label: string
+          modulo: string
+          tipo: string
+        }
+        Insert: {
+          created_at?: string
+          descricao?: string | null
+          display_order?: number
+          id?: string
+          label: string
+          modulo: string
+          tipo: string
+        }
+        Update: {
+          created_at?: string
+          descricao?: string | null
+          display_order?: number
+          id?: string
+          label?: string
+          modulo?: string
+          tipo?: string
+        }
+        Relationships: []
+      }
+      notification_rules: {
+        Row: {
+          ativa: boolean
+          channel_email: boolean
+          channel_inapp: boolean
+          company_id: string
+          created_at: string
+          created_by: string | null
+          descricao: string | null
+          event_type: string
+          id: string
+          nome: string
+          scope: string
+          scope_obra_ids: string[]
+          target_department_names: string[]
+          target_user_ids: string[]
+          updated_at: string
+        }
+        Insert: {
+          ativa?: boolean
+          channel_email?: boolean
+          channel_inapp?: boolean
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          event_type: string
+          id?: string
+          nome: string
+          scope?: string
+          scope_obra_ids?: string[]
+          target_department_names?: string[]
+          target_user_ids?: string[]
+          updated_at?: string
+        }
+        Update: {
+          ativa?: boolean
+          channel_email?: boolean
+          channel_inapp?: boolean
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          event_type?: string
+          id?: string
+          nome?: string
+          scope?: string
+          scope_obra_ids?: string[]
+          target_department_names?: string[]
+          target_user_ids?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_rules_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_rules_event_type_fkey"
+            columns: ["event_type"]
+            isOneToOne: false
+            referencedRelation: "notification_event_types"
+            referencedColumns: ["tipo"]
+          },
+        ]
+      }
       obra_doc_config: {
         Row: {
           created_at: string | null
@@ -11561,6 +11660,12 @@ export type Database = {
         Returns: number
       }
       reset_user_temp_password: { Args: { p_user_id: string }; Returns: string }
+      resolve_notification_recipients: {
+        Args: { _company_id: string; _event_type: string; _obra_id?: string }
+        Returns: {
+          user_id: string
+        }[]
+      }
       resolve_risk_alert: {
         Args: { p_alert_id: string; p_resolved_by?: string }
         Returns: undefined
