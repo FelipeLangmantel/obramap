@@ -8,7 +8,7 @@ import { useSupplyOverdueCount } from "@/components/supplies/hooks/useSupplyOver
 import { useNotifications } from "@/hooks/useNotifications";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
-import { Bell, CheckCheck, AlertTriangle as AlertTriangleIcon, CheckCircle2, FileText as FileTextIcon, Clock as ClockIcon } from "lucide-react";
+import { Bell, CheckCheck, AlertTriangle as AlertTriangleIcon, CheckCircle2, FileText as FileTextIcon, Clock as ClockIcon, MessageCircle } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -738,31 +738,48 @@ export function NotificationBell({ modulo }: { modulo?: string } = {}) {
               }
               const icon = iconMap[n.tipo] || <ClockIcon className="h-4 w-4 text-muted-foreground" />;
               return (
-                <button
+                <div
                   key={n.id}
                   className={cn(
-                    "w-full text-left p-3 rounded-lg border transition-colors",
+                    "w-full p-3 rounded-lg border transition-colors",
                     n.lida ? "bg-background" : "bg-accent/50 border-primary/20"
                   )}
-                  onClick={() => {
-                    notif.markAsRead(n.id);
-                    notif.setIsOpen(false);
-                    navigate(destino, Object.keys(navState).length > 0 ? { state: navState } : undefined);
-                  }}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 shrink-0">{icon}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{n.titulo}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-2">{n.mensagem}</p>
-                      {n.obra_nome && (
-                        <p className="text-[10px] text-primary mt-1">{n.obra_nome}</p>
-                      )}
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{timeAgo}</p>
-                    </div>
-                    {!n.lida && <div className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1.5" />}
+                    <button
+                      type="button"
+                      className="flex items-start gap-3 flex-1 text-left"
+                      onClick={() => {
+                        notif.markAsRead(n.id);
+                        notif.setIsOpen(false);
+                        navigate(destino, Object.keys(navState).length > 0 ? { state: navState } : undefined);
+                      }}
+                    >
+                      <div className="mt-0.5 shrink-0">{icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{n.titulo}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-2">{n.mensagem}</p>
+                        {n.obra_nome && (
+                          <p className="text-[10px] text-primary mt-1">{n.obra_nome}</p>
+                        )}
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{timeAgo}</p>
+                      </div>
+                      {!n.lida && <div className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1.5" />}
+                    </button>
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(
+                        `*${n.titulo}*\n${n.mensagem}${n.obra_nome ? `\nObra: ${n.obra_nome}` : ""}\n\nVia ObraMap`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      title="Compartilhar no WhatsApp"
+                      className="shrink-0 inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-emerald-500/15 text-emerald-600"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                    </a>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
