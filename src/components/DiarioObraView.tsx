@@ -174,7 +174,9 @@ export default function DiarioObraView() {
   const [produtividadeRef, setProdutividadeRef] = useState<number | null>(null);
   const [produtividadeRefId, setProdutividadeRefId] = useState<string | null>(null);
 
-  const isLocked = entryStatus === "finalizado";
+  const isAdmin = profile?.role === "admin" || profile?.role === "system_admin" || (profile as any)?.is_admin === true;
+  const canApprove = isAdmin || profile?.role === "coordinator";
+  const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado";
 
   const macros = useMemo(() => {
     const template = currentProject?.macrosTemplate || [];
@@ -298,9 +300,8 @@ export default function DiarioObraView() {
     if (!currentProject?.id || !user?.id) return;
     const { data } = await supabase
       .from("diary_entries")
-      .select("id, clima, equipe_presente, observacao_geral, status, num_relatorio, mm_chuva, noite_ativa, clima_manha, clima_tarde, clima_noite, condicao_manha, condicao_tarde, condicao_noite")
+      .select("id, clima, equipe_presente, observacao_geral, status, num_relatorio, mm_chuva, noite_ativa, clima_manha, clima_tarde, clima_noite, condicao_manha, condicao_tarde, condicao_noite, status_aprovacao, created_at, updated_at, engineer_name")
       .eq("project_id", currentProject.id)
-      .eq("engineer_id", user.id)
       .eq("entry_date", entryDate)
       .maybeSingle();
 
