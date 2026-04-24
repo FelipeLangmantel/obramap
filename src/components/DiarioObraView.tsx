@@ -21,6 +21,8 @@ import { geocodeMunicipio, fetchClimaHoje } from "@/lib/geocode";
 import { PrintDiarioDialog } from "./diario/PrintDiarioDialog";
 import type { DiarioPDFData } from "./diario/generateDiarioPDF";
 import { DiarioSummaryPanel } from "./diario/DiarioSummaryPanel";
+import { ConfirmRainDialog } from "./diario/ConfirmRainDialog";
+import { ImportPreviousDayButton } from "./diario/ImportPreviousDayButton";
 
 // RDO modular components
 import { RdoSidebar } from "./diario/rdo/RdoSidebar";
@@ -146,7 +148,11 @@ export default function DiarioObraView() {
     engenheiroResidente: string | null;
     startDate: string | null;
     endDate: string | null;
-  }>({ location: null, contractor: null, engenheiroResidente: null, startDate: null, endDate: null });
+    lat: number | null;
+    lng: number | null;
+  }>({ location: null, contractor: null, engenheiroResidente: null, startDate: null, endDate: null, lat: null, lng: null });
+
+  const [confirmRainOpen, setConfirmRainOpen] = useState(false);
 
   // Service steps (produção física existente)
   const [selectedMacro, setSelectedMacro] = useState<{ id: string; name: string; color: string } | null>(null);
