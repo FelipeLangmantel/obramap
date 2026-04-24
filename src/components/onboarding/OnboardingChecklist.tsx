@@ -18,16 +18,29 @@ export function OnboardingChecklist({ onAction }: OnboardingChecklistProps) {
   useEffect(() => {
     const load = async () => {
       if (!company?.id) return;
-      const [{ data: cmp }, { count: obras }, { count: macros }, { count: users }] = await Promise.all([
+
+      // Buscar projetos da empresa para isolar a contagem de etapas
+      const { data: companyProjects } = await supabase
+        .from("projects")
+        .select("id")
+        .eq("company_id", company.id);
+      const projectIds = (companyProjects || []).map((p: any) => p.id);
+
+      const [{ data: cmp }, { count: obras }, macrosRes, { count: users }] = await Promise.all([
         supabase.from("companies").select("razao_social, cnpj").eq("id", company.id).maybeSingle(),
         supabase.from("obras_portfolio").select("id", { count: "exact", head: true }).eq("company_id", company.id),
-        supabase.from("planning_stages").select("id", { count: "exact", head: true }),
+        projectIds.length > 0
+          ? supabase
+              .from("planning_stages")
+              .select("id", { count: "exact", head: true })
+              .in("project_id", projectIds)
+          : Promise.resolve({ count: 0 } as any),
         supabase.from("profiles").select("id", { count: "exact", head: true }).eq("company_id", company.id),
       ]);
       setSteps({
         empresa: !!(cmp && (cmp as any).razao_social && (cmp as any).cnpj),
         obra: (obras || 0) > 0,
-        macros: (macros || 0) > 0,
+        macros: (macrosRes?.count || 0) > 0,
         equipe: (users || 0) > 1,
       });
       setLoading(false);
