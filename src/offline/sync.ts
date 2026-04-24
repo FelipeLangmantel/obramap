@@ -288,8 +288,16 @@ export async function runSync(): Promise<void> {
           "recompute_house_progress_from_diary" as any,
           { p_project_id: projectId, p_house_numbers: houseNumbers }
         );
-        if (!rpcErr) recomputed.push(projectId);
-        else console.warn("[sync] recompute progress failed:", rpcErr.message);
+        if (!rpcErr) {
+          recomputed.push(projectId);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("obramap:progress-recomputed", {
+              detail: { projectId, houseNumbers }
+            }));
+          }
+        } else {
+          console.warn("[sync] recompute progress failed:", rpcErr.message);
+        }
       } catch (e) {
         console.warn("[sync] recompute progress threw:", e);
       }
