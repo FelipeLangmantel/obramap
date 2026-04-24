@@ -159,6 +159,19 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               </div>
             </>
           )}
+
+          {company?.id && (isCompanyAdmin || isSystemAdmin) && (
+            <>
+              <Separator />
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-sm font-medium">Regras de Notificação</Label>
+                </div>
+                <NotificationRulesPanel />
+              </div>
+            </>
+          )}
         </div>
 
         <DialogFooter>
