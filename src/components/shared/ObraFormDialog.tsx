@@ -495,14 +495,27 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
               </div>
             </div>
           </div>
+          </>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={!allowed || saving} className="gap-2">
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            Salvar Obra
-          </Button>
+          {mode === "link" ? (
+            <Button
+              onClick={handleLinkExisting}
+              disabled={!allowed || saving || !selectedObraId}
+              className="gap-2"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+              Vincular ao ObraMap
+            </Button>
+          ) : (
+            <Button onClick={handleSubmit} disabled={!allowed || saving} className="gap-2">
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Salvar Obra
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
