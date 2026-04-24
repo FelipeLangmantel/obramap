@@ -706,11 +706,11 @@ export default function HoldingReceitasPage() {
             {/* TABS */}
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-5 max-w-2xl">
-                <TabsTrigger value="financeiro">💳 Financeiro</TabsTrigger>
-                <TabsTrigger value="resumo">📊 Resumo</TabsTrigger>
-                <TabsTrigger value="tabela">📋 Tabela</TabsTrigger>
-                <TabsTrigger value="previsao">📅 Previsão</TabsTrigger>
-                <TabsTrigger value="programacao">💰 Programação</TabsTrigger>
+                <TabsTrigger value="financeiro">Financeiro</TabsTrigger>
+                <TabsTrigger value="resumo">Resumo</TabsTrigger>
+                <TabsTrigger value="tabela">Tabela</TabsTrigger>
+                <TabsTrigger value="previsao">Previsão</TabsTrigger>
+                <TabsTrigger value="programacao">Programação</TabsTrigger>
               </TabsList>
 
               {/* ═══ TAB RESUMO ═══ */}

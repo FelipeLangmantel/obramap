@@ -1150,20 +1150,15 @@ export function WeeklyProductionView() {
             Registrar
           </TabsTrigger>
           <TabsTrigger value="diario" className="gap-2 text-sm">
-            📓 Do Diário
+            Do Diário
           </TabsTrigger>
           <TabsTrigger value="analysis" className="gap-2 text-sm">
             <TrendingUp className="w-4 h-4" />
             Análise
           </TabsTrigger>
           <TabsTrigger value="historico" className="gap-2 text-sm">
-            📋 Histórico
+            Histórico
           </TabsTrigger>
-          {podeExcluir && (
-            <TabsTrigger value="obra" className="gap-2 text-sm">
-              📜 Obra
-            </TabsTrigger>
-          )}
         </TabsList>
 
         <TabsContent value="register" className="flex-1 overflow-auto mt-4 space-y-4">

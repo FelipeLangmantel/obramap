@@ -478,7 +478,7 @@ function ObraDetailContent({ obra }: { obra: ObraDrawerData }) {
           <TabsTrigger value="financeiro">Despesas</TabsTrigger>
           <TabsTrigger value="aditivos">Aditivos</TabsTrigger>
           <TabsTrigger value="restricoes">Restrições</TabsTrigger>
-          <TabsTrigger value="reprogramacao">📋 Reprogramação</TabsTrigger>
+          <TabsTrigger value="reprogramacao">Reprogramação</TabsTrigger>
           <TabsTrigger value="historico">Histórico</TabsTrigger>
         </TabsList>
         <div className="flex-1 overflow-y-auto px-6 py-4">
