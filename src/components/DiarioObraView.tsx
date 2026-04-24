@@ -42,6 +42,8 @@ import { AddChecklistDialog } from "./diario/rdo/AddChecklistDialog";
 import { AddCommentDialog } from "./diario/rdo/AddCommentDialog";
 import { useRdoData } from "./diario/rdo/useRdoData";
 import type { RdoSectionKey } from "./diario/rdo/types";
+import { RdoApprovalSection, type StatusAprovacao } from "./diario/rdo/RdoApprovalSection";
+import { RdoFooterNav } from "./diario/rdo/RdoFooterNav";
 
 // Compressão simples via Canvas — reduz tamanho das fotos antes do upload
 async function comprimirImagem(file: File, maxDim = 1024, quality = 0.7): Promise<Blob> {
