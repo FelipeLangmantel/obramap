@@ -1862,6 +1862,68 @@ export type Database = {
           },
         ]
       }
+      diary_edit_requests: {
+        Row: {
+          admin_response: string | null
+          company_id: string
+          created_at: string
+          diary_entry_id: string
+          id: string
+          justificativa: string
+          project_id: string
+          requested_by: string
+          requested_by_name: string
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_by_name: string | null
+          status: string
+          unlocked_until: string | null
+          updated_at: string
+        }
+        Insert: {
+          admin_response?: string | null
+          company_id: string
+          created_at?: string
+          diary_entry_id: string
+          id?: string
+          justificativa: string
+          project_id: string
+          requested_by: string
+          requested_by_name: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_by_name?: string | null
+          status?: string
+          unlocked_until?: string | null
+          updated_at?: string
+        }
+        Update: {
+          admin_response?: string | null
+          company_id?: string
+          created_at?: string
+          diary_entry_id?: string
+          id?: string
+          justificativa?: string
+          project_id?: string
+          requested_by?: string
+          requested_by_name?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_by_name?: string | null
+          status?: string
+          unlocked_until?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_edit_requests_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       diary_entries: {
         Row: {
           clima: string | null
