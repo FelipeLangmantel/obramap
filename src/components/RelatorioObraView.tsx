@@ -114,7 +114,7 @@ export default function RelatorioObraView() {
       // 1. Diary entries
       const { data: entriesData } = await supabase
         .from("diary_entries")
-        .select("id, entry_date, engineer_name, clima, equipe_presente, observacao_geral, status")
+        .select("id, entry_date, engineer_name, clima, equipe_presente, observacao_geral, status, status_aprovacao, mm_chuva")
         .eq("project_id", currentProject.id)
         .gte("entry_date", dataInicio)
         .lte("entry_date", dataFim)
