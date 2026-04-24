@@ -569,32 +569,49 @@ export default function DiarioObraView() {
     if (entryId) return entryId;
     if (!currentProject?.id || !user?.id || !company?.id) return null;
 
-    const { data, error } = await supabase.from("diary_entries").insert({
-      company_id: company.id,
-      project_id: currentProject.id,
-      engineer_id: user.id,
-      engineer_name: profile?.display_name || user.email || "Engenheiro",
-      entry_date: entryDate,
-      equipe_presente: equipePres,
-      observacao_geral: obsGeral || null,
-      ...buildClimaPayload(),
-    }).select("id, num_relatorio, status, status_aprovacao, created_at, updated_at, engineer_name").single();
+    try {
+      const result = await createDiaryEntryAware({
+        project_id: currentProject.id,
+        company_id: company.id,
+        user_id: user.id,
+        data: entryDate,
+        payload: {
+          engineer_id: user.id,
+          engineer_name: profile?.display_name || user.email || "Engenheiro",
+          entry_date: entryDate,
+          equipe_presente: equipePres,
+          observacao_geral: obsGeral || null,
+          ...buildClimaPayload(),
+        },
+      });
 
-    if (error) {
+      setEntryId(result.id);
+      if (result.mode === "online") {
+        setNumRelatorio(result.num_relatorio ?? null);
+        setEntryStatus("rascunho");
+        setStatusAprovacao("preenchendo");
+        setEntryMeta({
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          engineer_name: profile?.display_name || user.email || null,
+        });
+      } else {
+        // Modo offline: número do relatório só é gerado pelo servidor
+        setNumRelatorio(null);
+        setEntryStatus("rascunho");
+        setStatusAprovacao("preenchendo");
+        setEntryMeta({
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          engineer_name: profile?.display_name || user.email || null,
+        });
+        toast.info("Sem internet — relatório salvo no celular. Será enviado quando a conexão voltar.");
+      }
+      return result.id;
+    } catch (error: any) {
       toast.error("Erro ao iniciar relatório: " + (error.message || ""));
       return null;
     }
-
-    setEntryId(data.id);
-    setNumRelatorio((data as any).num_relatorio ?? null);
-    setEntryStatus((data as any).status || "rascunho");
-    setStatusAprovacao(((data as any).status_aprovacao || "preenchendo") as StatusAprovacao);
-    setEntryMeta({
-      created_at: (data as any).created_at || null,
-      updated_at: (data as any).updated_at || null,
-      engineer_name: (data as any).engineer_name || null,
-    });
-    return data.id;
   }, [entryId, currentProject?.id, user?.id, company?.id, profile?.display_name, user?.email, entryDate, equipePres, obsGeral, buildClimaPayload]);
 
   const openDialogWithEntry = useCallback(async (openDialog: () => void) => {
