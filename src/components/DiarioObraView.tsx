@@ -846,7 +846,7 @@ export default function DiarioObraView() {
       }
 
       try {
-        if (produtividadeRefId && produtividadeRef && equipePres > 0) {
+        if (!isOffline && produtividadeRefId && produtividadeRef && equipePres > 0) {
           const produtividadeReal = selectedHouses.length / equipePres;
           if (produtividadeReal > 0) {
             const novaMedia = produtividadeRef * 0.8 + produtividadeReal * 0.2;
