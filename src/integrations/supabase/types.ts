@@ -9591,7 +9591,9 @@ export type Database = {
           team_count: number | null
           teams_planned: number | null
           unit_cost_value: number | null
+          unit_label: string | null
           unit_revenue_value: number | null
+          unit_symbol: string | null
           updated_at: string | null
         }
         Insert: {
@@ -9630,7 +9632,9 @@ export type Database = {
           team_count?: number | null
           teams_planned?: number | null
           unit_cost_value?: number | null
+          unit_label?: string | null
           unit_revenue_value?: number | null
+          unit_symbol?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -9669,7 +9673,9 @@ export type Database = {
           team_count?: number | null
           teams_planned?: number | null
           unit_cost_value?: number | null
+          unit_label?: string | null
           unit_revenue_value?: number | null
+          unit_symbol?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -11067,8 +11073,11 @@ export type Database = {
           macro_name: string
           notes: string | null
           project_id: string
+          quantity: number | null
           scope_id: string
           scope_name: string
+          unit_label: string | null
+          unit_symbol: string | null
           updated_at: string
           week_end: string
           week_start: string
@@ -11093,8 +11102,11 @@ export type Database = {
           macro_name: string
           notes?: string | null
           project_id: string
+          quantity?: number | null
           scope_id: string
           scope_name: string
+          unit_label?: string | null
+          unit_symbol?: string | null
           updated_at?: string
           week_end: string
           week_start: string
@@ -11119,8 +11131,11 @@ export type Database = {
           macro_name?: string
           notes?: string | null
           project_id?: string
+          quantity?: number | null
           scope_id?: string
           scope_name?: string
+          unit_label?: string | null
+          unit_symbol?: string | null
           updated_at?: string
           week_end?: string
           week_start?: string

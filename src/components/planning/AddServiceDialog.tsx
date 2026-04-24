@@ -19,6 +19,7 @@ import {
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { UnitPresetSelector } from "@/components/shared/UnitPresetSelector";
 
 interface ContractService {
   macro_id: string;
@@ -81,6 +82,12 @@ export function AddServiceDialog({
   const [targetHouses, setTargetHouses] = useState<number>(0);
   const [teamCount, setTeamCount] = useState<number>(1);
   const [productivityPerTeam, setProductivityPerTeam] = useState<number>(0);
+  const [unitLabel, setUnitLabel] = useState<string>("");
+  const [unitSymbol, setUnitSymbol] = useState<string>("");
+  const [projectDefaultUnit, setProjectDefaultUnit] = useState<{
+    label: string;
+    symbol: string;
+  } | null>(null);
 
   const isEditing = !!existingService;
 
@@ -110,6 +117,25 @@ export function AddServiceDialog({
     loadContractServices();
   }, [projectId, open]);
 
+  // Carrega unidade default da obra (fallback quando o serviço não define unidade própria)
+  useEffect(() => {
+    const loadProjectUnit = async () => {
+      if (!projectId || !open) return;
+      const { data } = await supabase
+        .from("projects")
+        .select("default_unit_label, default_unit_symbol")
+        .eq("id", projectId)
+        .maybeSingle();
+      if (data) {
+        setProjectDefaultUnit({
+          label: data.default_unit_label || "Casa",
+          symbol: data.default_unit_symbol || "un",
+        });
+      }
+    };
+    loadProjectUnit();
+  }, [projectId, open]);
+
   // Reset/populate form when dialog opens
   useEffect(() => {
     if (open) {
@@ -119,12 +145,16 @@ export function AddServiceDialog({
         setTargetHouses(existingService.target_houses);
         setTeamCount(existingService.team_count);
         setProductivityPerTeam(existingService.productivity_per_team);
+        setUnitLabel((existingService as any).unit_label || "");
+        setUnitSymbol((existingService as any).unit_symbol || "");
       } else {
         setSelectedMacro("");
         setSelectedScope("");
         setTargetHouses(0);
         setTeamCount(1);
         setProductivityPerTeam(0);
+        setUnitLabel("");
+        setUnitSymbol("");
       }
     }
   }, [open, existingService]);
@@ -190,6 +220,9 @@ export function AddServiceDialog({
           targetHouses *
           ((selectedService?.unit_revenue_value || 0) - (selectedService?.max_cost_value || 0)),
         status: "planned",
+        // Unidade customizada por serviço (null = herda da obra)
+        unit_label: unitLabel || null,
+        unit_symbol: unitSymbol || null,
         updated_at: new Date().toISOString(),
       };
 
@@ -306,14 +339,37 @@ export function AddServiceDialog({
                 </div>
               )}
 
-              {/* Houses */}
+              {/* Unidade de produção (preset ou personalizada) */}
+              <UnitPresetSelector
+                value={{ unit_label: unitLabel, unit_symbol: unitSymbol }}
+                onChange={(v) => {
+                  setUnitLabel(v.unit_label);
+                  setUnitSymbol(v.unit_symbol);
+                }}
+                label="Unidade de medida"
+                fallbackHint={
+                  projectDefaultUnit
+                    ? `Herdar da obra: ${projectDefaultUnit.label} (${projectDefaultUnit.symbol})`
+                    : "Herdar unidade default da obra"
+                }
+              />
+
+              {/* Quantity */}
               <div className="space-y-2">
-                <Label>Casas Planejadas</Label>
+                <Label>
+                  Quantidade Planejada
+                  {(unitSymbol || projectDefaultUnit?.symbol) && (
+                    <span className="text-muted-foreground ml-1 text-xs">
+                      ({unitSymbol || projectDefaultUnit?.symbol})
+                    </span>
+                  )}
+                </Label>
                 <Input
                   type="number"
                   min={0}
+                  step={0.01}
                   value={targetHouses}
-                  onChange={(e) => setTargetHouses(parseInt(e.target.value) || 0)}
+                  onChange={(e) => setTargetHouses(parseFloat(e.target.value) || 0)}
                 />
               </div>
 
@@ -330,7 +386,12 @@ export function AddServiceDialog({
 
               {/* Productivity per Team */}
               <div className="space-y-2">
-                <Label>Produtividade por Equipe (casas/quinzena)</Label>
+                <Label>
+                  Produtividade por Equipe
+                  <span className="text-muted-foreground ml-1 text-xs">
+                    ({unitSymbol || projectDefaultUnit?.symbol || "un"}/quinzena)
+                  </span>
+                </Label>
                 <Input
                   type="number"
                   min={0}
@@ -352,7 +413,9 @@ export function AddServiceDialog({
               >
                 <div className="flex justify-between">
                   <span>Capacidade (equipes × produtividade):</span>
-                  <span className="font-medium">{expectedOutput} casas</span>
+                  <span className="font-medium">
+                    {expectedOutput} {unitSymbol || projectDefaultUnit?.symbol || "un"}
+                  </span>
                 </div>
                 <div className="flex justify-between mt-1">
                   <span>{capacityGap >= 0 ? "Folga:" : "Déficit:"}</span>
@@ -361,7 +424,8 @@ export function AddServiceDialog({
                       capacityGap >= 0 ? "text-green-600" : "text-red-600"
                     }`}
                   >
-                    {capacityGap >= 0 ? `+${capacityGap}` : capacityGap} casas
+                    {capacityGap >= 0 ? `+${capacityGap}` : capacityGap}{" "}
+                    {unitSymbol || projectDefaultUnit?.symbol || "un"}
                   </span>
                 </div>
               </div>

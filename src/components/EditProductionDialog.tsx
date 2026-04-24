@@ -42,6 +42,10 @@ interface WeeklyProduction {
   created_at: string;
   notes: string | null;
   is_initial_database?: boolean;
+  // Unidade customizada por serviço (fallback: unidade da obra)
+  unit_label?: string | null;
+  unit_symbol?: string | null;
+  quantity?: number | null;
 }
 
 interface EditProductionDialogProps {
@@ -61,12 +65,29 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
   const [isInitialDatabase, setIsInitialDatabase] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  
+  const [quantity, setQuantity] = useState<number | "">("");
+
   // Percentage editing
   const [editPercentageMode, setEditPercentageMode] = useState(false);
   const [housePercentages, setHousePercentages] = useState<Record<number, number>>({});
 
   const houses = currentProject?.houses || [];
+
+  // Resolve unidade efetiva: serviço → obra → fallback "un"
+  const effectiveUnit = {
+    label:
+      production?.unit_label ||
+      (currentProject as any)?.default_unit_label ||
+      "Casa",
+    symbol:
+      production?.unit_symbol ||
+      (currentProject as any)?.default_unit_symbol ||
+      "un",
+  };
+  // Quando a unidade for "Casa/un", quantidade = nº de casas selecionadas (compat)
+  const isHouseUnit =
+    (effectiveUnit.symbol || "").toLowerCase() === "un" &&
+    /casa|unidade/i.test(effectiveUnit.label || "");
 
   // Get current progress for each house in this scope
   const getHouseProgress = (houseId: number): number => {
@@ -88,7 +109,12 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
       setSelectedHouses(production.house_ids || []);
       setIsInitialDatabase(production.is_initial_database || false);
       setEditPercentageMode(false);
-      
+      setQuantity(
+        production.quantity !== null && production.quantity !== undefined
+          ? Number(production.quantity)
+          : ""
+      );
+
       // Initialize percentages from current house data
       const percentages: Record<number, number> = {};
       production.house_ids.forEach(houseId => {
@@ -162,6 +188,13 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
 
     setIsSaving(true);
     try {
+      // Quantidade efetiva: número de casas (modo casa) ou input livre
+      const effectiveQuantity = isHouseUnit
+        ? selectedHouses.length
+        : typeof quantity === "number"
+        ? quantity
+        : 0;
+
       // Update production record
       const { error } = await supabase
         .from('weekly_productions')
@@ -172,6 +205,9 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
           houses_count: selectedHouses.length,
           notes: notes || null,
           is_initial_database: isInitialDatabase,
+          quantity: effectiveQuantity,
+          unit_label: effectiveUnit.label,
+          unit_symbol: effectiveUnit.symbol,
           updated_at: new Date().toISOString()
         })
         .eq('id', production.id);
@@ -415,7 +451,33 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
               </div>
             )}
 
-            {/* Houses Selection */}
+            {/* Quantity (apenas quando unidade não é Casa/un) */}
+            {!isHouseUnit && (
+              <div className="space-y-2 p-3 rounded-lg border bg-primary/5">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  Quantidade Produzida
+                  <Badge variant="outline" className="text-xs">
+                    {effectiveUnit.label} ({effectiveUnit.symbol})
+                  </Badge>
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={quantity}
+                  placeholder={`Ex: 120 ${effectiveUnit.symbol}`}
+                  onChange={(e) =>
+                    setQuantity(e.target.value === "" ? "" : parseFloat(e.target.value))
+                  }
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  As casas selecionadas abaixo continuam sendo registradas para fins
+                  de mapa e auditoria, mas o avanço financeiro/físico considera a
+                  quantidade em {effectiveUnit.symbol}.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium flex items-center gap-2">
