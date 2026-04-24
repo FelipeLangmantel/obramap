@@ -191,7 +191,7 @@ export default function DiarioObraView() {
     (async () => {
       const { data: projData } = await supabase
         .from("projects")
-        .select("location, municipio, estado, start_date, end_date")
+        .select("location, municipio, estado")
         .eq("id", currentProject.id)
         .maybeSingle();
 
@@ -203,7 +203,6 @@ export default function DiarioObraView() {
         .limit(1)
         .maybeSingle();
 
-      // Engenheiro residente — buscar via responsabilidades de obra (holding) ou owner
       let residente: string | null = null;
       try {
         const { data: obra } = await supabase
@@ -212,17 +211,18 @@ export default function DiarioObraView() {
           .eq("ple_project_id", currentProject.id)
           .maybeSingle();
         residente = (obra as any)?.engenheiro_residente_nome || null;
-      } catch { /* tabela pode não existir em todos os ambientes */ }
+      } catch { /* opcional */ }
 
-      const loc = projData?.location ||
-        (projData?.municipio ? `${projData.municipio}${projData.estado ? "/" + projData.estado : ""}` : null);
+      const proj = projData as any;
+      const loc = proj?.location ||
+        (proj?.municipio ? `${proj.municipio}${proj.estado ? "/" + proj.estado : ""}` : null);
 
       setProjectInfo({
         location: loc,
         contractor: (contractorData?.contractor as any)?.name || null,
         engenheiroResidente: residente,
-        startDate: (projData as any)?.start_date || null,
-        endDate: (projData as any)?.end_date || null,
+        startDate: null,
+        endDate: null,
       });
     })();
   }, [currentProject?.id]);
