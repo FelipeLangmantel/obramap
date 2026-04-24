@@ -12,6 +12,7 @@ interface Props {
   attachments: RdoAttachment[];
   disabled?: boolean;
   onChanged: () => void;
+  onRequestCreateEntry?: () => Promise<string | null>;
 }
 
 const MAX_BYTES = 20 * 1024 * 1024; // 20 MB
@@ -23,13 +24,23 @@ function getIcon(name: string | null) {
   return FileText;
 }
 
-export function RdoAttachmentsSection({ entryId, companyId, attachments, disabled, onChanged }: Props) {
+export function RdoAttachmentsSection({ entryId, companyId, attachments, disabled, onChanged, onRequestCreateEntry }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [ensuredEntryId, setEnsuredEntryId] = useState<string | null>(null);
+
+  const activeEntryId = entryId || ensuredEntryId;
+
+  const handleOpenPicker = async () => {
+    const resolvedEntryId = activeEntryId || await onRequestCreateEntry?.();
+    if (!resolvedEntryId) return;
+    setEnsuredEntryId(resolvedEntryId);
+    inputRef.current?.click();
+  };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !entryId) return;
+    if (!file || !activeEntryId) return;
     e.target.value = "";
 
     if (file.size > MAX_BYTES) { toast.error("Arquivo excede 20 MB."); return; }
@@ -37,14 +48,14 @@ export function RdoAttachmentsSection({ entryId, companyId, attachments, disable
     setUploading(true);
     try {
       const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
-      const path = `${companyId}/${entryId}/anexos/${Date.now()}_${safeName}`;
+      const path = `${companyId}/${activeEntryId}/anexos/${Date.now()}_${safeName}`;
       const { error: upErr } = await supabase.storage
         .from("diary-attachments")
         .upload(path, file, { contentType: file.type, upsert: false });
       if (upErr) throw upErr;
       const { error: dbErr } = await supabase.from("diary_attachments").insert({
         company_id: companyId,
-        diary_entry_id: entryId,
+        diary_entry_id: activeEntryId,
         tipo: "anexo",
         storage_path: path,
         nome_original: file.name,
@@ -79,7 +90,7 @@ export function RdoAttachmentsSection({ entryId, companyId, attachments, disable
       id="anexos"
       title="Anexos"
       count={attachments.length}
-      onAdd={entryId && !disabled ? () => inputRef.current?.click() : undefined}
+      onAdd={!disabled ? handleOpenPicker : undefined}
       disabled={disabled || uploading}
       emptyText="PDF, DOC, XLS, JPG ou PNG (até 20 MB)"
     >
