@@ -58,6 +58,7 @@ import { MeasurementSelector } from "./production/MeasurementSelector";
 import { useMeasurements, MeasurementWithServices, MeasurementService } from "@/hooks/useMeasurements";
 import DiarioTabContent from "./weekly-production/DiarioTabContent";
 import { ObraHistoricoPanel } from "./production/ObraHistoricoPanel";
+import { WeatherPeriodPanel } from "./production/WeatherPeriodPanel";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface WeeklyProduction {
@@ -1144,26 +1145,21 @@ export function WeeklyProductionView() {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full">
-        <TabsList className={cn("grid w-full max-w-3xl h-10", podeExcluir ? "grid-cols-5" : "grid-cols-4")}>
+        <TabsList className="grid w-full max-w-3xl h-10 grid-cols-4">
           <TabsTrigger value="register" className="gap-2 text-sm">
             <ClipboardList className="w-4 h-4" />
             Registrar
           </TabsTrigger>
           <TabsTrigger value="diario" className="gap-2 text-sm">
-            📓 Do Diário
+            Do Diário
           </TabsTrigger>
           <TabsTrigger value="analysis" className="gap-2 text-sm">
             <TrendingUp className="w-4 h-4" />
             Análise
           </TabsTrigger>
           <TabsTrigger value="historico" className="gap-2 text-sm">
-            📋 Histórico
+            Histórico
           </TabsTrigger>
-          {podeExcluir && (
-            <TabsTrigger value="obra" className="gap-2 text-sm">
-              📜 Obra
-            </TabsTrigger>
-          )}
         </TabsList>
 
         <TabsContent value="register" className="flex-1 overflow-auto mt-4 space-y-4">
@@ -1931,6 +1927,7 @@ export function WeeklyProductionView() {
           <Tabs defaultValue="evolution" className="w-full">
             <TabsList className="mb-4">
               <TabsTrigger value="evolution">Evolução</TabsTrigger>
+              <TabsTrigger value="clima">Clima e dias praticáveis</TabsTrigger>
               <TabsTrigger value="alerts" className="gap-1.5">
                 Alertas
                 {openDeviationAlertCount > 0 && (
@@ -1940,6 +1937,10 @@ export function WeeklyProductionView() {
                 )}
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="clima" className="space-y-4">
+              {currentProject?.id && <WeatherPeriodPanel projectId={currentProject.id} />}
+            </TabsContent>
 
             <TabsContent value="evolution" className="space-y-4">
           {/* Filters */}
@@ -2491,20 +2492,25 @@ export function WeeklyProductionView() {
         </TabsContent>
 
         <TabsContent value="historico" className="flex-1 overflow-auto mt-4 space-y-4">
-          {podeExcluir ? (
-            <div className="space-y-4">
-              <div className="flex gap-2 flex-wrap">
-                {(["todos","exclusoes","correcoes"] as const).map(f => (
-                  <Button key={f} size="sm"
-                    variant={filtroHistorico === f ? "default" : "outline"}
-                    onClick={() => setFiltroHistorico(f)}>
-                    {f === "todos" ? "Todos" : f === "exclusoes" ? "Exclusões" : "Correções"}
-                  </Button>
-                ))}
-              </div>
-              {historicoUnificado.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">Nenhum registro encontrado.</p>
-              ) : (
+          {currentProject?.id && <ObraHistoricoPanel projectId={currentProject.id} />}
+
+          {podeExcluir && historicoUnificado.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Exclusões e correções manuais
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex gap-2 flex-wrap">
+                  {(["todos","exclusoes","correcoes"] as const).map(f => (
+                    <Button key={f} size="sm"
+                      variant={filtroHistorico === f ? "default" : "outline"}
+                      onClick={() => setFiltroHistorico(f)}>
+                      {f === "todos" ? "Todos" : f === "exclusoes" ? "Exclusões" : "Correções"}
+                    </Button>
+                  ))}
+                </div>
                 <div className="space-y-2">
                   {historicoUnificado.map((item: any, i: number) => (
                     <div key={i} className="rounded-lg border p-3 text-sm space-y-1">
@@ -2526,18 +2532,10 @@ export function WeeklyProductionView() {
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">Acesso restrito a administradores.</p>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
-
-        {podeExcluir && (
-          <TabsContent value="obra" className="flex-1 overflow-auto mt-4 space-y-4">
-            {currentProject?.id && <ObraHistoricoPanel projectId={currentProject.id} />}
-          </TabsContent>
-        )}
 
       </Tabs>
 

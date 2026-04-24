@@ -21,6 +21,8 @@ import { geocodeMunicipio, fetchClimaHoje } from "@/lib/geocode";
 import { PrintDiarioDialog } from "./diario/PrintDiarioDialog";
 import type { DiarioPDFData } from "./diario/generateDiarioPDF";
 import { DiarioSummaryPanel } from "./diario/DiarioSummaryPanel";
+import { ConfirmRainDialog } from "./diario/ConfirmRainDialog";
+import { ImportPreviousDayButton } from "./diario/ImportPreviousDayButton";
 
 // RDO modular components
 import { RdoSidebar } from "./diario/rdo/RdoSidebar";
@@ -146,7 +148,11 @@ export default function DiarioObraView() {
     engenheiroResidente: string | null;
     startDate: string | null;
     endDate: string | null;
-  }>({ location: null, contractor: null, engenheiroResidente: null, startDate: null, endDate: null });
+    lat: number | null;
+    lng: number | null;
+  }>({ location: null, contractor: null, engenheiroResidente: null, startDate: null, endDate: null, lat: null, lng: null });
+
+  const [confirmRainOpen, setConfirmRainOpen] = useState(false);
 
   // Service steps (produção física existente)
   const [selectedMacro, setSelectedMacro] = useState<{ id: string; name: string; color: string } | null>(null);
@@ -230,22 +236,34 @@ export default function DiarioObraView() {
     return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [entryId]);
 
-  const handleSendForApproval = async () => {
+  const handleSendForApproval = () => {
     if (!entryId) return;
-    setSendingForApproval(true);
-    const { error } = await supabase
-      .from("diary_entries")
-      .update({ status_aprovacao: "revisando" } as any)
-      .eq("id", entryId);
-    setSendingForApproval(false);
-    if (error) {
-      toast.error("Erro ao enviar: " + error.message);
-      return;
-    }
-    setStatusAprovacao("revisando");
-    toast.success("RDO enviado ao coordenador para revisão e aprovação.");
+    // Abre confirmação de pluviometria — engenharia exige fechamento desse índice
+    setConfirmRainOpen(true);
   };
 
+  const handleConfirmRainAndSend = async (mmFinal: number) => {
+    if (!entryId) return;
+    setSendingForApproval(true);
+    try {
+      const { error } = await supabase
+        .from("diary_entries")
+        .update({
+          mm_chuva: mmFinal,
+          status_aprovacao: "revisando",
+        } as any)
+        .eq("id", entryId);
+      if (error) {
+        toast.error("Erro ao enviar: " + error.message);
+        return;
+      }
+      setClimaState(prev => ({ ...prev, mmChuva: mmFinal }));
+      setStatusAprovacao("revisando");
+      toast.success("RDO enviado ao coordenador para revisão e aprovação.");
+    } finally {
+      setSendingForApproval(false);
+    }
+  };
 
   const macros = useMemo(() => {
     const template = currentProject?.macrosTemplate || [];
@@ -268,7 +286,7 @@ export default function DiarioObraView() {
     (async () => {
       const { data: projData } = await supabase
         .from("projects")
-        .select("location, municipio, estado")
+        .select("location, municipio, estado, lat, lng")
         .eq("id", currentProject.id)
         .maybeSingle();
 
@@ -300,6 +318,8 @@ export default function DiarioObraView() {
         engenheiroResidente: residente,
         startDate: null,
         endDate: null,
+        lat: proj?.lat != null ? Number(proj.lat) : null,
+        lng: proj?.lng != null ? Number(proj.lng) : null,
       });
     })();
   }, [currentProject?.id]);
@@ -350,13 +370,20 @@ export default function DiarioObraView() {
       const climaAuto = await fetchClimaHoje(coords.lat, coords.lng);
       if (climaAuto) {
         const turno = legacyToTurno(climaAuto.codigo);
-        setClimaState(prev => ({ ...prev, climaManha: turno, climaTarde: turno }));
+        setClimaState(prev => ({
+          ...prev,
+          climaManha: turno,
+          climaTarde: turno,
+          // Pré-preenche pluviometria do Open-Meteo apenas se ainda não houver leitura manual
+          mmChuva: prev.mmChuva == null ? Number(climaAuto.mm_chuva ?? 0) : prev.mmChuva,
+        }));
         setClimaAutoPreenchido(true);
         if (eId) {
           await supabase.from("diary_entries").update({
             clima: climaAuto.codigo,
             clima_manha: turno,
             clima_tarde: turno,
+            mm_chuva: climaAuto.mm_chuva ?? 0,
           }).eq("id", eId);
         }
       }
@@ -1070,6 +1097,22 @@ export default function DiarioObraView() {
             </div>
           </div>
           <div className="flex gap-2 shrink-0 self-start flex-wrap">
+            {!isLocked && currentProject?.id && company?.id && (
+              <ImportPreviousDayButton
+                projectId={currentProject.id}
+                companyId={company.id}
+                currentEntryId={entryId}
+                currentEntryDate={entryDate}
+                isLocked={isLocked}
+                onImported={async () => {
+                  if (entryId) {
+                    await rdo.reload(entryId);
+                    await loadItems(entryId);
+                  }
+                }}
+                ensureEntryExists={ensureEntryExists}
+              />
+            )}
             {!isLocked && (
               <Button onClick={handleSaveHeader} disabled={savingHeader} className="min-h-[40px]">
                 {savingHeader ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
@@ -1585,6 +1628,14 @@ export default function DiarioObraView() {
 
       {/* Print dialog */}
       <PrintDiarioDialog open={printOpen} onOpenChange={setPrintOpen} buildData={buildPrintData} />
+      <ConfirmRainDialog
+        open={confirmRainOpen}
+        onOpenChange={setConfirmRainOpen}
+        lat={projectInfo.lat}
+        lng={projectInfo.lng}
+        currentMm={climaState.mmChuva}
+        onConfirm={handleConfirmRainAndSend}
+      />
 
       {/* ADD DIALOGS */}
       {entryId && company?.id && (
