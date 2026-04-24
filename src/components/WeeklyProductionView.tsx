@@ -58,6 +58,7 @@ import { MeasurementSelector } from "./production/MeasurementSelector";
 import { useMeasurements, MeasurementWithServices, MeasurementService } from "@/hooks/useMeasurements";
 import DiarioTabContent from "./weekly-production/DiarioTabContent";
 import { ObraHistoricoPanel } from "./production/ObraHistoricoPanel";
+import { WeatherPeriodPanel } from "./production/WeatherPeriodPanel";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface WeeklyProduction {
@@ -1926,6 +1927,7 @@ export function WeeklyProductionView() {
           <Tabs defaultValue="evolution" className="w-full">
             <TabsList className="mb-4">
               <TabsTrigger value="evolution">Evolução</TabsTrigger>
+              <TabsTrigger value="clima">Clima e dias praticáveis</TabsTrigger>
               <TabsTrigger value="alerts" className="gap-1.5">
                 Alertas
                 {openDeviationAlertCount > 0 && (
@@ -1935,6 +1937,10 @@ export function WeeklyProductionView() {
                 )}
               </TabsTrigger>
             </TabsList>
+
+            <TabsContent value="clima" className="space-y-4">
+              {currentProject?.id && <WeatherPeriodPanel projectId={currentProject.id} />}
+            </TabsContent>
 
             <TabsContent value="evolution" className="space-y-4">
           {/* Filters */}
