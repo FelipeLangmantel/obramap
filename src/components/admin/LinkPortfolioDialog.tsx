@@ -333,6 +333,36 @@ export function LinkPortfolioDialog({ open, onOpenChange, onLinked }: LinkPortfo
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Sub-dialog: configurar módulos antes de finalizar o vínculo */}
+      <Dialog open={!!moduleDialog} onOpenChange={(o) => !o && setModuleDialog(null)}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5" />
+              Módulos para "{moduleDialog?.obraNome}"
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              Escolha quais módulos esta obra terá acesso após o vínculo.
+            </p>
+          </DialogHeader>
+          <ProjectModulesSelector
+            value={selectedModules}
+            onChange={setSelectedModules}
+            companyId={company?.id}
+            defaultAllEnabled
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModuleDialog(null)} disabled={!!saving}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmLink} disabled={!!saving} className="gap-2">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Confirmar vínculo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
