@@ -205,12 +205,12 @@ export default function DiarioObraView() {
 
       let residente: string | null = null;
       try {
-        const { data: obra } = await supabase
+        const { data: obra } = await (supabase as any)
           .from("obras_portfolio")
           .select("engenheiro_residente_nome")
           .eq("ple_project_id", currentProject.id)
           .maybeSingle();
-        residente = (obra as any)?.engenheiro_residente_nome || null;
+        residente = obra?.engenheiro_residente_nome || null;
       } catch { /* opcional */ }
 
       const proj = projData as any;
