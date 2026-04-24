@@ -327,8 +327,12 @@ export default function DiarioTabContent() {
 
       // 2. Aplicar correção no item
       if (tipoCorrecao === "exclusao") {
-        if (item.production_id) await supabase.from("productions").delete().eq("id", item.production_id);
-        await supabase.from("diary_items").delete().eq("id", item.id);
+        const nowIso = new Date().toISOString();
+        if (item.production_id) {
+          await supabase.from("productions").update({ deleted_at: nowIso, deleted_by: user?.id }).eq("id", item.production_id);
+          await supabase.from("weekly_productions").update({ deleted_at: nowIso, deleted_by: user?.id }).eq("id", item.production_id);
+        }
+        await supabase.from("diary_items").update({ deleted_at: nowIso, deleted_by: user?.id }).eq("id", item.id);
         const revertMap: Record<number, number> = {};
         for (const hId of houseIdsAnterior) {
           const h = houses.find(h => h.id === hId);
@@ -341,6 +345,10 @@ export default function DiarioTabContent() {
       } else if (tipoCorrecao === "ajuste_casas") {
         const removidas = houseIdsAnterior.filter(h => !novasCasas.includes(h));
         await supabase.from("diary_items").update({ house_ids: novasCasas, houses_count: novasCasas.length }).eq("id", item.id);
+        if (item.production_id) {
+          await supabase.from("weekly_productions").update({ house_ids: novasCasas, houses_count: novasCasas.length }).eq("id", item.production_id);
+          await supabase.from("productions").update({ house_ids: novasCasas }).eq("id", item.production_id);
+        }
         if (removidas.length > 0) {
           const revertMap: Record<number, number> = {};
           for (const hId of removidas) {
