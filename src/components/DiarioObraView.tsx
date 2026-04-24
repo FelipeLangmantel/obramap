@@ -105,7 +105,7 @@ const DEFAULT_CLIMA: ClimaState = {
 };
 
 export default function DiarioObraView() {
-  const { currentProject, updateBatchScopeProgress } = useConstruction();
+  const { currentProject, updateBatchScopeProgress, refreshHousesFromDB } = useConstruction();
   const { user, profile, company } = useAuth();
   const houses = currentProject?.houses || [];
   const queryClient = useQueryClient();
@@ -155,6 +155,7 @@ export default function DiarioObraView() {
   const [fotos, setFotos] = useState<{ id: string; url: string; storage_path: string; legenda: string | null }[]>([]);
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState<{ id: string; url: string; legenda: string | null } | null>(null);
+  const fotoInputRef = React.useRef<HTMLInputElement>(null);
 
   // RDO data
   const rdo = useRdoData(entryId);
@@ -173,6 +174,10 @@ export default function DiarioObraView() {
   // Produtividade de referência
   const [produtividadeRef, setProdutividadeRef] = useState<number | null>(null);
   const [produtividadeRefId, setProdutividadeRefId] = useState<string | null>(null);
+  const equipeCalculada = useMemo(
+    () => rdo.labor.reduce((sum, item) => sum + Number(item.quantidade || 0), 0),
+    [rdo.labor]
+  );
 
   const isAdmin = profile?.system_role === "system_admin" || profile?.system_role === "admin";
   const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado";
@@ -463,11 +468,21 @@ export default function DiarioObraView() {
         }
       })
       .on("postgres_changes", {
-        event: "DELETE", schema: "public", table: "diary_items",
-      }, () => { loadEntry(); })
+        event: "*", schema: "public", table: "diary_items",
+        filter: entryId ? `diary_entry_id=eq.${entryId}` : undefined,
+      }, async () => {
+        await loadEntry();
+        await refreshHousesFromDB();
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [currentProject?.id, user?.id]);
+  }, [currentProject?.id, user?.id, entryId, refreshHousesFromDB]);
+
+  useEffect(() => {
+    setEquipePres(equipeCalculada);
+    if (!entryId) return;
+    void supabase.from("diary_entries").update({ equipe_presente: equipeCalculada }).eq("id", entryId);
+  }, [equipeCalculada, entryId]);
 
   const buildClimaPayload = useCallback(() => ({
     clima_manha: climaState.climaManha,
@@ -518,6 +533,17 @@ export default function DiarioObraView() {
     const ensuredEntryId = await ensureEntryExists();
     if (ensuredEntryId) openDialog();
   }, [ensureEntryExists]);
+
+  const handleOpenFotoPicker = useCallback(async () => {
+    if (entryId) {
+      fotoInputRef.current?.click();
+      return;
+    }
+
+    const ensuredEntryId = await ensureEntryExists();
+    if (!ensuredEntryId) return;
+    toast.info("Relatório iniciado. Toque novamente para selecionar as fotos.");
+  }, [entryId, ensureEntryExists]);
 
   // Save header (cabeçalho + clima novo)
   const handleSaveHeader = async () => {
