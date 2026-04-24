@@ -310,6 +310,12 @@ export default function DiarioObraView() {
       setEquipePres(data.equipe_presente || 0);
       setObsGeral(data.observacao_geral || "");
       setEntryStatus(data.status || "rascunho");
+      setStatusAprovacao(((data as any).status_aprovacao || "preenchendo") as StatusAprovacao);
+      setEntryMeta({
+        created_at: (data as any).created_at || null,
+        updated_at: (data as any).updated_at || null,
+        engineer_name: (data as any).engineer_name || null,
+      });
       setNumRelatorio((data as any).num_relatorio ?? null);
       setClimaState({
         noiteAtiva: !!(data as any).noite_ativa,
@@ -333,11 +339,25 @@ export default function DiarioObraView() {
       if (!data.clima && !(data as any).clima_manha) {
         tryAutoFillClima(data.id);
       }
+      // Registrar visualização (upsert para evitar duplicatas)
+      if (user?.id && company?.id) {
+        try {
+          await (supabase as any).from("diary_views").upsert({
+            company_id: company.id,
+            diary_entry_id: data.id,
+            user_id: user.id,
+            user_nome: profile?.display_name || user.email || "Usuário",
+            viewed_at: new Date().toISOString(),
+          }, { onConflict: "diary_entry_id,user_id" });
+        } catch { /* silencioso */ }
+      }
     } else {
       setEntryId(null);
       setEquipePres(0);
       setObsGeral("");
       setEntryStatus("rascunho");
+      setStatusAprovacao("preenchendo");
+      setEntryMeta({ created_at: null, updated_at: null, engineer_name: null });
       setNumRelatorio(null);
       setClimaState(DEFAULT_CLIMA);
       setDiaryItems([]);
