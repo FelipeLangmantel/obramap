@@ -7115,6 +7115,8 @@ export type Database = {
           project_id: string
           scope_id: string | null
           sequence_order: number
+          unit_label: string | null
+          unit_symbol: string | null
           updated_at: string
           version_id: string | null
         }
@@ -7136,6 +7138,8 @@ export type Database = {
           project_id: string
           scope_id?: string | null
           sequence_order?: number
+          unit_label?: string | null
+          unit_symbol?: string | null
           updated_at?: string
           version_id?: string | null
         }
@@ -7157,6 +7161,8 @@ export type Database = {
           project_id?: string
           scope_id?: string | null
           sequence_order?: number
+          unit_label?: string | null
+          unit_symbol?: string | null
           updated_at?: string
           version_id?: string | null
         }
@@ -8098,8 +8104,11 @@ export type Database = {
           notes: string | null
           production_date: string
           project_id: string
+          quantity: number | null
           scope_id: string
           scope_name: string
+          unit_label: string | null
+          unit_symbol: string | null
           updated_at: string
         }
         Insert: {
@@ -8122,8 +8131,11 @@ export type Database = {
           notes?: string | null
           production_date?: string
           project_id: string
+          quantity?: number | null
           scope_id: string
           scope_name: string
+          unit_label?: string | null
+          unit_symbol?: string | null
           updated_at?: string
         }
         Update: {
@@ -8146,8 +8158,11 @@ export type Database = {
           notes?: string | null
           production_date?: string
           project_id?: string
+          quantity?: number | null
           scope_id?: string
           scope_name?: string
+          unit_label?: string | null
+          unit_symbol?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -8446,6 +8461,47 @@ export type Database = {
           },
         ]
       }
+      project_modules: {
+        Row: {
+          created_at: string
+          enabled_at: string | null
+          enabled_by: string | null
+          id: string
+          is_enabled: boolean
+          module_key: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled_at?: string | null
+          enabled_by?: string | null
+          id?: string
+          is_enabled?: boolean
+          module_key: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled_at?: string | null
+          enabled_by?: string | null
+          id?: string
+          is_enabled?: boolean
+          module_key?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_modules_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_service_productivity: {
         Row: {
           company_id: string
@@ -8555,6 +8611,8 @@ export type Database = {
           contractor: string
           created_at: string
           custom_legend_items: Json
+          default_unit_label: string | null
+          default_unit_symbol: string | null
           display_order: number
           estado: string | null
           expected_end_date: string
@@ -8582,6 +8640,8 @@ export type Database = {
           contractor: string
           created_at?: string
           custom_legend_items?: Json
+          default_unit_label?: string | null
+          default_unit_symbol?: string | null
           display_order?: number
           estado?: string | null
           expected_end_date: string
@@ -8609,6 +8669,8 @@ export type Database = {
           contractor?: string
           created_at?: string
           custom_legend_items?: Json
+          default_unit_label?: string | null
+          default_unit_symbol?: string | null
           display_order?: number
           estado?: string | null
           expected_end_date?: string
@@ -11795,6 +11857,10 @@ export type Database = {
       }
       recalc_alerts_for_measurement: {
         Args: { p_measurement_id: string }
+        Returns: undefined
+      }
+      recalc_obra_portfolio_progress: {
+        Args: { _project_id: string }
         Returns: undefined
       }
       recalcular_percentual_financeiro: {
