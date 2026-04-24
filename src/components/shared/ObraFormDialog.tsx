@@ -66,7 +66,23 @@ const initialForm = {
   coordenador_telefone: "",
   planejador_nome: "",
   planejador_telefone: "",
+  // Unidade de medida da obra (default p/ etapas/produções)
+  default_unit_label: "Casa",
+  default_unit_symbol: "un",
 };
+
+// Unidades pré-definidas + opção customizável
+const UNIT_PRESETS = [
+  { label: "Casa / Unidade", value: "Casa|un" },
+  { label: "Metro Quadrado", value: "Metro Quadrado|m²" },
+  { label: "Metro Cúbico", value: "Metro Cúbico|m³" },
+  { label: "Metro Linear", value: "Metro Linear|m" },
+  { label: "Verba (R$)", value: "Verba|R$" },
+  { label: "Percentual (%)", value: "Percentual|%" },
+  { label: "Tonelada", value: "Tonelada|ton" },
+  { label: "Quilograma", value: "Quilograma|kg" },
+  { label: "Personalizado...", value: "__custom__" },
+];
 
 export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogProps) {
   const { company, isCompanyAdmin, isSystemAdmin, canEdit, requireEdit } = useAuth();
