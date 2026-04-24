@@ -65,6 +65,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { UserPermissionsPanel } from "@/components/admin/UserPermissionsPanel";
+import { LinkPortfolioDialog } from "@/components/admin/LinkPortfolioDialog";
 import { ModuleUnderDevelopmentDialog } from "@/components/ModuleUnderDevelopmentDialog";
 import {
   Dialog,
@@ -160,6 +161,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [projectsListOpen, setProjectsListOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [linkPortfolioOpen, setLinkPortfolioOpen] = useState(false);
   const [macrosDialogOpen, setMacrosDialogOpen] = useState(false);
   const [quadrasDialogOpen, setQuadrasDialogOpen] = useState(false);
   const [companyModules, setCompanyModules] = useState<CompanyModule[]>([]);
@@ -466,6 +468,17 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
+                {(isAdmin || isCompanyAdmin) && canAccessManagement("projetos") && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setLinkPortfolioOpen(true)}
+                      className="w-full justify-start gap-3 px-3 py-3 rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-150"
+                    >
+                      <Building2 className="h-5 w-5 shrink-0" />
+                      <span className="text-sm font-medium">Vincular Painel ↔ ObraMap</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
                 {canAccessManagement("quadras") && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
@@ -623,6 +636,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       />
 
       <ProjectsListDialog open={projectsListOpen} onOpenChange={setProjectsListOpen} />
+      <LinkPortfolioDialog open={linkPortfolioOpen} onOpenChange={setLinkPortfolioOpen} />
       <NewProjectDialog 
         open={newProjectOpen} 
         onOpenChange={setNewProjectOpen}

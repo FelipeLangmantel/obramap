@@ -4,11 +4,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Building2, Loader2 } from "lucide-react";
+import { Building2, Link2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+
+interface UnlinkedObra {
+  id: string;
+  nome: string;
+  empresa: string | null;
+  municipio: string | null;
+  estado: string | null;
+  uh: number | null;
+  data_inicio: string | null;
+  prazo_dias: number | null;
+  tipo_contrato: string | null;
+}
 
 interface ObraFormDialogProps {
   open: boolean;
@@ -66,10 +79,17 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // Modo: criar nova obra OU vincular obra existente do Painel
+  const [mode, setMode] = useState<"new" | "link">("new");
+  const [unlinkedObras, setUnlinkedObras] = useState<UnlinkedObra[]>([]);
+  const [selectedObraId, setSelectedObraId] = useState<string>("");
+
   useEffect(() => {
     if (!open) return;
     setForm(initialForm);
     setErrors({});
+    setMode("new");
+    setSelectedObraId("");
     if (company?.id) {
       supabase
         .from("company_contract_types" as any)
@@ -78,6 +98,14 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
         .eq("ativo", true)
         .order("nome")
         .then(({ data }) => setContractTypes((data as any[]) || []));
+      // Obras do Painel ainda não vinculadas — base do modo "linkar existente"
+      supabase
+        .from("obras_portfolio")
+        .select("id, nome, empresa, municipio, estado, uh, data_inicio, prazo_dias, tipo_contrato")
+        .eq("company_id", company.id)
+        .is("obramap_project_id", null)
+        .order("nome")
+        .then(({ data }) => setUnlinkedObras((data as any[]) || []));
     }
     // System admin pode escolher empresa; normal usa a sua
     if (isSystemAdmin) {
@@ -89,6 +117,11 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
       setForm((f) => ({ ...f, empresa: company.name || "" }));
     }
   }, [open, company?.id, company?.name, isSystemAdmin]);
+
+  const selectedObra = useMemo(
+    () => unlinkedObras.find((o) => o.id === selectedObraId) || null,
+    [unlinkedObras, selectedObraId]
+  );
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -108,6 +141,46 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
     if (!form.responsavel_nome.trim()) e.responsavel_nome = "Eng. Residente é obrigatório";
     setErrors(e);
     return Object.keys(e).length === 0;
+  };
+
+  // Cria APENAS um projeto operacional no ObraMap e amarra a uma obra
+  // já existente no Painel de Obras (obras_portfolio).
+  const handleLinkExisting = async () => {
+    if (!requireEdit()) return;
+    if (!company?.id) return;
+    if (!selectedObra) {
+      toast.error("Selecione uma obra do Painel.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const projectId = await addProject({
+        name: selectedObra.nome,
+        location: `${selectedObra.municipio || ""} - ${selectedObra.estado || ""}`.trim(),
+        contractor: selectedObra.empresa || "",
+        startDate: selectedObra.data_inicio || "",
+        expectedEndDate: "",
+        totalHouses: Number(selectedObra.uh) || 0,
+        unitSize: 45,
+        projectType: selectedObra.tipo_contrato || "Residencial Popular",
+      });
+      if (!projectId) throw new Error("Falha ao criar projeto ObraMap");
+
+      const { error: linkErr } = await supabase
+        .from("obras_portfolio")
+        .update({ obramap_project_id: projectId } as any)
+        .eq("id", selectedObra.id);
+      if (linkErr) throw linkErr;
+
+      await setCurrentProject(projectId);
+      toast.success(`Obra "${selectedObra.nome}" vinculada ao ObraMap!`);
+      onOpenChange(false);
+      onSaved?.(selectedObra.id, projectId);
+    } catch (e: any) {
+      toast.error("Erro ao vincular obra: " + (e.message || ""));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -203,6 +276,77 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
         </DialogHeader>
 
         <div className="space-y-5 py-3">
+          {/* Seletor de modo: Nova obra OU vincular existente */}
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
+            <RadioGroup
+              value={mode}
+              onValueChange={(v) => setMode(v as "new" | "link")}
+              className="grid grid-cols-1 md:grid-cols-2 gap-2"
+            >
+              <label
+                className={`flex items-start gap-2 p-3 rounded-md border cursor-pointer transition-colors ${
+                  mode === "new" ? "border-primary bg-primary/5" : "border-border bg-background"
+                }`}
+              >
+                <RadioGroupItem value="new" className="mt-0.5" />
+                <div className="space-y-0.5">
+                  <div className="text-sm font-medium flex items-center gap-1.5">
+                    <Building2 className="h-3.5 w-3.5" /> Cadastrar nova obra
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Cria a obra no Painel e no ObraMap simultaneamente.
+                  </div>
+                </div>
+              </label>
+              <label
+                className={`flex items-start gap-2 p-3 rounded-md border cursor-pointer transition-colors ${
+                  mode === "link" ? "border-primary bg-primary/5" : "border-border bg-background"
+                } ${unlinkedObras.length === 0 ? "opacity-50" : ""}`}
+              >
+                <RadioGroupItem value="link" className="mt-0.5" disabled={unlinkedObras.length === 0} />
+                <div className="space-y-0.5">
+                  <div className="text-sm font-medium flex items-center gap-1.5">
+                    <Link2 className="h-3.5 w-3.5" /> Vincular obra do Painel
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {unlinkedObras.length > 0
+                      ? `${unlinkedObras.length} obra(s) do painel sem ObraMap.`
+                      : "Nenhuma obra pendente no painel."}
+                  </div>
+                </div>
+              </label>
+            </RadioGroup>
+
+            {mode === "link" && (
+              <div className="space-y-2">
+                <Label>Obra do Painel *</Label>
+                <Select value={selectedObraId} onValueChange={setSelectedObraId} disabled={!allowed}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Escolha uma obra já cadastrada..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {unlinkedObras.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {o.nome} {o.municipio ? `— ${o.municipio}/${o.estado}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedObra && (
+                  <div className="text-[11px] text-muted-foreground bg-background rounded p-2 border">
+                    <strong>{selectedObra.nome}</strong> • {selectedObra.empresa} •{" "}
+                    {selectedObra.municipio}/{selectedObra.estado} • {selectedObra.uh ?? "?"} UH
+                    <br />
+                    Ao confirmar, será criado um projeto operacional no ObraMap (mapa,
+                    diários, produção) vinculado a esta obra.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {mode === "new" && (
+          <>
           {/* Identificação */}
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-foreground/80">Identificação</h3>
@@ -351,14 +495,27 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
               </div>
             </div>
           </div>
+          </>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={!allowed || saving} className="gap-2">
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            Salvar Obra
-          </Button>
+          {mode === "link" ? (
+            <Button
+              onClick={handleLinkExisting}
+              disabled={!allowed || saving || !selectedObraId}
+              className="gap-2"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+              Vincular ao ObraMap
+            </Button>
+          ) : (
+            <Button onClick={handleSubmit} disabled={!allowed || saving} className="gap-2">
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              Salvar Obra
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
