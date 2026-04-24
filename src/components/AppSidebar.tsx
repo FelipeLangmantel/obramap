@@ -636,6 +636,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       />
 
       <ProjectsListDialog open={projectsListOpen} onOpenChange={setProjectsListOpen} />
+      <LinkPortfolioDialog open={linkPortfolioOpen} onOpenChange={setLinkPortfolioOpen} />
       <NewProjectDialog 
         open={newProjectOpen} 
         onOpenChange={setNewProjectOpen}
