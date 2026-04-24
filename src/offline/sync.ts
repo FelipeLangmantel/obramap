@@ -97,7 +97,7 @@ async function syncEntry(entry: PendingDiaryEntry): Promise<string | null> {
 
   const { data, error } = await supabase
     .from("diary_entries")
-    .insert(insertPayload)
+    .insert(insertPayload as any)
     .select("id")
     .single();
 
