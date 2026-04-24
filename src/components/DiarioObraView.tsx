@@ -790,20 +790,23 @@ export default function DiarioObraView() {
     setRegistering(true);
     try {
       const productionDate = entryDate;
-      const { data: prod, error: prodErr } = await supabase.from("productions").insert({
+      const isOffline = !navigator.onLine;
+
+      // 1) productions
+      const prodResult = await createProductionAware(entryId, {
         project_id: currentProject.id,
         macro_id: selectedMacro.id, macro_name: selectedMacro.name, macro_color: selectedMacro.color,
         scope_id: selectedScope.id, scope_name: selectedScope.name,
         house_ids: selectedHouses, houses_count: selectedHouses.length,
         production_date: productionDate, notes: obsItem || null,
         created_by: user?.id || null,
-      }).select("id").single();
-      if (prodErr) throw prodErr;
+      });
 
+      // 2) weekly_productions
       const entryDateObj = parseISO(entryDate);
       const weekStart = format(startOfWeek(entryDateObj, { weekStartsOn: 1 }), "yyyy-MM-dd");
       const weekEnd = format(endOfWeek(entryDateObj, { weekStartsOn: 1 }), "yyyy-MM-dd");
-      await supabase.from("weekly_productions").insert({
+      await createWeeklyProductionAware(entryId, {
         project_id: currentProject.id, week_start: weekStart, week_end: weekEnd,
         scope_id: selectedScope.id, scope_name: selectedScope.name,
         macro_id: selectedMacro.id, macro_name: selectedMacro.name, macro_color: selectedMacro.color,
@@ -812,29 +815,35 @@ export default function DiarioObraView() {
         created_by_name: profile?.display_name || null,
       });
 
-      await supabase.from("diary_items").insert({
-        diary_entry_id: entryId, production_id: prod.id,
+      // 3) diary_items (vincula à production criada acima — id local quando offline)
+      await createDiaryItemAware(entryId, prodResult.id, {
         macro_id: selectedMacro.id, macro_name: selectedMacro.name, macro_color: selectedMacro.color,
         scope_id: selectedScope.id, scope_name: selectedScope.name,
         house_ids: selectedHouses, houses_count: selectedHouses.length,
         percentual_executado: percentual, observacao: obsItem || null,
       });
 
-      const progressMap: Record<number, number> = {};
-      for (const houseId of selectedHouses) {
-        const housePct = housePercents[houseId] ?? percentual;
-        const currentProg = getHouseProgress(houseId);
-        const remaining = 100 - currentProg;
-        const addPct = Math.min(housePct, remaining);
-        progressMap[houseId] = Math.min(100, currentProg + addPct);
+      // 4) Progresso das casas — só atualiza no servidor quando online.
+      // Offline: o progresso será recalculado na próxima reabertura quando os dados voltarem.
+      if (!isOffline) {
+        const progressMap: Record<number, number> = {};
+        for (const houseId of selectedHouses) {
+          const housePct = housePercents[houseId] ?? percentual;
+          const currentProg = getHouseProgress(houseId);
+          const remaining = 100 - currentProg;
+          const addPct = Math.min(housePct, remaining);
+          progressMap[houseId] = Math.min(100, currentProg + addPct);
+        }
+        await updateBatchScopeProgress(selectedHouses, selectedMacro.id, selectedScope.id, 100, progressMap);
+
+        queryClient.invalidateQueries({ queryKey: ["productions"] });
+        queryClient.invalidateQueries({ queryKey: ["weekly_productions"] });
+        queryClient.invalidateQueries({ queryKey: ["houses"] });
+
+        toast.success(`Registrado: ${selectedScope.name} em ${selectedHouses.length} casas`);
+      } else {
+        toast.success(`Salvo offline: ${selectedScope.name} em ${selectedHouses.length} casas. Sincroniza quando voltar a internet.`);
       }
-      await updateBatchScopeProgress(selectedHouses, selectedMacro.id, selectedScope.id, 100, progressMap);
-
-      queryClient.invalidateQueries({ queryKey: ["productions"] });
-      queryClient.invalidateQueries({ queryKey: ["weekly_productions"] });
-      queryClient.invalidateQueries({ queryKey: ["houses"] });
-
-      toast.success(`Registrado: ${selectedScope.name} em ${selectedHouses.length} casas`);
 
       try {
         if (produtividadeRefId && produtividadeRef && equipePres > 0) {
