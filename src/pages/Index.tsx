@@ -486,6 +486,24 @@ function Index() {
                     <RelatorioObraView />
                   </div>
                 )}
+
+                {activeView === "empresa" && (
+                  <div className="flex-1">
+                    <MinhaEmpresaView />
+                  </div>
+                )}
+
+                {activeView === "manual" && (
+                  <div className="flex-1">
+                    <ManualView onNavigate={(t) => {
+                      if (t === "empresa") setActiveView("empresa");
+                      else if (t === "newObra") setNewObraOpen(true);
+                      else if (t === "macros") setMacrosOpen(true);
+                      else if (t === "users") setUsersOpen(true);
+                      else if (t === "production") setActiveView("production");
+                    }} />
+                  </div>
+                )}
               </div>
             )}
           </main>
@@ -495,6 +513,18 @@ function Index() {
             <p>Desenvolvido por <span className="font-semibold text-foreground">Felipe Langmantel</span></p>
           </footer>
         </div>
+
+        {/* Dialogs disparados pelo banner de onboarding / manual */}
+        <NewProjectDialog open={newObraOpen} onOpenChange={setNewObraOpen} />
+        <ManageMacrosDialog open={macrosOpen} onOpenChange={setMacrosOpen} />
+        <Dialog open={usersOpen} onOpenChange={setUsersOpen}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Painel de Gerenciamento de Usuários</DialogTitle>
+            </DialogHeader>
+            <UserPermissionsPanel />
+          </DialogContent>
+        </Dialog>
       </div>
     </SidebarProvider>
   );
