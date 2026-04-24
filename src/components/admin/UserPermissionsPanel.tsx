@@ -1154,6 +1154,7 @@ export function UserPermissionsPanel() {
         </TabsContent>
 
         <TabsContent value="edit_requests" className="space-y-4">
+          <ProductionApprovalPanel />
           <EditRequestsPanel />
         </TabsContent>
 
