@@ -42,6 +42,8 @@ import { AddChecklistDialog } from "./diario/rdo/AddChecklistDialog";
 import { AddCommentDialog } from "./diario/rdo/AddCommentDialog";
 import { useRdoData } from "./diario/rdo/useRdoData";
 import type { RdoSectionKey } from "./diario/rdo/types";
+import { RdoApprovalSection, type StatusAprovacao } from "./diario/rdo/RdoApprovalSection";
+import { RdoFooterNav } from "./diario/rdo/RdoFooterNav";
 
 // Compressão simples via Canvas — reduz tamanho das fotos antes do upload
 async function comprimirImagem(file: File, maxDim = 1024, quality = 0.7): Promise<Blob> {
@@ -114,9 +116,13 @@ export default function DiarioObraView() {
   const [obsGeral, setObsGeral] = useState("");
   const [entryId, setEntryId] = useState<string | null>(null);
   const [entryStatus, setEntryStatus] = useState<string>("rascunho");
+  const [statusAprovacao, setStatusAprovacao] = useState<StatusAprovacao>("preenchendo");
   const [numRelatorio, setNumRelatorio] = useState<number | null>(null);
   const [savingHeader, setSavingHeader] = useState(false);
   const [correcoesDoDia, setCorrecoesDoDia] = useState<any[]>([]);
+  const [entryMeta, setEntryMeta] = useState<{ created_at: string | null; updated_at: string | null; engineer_name: string | null }>({
+    created_at: null, updated_at: null, engineer_name: null,
+  });
 
   // Clima (novo formato)
   const [climaState, setClimaState] = useState<ClimaState>(DEFAULT_CLIMA);
@@ -168,7 +174,9 @@ export default function DiarioObraView() {
   const [produtividadeRef, setProdutividadeRef] = useState<number | null>(null);
   const [produtividadeRefId, setProdutividadeRefId] = useState<string | null>(null);
 
-  const isLocked = entryStatus === "finalizado";
+  const isAdmin = profile?.system_role === "system_admin" || profile?.system_role === "admin";
+  const canApprove = isAdmin || profile?.system_role === "editor";
+  const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado";
 
   const macros = useMemo(() => {
     const template = currentProject?.macrosTemplate || [];
@@ -292,9 +300,8 @@ export default function DiarioObraView() {
     if (!currentProject?.id || !user?.id) return;
     const { data } = await supabase
       .from("diary_entries")
-      .select("id, clima, equipe_presente, observacao_geral, status, num_relatorio, mm_chuva, noite_ativa, clima_manha, clima_tarde, clima_noite, condicao_manha, condicao_tarde, condicao_noite")
+      .select("id, clima, equipe_presente, observacao_geral, status, num_relatorio, mm_chuva, noite_ativa, clima_manha, clima_tarde, clima_noite, condicao_manha, condicao_tarde, condicao_noite, status_aprovacao, created_at, updated_at, engineer_name")
       .eq("project_id", currentProject.id)
-      .eq("engineer_id", user.id)
       .eq("entry_date", entryDate)
       .maybeSingle();
 
@@ -303,6 +310,12 @@ export default function DiarioObraView() {
       setEquipePres(data.equipe_presente || 0);
       setObsGeral(data.observacao_geral || "");
       setEntryStatus(data.status || "rascunho");
+      setStatusAprovacao(((data as any).status_aprovacao || "preenchendo") as StatusAprovacao);
+      setEntryMeta({
+        created_at: (data as any).created_at || null,
+        updated_at: (data as any).updated_at || null,
+        engineer_name: (data as any).engineer_name || null,
+      });
       setNumRelatorio((data as any).num_relatorio ?? null);
       setClimaState({
         noiteAtiva: !!(data as any).noite_ativa,
@@ -326,11 +339,25 @@ export default function DiarioObraView() {
       if (!data.clima && !(data as any).clima_manha) {
         tryAutoFillClima(data.id);
       }
+      // Registrar visualização (upsert para evitar duplicatas)
+      if (user?.id && company?.id) {
+        try {
+          await (supabase as any).from("diary_views").upsert({
+            company_id: company.id,
+            diary_entry_id: data.id,
+            user_id: user.id,
+            user_nome: profile?.display_name || user.email || "Usuário",
+            viewed_at: new Date().toISOString(),
+          }, { onConflict: "diary_entry_id,user_id" });
+        } catch { /* silencioso */ }
+      }
     } else {
       setEntryId(null);
       setEquipePres(0);
       setObsGeral("");
       setEntryStatus("rascunho");
+      setStatusAprovacao("preenchendo");
+      setEntryMeta({ created_at: null, updated_at: null, engineer_name: null });
       setNumRelatorio(null);
       setClimaState(DEFAULT_CLIMA);
       setDiaryItems([]);
@@ -462,6 +489,7 @@ export default function DiarioObraView() {
              : climaState.climaManha === "nublado" ? "nublado" : "sol",
       };
 
+      let savedEntryId = entryId;
       if (entryId) {
         await supabase.from("diary_entries").update({
           equipe_presente: equipePres,
@@ -482,7 +510,25 @@ export default function DiarioObraView() {
         const { data, error } = await supabase.from("diary_entries").insert(payload).select("id, num_relatorio").single();
         if (error) throw error;
         setEntryId(data.id);
+        savedEntryId = data.id;
         setNumRelatorio((data as any).num_relatorio ?? null);
+      }
+      // Registrar log de edição
+      if (savedEntryId) {
+        try {
+          const ua = navigator.userAgent;
+          const dispositivo = /Android/i.test(ua) ? "android"
+            : /iPhone|iPad|iPod/i.test(ua) ? "ios"
+            : /Tablet|iPad/i.test(ua) ? "tablet" : "web";
+          await (supabase as any).from("diary_edit_log").insert({
+            company_id: company.id,
+            diary_entry_id: savedEntryId,
+            user_id: user.id,
+            user_nome: profile?.display_name || user.email || "Usuário",
+            user_email: user.email || null,
+            dispositivo,
+          });
+        } catch { /* silencioso */ }
       }
       toast.success("Relatório salvo!");
     } catch (err: any) {
@@ -1213,6 +1259,36 @@ export default function DiarioObraView() {
             disabled={isLocked}
             onChanged={() => entryId && rdo.loadAttachments(entryId)}
           />
+
+          {/* APROVAÇÃO E ASSINATURAS */}
+          <RdoApprovalSection
+            entryId={entryId}
+            companyId={company?.id || null}
+            status={statusAprovacao}
+            onStatusChange={(s) => {
+              setStatusAprovacao(s);
+              if (s === "aprovado") setEntryStatus("finalizado");
+              else if (entryStatus === "finalizado") setEntryStatus("rascunho");
+            }}
+            canApprove={canApprove}
+            signerId={user?.id || null}
+            signerName={profile?.display_name || user?.email || null}
+            isLocked={isLocked && !isAdmin}
+          />
+
+          {/* FOOTER: navegação + log + visualizações */}
+          {entryId && (
+            <RdoFooterNav
+              entryId={entryId}
+              projectId={currentProject?.id || null}
+              entryDate={entryDate}
+              onNavigate={(d) => setEntryDate(d)}
+              createdByName={entryMeta.engineer_name}
+              createdAt={entryMeta.created_at}
+              updatedByName={profile?.display_name || null}
+              updatedAt={entryMeta.updated_at}
+            />
+          )}
 
           {/* CORREÇÕES */}
           {correcoesDoDia.length > 0 && (
