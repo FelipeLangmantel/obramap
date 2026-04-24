@@ -934,7 +934,15 @@ export default function DiarioObraView() {
     }
   };
 
+  const [deleteRequestItem, setDeleteRequestItem] = useState<DiaryItem | null>(null);
+
   const handleDeleteItem = async (item: DiaryItem) => {
+    // Engenheiro/usuário comum: precisa abrir pedido de exclusão (governança)
+    if (!isAdmin) {
+      setDeleteRequestItem(item);
+      return;
+    }
+    // Admin/coordenador: hard-delete imediato com revert atômico
     try {
       if (item.production_id) {
         await supabase.from("productions").delete().eq("id", item.production_id);
