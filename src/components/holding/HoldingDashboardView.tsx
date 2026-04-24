@@ -1727,27 +1727,50 @@ export default function HoldingDashboardView() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs">% Andamento Físico (inserido pelo engenheiro)</Label>
-              <div className="flex items-center gap-3 mt-2">
-                <Slider
-                  value={[newObraForm.percentual_andamento]}
-                  onValueChange={([v]) => setNewObraForm(p => ({ ...p, percentual_andamento: v }))}
-                  max={100} step={0.5} className="flex-1"
-                  disabled={editingObra && isEditorRestricted}
-                />
-                <div className="flex items-center gap-1">
-                  <Input type="number" min={0} max={100} step={0.5} value={newObraForm.percentual_andamento}
-                    onChange={(e) => { const v = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)); setNewObraForm(p => ({ ...p, percentual_andamento: v })); }}
-                    className="w-20 text-sm text-right" disabled={editingObra && isEditorRestricted}
-                  />
-                  <span className="text-xs text-muted-foreground">%</span>
-                </div>
-              </div>
-              {newObraForm.valor_contrato && Number(newObraForm.valor_contrato) > 0 && (
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  Valor executado estimado: <span className="font-medium text-foreground">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(newObraForm.valor_contrato) * newObraForm.percentual_andamento / 100)}</span>
-                </p>
-              )}
+              {/* Quando obra está vinculada ao ObraMap, % físico é alimentado AUTOMATICAMENTE
+                  pelas produções lançadas. Bloqueamos o input para evitar divergência entre
+                  fonte oficial (ObraMap) e edição manual no painel. */}
+              {(() => {
+                const isLinkedToObraMap = !!(editingObra as any)?.obramap_project_id;
+                const fisicoDisabled = (editingObra && isEditorRestricted) || isLinkedToObraMap;
+                return (
+                  <>
+                    <Label className="text-xs flex items-center gap-2">
+                      % Andamento Físico {isLinkedToObraMap ? "(sincronizado pelo ObraMap)" : "(inserido pelo engenheiro)"}
+                      {isLinkedToObraMap && (
+                        <Badge variant="secondary" className="text-[9px] py-0 px-1.5 h-4 gap-1">
+                          <Lock className="h-2.5 w-2.5" /> ObraMap
+                        </Badge>
+                      )}
+                    </Label>
+                    <div className="flex items-center gap-3 mt-2">
+                      <Slider
+                        value={[newObraForm.percentual_andamento]}
+                        onValueChange={([v]) => setNewObraForm(p => ({ ...p, percentual_andamento: v }))}
+                        max={100} step={0.5} className="flex-1"
+                        disabled={fisicoDisabled}
+                      />
+                      <div className="flex items-center gap-1">
+                        <Input type="number" min={0} max={100} step={0.5} value={newObraForm.percentual_andamento}
+                          onChange={(e) => { const v = Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)); setNewObraForm(p => ({ ...p, percentual_andamento: v })); }}
+                          className="w-20 text-sm text-right" disabled={fisicoDisabled}
+                        />
+                        <span className="text-xs text-muted-foreground">%</span>
+                      </div>
+                    </div>
+                    {isLinkedToObraMap && (
+                      <p className="text-[10px] text-muted-foreground mt-1 italic">
+                        Esta obra está vinculada ao ObraMap. O % físico é recalculado automaticamente a cada lançamento de produção.
+                      </p>
+                    )}
+                    {!isLinkedToObraMap && newObraForm.valor_contrato && Number(newObraForm.valor_contrato) > 0 && (
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Valor executado estimado: <span className="font-medium text-foreground">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(newObraForm.valor_contrato) * newObraForm.percentual_andamento / 100)}</span>
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
             </div>
             <div>
               <Label className="text-xs">% Financeiro (calculado automaticamente)</Label>
