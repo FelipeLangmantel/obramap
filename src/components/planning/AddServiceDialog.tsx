@@ -339,14 +339,37 @@ export function AddServiceDialog({
                 </div>
               )}
 
-              {/* Houses */}
+              {/* Unidade de produção (preset ou personalizada) */}
+              <UnitPresetSelector
+                value={{ unit_label: unitLabel, unit_symbol: unitSymbol }}
+                onChange={(v) => {
+                  setUnitLabel(v.unit_label);
+                  setUnitSymbol(v.unit_symbol);
+                }}
+                label="Unidade de medida"
+                fallbackHint={
+                  projectDefaultUnit
+                    ? `Herdar da obra: ${projectDefaultUnit.label} (${projectDefaultUnit.symbol})`
+                    : "Herdar unidade default da obra"
+                }
+              />
+
+              {/* Quantity */}
               <div className="space-y-2">
-                <Label>Casas Planejadas</Label>
+                <Label>
+                  Quantidade Planejada
+                  {(unitSymbol || projectDefaultUnit?.symbol) && (
+                    <span className="text-muted-foreground ml-1 text-xs">
+                      ({unitSymbol || projectDefaultUnit?.symbol})
+                    </span>
+                  )}
+                </Label>
                 <Input
                   type="number"
                   min={0}
+                  step={0.01}
                   value={targetHouses}
-                  onChange={(e) => setTargetHouses(parseInt(e.target.value) || 0)}
+                  onChange={(e) => setTargetHouses(parseFloat(e.target.value) || 0)}
                 />
               </div>
 
@@ -363,7 +386,12 @@ export function AddServiceDialog({
 
               {/* Productivity per Team */}
               <div className="space-y-2">
-                <Label>Produtividade por Equipe (casas/quinzena)</Label>
+                <Label>
+                  Produtividade por Equipe
+                  <span className="text-muted-foreground ml-1 text-xs">
+                    ({unitSymbol || projectDefaultUnit?.symbol || "un"}/quinzena)
+                  </span>
+                </Label>
                 <Input
                   type="number"
                   min={0}
