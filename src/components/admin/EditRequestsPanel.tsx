@@ -117,6 +117,25 @@ export function EditRequestsPanel() {
         });
       });
 
+      // Map diary_edit_requests
+      ((diaryRes as any).data || []).forEach((r: any) => {
+        unified.push({
+          id: r.id,
+          source: "diary_edit",
+          user_name: r.requested_by_name,
+          obra_id: r.project_id,
+          obra_nome: projectMap.get(r.project_id) || "Projeto",
+          justificativa: r.justificativa,
+          status: r.status,
+          admin_response: r.admin_response,
+          created_at: r.created_at,
+          resolved_at: r.resolved_at,
+          resolved_by: r.resolved_by,
+          diary_entry_id: r.diary_entry_id,
+          project_id: r.project_id,
+        });
+      });
+
       // Sort by date desc
       unified.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
