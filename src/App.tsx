@@ -144,6 +144,8 @@ const App = () => {
                   <Route path="/holding-config" element={<HoldingConfigPage />} />
                   <Route path="/cashflow-simulator" element={<CashflowSimulatorPage />} />
                   <Route path="/purchase-panel" element={<PurchasePanelPage />} />
+                  <Route path="/purchase-panel" element={<PurchasePanelPage />} />
+                  <Route path="/diario-fila-offline" element={<DiarioOfflineQueuePage />} />
                   <Route path="/dashboard" element={<Index />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>
