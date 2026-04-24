@@ -859,7 +859,7 @@ export default function DiarioObraView() {
       } catch { /* silencioso */ }
 
       setSelectedHouses([]); setHousePercents({}); setObsItem(""); setPercentual(100);
-      loadItems(entryId);
+      if (!isOffline) loadItems(entryId);
     } catch (err: any) {
       toast.error("Erro ao registrar: " + (err.message || ""));
     } finally {
