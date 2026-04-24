@@ -1144,7 +1144,7 @@ export function WeeklyProductionView() {
   return (
     <div className="space-y-4 h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col h-full">
-        <TabsList className={cn("grid w-full max-w-3xl h-10", podeExcluir ? "grid-cols-5" : "grid-cols-4")}>
+        <TabsList className="grid w-full max-w-3xl h-10 grid-cols-4">
           <TabsTrigger value="register" className="gap-2 text-sm">
             <ClipboardList className="w-4 h-4" />
             Registrar
