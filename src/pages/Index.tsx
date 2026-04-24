@@ -41,7 +41,7 @@ function SidebarTriggerButton() {
   );
 }
 
-type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard" | "diario-obra" | "relatorio-obra";
+type ViewType = "home" | "map" | "charts" | "production" | "costs" | "planning" | "interactive-map" | "3d-map" | "supplies" | "inputs" | "suppliers" | "financial-flow" | "board-decisions" | "delivery" | "smart-planning" | "productivity" | "contractors" | "industrialization" | "holding-dashboard" | "diario-obra" | "relatorio-obra" | "empresa" | "manual";
 
 /**
  * ✅ Index agora é puro - sem redirects
@@ -238,9 +238,11 @@ function Index() {
     "productivity": "Produtividade e Equipes",
     "contractors": "Empreiteiros",
     "industrialization": "Industrialização & Logística",
-    "holding-dashboard": "Painel da Holding",
+    "holding-dashboard": "Painel de Obras",
     "diario-obra": "Diário de Obras",
     "relatorio-obra": "Relatório de Obra",
+    "empresa": "Minha Empresa",
+    "manual": "Manual de Configuração",
   };
 
   return (
