@@ -104,25 +104,35 @@ export function RdoApprovalSection({
             <RadioGroup
               value={status}
               onValueChange={(v) => handleStatusChange(v as StatusAprovacao)}
-              disabled={!canApprove || savingStatus || !entryId}
+              disabled={savingStatus || !entryId}
               className="grid grid-cols-1 sm:grid-cols-3 gap-2"
             >
               {([
-                { v: "preenchendo", l: "1° Preenchendo" },
-                { v: "revisando", l: "2° Revisando" },
-                { v: "aprovado", l: "3° Aprovado" },
-              ] as const).map(opt => (
-                <label key={opt.v}
-                  className="flex items-center gap-2 border rounded-lg p-2 cursor-pointer hover:bg-accent/50 transition-colors"
-                  htmlFor={`status-${opt.v}`}>
-                  <RadioGroupItem id={`status-${opt.v}`} value={opt.v} />
-                  <span className="text-sm">{opt.l}</span>
-                </label>
-              ))}
+                { v: "preenchendo", l: "1° Preenchendo", adminOnly: false },
+                { v: "revisando", l: "2° Revisando", adminOnly: false },
+                { v: "aprovado", l: "3° Aprovado", adminOnly: true },
+              ] as const).map(opt => {
+                const itemDisabled = opt.adminOnly && !canApprove;
+                return (
+                  <label
+                    key={opt.v}
+                    className={`flex items-center gap-2 border rounded-lg p-2 transition-colors ${
+                      itemDisabled
+                        ? "opacity-50 cursor-not-allowed"
+                        : "cursor-pointer hover:bg-accent/50"
+                    }`}
+                    htmlFor={`status-${opt.v}`}
+                    title={itemDisabled ? "Somente o coordenador/administrador pode aprovar" : undefined}
+                  >
+                    <RadioGroupItem id={`status-${opt.v}`} value={opt.v} disabled={itemDisabled} />
+                    <span className="text-sm">{opt.l}</span>
+                  </label>
+                );
+              })}
             </RadioGroup>
             {!canApprove && (
               <p className="text-[11px] text-muted-foreground mt-1">
-                Apenas coordenadores ou administradores podem alterar o status.
+                Somente o coordenador (ou administrador) pode aprovar o RDO no fim da semana.
               </p>
             )}
           </div>

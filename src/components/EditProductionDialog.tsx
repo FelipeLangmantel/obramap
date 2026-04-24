@@ -299,10 +299,10 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
         }
       }
 
-      // Delete production record
+      // Soft delete production record (preserves audit trail)
       const { error } = await supabase
         .from('weekly_productions')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', production.id);
 
       if (error) throw error;
