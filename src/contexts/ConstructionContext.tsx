@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { saveProjectSnapshot, getProjectSnapshot, getAllProjectSnapshots } from "@/offline/projectCache";
 
 export interface LegendItem {
   id: string;
