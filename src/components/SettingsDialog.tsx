@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Moon, Sun, Monitor, Building2, FileText } from "lucide-react";
+import { Moon, Sun, Monitor, Building2, FileText, Bell } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { LogoUploader } from "@/components/diario/LogoUploader";
 import { ContractTypesPanel } from "@/components/settings/ContractTypesPanel";
+import { NotificationRulesPanel } from "@/components/settings/NotificationRulesPanel";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -155,6 +156,19 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                   <Label className="text-sm font-medium">Tipos de Contrato</Label>
                 </div>
                 <ContractTypesPanel />
+              </div>
+            </>
+          )}
+
+          {company?.id && (isCompanyAdmin || isSystemAdmin) && (
+            <>
+              <Separator />
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Bell className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-sm font-medium">Regras de Notificação</Label>
+                </div>
+                <NotificationRulesPanel />
               </div>
             </>
           )}
