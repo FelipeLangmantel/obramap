@@ -406,19 +406,19 @@ export function useMeasurements({ projectId }: UseMeasurementsOptions) {
   // Delete a complete measurement with all services and productions (cascade)
   const deleteMeasurement = useCallback(async (measurementId: string): Promise<boolean> => {
     try {
-      // 1. Delete all productions linked to services of this measurement
+      // 1. Soft delete all productions linked to services of this measurement
       const servicesToDelete = measurementServices.filter(s => s.measurement_id === measurementId);
       for (const service of servicesToDelete) {
         await supabase
           .from('productions')
-          .delete()
+          .update({ deleted_at: new Date().toISOString() })
           .eq('measurement_service_id', service.id);
       }
       
-      // 2. Also delete productions directly linked to measurement
+      // 2. Also soft delete productions directly linked to measurement
       await supabase
         .from('productions')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('measurement_id', measurementId);
 
       // 3. Delete all measurement_services
