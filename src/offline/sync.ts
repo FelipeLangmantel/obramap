@@ -116,19 +116,19 @@ async function syncEntry(entry: PendingDiaryEntry): Promise<string | null> {
   return data.id;
 }
 
-// ───────────────────────────── Sync de um filho (item/produção)
+// Sync genérico de um filho do diário. Aceita overrides de payload
+// (ex: para resolver production_id local → production_id remoto).
 async function syncChild<T extends PendingDiaryItem | PendingProduction>(
   table: "diary_items" | "productions" | "weekly_productions",
   store: any,
   child: T,
-  remoteEntryId: string,
-  entryFkColumn: string
+  payloadOverrides: Record<string, any>
 ): Promise<boolean> {
   await store.update(child.client_uuid, { status: "syncing" });
   const payload = {
     ...child.payload,
+    ...payloadOverrides,
     client_uuid: child.client_uuid,
-    [entryFkColumn]: remoteEntryId,
   };
   const { error } = await supabase.from(table as any).insert(payload);
   if (error && !/duplicate key|unique/i.test(error.message)) {
@@ -212,23 +212,43 @@ export async function runSync(): Promise<void> {
       synced++; done++;
       emit({ type: "progress", done, total });
 
-      // Filhos atrelados a essa entry
-      const items = await offlineDB.diary_items
-        .where({ diary_entry_client_uuid: entry.client_uuid })
-        .and((i) => i.status === "pending" || i.status === "error")
-        .toArray();
-      for (const item of items) {
-        const ok = await syncChild("diary_items", offlineDB.diary_items, item, remoteId, "diary_entry_id");
-        ok ? synced++ : failed++; done++;
-        emit({ type: "progress", done, total });
-      }
-
+      // 1) Produções (productions + weekly_productions) — precisam vir antes dos diary_items
+      const productionRemoteIdMap = new Map<string, string>(); // client_uuid → remote_id
       const prods = await offlineDB.productions
         .where({ diary_entry_client_uuid: entry.client_uuid })
         .and((p) => p.status === "pending" || p.status === "error")
         .toArray();
       for (const p of prods) {
-        const ok = await syncChild(p.table, offlineDB.productions, p, remoteId, "diary_entry_id");
+        const ok = await syncChild(p.table, offlineDB.productions, p, {
+          // productions não tem diary_entry_id; o vínculo é via diary_items
+        });
+        if (ok) {
+          // Buscar o remote_id que o servidor atribuiu (via client_uuid)
+          const { data: remote } = await supabase
+            .from(p.table as any)
+            .select("id")
+            .eq("client_uuid", p.client_uuid)
+            .maybeSingle();
+          if (remote && (remote as any).id) {
+            productionRemoteIdMap.set(p.client_uuid, (remote as any).id);
+          }
+        }
+        ok ? synced++ : failed++; done++;
+        emit({ type: "progress", done, total });
+      }
+
+      // 2) diary_items — resolve production_id local → remote
+      const items = await offlineDB.diary_items
+        .where({ diary_entry_client_uuid: entry.client_uuid })
+        .and((i) => i.status === "pending" || i.status === "error")
+        .toArray();
+      for (const item of items) {
+        const localProdRef = item.payload?.production_id as string | undefined;
+        const resolvedProdId = localProdRef && productionRemoteIdMap.get(localProdRef);
+        const ok = await syncChild("diary_items", offlineDB.diary_items, item, {
+          diary_entry_id: remoteId,
+          ...(resolvedProdId ? { production_id: resolvedProdId } : {}),
+        });
         ok ? synced++ : failed++; done++;
         emit({ type: "progress", done, total });
       }

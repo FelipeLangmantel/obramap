@@ -47,6 +47,13 @@ import { RdoFooterNav } from "./diario/rdo/RdoFooterNav";
 import { RdoEditRequestDialog } from "./diario/rdo/RdoEditRequestDialog";
 import { RdoProductionCharts } from "./diario/rdo/RdoProductionCharts";
 import { Send, Unlock } from "lucide-react";
+import {
+  createDiaryEntryAware,
+  createProductionAware,
+  createWeeklyProductionAware,
+  createDiaryItemAware,
+} from "@/offline/diaryAdapter";
+import { OfflineBanner } from "@/components/offline/OfflineStatusBadge";
 
 // Compressão simples via Canvas — reduz tamanho das fotos antes do upload
 async function comprimirImagem(file: File, maxDim = 1024, quality = 0.7): Promise<Blob> {
@@ -569,32 +576,49 @@ export default function DiarioObraView() {
     if (entryId) return entryId;
     if (!currentProject?.id || !user?.id || !company?.id) return null;
 
-    const { data, error } = await supabase.from("diary_entries").insert({
-      company_id: company.id,
-      project_id: currentProject.id,
-      engineer_id: user.id,
-      engineer_name: profile?.display_name || user.email || "Engenheiro",
-      entry_date: entryDate,
-      equipe_presente: equipePres,
-      observacao_geral: obsGeral || null,
-      ...buildClimaPayload(),
-    }).select("id, num_relatorio, status, status_aprovacao, created_at, updated_at, engineer_name").single();
+    try {
+      const result = await createDiaryEntryAware({
+        project_id: currentProject.id,
+        company_id: company.id,
+        user_id: user.id,
+        data: entryDate,
+        payload: {
+          engineer_id: user.id,
+          engineer_name: profile?.display_name || user.email || "Engenheiro",
+          entry_date: entryDate,
+          equipe_presente: equipePres,
+          observacao_geral: obsGeral || null,
+          ...buildClimaPayload(),
+        },
+      });
 
-    if (error) {
+      setEntryId(result.id);
+      if (result.mode === "online") {
+        setNumRelatorio(result.num_relatorio ?? null);
+        setEntryStatus("rascunho");
+        setStatusAprovacao("preenchendo");
+        setEntryMeta({
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          engineer_name: profile?.display_name || user.email || null,
+        });
+      } else {
+        // Modo offline: número do relatório só é gerado pelo servidor
+        setNumRelatorio(null);
+        setEntryStatus("rascunho");
+        setStatusAprovacao("preenchendo");
+        setEntryMeta({
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          engineer_name: profile?.display_name || user.email || null,
+        });
+        toast.info("Sem internet — relatório salvo no celular. Será enviado quando a conexão voltar.");
+      }
+      return result.id;
+    } catch (error: any) {
       toast.error("Erro ao iniciar relatório: " + (error.message || ""));
       return null;
     }
-
-    setEntryId(data.id);
-    setNumRelatorio((data as any).num_relatorio ?? null);
-    setEntryStatus((data as any).status || "rascunho");
-    setStatusAprovacao(((data as any).status_aprovacao || "preenchendo") as StatusAprovacao);
-    setEntryMeta({
-      created_at: (data as any).created_at || null,
-      updated_at: (data as any).updated_at || null,
-      engineer_name: (data as any).engineer_name || null,
-    });
-    return data.id;
   }, [entryId, currentProject?.id, user?.id, company?.id, profile?.display_name, user?.email, entryDate, equipePres, obsGeral, buildClimaPayload]);
 
   const openDialogWithEntry = useCallback(async (openDialog: () => void) => {
@@ -767,20 +791,23 @@ export default function DiarioObraView() {
     setRegistering(true);
     try {
       const productionDate = entryDate;
-      const { data: prod, error: prodErr } = await supabase.from("productions").insert({
+      const isOffline = !navigator.onLine;
+
+      // 1) productions
+      const prodResult = await createProductionAware(entryId, {
         project_id: currentProject.id,
         macro_id: selectedMacro.id, macro_name: selectedMacro.name, macro_color: selectedMacro.color,
         scope_id: selectedScope.id, scope_name: selectedScope.name,
         house_ids: selectedHouses, houses_count: selectedHouses.length,
         production_date: productionDate, notes: obsItem || null,
         created_by: user?.id || null,
-      }).select("id").single();
-      if (prodErr) throw prodErr;
+      });
 
+      // 2) weekly_productions
       const entryDateObj = parseISO(entryDate);
       const weekStart = format(startOfWeek(entryDateObj, { weekStartsOn: 1 }), "yyyy-MM-dd");
       const weekEnd = format(endOfWeek(entryDateObj, { weekStartsOn: 1 }), "yyyy-MM-dd");
-      await supabase.from("weekly_productions").insert({
+      await createWeeklyProductionAware(entryId, {
         project_id: currentProject.id, week_start: weekStart, week_end: weekEnd,
         scope_id: selectedScope.id, scope_name: selectedScope.name,
         macro_id: selectedMacro.id, macro_name: selectedMacro.name, macro_color: selectedMacro.color,
@@ -789,32 +816,38 @@ export default function DiarioObraView() {
         created_by_name: profile?.display_name || null,
       });
 
-      await supabase.from("diary_items").insert({
-        diary_entry_id: entryId, production_id: prod.id,
+      // 3) diary_items (vincula à production criada acima — id local quando offline)
+      await createDiaryItemAware(entryId, prodResult.id, {
         macro_id: selectedMacro.id, macro_name: selectedMacro.name, macro_color: selectedMacro.color,
         scope_id: selectedScope.id, scope_name: selectedScope.name,
         house_ids: selectedHouses, houses_count: selectedHouses.length,
         percentual_executado: percentual, observacao: obsItem || null,
       });
 
-      const progressMap: Record<number, number> = {};
-      for (const houseId of selectedHouses) {
-        const housePct = housePercents[houseId] ?? percentual;
-        const currentProg = getHouseProgress(houseId);
-        const remaining = 100 - currentProg;
-        const addPct = Math.min(housePct, remaining);
-        progressMap[houseId] = Math.min(100, currentProg + addPct);
+      // 4) Progresso das casas — só atualiza no servidor quando online.
+      // Offline: o progresso será recalculado na próxima reabertura quando os dados voltarem.
+      if (!isOffline) {
+        const progressMap: Record<number, number> = {};
+        for (const houseId of selectedHouses) {
+          const housePct = housePercents[houseId] ?? percentual;
+          const currentProg = getHouseProgress(houseId);
+          const remaining = 100 - currentProg;
+          const addPct = Math.min(housePct, remaining);
+          progressMap[houseId] = Math.min(100, currentProg + addPct);
+        }
+        await updateBatchScopeProgress(selectedHouses, selectedMacro.id, selectedScope.id, 100, progressMap);
+
+        queryClient.invalidateQueries({ queryKey: ["productions"] });
+        queryClient.invalidateQueries({ queryKey: ["weekly_productions"] });
+        queryClient.invalidateQueries({ queryKey: ["houses"] });
+
+        toast.success(`Registrado: ${selectedScope.name} em ${selectedHouses.length} casas`);
+      } else {
+        toast.success(`Salvo offline: ${selectedScope.name} em ${selectedHouses.length} casas. Sincroniza quando voltar a internet.`);
       }
-      await updateBatchScopeProgress(selectedHouses, selectedMacro.id, selectedScope.id, 100, progressMap);
-
-      queryClient.invalidateQueries({ queryKey: ["productions"] });
-      queryClient.invalidateQueries({ queryKey: ["weekly_productions"] });
-      queryClient.invalidateQueries({ queryKey: ["houses"] });
-
-      toast.success(`Registrado: ${selectedScope.name} em ${selectedHouses.length} casas`);
 
       try {
-        if (produtividadeRefId && produtividadeRef && equipePres > 0) {
+        if (!isOffline && produtividadeRefId && produtividadeRef && equipePres > 0) {
           const produtividadeReal = selectedHouses.length / equipePres;
           if (produtividadeReal > 0) {
             const novaMedia = produtividadeRef * 0.8 + produtividadeReal * 0.2;
@@ -827,7 +860,7 @@ export default function DiarioObraView() {
       } catch { /* silencioso */ }
 
       setSelectedHouses([]); setHousePercents({}); setObsItem(""); setPercentual(100);
-      loadItems(entryId);
+      if (!isOffline) loadItems(entryId);
     } catch (err: any) {
       toast.error("Erro ao registrar: " + (err.message || ""));
     } finally {
@@ -956,6 +989,7 @@ export default function DiarioObraView() {
 
   return (
     <div className="pb-24 md:pb-4">
+      <OfflineBanner />
       {/* HEADER do RDO */}
       <div className="bg-card border rounded-lg p-4 mb-4">
         <div className="flex items-start justify-between gap-4 flex-wrap md:flex-nowrap">
