@@ -4,11 +4,24 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { supabase } from "@/integrations/supabase/client";
-import { Building2, Loader2 } from "lucide-react";
+import { Building2, Link2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+
+interface UnlinkedObra {
+  id: string;
+  nome: string;
+  empresa: string | null;
+  municipio: string | null;
+  estado: string | null;
+  uh: number | null;
+  data_inicio: string | null;
+  prazo_dias: number | null;
+  tipo_contrato: string | null;
+}
 
 interface ObraFormDialogProps {
   open: boolean;
