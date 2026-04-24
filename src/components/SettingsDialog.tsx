@@ -145,6 +145,19 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               </div>
             </>
           )}
+
+          {company?.id && (
+            <>
+              <Separator />
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-sm font-medium">Tipos de Contrato</Label>
+                </div>
+                <ContractTypesPanel />
+              </div>
+            </>
+          )}
         </div>
 
         <DialogFooter>
