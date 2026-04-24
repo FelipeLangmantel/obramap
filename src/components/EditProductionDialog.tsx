@@ -188,6 +188,13 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
 
     setIsSaving(true);
     try {
+      // Quantidade efetiva: número de casas (modo casa) ou input livre
+      const effectiveQuantity = isHouseUnit
+        ? selectedHouses.length
+        : typeof quantity === "number"
+        ? quantity
+        : 0;
+
       // Update production record
       const { error } = await supabase
         .from('weekly_productions')
@@ -198,6 +205,9 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
           houses_count: selectedHouses.length,
           notes: notes || null,
           is_initial_database: isInitialDatabase,
+          quantity: effectiveQuantity,
+          unit_label: effectiveUnit.label,
+          unit_symbol: effectiveUnit.symbol,
           updated_at: new Date().toISOString()
         })
         .eq('id', production.id);
