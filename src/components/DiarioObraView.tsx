@@ -175,7 +175,6 @@ export default function DiarioObraView() {
   const [produtividadeRefId, setProdutividadeRefId] = useState<string | null>(null);
 
   const isAdmin = profile?.system_role === "system_admin" || profile?.system_role === "admin";
-  const canApprove = isAdmin || profile?.system_role === "editor";
   const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado";
 
   const macros = useMemo(() => {
