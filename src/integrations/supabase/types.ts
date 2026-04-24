@@ -1637,47 +1637,305 @@ export type Database = {
           },
         ]
       }
+      diary_activities: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          descricao: string
+          diary_entry_id: string
+          id: string
+          localizacao: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          descricao: string
+          diary_entry_id: string
+          id?: string
+          localizacao?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          descricao?: string
+          diary_entry_id?: string
+          id?: string
+          localizacao?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_activities_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_activities_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diary_attachments: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          diary_entry_id: string
+          id: string
+          nome_original: string | null
+          storage_path: string
+          tamanho_bytes: number | null
+          tipo: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          diary_entry_id: string
+          id?: string
+          nome_original?: string | null
+          storage_path: string
+          tamanho_bytes?: number | null
+          tipo: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          diary_entry_id?: string
+          id?: string
+          nome_original?: string | null
+          storage_path?: string
+          tamanho_bytes?: number | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_attachments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_attachments_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diary_checklist: {
+        Row: {
+          company_id: string
+          concluido: boolean | null
+          created_at: string | null
+          diary_entry_id: string
+          id: string
+          item: string
+        }
+        Insert: {
+          company_id: string
+          concluido?: boolean | null
+          created_at?: string | null
+          diary_entry_id: string
+          id?: string
+          item: string
+        }
+        Update: {
+          company_id?: string
+          concluido?: boolean | null
+          created_at?: string | null
+          diary_entry_id?: string
+          id?: string
+          item?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_checklist_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_checklist_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diary_comments: {
+        Row: {
+          autor_id: string | null
+          autor_nome: string | null
+          company_id: string
+          created_at: string | null
+          diary_entry_id: string
+          id: string
+          texto: string
+        }
+        Insert: {
+          autor_id?: string | null
+          autor_nome?: string | null
+          company_id: string
+          created_at?: string | null
+          diary_entry_id: string
+          id?: string
+          texto: string
+        }
+        Update: {
+          autor_id?: string | null
+          autor_nome?: string | null
+          company_id?: string
+          created_at?: string | null
+          diary_entry_id?: string
+          id?: string
+          texto?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_comments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_comments_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diary_edit_log: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          diary_entry_id: string
+          dispositivo: string | null
+          id: string
+          user_email: string | null
+          user_id: string | null
+          user_nome: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          diary_entry_id: string
+          dispositivo?: string | null
+          id?: string
+          user_email?: string | null
+          user_id?: string | null
+          user_nome?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          diary_entry_id?: string
+          dispositivo?: string | null
+          id?: string
+          user_email?: string | null
+          user_id?: string | null
+          user_nome?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_edit_log_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_edit_log_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       diary_entries: {
         Row: {
           clima: string | null
+          clima_manha: string | null
+          clima_noite: string | null
+          clima_tarde: string | null
           company_id: string
+          condicao_manha: string | null
+          condicao_noite: string | null
+          condicao_obra: string | null
+          condicao_tarde: string | null
           created_at: string | null
           engineer_id: string
           engineer_name: string
           entry_date: string
           equipe_presente: number | null
           id: string
+          mm_chuva: number | null
+          noite_ativa: boolean | null
+          num_relatorio: number | null
           observacao_geral: string | null
           project_id: string
           status: string
+          status_aprovacao: string | null
           updated_at: string | null
         }
         Insert: {
           clima?: string | null
+          clima_manha?: string | null
+          clima_noite?: string | null
+          clima_tarde?: string | null
           company_id: string
+          condicao_manha?: string | null
+          condicao_noite?: string | null
+          condicao_obra?: string | null
+          condicao_tarde?: string | null
           created_at?: string | null
           engineer_id: string
           engineer_name: string
           entry_date?: string
           equipe_presente?: number | null
           id?: string
+          mm_chuva?: number | null
+          noite_ativa?: boolean | null
+          num_relatorio?: number | null
           observacao_geral?: string | null
           project_id: string
           status?: string
+          status_aprovacao?: string | null
           updated_at?: string | null
         }
         Update: {
           clima?: string | null
+          clima_manha?: string | null
+          clima_noite?: string | null
+          clima_tarde?: string | null
           company_id?: string
+          condicao_manha?: string | null
+          condicao_noite?: string | null
+          condicao_obra?: string | null
+          condicao_tarde?: string | null
           created_at?: string | null
           engineer_id?: string
           engineer_name?: string
           entry_date?: string
           equipe_presente?: number | null
           id?: string
+          mm_chuva?: number | null
+          noite_ativa?: boolean | null
+          num_relatorio?: number | null
           observacao_geral?: string | null
           project_id?: string
           status?: string
+          status_aprovacao?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -1693,6 +1951,48 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diary_equipment: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          diary_entry_id: string
+          id: string
+          nome: string
+          quantidade: number
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          diary_entry_id: string
+          id?: string
+          nome: string
+          quantidade?: number
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          diary_entry_id?: string
+          id?: string
+          nome?: string
+          quantidade?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_equipment_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_equipment_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
             referencedColumns: ["id"]
           },
         ]
@@ -1858,6 +2158,93 @@ export type Database = {
           },
         ]
       }
+      diary_labor: {
+        Row: {
+          categoria: string
+          company_id: string
+          created_at: string | null
+          diary_entry_id: string
+          id: string
+          nome: string
+          quantidade: number
+        }
+        Insert: {
+          categoria?: string
+          company_id: string
+          created_at?: string | null
+          diary_entry_id: string
+          id?: string
+          nome: string
+          quantidade?: number
+        }
+        Update: {
+          categoria?: string
+          company_id?: string
+          created_at?: string | null
+          diary_entry_id?: string
+          id?: string
+          nome?: string
+          quantidade?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_labor_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_labor_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diary_occurrences: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          descricao: string
+          diary_entry_id: string
+          id: string
+          tags: string[] | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          descricao: string
+          diary_entry_id: string
+          id?: string
+          tags?: string[] | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          descricao?: string
+          diary_entry_id?: string
+          id?: string
+          tags?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_occurrences_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_occurrences_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       diary_photos: {
         Row: {
           created_at: string | null
@@ -1896,6 +2283,99 @@ export type Database = {
             columns: ["diary_item_id"]
             isOneToOne: false
             referencedRelation: "diary_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diary_signatures: {
+        Row: {
+          assinado_por: string | null
+          assinado_por_nome: string | null
+          company_id: string
+          created_at: string | null
+          diary_entry_id: string
+          id: string
+          signature_data: string
+          slot: number
+        }
+        Insert: {
+          assinado_por?: string | null
+          assinado_por_nome?: string | null
+          company_id: string
+          created_at?: string | null
+          diary_entry_id: string
+          id?: string
+          signature_data: string
+          slot: number
+        }
+        Update: {
+          assinado_por?: string | null
+          assinado_por_nome?: string | null
+          company_id?: string
+          created_at?: string | null
+          diary_entry_id?: string
+          id?: string
+          signature_data?: string
+          slot?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_signatures_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_signatures_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diary_views: {
+        Row: {
+          company_id: string
+          diary_entry_id: string
+          id: string
+          user_id: string | null
+          user_nome: string | null
+          view_count: number
+          viewed_at: string | null
+        }
+        Insert: {
+          company_id: string
+          diary_entry_id: string
+          id?: string
+          user_id?: string | null
+          user_nome?: string | null
+          view_count?: number
+          viewed_at?: string | null
+        }
+        Update: {
+          company_id?: string
+          diary_entry_id?: string
+          id?: string
+          user_id?: string | null
+          user_nome?: string | null
+          view_count?: number
+          viewed_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_views_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_views_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
             referencedColumns: ["id"]
           },
         ]
@@ -1999,6 +2479,35 @@ export type Database = {
             columns: ["obra_id"]
             isOneToOne: false
             referencedRelation: "obras_portfolio"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      equipment_types: {
+        Row: {
+          company_id: string | null
+          created_at: string | null
+          id: string
+          nome: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          nome: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          nome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipment_types_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -4614,6 +5123,38 @@ export type Database = {
           },
         ]
       }
+      labor_types: {
+        Row: {
+          categoria: string
+          company_id: string | null
+          created_at: string | null
+          id: string
+          nome: string
+        }
+        Insert: {
+          categoria?: string
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          nome: string
+        }
+        Update: {
+          categoria?: string
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          nome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "labor_types_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       map_layer_stage_links: {
         Row: {
           created_at: string
@@ -5529,6 +6070,38 @@ export type Database = {
             columns: ["obramap_project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      occurrence_tags: {
+        Row: {
+          company_id: string | null
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          nome: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          nome: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          nome?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "occurrence_tags_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
