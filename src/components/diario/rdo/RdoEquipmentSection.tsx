@@ -15,7 +15,7 @@ interface Props {
 export function RdoEquipmentSection({ items, onAdd, disabled, onChanged }: Props) {
   const handleRemove = async (id: string) => {
     try {
-      await supabase.from("diary_equipment").delete().eq("id", id);
+      await supabase.from("diary_equipment").update({ deleted_at: new Date().toISOString() }).eq("id", id);
       onChanged();
     } catch (err: any) { toast.error("Erro: " + (err.message || "")); }
   };

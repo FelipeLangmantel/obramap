@@ -24,7 +24,7 @@ function initials(name: string | null) {
 export function RdoCommentsSection({ items, onAdd, disabled, onChanged }: Props) {
   const handleRemove = async (id: string) => {
     try {
-      await supabase.from("diary_comments").delete().eq("id", id);
+      await supabase.from("diary_comments").update({ deleted_at: new Date().toISOString() }).eq("id", id);
       onChanged();
     } catch (err: any) { toast.error("Erro: " + (err.message || "")); }
   };

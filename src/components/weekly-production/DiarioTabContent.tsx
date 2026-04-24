@@ -330,8 +330,13 @@ export default function DiarioTabContent() {
         const nowIso = new Date().toISOString();
         if (item.production_id) {
           await supabase.from("productions").update({ deleted_at: nowIso, deleted_by: user?.id }).eq("id", item.production_id);
-          await supabase.from("weekly_productions").update({ deleted_at: nowIso, deleted_by: user?.id }).eq("id", item.production_id);
         }
+        await supabase.from("weekly_productions")
+          .update({ deleted_at: nowIso, deleted_by: user?.id })
+          .eq("project_id", currentProject.id)
+          .eq("scope_id", item.scope_id)
+          .eq("week_start", semanaInicio)
+          .is("deleted_at", null);
         await supabase.from("diary_items").update({ deleted_at: nowIso, deleted_by: user?.id }).eq("id", item.id);
         const revertMap: Record<number, number> = {};
         for (const hId of houseIdsAnterior) {
@@ -346,9 +351,14 @@ export default function DiarioTabContent() {
         const removidas = houseIdsAnterior.filter(h => !novasCasas.includes(h));
         await supabase.from("diary_items").update({ house_ids: novasCasas, houses_count: novasCasas.length }).eq("id", item.id);
         if (item.production_id) {
-          await supabase.from("weekly_productions").update({ house_ids: novasCasas, houses_count: novasCasas.length }).eq("id", item.production_id);
           await supabase.from("productions").update({ house_ids: novasCasas }).eq("id", item.production_id);
         }
+        await supabase.from("weekly_productions")
+          .update({ house_ids: novasCasas, houses_count: novasCasas.length })
+          .eq("project_id", currentProject.id)
+          .eq("scope_id", item.scope_id)
+          .eq("week_start", semanaInicio)
+          .is("deleted_at", null);
         if (removidas.length > 0) {
           const revertMap: Record<number, number> = {};
           for (const hId of removidas) {

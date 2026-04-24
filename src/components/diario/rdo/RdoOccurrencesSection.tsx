@@ -16,7 +16,7 @@ interface Props {
 export function RdoOccurrencesSection({ items, onAdd, disabled, onChanged }: Props) {
   const handleRemove = async (id: string) => {
     try {
-      await supabase.from("diary_occurrences").delete().eq("id", id);
+      await supabase.from("diary_occurrences").update({ deleted_at: new Date().toISOString() }).eq("id", id);
       onChanged();
     } catch (err: any) { toast.error("Erro: " + (err.message || "")); }
   };

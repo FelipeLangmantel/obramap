@@ -50,12 +50,12 @@ export function useRdoData(entryId: string | null) {
     setLoading(true);
     try {
       const [l, eq, a, oc, ck, cm] = await Promise.all([
-        supabase.from("diary_labor").select("id, nome, categoria, quantidade").eq("diary_entry_id", eId).order("created_at"),
-        supabase.from("diary_equipment").select("id, nome, quantidade").eq("diary_entry_id", eId).order("created_at"),
-        supabase.from("diary_activities").select("id, descricao, localizacao").eq("diary_entry_id", eId).order("created_at"),
-        supabase.from("diary_occurrences").select("id, descricao, tags").eq("diary_entry_id", eId).order("created_at"),
-        supabase.from("diary_checklist").select("id, item, concluido").eq("diary_entry_id", eId).order("created_at"),
-        supabase.from("diary_comments").select("id, texto, autor_nome, created_at").eq("diary_entry_id", eId).order("created_at"),
+        supabase.from("diary_labor").select("id, nome, categoria, quantidade").eq("diary_entry_id", eId).is("deleted_at", null).order("created_at"),
+        supabase.from("diary_equipment").select("id, nome, quantidade").eq("diary_entry_id", eId).is("deleted_at", null).order("created_at"),
+        supabase.from("diary_activities").select("id, descricao, localizacao").eq("diary_entry_id", eId).is("deleted_at", null).order("created_at"),
+        supabase.from("diary_occurrences").select("id, descricao, tags").eq("diary_entry_id", eId).is("deleted_at", null).order("created_at"),
+        supabase.from("diary_checklist").select("id, item, concluido").eq("diary_entry_id", eId).is("deleted_at", null).order("created_at"),
+        supabase.from("diary_comments").select("id, texto, autor_nome, created_at").eq("diary_entry_id", eId).is("deleted_at", null).order("created_at"),
       ]);
       setLabor((l.data as any) || []);
       setEquipment((eq.data as any) || []);
