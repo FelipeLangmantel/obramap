@@ -988,6 +988,7 @@ export default function DiarioObraView() {
 
   return (
     <div className="pb-24 md:pb-4">
+      <OfflineBanner />
       {/* HEADER do RDO */}
       <div className="bg-card border rounded-lg p-4 mb-4">
         <div className="flex items-start justify-between gap-4 flex-wrap md:flex-nowrap">
