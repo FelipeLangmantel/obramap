@@ -413,7 +413,9 @@ export function AddServiceDialog({
               >
                 <div className="flex justify-between">
                   <span>Capacidade (equipes × produtividade):</span>
-                  <span className="font-medium">{expectedOutput} casas</span>
+                  <span className="font-medium">
+                    {expectedOutput} {unitSymbol || projectDefaultUnit?.symbol || "un"}
+                  </span>
                 </div>
                 <div className="flex justify-between mt-1">
                   <span>{capacityGap >= 0 ? "Folga:" : "Déficit:"}</span>
@@ -422,7 +424,8 @@ export function AddServiceDialog({
                       capacityGap >= 0 ? "text-green-600" : "text-red-600"
                     }`}
                   >
-                    {capacityGap >= 0 ? `+${capacityGap}` : capacityGap} casas
+                    {capacityGap >= 0 ? `+${capacityGap}` : capacityGap}{" "}
+                    {unitSymbol || projectDefaultUnit?.symbol || "un"}
                   </span>
                 </div>
               </div>
