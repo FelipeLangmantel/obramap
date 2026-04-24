@@ -468,6 +468,17 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
+                {(isAdmin || isCompanyAdmin) && canAccessManagement("projetos") && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setLinkPortfolioOpen(true)}
+                      className="w-full justify-start gap-3 px-3 py-3 rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-150"
+                    >
+                      <Building2 className="h-5 w-5 shrink-0" />
+                      <span className="text-sm font-medium">Vincular Painel ↔ ObraMap</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
                 {canAccessManagement("quadras") && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
