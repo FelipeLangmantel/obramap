@@ -12,6 +12,7 @@ import { format, parseISO, subDays } from "date-fns";
 
 interface Props {
   projectId: string;
+  companyId: string;
   currentEntryId: string | null;
   currentEntryDate: string;       // YYYY-MM-DD
   isLocked: boolean;
@@ -33,7 +34,7 @@ interface Props {
  * duplicidade caso o usuário clique novamente por engano.
  */
 export function ImportPreviousDayButton({
-  projectId, currentEntryId, currentEntryDate, isLocked,
+  projectId, companyId, currentEntryId, currentEntryDate, isLocked,
   onImported, ensureEntryExists,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -95,21 +96,21 @@ export function ImportPreviousDayButton({
       let copiedLab = 0, copiedEq = 0, copiedAct = 0, copiedItems = 0;
 
       if ((destLab.count ?? 0) === 0 && labRes.data?.length) {
-        inserts.push(supabase.from("diary_labor").insert(
-          labRes.data.map(r => ({ diary_entry_id: targetId, ...r }))
-        ));
+        inserts.push(Promise.resolve(supabase.from("diary_labor").insert(
+          labRes.data.map(r => ({ diary_entry_id: targetId, company_id: companyId, ...r }))
+        )));
         copiedLab = labRes.data.length;
       }
       if ((destEquip.count ?? 0) === 0 && equipRes.data?.length) {
-        inserts.push(supabase.from("diary_equipment").insert(
-          equipRes.data.map(r => ({ diary_entry_id: targetId, ...r }))
-        ));
+        inserts.push(Promise.resolve(supabase.from("diary_equipment").insert(
+          equipRes.data.map(r => ({ diary_entry_id: targetId, company_id: companyId, ...r }))
+        )));
         copiedEq = equipRes.data.length;
       }
       if ((destAct.count ?? 0) === 0 && actRes.data?.length) {
-        inserts.push(supabase.from("diary_activities").insert(
-          actRes.data.map(r => ({ diary_entry_id: targetId, ...r }))
-        ));
+        inserts.push(Promise.resolve(supabase.from("diary_activities").insert(
+          actRes.data.map(r => ({ diary_entry_id: targetId, company_id: companyId, ...r }))
+        )));
         copiedAct = actRes.data.length;
       }
       // Serviços do dia: SEM percentuais e SEM houses para forçar nova leitura
@@ -117,9 +118,10 @@ export function ImportPreviousDayButton({
         // dedupe por (macro_id, scope_id) — não faz sentido importar duplicado
         const uniq = new Map<string, any>();
         itemsRes.data.forEach(r => uniq.set(`${r.macro_id}::${r.scope_id}`, r));
-        inserts.push(supabase.from("diary_items").insert(
+        inserts.push(Promise.resolve(supabase.from("diary_items").insert(
           Array.from(uniq.values()).map(r => ({
             diary_entry_id: targetId,
+            company_id: companyId,
             macro_id: r.macro_id,
             macro_name: r.macro_name,
             macro_color: r.macro_color,
@@ -131,7 +133,7 @@ export function ImportPreviousDayButton({
             observacao: null,
             production_id: null,
           }))
-        ));
+        )));
         copiedItems = uniq.size;
       }
 
