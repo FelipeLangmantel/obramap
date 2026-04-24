@@ -265,7 +265,9 @@ export function EditRequestsPanel() {
   const resolvidas = requests.filter(r => r.status !== "pendente");
 
   const getSourceLabel = (source: string) =>
-    source === "medicao_correction" ? "Medição" : "Edição";
+    source === "medicao_correction" ? "Medição"
+    : source === "diary_edit" ? "RDO"
+    : "Edição";
 
   return (
     <div className="space-y-4">
