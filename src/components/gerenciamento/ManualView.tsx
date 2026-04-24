@@ -28,7 +28,7 @@ export function ManualView({ onNavigate }: ManualViewProps) {
       const [{ data: cmp }, { count: obras }, { count: macros }, { count: quadras }, { count: users }, { count: prods }] = await Promise.all([
         supabase.from("companies").select("razao_social, cnpj").eq("id", company.id).maybeSingle(),
         supabase.from("obras_portfolio").select("id", { count: "exact", head: true }).eq("company_id", company.id),
-        supabase.from("macros").select("id", { count: "exact", head: true }),
+        supabase.from("planning_stages").select("id", { count: "exact", head: true }),
         supabase.from("quadras").select("id", { count: "exact", head: true }),
         supabase.from("profiles").select("id", { count: "exact", head: true }).eq("company_id", company.id),
         supabase.from("productions").select("id", { count: "exact", head: true }).limit(1),
