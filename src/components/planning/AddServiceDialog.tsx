@@ -19,6 +19,7 @@ import {
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { UnitPresetSelector } from "@/components/shared/UnitPresetSelector";
 
 interface ContractService {
   macro_id: string;
@@ -81,6 +82,12 @@ export function AddServiceDialog({
   const [targetHouses, setTargetHouses] = useState<number>(0);
   const [teamCount, setTeamCount] = useState<number>(1);
   const [productivityPerTeam, setProductivityPerTeam] = useState<number>(0);
+  const [unitLabel, setUnitLabel] = useState<string>("");
+  const [unitSymbol, setUnitSymbol] = useState<string>("");
+  const [projectDefaultUnit, setProjectDefaultUnit] = useState<{
+    label: string;
+    symbol: string;
+  } | null>(null);
 
   const isEditing = !!existingService;
 
