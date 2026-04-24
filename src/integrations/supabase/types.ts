@@ -2291,10 +2291,78 @@ export type Database = {
           },
         ]
       }
+      diary_item_delete_requests: {
+        Row: {
+          company_id: string
+          decided_at: string | null
+          decided_by: string | null
+          decision_note: string | null
+          diary_entry_id: string
+          diary_item_id: string
+          id: string
+          project_id: string
+          reason: string
+          requested_at: string
+          requested_by: string
+          status: string
+        }
+        Insert: {
+          company_id: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          diary_entry_id: string
+          diary_item_id: string
+          id?: string
+          project_id: string
+          reason: string
+          requested_at?: string
+          requested_by: string
+          status?: string
+        }
+        Update: {
+          company_id?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_note?: string | null
+          diary_entry_id?: string
+          diary_item_id?: string
+          id?: string
+          project_id?: string
+          reason?: string
+          requested_at?: string
+          requested_by?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_item_delete_requests_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_item_delete_requests_diary_item_id_fkey"
+            columns: ["diary_item_id"]
+            isOneToOne: false
+            referencedRelation: "diary_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_item_delete_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       diary_items: {
         Row: {
           client_uuid: string | null
           created_at: string | null
+          created_by: string | null
           deleted_at: string | null
           deleted_by: string | null
           diary_entry_id: string
@@ -2306,13 +2374,22 @@ export type Database = {
           macro_name: string
           observacao: string | null
           percentual_executado: number
+          previous_percentual: number | null
           production_id: string | null
+          regression_approved_at: string | null
+          regression_approved_by: string | null
+          regression_reason: string | null
+          review_note: string | null
+          review_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
           scope_id: string
           scope_name: string
         }
         Insert: {
           client_uuid?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
           diary_entry_id: string
@@ -2324,13 +2401,22 @@ export type Database = {
           macro_name: string
           observacao?: string | null
           percentual_executado?: number
+          previous_percentual?: number | null
           production_id?: string | null
+          regression_approved_at?: string | null
+          regression_approved_by?: string | null
+          regression_reason?: string | null
+          review_note?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           scope_id: string
           scope_name: string
         }
         Update: {
           client_uuid?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
           diary_entry_id?: string
@@ -2342,7 +2428,15 @@ export type Database = {
           macro_name?: string
           observacao?: string | null
           percentual_executado?: number
+          previous_percentual?: number | null
           production_id?: string | null
+          regression_approved_at?: string | null
+          regression_approved_by?: string | null
+          regression_reason?: string | null
+          review_note?: string | null
+          review_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           scope_id?: string
           scope_name?: string
         }
@@ -11209,6 +11303,14 @@ export type Database = {
         Args: { p_new_template: Json; p_project_id: string }
         Returns: Json
       }
+      approve_diary_item_deletion: {
+        Args: { p_note?: string; p_request_id: string }
+        Returns: Json
+      }
+      approve_diary_item_review: {
+        Args: { p_decision: string; p_item_id: string; p_note?: string }
+        Returns: Json
+      }
       approve_planning_period: {
         Args: { p_period_id: string; p_user_id?: string }
         Returns: Json
@@ -11974,6 +12076,10 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: undefined
       }
+      reject_diary_item_deletion: {
+        Args: { p_note?: string; p_request_id: string }
+        Returns: Json
+      }
       rename_house_number: {
         Args: {
           p_new_number: number
@@ -11990,6 +12096,10 @@ export type Database = {
       repair_house_macros_from_productions: {
         Args: { p_project_id: string }
         Returns: number
+      }
+      request_diary_item_deletion: {
+        Args: { p_item_id: string; p_reason: string }
+        Returns: string
       }
       reset_user_temp_password: { Args: { p_user_id: string }; Returns: string }
       resolve_notification_recipients: {
