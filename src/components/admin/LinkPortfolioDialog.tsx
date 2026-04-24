@@ -48,6 +48,15 @@ export function LinkPortfolioDialog({ open, onOpenChange, onLinked }: LinkPortfo
   const [selection, setSelection] = useState<Record<string, string>>({}); // obraId -> projectId
   const [search, setSearch] = useState("");
 
+  // Sub-dialog de seleção de módulos: abre depois de clicar em Vincular
+  const [moduleDialog, setModuleDialog] = useState<{
+    obraId: string;
+    projectId: string;
+    obraNome: string;
+  } | null>(null);
+  const [selectedModules, setSelectedModules] = useState<Record<string, boolean>>({});
+  const { setModulesForProject } = useProjectModules(moduleDialog?.projectId);
+
   const reload = async () => {
     if (!company?.id) return;
     setLoading(true);
