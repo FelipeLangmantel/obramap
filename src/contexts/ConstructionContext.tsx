@@ -273,6 +273,40 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
 
     const loadProjects = async () => {
       setIsLoading(true);
+
+      // ⚡ STALE-WHILE-REVALIDATE: hidrata da cache local IMEDIATAMENTE
+      // para que Mapa Interativo / Mapa de Obras / Gráficos / Mapa 3D
+      // abram instantaneamente, inclusive offline.
+      try {
+        const snapshots = await getAllProjectSnapshots();
+        if (snapshots.length > 0) {
+          const cached = snapshots
+            .map((s) => s.data as Project)
+            .filter(Boolean)
+            .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+          if (cached.length > 0) {
+            setProjects(cached);
+            projectsRef.current = cached;
+            setCurrentProjectId((id) => id ?? cached[0]?.id ?? null);
+            // Já considera projetos hidratados (com casas) se a snapshot trouxer casas
+            cached.forEach((p) => {
+              if (Array.isArray(p.houses) && p.houses.length > 0) {
+                hydratedProjectIdsRef.current.add(p.id);
+              }
+            });
+            setIsLoading(false);
+          }
+        }
+      } catch (e) {
+        console.warn("[cache] failed to hydrate projects from local snapshot", e);
+      }
+
+      // Sem internet? Mantém o que veio do cache e sai.
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
         const { data: projectsData, error: projectsError } = await supabase
           .from("projects")
@@ -312,9 +346,20 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
           };
         });
 
-        setProjects(loadedProjects);
+        // Mescla com casas/quadras já em memória (vindas do cache local) para
+        // não perder a UI já renderizada enquanto a hidratação acontece.
+        setProjects((prev) => {
+          const prevById = new Map(prev.map((p) => [p.id, p]));
+          return loadedProjects.map((p) => {
+            const old = prevById.get(p.id);
+            if (old && (old.houses?.length || old.quadras?.length)) {
+              return { ...p, houses: old.houses, quadras: old.quadras };
+            }
+            return p;
+          });
+        });
         projectsRef.current = loadedProjects;
-        setCurrentProjectId(loadedProjects[0]?.id ?? null);
+        setCurrentProjectId((id) => id ?? loadedProjects[0]?.id ?? null);
       } catch (error) {
         console.error("Error loading projects:", error);
       } finally {
