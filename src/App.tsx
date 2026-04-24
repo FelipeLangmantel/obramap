@@ -29,6 +29,8 @@ import HoldingInsightsPage from "./pages/HoldingInsightsPage";
 import HoldingConfigPage from "./pages/HoldingConfigPage";
 import CashflowSimulatorPage from "./pages/CashflowSimulatorPage";
 import PurchasePanelPage from "./pages/PurchasePanelPage";
+import DiarioOfflineQueuePage from "./pages/DiarioOfflineQueuePage";
+import { bootstrapSyncWorker } from "@/offline/sync";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -99,6 +101,8 @@ const App = () => {
   useEffect(() => {
     document.documentElement.classList.add("dark");
     localStorage.setItem("obramap_theme", "dark");
+    // Inicia o worker de sincronização offline (autodetecta online/offline)
+    bootstrapSyncWorker();
   }, []);
 
   return (
@@ -140,6 +144,7 @@ const App = () => {
                   <Route path="/holding-config" element={<HoldingConfigPage />} />
                   <Route path="/cashflow-simulator" element={<CashflowSimulatorPage />} />
                   <Route path="/purchase-panel" element={<PurchasePanelPage />} />
+                  <Route path="/diario-fila-offline" element={<DiarioOfflineQueuePage />} />
                   <Route path="/dashboard" element={<Index />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>

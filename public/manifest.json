@@ -1,12 +1,25 @@
 {
   "name": "ObraMap — Diário de Obras",
   "short_name": "ObraMap",
-  "start_url": "/dashboard",
+  "description": "Lance o RDO direto no campo, mesmo sem internet. Sincroniza automaticamente quando a conexão voltar.",
+  "start_url": "/index",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#3b82f6",
   "orientation": "portrait",
+  "lang": "pt-BR",
+  "categories": ["productivity", "business"],
   "icons": [
-    { "src": "/obramap_icon_dark.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/obramap_icon_dark.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "/obramap_icon_dark.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Diário de Obra",
+      "short_name": "Diário",
+      "url": "/index?view=diario",
+      "icons": [{ "src": "/obramap_icon_dark.png", "sizes": "1024x1024" }]
+    }
   ]
 }

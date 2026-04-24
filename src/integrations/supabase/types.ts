@@ -1702,6 +1702,51 @@ export type Database = {
           },
         ]
       }
+      device_sync_log: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          device_id: string
+          device_label: string | null
+          id: string
+          last_error: string | null
+          last_status: string
+          last_sync_at: string
+          pending_count: number
+          storage_estimate_bytes: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          device_id: string
+          device_label?: string | null
+          id?: string
+          last_error?: string | null
+          last_status?: string
+          last_sync_at?: string
+          pending_count?: number
+          storage_estimate_bytes?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          device_id?: string
+          device_label?: string | null
+          id?: string
+          last_error?: string | null
+          last_status?: string
+          last_sync_at?: string
+          pending_count?: number
+          storage_estimate_bytes?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       diary_activities: {
         Row: {
           company_id: string
@@ -1746,6 +1791,7 @@ export type Database = {
       }
       diary_attachments: {
         Row: {
+          client_uuid: string | null
           company_id: string
           created_at: string | null
           diary_entry_id: string
@@ -1756,6 +1802,7 @@ export type Database = {
           tipo: string
         }
         Insert: {
+          client_uuid?: string | null
           company_id: string
           created_at?: string | null
           diary_entry_id: string
@@ -1766,6 +1813,7 @@ export type Database = {
           tipo: string
         }
         Update: {
+          client_uuid?: string | null
           company_id?: string
           created_at?: string | null
           diary_entry_id?: string
@@ -1991,6 +2039,7 @@ export type Database = {
       }
       diary_entries: {
         Row: {
+          client_uuid: string | null
           clima: string | null
           clima_manha: string | null
           clima_noite: string | null
@@ -2016,6 +2065,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          client_uuid?: string | null
           clima?: string | null
           clima_manha?: string | null
           clima_noite?: string | null
@@ -2041,6 +2091,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          client_uuid?: string | null
           clima?: string | null
           clima_manha?: string | null
           clima_noite?: string | null
@@ -2218,6 +2269,7 @@ export type Database = {
       }
       diary_items: {
         Row: {
+          client_uuid: string | null
           created_at: string | null
           deleted_at: string | null
           deleted_by: string | null
@@ -2235,6 +2287,7 @@ export type Database = {
           scope_name: string
         }
         Insert: {
+          client_uuid?: string | null
           created_at?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
@@ -2252,6 +2305,7 @@ export type Database = {
           scope_name: string
         }
         Update: {
+          client_uuid?: string | null
           created_at?: string | null
           deleted_at?: string | null
           deleted_by?: string | null
@@ -7902,6 +7956,7 @@ export type Database = {
       }
       productions: {
         Row: {
+          client_uuid: string | null
           created_at: string
           created_by: string | null
           deleted_at: string | null
@@ -7925,6 +7980,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          client_uuid?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -7948,6 +8004,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          client_uuid?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
@@ -10780,6 +10837,7 @@ export type Database = {
       }
       weekly_productions: {
         Row: {
+          client_uuid: string | null
           contractor_id: string | null
           created_at: string
           created_by_name: string | null
@@ -10805,6 +10863,7 @@ export type Database = {
           weekly_plan_service_id: string | null
         }
         Insert: {
+          client_uuid?: string | null
           contractor_id?: string | null
           created_at?: string
           created_by_name?: string | null
@@ -10830,6 +10889,7 @@ export type Database = {
           weekly_plan_service_id?: string | null
         }
         Update: {
+          client_uuid?: string | null
           contractor_id?: string | null
           created_at?: string
           created_by_name?: string | null
