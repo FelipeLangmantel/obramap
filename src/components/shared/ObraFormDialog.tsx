@@ -143,6 +143,46 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
     return Object.keys(e).length === 0;
   };
 
+  // Cria APENAS um projeto operacional no ObraMap e amarra a uma obra
+  // já existente no Painel de Obras (obras_portfolio).
+  const handleLinkExisting = async () => {
+    if (!requireEdit()) return;
+    if (!company?.id) return;
+    if (!selectedObra) {
+      toast.error("Selecione uma obra do Painel.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const projectId = await addProject({
+        name: selectedObra.nome,
+        location: `${selectedObra.municipio || ""} - ${selectedObra.estado || ""}`.trim(),
+        contractor: selectedObra.empresa || "",
+        startDate: selectedObra.data_inicio || "",
+        expectedEndDate: "",
+        totalHouses: Number(selectedObra.uh) || 0,
+        unitSize: 45,
+        projectType: selectedObra.tipo_contrato || "Residencial Popular",
+      });
+      if (!projectId) throw new Error("Falha ao criar projeto ObraMap");
+
+      const { error: linkErr } = await supabase
+        .from("obras_portfolio")
+        .update({ obramap_project_id: projectId } as any)
+        .eq("id", selectedObra.id);
+      if (linkErr) throw linkErr;
+
+      await setCurrentProject(projectId);
+      toast.success(`Obra "${selectedObra.nome}" vinculada ao ObraMap!`);
+      onOpenChange(false);
+      onSaved?.(selectedObra.id, projectId);
+    } catch (e: any) {
+      toast.error("Erro ao vincular obra: " + (e.message || ""));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!requireEdit()) return;
     if (!company?.id) return;
