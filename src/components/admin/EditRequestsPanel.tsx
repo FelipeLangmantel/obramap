@@ -52,7 +52,7 @@ export function EditRequestsPanel() {
       const obraMap = new Map(obras.map(o => [o.id, o.nome]));
 
       // Fetch both tables in parallel
-      const [editRes, correctionRes] = await Promise.all([
+      const [editRes, correctionRes, diaryRes, projectsRes] = await Promise.all([
         supabase
           .from("edit_requests")
           .select("*")
@@ -65,7 +65,19 @@ export function EditRequestsPanel() {
           .in("obra_id", obraIds)
           .order("created_at", { ascending: false })
           .limit(100),
+        (supabase as any)
+          .from("diary_edit_requests")
+          .select("*")
+          .eq("company_id", company.id)
+          .order("created_at", { ascending: false })
+          .limit(100),
+        supabase
+          .from("projects")
+          .select("id, name")
+          .eq("company_id", company.id),
       ]);
+
+      const projectMap = new Map((projectsRes.data || []).map((p: any) => [p.id, p.name]));
 
       const unified: UnifiedRequest[] = [];
 
