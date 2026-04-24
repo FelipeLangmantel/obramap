@@ -506,3 +506,62 @@ export function UserManagement() {
     </div>
   );
 }
+
+interface PhoneCellProps {
+  initial: string | null;
+  onSave: (raw: string) => Promise<void>;
+}
+
+function PhoneCell({ initial, onSave }: PhoneCellProps) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(formatPhoneBR(initial) || "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!editing) setValue(formatPhoneBR(initial) || "");
+  }, [initial, editing]);
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="text-sm text-left hover:underline"
+        title="Clique para editar"
+      >
+        {initial ? formatPhoneBR(initial) : <span className="text-muted-foreground italic">Adicionar telefone</span>}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <Input
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(maskPhoneInputBR(e.target.value))}
+        placeholder="(11) 9 8765-4321"
+        className="h-8 w-44"
+        disabled={saving}
+      />
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={saving}
+        onClick={async () => {
+          setSaving(true);
+          try {
+            await onSave(value);
+            setEditing(false);
+          } finally {
+            setSaving(false);
+          }
+        }}
+      >
+        OK
+      </Button>
+      <Button size="sm" variant="ghost" disabled={saving} onClick={() => setEditing(false)}>
+        ✕
+      </Button>
+    </div>
+  );
+}
