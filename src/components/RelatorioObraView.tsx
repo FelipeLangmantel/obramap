@@ -192,11 +192,47 @@ export default function RelatorioObraView() {
       .map(e => ({ data: e.entry_date, texto: e.observacao_geral!, engenheiro: e.engineer_name }));
   }, [entries]);
 
+  // IDC e clima
+  const climaStats = useMemo(() => {
+    const totalDias = entries.length;
+    const chuvosos = entries.filter(e => (e.clima || "").toLowerCase().includes("chuv")).length;
+    const praticaveis = totalDias - chuvosos;
+    const mmAcumulado = entries.reduce((s, e) => s + Number(e.mm_chuva || 0), 0);
+    const idc = totalDias > 0 ? Math.round((praticaveis / totalDias) * 100) : 0;
+    return { totalDias, chuvosos, praticaveis, mmAcumulado: Math.round(mmAcumulado * 10) / 10, idc };
+  }, [entries]);
+
+  // Status RDOs
+  const rdoStatus = useMemo(() => {
+    const aprovado = entries.filter(e => e.status_aprovacao === "aprovado").length;
+    const revisando = entries.filter(e => e.status_aprovacao === "revisando").length;
+    const preenchendo = entries.filter(e => e.status_aprovacao === "preenchendo" || !e.status_aprovacao).length;
+    return { aprovado, revisando, preenchendo, total: entries.length };
+  }, [entries]);
+
+  // Curva S — % executado acumulado por dia
+  const curvaS = useMemo(() => {
+    // Soma percentuais por dia, divididos pelo nº de casas, normalizando por casa-serviço
+    const byDay = new Map<string, number>();
+    for (const e of entries) byDay.set(e.entry_date, 0);
+    for (const it of items) {
+      const ent = entries.find(e => e.id === it.diary_entry_id);
+      if (!ent) continue;
+      const peso = (it.percentual_executado / 100) * it.house_ids.length;
+      byDay.set(ent.entry_date, (byDay.get(ent.entry_date) || 0) + peso);
+    }
+    const ordered = Array.from(byDay.entries()).sort(([a], [b]) => a.localeCompare(b));
+    let acum = 0;
+    return ordered.map(([d, v]) => ({ data: d, dia: v, acum: (acum += v) }));
+  }, [entries, items]);
+
   const handleGeneratePDF = async () => {
     if (!currentProject) return;
     setExporting(true);
     try {
       const { jsPDF } = await import("jspdf");
+      const autoTableMod = await import("jspdf-autotable");
+      const autoTable = autoTableMod.default;
       const autoTableMod = await import("jspdf-autotable");
       const autoTable = autoTableMod.default;
 
