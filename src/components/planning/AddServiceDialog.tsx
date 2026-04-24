@@ -117,6 +117,25 @@ export function AddServiceDialog({
     loadContractServices();
   }, [projectId, open]);
 
+  // Carrega unidade default da obra (fallback quando o serviço não define unidade própria)
+  useEffect(() => {
+    const loadProjectUnit = async () => {
+      if (!projectId || !open) return;
+      const { data } = await supabase
+        .from("projects")
+        .select("default_unit_label, default_unit_symbol")
+        .eq("id", projectId)
+        .maybeSingle();
+      if (data) {
+        setProjectDefaultUnit({
+          label: data.default_unit_label || "Casa",
+          symbol: data.default_unit_symbol || "un",
+        });
+      }
+    };
+    loadProjectUnit();
+  }, [projectId, open]);
+
   // Reset/populate form when dialog opens
   useEffect(() => {
     if (open) {
@@ -126,12 +145,16 @@ export function AddServiceDialog({
         setTargetHouses(existingService.target_houses);
         setTeamCount(existingService.team_count);
         setProductivityPerTeam(existingService.productivity_per_team);
+        setUnitLabel((existingService as any).unit_label || "");
+        setUnitSymbol((existingService as any).unit_symbol || "");
       } else {
         setSelectedMacro("");
         setSelectedScope("");
         setTargetHouses(0);
         setTeamCount(1);
         setProductivityPerTeam(0);
+        setUnitLabel("");
+        setUnitSymbol("");
       }
     }
   }, [open, existingService]);
