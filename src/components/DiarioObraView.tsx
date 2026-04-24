@@ -554,6 +554,43 @@ export default function DiarioObraView() {
     return () => { supabase.removeChannel(channel); };
   }, [currentProject?.id, user?.id, entryId, refreshHousesFromDB]);
 
+  // Reconciliação online: quando o navegador volta a ficar online e/ou
+  // quando o sync worker termina, recalcula o progresso de macros do
+  // projeto atual no servidor (cobre lançamentos feitos offline).
+  useEffect(() => {
+    if (!currentProject?.id) return;
+    const projectId = currentProject.id;
+
+    const triggerRecompute = async () => {
+      if (!navigator.onLine) return;
+      const res = await recomputeProjectProgress(projectId);
+      if (res.ok) {
+        await refreshHousesFromDB();
+        queryClient.invalidateQueries({ queryKey: ["houses"] });
+      }
+    };
+
+    // 1) Recalcula quando o navegador volta online
+    const onOnline = () => { void triggerRecompute(); };
+    window.addEventListener("online", onOnline);
+
+    // 2) Recalcula quando o sync worker termina (já recompõe internamente,
+    // mas garantimos que a UI atual também sincronize)
+    const unsub = subscribeSync((ev) => {
+      if (ev.type === "done" && ev.synced > 0) {
+        void refreshHousesFromDB();
+      }
+    });
+
+    // 3) Disparo inicial se já está online (catch-up de sessões anteriores)
+    if (navigator.onLine) void triggerRecompute();
+
+    return () => {
+      window.removeEventListener("online", onOnline);
+      unsub();
+    };
+  }, [currentProject?.id, refreshHousesFromDB, queryClient]);
+
   useEffect(() => {
     setEquipePres(equipeCalculada);
     if (!entryId) return;
