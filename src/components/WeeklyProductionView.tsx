@@ -2486,20 +2486,25 @@ export function WeeklyProductionView() {
         </TabsContent>
 
         <TabsContent value="historico" className="flex-1 overflow-auto mt-4 space-y-4">
-          {podeExcluir ? (
-            <div className="space-y-4">
-              <div className="flex gap-2 flex-wrap">
-                {(["todos","exclusoes","correcoes"] as const).map(f => (
-                  <Button key={f} size="sm"
-                    variant={filtroHistorico === f ? "default" : "outline"}
-                    onClick={() => setFiltroHistorico(f)}>
-                    {f === "todos" ? "Todos" : f === "exclusoes" ? "Exclusões" : "Correções"}
-                  </Button>
-                ))}
-              </div>
-              {historicoUnificado.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">Nenhum registro encontrado.</p>
-              ) : (
+          {currentProject?.id && <ObraHistoricoPanel projectId={currentProject.id} />}
+
+          {podeExcluir && historicoUnificado.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  Exclusões e correções manuais
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex gap-2 flex-wrap">
+                  {(["todos","exclusoes","correcoes"] as const).map(f => (
+                    <Button key={f} size="sm"
+                      variant={filtroHistorico === f ? "default" : "outline"}
+                      onClick={() => setFiltroHistorico(f)}>
+                      {f === "todos" ? "Todos" : f === "exclusoes" ? "Exclusões" : "Correções"}
+                    </Button>
+                  ))}
+                </div>
                 <div className="space-y-2">
                   {historicoUnificado.map((item: any, i: number) => (
                     <div key={i} className="rounded-lg border p-3 text-sm space-y-1">
@@ -2521,18 +2526,10 @@ export function WeeklyProductionView() {
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">Acesso restrito a administradores.</p>
+              </CardContent>
+            </Card>
           )}
         </TabsContent>
-
-        {podeExcluir && (
-          <TabsContent value="obra" className="flex-1 overflow-auto mt-4 space-y-4">
-            {currentProject?.id && <ObraHistoricoPanel projectId={currentProject.id} />}
-          </TabsContent>
-        )}
 
       </Tabs>
 
