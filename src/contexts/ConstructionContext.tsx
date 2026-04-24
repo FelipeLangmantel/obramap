@@ -477,6 +477,18 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     })();
   }, [currentProjectId]); // ✅ Removido 'projects' das deps para evitar loop
 
+  // 💾 Mantém o snapshot offline em sincronia com o estado em memória
+  // (atualizações locais via realtime, edits, etc.)
+  useEffect(() => {
+    if (!currentProjectId) return;
+    const proj = projects.find((p) => p.id === currentProjectId);
+    if (!proj || !proj.houses?.length) return;
+    const t = setTimeout(() => {
+      void saveProjectSnapshot(currentProjectId, proj);
+    }, 1500); // debounce
+    return () => clearTimeout(t);
+  }, [projects, currentProjectId]);
+
   // ✅ 4.5 REALTIME: Auto-refresh houses when production/banco inicial changes
   useEffect(() => {
     if (!currentProjectId) return;
