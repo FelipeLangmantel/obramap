@@ -29,6 +29,13 @@ import IndustrializationModuleView from "@/components/industrialization/Industri
 import HoldingDashboardView from "@/components/holding/HoldingDashboardView";
 import DiarioObraView from "@/components/DiarioObraView";
 import RelatorioObraView from "@/components/RelatorioObraView";
+import { MinhaEmpresaView } from "@/components/gerenciamento/MinhaEmpresaView";
+import { ManualView } from "@/components/gerenciamento/ManualView";
+import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
+import { NewProjectDialog } from "@/components/NewProjectDialog";
+import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
+import { UserPermissionsPanel } from "@/components/admin/UserPermissionsPanel";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Loader2, Menu, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -182,6 +189,20 @@ function Index() {
     industrialization:  "industrializacao",
     "holding-dashboard":"holding",
     "relatorio-obra":   "producao",
+    "empresa":          "painel_inicial",
+    "manual":           "painel_inicial",
+  };
+
+  // Estados para dialogs disparados do banner de onboarding
+  const [newObraOpen, setNewObraOpen] = useState(false);
+  const [macrosOpen, setMacrosOpen] = useState(false);
+  const [usersOpen, setUsersOpen] = useState(false);
+
+  const handleOnboardingAction = (target: "empresa" | "newObra" | "macros" | "users") => {
+    if (target === "empresa") setActiveView("empresa");
+    else if (target === "newObra") setNewObraOpen(true);
+    else if (target === "macros") setMacrosOpen(true);
+    else if (target === "users") setUsersOpen(true);
   };
 
   // ─── Proteção de view restaurada ─────────────────────────────────────────
