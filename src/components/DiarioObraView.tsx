@@ -1523,6 +1523,21 @@ export default function DiarioObraView() {
             onSaved={() => rdo.reload(entryId)} />
         </>
       )}
+
+      {/* Solicitar edição (RDO bloqueado) */}
+      {entryId && currentProject?.id && company?.id && user?.id && (
+        <RdoEditRequestDialog
+          open={editRequestOpen}
+          onOpenChange={setEditRequestOpen}
+          diaryEntryId={entryId}
+          projectId={currentProject.id}
+          companyId={company.id}
+          userId={user.id}
+          userName={profile?.display_name || user.email || "Usuário"}
+          numRelatorio={numRelatorio}
+          entryDate={entryDate}
+        />
+      )}
     </div>
   );
 }
