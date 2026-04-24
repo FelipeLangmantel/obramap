@@ -29,6 +29,8 @@ import HoldingInsightsPage from "./pages/HoldingInsightsPage";
 import HoldingConfigPage from "./pages/HoldingConfigPage";
 import CashflowSimulatorPage from "./pages/CashflowSimulatorPage";
 import PurchasePanelPage from "./pages/PurchasePanelPage";
+import DiarioOfflineQueuePage from "./pages/DiarioOfflineQueuePage";
+import { bootstrapSyncWorker } from "@/offline/sync";
 
 const queryClient = new QueryClient({
   defaultOptions: {
