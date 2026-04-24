@@ -38,6 +38,7 @@ import { UserPermissionsPanel } from "@/components/admin/UserPermissionsPanel";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Loader2, Menu, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { OfflineStatusBadge } from "@/components/offline/OfflineStatusBadge";
 
 // Sidebar trigger button - visible on all screen sizes
 function SidebarTriggerButton() {
