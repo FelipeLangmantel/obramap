@@ -87,15 +87,21 @@ export function RdoAttachmentsSection({ entryId, companyId, attachments, disable
       id="anexos"
       title="Anexos"
       count={attachments.length}
-      onAdd={!disabled ? handleOpenPicker : undefined}
+      addAsLabel={!disabled ? { htmlFor: "rdo-attachment-input" } : undefined}
       disabled={disabled || uploading}
       emptyText="PDF, DOC, XLS, JPG ou PNG (até 20 MB)"
+      alwaysShowChildren
     >
-      <input ref={inputRef} type="file" accept={ACCEPT} className="hidden" onChange={handleFile} />
+      <input id="rdo-attachment-input" ref={inputRef} type="file" accept={ACCEPT} className="hidden" onChange={handleFile} />
       {uploading && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
           <Loader2 className="h-3 w-3 animate-spin" />Enviando...
         </div>
+      )}
+      {attachments.length === 0 && !uploading && (
+        <p className="text-sm text-muted-foreground text-center py-2">
+          PDF, DOC, XLS, JPG ou PNG (até 20 MB)
+        </p>
       )}
       {attachments.length > 0 && (
         <div className="space-y-1">
