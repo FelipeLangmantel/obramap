@@ -1317,6 +1317,11 @@ export default function DiarioObraView() {
             </section>
           )}
 
+          {/* GRÁFICOS DE PRODUÇÃO DO DIA */}
+          {entryId && (
+            <RdoProductionCharts items={diaryItems} totalCasas={houses.length} />
+          )}
+
           {/* OCORRÊNCIAS */}
           <RdoOccurrencesSection
             items={rdo.occurrences}
