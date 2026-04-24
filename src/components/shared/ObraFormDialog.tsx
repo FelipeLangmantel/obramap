@@ -276,6 +276,77 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
         </DialogHeader>
 
         <div className="space-y-5 py-3">
+          {/* Seletor de modo: Nova obra OU vincular existente */}
+          <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
+            <RadioGroup
+              value={mode}
+              onValueChange={(v) => setMode(v as "new" | "link")}
+              className="grid grid-cols-1 md:grid-cols-2 gap-2"
+            >
+              <label
+                className={`flex items-start gap-2 p-3 rounded-md border cursor-pointer transition-colors ${
+                  mode === "new" ? "border-primary bg-primary/5" : "border-border bg-background"
+                }`}
+              >
+                <RadioGroupItem value="new" className="mt-0.5" />
+                <div className="space-y-0.5">
+                  <div className="text-sm font-medium flex items-center gap-1.5">
+                    <Building2 className="h-3.5 w-3.5" /> Cadastrar nova obra
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Cria a obra no Painel e no ObraMap simultaneamente.
+                  </div>
+                </div>
+              </label>
+              <label
+                className={`flex items-start gap-2 p-3 rounded-md border cursor-pointer transition-colors ${
+                  mode === "link" ? "border-primary bg-primary/5" : "border-border bg-background"
+                } ${unlinkedObras.length === 0 ? "opacity-50" : ""}`}
+              >
+                <RadioGroupItem value="link" className="mt-0.5" disabled={unlinkedObras.length === 0} />
+                <div className="space-y-0.5">
+                  <div className="text-sm font-medium flex items-center gap-1.5">
+                    <Link2 className="h-3.5 w-3.5" /> Vincular obra do Painel
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {unlinkedObras.length > 0
+                      ? `${unlinkedObras.length} obra(s) do painel sem ObraMap.`
+                      : "Nenhuma obra pendente no painel."}
+                  </div>
+                </div>
+              </label>
+            </RadioGroup>
+
+            {mode === "link" && (
+              <div className="space-y-2">
+                <Label>Obra do Painel *</Label>
+                <Select value={selectedObraId} onValueChange={setSelectedObraId} disabled={!allowed}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Escolha uma obra já cadastrada..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {unlinkedObras.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {o.nome} {o.municipio ? `— ${o.municipio}/${o.estado}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedObra && (
+                  <div className="text-[11px] text-muted-foreground bg-background rounded p-2 border">
+                    <strong>{selectedObra.nome}</strong> • {selectedObra.empresa} •{" "}
+                    {selectedObra.municipio}/{selectedObra.estado} • {selectedObra.uh ?? "?"} UH
+                    <br />
+                    Ao confirmar, será criado um projeto operacional no ObraMap (mapa,
+                    diários, produção) vinculado a esta obra.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {mode === "new" && (
+          <>
           {/* Identificação */}
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-foreground/80">Identificação</h3>
