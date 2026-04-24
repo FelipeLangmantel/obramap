@@ -379,9 +379,16 @@ export default function RelatorioObraView() {
                   <SelectItem value="semanal">Semanal (7 dias)</SelectItem>
                   <SelectItem value="quinzenal">Quinzenal (15 dias)</SelectItem>
                   <SelectItem value="mensal">Mensal (30 dias)</SelectItem>
+                  <SelectItem value="personalizado">Personalizado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {periodo === "personalizado" && (
+              <div className="flex-1 min-w-[160px]">
+                <label className="text-xs font-medium text-muted-foreground">Data Início</label>
+                <Input type="date" value={dataInicioCustom} onChange={(e) => setDataInicioCustom(e.target.value)} className="mt-1" />
+              </div>
+            )}
             <div className="flex-1 min-w-[160px]">
               <label className="text-xs font-medium text-muted-foreground">Data Fim</label>
               <Input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="mt-1" />
