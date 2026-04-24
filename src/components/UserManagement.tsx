@@ -357,6 +357,25 @@ export function UserManagement() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="create-phone" className="flex items-center gap-2">
+                  <Phone className="h-3.5 w-3.5" /> Telefone (WhatsApp)
+                </Label>
+                <Input
+                  id="create-phone"
+                  value={phoneRaw}
+                  onChange={(e) => setPhoneRaw(maskPhoneInputBR(e.target.value))}
+                  placeholder="(11) 9 8765-4321"
+                  className={errors.phone ? "border-destructive" : ""}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Necessário para receber alertas via WhatsApp.
+                </p>
+                {errors.phone && (
+                  <p className="text-sm text-destructive">{errors.phone}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="create-role">Função</Label>
                 <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
                   <SelectTrigger className={errors.role ? "border-destructive" : ""}>
@@ -409,6 +428,7 @@ export function UserManagement() {
             <TableRow>
               <TableHead>Nome</TableHead>
               <TableHead>Email</TableHead>
+              <TableHead>Telefone</TableHead>
               <TableHead>Função</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
@@ -418,6 +438,12 @@ export function UserManagement() {
               <TableRow key={u.id}>
                 <TableCell className="font-medium">{u.display_name}</TableCell>
                 <TableCell>{u.email}</TableCell>
+                <TableCell>
+                  <PhoneCell
+                    initial={u.phone}
+                    onSave={(raw) => handleSavePhone(u.user_id, raw)}
+                  />
+                </TableCell>
                 <TableCell>{getRoleBadge(u.role)}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-2">
@@ -450,7 +476,7 @@ export function UserManagement() {
             ))}
             {users.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                   Nenhum usuário cadastrado
                 </TableCell>
               </TableRow>
