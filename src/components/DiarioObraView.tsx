@@ -175,7 +175,6 @@ export default function DiarioObraView() {
   const [produtividadeRefId, setProdutividadeRefId] = useState<string | null>(null);
 
   const isAdmin = profile?.system_role === "system_admin" || profile?.system_role === "admin";
-  const canApprove = isAdmin || profile?.system_role === "editor";
   const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado";
 
   const macros = useMemo(() => {
@@ -470,24 +469,62 @@ export default function DiarioObraView() {
     return () => { supabase.removeChannel(channel); };
   }, [currentProject?.id, user?.id]);
 
+  const buildClimaPayload = useCallback(() => ({
+    clima_manha: climaState.climaManha,
+    clima_tarde: climaState.climaTarde,
+    clima_noite: climaState.climaNoite,
+    condicao_manha: climaState.condicaoManha,
+    condicao_tarde: climaState.condicaoTarde,
+    condicao_noite: climaState.condicaoNoite,
+    noite_ativa: climaState.noiteAtiva,
+    mm_chuva: climaState.mmChuva,
+    clima: climaState.climaManha === "chuvoso" ? "chuva_fraca"
+      : climaState.climaManha === "nublado" ? "nublado" : "sol",
+  }), [climaState]);
+
+  const ensureEntryExists = useCallback(async () => {
+    if (entryId) return entryId;
+    if (!currentProject?.id || !user?.id || !company?.id) return null;
+
+    const { data, error } = await supabase.from("diary_entries").insert({
+      company_id: company.id,
+      project_id: currentProject.id,
+      engineer_id: user.id,
+      engineer_name: profile?.display_name || user.email || "Engenheiro",
+      entry_date: entryDate,
+      equipe_presente: equipePres,
+      observacao_geral: obsGeral || null,
+      ...buildClimaPayload(),
+    }).select("id, num_relatorio, status, status_aprovacao, created_at, updated_at, engineer_name").single();
+
+    if (error) {
+      toast.error("Erro ao iniciar relatório: " + (error.message || ""));
+      return null;
+    }
+
+    setEntryId(data.id);
+    setNumRelatorio((data as any).num_relatorio ?? null);
+    setEntryStatus((data as any).status || "rascunho");
+    setStatusAprovacao(((data as any).status_aprovacao || "preenchendo") as StatusAprovacao);
+    setEntryMeta({
+      created_at: (data as any).created_at || null,
+      updated_at: (data as any).updated_at || null,
+      engineer_name: (data as any).engineer_name || null,
+    });
+    return data.id;
+  }, [entryId, currentProject?.id, user?.id, company?.id, profile?.display_name, user?.email, entryDate, equipePres, obsGeral, buildClimaPayload]);
+
+  const openDialogWithEntry = useCallback(async (openDialog: () => void) => {
+    const ensuredEntryId = await ensureEntryExists();
+    if (ensuredEntryId) openDialog();
+  }, [ensureEntryExists]);
+
   // Save header (cabeçalho + clima novo)
   const handleSaveHeader = async () => {
     if (!currentProject?.id || !user?.id || !company?.id) return;
     setSavingHeader(true);
     try {
-      const climaPayload = {
-        clima_manha: climaState.climaManha,
-        clima_tarde: climaState.climaTarde,
-        clima_noite: climaState.climaNoite,
-        condicao_manha: climaState.condicaoManha,
-        condicao_tarde: climaState.condicaoTarde,
-        condicao_noite: climaState.condicaoNoite,
-        noite_ativa: climaState.noiteAtiva,
-        mm_chuva: climaState.mmChuva,
-        // Manter clima legacy (campo único) para compatibilidade
-        clima: climaState.climaManha === "chuvoso" ? "chuva_fraca"
-             : climaState.climaManha === "nublado" ? "nublado" : "sol",
-      };
+      const climaPayload = buildClimaPayload();
 
       let savedEntryId = entryId;
       if (entryId) {
@@ -497,21 +534,8 @@ export default function DiarioObraView() {
           ...climaPayload,
         }).eq("id", entryId);
       } else {
-        const payload = {
-          company_id: company.id,
-          project_id: currentProject.id,
-          engineer_id: user.id,
-          engineer_name: profile?.display_name || user.email || "Engenheiro",
-          entry_date: entryDate,
-          equipe_presente: equipePres,
-          observacao_geral: obsGeral || null,
-          ...climaPayload,
-        };
-        const { data, error } = await supabase.from("diary_entries").insert(payload).select("id, num_relatorio").single();
-        if (error) throw error;
-        setEntryId(data.id);
-        savedEntryId = data.id;
-        setNumRelatorio((data as any).num_relatorio ?? null);
+        savedEntryId = await ensureEntryExists();
+        if (!savedEntryId) throw new Error("Não foi possível criar o relatório.");
       }
       // Registrar log de edição
       if (savedEntryId) {
@@ -953,29 +977,29 @@ export default function DiarioObraView() {
           {/* MÃO DE OBRA */}
           <RdoLaborSection
             items={rdo.labor}
-            onAdd={entryId ? () => setAddLaborOpen(true) : undefined}
-            disabled={isLocked || !entryId}
+            onAdd={() => openDialogWithEntry(() => setAddLaborOpen(true))}
+            disabled={isLocked}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
           {/* EQUIPAMENTOS */}
           <RdoEquipmentSection
             items={rdo.equipment}
-            onAdd={entryId ? () => setAddEquipOpen(true) : undefined}
-            disabled={isLocked || !entryId}
+            onAdd={() => openDialogWithEntry(() => setAddEquipOpen(true))}
+            disabled={isLocked}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
           {/* ATIVIDADES DESCRITIVAS */}
           <RdoActivitiesSection
             items={rdo.activities}
-            onAdd={entryId ? () => setAddActivityOpen(true) : undefined}
-            disabled={isLocked || !entryId}
+            onAdd={() => openDialogWithEntry(() => setAddActivityOpen(true))}
+            disabled={isLocked}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
           {/* PRODUÇÃO POR CASA (existente) */}
-          {entryId && !isLocked && (
+          {!isLocked && (
             <section id="producao" className="scroll-mt-4">
               <Card>
                 <CardHeader className="pb-3">
@@ -997,7 +1021,9 @@ export default function DiarioObraView() {
                             borderColor: macro.color,
                             color: selectedMacro?.id === macro.id ? "#fff" : undefined,
                           }}
-                          onClick={() => {
+                          onClick={async () => {
+                            const ensuredEntryId = await ensureEntryExists();
+                            if (!ensuredEntryId) return;
                             setSelectedMacro(selectedMacro?.id === macro.id ? null : { id: macro.id, name: macro.name, color: macro.color });
                             setSelectedScope(null); setSelectedHouses([]);
                           }}>
@@ -1177,24 +1203,24 @@ export default function DiarioObraView() {
           {/* OCORRÊNCIAS */}
           <RdoOccurrencesSection
             items={rdo.occurrences}
-            onAdd={entryId ? () => setAddOccurOpen(true) : undefined}
-            disabled={isLocked || !entryId}
+            onAdd={() => openDialogWithEntry(() => setAddOccurOpen(true))}
+            disabled={isLocked}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
           {/* CHECKLIST */}
           <RdoChecklistSection
             items={rdo.checklist}
-            onAdd={entryId ? () => setAddChecklistOpen(true) : undefined}
-            disabled={isLocked || !entryId}
+            onAdd={() => openDialogWithEntry(() => setAddChecklistOpen(true))}
+            disabled={isLocked}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
           {/* COMENTÁRIOS */}
           <RdoCommentsSection
             items={rdo.comments}
-            onAdd={entryId ? () => setAddCommentOpen(true) : undefined}
-            disabled={isLocked || !entryId}
+            onAdd={() => openDialogWithEntry(() => setAddCommentOpen(true))}
+            disabled={isLocked}
             currentUserId={user?.id || null}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
@@ -1226,13 +1252,20 @@ export default function DiarioObraView() {
                   ))}
                 </div>
               )}
-              {entryId && !isLocked && fotos.length < 10 && (
+              {!isLocked && fotos.length < 10 && (
                 <label className={cn(
                   "flex items-center gap-2 cursor-pointer text-sm text-muted-foreground",
                   "border-2 border-dashed rounded-lg p-3 hover:border-primary hover:text-primary transition-colors",
                   uploadingFoto && "opacity-50 pointer-events-none"
                 )}>
                   <input type="file" accept="image/*" capture="environment" multiple className="hidden"
+                    onClick={async (e) => {
+                      if (entryId) return;
+                      const ensuredEntryId = await ensureEntryExists();
+                      if (!ensuredEntryId) {
+                        e.preventDefault();
+                      }
+                    }}
                     onChange={handleUploadFotos} disabled={uploadingFoto} />
                   {uploadingFoto
                     ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando...</>
@@ -1249,6 +1282,7 @@ export default function DiarioObraView() {
             companyId={company?.id || null}
             disabled={isLocked}
             onChanged={() => entryId && rdo.loadAttachments(entryId)}
+            onRequestCreateEntry={ensureEntryExists}
           />
 
           {/* ANEXOS */}
@@ -1258,6 +1292,7 @@ export default function DiarioObraView() {
             companyId={company?.id || null}
             disabled={isLocked}
             onChanged={() => entryId && rdo.loadAttachments(entryId)}
+            onRequestCreateEntry={ensureEntryExists}
           />
 
           {/* APROVAÇÃO E ASSINATURAS */}
@@ -1270,7 +1305,7 @@ export default function DiarioObraView() {
               if (s === "aprovado") setEntryStatus("finalizado");
               else if (entryStatus === "finalizado") setEntryStatus("rascunho");
             }}
-            canApprove={canApprove}
+            canApprove={false}
             signerId={user?.id || null}
             signerName={profile?.display_name || user?.email || null}
             isLocked={isLocked && !isAdmin}
