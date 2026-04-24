@@ -146,6 +146,7 @@ const App = () => {
                   <Route path="/purchase-panel" element={<PurchasePanelPage />} />
                   <Route path="/diario-fila-offline" element={<DiarioOfflineQueuePage />} />
                   <Route path="/dashboard" element={<Index />} />
+                  <Route path="/index" element={<Navigate to="/dashboard" replace />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>
               </Routes>
