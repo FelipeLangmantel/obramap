@@ -42,6 +42,10 @@ interface WeeklyProduction {
   created_at: string;
   notes: string | null;
   is_initial_database?: boolean;
+  // Unidade customizada por serviço (fallback: unidade da obra)
+  unit_label?: string | null;
+  unit_symbol?: string | null;
+  quantity?: number | null;
 }
 
 interface EditProductionDialogProps {
