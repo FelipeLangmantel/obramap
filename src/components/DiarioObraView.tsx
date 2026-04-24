@@ -1680,6 +1680,15 @@ export default function DiarioObraView() {
           entryDate={entryDate}
         />
       )}
+
+      {/* Solicitar exclusão de lançamento */}
+      <RequestDeleteItemDialog
+        open={!!deleteRequestItem}
+        onOpenChange={(v) => { if (!v) setDeleteRequestItem(null); }}
+        itemId={deleteRequestItem?.id || null}
+        itemDescription={deleteRequestItem ? `${deleteRequestItem.macro_name} · ${deleteRequestItem.scope_name} (${deleteRequestItem.percentual_executado}%)` : undefined}
+        onRequested={() => { if (entryId) loadItems(entryId); }}
+      />
     </div>
   );
 }
