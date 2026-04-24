@@ -59,14 +59,17 @@ export function UnitPresetSelector({
     (u) => u.value === currentValue && u.value !== "__custom__"
   );
   const isEmpty = !value.unit_label && !value.unit_symbol;
+  // Sentinela para "sem seleção" — Radix Select NÃO aceita string vazia em <Select value>
+  const NONE = "__none__";
 
   return (
     <div className="space-y-2">
       <Label className="text-sm">{label}</Label>
       <Select
         disabled={disabled}
-        value={isEmpty ? "" : isPreset ? currentValue : "__custom__"}
+        value={isEmpty ? NONE : isPreset ? currentValue : "__custom__"}
         onValueChange={(v) => {
+          if (v === NONE) return;
           if (v === "__custom__") {
             // Mantém valores se já houver, senão limpa para usuário digitar
             if (isPreset) onChange({ unit_label: "", unit_symbol: "" });
