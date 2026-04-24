@@ -1628,6 +1628,14 @@ export default function DiarioObraView() {
 
       {/* Print dialog */}
       <PrintDiarioDialog open={printOpen} onOpenChange={setPrintOpen} buildData={buildPrintData} />
+      <ConfirmRainDialog
+        open={confirmRainOpen}
+        onOpenChange={setConfirmRainOpen}
+        lat={projectInfo.lat}
+        lng={projectInfo.lng}
+        currentMm={climaState.mmChuva}
+        onConfirm={handleConfirmRainAndSend}
+      />
 
       {/* ADD DIALOGS */}
       {entryId && company?.id && (
