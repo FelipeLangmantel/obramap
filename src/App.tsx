@@ -30,6 +30,7 @@ import HoldingConfigPage from "./pages/HoldingConfigPage";
 import CashflowSimulatorPage from "./pages/CashflowSimulatorPage";
 import PurchasePanelPage from "./pages/PurchasePanelPage";
 import DiarioOfflineQueuePage from "./pages/DiarioOfflineQueuePage";
+import Unsubscribe from "./pages/Unsubscribe";
 import { bootstrapSyncWorker } from "@/offline/sync";
 
 const queryClient = new QueryClient({
