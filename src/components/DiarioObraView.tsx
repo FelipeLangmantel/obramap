@@ -274,7 +274,7 @@ export default function DiarioObraView() {
     (async () => {
       const { data: projData } = await supabase
         .from("projects")
-        .select("location, municipio, estado")
+        .select("location, municipio, estado, lat, lng")
         .eq("id", currentProject.id)
         .maybeSingle();
 
@@ -306,6 +306,8 @@ export default function DiarioObraView() {
         engenheiroResidente: residente,
         startDate: null,
         endDate: null,
+        lat: proj?.lat != null ? Number(proj.lat) : null,
+        lng: proj?.lng != null ? Number(proj.lng) : null,
       });
     })();
   }, [currentProject?.id]);
