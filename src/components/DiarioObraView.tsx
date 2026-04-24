@@ -1097,6 +1097,22 @@ export default function DiarioObraView() {
             </div>
           </div>
           <div className="flex gap-2 shrink-0 self-start flex-wrap">
+            {!isLocked && currentProject?.id && company?.id && (
+              <ImportPreviousDayButton
+                projectId={currentProject.id}
+                companyId={company.id}
+                currentEntryId={entryId}
+                currentEntryDate={entryDate}
+                isLocked={isLocked}
+                onImported={async () => {
+                  if (entryId) {
+                    await rdo.reload(entryId);
+                    await loadItems(entryId);
+                  }
+                }}
+                ensureEntryExists={ensureEntryExists}
+              />
+            )}
             {!isLocked && (
               <Button onClick={handleSaveHeader} disabled={savingHeader} className="min-h-[40px]">
                 {savingHeader ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
