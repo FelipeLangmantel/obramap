@@ -13,9 +13,23 @@ import { toast } from "sonner";
 
 type UnifiedRequest = {
   id: string;
-  source: "edit_requests" | "medicao_correction";
+  source: "edit_requests" | "medicao_correction" | "diary_edit";
   user_name: string;
   obra_id: string;
+  obra_nome: string;
+  justificativa: string;
+  status: string;
+  admin_response: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  // medicao-specific
+  medicao_id?: string;
+  section?: string;
+  // diary-specific
+  diary_entry_id?: string;
+  project_id?: string;
+};
   obra_nome: string;
   justificativa: string;
   status: string;
