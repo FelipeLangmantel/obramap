@@ -412,6 +412,38 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="space-y-1">
+                {(isAdmin || isCompanyAdmin) && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => handleViewChange("empresa")}
+                      isActive={currentActiveView === "empresa"}
+                      className={cn(
+                        "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
+                        currentActiveView === "empresa"
+                          ? "bg-primary text-primary-foreground font-medium shadow-sm"
+                          : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                      )}
+                    >
+                      <Building2 className="h-5 w-5 shrink-0" />
+                      <span className="text-sm font-medium">Minha Empresa</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => handleViewChange("manual")}
+                    isActive={currentActiveView === "manual"}
+                    className={cn(
+                      "w-full justify-start gap-3 px-3 py-3 rounded-lg transition-all duration-150",
+                      currentActiveView === "manual"
+                        ? "bg-primary text-primary-foreground font-medium shadow-sm"
+                        : "text-foreground hover:bg-accent hover:text-accent-foreground"
+                    )}
+                  >
+                    <BookOpen className="h-5 w-5 shrink-0" />
+                    <span className="text-sm font-medium">Manual de Configuração</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 {canEdit && canAccessManagement("projetos") && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
@@ -501,6 +533,15 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setSettingsDialogOpen(true)}
+                    className="w-full justify-start gap-3 px-3 py-3 rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-150"
+                  >
+                    <Settings className="h-5 w-5 shrink-0" />
+                    <span className="text-sm font-medium">Configurações</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
