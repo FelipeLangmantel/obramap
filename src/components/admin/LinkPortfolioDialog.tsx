@@ -10,6 +10,8 @@ import { useConstruction } from "@/contexts/ConstructionContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Link2, Loader2, Search, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { ProjectModulesSelector } from "./ProjectModulesSelector";
+import { useProjectModules } from "@/hooks/useProjectModules";
 
 interface PortfolioObra {
   id: string;
