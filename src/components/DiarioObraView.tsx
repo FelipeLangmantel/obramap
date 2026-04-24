@@ -236,22 +236,34 @@ export default function DiarioObraView() {
     return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [entryId]);
 
-  const handleSendForApproval = async () => {
+  const handleSendForApproval = () => {
     if (!entryId) return;
-    setSendingForApproval(true);
-    const { error } = await supabase
-      .from("diary_entries")
-      .update({ status_aprovacao: "revisando" } as any)
-      .eq("id", entryId);
-    setSendingForApproval(false);
-    if (error) {
-      toast.error("Erro ao enviar: " + error.message);
-      return;
-    }
-    setStatusAprovacao("revisando");
-    toast.success("RDO enviado ao coordenador para revisão e aprovação.");
+    // Abre confirmação de pluviometria — engenharia exige fechamento desse índice
+    setConfirmRainOpen(true);
   };
 
+  const handleConfirmRainAndSend = async (mmFinal: number) => {
+    if (!entryId) return;
+    setSendingForApproval(true);
+    try {
+      const { error } = await supabase
+        .from("diary_entries")
+        .update({
+          mm_chuva: mmFinal,
+          status_aprovacao: "revisando",
+        } as any)
+        .eq("id", entryId);
+      if (error) {
+        toast.error("Erro ao enviar: " + error.message);
+        return;
+      }
+      setClimaState(prev => ({ ...prev, mmChuva: mmFinal }));
+      setStatusAprovacao("revisando");
+      toast.success("RDO enviado ao coordenador para revisão e aprovação.");
+    } finally {
+      setSendingForApproval(false);
+    }
+  };
 
   const macros = useMemo(() => {
     const template = currentProject?.macrosTemplate || [];
