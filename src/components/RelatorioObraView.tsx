@@ -14,9 +14,9 @@ import { ptBR } from "date-fns/locale";
 import { FileText, Loader2, CalendarDays, Users, ClipboardCheck, Hammer, AlertTriangle, MessageSquare, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
-type Periodo = "semanal" | "quinzenal" | "mensal";
+type Periodo = "semanal" | "quinzenal" | "mensal" | "personalizado";
 
-const PERIODO_DAYS: Record<Periodo, number> = { semanal: 7, quinzenal: 15, mensal: 30 };
+const PERIODO_DAYS: Record<Exclude<Periodo, "personalizado">, number> = { semanal: 7, quinzenal: 15, mensal: 30 };
 
 interface DiaryEntryRow {
   id: string;
