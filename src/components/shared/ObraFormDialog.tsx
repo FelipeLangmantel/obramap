@@ -478,6 +478,70 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
                 {err("uh")}
               </div>
             </div>
+            {/* Unidade de medida da obra */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="md:col-span-2">
+                <Label>Unidade de Medida da Obra</Label>
+                <Select
+                  value={
+                    UNIT_PRESETS.some(
+                      (u) => u.value === `${form.default_unit_label}|${form.default_unit_symbol}`
+                    )
+                      ? `${form.default_unit_label}|${form.default_unit_symbol}`
+                      : "__custom__"
+                  }
+                  onValueChange={(v) => {
+                    if (v === "__custom__") {
+                      set("default_unit_label", "");
+                      set("default_unit_symbol", "");
+                    } else {
+                      const [label, symbol] = v.split("|");
+                      set("default_unit_label", label);
+                      set("default_unit_symbol", symbol);
+                    }
+                  }}
+                  disabled={!allowed}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UNIT_PRESETS.map((u) => (
+                      <SelectItem key={u.value} value={u.value}>
+                        {u.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Define como produções serão lançadas (ex: m², verba, %). Pode ser sobrescrito por etapa.
+                </p>
+              </div>
+              <div>
+                <Label>Símbolo</Label>
+                <Input
+                  value={form.default_unit_symbol}
+                  onChange={(e) => set("default_unit_symbol", e.target.value)}
+                  placeholder="un, m², R$..."
+                  maxLength={8}
+                  disabled={!allowed}
+                />
+              </div>
+              {!UNIT_PRESETS.some(
+                (u) => u.value === `${form.default_unit_label}|${form.default_unit_symbol}`
+              ) && (
+                <div className="md:col-span-3">
+                  <Label>Nome da Unidade Personalizada</Label>
+                  <Input
+                    value={form.default_unit_label}
+                    onChange={(e) => set("default_unit_label", e.target.value)}
+                    placeholder="Ex: Apartamento, Lote, Pavimento..."
+                    maxLength={50}
+                    disabled={!allowed}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Responsáveis */}
