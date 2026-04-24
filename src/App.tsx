@@ -101,6 +101,8 @@ const App = () => {
   useEffect(() => {
     document.documentElement.classList.add("dark");
     localStorage.setItem("obramap_theme", "dark");
+    // Inicia o worker de sincronização offline (autodetecta online/offline)
+    bootstrapSyncWorker();
   }, []);
 
   return (
