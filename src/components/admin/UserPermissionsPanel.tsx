@@ -67,6 +67,7 @@ import { z } from "zod";
 import { cn } from "@/lib/utils";
 import { AuditLogPanel } from "./AuditLogPanel";
 import { EditRequestsPanel } from "./EditRequestsPanel";
+import { ProductionApprovalPanel } from "./ProductionApprovalPanel";
 
 type AppRole = "admin" | "editor" | "viewer";
 
