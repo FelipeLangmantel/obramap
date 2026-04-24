@@ -65,12 +65,29 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
   const [isInitialDatabase, setIsInitialDatabase] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  
+  const [quantity, setQuantity] = useState<number | "">("");
+
   // Percentage editing
   const [editPercentageMode, setEditPercentageMode] = useState(false);
   const [housePercentages, setHousePercentages] = useState<Record<number, number>>({});
 
   const houses = currentProject?.houses || [];
+
+  // Resolve unidade efetiva: serviço → obra → fallback "un"
+  const effectiveUnit = {
+    label:
+      production?.unit_label ||
+      (currentProject as any)?.default_unit_label ||
+      "Casa",
+    symbol:
+      production?.unit_symbol ||
+      (currentProject as any)?.default_unit_symbol ||
+      "un",
+  };
+  // Quando a unidade for "Casa/un", quantidade = nº de casas selecionadas (compat)
+  const isHouseUnit =
+    (effectiveUnit.symbol || "").toLowerCase() === "un" &&
+    /casa|unidade/i.test(effectiveUnit.label || "");
 
   // Get current progress for each house in this scope
   const getHouseProgress = (houseId: number): number => {
