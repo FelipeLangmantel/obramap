@@ -11698,6 +11698,13 @@ export type Database = {
         Args: { p_project_id: string }
         Returns: undefined
       }
+      recompute_house_progress_from_diary: {
+        Args: { p_house_numbers?: number[]; p_project_id: string }
+        Returns: {
+          house_number: number
+          macros_updated: number
+        }[]
+      }
       regenerate_supply_alerts: {
         Args: { p_project_id: string }
         Returns: undefined
