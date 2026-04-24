@@ -11073,8 +11073,11 @@ export type Database = {
           macro_name: string
           notes: string | null
           project_id: string
+          quantity: number | null
           scope_id: string
           scope_name: string
+          unit_label: string | null
+          unit_symbol: string | null
           updated_at: string
           week_end: string
           week_start: string
@@ -11099,8 +11102,11 @@ export type Database = {
           macro_name: string
           notes?: string | null
           project_id: string
+          quantity?: number | null
           scope_id: string
           scope_name: string
+          unit_label?: string | null
+          unit_symbol?: string | null
           updated_at?: string
           week_end: string
           week_start: string
@@ -11125,8 +11131,11 @@ export type Database = {
           macro_name?: string
           notes?: string | null
           project_id?: string
+          quantity?: number | null
           scope_id?: string
           scope_name?: string
+          unit_label?: string | null
+          unit_symbol?: string | null
           updated_at?: string
           week_end?: string
           week_start?: string
