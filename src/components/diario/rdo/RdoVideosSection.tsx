@@ -9,7 +9,7 @@ import { RdoSectionShell } from "./RdoSectionShell";
 
 interface Props {
   entryId: string | null;
-  companyId: string;
+  companyId: string | null;
   videos: RdoAttachment[];
   disabled?: boolean;
   onChanged: () => void;
@@ -38,15 +38,27 @@ export function RdoVideosSection({ entryId, companyId, videos, disabled, onChang
   const activeEntryId = entryId || ensuredEntryId;
 
   const handleAdd = async () => {
-    const resolvedEntryId = activeEntryId || await onRequestCreateEntry?.();
+    if (!companyId) {
+      toast.error("Empresa não identificada para o upload.");
+      return;
+    }
+
+    if (activeEntryId) {
+      inputRef.current?.click();
+      return;
+    }
+
+    const resolvedEntryId = await onRequestCreateEntry?.();
     if (!resolvedEntryId) return;
     setEnsuredEntryId(resolvedEntryId);
-    inputRef.current?.click();
+    requestAnimationFrame(() => inputRef.current?.click());
   };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !activeEntryId) return;
+    const resolvedEntryId = activeEntryId || ensuredEntryId || await onRequestCreateEntry?.();
+    if (!file || !resolvedEntryId || !companyId) return;
+    setEnsuredEntryId(resolvedEntryId);
     e.target.value = "";
 
     if (file.size > MAX_BYTES) {
@@ -67,7 +79,7 @@ export function RdoVideosSection({ entryId, companyId, videos, disabled, onChang
     setUploading(true); setProgress(10);
     try {
       const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
-      const path = `${companyId}/${activeEntryId}/videos/${Date.now()}_${safeName}`;
+      const path = `${companyId}/${resolvedEntryId}/videos/${Date.now()}_${safeName}`;
       setProgress(40);
       const { error: upErr } = await supabase.storage
         .from("diary-attachments")
@@ -76,7 +88,7 @@ export function RdoVideosSection({ entryId, companyId, videos, disabled, onChang
       setProgress(80);
       const { error: dbErr } = await supabase.from("diary_attachments").insert({
         company_id: companyId,
-        diary_entry_id: activeEntryId,
+        diary_entry_id: resolvedEntryId,
         tipo: "video",
         storage_path: path,
         nome_original: file.name,

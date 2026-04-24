@@ -105,7 +105,7 @@ const DEFAULT_CLIMA: ClimaState = {
 };
 
 export default function DiarioObraView() {
-  const { currentProject, updateBatchScopeProgress } = useConstruction();
+  const { currentProject, updateBatchScopeProgress, refreshHousesFromDB } = useConstruction();
   const { user, profile, company } = useAuth();
   const houses = currentProject?.houses || [];
   const queryClient = useQueryClient();
@@ -155,6 +155,7 @@ export default function DiarioObraView() {
   const [fotos, setFotos] = useState<{ id: string; url: string; storage_path: string; legenda: string | null }[]>([]);
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState<{ id: string; url: string; legenda: string | null } | null>(null);
+  const fotoInputRef = React.useRef<HTMLInputElement>(null);
 
   // RDO data
   const rdo = useRdoData(entryId);
@@ -173,6 +174,10 @@ export default function DiarioObraView() {
   // Produtividade de referência
   const [produtividadeRef, setProdutividadeRef] = useState<number | null>(null);
   const [produtividadeRefId, setProdutividadeRefId] = useState<string | null>(null);
+  const equipeCalculada = useMemo(
+    () => rdo.labor.reduce((sum, item) => sum + Number(item.quantidade || 0), 0),
+    [rdo.labor]
+  );
 
   const isAdmin = profile?.system_role === "system_admin" || profile?.system_role === "admin";
   const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado";
@@ -385,7 +390,8 @@ export default function DiarioObraView() {
 
   // Upload de fotos
   const handleUploadFotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!entryId || !e.target.files?.length || !company?.id) return;
+    const resolvedEntryId = entryId || await ensureEntryExists();
+    if (!resolvedEntryId || !e.target.files?.length || !company?.id) return;
     setUploadingFoto(true);
     try {
       const arquivos = Array.from(e.target.files).slice(0, 10 - fotos.length);
@@ -393,13 +399,13 @@ export default function DiarioObraView() {
       for (const arquivo of arquivos) {
         const comprimido = await comprimirImagem(arquivo, 1024, 0.7);
         const safeName = arquivo.name.replace(/[^a-zA-Z0-9.]/g, "_");
-        const path = `${company.id}/${entryId}/${Date.now()}_${safeName}`;
+        const path = `${company.id}/${resolvedEntryId}/${Date.now()}_${safeName}`;
         const { error: uploadError } = await supabase.storage
           .from("diary-photos")
           .upload(path, comprimido, { contentType: "image/jpeg", upsert: false });
         if (uploadError) throw uploadError;
         const { error: dbError } = await supabase.from("diary_photos").insert({
-          diary_entry_id: entryId, storage_path: path, legenda: null,
+          diary_entry_id: resolvedEntryId, storage_path: path, legenda: null,
         });
         if (dbError) {
           await supabase.storage.from("diary-photos").remove([path]);
@@ -407,7 +413,7 @@ export default function DiarioObraView() {
         }
         uploaded++;
       }
-      await loadFotos(entryId);
+      await loadFotos(resolvedEntryId);
       toast.success(`${uploaded} foto(s) enviada(s).`);
     } catch (err: any) {
       toast.error("Erro ao enviar foto: " + (err.message || ""));
@@ -463,11 +469,21 @@ export default function DiarioObraView() {
         }
       })
       .on("postgres_changes", {
-        event: "DELETE", schema: "public", table: "diary_items",
-      }, () => { loadEntry(); })
+        event: "*", schema: "public", table: "diary_items",
+        filter: entryId ? `diary_entry_id=eq.${entryId}` : undefined,
+      }, async () => {
+        await loadEntry();
+        await refreshHousesFromDB();
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [currentProject?.id, user?.id]);
+  }, [currentProject?.id, user?.id, entryId, refreshHousesFromDB]);
+
+  useEffect(() => {
+    setEquipePres(equipeCalculada);
+    if (!entryId) return;
+    void supabase.from("diary_entries").update({ equipe_presente: equipeCalculada }).eq("id", entryId);
+  }, [equipeCalculada, entryId]);
 
   const buildClimaPayload = useCallback(() => ({
     clima_manha: climaState.climaManha,
@@ -518,6 +534,17 @@ export default function DiarioObraView() {
     const ensuredEntryId = await ensureEntryExists();
     if (ensuredEntryId) openDialog();
   }, [ensureEntryExists]);
+
+  const handleOpenFotoPicker = useCallback(async () => {
+    if (entryId) {
+      fotoInputRef.current?.click();
+      return;
+    }
+
+    const ensuredEntryId = await ensureEntryExists();
+    if (!ensuredEntryId) return;
+    toast.info("Relatório iniciado. Toque novamente para selecionar as fotos.");
+  }, [entryId, ensureEntryExists]);
 
   // Save header (cabeçalho + clima novo)
   const handleSaveHeader = async () => {
@@ -864,7 +891,7 @@ export default function DiarioObraView() {
     <div className="pb-24 md:pb-4">
       {/* HEADER do RDO */}
       <div className="bg-card border rounded-lg p-4 mb-4">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex items-start justify-between gap-4 flex-wrap md:flex-nowrap">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <ClipboardList className="h-5 w-5 text-primary" />
@@ -876,7 +903,7 @@ export default function DiarioObraView() {
                 <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">✅ Finalizado</Badge>
               )}
               {entryStatus !== "finalizado" && entryId && (
-                <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">📝 Preenchendo</Badge>
+                <Badge className="shrink-0 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">📝 Preenchendo</Badge>
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -897,7 +924,7 @@ export default function DiarioObraView() {
               )}
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0 self-start">
             <Button onClick={handleSaveHeader} disabled={savingHeader || isLocked} className="min-h-[40px]">
               {savingHeader ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
               Salvar
@@ -936,7 +963,7 @@ export default function DiarioObraView() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Data</label>
                     <Input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)}
@@ -944,10 +971,11 @@ export default function DiarioObraView() {
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Equipe presente</label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                      <Input type="number" min={0} value={equipePres}
-                        onChange={e => setEquipePres(Number(e.target.value))} disabled={isLocked} />
+                    <div className="mt-1 flex min-h-10 items-center gap-2 rounded-md border border-input bg-muted/30 px-3 text-sm text-muted-foreground">
+                      <Users className="h-4 w-4" />
+                      <span>
+                        {equipeCalculada} colaborador(es) calculados automaticamente pela seção de mão de obra
+                      </span>
                     </div>
                   </div>
                 </div>
