@@ -119,6 +119,7 @@ const App = () => {
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/change-password" element={<ChangePassword />} />
+                <Route path="/unsubscribe" element={<Unsubscribe />} />
                 {/* Legacy redirect */}
                 <Route path="/landing" element={<LandingPage />} />
 
