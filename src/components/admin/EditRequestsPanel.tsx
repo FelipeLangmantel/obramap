@@ -13,7 +13,7 @@ import { toast } from "sonner";
 
 type UnifiedRequest = {
   id: string;
-  source: "edit_requests" | "medicao_correction";
+  source: "edit_requests" | "medicao_correction" | "diary_edit";
   user_name: string;
   obra_id: string;
   obra_nome: string;
@@ -26,6 +26,9 @@ type UnifiedRequest = {
   // medicao-specific
   medicao_id?: string;
   section?: string;
+  // diary-specific
+  diary_entry_id?: string;
+  project_id?: string;
 };
 
 export function EditRequestsPanel() {
@@ -49,7 +52,7 @@ export function EditRequestsPanel() {
       const obraMap = new Map(obras.map(o => [o.id, o.nome]));
 
       // Fetch both tables in parallel
-      const [editRes, correctionRes] = await Promise.all([
+      const [editRes, correctionRes, diaryRes, projectsRes] = await Promise.all([
         supabase
           .from("edit_requests")
           .select("*")
@@ -62,7 +65,19 @@ export function EditRequestsPanel() {
           .in("obra_id", obraIds)
           .order("created_at", { ascending: false })
           .limit(100),
+        (supabase as any)
+          .from("diary_edit_requests")
+          .select("*")
+          .eq("company_id", company.id)
+          .order("created_at", { ascending: false })
+          .limit(100),
+        supabase
+          .from("projects")
+          .select("id, name")
+          .eq("company_id", company.id),
       ]);
+
+      const projectMap = new Map((projectsRes.data || []).map((p: any) => [p.id, p.name]));
 
       const unified: UnifiedRequest[] = [];
 
@@ -102,6 +117,25 @@ export function EditRequestsPanel() {
         });
       });
 
+      // Map diary_edit_requests
+      ((diaryRes as any).data || []).forEach((r: any) => {
+        unified.push({
+          id: r.id,
+          source: "diary_edit",
+          user_name: r.requested_by_name,
+          obra_id: r.project_id,
+          obra_nome: projectMap.get(r.project_id) || "Projeto",
+          justificativa: r.justificativa,
+          status: r.status,
+          admin_response: r.admin_response,
+          created_at: r.created_at,
+          resolved_at: r.resolved_at,
+          resolved_by: r.resolved_by,
+          diary_entry_id: r.diary_entry_id,
+          project_id: r.project_id,
+        });
+      });
+
       // Sort by date desc
       unified.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
@@ -120,6 +154,13 @@ export function EditRequestsPanel() {
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "medicao_correction_requests" }, () => {
         queryClient.invalidateQueries({ queryKey: ["edit-requests-unified", company.id] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "diary_edit_requests" }, (payload: any) => {
+        queryClient.invalidateQueries({ queryKey: ["edit-requests-unified", company.id] });
+        if (payload.eventType === "INSERT") {
+          const r = payload.new;
+          toast.info(`Nova solicitação de edição de RDO de ${r.requested_by_name}.`);
+        }
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -144,7 +185,7 @@ export function EditRequestsPanel() {
         setProcessing(false);
         return;
       }
-    } else {
+    } else if (request.source === "medicao_correction") {
       // medicao_correction_requests
       const mappedStatus = status === "aprovado" ? "approved" : "rejected";
 
@@ -175,6 +216,38 @@ export function EditRequestsPanel() {
         setProcessing(false);
         return;
       }
+    } else if (request.source === "diary_edit") {
+      // Aprovar: desbloquear o diário por 24h (revertendo status para 'rascunho' e status_aprovacao 'preenchendo')
+      if (status === "aprovado" && request.diary_entry_id) {
+        const unlockUntil = new Date();
+        unlockUntil.setHours(unlockUntil.getHours() + 24);
+        await supabase.from("diary_entries").update({
+          status: "rascunho",
+          status_aprovacao: "preenchendo",
+        } as any).eq("id", request.diary_entry_id);
+
+        await (supabase as any).from("diary_edit_requests").update({
+          status: "aprovado",
+          admin_response: adminResponse || null,
+          resolved_at: new Date().toISOString(),
+          resolved_by: user?.id,
+          resolved_by_name: user?.email?.split("@")[0] || "Admin",
+          unlocked_until: unlockUntil.toISOString(),
+        }).eq("id", request.id);
+      } else {
+        const { error } = await (supabase as any).from("diary_edit_requests").update({
+          status: "rejeitado",
+          admin_response: adminResponse || null,
+          resolved_at: new Date().toISOString(),
+          resolved_by: user?.id,
+          resolved_by_name: user?.email?.split("@")[0] || "Admin",
+        }).eq("id", request.id);
+        if (error) {
+          toast.error("Erro ao processar solicitação.");
+          setProcessing(false);
+          return;
+        }
+      }
     }
 
     setProcessing(false);
@@ -192,7 +265,9 @@ export function EditRequestsPanel() {
   const resolvidas = requests.filter(r => r.status !== "pendente");
 
   const getSourceLabel = (source: string) =>
-    source === "medicao_correction" ? "Medição" : "Edição";
+    source === "medicao_correction" ? "Medição"
+    : source === "diary_edit" ? "RDO"
+    : "Edição";
 
   return (
     <div className="space-y-4">

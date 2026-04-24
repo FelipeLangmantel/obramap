@@ -44,6 +44,9 @@ import { useRdoData } from "./diario/rdo/useRdoData";
 import type { RdoSectionKey } from "./diario/rdo/types";
 import { RdoApprovalSection, type StatusAprovacao } from "./diario/rdo/RdoApprovalSection";
 import { RdoFooterNav } from "./diario/rdo/RdoFooterNav";
+import { RdoEditRequestDialog } from "./diario/rdo/RdoEditRequestDialog";
+import { RdoProductionCharts } from "./diario/rdo/RdoProductionCharts";
+import { Send, Unlock } from "lucide-react";
 
 // Compressão simples via Canvas — reduz tamanho das fotos antes do upload
 async function comprimirImagem(file: File, maxDim = 1024, quality = 0.7): Promise<Blob> {
@@ -170,6 +173,9 @@ export default function DiarioObraView() {
   const [addOccurOpen, setAddOccurOpen] = useState(false);
   const [addChecklistOpen, setAddChecklistOpen] = useState(false);
   const [addCommentOpen, setAddCommentOpen] = useState(false);
+  const [editRequestOpen, setEditRequestOpen] = useState(false);
+  const [pendingEditRequest, setPendingEditRequest] = useState(false);
+  const [sendingForApproval, setSendingForApproval] = useState(false);
 
   // Produtividade de referência
   const [produtividadeRef, setProdutividadeRef] = useState<number | null>(null);
@@ -181,6 +187,57 @@ export default function DiarioObraView() {
 
   const isAdmin = profile?.system_role === "system_admin" || profile?.system_role === "admin";
   const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado";
+
+  // Verifica se há solicitação de edição pendente para este RDO
+  useEffect(() => {
+    if (!entryId) { setPendingEditRequest(false); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("diary_edit_requests")
+        .select("id, status, unlocked_until")
+        .eq("diary_entry_id", entryId)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (cancelled) return;
+      const last = data?.[0];
+      setPendingEditRequest(last?.status === "pendente");
+    })();
+    // realtime para refletir aprovação/rejeição
+    const ch = supabase
+      .channel(`rdo-edit-req-${entryId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "diary_edit_requests", filter: `diary_entry_id=eq.${entryId}` },
+        (payload: any) => {
+          const row = payload.new || payload.old;
+          if (row?.status === "pendente") setPendingEditRequest(true);
+          else if (row?.status === "aprovado") {
+            setPendingEditRequest(false);
+            toast.success("Sua solicitação de edição foi APROVADA. O relatório está liberado por 24h.");
+          } else if (row?.status === "rejeitado") {
+            setPendingEditRequest(false);
+            toast.info("Sua solicitação de edição foi rejeitada pelo administrador.");
+          }
+        })
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(ch); };
+  }, [entryId]);
+
+  const handleSendForApproval = async () => {
+    if (!entryId) return;
+    setSendingForApproval(true);
+    const { error } = await supabase
+      .from("diary_entries")
+      .update({ status_aprovacao: "revisando" } as any)
+      .eq("id", entryId);
+    setSendingForApproval(false);
+    if (error) {
+      toast.error("Erro ao enviar: " + error.message);
+      return;
+    }
+    setStatusAprovacao("revisando");
+    toast.success("RDO enviado ao coordenador para revisão e aprovação.");
+  };
+
 
   const macros = useMemo(() => {
     const template = currentProject?.macrosTemplate || [];
@@ -893,17 +950,23 @@ export default function DiarioObraView() {
       <div className="bg-card border rounded-lg p-4 mb-4">
         <div className="flex items-start justify-between gap-4 flex-wrap md:flex-nowrap">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <ClipboardList className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-bold">
+              <h2 className="text-base sm:text-lg font-bold">
                 {entryId ? "Editar relatório" : "Novo relatório"}: {format(parseISO(entryDate), "dd/MM/yyyy")}
                 {numRelatorio != null && <span className="text-muted-foreground"> · n° {numRelatorio}</span>}
               </h2>
               {entryStatus === "finalizado" && (
-                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">✅ Finalizado</Badge>
+                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">✅ Aprovado</Badge>
               )}
-              {entryStatus !== "finalizado" && entryId && (
-                <Badge className="shrink-0 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">📝 Preenchendo</Badge>
+              {entryStatus !== "finalizado" && statusAprovacao === "revisando" && (
+                <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">🔍 Em revisão</Badge>
+              )}
+              {entryStatus !== "finalizado" && statusAprovacao === "preenchendo" && entryId && (
+                <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">📝 Preenchendo</Badge>
+              )}
+              {pendingEditRequest && (
+                <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">⏳ Edição solicitada</Badge>
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -924,11 +987,36 @@ export default function DiarioObraView() {
               )}
             </div>
           </div>
-          <div className="flex gap-2 shrink-0 self-start">
-            <Button onClick={handleSaveHeader} disabled={savingHeader || isLocked} className="min-h-[40px]">
-              {savingHeader ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-              Salvar
-            </Button>
+          <div className="flex gap-2 shrink-0 self-start flex-wrap">
+            {!isLocked && (
+              <Button onClick={handleSaveHeader} disabled={savingHeader} className="min-h-[40px]">
+                {savingHeader ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                Salvar
+              </Button>
+            )}
+            {entryId && !isLocked && statusAprovacao === "preenchendo" && (
+              <Button
+                variant="default"
+                onClick={handleSendForApproval}
+                disabled={sendingForApproval}
+                className="min-h-[40px] bg-blue-600 hover:bg-blue-700"
+              >
+                {sendingForApproval ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                <span className="hidden sm:inline">Enviar p/ aprovação</span>
+                <span className="sm:hidden">Aprovar</span>
+              </Button>
+            )}
+            {entryId && isLocked && !pendingEditRequest && !isAdmin && (
+              <Button
+                variant="outline"
+                onClick={() => setEditRequestOpen(true)}
+                className="min-h-[40px] border-amber-400 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+              >
+                <Unlock className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Solicitar edição</span>
+                <span className="sm:hidden">Editar</span>
+              </Button>
+            )}
             {entryId && (
               <Button variant="outline" onClick={() => setPrintOpen(true)} className="min-h-[40px]">
                 <Printer className="h-4 w-4 mr-2" /><span className="hidden sm:inline">Imprimir</span>
@@ -936,6 +1024,7 @@ export default function DiarioObraView() {
             )}
           </div>
         </div>
+
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-4">
@@ -1228,6 +1317,11 @@ export default function DiarioObraView() {
             </section>
           )}
 
+          {/* GRÁFICOS DE PRODUÇÃO DO DIA */}
+          {entryId && (
+            <RdoProductionCharts items={diaryItems} totalCasas={houses.length} />
+          )}
+
           {/* OCORRÊNCIAS */}
           <RdoOccurrencesSection
             items={rdo.occurrences}
@@ -1428,6 +1522,21 @@ export default function DiarioObraView() {
             autorId={user?.id || null} autorNome={profile?.display_name || user?.email || null}
             onSaved={() => rdo.reload(entryId)} />
         </>
+      )}
+
+      {/* Solicitar edição (RDO bloqueado) */}
+      {entryId && currentProject?.id && company?.id && user?.id && (
+        <RdoEditRequestDialog
+          open={editRequestOpen}
+          onOpenChange={setEditRequestOpen}
+          diaryEntryId={entryId}
+          projectId={currentProject.id}
+          companyId={company.id}
+          userId={user.id}
+          userName={profile?.display_name || user.email || "Usuário"}
+          numRelatorio={numRelatorio}
+          entryDate={entryDate}
+        />
       )}
     </div>
   );
