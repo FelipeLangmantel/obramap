@@ -65,6 +65,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { UserPermissionsPanel } from "@/components/admin/UserPermissionsPanel";
+import { LinkPortfolioDialog } from "@/components/admin/LinkPortfolioDialog";
 import { ModuleUnderDevelopmentDialog } from "@/components/ModuleUnderDevelopmentDialog";
 import {
   Dialog,
@@ -160,6 +161,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [projectsListOpen, setProjectsListOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [linkPortfolioOpen, setLinkPortfolioOpen] = useState(false);
   const [macrosDialogOpen, setMacrosDialogOpen] = useState(false);
   const [quadrasDialogOpen, setQuadrasDialogOpen] = useState(false);
   const [companyModules, setCompanyModules] = useState<CompanyModule[]>([]);
