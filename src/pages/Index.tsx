@@ -293,17 +293,35 @@ function Index() {
           {/* Main Content */}
           <main className="flex-1 p-4 md:p-5 lg:p-6 overflow-auto">
             {projects.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 gap-4">
-                <div className="text-6xl">🏗️</div>
-                <h2 className="text-2xl font-semibold text-foreground">Nenhuma obra cadastrada</h2>
-                <p className="text-muted-foreground text-center max-w-md text-base">
-                  Clique em "Nova Obra" no menu lateral para cadastrar seu primeiro empreendimento.
-                </p>
+              <div className="max-w-3xl mx-auto py-8">
+                {activeView === "empresa" ? (
+                  <MinhaEmpresaView />
+                ) : activeView === "manual" ? (
+                  <ManualView onNavigate={(t) => {
+                    if (t === "empresa") setActiveView("empresa");
+                    else if (t === "newObra") setNewObraOpen(true);
+                    else if (t === "macros") setMacrosOpen(true);
+                    else if (t === "users") setUsersOpen(true);
+                    else if (t === "production") setActiveView("production");
+                  }} />
+                ) : (
+                  <>
+                    <OnboardingChecklist onAction={handleOnboardingAction} />
+                    <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+                      <div className="text-5xl">🏗️</div>
+                      <h2 className="text-xl font-semibold text-foreground">Nenhuma obra cadastrada</h2>
+                      <p className="text-muted-foreground max-w-md text-sm">
+                        Siga o passo a passo acima para configurar o sistema. Comece cadastrando sua empresa.
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <div className="h-full flex flex-col">
                 {activeView === "home" && (
                   <div className="flex-1">
+                    <OnboardingChecklist onAction={handleOnboardingAction} />
                     <HomeDashboard onNavigateToProject={(view) => setActiveView(view as ViewType)} />
                   </div>
                 )}
