@@ -532,6 +532,16 @@ export default function DiarioObraView() {
         await loadEntry();
         await refreshHousesFromDB();
       })
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public", table: "diary_entries",
+        filter: `project_id=eq.${currentProject.id}`,
+      }, (payload) => {
+        const next: any = payload.new;
+        if (next?.id === entryId && next?.status === "finalizado") {
+          setEntryStatus("finalizado");
+          toast.info("Esta semana foi fechada pelo coordenador.");
+        }
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [currentProject?.id, user?.id, entryId, refreshHousesFromDB]);

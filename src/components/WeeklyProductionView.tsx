@@ -554,6 +554,23 @@ export function WeeklyProductionView() {
     setProductions(newData || []);
   };
 
+  // Realtime: novos lançamentos do Diário recarregam a lista
+  useEffect(() => {
+    if (!currentProject?.id) return;
+    const channel = supabase
+      .channel(`weekly-prod-realtime-${currentProject.id}`)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'productions',
+        filter: `project_id=eq.${currentProject.id}`,
+      }, () => { void reloadProductions(); })
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'weekly_productions',
+        filter: `project_id=eq.${currentProject.id}`,
+      }, () => { void reloadProductions(); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [currentProject?.id]);
+
   // State for selected planned period
   const [selectedPlannedPeriod, setSelectedPlannedPeriod] = useState<PlannedPeriod | null>(null);
 
