@@ -773,8 +773,12 @@ export default function HoldingDashboardView() {
       data_inicio: newObraForm.data_inicio || null,
       prazo_dias: Number(newObraForm.prazo_dias) || 0,
       status: newObraForm.status,
-      percentual_andamento: newObraForm.percentual_andamento,
-      percentual_fisico: newObraForm.percentual_fisico,
+      // Quando obra está vinculada ao ObraMap, % físico/andamento é gerenciado pela trigger
+      // recalc_obra_portfolio_progress — NÃO enviamos valor manual para evitar sobrescrita.
+      ...(((editingObra as any)?.obramap_project_id) ? {} : {
+        percentual_andamento: newObraForm.percentual_andamento,
+        percentual_fisico: newObraForm.percentual_fisico,
+      }),
       periodo_medicao: newObraForm.periodo_medicao || null,
       prazo_pagamento: newObraForm.prazo_pagamento || null,
       municipio: newObraForm.municipio || null,
