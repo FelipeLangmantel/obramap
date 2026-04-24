@@ -1258,8 +1258,21 @@ export default function DiarioObraView() {
             id="fotos"
             title="Fotos"
             count={fotos.length}
-            emptyText="Nenhuma foto enviada."
+            addAsLabel={!isLocked && fotos.length < 10 ? { htmlFor: "rdo-photo-input" } : undefined}
+            disabled={uploadingFoto}
+            alwaysShowChildren
           >
+            <input
+              id="rdo-photo-input"
+              ref={fotoInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              multiple
+              className="hidden"
+              onChange={handleUploadFotos}
+              disabled={uploadingFoto}
+            />
             <div className="space-y-3">
               {fotos.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -1280,25 +1293,15 @@ export default function DiarioObraView() {
                   ))}
                 </div>
               )}
-              {!isLocked && fotos.length < 10 && (
-                <label className={cn(
-                  "flex items-center gap-2 cursor-pointer text-sm text-muted-foreground",
-                  "border-2 border-dashed rounded-lg p-3 hover:border-primary hover:text-primary transition-colors",
-                  uploadingFoto && "opacity-50 pointer-events-none"
-                )}>
-                  <input type="file" accept="image/*" capture="environment" multiple className="hidden"
-                    onClick={async (e) => {
-                      if (entryId) return;
-                      const ensuredEntryId = await ensureEntryExists();
-                      if (!ensuredEntryId) {
-                        e.preventDefault();
-                      }
-                    }}
-                    onChange={handleUploadFotos} disabled={uploadingFoto} />
-                  {uploadingFoto
-                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando...</>
-                    : <><Camera className="h-4 w-4" /> Adicionar foto (máx 10)</>}
-                </label>
+              {uploadingFoto && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Enviando fotos...
+                </div>
+              )}
+              {fotos.length === 0 && !uploadingFoto && (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  Toque em <strong>Adicionar</strong> para enviar fotos da obra (máx 10).
+                </p>
               )}
             </div>
           </RdoSectionShell>

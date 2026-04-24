@@ -31,27 +31,12 @@ export function RdoAttachmentsSection({ entryId, companyId, attachments, disable
 
   const activeEntryId = entryId || ensuredEntryId;
 
-  const handleOpenPicker = async () => {
-    if (!companyId) {
-      toast.error("Empresa não identificada para o upload.");
-      return;
-    }
-
-    if (activeEntryId) {
-      inputRef.current?.click();
-      return;
-    }
-
-    const resolvedEntryId = await onRequestCreateEntry?.();
-    if (!resolvedEntryId) return;
-    setEnsuredEntryId(resolvedEntryId);
-    toast.info("Relatório iniciado. Toque novamente para selecionar o anexo.");
-  };
-
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    const resolvedEntryId = activeEntryId || ensuredEntryId || await onRequestCreateEntry?.();
-    if (!file || !resolvedEntryId || !companyId) return;
+    if (!file) return;
+    if (!companyId) { toast.error("Empresa não identificada."); e.target.value = ""; return; }
+    const resolvedEntryId = activeEntryId || await onRequestCreateEntry?.();
+    if (!resolvedEntryId) { e.target.value = ""; return; }
     setEnsuredEntryId(resolvedEntryId);
     e.target.value = "";
 
@@ -102,15 +87,21 @@ export function RdoAttachmentsSection({ entryId, companyId, attachments, disable
       id="anexos"
       title="Anexos"
       count={attachments.length}
-      onAdd={!disabled ? handleOpenPicker : undefined}
+      addAsLabel={!disabled ? { htmlFor: "rdo-attachment-input" } : undefined}
       disabled={disabled || uploading}
       emptyText="PDF, DOC, XLS, JPG ou PNG (até 20 MB)"
+      alwaysShowChildren
     >
-      <input ref={inputRef} type="file" accept={ACCEPT} className="hidden" onChange={handleFile} />
+      <input id="rdo-attachment-input" ref={inputRef} type="file" accept={ACCEPT} className="hidden" onChange={handleFile} />
       {uploading && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
           <Loader2 className="h-3 w-3 animate-spin" />Enviando...
         </div>
+      )}
+      {attachments.length === 0 && !uploading && (
+        <p className="text-sm text-muted-foreground text-center py-2">
+          PDF, DOC, XLS, JPG ou PNG (até 20 MB)
+        </p>
       )}
       {attachments.length > 0 && (
         <div className="space-y-1">

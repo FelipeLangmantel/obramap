@@ -37,27 +37,12 @@ export function RdoVideosSection({ entryId, companyId, videos, disabled, onChang
 
   const activeEntryId = entryId || ensuredEntryId;
 
-  const handleAdd = async () => {
-    if (!companyId) {
-      toast.error("Empresa não identificada para o upload.");
-      return;
-    }
-
-    if (activeEntryId) {
-      inputRef.current?.click();
-      return;
-    }
-
-    const resolvedEntryId = await onRequestCreateEntry?.();
-    if (!resolvedEntryId) return;
-    setEnsuredEntryId(resolvedEntryId);
-    requestAnimationFrame(() => inputRef.current?.click());
-  };
-
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    const resolvedEntryId = activeEntryId || ensuredEntryId || await onRequestCreateEntry?.();
-    if (!file || !resolvedEntryId || !companyId) return;
+    if (!file) return;
+    if (!companyId) { toast.error("Empresa não identificada."); e.target.value = ""; return; }
+    const resolvedEntryId = activeEntryId || await onRequestCreateEntry?.();
+    if (!resolvedEntryId) { e.target.value = ""; return; }
     setEnsuredEntryId(resolvedEntryId);
     e.target.value = "";
 
@@ -125,17 +110,24 @@ export function RdoVideosSection({ entryId, companyId, videos, disabled, onChang
       id="videos"
       title="Vídeos"
       count={videos.length}
-      onAdd={!disabled ? handleAdd : undefined}
+      addAsLabel={!disabled ? { htmlFor: "rdo-video-input" } : undefined}
       disabled={disabled || uploading}
       emptyText="Vídeo MP4 (50 segundos) com até 100 MB"
+      alwaysShowChildren
     >
       <input
+        id="rdo-video-input"
         ref={inputRef}
         type="file"
         accept="video/mp4"
         className="hidden"
         onChange={handleFile}
       />
+      {videos.length === 0 && !uploading && (
+        <p className="text-sm text-muted-foreground text-center py-2">
+          Vídeo MP4 (50 segundos) com até 100 MB
+        </p>
+      )}
       {uploading && (
         <div className="mb-3 space-y-1">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
