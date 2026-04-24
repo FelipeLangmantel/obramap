@@ -29,14 +29,16 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, UserPlus, Shield, Pencil, Eye, Trash2 } from "lucide-react";
+import { Loader2, UserPlus, Shield, Pencil, Eye, Trash2, Phone } from "lucide-react";
 import { z } from "zod";
+import { maskPhoneInputBR, toE164BR, formatPhoneBR } from "@/lib/phone";
 
 interface UserWithRole {
   id: string;
   user_id: string;
   display_name: string;
   email: string;
+  phone: string | null;
   role: AppRole;
   created_at: string;
 }
@@ -45,6 +47,9 @@ const createUserSchema = z.object({
   email: z.string().email("Email inválido"),
   password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
   displayName: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  phone: z.string().refine((v) => !v || /^\+55[1-9]{2}9?[0-9]{8}$/.test(v), {
+    message: "Telefone inválido. Use DDD + número (ex: 11 98765-4321)",
+  }),
   role: z.enum(["admin", "editor", "viewer"]),
 });
 
@@ -59,6 +64,7 @@ export function UserManagement() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [phoneRaw, setPhoneRaw] = useState("");
   const [role, setRole] = useState<AppRole>("viewer");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
