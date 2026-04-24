@@ -61,7 +61,7 @@ export function AddEquipmentDialog({ open, onOpenChange, entryId, companyId, onS
     try {
       const { data, error } = await supabase
         .from("equipment_types")
-        .insert({ nome: novoNome.trim(), company_id: companyId })
+        .insert({ nome: novoNome.trim() })
         .select("id, nome")
         .single();
       if (error) throw error;

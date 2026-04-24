@@ -52,7 +52,7 @@ export function AddOccurrenceDialog({ open, onOpenChange, entryId, companyId, on
     try {
       const { data, error } = await supabase
         .from("occurrence_tags")
-        .insert({ nome: novaTag.trim(), is_default: false, company_id: companyId })
+        .insert({ nome: novaTag.trim() })
         .select("id, nome").single();
       if (error) throw error;
       setTags(prev => [...prev, data as any]);
