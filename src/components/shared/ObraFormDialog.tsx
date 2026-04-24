@@ -259,6 +259,16 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
           projectType: form.tipo_contrato || "Residencial Popular",
         });
         if (projectId) {
+          // Persiste a unidade de medida customizada da obra
+          if (form.default_unit_label || form.default_unit_symbol) {
+            await supabase
+              .from("projects")
+              .update({
+                default_unit_label: form.default_unit_label || "Unidade",
+                default_unit_symbol: form.default_unit_symbol || "un",
+              } as any)
+              .eq("id", projectId);
+          }
           // 3) Vincular obra portfolio ao projeto
           await supabase
             .from("obras_portfolio")
