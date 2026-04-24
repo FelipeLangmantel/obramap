@@ -260,16 +260,16 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       ],
     },
     {
-      label: "Holding",
+      label: "Painel de Gestão",
       items: [
-        { title: "Painel da Holding", view: "holding-dashboard", icon: Crown, permissionId: "holding" },
+        { title: "Painel de Obras", view: "holding-dashboard", icon: Crown, permissionId: "holding" },
         { title: "Receitas & Medições", view: "holding-receitas", icon: TrendingUp, permissionId: "holding_receitas" },
         { title: "Medições PLE", view: "ple-measurements", icon: ClipboardList, permissionId: "ple_medicoes" },
         { title: "Despesas & Custos", view: "holding-despesas", icon: Receipt, permissionId: "holding_despesas" },
         { title: "Documentação", view: "holding-documentos", icon: FolderOpen, permissionId: "holding_documentos" },
         { title: "PRD — Cronograma", view: "holding-prd", icon: BarChart3, permissionId: "holding_prd" },
         { title: "IA — Insights", view: "holding-insights", icon: Sparkles, permissionId: "holding_insights", badge: "BETA" },
-        { title: "Configurações", view: "holding-config", icon: Settings, permissionId: "holding" },
+        { title: "Configurações Gerenciais", view: "holding-config", icon: Settings, permissionId: "holding" },
       ],
     },
   ];
