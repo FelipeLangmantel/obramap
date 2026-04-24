@@ -363,6 +363,10 @@ export default function DiarioTabContent() {
       } else if (tipoCorrecao === "ajuste_percentual") {
         const delta = novoPercentual - Number(item.percentual_executado);
         await supabase.from("diary_items").update({ percentual_executado: novoPercentual }).eq("id", item.id);
+        if (item.production_id) {
+          await supabase.from("weekly_productions").update({ percentual: novoPercentual }).eq("id", item.production_id);
+          await supabase.from("productions").update({ percentual: novoPercentual }).eq("id", item.production_id);
+        }
         const adjustMap: Record<number, number> = {};
         for (const hId of houseIdsAnterior) {
           const h = houses.find(h => h.id === hId);
