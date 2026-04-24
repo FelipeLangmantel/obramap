@@ -116,19 +116,19 @@ async function syncEntry(entry: PendingDiaryEntry): Promise<string | null> {
   return data.id;
 }
 
-// ───────────────────────────── Sync de um filho (item/produção)
+// Sync genérico de um filho do diário. Aceita overrides de payload
+// (ex: para resolver production_id local → production_id remoto).
 async function syncChild<T extends PendingDiaryItem | PendingProduction>(
   table: "diary_items" | "productions" | "weekly_productions",
   store: any,
   child: T,
-  remoteEntryId: string,
-  entryFkColumn: string
+  payloadOverrides: Record<string, any>
 ): Promise<boolean> {
   await store.update(child.client_uuid, { status: "syncing" });
   const payload = {
     ...child.payload,
+    ...payloadOverrides,
     client_uuid: child.client_uuid,
-    [entryFkColumn]: remoteEntryId,
   };
   const { error } = await supabase.from(table as any).insert(payload);
   if (error && !/duplicate key|unique/i.test(error.message)) {
