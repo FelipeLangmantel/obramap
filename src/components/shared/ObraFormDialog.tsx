@@ -79,10 +79,17 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // Modo: criar nova obra OU vincular obra existente do Painel
+  const [mode, setMode] = useState<"new" | "link">("new");
+  const [unlinkedObras, setUnlinkedObras] = useState<UnlinkedObra[]>([]);
+  const [selectedObraId, setSelectedObraId] = useState<string>("");
+
   useEffect(() => {
     if (!open) return;
     setForm(initialForm);
     setErrors({});
+    setMode("new");
+    setSelectedObraId("");
     if (company?.id) {
       supabase
         .from("company_contract_types" as any)
@@ -91,6 +98,14 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
         .eq("ativo", true)
         .order("nome")
         .then(({ data }) => setContractTypes((data as any[]) || []));
+      // Obras do Painel ainda não vinculadas — base do modo "linkar existente"
+      supabase
+        .from("obras_portfolio")
+        .select("id, nome, empresa, municipio, estado, uh, data_inicio, prazo_dias, tipo_contrato")
+        .eq("company_id", company.id)
+        .is("obramap_project_id", null)
+        .order("nome")
+        .then(({ data }) => setUnlinkedObras((data as any[]) || []));
     }
     // System admin pode escolher empresa; normal usa a sua
     if (isSystemAdmin) {
@@ -102,6 +117,11 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
       setForm((f) => ({ ...f, empresa: company.name || "" }));
     }
   }, [open, company?.id, company?.name, isSystemAdmin]);
+
+  const selectedObra = useMemo(
+    () => unlinkedObras.find((o) => o.id === selectedObraId) || null,
+    [unlinkedObras, selectedObraId]
+  );
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
 
