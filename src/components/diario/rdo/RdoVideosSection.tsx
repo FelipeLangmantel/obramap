@@ -51,7 +51,7 @@ export function RdoVideosSection({ entryId, companyId, videos, disabled, onChang
     const resolvedEntryId = await onRequestCreateEntry?.();
     if (!resolvedEntryId) return;
     setEnsuredEntryId(resolvedEntryId);
-    toast.info("Relatório iniciado. Toque novamente para selecionar o vídeo.");
+    requestAnimationFrame(() => inputRef.current?.click());
   };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
