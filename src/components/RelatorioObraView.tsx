@@ -26,6 +26,8 @@ interface DiaryEntryRow {
   equipe_presente: number | null;
   observacao_geral: string | null;
   status: string;
+  status_aprovacao?: string | null;
+  mm_chuva?: number | null;
 }
 interface DiaryItemRow {
   id: string;
