@@ -188,6 +188,57 @@ export default function DiarioObraView() {
   const isAdmin = profile?.system_role === "system_admin" || profile?.system_role === "admin";
   const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado";
 
+  // Verifica se há solicitação de edição pendente para este RDO
+  useEffect(() => {
+    if (!entryId) { setPendingEditRequest(false); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("diary_edit_requests")
+        .select("id, status, unlocked_until")
+        .eq("diary_entry_id", entryId)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (cancelled) return;
+      const last = data?.[0];
+      setPendingEditRequest(last?.status === "pendente");
+    })();
+    // realtime para refletir aprovação/rejeição
+    const ch = supabase
+      .channel(`rdo-edit-req-${entryId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "diary_edit_requests", filter: `diary_entry_id=eq.${entryId}` },
+        (payload: any) => {
+          const row = payload.new || payload.old;
+          if (row?.status === "pendente") setPendingEditRequest(true);
+          else if (row?.status === "aprovado") {
+            setPendingEditRequest(false);
+            toast.success("Sua solicitação de edição foi APROVADA. O relatório está liberado por 24h.");
+          } else if (row?.status === "rejeitado") {
+            setPendingEditRequest(false);
+            toast.info("Sua solicitação de edição foi rejeitada pelo administrador.");
+          }
+        })
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(ch); };
+  }, [entryId]);
+
+  const handleSendForApproval = async () => {
+    if (!entryId) return;
+    setSendingForApproval(true);
+    const { error } = await supabase
+      .from("diary_entries")
+      .update({ status_aprovacao: "revisando" } as any)
+      .eq("id", entryId);
+    setSendingForApproval(false);
+    if (error) {
+      toast.error("Erro ao enviar: " + error.message);
+      return;
+    }
+    setStatusAprovacao("revisando");
+    toast.success("RDO enviado ao coordenador para revisão e aprovação.");
+  };
+
+
   const macros = useMemo(() => {
     const template = currentProject?.macrosTemplate || [];
     if (!houses.length) return template;
