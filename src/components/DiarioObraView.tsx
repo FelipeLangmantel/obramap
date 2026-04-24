@@ -23,6 +23,7 @@ import type { DiarioPDFData } from "./diario/generateDiarioPDF";
 import { DiarioSummaryPanel } from "./diario/DiarioSummaryPanel";
 import { ConfirmRainDialog } from "./diario/ConfirmRainDialog";
 import { ImportPreviousDayButton } from "./diario/ImportPreviousDayButton";
+import { RequestDeleteItemDialog } from "./diario/RequestDeleteItemDialog";
 
 // RDO modular components
 import { RdoSidebar } from "./diario/rdo/RdoSidebar";
