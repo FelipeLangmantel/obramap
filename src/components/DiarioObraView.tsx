@@ -1198,7 +1198,7 @@ export default function DiarioObraView() {
 
           {/* VÍDEOS */}
           <RdoVideosSection
-            items={rdo.videos}
+            videos={rdo.videos}
             entryId={entryId}
             companyId={company?.id || null}
             disabled={isLocked}
@@ -1207,7 +1207,7 @@ export default function DiarioObraView() {
 
           {/* ANEXOS */}
           <RdoAttachmentsSection
-            items={rdo.attachments}
+            attachments={rdo.attachments}
             entryId={entryId}
             companyId={company?.id || null}
             disabled={isLocked}
