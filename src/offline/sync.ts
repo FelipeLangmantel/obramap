@@ -308,6 +308,32 @@ export async function runSync(): Promise<void> {
   }
 }
 
+// ───────────────────────────── Recálculo sob demanda
+// Útil para o DiarioObraView chamar manualmente quando volta a ficar online,
+// ou após "Forçar sincronização" na página de fila.
+export async function recomputeProjectProgress(
+  projectId: string,
+  houseNumbers?: number[]
+): Promise<{ ok: boolean; error?: string }> {
+  if (!navigator.onLine) return { ok: false, error: "offline" };
+  try {
+    const { error } = await supabase.rpc(
+      "recompute_house_progress_from_diary" as any,
+      { p_project_id: projectId, p_house_numbers: houseNumbers ?? null }
+    );
+    if (error) return { ok: false, error: error.message };
+    // Notifica a UI (ConstructionContext escuta este evento)
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("obramap:progress-recomputed", {
+        detail: { projectId, houseNumbers }
+      }));
+    }
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
 // ───────────────────────────── Bootstrap (instalado uma vez no App)
 let bootstrapped = false;
 export function bootstrapSyncWorker(): void {
