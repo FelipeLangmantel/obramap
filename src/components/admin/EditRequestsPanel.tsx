@@ -185,7 +185,7 @@ export function EditRequestsPanel() {
         setProcessing(false);
         return;
       }
-    } else {
+    } else if (request.source === "medicao_correction") {
       // medicao_correction_requests
       const mappedStatus = status === "aprovado" ? "approved" : "rejected";
 
@@ -215,6 +215,38 @@ export function EditRequestsPanel() {
         toast.error("Erro ao processar solicitação.");
         setProcessing(false);
         return;
+      }
+    } else if (request.source === "diary_edit") {
+      // Aprovar: desbloquear o diário por 24h (revertendo status para 'rascunho' e status_aprovacao 'preenchendo')
+      if (status === "aprovado" && request.diary_entry_id) {
+        const unlockUntil = new Date();
+        unlockUntil.setHours(unlockUntil.getHours() + 24);
+        await supabase.from("diary_entries").update({
+          status: "rascunho",
+          status_aprovacao: "preenchendo",
+        } as any).eq("id", request.diary_entry_id);
+
+        await (supabase as any).from("diary_edit_requests").update({
+          status: "aprovado",
+          admin_response: adminResponse || null,
+          resolved_at: new Date().toISOString(),
+          resolved_by: user?.id,
+          resolved_by_name: user?.email?.split("@")[0] || "Admin",
+          unlocked_until: unlockUntil.toISOString(),
+        }).eq("id", request.id);
+      } else {
+        const { error } = await (supabase as any).from("diary_edit_requests").update({
+          status: "rejeitado",
+          admin_response: adminResponse || null,
+          resolved_at: new Date().toISOString(),
+          resolved_by: user?.id,
+          resolved_by_name: user?.email?.split("@")[0] || "Admin",
+        }).eq("id", request.id);
+        if (error) {
+          toast.error("Erro ao processar solicitação.");
+          setProcessing(false);
+          return;
+        }
       }
     }
 
