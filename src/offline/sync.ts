@@ -24,7 +24,7 @@ import {
 type SyncEvent =
   | { type: "start" }
   | { type: "progress"; done: number; total: number }
-  | { type: "done"; synced: number; failed: number }
+  | { type: "done"; synced: number; failed: number; recomputed_projects: string[] }
   | { type: "error"; message: string };
 
 type Listener = (e: SyncEvent) => void;
@@ -198,6 +198,9 @@ export async function runSync(): Promise<void> {
   emit({ type: "start" });
   let synced = 0;
   let failed = 0;
+  // Coletamos quais projetos/casas tiveram lançamentos sincronizados
+  // para reconciliar o progresso de macros depois.
+  const affectedByProject = new Map<string, Set<number>>();
 
   try {
     const entries = await offlineDB.diary_entries
@@ -249,6 +252,16 @@ export async function runSync(): Promise<void> {
           diary_entry_id: remoteId,
           ...(resolvedProdId ? { production_id: resolvedProdId } : {}),
         });
+        if (ok) {
+          // Coleta as casas afetadas para recálculo posterior
+          const houseIds = (item.payload?.house_ids as number[] | undefined) || [];
+          if (houseIds.length > 0 && entry.project_id) {
+            if (!affectedByProject.has(entry.project_id)) {
+              affectedByProject.set(entry.project_id, new Set());
+            }
+            houseIds.forEach((h) => affectedByProject.get(entry.project_id)!.add(h));
+          }
+        }
         ok ? synced++ : failed++; done++;
         emit({ type: "progress", done, total });
       }
@@ -264,16 +277,68 @@ export async function runSync(): Promise<void> {
       }
     }
 
+    // ─── Reconciliação: recalcula progresso das macros no servidor para
+    // todas as casas afetadas pelos lançamentos sincronizados.
+    // Isto repõe o que foi pulado quando o usuário lançou offline.
+    const recomputed: string[] = [];
+    for (const [projectId, houseSet] of affectedByProject.entries()) {
+      try {
+        const houseNumbers = Array.from(houseSet);
+        const { error: rpcErr } = await supabase.rpc(
+          "recompute_house_progress_from_diary" as any,
+          { p_project_id: projectId, p_house_numbers: houseNumbers }
+        );
+        if (!rpcErr) {
+          recomputed.push(projectId);
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("obramap:progress-recomputed", {
+              detail: { projectId, houseNumbers }
+            }));
+          }
+        } else {
+          console.warn("[sync] recompute progress failed:", rpcErr.message);
+        }
+      } catch (e) {
+        console.warn("[sync] recompute progress threw:", e);
+      }
+    }
+
     await logDeviceSync({
       pending: await countPending(),
       status: failed === 0 ? "ok" : "error",
       error: failed > 0 ? `${failed} item(ns) com erro` : undefined,
     });
-    emit({ type: "done", synced, failed });
+    emit({ type: "done", synced, failed, recomputed_projects: recomputed });
   } catch (e: any) {
     emit({ type: "error", message: e?.message || String(e) });
   } finally {
     isSyncing = false;
+  }
+}
+
+// ───────────────────────────── Recálculo sob demanda
+// Útil para o DiarioObraView chamar manualmente quando volta a ficar online,
+// ou após "Forçar sincronização" na página de fila.
+export async function recomputeProjectProgress(
+  projectId: string,
+  houseNumbers?: number[]
+): Promise<{ ok: boolean; error?: string }> {
+  if (!navigator.onLine) return { ok: false, error: "offline" };
+  try {
+    const { error } = await supabase.rpc(
+      "recompute_house_progress_from_diary" as any,
+      { p_project_id: projectId, p_house_numbers: houseNumbers ?? null }
+    );
+    if (error) return { ok: false, error: error.message };
+    // Notifica a UI (ConstructionContext escuta este evento)
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("obramap:progress-recomputed", {
+        detail: { projectId, houseNumbers }
+      }));
+    }
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
   }
 }
 

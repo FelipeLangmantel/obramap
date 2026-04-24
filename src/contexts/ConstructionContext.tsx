@@ -1556,6 +1556,19 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     }
   }, [currentProjectId, selectedHouse]);
 
+  // Escuta o evento disparado pelo sync worker / recálculo manual
+  // (offline → online) para recarregar as casas do projeto afetado.
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const detail = (ev as CustomEvent).detail as { projectId?: string } | undefined;
+      if (!detail?.projectId) return;
+      if (detail.projectId !== currentProjectId) return;
+      void refreshHousesFromDB();
+    };
+    window.addEventListener("obramap:progress-recomputed", handler);
+    return () => window.removeEventListener("obramap:progress-recomputed", handler);
+  }, [currentProjectId, refreshHousesFromDB]);
+
   const updateHouseInfo = useCallback(async (houseId: number, updates: Partial<Pick<House, "area" | "constructorName" | "type" | "expectedDate">>) => {
     if (!currentProjectId) return;
     
