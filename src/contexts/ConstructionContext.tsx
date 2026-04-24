@@ -393,9 +393,37 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
 
     (async () => {
       setIsLoading(true);
-      try {
 
-        // hydrate inline (duplicated small call to avoid function re-creation deps)
+      // ⚡ Cache-first: pinta a UI com o snapshot offline antes da rede
+      let hadCache = false;
+      try {
+        const snap = await getProjectSnapshot(currentProjectId);
+        const cachedHouses = snap?.data?.houses as House[] | undefined;
+        const cachedQuadras = snap?.data?.quadras as Quadra[] | undefined;
+        if (cachedHouses?.length || cachedQuadras?.length) {
+          hadCache = true;
+          setProjects((prev) =>
+            prev.map((p) =>
+              p.id === currentProjectId
+                ? { ...p, houses: cachedHouses ?? p.houses, quadras: cachedQuadras ?? p.quadras }
+                : p
+            )
+          );
+          hydratedProjectIdsRef.current.add(currentProjectId);
+          setIsLoading(false);
+        }
+      } catch (e) {
+        console.warn("[cache] hidratacao local falhou", e);
+      }
+
+      // Sem internet: confia no cache (ou fica vazio se não tiver)
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setIsLoading(false);
+        isHydratingRef.current = false;
+        return;
+      }
+
+      try {
         const [{ data: quadrasData }, { data: housesData }] = await Promise.race([
           Promise.all([
             supabase
@@ -420,8 +448,6 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
           houses: q.house_ids || [],
         }));
 
-        const projectTemplate = project.macrosTemplate;
-
         const houses: House[] = (housesData || []).map((h: any) => ({
           id: h.house_number,
           quadra: h.quadra_id || "",
@@ -434,12 +460,16 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         }));
 
         hydratedProjectIdsRef.current.add(currentProjectId);
-        setProjects((prev) =>
-          prev.map((p) => (p.id === currentProjectId ? { ...p, quadras, houses } : p))
-        );
+        setProjects((prev) => {
+          const next = prev.map((p) => (p.id === currentProjectId ? { ...p, quadras, houses } : p));
+          // 💾 Persiste snapshot completo para uso offline
+          const merged = next.find((p) => p.id === currentProjectId);
+          if (merged) void saveProjectSnapshot(currentProjectId, merged);
+          return next;
+        });
       } catch (e) {
         console.error("Error hydrating project:", e);
-        hydratedProjectIdsRef.current.delete(currentProjectId);
+        if (!hadCache) hydratedProjectIdsRef.current.delete(currentProjectId);
       } finally {
         setIsLoading(false);
         isHydratingRef.current = false;
