@@ -413,6 +413,51 @@ export default function RelatorioObraView() {
         <KpiCard icon={<Users />} label="Equipe média/dia" value={kpis.equipeMedia} color="text-purple-600" />
       </div>
 
+      {/* Clima/IDC + RDOs status */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Clima e Praticabilidade</CardTitle></CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <div className="flex justify-between"><span className="text-muted-foreground">IDC (Dias Praticáveis)</span><span className="font-bold">{climaStats.idc}%</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Dias praticáveis</span><span>{climaStats.praticaveis} / {climaStats.totalDias}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Dias com chuva</span><span>{climaStats.chuvosos}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Pluviometria acumulada</span><span className="font-semibold">{climaStats.mmAcumulado} mm</span></div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Status dos RDOs no período</CardTitle></CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            <div className="flex justify-between"><span className="text-muted-foreground">Total de RDOs</span><span className="font-bold">{rdoStatus.total}</span></div>
+            <div className="flex justify-between"><span className="text-emerald-600">Aprovados</span><span>{rdoStatus.aprovado}</span></div>
+            <div className="flex justify-between"><span className="text-amber-600">Em revisão</span><span>{rdoStatus.revisando}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Em preenchimento</span><span>{rdoStatus.preenchendo}</span></div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Curva S — execução acumulada */}
+      {curvaS.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Curva S — Execução acumulada (casas-serviço)</CardTitle></CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow><TableHead>Data</TableHead><TableHead className="text-right">Dia</TableHead><TableHead className="text-right">Acumulado</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {curvaS.map(c => (
+                    <TableRow key={c.data}>
+                      <TableCell>{format(parseISO(c.data), "dd/MM")}</TableCell>
+                      <TableCell className="text-right">{c.dia.toFixed(2)}</TableCell>
+                      <TableCell className="text-right font-semibold">{c.acum.toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Atividades */}
       <Card>
         <CardHeader className="pb-3">
