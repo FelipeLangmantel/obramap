@@ -24,7 +24,7 @@ import {
 type SyncEvent =
   | { type: "start" }
   | { type: "progress"; done: number; total: number }
-  | { type: "done"; synced: number; failed: number }
+  | { type: "done"; synced: number; failed: number; recomputed_projects: string[] }
   | { type: "error"; message: string };
 
 type Listener = (e: SyncEvent) => void;
