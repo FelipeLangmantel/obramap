@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { saveProjectSnapshot, getProjectSnapshot, getAllProjectSnapshots } from "@/offline/projectCache";
 
 export interface LegendItem {
   id: string;
@@ -272,6 +273,40 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
 
     const loadProjects = async () => {
       setIsLoading(true);
+
+      // ⚡ STALE-WHILE-REVALIDATE: hidrata da cache local IMEDIATAMENTE
+      // para que Mapa Interativo / Mapa de Obras / Gráficos / Mapa 3D
+      // abram instantaneamente, inclusive offline.
+      try {
+        const snapshots = await getAllProjectSnapshots();
+        if (snapshots.length > 0) {
+          const cached = snapshots
+            .map((s) => s.data as Project)
+            .filter(Boolean)
+            .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
+          if (cached.length > 0) {
+            setProjects(cached);
+            projectsRef.current = cached;
+            setCurrentProjectId((id) => id ?? cached[0]?.id ?? null);
+            // Já considera projetos hidratados (com casas) se a snapshot trouxer casas
+            cached.forEach((p) => {
+              if (Array.isArray(p.houses) && p.houses.length > 0) {
+                hydratedProjectIdsRef.current.add(p.id);
+              }
+            });
+            setIsLoading(false);
+          }
+        }
+      } catch (e) {
+        console.warn("[cache] failed to hydrate projects from local snapshot", e);
+      }
+
+      // Sem internet? Mantém o que veio do cache e sai.
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
         const { data: projectsData, error: projectsError } = await supabase
           .from("projects")
@@ -311,9 +346,20 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
           };
         });
 
-        setProjects(loadedProjects);
+        // Mescla com casas/quadras já em memória (vindas do cache local) para
+        // não perder a UI já renderizada enquanto a hidratação acontece.
+        setProjects((prev) => {
+          const prevById = new Map(prev.map((p) => [p.id, p]));
+          return loadedProjects.map((p) => {
+            const old = prevById.get(p.id);
+            if (old && (old.houses?.length || old.quadras?.length)) {
+              return { ...p, houses: old.houses, quadras: old.quadras };
+            }
+            return p;
+          });
+        });
         projectsRef.current = loadedProjects;
-        setCurrentProjectId(loadedProjects[0]?.id ?? null);
+        setCurrentProjectId((id) => id ?? loadedProjects[0]?.id ?? null);
       } catch (error) {
         console.error("Error loading projects:", error);
       } finally {
@@ -347,9 +393,37 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
 
     (async () => {
       setIsLoading(true);
-      try {
 
-        // hydrate inline (duplicated small call to avoid function re-creation deps)
+      // ⚡ Cache-first: pinta a UI com o snapshot offline antes da rede
+      let hadCache = false;
+      try {
+        const snap = await getProjectSnapshot(currentProjectId);
+        const cachedHouses = snap?.data?.houses as House[] | undefined;
+        const cachedQuadras = snap?.data?.quadras as Quadra[] | undefined;
+        if (cachedHouses?.length || cachedQuadras?.length) {
+          hadCache = true;
+          setProjects((prev) =>
+            prev.map((p) =>
+              p.id === currentProjectId
+                ? { ...p, houses: cachedHouses ?? p.houses, quadras: cachedQuadras ?? p.quadras }
+                : p
+            )
+          );
+          hydratedProjectIdsRef.current.add(currentProjectId);
+          setIsLoading(false);
+        }
+      } catch (e) {
+        console.warn("[cache] hidratacao local falhou", e);
+      }
+
+      // Sem internet: confia no cache (ou fica vazio se não tiver)
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setIsLoading(false);
+        isHydratingRef.current = false;
+        return;
+      }
+
+      try {
         const [{ data: quadrasData }, { data: housesData }] = await Promise.race([
           Promise.all([
             supabase
@@ -374,8 +448,6 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
           houses: q.house_ids || [],
         }));
 
-        const projectTemplate = project.macrosTemplate;
-
         const houses: House[] = (housesData || []).map((h: any) => ({
           id: h.house_number,
           quadra: h.quadra_id || "",
@@ -388,18 +460,34 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
         }));
 
         hydratedProjectIdsRef.current.add(currentProjectId);
-        setProjects((prev) =>
-          prev.map((p) => (p.id === currentProjectId ? { ...p, quadras, houses } : p))
-        );
+        setProjects((prev) => {
+          const next = prev.map((p) => (p.id === currentProjectId ? { ...p, quadras, houses } : p));
+          // 💾 Persiste snapshot completo para uso offline
+          const merged = next.find((p) => p.id === currentProjectId);
+          if (merged) void saveProjectSnapshot(currentProjectId, merged);
+          return next;
+        });
       } catch (e) {
         console.error("Error hydrating project:", e);
-        hydratedProjectIdsRef.current.delete(currentProjectId);
+        if (!hadCache) hydratedProjectIdsRef.current.delete(currentProjectId);
       } finally {
         setIsLoading(false);
         isHydratingRef.current = false;
       }
     })();
   }, [currentProjectId]); // ✅ Removido 'projects' das deps para evitar loop
+
+  // 💾 Mantém o snapshot offline em sincronia com o estado em memória
+  // (atualizações locais via realtime, edits, etc.)
+  useEffect(() => {
+    if (!currentProjectId) return;
+    const proj = projects.find((p) => p.id === currentProjectId);
+    if (!proj || !proj.houses?.length) return;
+    const t = setTimeout(() => {
+      void saveProjectSnapshot(currentProjectId, proj);
+    }, 1500); // debounce
+    return () => clearTimeout(t);
+  }, [projects, currentProjectId]);
 
   // ✅ 4.5 REALTIME: Auto-refresh houses when production/banco inicial changes
   useEffect(() => {
