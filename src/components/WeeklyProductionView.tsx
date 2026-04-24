@@ -569,6 +569,7 @@ export function WeeklyProductionView() {
       }, () => { void reloadProductions(); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
+  }, [currentProject?.id]);
 
   // State for selected planned period
   const [selectedPlannedPeriod, setSelectedPlannedPeriod] = useState<PlannedPeriod | null>(null);
