@@ -10,6 +10,8 @@ import { useConstruction } from "@/contexts/ConstructionContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Link2, Loader2, Search, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { ProjectModulesSelector } from "./ProjectModulesSelector";
+import { useProjectModules } from "@/hooks/useProjectModules";
 
 interface PortfolioObra {
   id: string;
@@ -45,6 +47,15 @@ export function LinkPortfolioDialog({ open, onOpenChange, onLinked }: LinkPortfo
   const [linkedProjectIds, setLinkedProjectIds] = useState<Set<string>>(new Set());
   const [selection, setSelection] = useState<Record<string, string>>({}); // obraId -> projectId
   const [search, setSearch] = useState("");
+
+  // Sub-dialog de seleção de módulos: abre depois de clicar em Vincular
+  const [moduleDialog, setModuleDialog] = useState<{
+    obraId: string;
+    projectId: string;
+    obraNome: string;
+  } | null>(null);
+  const [selectedModules, setSelectedModules] = useState<Record<string, boolean>>({});
+  const { setModulesForProject } = useProjectModules(moduleDialog?.projectId);
 
   const reload = async () => {
     if (!company?.id) return;
@@ -95,19 +106,43 @@ export function LinkPortfolioDialog({ open, onOpenChange, onLinked }: LinkPortfo
       toast.error("Selecione um projeto do ObraMap.");
       return;
     }
-    setSaving(obraId);
+    const obra = obras.find((o) => o.id === obraId);
+    // Abre seletor de módulos antes de finalizar o vínculo
+    setSelectedModules({});
+    setModuleDialog({
+      obraId,
+      projectId,
+      obraNome: obra?.nome || "",
+    });
+  };
+
+  const confirmLink = async () => {
+    if (!moduleDialog) return;
+    setSaving(moduleDialog.obraId);
     try {
+      // 1) Cria o vínculo
       const { error } = await supabase
         .from("obras_portfolio")
-        .update({ obramap_project_id: projectId } as any)
-        .eq("id", obraId);
+        .update({ obramap_project_id: moduleDialog.projectId } as any)
+        .eq("id", moduleDialog.obraId);
       if (error) throw error;
-      toast.success("Obra vinculada com sucesso!");
+
+      // 2) Persiste seleção de módulos
+      const entries = Object.entries(selectedModules).map(([module_key, is_enabled]) => ({
+        module_key,
+        is_enabled,
+      }));
+      if (entries.length > 0) {
+        await setModulesForProject(moduleDialog.projectId, entries);
+      }
+
+      toast.success("Obra vinculada e módulos configurados!");
       setSelection((s) => {
         const c = { ...s };
-        delete c[obraId];
+        delete c[moduleDialog.obraId];
         return c;
       });
+      setModuleDialog(null);
       await reload();
       onLinked?.();
     } catch (e: any) {
@@ -298,6 +333,36 @@ export function LinkPortfolioDialog({ open, onOpenChange, onLinked }: LinkPortfo
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Sub-dialog: configurar módulos antes de finalizar o vínculo */}
+      <Dialog open={!!moduleDialog} onOpenChange={(o) => !o && setModuleDialog(null)}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5" />
+              Módulos para "{moduleDialog?.obraNome}"
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              Escolha quais módulos esta obra terá acesso após o vínculo.
+            </p>
+          </DialogHeader>
+          <ProjectModulesSelector
+            value={selectedModules}
+            onChange={setSelectedModules}
+            companyId={company?.id}
+            defaultAllEnabled
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModuleDialog(null)} disabled={!!saving}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmLink} disabled={!!saving} className="gap-2">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Confirmar vínculo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
