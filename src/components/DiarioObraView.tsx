@@ -174,8 +174,8 @@ export default function DiarioObraView() {
   const [produtividadeRef, setProdutividadeRef] = useState<number | null>(null);
   const [produtividadeRefId, setProdutividadeRefId] = useState<string | null>(null);
 
-  const isAdmin = profile?.role === "admin" || profile?.role === "system_admin" || (profile as any)?.is_admin === true;
-  const canApprove = isAdmin || profile?.role === "coordinator";
+  const isAdmin = profile?.system_role === "system_admin" || profile?.system_role === "company_admin";
+  const canApprove = isAdmin || profile?.system_role === "company_user";
   const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado";
 
   const macros = useMemo(() => {
