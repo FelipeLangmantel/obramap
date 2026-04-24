@@ -62,6 +62,7 @@ export default function RelatorioObraView() {
   const { currentProject } = useConstruction();
   const [periodo, setPeriodo] = useState<Periodo>("semanal");
   const [dataFim, setDataFim] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [dataInicioCustom, setDataInicioCustom] = useState<string>(format(subDays(new Date(), 7), "yyyy-MM-dd"));
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -70,9 +71,10 @@ export default function RelatorioObraView() {
   const [deviations, setDeviations] = useState<DeviationRow[]>([]);
 
   const dataInicio = useMemo(() => {
+    if (periodo === "personalizado") return dataInicioCustom;
     const fim = parseISO(dataFim);
     return format(subDays(fim, PERIODO_DAYS[periodo] - 1), "yyyy-MM-dd");
-  }, [periodo, dataFim]);
+  }, [periodo, dataFim, dataInicioCustom]);
 
   useEffect(() => {
     if (!currentProject?.id) return;
