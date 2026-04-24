@@ -87,13 +87,14 @@ export function UserManagement() {
       if (rolesError) throw rolesError;
 
       // Combine data
-      const usersWithRoles: UserWithRole[] = (profiles || []).map((profile) => {
+      const usersWithRoles: UserWithRole[] = (profiles || []).map((profile: any) => {
         const userRole = roles?.find((r) => r.user_id === profile.user_id);
         return {
           id: profile.id,
           user_id: profile.user_id,
           display_name: profile.display_name,
           email: profile.email,
+          phone: profile.phone ?? null,
           role: (userRole?.role as AppRole) || "viewer",
           created_at: profile.created_at,
         };
@@ -117,7 +118,8 @@ export function UserManagement() {
     e.preventDefault();
     setErrors({});
 
-    const result = createUserSchema.safeParse({ email, password, displayName, role });
+    const phoneE164 = phoneRaw ? toE164BR(phoneRaw) ?? "" : "";
+    const result = createUserSchema.safeParse({ email, password, displayName, phone: phoneE164, role });
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
       result.error.errors.forEach((err) => {
@@ -144,6 +146,11 @@ export function UserManagement() {
 
       if (fnError) throw fnError;
       if (data?.error) throw new Error(data.error);
+
+      // Salva telefone no profile (se informado)
+      if (phoneE164 && data?.user_id) {
+        await supabase.from("profiles").update({ phone: phoneE164 } as any).eq("user_id", data.user_id);
+      }
 
       toast.success("Usuário criado com sucesso!");
       setIsCreateDialogOpen(false);
@@ -212,8 +219,27 @@ export function UserManagement() {
     setEmail("");
     setPassword("");
     setDisplayName("");
+    setPhoneRaw("");
     setRole("viewer");
     setErrors({});
+  };
+
+  const handleSavePhone = async (userId: string, raw: string) => {
+    const e164 = raw ? toE164BR(raw) : null;
+    if (raw && !e164) {
+      toast.error("Telefone inválido");
+      return;
+    }
+    const { error } = await supabase
+      .from("profiles")
+      .update({ phone: e164 } as any)
+      .eq("user_id", userId);
+    if (error) {
+      toast.error("Erro ao salvar telefone");
+      return;
+    }
+    setUsers((prev) => prev.map((u) => (u.user_id === userId ? { ...u, phone: e164 } : u)));
+    toast.success("Telefone atualizado");
   };
 
   const getRoleBadge = (role: AppRole) => {
