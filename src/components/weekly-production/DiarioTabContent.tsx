@@ -58,6 +58,7 @@ interface ConsolidadoRow {
   itensIndividuais: {
     id: string;
     diary_entry_id: string;
+    scope_id: string;
     house_ids: number[];
     percentual_executado: number;
     production_id: string | null;
@@ -198,6 +199,7 @@ export default function DiarioTabContent() {
       entry.itensIndividuais.push({
         id: it.id,
         diary_entry_id: it.diary_entry_id,
+        scope_id: it.scope_id,
         house_ids: it.house_ids,
         percentual_executado: it.percentual_executado,
         production_id: it.production_id,
