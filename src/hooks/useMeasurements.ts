@@ -389,7 +389,7 @@ export function useMeasurements({ projectId }: UseMeasurementsOptions) {
     try {
       const { error } = await supabase
         .from('productions')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', productionId);
 
       if (error) throw error;
