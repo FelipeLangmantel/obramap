@@ -950,17 +950,23 @@ export default function DiarioObraView() {
       <div className="bg-card border rounded-lg p-4 mb-4">
         <div className="flex items-start justify-between gap-4 flex-wrap md:flex-nowrap">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <ClipboardList className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-bold">
+              <h2 className="text-base sm:text-lg font-bold">
                 {entryId ? "Editar relatório" : "Novo relatório"}: {format(parseISO(entryDate), "dd/MM/yyyy")}
                 {numRelatorio != null && <span className="text-muted-foreground"> · n° {numRelatorio}</span>}
               </h2>
               {entryStatus === "finalizado" && (
-                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">✅ Finalizado</Badge>
+                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">✅ Aprovado</Badge>
               )}
-              {entryStatus !== "finalizado" && entryId && (
-                <Badge className="shrink-0 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">📝 Preenchendo</Badge>
+              {entryStatus !== "finalizado" && statusAprovacao === "revisando" && (
+                <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">🔍 Em revisão</Badge>
+              )}
+              {entryStatus !== "finalizado" && statusAprovacao === "preenchendo" && entryId && (
+                <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">📝 Preenchendo</Badge>
+              )}
+              {pendingEditRequest && (
+                <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">⏳ Edição solicitada</Badge>
               )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -981,11 +987,36 @@ export default function DiarioObraView() {
               )}
             </div>
           </div>
-          <div className="flex gap-2 shrink-0 self-start">
-            <Button onClick={handleSaveHeader} disabled={savingHeader || isLocked} className="min-h-[40px]">
-              {savingHeader ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-              Salvar
-            </Button>
+          <div className="flex gap-2 shrink-0 self-start flex-wrap">
+            {!isLocked && (
+              <Button onClick={handleSaveHeader} disabled={savingHeader} className="min-h-[40px]">
+                {savingHeader ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                Salvar
+              </Button>
+            )}
+            {entryId && !isLocked && statusAprovacao === "preenchendo" && (
+              <Button
+                variant="default"
+                onClick={handleSendForApproval}
+                disabled={sendingForApproval}
+                className="min-h-[40px] bg-blue-600 hover:bg-blue-700"
+              >
+                {sendingForApproval ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                <span className="hidden sm:inline">Enviar p/ aprovação</span>
+                <span className="sm:hidden">Aprovar</span>
+              </Button>
+            )}
+            {entryId && isLocked && !pendingEditRequest && !isAdmin && (
+              <Button
+                variant="outline"
+                onClick={() => setEditRequestOpen(true)}
+                className="min-h-[40px] border-amber-400 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+              >
+                <Unlock className="h-4 w-4 mr-2" />
+                <span className="hidden sm:inline">Solicitar edição</span>
+                <span className="sm:hidden">Editar</span>
+              </Button>
+            )}
             {entryId && (
               <Button variant="outline" onClick={() => setPrintOpen(true)} className="min-h-[40px]">
                 <Printer className="h-4 w-4 mr-2" /><span className="hidden sm:inline">Imprimir</span>
@@ -993,6 +1024,7 @@ export default function DiarioObraView() {
             )}
           </div>
         </div>
+
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-4">
