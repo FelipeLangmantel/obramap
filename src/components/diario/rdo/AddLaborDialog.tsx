@@ -76,7 +76,7 @@ export function AddLaborDialog({ open, onOpenChange, entryId, companyId, onSaved
     try {
       const { data, error } = await supabase
         .from("labor_types")
-        .insert({ nome: novoNome.trim(), categoria: novoCat, company_id: companyId })
+        .insert({ nome: novoNome.trim(), categoria: novoCat })
         .select("id, nome, categoria")
         .single();
       if (error) throw error;
