@@ -68,6 +68,7 @@ export type RdoSectionKey =
   | "mao-obra"
   | "equipamentos"
   | "atividades"
+  | "producao"
   | "ocorrencias"
   | "checklist"
   | "comentarios"
