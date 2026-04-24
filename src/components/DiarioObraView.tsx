@@ -1260,6 +1260,36 @@ export default function DiarioObraView() {
             onChanged={() => entryId && rdo.loadAttachments(entryId)}
           />
 
+          {/* APROVAÇÃO E ASSINATURAS */}
+          <RdoApprovalSection
+            entryId={entryId}
+            companyId={company?.id || null}
+            status={statusAprovacao}
+            onStatusChange={(s) => {
+              setStatusAprovacao(s);
+              if (s === "aprovado") setEntryStatus("finalizado");
+              else if (entryStatus === "finalizado") setEntryStatus("rascunho");
+            }}
+            canApprove={canApprove}
+            signerId={user?.id || null}
+            signerName={profile?.display_name || user?.email || null}
+            isLocked={isLocked && !isAdmin}
+          />
+
+          {/* FOOTER: navegação + log + visualizações */}
+          {entryId && (
+            <RdoFooterNav
+              entryId={entryId}
+              projectId={currentProject?.id || null}
+              entryDate={entryDate}
+              onNavigate={(d) => setEntryDate(d)}
+              createdByName={entryMeta.engineer_name}
+              createdAt={entryMeta.created_at}
+              updatedByName={profile?.display_name || null}
+              updatedAt={entryMeta.updated_at}
+            />
+          )}
+
           {/* CORREÇÕES */}
           {correcoesDoDia.length > 0 && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 space-y-2">
