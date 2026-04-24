@@ -172,7 +172,7 @@ export function PlannedVsActualDialog({
     try {
       const { error } = await supabase
         .from('weekly_productions')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', productionId);
 
       if (error) throw error;
