@@ -106,19 +106,43 @@ export function LinkPortfolioDialog({ open, onOpenChange, onLinked }: LinkPortfo
       toast.error("Selecione um projeto do ObraMap.");
       return;
     }
-    setSaving(obraId);
+    const obra = obras.find((o) => o.id === obraId);
+    // Abre seletor de módulos antes de finalizar o vínculo
+    setSelectedModules({});
+    setModuleDialog({
+      obraId,
+      projectId,
+      obraNome: obra?.nome || "",
+    });
+  };
+
+  const confirmLink = async () => {
+    if (!moduleDialog) return;
+    setSaving(moduleDialog.obraId);
     try {
+      // 1) Cria o vínculo
       const { error } = await supabase
         .from("obras_portfolio")
-        .update({ obramap_project_id: projectId } as any)
-        .eq("id", obraId);
+        .update({ obramap_project_id: moduleDialog.projectId } as any)
+        .eq("id", moduleDialog.obraId);
       if (error) throw error;
-      toast.success("Obra vinculada com sucesso!");
+
+      // 2) Persiste seleção de módulos
+      const entries = Object.entries(selectedModules).map(([module_key, is_enabled]) => ({
+        module_key,
+        is_enabled,
+      }));
+      if (entries.length > 0) {
+        await setModulesForProject(moduleDialog.projectId, entries);
+      }
+
+      toast.success("Obra vinculada e módulos configurados!");
       setSelection((s) => {
         const c = { ...s };
-        delete c[obraId];
+        delete c[moduleDialog.obraId];
         return c;
       });
+      setModuleDialog(null);
       await reload();
       onLinked?.();
     } catch (e: any) {
