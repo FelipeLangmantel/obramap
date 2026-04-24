@@ -979,7 +979,7 @@ export default function DiarioObraView() {
           <RdoLaborSection
             items={rdo.labor}
             onAdd={() => openDialogWithEntry(() => setAddLaborOpen(true))}
-            disabled={isLocked || !entryId}
+            disabled={isLocked}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
@@ -987,7 +987,7 @@ export default function DiarioObraView() {
           <RdoEquipmentSection
             items={rdo.equipment}
             onAdd={() => openDialogWithEntry(() => setAddEquipOpen(true))}
-            disabled={isLocked || !entryId}
+            disabled={isLocked}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
@@ -995,7 +995,7 @@ export default function DiarioObraView() {
           <RdoActivitiesSection
             items={rdo.activities}
             onAdd={() => openDialogWithEntry(() => setAddActivityOpen(true))}
-            disabled={isLocked || !entryId}
+            disabled={isLocked}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
@@ -1205,7 +1205,7 @@ export default function DiarioObraView() {
           <RdoOccurrencesSection
             items={rdo.occurrences}
             onAdd={() => openDialogWithEntry(() => setAddOccurOpen(true))}
-            disabled={isLocked || !entryId}
+            disabled={isLocked}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
@@ -1213,7 +1213,7 @@ export default function DiarioObraView() {
           <RdoChecklistSection
             items={rdo.checklist}
             onAdd={() => openDialogWithEntry(() => setAddChecklistOpen(true))}
-            disabled={isLocked || !entryId}
+            disabled={isLocked}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
@@ -1221,7 +1221,7 @@ export default function DiarioObraView() {
           <RdoCommentsSection
             items={rdo.comments}
             onAdd={() => openDialogWithEntry(() => setAddCommentOpen(true))}
-            disabled={isLocked || !entryId}
+            disabled={isLocked}
             currentUserId={user?.id || null}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
@@ -1253,13 +1253,20 @@ export default function DiarioObraView() {
                   ))}
                 </div>
               )}
-              {entryId && !isLocked && fotos.length < 10 && (
+              {!isLocked && fotos.length < 10 && (
                 <label className={cn(
                   "flex items-center gap-2 cursor-pointer text-sm text-muted-foreground",
                   "border-2 border-dashed rounded-lg p-3 hover:border-primary hover:text-primary transition-colors",
                   uploadingFoto && "opacity-50 pointer-events-none"
                 )}>
                   <input type="file" accept="image/*" capture="environment" multiple className="hidden"
+                    onClick={async (e) => {
+                      if (entryId) return;
+                      const ensuredEntryId = await ensureEntryExists();
+                      if (!ensuredEntryId) {
+                        e.preventDefault();
+                      }
+                    }}
                     onChange={handleUploadFotos} disabled={uploadingFoto} />
                   {uploadingFoto
                     ? <><Loader2 className="h-4 w-4 animate-spin" /> Enviando...</>
@@ -1276,6 +1283,7 @@ export default function DiarioObraView() {
             companyId={company?.id || null}
             disabled={isLocked}
             onChanged={() => entryId && rdo.loadAttachments(entryId)}
+            onRequestCreateEntry={ensureEntryExists}
           />
 
           {/* ANEXOS */}
@@ -1285,6 +1293,7 @@ export default function DiarioObraView() {
             companyId={company?.id || null}
             disabled={isLocked}
             onChanged={() => entryId && rdo.loadAttachments(entryId)}
+            onRequestCreateEntry={ensureEntryExists}
           />
 
           {/* APROVAÇÃO E ASSINATURAS */}
@@ -1297,7 +1306,7 @@ export default function DiarioObraView() {
               if (s === "aprovado") setEntryStatus("finalizado");
               else if (entryStatus === "finalizado") setEntryStatus("rascunho");
             }}
-            canApprove={canApprove}
+            canApprove={false}
             signerId={user?.id || null}
             signerName={profile?.display_name || user?.email || null}
             isLocked={isLocked && !isAdmin}
