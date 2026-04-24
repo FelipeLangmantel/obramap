@@ -470,24 +470,62 @@ export default function DiarioObraView() {
     return () => { supabase.removeChannel(channel); };
   }, [currentProject?.id, user?.id]);
 
+  const buildClimaPayload = useCallback(() => ({
+    clima_manha: climaState.climaManha,
+    clima_tarde: climaState.climaTarde,
+    clima_noite: climaState.climaNoite,
+    condicao_manha: climaState.condicaoManha,
+    condicao_tarde: climaState.condicaoTarde,
+    condicao_noite: climaState.condicaoNoite,
+    noite_ativa: climaState.noiteAtiva,
+    mm_chuva: climaState.mmChuva,
+    clima: climaState.climaManha === "chuvoso" ? "chuva_fraca"
+      : climaState.climaManha === "nublado" ? "nublado" : "sol",
+  }), [climaState]);
+
+  const ensureEntryExists = useCallback(async () => {
+    if (entryId) return entryId;
+    if (!currentProject?.id || !user?.id || !company?.id) return null;
+
+    const { data, error } = await supabase.from("diary_entries").insert({
+      company_id: company.id,
+      project_id: currentProject.id,
+      engineer_id: user.id,
+      engineer_name: profile?.display_name || user.email || "Engenheiro",
+      entry_date: entryDate,
+      equipe_presente: equipePres,
+      observacao_geral: obsGeral || null,
+      ...buildClimaPayload(),
+    }).select("id, num_relatorio, status, status_aprovacao, created_at, updated_at, engineer_name").single();
+
+    if (error) {
+      toast.error("Erro ao iniciar relatório: " + (error.message || ""));
+      return null;
+    }
+
+    setEntryId(data.id);
+    setNumRelatorio((data as any).num_relatorio ?? null);
+    setEntryStatus((data as any).status || "rascunho");
+    setStatusAprovacao(((data as any).status_aprovacao || "preenchendo") as StatusAprovacao);
+    setEntryMeta({
+      created_at: (data as any).created_at || null,
+      updated_at: (data as any).updated_at || null,
+      engineer_name: (data as any).engineer_name || null,
+    });
+    return data.id;
+  }, [entryId, currentProject?.id, user?.id, company?.id, profile?.display_name, user?.email, entryDate, equipePres, obsGeral, buildClimaPayload]);
+
+  const openDialogWithEntry = useCallback(async (openDialog: () => void) => {
+    const ensuredEntryId = await ensureEntryExists();
+    if (ensuredEntryId) openDialog();
+  }, [ensureEntryExists]);
+
   // Save header (cabeçalho + clima novo)
   const handleSaveHeader = async () => {
     if (!currentProject?.id || !user?.id || !company?.id) return;
     setSavingHeader(true);
     try {
-      const climaPayload = {
-        clima_manha: climaState.climaManha,
-        clima_tarde: climaState.climaTarde,
-        clima_noite: climaState.climaNoite,
-        condicao_manha: climaState.condicaoManha,
-        condicao_tarde: climaState.condicaoTarde,
-        condicao_noite: climaState.condicaoNoite,
-        noite_ativa: climaState.noiteAtiva,
-        mm_chuva: climaState.mmChuva,
-        // Manter clima legacy (campo único) para compatibilidade
-        clima: climaState.climaManha === "chuvoso" ? "chuva_fraca"
-             : climaState.climaManha === "nublado" ? "nublado" : "sol",
-      };
+      const climaPayload = buildClimaPayload();
 
       let savedEntryId = entryId;
       if (entryId) {
@@ -497,21 +535,8 @@ export default function DiarioObraView() {
           ...climaPayload,
         }).eq("id", entryId);
       } else {
-        const payload = {
-          company_id: company.id,
-          project_id: currentProject.id,
-          engineer_id: user.id,
-          engineer_name: profile?.display_name || user.email || "Engenheiro",
-          entry_date: entryDate,
-          equipe_presente: equipePres,
-          observacao_geral: obsGeral || null,
-          ...climaPayload,
-        };
-        const { data, error } = await supabase.from("diary_entries").insert(payload).select("id, num_relatorio").single();
-        if (error) throw error;
-        setEntryId(data.id);
-        savedEntryId = data.id;
-        setNumRelatorio((data as any).num_relatorio ?? null);
+        savedEntryId = await ensureEntryExists();
+        if (!savedEntryId) throw new Error("Não foi possível criar o relatório.");
       }
       // Registrar log de edição
       if (savedEntryId) {
@@ -953,7 +978,7 @@ export default function DiarioObraView() {
           {/* MÃO DE OBRA */}
           <RdoLaborSection
             items={rdo.labor}
-            onAdd={entryId ? () => setAddLaborOpen(true) : undefined}
+            onAdd={() => openDialogWithEntry(() => setAddLaborOpen(true))}
             disabled={isLocked || !entryId}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
@@ -961,7 +986,7 @@ export default function DiarioObraView() {
           {/* EQUIPAMENTOS */}
           <RdoEquipmentSection
             items={rdo.equipment}
-            onAdd={entryId ? () => setAddEquipOpen(true) : undefined}
+            onAdd={() => openDialogWithEntry(() => setAddEquipOpen(true))}
             disabled={isLocked || !entryId}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
@@ -969,13 +994,13 @@ export default function DiarioObraView() {
           {/* ATIVIDADES DESCRITIVAS */}
           <RdoActivitiesSection
             items={rdo.activities}
-            onAdd={entryId ? () => setAddActivityOpen(true) : undefined}
+            onAdd={() => openDialogWithEntry(() => setAddActivityOpen(true))}
             disabled={isLocked || !entryId}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
           {/* PRODUÇÃO POR CASA (existente) */}
-          {entryId && !isLocked && (
+          {!isLocked && (
             <section id="producao" className="scroll-mt-4">
               <Card>
                 <CardHeader className="pb-3">
@@ -997,7 +1022,9 @@ export default function DiarioObraView() {
                             borderColor: macro.color,
                             color: selectedMacro?.id === macro.id ? "#fff" : undefined,
                           }}
-                          onClick={() => {
+                          onClick={async () => {
+                            const ensuredEntryId = await ensureEntryExists();
+                            if (!ensuredEntryId) return;
                             setSelectedMacro(selectedMacro?.id === macro.id ? null : { id: macro.id, name: macro.name, color: macro.color });
                             setSelectedScope(null); setSelectedHouses([]);
                           }}>
@@ -1177,7 +1204,7 @@ export default function DiarioObraView() {
           {/* OCORRÊNCIAS */}
           <RdoOccurrencesSection
             items={rdo.occurrences}
-            onAdd={entryId ? () => setAddOccurOpen(true) : undefined}
+            onAdd={() => openDialogWithEntry(() => setAddOccurOpen(true))}
             disabled={isLocked || !entryId}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
@@ -1185,7 +1212,7 @@ export default function DiarioObraView() {
           {/* CHECKLIST */}
           <RdoChecklistSection
             items={rdo.checklist}
-            onAdd={entryId ? () => setAddChecklistOpen(true) : undefined}
+            onAdd={() => openDialogWithEntry(() => setAddChecklistOpen(true))}
             disabled={isLocked || !entryId}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
@@ -1193,7 +1220,7 @@ export default function DiarioObraView() {
           {/* COMENTÁRIOS */}
           <RdoCommentsSection
             items={rdo.comments}
-            onAdd={entryId ? () => setAddCommentOpen(true) : undefined}
+            onAdd={() => openDialogWithEntry(() => setAddCommentOpen(true))}
             disabled={isLocked || !entryId}
             currentUserId={user?.id || null}
             onChanged={() => entryId && rdo.reload(entryId)}
