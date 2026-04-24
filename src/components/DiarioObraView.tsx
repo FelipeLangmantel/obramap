@@ -47,6 +47,12 @@ import { RdoFooterNav } from "./diario/rdo/RdoFooterNav";
 import { RdoEditRequestDialog } from "./diario/rdo/RdoEditRequestDialog";
 import { RdoProductionCharts } from "./diario/rdo/RdoProductionCharts";
 import { Send, Unlock } from "lucide-react";
+import {
+  createDiaryEntryAware,
+  createProductionAware,
+  createWeeklyProductionAware,
+  createDiaryItemAware,
+} from "@/offline/diaryAdapter";
 
 // Compressão simples via Canvas — reduz tamanho das fotos antes do upload
 async function comprimirImagem(file: File, maxDim = 1024, quality = 0.7): Promise<Blob> {
