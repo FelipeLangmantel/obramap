@@ -54,6 +54,7 @@ import {
   createDiaryItemAware,
 } from "@/offline/diaryAdapter";
 import { OfflineBanner } from "@/components/offline/OfflineStatusBadge";
+import { recomputeProjectProgress, subscribeSync } from "@/offline/sync";
 
 // Compressão simples via Canvas — reduz tamanho das fotos antes do upload
 async function comprimirImagem(file: File, maxDim = 1024, quality = 0.7): Promise<Blob> {
