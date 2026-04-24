@@ -1430,7 +1430,7 @@ export default function DiarioObraView() {
               if (s === "aprovado") setEntryStatus("finalizado");
               else if (entryStatus === "finalizado") setEntryStatus("rascunho");
             }}
-            canApprove={false}
+            canApprove={isAdmin}
             signerId={user?.id || null}
             signerName={profile?.display_name || user?.email || null}
             isLocked={isLocked && !isAdmin}
