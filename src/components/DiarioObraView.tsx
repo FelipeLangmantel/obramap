@@ -1114,8 +1114,23 @@ export default function DiarioObraView() {
               {projectInfo.location && (
                 <div className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />{projectInfo.location}</div>
               )}
-              {projectInfo.contractor && (
-                <div className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" />Contratada: {projectInfo.contractor}</div>
+              {legalConfig?.contratante_nome && (
+                <div className="flex items-center gap-1.5">
+                  <Building2 className="h-3.5 w-3.5" />
+                  Contratante: <span className="text-foreground font-medium truncate">{legalConfig.contratante_nome}</span>
+                </div>
+              )}
+              {(legalConfig?.contratada_razao_social || company?.name) && (
+                <div className="flex items-center gap-1.5">
+                  <Building2 className="h-3.5 w-3.5" />
+                  Contratada: <span className="text-foreground font-medium truncate">{legalConfig?.contratada_razao_social || company?.name}</span>
+                </div>
+              )}
+              {legalConfig?.contrato_numero && (
+                <div className="flex items-center gap-1.5">
+                  <FileSignature className="h-3.5 w-3.5" />
+                  Contrato nº <span className="text-foreground font-medium">{legalConfig.contrato_numero}</span>
+                </div>
               )}
               {projectInfo.engenheiroResidente && (
                 <div className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />Resp.: {projectInfo.engenheiroResidente}</div>
@@ -1127,6 +1142,16 @@ export default function DiarioObraView() {
                 </div>
               )}
             </div>
+            {!legalConfig?.contrato_numero && (
+              <button
+                type="button"
+                onClick={() => navigate("/diario-config")}
+                className="mt-2 text-xs text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+              >
+                <FileSignature className="h-3 w-3" />
+                Configurar documentação legal do RDO →
+              </button>
+            )}
           </div>
           <div className="flex gap-2 shrink-0 self-start flex-wrap">
             {!isLocked && currentProject?.id && company?.id && (
