@@ -987,11 +987,6 @@ export default function DiarioObraView() {
       company?.id ? supabase.from("companies").select("logo_url").eq("id", company.id).maybeSingle() : Promise.resolve({ data: null }),
     ]);
     const logoUrl = projData?.logo_url || (companyData as any)?.logo_url || null;
-    const { data: contractorData } = await supabase
-      .from("contractor_contracts")
-      .select("contractor:contractors(name)")
-      .eq("project_id", currentProject.id).eq("status", "active").limit(1).maybeSingle();
-    const contractorName = (contractorData?.contractor as any)?.name || null;
     const { count } = await supabase.from("diary_entries")
       .select("id", { count: "exact", head: true })
       .eq("project_id", currentProject.id).lte("entry_date", entryDate);
@@ -1000,10 +995,38 @@ export default function DiarioObraView() {
     for (const f of fotos) { if (f.url) photoUrls.push(f.url); }
     const projectLocation = projData?.location ||
       (projData?.municipio ? `${projData.municipio}${projData.estado ? "/" + projData.estado : ""}` : null);
+
+    // Monta legal config (com fallback para empresa cadastrada se não houver dados)
+    const legal = legalConfig ? {
+      pdf_template: legalConfig.pdf_template,
+      contratante_tipo: legalConfig.contratante_tipo,
+      contratante_nome: legalConfig.contratante_nome,
+      contratante_cnpj_cpf: legalConfig.contratante_cnpj_cpf,
+      contratante_orgao: legalConfig.contratante_orgao,
+      contratante_endereco: legalConfig.contratante_endereco,
+      contratante_municipio: legalConfig.contratante_municipio,
+      contratante_estado: legalConfig.contratante_estado,
+      contratada_razao_social: legalConfig.contratada_razao_social || company?.name || null,
+      contratada_cnpj: legalConfig.contratada_cnpj,
+      contratada_endereco: legalConfig.contratada_endereco,
+      contratada_municipio: legalConfig.contratada_municipio,
+      contratada_estado: legalConfig.contratada_estado,
+      contrato_numero: legalConfig.contrato_numero,
+      contrato_data_assinatura: legalConfig.contrato_data_assinatura,
+      contrato_objeto: legalConfig.contrato_objeto,
+      contrato_valor: legalConfig.contrato_valor,
+      contrato_modalidade: legalConfig.contrato_modalidade,
+      processo_licitatorio: legalConfig.processo_licitatorio,
+      responsavel_tecnico_nome: legalConfig.responsavel_tecnico_nome,
+      responsavel_tecnico_crea: legalConfig.responsavel_tecnico_crea,
+      responsavel_tecnico_art: legalConfig.responsavel_tecnico_art,
+      rodape_observacoes: legalConfig.rodape_observacoes,
+    } : null;
+
     return {
       logoUrl, companyName: company?.name || "Empresa",
       projectName: currentProject.name || "Projeto",
-      projectLocation, contractor: contractorName,
+      projectLocation, contractor: null,
       engineerName: profile?.display_name || user?.email || "Engenheiro",
       entryDate,
       clima: climaState.climaManha === "chuvoso" ? "chuva_fraca" : (climaState.climaManha === "nublado" ? "nublado" : "sol"),
@@ -1018,9 +1041,9 @@ export default function DiarioObraView() {
         percentual_anterior: c.percentual_anterior, percentual_posterior: c.percentual_posterior,
         justificativa: c.justificativa, corrigido_por_nome: c.corrigido_por_nome,
       })),
-      photoUrls, reportNumber,
+      photoUrls, reportNumber, legal,
     };
-  }, [entryId, currentProject, company, profile, user, entryDate, climaState, equipePres, obsGeral, diaryItems, correcoesDoDia, fotos, numRelatorio]);
+  }, [entryId, currentProject, company, profile, user, entryDate, climaState, equipePres, obsGeral, diaryItems, correcoesDoDia, fotos, numRelatorio, legalConfig]);
 
   // Prazo decorrido / a vencer
   const prazoInfo = useMemo(() => {
