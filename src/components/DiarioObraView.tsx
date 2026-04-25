@@ -123,7 +123,16 @@ const DEFAULT_CLIMA: ClimaState = {
   mmChuva: null,
 };
 
-export default function DiarioObraView() {
+interface DiarioObraViewProps {
+  /** Data inicial (YYYY-MM-DD). Quando informada, o editor abre direto naquele dia. */
+  initialDate?: string;
+  /** Callback para voltar à tela de calendário. Quando definido, mostra um botão "Voltar". */
+  onBack?: () => void;
+  /** Oculta o alerta amarelo de configuração legal — útil quando há aba dedicada. */
+  hideLegalConfigAlert?: boolean;
+}
+
+export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAlert }: DiarioObraViewProps = {}) {
   const { currentProject, updateBatchScopeProgress, refreshHousesFromDB } = useConstruction();
   const { user, profile, company } = useAuth();
   const houses = currentProject?.houses || [];
@@ -132,7 +141,15 @@ export default function DiarioObraView() {
   const { config: legalConfig } = useDiaryLegalConfig(currentProject?.id);
 
   // Header state
-  const [entryDate, setEntryDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [entryDate, setEntryDate] = useState(initialDate || format(new Date(), "yyyy-MM-dd"));
+
+  // Sincroniza com initialDate quando o consumidor troca o dia (ex.: clique em outro card do calendário)
+  useEffect(() => {
+    if (initialDate && initialDate !== entryDate) {
+      setEntryDate(initialDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDate]);
   const [equipePres, setEquipePres] = useState(0);
   const [obsGeral, setObsGeral] = useState("");
   const [entryId, setEntryId] = useState<string | null>(null);
