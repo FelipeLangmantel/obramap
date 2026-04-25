@@ -289,7 +289,7 @@ export default function DiarioObraView() {
     );
   }, [currentProject, houses]);
 
-  // Carrega informações do projeto (endereço, contratada, residente, prazos)
+  // Carrega informações do projeto (endereço, residente, prazos)
   useEffect(() => {
     if (!currentProject?.id) return;
     (async () => {
@@ -297,14 +297,6 @@ export default function DiarioObraView() {
         .from("projects")
         .select("location, municipio, estado, lat, lng")
         .eq("id", currentProject.id)
-        .maybeSingle();
-
-      const { data: contractorData } = await supabase
-        .from("contractor_contracts")
-        .select("contractor:contractors(name)")
-        .eq("project_id", currentProject.id)
-        .eq("status", "active")
-        .limit(1)
         .maybeSingle();
 
       let residente: string | null = null;
@@ -323,7 +315,7 @@ export default function DiarioObraView() {
 
       setProjectInfo({
         location: loc,
-        contractor: (contractorData?.contractor as any)?.name || null,
+        contractor: null, // legado — agora vem de legalConfig
         engenheiroResidente: residente,
         startDate: null,
         endDate: null,
