@@ -1060,8 +1060,18 @@ export default function DiarioObraView() {
         justificativa: c.justificativa, corrigido_por_nome: c.corrigido_por_nome,
       })),
       photoUrls, reportNumber, legal,
+      photosByService: diaryItems
+        .filter(it => fotosPorServico[it.id]?.length)
+        .map(it => ({
+          macro_name: it.macro_name,
+          scope_name: it.scope_name,
+          macro_color: it.macro_color,
+          house_ids: it.house_ids,
+          percentual_executado: it.percentual_executado,
+          photos: fotosPorServico[it.id],
+        })),
     };
-  }, [entryId, currentProject, company, profile, user, entryDate, climaState, equipePres, obsGeral, diaryItems, correcoesDoDia, fotos, numRelatorio, legalConfig]);
+  }, [entryId, currentProject, company, profile, user, entryDate, climaState, equipePres, obsGeral, diaryItems, correcoesDoDia, fotos, fotosPorServico, numRelatorio, legalConfig]);
 
   // Prazo decorrido / a vencer
   const prazoInfo = useMemo(() => {
