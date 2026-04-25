@@ -25,6 +25,7 @@ import { DiarioSummaryPanel } from "./diario/DiarioSummaryPanel";
 import { ConfirmRainDialog } from "./diario/ConfirmRainDialog";
 import { ImportPreviousDayButton } from "./diario/ImportPreviousDayButton";
 import { RequestDeleteItemDialog } from "./diario/RequestDeleteItemDialog";
+import { DiaryItemPhotoButton } from "./diario/DiaryItemPhotoButton";
 import { useDiaryLegalConfig } from "@/hooks/useDiaryLegalConfig";
 import { useNavigate } from "react-router-dom";
 import { FileSignature } from "lucide-react";
@@ -1479,6 +1480,14 @@ export default function DiarioObraView() {
                                 Casas: {item.house_ids.sort((a, b) => a - b).map(id => String(id).padStart(2, "0")).join(", ")} — {item.percentual_executado}%
                               </div>
                             </div>
+                            {entryId && company?.id && (
+                              <DiaryItemPhotoButton
+                                diaryEntryId={entryId}
+                                diaryItemId={item.id}
+                                companyId={company.id}
+                                disabled={isLocked}
+                              />
+                            )}
                             <Button variant="ghost" size="icon" className="text-destructive"
                               onClick={() => handleDeleteItem(item)} disabled={isLocked}>
                               <Trash2 className="h-4 w-4" />
