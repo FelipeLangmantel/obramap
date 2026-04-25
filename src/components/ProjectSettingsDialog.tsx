@@ -453,6 +453,14 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
             </div>
           </TabsContent>
 
+          <TabsContent value="unidades" className="space-y-4 mt-4">
+            <UnitTypesPanel
+              projectId={currentProject.id}
+              totalHouses={currentProject.totalHouses}
+              canEdit={canEdit}
+            />
+          </TabsContent>
+
           <TabsContent value="settings" className="space-y-4 mt-4">
             <div className="space-y-4">
               <ProjectCoordinatorSelector projectId={currentProject.id} />
