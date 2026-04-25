@@ -11675,6 +11675,26 @@ export type Database = {
         Args: { p_contract_id: string }
         Returns: Json
       }
+      get_house_photo_history: {
+        Args: { p_house_id: number; p_project_id: string }
+        Returns: {
+          diary_entry_id: string
+          diary_item_id: string
+          engineer_name: string
+          entry_date: string
+          legenda: string
+          macro_color: string
+          macro_id: string
+          macro_name: string
+          observacao: string
+          percentual_executado: number
+          photo_created_at: string
+          photo_id: string
+          scope_id: string
+          scope_name: string
+          storage_path: string
+        }[]
+      }
       get_ind_cash_projection: {
         Args: { p_context_id: string }
         Returns: {
