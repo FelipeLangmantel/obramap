@@ -1,4 +1,4 @@
-import { X, Edit } from "lucide-react";
+import { X, Edit, Camera } from "lucide-react";
 import { useConstruction, DEFAULT_LEGEND_ITEMS } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { calculateHouseProgress } from "@/data/constructionData";
@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button";
 import { ScopesList } from "./ScopesList";
 import { useState } from "react";
 import { EditHouseDialog } from "./EditHouseDialog";
+import { HouseFotoHistoryDrawer } from "./diario/HouseFotoHistoryDrawer";
 
 export function HouseDetails() {
   const { selectedHouse, setSelectedHouse, currentProject } = useConstruction();
   const { canEdit } = useAuth();
   const [editOpen, setEditOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   
   const legendItems = currentProject?.customLegendItems ?? DEFAULT_LEGEND_ITEMS;
   
@@ -72,6 +74,15 @@ export function HouseDetails() {
             />
           </div>
         </div>
+
+        <Button
+          variant="outline"
+          className="w-full justify-start"
+          onClick={() => setHistoryOpen(true)}
+        >
+          <Camera className="w-4 h-4 mr-2" />
+          Ver histórico fotográfico
+        </Button>
         
         <ScopesList house={house} />
       </div>
@@ -80,6 +91,14 @@ export function HouseDetails() {
         open={editOpen} 
         onOpenChange={setEditOpen} 
         house={house}
+      />
+
+      <HouseFotoHistoryDrawer
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        houseId={house.id}
+        projectId={currentProject.id}
+        houseLabel={`Casa ${house.id}`}
       />
     </div>
   );
