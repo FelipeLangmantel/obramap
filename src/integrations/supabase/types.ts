@@ -8703,6 +8703,7 @@ export type Database = {
         Row: {
           company_id: string | null
           contractor: string
+          coordenador_user_id: string | null
           created_at: string
           custom_legend_items: Json
           default_unit_label: string | null
@@ -8735,6 +8736,7 @@ export type Database = {
         Insert: {
           company_id?: string | null
           contractor: string
+          coordenador_user_id?: string | null
           created_at?: string
           custom_legend_items?: Json
           default_unit_label?: string | null
@@ -8767,6 +8769,7 @@ export type Database = {
         Update: {
           company_id?: string | null
           contractor?: string
+          coordenador_user_id?: string | null
           created_at?: string
           custom_legend_items?: Json
           default_unit_label?: string | null
@@ -11927,6 +11930,10 @@ export type Database = {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
       }
+      is_coordenador_or_admin: {
+        Args: { _project_id?: string; _user_id: string }
+        Returns: boolean
+      }
       is_house_in_active_measurement: {
         Args: { p_company_id: string; p_house_id: string; p_project_id: string }
         Returns: boolean
@@ -12211,7 +12218,7 @@ export type Database = {
         | "ordered"
         | "delivered"
         | "cancelled"
-      system_role: "system_admin" | "admin" | "user"
+      system_role: "system_admin" | "admin" | "user" | "coordenador"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -12373,7 +12380,7 @@ export const Constants = {
         "delivered",
         "cancelled",
       ],
-      system_role: ["system_admin", "admin", "user"],
+      system_role: ["system_admin", "admin", "user", "coordenador"],
     },
   },
 } as const

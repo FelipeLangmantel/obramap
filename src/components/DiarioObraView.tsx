@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCoordenadorAccess } from "@/hooks/useCoordenadorAccess";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -200,7 +201,9 @@ export default function DiarioObraView() {
     [rdo.labor]
   );
 
-  const isAdmin = profile?.system_role === "system_admin" || profile?.system_role === "admin";
+  const { canApprove: canApproveObra, isAdmin: isGlobalAdmin } = useCoordenadorAccess(currentProject?.id || null);
+  // 'isAdmin' aqui significa "pode aprovar/corrigir sem restrição": admin global, coordenador global ou coordenador desta obra
+  const isAdmin = canApproveObra;
   const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado";
 
   // Verifica se há solicitação de edição pendente para este RDO
