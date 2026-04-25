@@ -283,9 +283,14 @@ export function EditProductionDialog({ open, onOpenChange, production, onSave }:
       toast.success("Registro atualizado com sucesso");
       onSave();
       onOpenChange(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating production:', error);
-      toast.error("Erro ao atualizar registro");
+      const msg = error?.message || "";
+      if (msg.includes("Capacidade excedida")) {
+        toast.error("Capacidade da casa excedida", { description: msg, duration: 8000 });
+      } else {
+        toast.error("Erro ao atualizar registro", { description: msg });
+      }
     }
     setIsSaving(false);
   };

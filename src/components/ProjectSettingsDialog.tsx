@@ -7,7 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, Home, Grid3X3, Plus, Trash2, Edit2, Check, X, Settings, ImagePlus, Eye } from "lucide-react";
+import { Building2, Home, Grid3X3, Plus, Trash2, Edit2, Check, X, Settings, ImagePlus, Eye, Ruler } from "lucide-react";
+import { UnitTypesPanel } from "@/components/settings/UnitTypesPanel";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
@@ -201,18 +202,25 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
         </DialogHeader>
         
         <Tabs defaultValue="info" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
             <TabsTrigger value="info" className="gap-2">
               <Home className="h-4 w-4" />
-              Informações
+              <span className="hidden sm:inline">Informações</span>
+              <span className="sm:hidden">Info</span>
             </TabsTrigger>
             <TabsTrigger value="quadras" className="gap-2">
               <Grid3X3 className="h-4 w-4" />
               Quadras
             </TabsTrigger>
+            <TabsTrigger value="unidades" className="gap-2">
+              <Ruler className="h-4 w-4" />
+              <span className="hidden sm:inline">Tipologias</span>
+              <span className="sm:hidden">Tipol.</span>
+            </TabsTrigger>
             <TabsTrigger value="settings" className="gap-2">
               <Settings className="h-4 w-4" />
-              Configurações
+              <span className="hidden sm:inline">Configurações</span>
+              <span className="sm:hidden">Config</span>
             </TabsTrigger>
           </TabsList>
           
@@ -443,6 +451,14 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
                 </div>
               )}
             </div>
+          </TabsContent>
+
+          <TabsContent value="unidades" className="space-y-4 mt-4">
+            <UnitTypesPanel
+              projectId={currentProject.id}
+              totalHouses={currentProject.totalHouses}
+              canEdit={canEdit}
+            />
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-4 mt-4">

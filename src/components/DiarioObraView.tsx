@@ -963,7 +963,12 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       setSelectedHouses([]); setHousePercents({}); setObsItem(""); setPercentual(100);
       if (!isOffline) loadItems(entryId);
     } catch (err: any) {
-      toast.error("Erro ao registrar: " + (err.message || ""));
+      const msg = err?.message || "";
+      if (msg.includes("Capacidade excedida")) {
+        toast.error("Capacidade da casa excedida", { description: msg, duration: 9000 });
+      } else {
+        toast.error("Erro ao registrar: " + msg);
+      }
     } finally {
       setRegistering(false);
     }
