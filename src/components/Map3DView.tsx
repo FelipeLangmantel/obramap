@@ -375,6 +375,7 @@ export function Map3DView() {
   const [modelData, setModelData] = useState<ModelData | null>(null);
   const [markers, setMarkers] = useState<HouseMarker[]>([]);
   const [selectedMarker, setSelectedMarker] = useState<HouseMarker | null>(null);
+  const [photoHistoryOpen, setPhotoHistoryOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -637,7 +638,21 @@ export function Map3DView() {
             onRenameLayer={layerManager.renameLayer}
           />
         )}
-        {selectedMarker && <HouseDetailsPanel marker={selectedMarker} onClose={() => setSelectedMarker(null)} customLegendItems={customLegendItems} />}
+        {selectedMarker && (
+          <HouseDetailsPanel
+            marker={selectedMarker}
+            onClose={() => setSelectedMarker(null)}
+            customLegendItems={customLegendItems}
+            onOpenPhotoHistory={() => setPhotoHistoryOpen(true)}
+          />
+        )}
+        <HouseFotoHistoryDrawer
+          open={photoHistoryOpen}
+          onOpenChange={setPhotoHistoryOpen}
+          houseId={selectedMarker?.houseNumber ?? null}
+          projectId={projectId ?? null}
+          houseLabel={selectedMarker ? `Casa ${String(selectedMarker.houseNumber).padStart(2, "0")}` : undefined}
+        />
         {!modelData && markers.length === 0 && !isLoading && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center space-y-4 p-8 bg-background/80 rounded-xl border border-border">
