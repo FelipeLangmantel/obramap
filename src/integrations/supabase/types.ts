@@ -11930,6 +11930,10 @@ export type Database = {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
       }
+      is_coordenador_or_admin: {
+        Args: { _project_id?: string; _user_id: string }
+        Returns: boolean
+      }
       is_house_in_active_measurement: {
         Args: { p_company_id: string; p_house_id: string; p_project_id: string }
         Returns: boolean
