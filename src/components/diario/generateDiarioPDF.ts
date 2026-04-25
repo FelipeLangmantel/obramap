@@ -98,6 +98,15 @@ export interface DiarioPDFData {
   items: DiaryItem[];
   correcoes: Correction[];
   photoUrls: string[];
+  /** Fotos vinculadas a serviços específicos — geram a seção "Registro Fotográfico por Serviço" */
+  photosByService?: Array<{
+    macro_name: string;
+    scope_name: string;
+    macro_color: string;
+    house_ids: number[];
+    percentual_executado: number;
+    photos: Array<{ url: string; legenda: string | null }>;
+  }>;
   reportNumber: number | null;
   legal: LegalConfig | null;
 }
