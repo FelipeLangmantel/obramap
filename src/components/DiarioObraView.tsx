@@ -178,6 +178,8 @@ export default function DiarioObraView() {
 
   // Fotos do dia
   const [fotos, setFotos] = useState<{ id: string; url: string; storage_path: string; legenda: string | null }[]>([]);
+  // Fotos vinculadas a serviços específicos (para PDF jurídico)
+  const [fotosPorServico, setFotosPorServico] = useState<Record<string, { url: string; legenda: string | null }[]>>({});
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState<{ id: string; url: string; legenda: string | null } | null>(null);
   const fotoInputRef = React.useRef<HTMLInputElement>(null);
