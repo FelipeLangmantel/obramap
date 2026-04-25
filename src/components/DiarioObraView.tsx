@@ -25,6 +25,9 @@ import { DiarioSummaryPanel } from "./diario/DiarioSummaryPanel";
 import { ConfirmRainDialog } from "./diario/ConfirmRainDialog";
 import { ImportPreviousDayButton } from "./diario/ImportPreviousDayButton";
 import { RequestDeleteItemDialog } from "./diario/RequestDeleteItemDialog";
+import { useDiaryLegalConfig } from "@/hooks/useDiaryLegalConfig";
+import { useNavigate } from "react-router-dom";
+import { FileSignature } from "lucide-react";
 
 // RDO modular components
 import { RdoSidebar } from "./diario/rdo/RdoSidebar";
