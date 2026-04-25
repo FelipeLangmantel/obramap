@@ -1137,6 +1137,17 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         <div className="flex items-start justify-between gap-4 flex-wrap md:flex-nowrap">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
+              {onBack && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onBack}
+                  className="h-8 w-8 -ml-1 shrink-0"
+                  title="Voltar ao calendário"
+                >
+                  <ChevronRight className="h-4 w-4 rotate-180" />
+                </Button>
+              )}
               <ClipboardList className="h-5 w-5 text-primary" />
               <h2 className="text-base sm:text-lg font-bold">
                 {entryId ? "Editar relatório" : "Novo relatório"}: {format(parseISO(entryDate), "dd/MM/yyyy")}
