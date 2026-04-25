@@ -651,6 +651,11 @@ async function renderCorporativoModerno(
     y = (doc as any).lastAutoTable.finalY + 4;
   }
 
+  // Registro Fotográfico por Serviço (auditoria) — corporativo moderno
+  if (config.showPhotos) {
+    y = await renderPhotosByService(doc, data, y, { font: "helvetica", titleColor: [15, 23, 42] });
+  }
+
   if (config.showPhotos && data.photoUrls.length > 0) {
     if (y > pageH - 60) { doc.addPage(); y = margin; }
     doc.setFont("helvetica", "bold");
