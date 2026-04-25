@@ -213,6 +213,9 @@ async function renderPhotosByService(
   return y;
 }
 
+// ════════════════════════════════════════════════════════════════════
+// TEMPLATE 1 — ÓRGÃO PÚBLICO (formal)
+// ════════════════════════════════════════════════════════════════════
 async function renderOrgaoPublico(
   doc: jsPDF, data: DiarioPDFData, config: DiarioPDFConfig
 ): Promise<void> {
