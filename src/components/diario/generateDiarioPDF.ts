@@ -409,7 +409,12 @@ async function renderOrgaoPublico(
     y = (doc as any).lastAutoTable.finalY + 4;
   }
 
-  // ─── Fotos ───────────────────────────────────────────────────────
+  // ─── Registro Fotográfico por Serviço (auditoria) ────────────────
+  if (config.showPhotos) {
+    y = await renderPhotosByService(doc, data, y, { font: "times", titleColor: [20, 20, 20] });
+  }
+
+  // ─── Fotos avulsas ───────────────────────────────────────────────
   if (config.showPhotos && data.photoUrls.length > 0) {
     if (y > pageH - 60) { doc.addPage(); y = margin; }
     doc.setFont("times", "bold");
