@@ -127,6 +127,8 @@ export default function DiarioObraView() {
   const { user, profile, company } = useAuth();
   const houses = currentProject?.houses || [];
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { config: legalConfig } = useDiaryLegalConfig(currentProject?.id);
 
   // Header state
   const [entryDate, setEntryDate] = useState(format(new Date(), "yyyy-MM-dd"));
