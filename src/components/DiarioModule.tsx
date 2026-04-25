@@ -31,15 +31,17 @@ export function DiarioModule() {
         <TabsList className="grid grid-cols-3 w-full max-w-2xl mb-4 h-auto">
           <TabsTrigger value="calendario" className="flex items-center gap-1.5 py-2 text-xs sm:text-sm">
             <Calendar className="h-4 w-4" />
-            <span className="hidden xs:inline sm:inline">Calendário</span>
+            <span className="hidden sm:inline">Calendário</span>
+            <span className="sm:hidden">Calend.</span>
           </TabsTrigger>
           <TabsTrigger value="editor" className="flex items-center gap-1.5 py-2 text-xs sm:text-sm">
             <ClipboardEdit className="h-4 w-4" />
-            <span className="hidden xs:inline sm:inline">Editor</span>
+            <span>Editor</span>
           </TabsTrigger>
           <TabsTrigger value="config" className="flex items-center gap-1.5 py-2 text-xs sm:text-sm">
             <FileSignature className="h-4 w-4" />
-            <span className="hidden xs:inline sm:inline">Configuração</span>
+            <span className="hidden sm:inline">Configuração</span>
+            <span className="sm:hidden">Config.</span>
           </TabsTrigger>
         </TabsList>
 
