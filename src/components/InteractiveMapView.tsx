@@ -42,11 +42,13 @@ import {
   AlignCenter,
   ChevronDown,
   ChevronRight,
-  Calendar
+  Calendar,
+  Camera
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 import { toast } from "sonner";
+import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDrawer";
 
 interface HousePosition {
   id: number;
@@ -232,6 +234,7 @@ export function InteractiveMapView() {
   const [isLayoutLoaded, setIsLayoutLoaded] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [photoHistoryOpen, setPhotoHistoryOpen] = useState(false);
   
   // Edit mode states
   const [isEditMode, setIsEditMode] = useState(false);
@@ -1812,15 +1815,36 @@ export function InteractiveMapView() {
           </DialogHeader>
           
           {selectedHouse && (
-            <HouseDetailsDialogContent 
-              house={selectedHouse} 
-              legendItems={legendItems}
-              quadraName={currentProject?.quadras.find(q => q.houses?.includes(selectedHouse.id))?.name}
-              macrosTemplate={macrosTemplate}
-            />
+            <>
+              <HouseDetailsDialogContent 
+                house={selectedHouse} 
+                legendItems={legendItems}
+                quadraName={currentProject?.quadras.find(q => q.houses?.includes(selectedHouse.id))?.name}
+                macrosTemplate={macrosTemplate}
+              />
+              <div className="pt-3 mt-2 border-t flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => { setShowDetailsDialog(false); setPhotoHistoryOpen(true); }}
+                >
+                  <Camera className="h-4 w-4 mr-1.5" />
+                  Histórico fotográfico
+                </Button>
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
+
+      <HouseFotoHistoryDrawer
+        open={photoHistoryOpen}
+        onOpenChange={setPhotoHistoryOpen}
+        houseId={selectedHouse?.id ?? null}
+        projectId={currentProject?.id ?? null}
+        houseLabel={selectedHouse ? `Casa ${String(selectedHouse.id).padStart(2, "0")}` : undefined}
+      />
     </div>
   );
 }

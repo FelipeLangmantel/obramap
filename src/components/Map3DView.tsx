@@ -10,7 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers } from "lucide-react";
+import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers, Camera } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useModelLayers } from "./map3d/useModelLayers";
 import { LayersPanel } from "./map3d/LayersPanel";
 import { LinkLayersDialog } from "./map3d/LinkLayersDialog";
+import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDrawer";
 
 interface ModelData {
   url: string;
@@ -305,7 +306,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
 }
 
 // House details panel
-function HouseDetailsPanel({ marker, onClose, customLegendItems }: { marker: HouseMarker; onClose: () => void; customLegendItems: any[] }) {
+function HouseDetailsPanel({ marker, onClose, customLegendItems, onOpenPhotoHistory }: { marker: HouseMarker; onClose: () => void; customLegendItems: any[]; onOpenPhotoHistory?: () => void }) {
   const [expanded, setExpanded] = useState<string[]>([]);
   const toggle = (id: string) => setExpanded(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
   const color = (p: number) => {
@@ -355,6 +356,12 @@ function HouseDetailsPanel({ marker, onClose, customLegendItems }: { marker: Hou
             ))}
           </div>
         )}
+        {onOpenPhotoHistory && (
+          <Button variant="outline" size="sm" className="w-full" onClick={onOpenPhotoHistory}>
+            <Camera className="h-4 w-4 mr-1.5" />
+            Histórico fotográfico
+          </Button>
+        )}
       </CardContent>
     </Card>
   );
@@ -368,6 +375,7 @@ export function Map3DView() {
   const [modelData, setModelData] = useState<ModelData | null>(null);
   const [markers, setMarkers] = useState<HouseMarker[]>([]);
   const [selectedMarker, setSelectedMarker] = useState<HouseMarker | null>(null);
+  const [photoHistoryOpen, setPhotoHistoryOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -630,7 +638,21 @@ export function Map3DView() {
             onRenameLayer={layerManager.renameLayer}
           />
         )}
-        {selectedMarker && <HouseDetailsPanel marker={selectedMarker} onClose={() => setSelectedMarker(null)} customLegendItems={customLegendItems} />}
+        {selectedMarker && (
+          <HouseDetailsPanel
+            marker={selectedMarker}
+            onClose={() => setSelectedMarker(null)}
+            customLegendItems={customLegendItems}
+            onOpenPhotoHistory={() => setPhotoHistoryOpen(true)}
+          />
+        )}
+        <HouseFotoHistoryDrawer
+          open={photoHistoryOpen}
+          onOpenChange={setPhotoHistoryOpen}
+          houseId={selectedMarker?.houseNumber ?? null}
+          projectId={projectId ?? null}
+          houseLabel={selectedMarker ? `Casa ${String(selectedMarker.houseNumber).padStart(2, "0")}` : undefined}
+        />
         {!modelData && markers.length === 0 && !isLoading && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center space-y-4 p-8 bg-background/80 rounded-xl border border-border">

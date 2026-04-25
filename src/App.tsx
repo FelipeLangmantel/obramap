@@ -31,6 +31,7 @@ import CashflowSimulatorPage from "./pages/CashflowSimulatorPage";
 import PurchasePanelPage from "./pages/PurchasePanelPage";
 import DiarioOfflineQueuePage from "./pages/DiarioOfflineQueuePage";
 import DiarioConfigPage from "./pages/DiarioConfigPage";
+import HouseHistoryPage from "./pages/HouseHistoryPage";
 import Unsubscribe from "./pages/Unsubscribe";
 import { bootstrapSyncWorker } from "@/offline/sync";
 
@@ -149,6 +150,7 @@ const App = () => {
                   <Route path="/purchase-panel" element={<PurchasePanelPage />} />
                   <Route path="/diario-fila-offline" element={<DiarioOfflineQueuePage />} />
                   <Route path="/diario-config" element={<DiarioConfigPage />} />
+                  <Route path="/casa/:houseId/historico" element={<HouseHistoryPage />} />
                   <Route path="/dashboard" element={<Index />} />
                   <Route path="/index" element={<Navigate to="/dashboard" replace />} />
                   <Route path="*" element={<NotFound />} />

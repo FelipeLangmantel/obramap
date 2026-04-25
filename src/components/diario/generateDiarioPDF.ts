@@ -98,6 +98,15 @@ export interface DiarioPDFData {
   items: DiaryItem[];
   correcoes: Correction[];
   photoUrls: string[];
+  /** Fotos vinculadas a serviços específicos — geram a seção "Registro Fotográfico por Serviço" */
+  photosByService?: Array<{
+    macro_name: string;
+    scope_name: string;
+    macro_color: string;
+    house_ids: number[];
+    percentual_executado: number;
+    photos: Array<{ url: string; legenda: string | null }>;
+  }>;
   reportNumber: number | null;
   legal: LegalConfig | null;
 }
@@ -125,6 +134,83 @@ function fmtCurrency(v: number | null) {
 function fmtDate(iso: string | null) {
   if (!iso) return "—";
   try { return format(parseISO(iso), "dd/MM/yyyy", { locale: ptBR }); } catch { return iso; }
+}
+
+/**
+ * Renderiza a seção "Registro Fotográfico por Serviço".
+ * Agrupa fotos por serviço executado, com contexto (etapa, casas, percentual).
+ * Critério jurídico — usado tanto no template público quanto corporativo.
+ */
+async function renderPhotosByService(
+  doc: jsPDF,
+  data: DiarioPDFData,
+  startY: number,
+  opts: { font: "times" | "helvetica"; titleColor: number[]; }
+): Promise<number> {
+  if (!data.photosByService || data.photosByService.length === 0) return startY;
+  const groups = data.photosByService.filter(g => g.photos.length > 0);
+  if (groups.length === 0) return startY;
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 14;
+  let y = startY;
+
+  if (y > pageH - 60) { doc.addPage(); y = margin; }
+  doc.setFont(opts.font, "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(opts.titleColor[0], opts.titleColor[1], opts.titleColor[2]);
+  const totalFotos = groups.reduce((s, g) => s + g.photos.length, 0);
+  doc.text(`REGISTRO FOTOGRÁFICO POR SERVIÇO (${totalFotos})`, margin, y);
+  y += 5;
+
+  for (const group of groups) {
+    if (y > pageH - 50) { doc.addPage(); y = margin; }
+    // Cabeçalho do grupo (faixa colorida + título)
+    try {
+      const c = group.macro_color || "#6b7280";
+      const r = parseInt(c.slice(1, 3), 16);
+      const g = parseInt(c.slice(3, 5), 16);
+      const b = parseInt(c.slice(5, 7), 16);
+      doc.setFillColor(r, g, b);
+    } catch { doc.setFillColor(107, 114, 128); }
+    doc.rect(margin, y, 2, 6, "F");
+
+    doc.setFont(opts.font, "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(20);
+    doc.text(`${group.macro_name} · ${group.scope_name}`, margin + 4, y + 4);
+    doc.setFont(opts.font, "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(80);
+    const houses = group.house_ids.sort((a, b) => a - b).map(h => String(h).padStart(2, "0")).join(", ");
+    doc.text(`Casas: ${houses} · ${group.percentual_executado}% executado · ${group.photos.length} foto(s)`, margin + 4, y + 8);
+    y += 11;
+
+    // Grid 3 colunas
+    const cols = 3, gap = 3;
+    const cellW = (pageW - margin * 2 - gap * (cols - 1)) / cols;
+    const cellH = cellW * 0.75;
+    let col = 0;
+    for (const photo of group.photos) {
+      if (y + cellH > pageH - 20) { doc.addPage(); y = margin; }
+      const dataUrl = await loadImageAsDataUrl(photo.url);
+      const x = margin + col * (cellW + gap);
+      if (dataUrl) {
+        try {
+          doc.addImage(dataUrl, "JPEG", x, y, cellW, cellH);
+          doc.setDrawColor(120);
+          doc.setLineWidth(0.2);
+          doc.rect(x, y, cellW, cellH);
+        } catch { /* */ }
+      }
+      col++;
+      if (col >= cols) { col = 0; y += cellH + gap; }
+    }
+    if (col !== 0) { y += cellH + gap; col = 0; }
+    y += 2;
+  }
+  return y;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -323,7 +409,12 @@ async function renderOrgaoPublico(
     y = (doc as any).lastAutoTable.finalY + 4;
   }
 
-  // ─── Fotos ───────────────────────────────────────────────────────
+  // ─── Registro Fotográfico por Serviço (auditoria) ────────────────
+  if (config.showPhotos) {
+    y = await renderPhotosByService(doc, data, y, { font: "times", titleColor: [20, 20, 20] });
+  }
+
+  // ─── Fotos avulsas ───────────────────────────────────────────────
   if (config.showPhotos && data.photoUrls.length > 0) {
     if (y > pageH - 60) { doc.addPage(); y = margin; }
     doc.setFont("times", "bold");
@@ -558,6 +649,11 @@ async function renderCorporativoModerno(
       margin: { left: margin, right: margin },
     });
     y = (doc as any).lastAutoTable.finalY + 4;
+  }
+
+  // Registro Fotográfico por Serviço (auditoria) — corporativo moderno
+  if (config.showPhotos) {
+    y = await renderPhotosByService(doc, data, y, { font: "helvetica", titleColor: [15, 23, 42] });
   }
 
   if (config.showPhotos && data.photoUrls.length > 0) {
