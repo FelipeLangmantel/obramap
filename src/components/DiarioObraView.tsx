@@ -337,18 +337,33 @@ export default function DiarioObraView() {
   const loadFotos = async (eId: string) => {
     const { data: fotosData } = await supabase
       .from("diary_photos")
-      .select("id, storage_path, legenda")
+      .select("id, storage_path, legenda, diary_item_id")
       .eq("diary_entry_id", eId)
       .order("created_at", { ascending: true });
-    if (!fotosData || fotosData.length === 0) { setFotos([]); return; }
+    if (!fotosData || fotosData.length === 0) {
+      setFotos([]); setFotosPorServico({}); return;
+    }
     const fotosComUrl = await Promise.all(
       fotosData.map(async (f) => {
         const { data: signed } = await supabase.storage
           .from("diary-photos").createSignedUrl(f.storage_path, 60 * 60);
-        return { id: f.id, storage_path: f.storage_path, legenda: f.legenda, url: signed?.signedUrl || "" };
+        return {
+          id: f.id, storage_path: f.storage_path, legenda: f.legenda,
+          url: signed?.signedUrl || "",
+          diary_item_id: (f as any).diary_item_id as string | null,
+        };
       })
     );
-    setFotos(fotosComUrl);
+    // Avulsas (sem item vinculado) ficam na galeria geral
+    setFotos(fotosComUrl.filter(f => !f.diary_item_id).map(({ diary_item_id, ...rest }) => rest));
+    // Por serviço — agrupa para uso no PDF
+    const byService: Record<string, { url: string; legenda: string | null }[]> = {};
+    fotosComUrl.forEach(f => {
+      if (!f.diary_item_id) return;
+      if (!byService[f.diary_item_id]) byService[f.diary_item_id] = [];
+      byService[f.diary_item_id].push({ url: f.url, legenda: f.legenda });
+    });
+    setFotosPorServico(byService);
   };
 
   const tryAutoFillClima = async (eId: string | null) => {
