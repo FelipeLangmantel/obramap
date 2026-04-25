@@ -27,7 +27,7 @@ import { ServiceProductivityView } from "@/components/productivity/ServiceProduc
 import ContractorsModuleView from "@/components/contractors/ContractorsModuleView";
 import IndustrializationModuleView from "@/components/industrialization/IndustrializationModuleView";
 import HoldingDashboardView from "@/components/holding/HoldingDashboardView";
-import DiarioObraView from "@/components/DiarioObraView";
+import { DiarioModule } from "@/components/DiarioModule";
 import RelatorioObraView from "@/components/RelatorioObraView";
 import { MinhaEmpresaView } from "@/components/gerenciamento/MinhaEmpresaView";
 import { ManualView } from "@/components/gerenciamento/ManualView";
@@ -479,7 +479,7 @@ function Index() {
 
                 {activeView === "diario-obra" && (
                   <div className="flex-1">
-                    <DiarioObraView />
+                    <DiarioModule />
                   </div>
                 )}
 

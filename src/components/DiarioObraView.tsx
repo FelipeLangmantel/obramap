@@ -123,7 +123,16 @@ const DEFAULT_CLIMA: ClimaState = {
   mmChuva: null,
 };
 
-export default function DiarioObraView() {
+interface DiarioObraViewProps {
+  /** Data inicial (YYYY-MM-DD). Quando informada, o editor abre direto naquele dia. */
+  initialDate?: string;
+  /** Callback para voltar à tela de calendário. Quando definido, mostra um botão "Voltar". */
+  onBack?: () => void;
+  /** Oculta o alerta amarelo de configuração legal — útil quando há aba dedicada. */
+  hideLegalConfigAlert?: boolean;
+}
+
+export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAlert }: DiarioObraViewProps = {}) {
   const { currentProject, updateBatchScopeProgress, refreshHousesFromDB } = useConstruction();
   const { user, profile, company } = useAuth();
   const houses = currentProject?.houses || [];
@@ -132,7 +141,15 @@ export default function DiarioObraView() {
   const { config: legalConfig } = useDiaryLegalConfig(currentProject?.id);
 
   // Header state
-  const [entryDate, setEntryDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [entryDate, setEntryDate] = useState(initialDate || format(new Date(), "yyyy-MM-dd"));
+
+  // Sincroniza com initialDate quando o consumidor troca o dia (ex.: clique em outro card do calendário)
+  useEffect(() => {
+    if (initialDate && initialDate !== entryDate) {
+      setEntryDate(initialDate);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDate]);
   const [equipePres, setEquipePres] = useState(0);
   const [obsGeral, setObsGeral] = useState("");
   const [entryId, setEntryId] = useState<string | null>(null);
@@ -1120,6 +1137,17 @@ export default function DiarioObraView() {
         <div className="flex items-start justify-between gap-4 flex-wrap md:flex-nowrap">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
+              {onBack && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onBack}
+                  className="h-8 w-8 -ml-1 shrink-0"
+                  title="Voltar ao calendário"
+                >
+                  <ChevronRight className="h-4 w-4 rotate-180" />
+                </Button>
+              )}
               <ClipboardList className="h-5 w-5 text-primary" />
               <h2 className="text-base sm:text-lg font-bold">
                 {entryId ? "Editar relatório" : "Novo relatório"}: {format(parseISO(entryDate), "dd/MM/yyyy")}
@@ -1170,7 +1198,7 @@ export default function DiarioObraView() {
                 </div>
               )}
             </div>
-            {!legalConfig?.contrato_numero && (
+            {!legalConfig?.contrato_numero && !hideLegalConfigAlert && (
               <button
                 type="button"
                 onClick={() => navigate("/diario-config")}
