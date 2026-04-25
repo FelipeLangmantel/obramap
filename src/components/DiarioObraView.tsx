@@ -1187,7 +1187,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 </div>
               )}
             </div>
-            {!legalConfig?.contrato_numero && (
+            {!legalConfig?.contrato_numero && !hideLegalConfigAlert && (
               <button
                 type="button"
                 onClick={() => navigate("/diario-config")}
