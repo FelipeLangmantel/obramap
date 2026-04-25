@@ -31,6 +31,7 @@ import CashflowSimulatorPage from "./pages/CashflowSimulatorPage";
 import PurchasePanelPage from "./pages/PurchasePanelPage";
 import DiarioOfflineQueuePage from "./pages/DiarioOfflineQueuePage";
 import DiarioConfigPage from "./pages/DiarioConfigPage";
+import HouseHistoryPage from "./pages/HouseHistoryPage";
 import Unsubscribe from "./pages/Unsubscribe";
 import { bootstrapSyncWorker } from "@/offline/sync";
 
