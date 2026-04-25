@@ -42,11 +42,13 @@ import {
   AlignCenter,
   ChevronDown,
   ChevronRight,
-  Calendar
+  Calendar,
+  Camera
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Json } from "@/integrations/supabase/types";
 import { toast } from "sonner";
+import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDrawer";
 
 interface HousePosition {
   id: number;
