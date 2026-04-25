@@ -35,7 +35,6 @@ export function useDiaryMonthEntries(projectId: string | null | undefined, month
         .eq("project_id", projectId)
         .gte("entry_date", fromDate)
         .lte("entry_date", toDate)
-        .is("deleted_at", null)
         .order("entry_date", { ascending: true });
 
       if (error) throw error;
