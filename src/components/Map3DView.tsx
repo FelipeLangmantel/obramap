@@ -306,7 +306,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
 }
 
 // House details panel
-function HouseDetailsPanel({ marker, onClose, customLegendItems }: { marker: HouseMarker; onClose: () => void; customLegendItems: any[] }) {
+function HouseDetailsPanel({ marker, onClose, customLegendItems, onOpenPhotoHistory }: { marker: HouseMarker; onClose: () => void; customLegendItems: any[]; onOpenPhotoHistory?: () => void }) {
   const [expanded, setExpanded] = useState<string[]>([]);
   const toggle = (id: string) => setExpanded(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
   const color = (p: number) => {
@@ -355,6 +355,12 @@ function HouseDetailsPanel({ marker, onClose, customLegendItems }: { marker: Hou
               </Collapsible>
             ))}
           </div>
+        )}
+        {onOpenPhotoHistory && (
+          <Button variant="outline" size="sm" className="w-full" onClick={onOpenPhotoHistory}>
+            <Camera className="h-4 w-4 mr-1.5" />
+            Histórico fotográfico
+          </Button>
         )}
       </CardContent>
     </Card>
