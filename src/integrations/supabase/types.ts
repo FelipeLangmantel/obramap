@@ -2508,6 +2508,116 @@ export type Database = {
           },
         ]
       }
+      diary_legal_config: {
+        Row: {
+          company_id: string
+          contratada_cnpj: string | null
+          contratada_endereco: string | null
+          contratada_estado: string | null
+          contratada_municipio: string | null
+          contratada_razao_social: string | null
+          contratante_cnpj_cpf: string | null
+          contratante_endereco: string | null
+          contratante_estado: string | null
+          contratante_municipio: string | null
+          contratante_nome: string | null
+          contratante_orgao: string | null
+          contratante_tipo: Database["public"]["Enums"]["contratante_tipo"]
+          contrato_data_assinatura: string | null
+          contrato_modalidade: string | null
+          contrato_numero: string | null
+          contrato_objeto: string | null
+          contrato_prazo_dias: number | null
+          contrato_valor: number | null
+          created_at: string
+          created_by: string | null
+          id: string
+          pdf_template: Database["public"]["Enums"]["rdo_pdf_template"]
+          processo_licitatorio: string | null
+          project_id: string
+          responsavel_tecnico_art: string | null
+          responsavel_tecnico_crea: string | null
+          responsavel_tecnico_nome: string | null
+          rodape_observacoes: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          company_id: string
+          contratada_cnpj?: string | null
+          contratada_endereco?: string | null
+          contratada_estado?: string | null
+          contratada_municipio?: string | null
+          contratada_razao_social?: string | null
+          contratante_cnpj_cpf?: string | null
+          contratante_endereco?: string | null
+          contratante_estado?: string | null
+          contratante_municipio?: string | null
+          contratante_nome?: string | null
+          contratante_orgao?: string | null
+          contratante_tipo?: Database["public"]["Enums"]["contratante_tipo"]
+          contrato_data_assinatura?: string | null
+          contrato_modalidade?: string | null
+          contrato_numero?: string | null
+          contrato_objeto?: string | null
+          contrato_prazo_dias?: number | null
+          contrato_valor?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          pdf_template?: Database["public"]["Enums"]["rdo_pdf_template"]
+          processo_licitatorio?: string | null
+          project_id: string
+          responsavel_tecnico_art?: string | null
+          responsavel_tecnico_crea?: string | null
+          responsavel_tecnico_nome?: string | null
+          rodape_observacoes?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          company_id?: string
+          contratada_cnpj?: string | null
+          contratada_endereco?: string | null
+          contratada_estado?: string | null
+          contratada_municipio?: string | null
+          contratada_razao_social?: string | null
+          contratante_cnpj_cpf?: string | null
+          contratante_endereco?: string | null
+          contratante_estado?: string | null
+          contratante_municipio?: string | null
+          contratante_nome?: string | null
+          contratante_orgao?: string | null
+          contratante_tipo?: Database["public"]["Enums"]["contratante_tipo"]
+          contrato_data_assinatura?: string | null
+          contrato_modalidade?: string | null
+          contrato_numero?: string | null
+          contrato_objeto?: string | null
+          contrato_prazo_dias?: number | null
+          contrato_valor?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          pdf_template?: Database["public"]["Enums"]["rdo_pdf_template"]
+          processo_licitatorio?: string | null
+          project_id?: string
+          responsavel_tecnico_art?: string | null
+          responsavel_tecnico_crea?: string | null
+          responsavel_tecnico_nome?: string | null
+          rodape_observacoes?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_legal_config_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       diary_occurrences: {
         Row: {
           company_id: string
@@ -12190,6 +12300,7 @@ export type Database = {
     Enums: {
       aditivo_status: "aprovado" | "pendente"
       app_role: "admin" | "editor" | "viewer"
+      contratante_tipo: "publico" | "privado" | "misto"
       delivery_status:
         | "em_vistoria"
         | "entrega_agendada"
@@ -12212,6 +12323,7 @@ export type Database = {
         | "prevista"
       nf_status: "recebido" | "aguardando_aprovacao" | "pendente"
       obra_status: "em_andamento" | "nao_iniciada" | "concluida" | "paralisada"
+      rdo_pdf_template: "orgao_publico" | "corporativo_moderno"
       supply_request_status:
         | "alert"
         | "quoted"
@@ -12348,6 +12460,7 @@ export const Constants = {
     Enums: {
       aditivo_status: ["aprovado", "pendente"],
       app_role: ["admin", "editor", "viewer"],
+      contratante_tipo: ["publico", "privado", "misto"],
       delivery_status: [
         "em_vistoria",
         "entrega_agendada",
@@ -12373,6 +12486,7 @@ export const Constants = {
       ],
       nf_status: ["recebido", "aguardando_aprovacao", "pendente"],
       obra_status: ["em_andamento", "nao_iniciada", "concluida", "paralisada"],
+      rdo_pdf_template: ["orgao_publico", "corporativo_moderno"],
       supply_request_status: [
         "alert",
         "quoted",
