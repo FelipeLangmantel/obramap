@@ -3358,6 +3358,7 @@ export type Database = {
           project_id: string
           quadra_id: string | null
           type: string
+          unit_type_id: string | null
         }
         Insert: {
           area?: number
@@ -3371,6 +3372,7 @@ export type Database = {
           project_id: string
           quadra_id?: string | null
           type?: string
+          unit_type_id?: string | null
         }
         Update: {
           area?: number
@@ -3384,6 +3386,7 @@ export type Database = {
           project_id?: string
           quadra_id?: string | null
           type?: string
+          unit_type_id?: string | null
         }
         Relationships: [
           {
@@ -3398,6 +3401,13 @@ export type Database = {
             columns: ["quadra_id"]
             isOneToOne: false
             referencedRelation: "quadras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "houses_unit_type_id_fkey"
+            columns: ["unit_type_id"]
+            isOneToOne: false
+            referencedRelation: "project_unit_types"
             referencedColumns: ["id"]
           },
         ]
@@ -8809,6 +8819,97 @@ export type Database = {
           },
         ]
       }
+      project_unit_capacities: {
+        Row: {
+          capacity_value: number
+          company_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          project_id: string
+          unit_label: string
+          unit_symbol: string
+          unit_type_id: string
+          updated_at: string
+        }
+        Insert: {
+          capacity_value: number
+          company_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          project_id: string
+          unit_label: string
+          unit_symbol: string
+          unit_type_id: string
+          updated_at?: string
+        }
+        Update: {
+          capacity_value?: number
+          company_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          project_id?: string
+          unit_label?: string
+          unit_symbol?: string
+          unit_type_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_unit_capacities_unit_type_id_fkey"
+            columns: ["unit_type_id"]
+            isOneToOne: false
+            referencedRelation: "project_unit_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_unit_types: {
+        Row: {
+          company_id: string
+          created_at: string
+          description: string | null
+          display_order: number
+          id: string
+          is_default: boolean
+          name: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          is_default?: boolean
+          name: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          display_order?: number
+          id?: string
+          is_default?: boolean
+          name?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_unit_types_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           company_id: string | null
@@ -11675,6 +11776,10 @@ export type Database = {
         Args: { p_contract_id: string }
         Returns: Json
       }
+      get_house_capacity: {
+        Args: { p_house_id: string; p_unit_symbol: string }
+        Returns: number
+      }
       get_house_photo_history: {
         Args: { p_house_id: number; p_project_id: string }
         Returns: {
@@ -12315,6 +12420,18 @@ export type Database = {
       validate_contract_ready: {
         Args: { p_contract_id: string }
         Returns: Json
+      }
+      validate_production_capacity: {
+        Args: {
+          p_exclude_weekly_id?: string
+          p_house_numbers: number[]
+          p_macro_id: string
+          p_project_id: string
+          p_quantity: number
+          p_scope_id: string
+          p_unit_symbol: string
+        }
+        Returns: undefined
       }
     }
     Enums: {
