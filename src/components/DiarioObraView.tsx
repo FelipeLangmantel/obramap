@@ -200,7 +200,9 @@ export default function DiarioObraView() {
     [rdo.labor]
   );
 
-  const isAdmin = profile?.system_role === "system_admin" || profile?.system_role === "admin";
+  const { canApprove: canApproveObra, isAdmin: isGlobalAdmin } = useCoordenadorAccess(currentProject?.id || null);
+  // 'isAdmin' aqui significa "pode aprovar/corrigir sem restrição": admin global, coordenador global ou coordenador desta obra
+  const isAdmin = canApproveObra;
   const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado";
 
   // Verifica se há solicitação de edição pendente para este RDO
