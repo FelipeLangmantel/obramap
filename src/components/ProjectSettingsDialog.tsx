@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { LogoUploader } from "@/components/diario/LogoUploader";
+import { ProjectCoordinatorSelector } from "@/components/admin/ProjectCoordinatorSelector";
 
 interface ProjectSettingsDialogProps {
   open: boolean;
@@ -446,6 +447,8 @@ export function ProjectSettingsDialog({ open, onOpenChange }: ProjectSettingsDia
 
           <TabsContent value="settings" className="space-y-4 mt-4">
             <div className="space-y-4">
+              <ProjectCoordinatorSelector projectId={currentProject.id} />
+
               <div className="p-4 border rounded-lg space-y-4">
                 <div className="flex items-center gap-2">
                   <ImagePlus className="h-5 w-5 text-muted-foreground" />
