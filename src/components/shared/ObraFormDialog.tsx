@@ -248,12 +248,19 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
       // 2) Criar também o projeto operacional (mapa, produção etc.)
       let projectId: string | undefined;
       try {
+        // Calcula data prevista de término a partir do prazo (campo NOT NULL em projects)
+        const inicio = form.data_inicio ? new Date(form.data_inicio) : new Date();
+        const prazoDias = Number(form.prazo_dias) || 0;
+        const fim = new Date(inicio);
+        fim.setDate(fim.getDate() + prazoDias);
+        const expectedEnd = fim.toISOString().split("T")[0];
+
         projectId = await addProject({
           name: form.nome.trim(),
           location: `${form.municipio} - ${form.estado}`,
           contractor: form.empresa,
           startDate: form.data_inicio,
-          expectedEndDate: "",
+          expectedEndDate: expectedEnd,
           totalHouses: Number(form.uh) || 0,
           unitSize: 45,
           projectType: form.tipo_contrato || "Residencial Popular",
@@ -275,10 +282,12 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
             .update({ obramap_project_id: projectId } as any)
             .eq("id", obra.id);
           await setCurrentProject(projectId);
+        } else {
+          toast.warning("Obra cadastrada no portfólio, mas não foi possível criar o projeto operacional. Tente vincular manualmente.");
         }
-      } catch (e) {
-        // Não bloqueia se a criação do projects falhar
-        console.warn("[ObraFormDialog] project creation skipped:", e);
+      } catch (e: any) {
+        console.warn("[ObraFormDialog] project creation failed:", e);
+        toast.warning("Obra cadastrada no portfólio, mas o projeto operacional falhou: " + (e?.message || "erro desconhecido"));
       }
 
       toast.success("Obra cadastrada com sucesso!");
