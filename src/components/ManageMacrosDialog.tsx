@@ -973,30 +973,48 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                           
                           {/* Add Scope */}
                           {newScope?.macroId === macro.id ? (
-                            <div className="flex gap-2 items-center p-2 bg-secondary/50 rounded-lg">
-                              <Input
-                                value={newScope.name}
-                                onChange={(e) => setNewScope({ ...newScope, name: e.target.value })}
-                                className="h-8 flex-1"
-                                placeholder="Nome do serviço"
+                            <div className="flex flex-col gap-2 p-2 bg-secondary/50 rounded-lg">
+                              <div className="flex gap-2 items-center">
+                                <Input
+                                  value={newScope.name}
+                                  onChange={(e) => setNewScope({ ...newScope, name: e.target.value })}
+                                  className="h-8 flex-1"
+                                  placeholder="Nome do serviço"
+                                />
+                                <Input
+                                  type="number"
+                                  value={newScope.weight}
+                                  onChange={(e) => setNewScope({ ...newScope, weight: e.target.value })}
+                                  onFocus={(e) => e.target.select()}
+                                  className="h-8 w-20"
+                                  placeholder="Peso %"
+                                />
+                                <Button size="sm" onClick={handleAddScope}>Adicionar</Button>
+                                <Button size="sm" variant="ghost" onClick={() => setNewScope(null)}>X</Button>
+                              </div>
+                              <UnitPresetSelector
+                                compact
+                                label="Unidade de medida (opcional)"
+                                fallbackHint="Defina para usar capacidade/RUP por casa"
+                                value={{
+                                  unit_label: newScope.unit_label,
+                                  unit_symbol: newScope.unit_symbol,
+                                }}
+                                onChange={(v) =>
+                                  setNewScope({
+                                    ...newScope,
+                                    unit_label: v.unit_label,
+                                    unit_symbol: v.unit_symbol,
+                                  })
+                                }
                               />
-                              <Input
-                                type="number"
-                                value={newScope.weight}
-                                onChange={(e) => setNewScope({ ...newScope, weight: e.target.value })}
-                                onFocus={(e) => e.target.select()}
-                                className="h-8 w-20"
-                                placeholder="Peso %"
-                              />
-                              <Button size="sm" onClick={handleAddScope}>Adicionar</Button>
-                              <Button size="sm" variant="ghost" onClick={() => setNewScope(null)}>X</Button>
                             </div>
                           ) : canEdit ? (
                             <Button 
                               variant="ghost" 
                               size="sm"
                               className="w-full border border-dashed mt-2"
-                              onClick={() => setNewScope({ macroId: macro.id, name: "", weight: "" })}
+                              onClick={() => setNewScope({ macroId: macro.id, name: "", weight: "", unit_label: "", unit_symbol: "" })}
                             >
                               <Plus className="w-3.5 h-3.5 mr-1" />
                               Adicionar Serviço
