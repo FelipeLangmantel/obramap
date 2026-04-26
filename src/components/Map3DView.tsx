@@ -535,23 +535,6 @@ export function Map3DView() {
     };
   }, [projectId, layerManager.autoMode, refreshHousesFromDB, currentProject?.houses]);
 
-    const handleVisibility = () => {
-      if (document.hidden) {
-        if (channel) { supabase.removeChannel(channel); channel = null; }
-      } else if (!channel) {
-        subscribe();
-        void refreshHousesFromDB();
-      }
-    };
-
-    subscribe();
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibility);
-      if (channel) supabase.removeChannel(channel);
-    };
-  }, [projectId, layerManager.autoMode, refreshHousesFromDB]);
-
   // Also mark ready for markers
   useEffect(() => {
     if (markers.length > 0 && !modelData) setSceneReady(true);
