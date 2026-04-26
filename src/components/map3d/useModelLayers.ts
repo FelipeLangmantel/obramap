@@ -171,6 +171,44 @@ export function useModelLayers(projectId: string | undefined) {
     }));
   }, [autoMode, links]);
 
+  /**
+   * Atualiza camadas a partir do progresso REAL agregado por macro/scope.
+   * Esta é a integração viva com o módulo de produção: cada vez que o
+   * progresso médio das casas muda (via diário/produção semanal), o 3D
+   * reflete o estado da obra.
+   *
+   * Mapeamento por chave `macro_id::scope_id` (ou apenas `macro_id` quando o
+   * vínculo é por etapa inteira). O LinkLayersDialog grava ambos.
+   *
+   * Regra visual:
+   *  - 0%   → camada oculta (estrutura ainda não executada)
+   *  - 1-99 → semitransparente proporcional (0.3 + 0.7 * p)
+   *  - 100% → totalmente visível
+   *
+   * Camadas sem vínculo permanecem visíveis (não escondem o modelo "vazio").
+   */
+  const updateFromMacroProgress = useCallback((
+    progressMap: Map<string, number>
+  ) => {
+    if (!autoMode || links.length === 0) return;
+    setLayers(prev => prev.map(layer => {
+      const link = links.find(l => l.layer_name === layer.name);
+      if (!link) return { ...layer, visible: true, opacity: 1 };
+
+      // chave preferencial: macro+scope; fallback: só macro
+      const key = link.macro_id && link.scope_id
+        ? `${link.macro_id}::${link.scope_id}`
+        : link.macro_id || "";
+      const progress = progressMap.get(key);
+      if (progress == null) return { ...layer, visible: true, opacity: 1 };
+
+      if (progress <= 0)   return { ...layer, visible: false, opacity: 0, progress: 0 };
+      if (progress >= 100) return { ...layer, visible: true, opacity: 1, progress: 100 };
+      const opacity = 0.3 + (progress / 100) * 0.7;
+      return { ...layer, visible: true, opacity, progress };
+    }));
+  }, [autoMode, links]);
+
   return {
     layers,
     links,
@@ -184,6 +222,7 @@ export function useModelLayers(projectId: string | undefined) {
     autoMode,
     setAutoMode,
     updateFromProduction,
+    updateFromMacroProgress,
     setSceneRef,
   };
 }

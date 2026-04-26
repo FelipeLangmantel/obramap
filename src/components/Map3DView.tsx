@@ -368,7 +368,7 @@ function HouseDetailsPanel({ marker, onClose, customLegendItems, onOpenPhotoHist
 }
 
 export function Map3DView() {
-  const { currentProject } = useConstruction();
+  const { currentProject, refreshHousesFromDB } = useConstruction();
   const { isAdmin } = useAuth();
   const projectId = currentProject?.id;
   
@@ -411,39 +411,102 @@ export function Map3DView() {
     console.log('[3D] Layers extracted from model');
   }, [layerManager.extractLayers]);
 
-  // Load production data to update layers
+  // ============================================================
+  // Integração 3D ⇄ Produção em tempo real
+  // ============================================================
+  // Calcula o progresso médio por (macro_id, scope_id) e por (macro_id)
+  // diretamente das casas em memória — sem query adicional. As casas já
+  // são mantidas atualizadas em tempo real pelo canal `houses-realtime-*`
+  // do ConstructionContext (recompute_house_progress_from_diary roda no
+  // backend a cada item de diário/produção). Assim, ao lançar uma produção,
+  // o 3D atualiza camada por camada automaticamente.
   useEffect(() => {
-    if (!projectId || !layerManager.autoMode || layerManager.links.length === 0) return;
-    const loadProduction = async () => {
-      const { data: stages } = await supabase
-        .from("planning_stages")
-        .select("id, name")
-        .eq("project_id", projectId);
-      if (!stages) return;
-      
-      const { data: logs } = await supabase
-        .from("daily_work_logs")
-        .select("stage_id, units_completed")
-        .eq("project_id", projectId);
-      
-      // Get total houses for the project
-      const { count: totalHouses } = await supabase
-        .from("houses")
-        .select("id", { count: "exact", head: true })
-        .eq("project_id", projectId);
-      
-      const total = totalHouses || 1;
-      const stageProgress = stages.map(s => {
-        const completed = (logs || [])
-          .filter(l => l.stage_id === s.id)
-          .reduce((sum, l) => sum + (l.units_completed || 0), 0);
-        return { id: s.id, name: s.name, progress: Math.min(100, (completed / total) * 100) };
+    if (!currentProject || !layerManager.autoMode || layerManager.links.length === 0) return;
+
+    const houses = currentProject.houses || [];
+    if (houses.length === 0) return;
+
+    const totalHouses = houses.length;
+    const sumByScope = new Map<string, number>();   // chave: macro::scope
+    const sumByMacro = new Map<string, number>();   // chave: macro
+    const countByMacro = new Map<string, number>(); // nº de scopes por macro (para média)
+
+    houses.forEach(h => {
+      (h.macros || []).forEach((m: any) => {
+        let macroSum = 0;
+        let macroCount = 0;
+        (m.scopes || []).forEach((s: any) => {
+          const key = `${m.id}::${s.id}`;
+          sumByScope.set(key, (sumByScope.get(key) || 0) + (s.progress || 0));
+          macroSum += (s.progress || 0);
+          macroCount += 1;
+        });
+        // Progresso da etapa = média dos scopes daquela casa
+        if (macroCount > 0) {
+          sumByMacro.set(m.id, (sumByMacro.get(m.id) || 0) + macroSum / macroCount);
+          countByMacro.set(m.id, (countByMacro.get(m.id) || 0) + 1);
+        }
       });
-      
-      layerManager.updateFromProduction(stageProgress);
+    });
+
+    const progressMap = new Map<string, number>();
+    sumByScope.forEach((sum, key) => {
+      progressMap.set(key, sum / totalHouses);
+    });
+    sumByMacro.forEach((sum, macroId) => {
+      const n = countByMacro.get(macroId) || totalHouses;
+      progressMap.set(macroId, sum / n);
+    });
+
+    layerManager.updateFromMacroProgress(progressMap);
+  }, [
+    currentProject?.id,
+    currentProject?.houses,
+    layerManager.autoMode,
+    layerManager.links,
+    layerManager.updateFromMacroProgress,
+  ]);
+
+  // Realtime: lançamentos no Diário/Produção disparam refresh das casas,
+  // que por sua vez recalcula o progresso por camada acima. Pausa quando
+  // (refreshHousesFromDB já desestruturado acima)
+  useEffect(() => {
+    if (!projectId || !layerManager.autoMode) return;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const subscribe = () => {
+      channel = supabase
+        .channel(`map3d-production-${projectId}`)
+        .on("postgres_changes", {
+          event: "*", schema: "public", table: "productions",
+          filter: `project_id=eq.${projectId}`,
+        }, () => { void refreshHousesFromDB(); })
+        .on("postgres_changes", {
+          event: "*", schema: "public", table: "weekly_productions",
+          filter: `project_id=eq.${projectId}`,
+        }, () => { void refreshHousesFromDB(); })
+        .on("postgres_changes", {
+          event: "*", schema: "public", table: "diary_items",
+        }, () => { void refreshHousesFromDB(); })
+        .subscribe();
     };
-    loadProduction();
-  }, [projectId, layerManager.autoMode, layerManager.links]);
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (channel) { supabase.removeChannel(channel); channel = null; }
+      } else if (!channel) {
+        subscribe();
+        void refreshHousesFromDB();
+      }
+    };
+
+    subscribe();
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [projectId, layerManager.autoMode, refreshHousesFromDB]);
 
   // Also mark ready for markers
   useEffect(() => {
