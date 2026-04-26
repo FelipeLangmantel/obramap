@@ -160,6 +160,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [projectsListOpen, setProjectsListOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [linkPortfolioOpen, setLinkPortfolioOpen] = useState(false);
