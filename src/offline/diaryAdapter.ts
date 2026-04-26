@@ -42,6 +42,9 @@ export async function createDiaryEntryAware(
   const client_uuid = generateClientUuid();
 
   if (isOnline()) {
+    // NOTA: a tabela `diary_entries` não tem coluna `user_id` — quem identifica
+    // o autor é `engineer_id` (já incluído em `input.payload`). O `user_id` é
+    // mantido apenas no input para uso pela fila offline (rastreio local).
     const { data, error } = await supabase
       .from("diary_entries")
       .insert({
@@ -49,7 +52,6 @@ export async function createDiaryEntryAware(
         client_uuid,
         company_id: input.company_id,
         project_id: input.project_id,
-        user_id: input.user_id,
       } as any)
       .select("id, num_relatorio")
       .single();
