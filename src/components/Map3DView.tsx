@@ -444,6 +444,61 @@ export function Map3DView() {
     console.log('[3D] Layers extracted from model');
   }, [layerManager.extractLayers]);
 
+  // ====================================================
+  // Modo "Atribuir Casas": clique numa malha abre popover
+  // ====================================================
+  const handleMeshClick = useCallback((obj: THREE.Object3D) => {
+    if (!assignMode) return;
+    if (!(obj as THREE.Mesh).isMesh) return;
+
+    const meshName = obj.name || `Mesh_${obj.id}`;
+
+    // Sobe um nível: o "grupo pai" agrupa peças da mesma casa
+    // (telhado + paredes + piso de uma mesma casa, no SketchUp).
+    const parent = obj.parent;
+    const isRealGroup = parent && parent.type !== "Scene" && (parent.children?.length ?? 0) > 1;
+    const groupName = isRealGroup ? (parent?.name || undefined) : undefined;
+
+    const childMeshes: string[] = [];
+    if (isRealGroup && parent) {
+      parent.traverse(c => {
+        if ((c as THREE.Mesh).isMesh) {
+          const n = c.name || `Mesh_${c.id}`;
+          if (n !== meshName) childMeshes.push(n);
+        }
+      });
+    }
+
+    setPickedMesh({ name: meshName, groupName, childMeshes });
+  }, [assignMode]);
+
+  const confirmAssignment = useCallback(async (houseNumber: number, includeChildren: boolean) => {
+    if (!pickedMesh) return;
+    setAssignSaving(true);
+    const targets = includeChildren
+      ? [pickedMesh.name, ...pickedMesh.childMeshes]
+      : [pickedMesh.name];
+    const { error } = await meshAssignments.assignMeshes(targets, houseNumber);
+    setAssignSaving(false);
+    if (error) {
+      toast.error("Erro ao atribuir casa: " + error.message);
+      return;
+    }
+    toast.success(
+      `${targets.length} mesh(es) atribuído(s) à Casa ${String(houseNumber).padStart(2, "0")}`
+    );
+    setPickedMesh(null);
+  }, [pickedMesh, meshAssignments]);
+
+  const clearAssignment = useCallback(async () => {
+    if (!pickedMesh) return;
+    setAssignSaving(true);
+    await meshAssignments.clearMesh(pickedMesh.name);
+    setAssignSaving(false);
+    toast.success("Atribuição removida");
+    setPickedMesh(null);
+  }, [pickedMesh, meshAssignments]);
+
   // ============================================================
   // Integração 3D ⇄ Produção em tempo real
   // ============================================================
