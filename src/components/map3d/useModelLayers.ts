@@ -28,7 +28,11 @@ export interface LayerStageLink {
   house_number: number | null;
 }
 
-export function useModelLayers(projectId: string | undefined) {
+export function useModelLayers(
+  projectId: string | undefined,
+  /** Mapa malha→casa vindo de `useMeshHouseAssignments` (atribuição manual). */
+  meshAssignmentMap?: Map<string, number>,
+) {
   const [layers, setLayers] = useState<ModelLayer[]>([]);
   const [links, setLinks] = useState<LayerStageLink[]>([]);
   const [sceneRef, setSceneRef] = useState<THREE.Object3D | null>(null);
@@ -49,7 +53,9 @@ export function useModelLayers(projectId: string | undefined) {
       const prevMap = new Map(prev.map(l => [l.name, l]));
       return Array.from(layerMap.entries()).map(([name, count]) => {
         const existing = prevMap.get(name);
-        const houseNumber = parseHouseNumberFromMesh(name);
+        // Atribuição manual TEM PRIORIDADE sobre auto-detect por nome.
+        const manualHouse = meshAssignmentMap?.get(name);
+        const houseNumber = manualHouse ?? parseHouseNumberFromMesh(name);
         const friendly = houseNumber != null
           ? `Casa ${String(houseNumber).padStart(2, "0")} • ${stripHousePrefix(name)}`
           : name;
@@ -64,7 +70,24 @@ export function useModelLayers(projectId: string | undefined) {
         };
       });
     });
-  }, []);
+  }, [meshAssignmentMap]);
+
+  /**
+   * Recalcula o `houseNumber` de todas as camadas quando o mapa de
+   * atribuição muda (sem precisar reextrair do GLTF).
+   */
+  useEffect(() => {
+    if (!meshAssignmentMap) return;
+    setLayers(prev => prev.map(l => {
+      const manualHouse = meshAssignmentMap.get(l.name);
+      const newHouse = manualHouse ?? parseHouseNumberFromMesh(l.name);
+      if (newHouse === l.houseNumber) return l;
+      const friendly = newHouse != null
+        ? `Casa ${String(newHouse).padStart(2, "0")} • ${stripHousePrefix(l.name)}`
+        : l.name;
+      return { ...l, houseNumber: newHouse, displayName: friendly };
+    }));
+  }, [meshAssignmentMap]);
 
   const loadLinks = useCallback(async () => {
     if (!projectId) return;
