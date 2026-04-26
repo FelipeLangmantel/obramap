@@ -173,9 +173,18 @@ O formato deve ser exatamente:
     if (parseResult.items && Array.isArray(parseResult.items)) {
       for (const item of parseResult.items) {
         if (item.name && typeof item.name === 'string' && item.name.trim()) {
+          const category = ["material", "labor", "equipment"].includes(item.category) ? item.category : "material";
+          const rawFamily = (item as any).family;
+          let family = typeof rawFamily === 'string' ? rawFamily.trim() : '';
+          if (!family) {
+            family = category === 'labor' ? 'Mão de Obra'
+                   : category === 'equipment' ? 'Locações'
+                   : 'Geral';
+          }
           validatedItems.push({
             name: item.name.trim(),
-            category: ["material", "labor", "equipment"].includes(item.category) ? item.category : "material",
+            category,
+            family,
             quantity: typeof item.quantity === "number" ? item.quantity : parseFloat(item.quantity) || 1,
             unit: item.unit || "un",
             unitValue: typeof item.unitValue === "number" ? item.unitValue : parseFloat(item.unitValue) || 0,
