@@ -1214,7 +1214,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
               </button>
             )}
           </div>
-          <div className="flex gap-2 shrink-0 self-start flex-wrap">
+          <div className="flex gap-2 shrink-0 self-start flex-wrap w-full md:w-auto">
             {!isLocked && currentProject?.id && company?.id && (
               <ImportPreviousDayButton
                 projectId={currentProject.id}
