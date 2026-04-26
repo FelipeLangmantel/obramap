@@ -20,7 +20,7 @@ export default function HouseHistoryPage() {
   const projectId = searchParams.get("project") || currentProject?.id || null;
   const houseIdNum = houseId ? Number(houseId) : null;
 
-  const { photos, loading } = useHousePhotoHistory(houseIdNum, projectId);
+  const { photos, loading } = useHousePhotoHistory(houseIdNum, projectId, { initialLimit: null });
   const [view, setView] = useState<"servico" | "cronologico">("servico");
   const [filterMacro, setFilterMacro] = useState<string>("all");
   const [search, setSearch] = useState("");
