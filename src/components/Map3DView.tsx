@@ -285,8 +285,9 @@ function AutoFitCamera({
 
 // Scene
 function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLegendItems,
-  resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady
-}: { 
+  resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady,
+  onMeshClick,
+}: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
   resetTrigger: number; fitTrigger: number;
@@ -294,6 +295,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   onCameraChange?: (p: [number, number, number], t: [number, number, number]) => void;
   sceneReady: boolean; onModelLoaded: () => void;
   onSceneReady?: (scene: THREE.Object3D) => void;
+  onMeshClick?: (mesh: THREE.Object3D) => void;
 }) {
   return (
     <>
@@ -306,17 +308,17 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
       <directionalLight position={[-10, 10, -5]} intensity={0.5} />
       <hemisphereLight args={["#87ceeb", "#4a7c59", 0.4]} />
-      
+
       {modelData && (
         <Suspense fallback={<Html center><div className="bg-background/90 px-4 py-2 rounded-lg border border-border">Carregando modelo...</div></Html>}>
           {modelData.type === "gltf" ? (
-            <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} />
+            <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} />
           ) : (
-            <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} />
+            <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} />
           )}
         </Suspense>
       )}
-      
+
       {markers.map((m) => (
         <HouseMarker3D key={m.id} marker={m} onClick={() => onMarkerClick(m)}
           isSelected={selectedMarkerId === m.id} customLegendItems={customLegendItems} />
