@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import * as THREE from "three";
 import { supabase } from "@/integrations/supabase/client";
+import { parseHouseNumberFromMesh, stripHousePrefix } from "./parseHouseFromMeshName";
 
 export interface ModelLayer {
   name: string;
@@ -8,6 +9,8 @@ export interface ModelLayer {
   visible: boolean;
   opacity: number;
   meshCount: number;
+  /** Casa detectada automaticamente pelo nome do mesh (1..N), null = camada agregada. */
+  houseNumber: number | null;
   linkedStageId?: string;
   linkedMacroId?: string;
   progress?: number;
@@ -21,6 +24,8 @@ export interface LayerStageLink {
   stage_id: string | null;
   macro_id: string | null;
   scope_id: string | null;
+  /** NULL = vínculo agregado da obra; preenchido = casa específica. */
+  house_number: number | null;
 }
 
 export function useModelLayers(projectId: string | undefined) {
@@ -40,17 +45,21 @@ export function useModelLayers(projectId: string | undefined) {
       }
     });
 
-    // Preserve existing display names from previously loaded links
     setLayers(prev => {
       const prevMap = new Map(prev.map(l => [l.name, l]));
       return Array.from(layerMap.entries()).map(([name, count]) => {
         const existing = prevMap.get(name);
+        const houseNumber = parseHouseNumberFromMesh(name);
+        const friendly = houseNumber != null
+          ? `Casa ${String(houseNumber).padStart(2, "0")} • ${stripHousePrefix(name)}`
+          : name;
         return {
           name,
-          displayName: existing?.displayName || name,
+          displayName: existing?.displayName || friendly,
           visible: existing?.visible ?? true,
           opacity: existing?.opacity ?? 1,
           meshCount: count,
+          houseNumber,
           progress: existing?.progress,
         };
       });
@@ -66,7 +75,6 @@ export function useModelLayers(projectId: string | undefined) {
     if (!error && data) {
       const parsed = data as unknown as LayerStageLink[];
       setLinks(parsed);
-      // Apply display names from saved links
       setLayers(prev => prev.map(l => {
         const link = parsed.find(lk => lk.layer_name === l.name);
         return link?.display_name ? { ...l, displayName: link.display_name } : l;
@@ -76,7 +84,14 @@ export function useModelLayers(projectId: string | undefined) {
 
   useEffect(() => { loadLinks(); }, [loadLinks]);
 
-  const saveLink = useCallback(async (layerName: string, stageId: string | null, macroId: string | null, scopeId?: string | null, displayName?: string | null) => {
+  const saveLink = useCallback(async (
+    layerName: string,
+    stageId: string | null,
+    macroId: string | null,
+    scopeId?: string | null,
+    displayName?: string | null,
+    houseNumber?: number | null,
+  ) => {
     if (!projectId) return;
     const { error } = await supabase
       .from("map_layer_stage_links" as any)
@@ -87,10 +102,9 @@ export function useModelLayers(projectId: string | undefined) {
         macro_id: macroId,
         scope_id: scopeId || null,
         display_name: displayName || null,
+        house_number: houseNumber ?? null,
       } as any, { onConflict: "project_id,layer_name" });
-    if (!error) {
-      await loadLinks();
-    }
+    if (!error) await loadLinks();
     return error;
   }, [projectId, loadLinks]);
 
@@ -106,7 +120,6 @@ export function useModelLayers(projectId: string | undefined) {
 
   const renameLayer = useCallback(async (layerName: string, newDisplayName: string) => {
     if (!projectId) return;
-    // Upsert the display name
     await supabase
       .from("map_layer_stage_links" as any)
       .upsert({
@@ -114,26 +127,25 @@ export function useModelLayers(projectId: string | undefined) {
         layer_name: layerName,
         display_name: newDisplayName,
       } as any, { onConflict: "project_id,layer_name" });
-    
-    setLayers(prev => prev.map(l => 
+    setLayers(prev => prev.map(l =>
       l.name === layerName ? { ...l, displayName: newDisplayName } : l
     ));
     await loadLinks();
   }, [projectId, loadLinks]);
 
   const toggleLayer = useCallback((layerName: string) => {
-    setLayers(prev => prev.map(l => 
+    setLayers(prev => prev.map(l =>
       l.name === layerName ? { ...l, visible: !l.visible } : l
     ));
   }, []);
 
   const setLayerOpacity = useCallback((layerName: string, opacity: number) => {
-    setLayers(prev => prev.map(l => 
+    setLayers(prev => prev.map(l =>
       l.name === layerName ? { ...l, opacity } : l
     ));
   }, []);
 
-  // Apply visibility to Three.js scene
+  // Aplica visibilidade/opacity ao Three.js
   useEffect(() => {
     if (!sceneRef) return;
     sceneRef.traverse((child) => {
@@ -156,56 +168,47 @@ export function useModelLayers(projectId: string | undefined) {
     });
   }, [layers, sceneRef]);
 
-  const updateFromProduction = useCallback(async (stages: Array<{ id: string; name: string; progress: number }>) => {
-    if (!autoMode || links.length === 0) return;
-    setLayers(prev => prev.map(layer => {
-      const link = links.find(l => l.layer_name === layer.name);
-      if (!link || !link.stage_id) return { ...layer, visible: true, opacity: 1 };
-      const stage = stages.find(s => s.id === link.stage_id);
-      if (!stage) return { ...layer, visible: true, opacity: 1 };
-      const progress = stage.progress;
-      if (progress === 0) return { ...layer, visible: false, opacity: 0, progress: 0 };
-      if (progress >= 100) return { ...layer, visible: true, opacity: 1, progress: 100 };
-      const opacity = 0.3 + (progress / 100) * 0.7;
-      return { ...layer, visible: true, opacity, progress };
-    }));
-  }, [autoMode, links]);
-
   /**
-   * Atualiza camadas a partir do progresso REAL agregado por macro/scope.
-   * Esta é a integração viva com o módulo de produção: cada vez que o
-   * progresso médio das casas muda (via diário/produção semanal), o 3D
-   * reflete o estado da obra.
-   *
-   * Mapeamento por chave `macro_id::scope_id` (ou apenas `macro_id` quando o
-   * vínculo é por etapa inteira). O LinkLayersDialog grava ambos.
-   *
-   * Regra visual:
-   *  - 0%   → camada oculta (estrutura ainda não executada)
-   *  - 1-99 → semitransparente proporcional (0.3 + 0.7 * p)
-   *  - 100% → totalmente visível
-   *
-   * Camadas sem vínculo permanecem visíveis (não escondem o modelo "vazio").
+   * Atualização AGREGADA (média da obra inteira por macro/scope).
+   * Usada apenas para camadas SEM house_number (vínculo geral).
    */
-  const updateFromMacroProgress = useCallback((
-    progressMap: Map<string, number>
-  ) => {
+  const updateFromMacroProgress = useCallback((progressMap: Map<string, number>) => {
     if (!autoMode || links.length === 0) return;
     setLayers(prev => prev.map(layer => {
       const link = links.find(l => l.layer_name === layer.name);
-      if (!link) return { ...layer, visible: true, opacity: 1 };
-
-      // chave preferencial: macro+scope; fallback: só macro
+      if (!link || link.house_number != null) return layer; // casa-específica é tratada em updateFromHousesProgress
       const key = link.macro_id && link.scope_id
         ? `${link.macro_id}::${link.scope_id}`
         : link.macro_id || "";
       const progress = progressMap.get(key);
       if (progress == null) return { ...layer, visible: true, opacity: 1 };
-
       if (progress <= 0)   return { ...layer, visible: false, opacity: 0, progress: 0 };
       if (progress >= 100) return { ...layer, visible: true, opacity: 1, progress: 100 };
-      const opacity = 0.3 + (progress / 100) * 0.7;
-      return { ...layer, visible: true, opacity, progress };
+      return { ...layer, visible: true, opacity: 0.3 + (progress / 100) * 0.7, progress };
+    }));
+  }, [autoMode, links]);
+
+  /**
+   * Atualização POR CASA — mapa de chave `house::macro::scope` (ou `house::macro`)
+   * para o progresso REAL daquela casa específica.
+   *
+   * - Vínculo com house_number: aplica progresso individual da casa.
+   * - Vínculo sem house_number: cai no updateFromMacroProgress (média).
+   */
+  const updateFromHousesProgress = useCallback((perHouseProgress: Map<string, number>) => {
+    if (!autoMode || links.length === 0) return;
+    setLayers(prev => prev.map(layer => {
+      const link = links.find(l => l.layer_name === layer.name);
+      if (!link || link.house_number == null) return layer; // agregada é tratada acima
+      const macro = link.macro_id || "";
+      const key = link.scope_id
+        ? `${link.house_number}::${macro}::${link.scope_id}`
+        : `${link.house_number}::${macro}`;
+      const progress = perHouseProgress.get(key);
+      if (progress == null) return { ...layer, visible: true, opacity: 1 };
+      if (progress <= 0)   return { ...layer, visible: false, opacity: 0, progress: 0 };
+      if (progress >= 100) return { ...layer, visible: true, opacity: 1, progress: 100 };
+      return { ...layer, visible: true, opacity: 0.3 + (progress / 100) * 0.7, progress };
     }));
   }, [autoMode, links]);
 
@@ -221,8 +224,8 @@ export function useModelLayers(projectId: string | undefined) {
     loadLinks,
     autoMode,
     setAutoMode,
-    updateFromProduction,
     updateFromMacroProgress,
+    updateFromHousesProgress,
     setSceneRef,
   };
 }
