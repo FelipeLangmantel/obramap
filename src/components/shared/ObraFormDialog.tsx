@@ -170,12 +170,19 @@ export function ObraFormDialog({ open, onOpenChange, onSaved }: ObraFormDialogPr
     }
     setSaving(true);
     try {
+      // Calcula expectedEndDate (NOT NULL em projects) a partir do prazo da obra
+      const inicio = selectedObra.data_inicio ? new Date(selectedObra.data_inicio) : new Date();
+      const prazoDias = Number(selectedObra.prazo_dias) || 0;
+      const fim = new Date(inicio);
+      if (prazoDias > 0) fim.setDate(fim.getDate() + prazoDias);
+      const expectedEnd = fim.toISOString().split("T")[0];
+
       const projectId = await addProject({
         name: selectedObra.nome,
         location: `${selectedObra.municipio || ""} - ${selectedObra.estado || ""}`.trim(),
         contractor: selectedObra.empresa || "",
-        startDate: selectedObra.data_inicio || "",
-        expectedEndDate: "",
+        startDate: selectedObra.data_inicio || new Date().toISOString().split("T")[0],
+        expectedEndDate: expectedEnd,
         totalHouses: Number(selectedObra.uh) || 0,
         unitSize: 45,
         projectType: selectedObra.tipo_contrato || "Residencial Popular",
