@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+export interface RoleBreakdown {
+  role_name: string;
+  role_type: 'professional' | 'helper';
+  qty_per_team: number;
+  total: number;
+}
+
 export interface PeriodTeamRow {
   scope_id: string;
   scope_name: string;
@@ -16,6 +23,9 @@ export interface PeriodTeamRow {
   total_helpers: number;
   total_people: number;
   has_productivity_config: boolean;
+  has_team_composition: boolean;
+  /** Quebra detalhada por profissão (já multiplicada pelo nº de equipes) */
+  role_breakdown: RoleBreakdown[];
 }
 
 export interface PeriodTeamRequirements {
