@@ -1138,8 +1138,8 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     <div className="pb-24 md:pb-4 w-full max-w-full min-w-0 overflow-x-hidden">
       <OfflineBanner />
       {/* HEADER do RDO */}
-      <div className="bg-card border rounded-lg p-4 mb-4">
-        <div className="flex items-start justify-between gap-4 flex-wrap md:flex-nowrap">
+      <div className="bg-card border rounded-lg p-3 sm:p-4 mb-4 w-full max-w-full min-w-0 overflow-hidden">
+        <div className="flex items-start justify-between gap-3 sm:gap-4 flex-wrap md:flex-nowrap min-w-0">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               {onBack && (
