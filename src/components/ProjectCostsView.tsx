@@ -836,19 +836,19 @@ export function ProjectCostsView() {
 
           {/* Scope editor inline or macro list */}
           {editingScope ? (
-            <Card>
+            <Card className="overflow-hidden">
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Calculator className="w-4 h-4" />
-                    {editingScope.scopeName}
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <CardTitle className="text-base flex items-center gap-2 min-w-0 truncate">
+                    <Calculator className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{editingScope.scopeName}</span>
                   </CardTitle>
-                  <Button variant="outline" size="sm" onClick={handleBackFromEdit}>
+                  <Button variant="outline" size="sm" onClick={handleBackFromEdit} className="shrink-0">
                     Voltar
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="min-w-0 overflow-hidden">
                 <BudgetItemsEditor
                   projectId={currentProject.id}
                   scopeId={editingScope.scopeId}
