@@ -9748,6 +9748,56 @@ export type Database = {
           },
         ]
       }
+      service_default_capacities: {
+        Row: {
+          capacity_value: number
+          company_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          project_id: string
+          scope_id: string
+          scope_name: string | null
+          unit_label: string
+          unit_symbol: string
+          updated_at: string
+        }
+        Insert: {
+          capacity_value: number
+          company_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          project_id: string
+          scope_id: string
+          scope_name?: string | null
+          unit_label: string
+          unit_symbol: string
+          updated_at?: string
+        }
+        Update: {
+          capacity_value?: number
+          company_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          project_id?: string
+          scope_id?: string
+          scope_name?: string | null
+          unit_label?: string
+          unit_symbol?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_default_capacities_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_house_allocations: {
         Row: {
           company_id: string
@@ -9822,6 +9872,56 @@ export type Database = {
             columns: ["service_plan_id"]
             isOneToOne: false
             referencedRelation: "service_planning_by_period"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_house_capacities: {
+        Row: {
+          capacity_value: number
+          company_id: string
+          created_at: string
+          house_number: number
+          id: string
+          notes: string | null
+          project_id: string
+          scope_id: string
+          unit_label: string
+          unit_symbol: string
+          updated_at: string
+        }
+        Insert: {
+          capacity_value: number
+          company_id: string
+          created_at?: string
+          house_number: number
+          id?: string
+          notes?: string | null
+          project_id: string
+          scope_id: string
+          unit_label: string
+          unit_symbol: string
+          updated_at?: string
+        }
+        Update: {
+          capacity_value?: number
+          company_id?: string
+          created_at?: string
+          house_number?: number
+          id?: string
+          notes?: string | null
+          project_id?: string
+          scope_id?: string
+          unit_label?: string
+          unit_symbol?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_house_capacities_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
