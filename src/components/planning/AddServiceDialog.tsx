@@ -92,6 +92,14 @@ export function AddServiceDialog({
     symbol: string;
   } | null>(null);
   const [totalHouses, setTotalHouses] = useState<number>(0);
+  const [serviceProductivity, setServiceProductivity] = useState<{
+    productivity_value: number;
+    productivity_unit: string;
+    default_team_count: number;
+    professionals_per_team: number;
+    helpers_per_team: number;
+  } | null>(null);
+  const [productivityChecked, setProductivityChecked] = useState(false);
 
   const isEditing = !!existingService;
 
