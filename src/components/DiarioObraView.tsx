@@ -1135,7 +1135,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   }
 
   return (
-    <div className="pb-24 md:pb-4">
+    <div className="pb-24 md:pb-4 w-full max-w-full min-w-0 overflow-x-hidden">
       <OfflineBanner />
       {/* HEADER do RDO */}
       <div className="bg-card border rounded-lg p-4 mb-4">
