@@ -18,8 +18,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PlanningPeriod, PeriodService } from "@/hooks/usePeriodPlanning";
+import { AddServiceDialog } from "@/components/planning/AddServiceDialog";
 
 interface PeriodServicesDialogProps {
   open: boolean;
@@ -42,10 +45,16 @@ export function PeriodServicesDialog({
   services,
   isLoading,
   canEdit,
+  projectId,
+  companyId,
+  onRefresh,
+  onDeleteService,
   onUpdateHouses,
 }: PeriodServicesDialogProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [addServiceOpen, setAddServiceOpen] = useState(false);
+  const [editingService, setEditingService] = useState<any>(null);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
