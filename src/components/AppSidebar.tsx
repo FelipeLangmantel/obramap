@@ -84,6 +84,7 @@ import { NewProjectDialog } from "@/components/NewProjectDialog";
 import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
 import obraMapLogoDark from "@/assets/obramap-logo-new.png";
 import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 
