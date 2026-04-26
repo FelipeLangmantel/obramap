@@ -138,6 +138,26 @@ export function HouseFotoHistoryDrawer({
                 ))}
               </div>
             )}
+
+            {!loading && hasMore && photos.length > 0 && (
+              <div className="mt-4 flex justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadAll()}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      Carregando...
+                    </>
+                  ) : (
+                    <>Ver todas ({totalCount} fotos)</>
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
         </SheetContent>
       </Sheet>
