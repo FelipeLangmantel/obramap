@@ -34,6 +34,8 @@ interface ExistingInput {
 interface ExtractedItem {
   name: string;
   category: 'material' | 'labor' | 'equipment';
+  /** Family name as extracted by AI (raw, may be new) */
+  extractedFamily?: string;
   quantity: number;
   unit: string;
   unitValue: number;
@@ -46,9 +48,11 @@ interface ExtractedItem {
   matchedInputValue?: number;
   matchedInputFamily?: string;
   matchConfidence: 'exact' | 'high' | 'medium' | 'low' | 'none';
-  // For creating new input
+  // For creating new input — user-selected family for the new cadastro
   createAsNewInput?: boolean;
   newInputFamily?: string;
+  /** True when newInputFamily does not exist in families list (will be created on import) */
+  isNewFamily?: boolean;
 }
 
 interface ImportBudgetItemsDialogProps {
