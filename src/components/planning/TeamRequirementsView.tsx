@@ -222,9 +222,12 @@ export function TeamRequirementsView() {
 
       {/* Tabs de visualização */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
+        <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="by-period">
             <CalendarRange className="h-4 w-4 mr-1.5" /> Por período
+          </TabsTrigger>
+          <TabsTrigger value="by-role">
+            <HardHat className="h-4 w-4 mr-1.5" /> Por profissão
           </TabsTrigger>
           <TabsTrigger value="by-macro">
             <Layers className="h-4 w-4 mr-1.5" /> Pico por etapa
