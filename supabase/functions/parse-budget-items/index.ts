@@ -9,6 +9,7 @@ const corsHeaders = {
 interface ExtractedItem {
   name: string;
   category: "material" | "labor" | "equipment";
+  family: string;
   quantity: number;
   unit: string;
   unitValue: number;
@@ -27,7 +28,7 @@ serve(async (req) => {
   }
 
   try {
-    const { fileBase64, existingInputs } = await req.json();
+    const { fileBase64, existingInputs, existingFamilies } = await req.json();
 
     if (!fileBase64) {
       throw new Error("Arquivo é obrigatório");
@@ -40,8 +41,10 @@ serve(async (req) => {
 
     // Build context about existing inputs for better matching
     const inputsContext = existingInputs?.slice(0, 100).map((i: any) => i.name).join(", ") || "";
+    const familyNames: string[] = (existingFamilies || []).map((f: any) => f.name).filter(Boolean);
     
     console.log("Existing inputs sample for context:", inputsContext.substring(0, 200));
+    console.log("Existing families:", familyNames.join(", "));
     
     const prompt = `Você é um especialista em análise de orçamentos e composições de construção civil brasileira.
 
@@ -49,19 +52,28 @@ Analise este documento (orçamento, planilha, composição ou lista de materiais
 
 Para cada item, extraia:
 1. Nome/Descrição do insumo ou serviço
-2. Categoria: "material", "labor" (mão de obra, tarefa, serviço, empreitada), ou "equipment" (equipamento, aluguel, locação)
-3. Quantidade (número decimal)
-4. Unidade de medida (m, m², m³, kg, un, pc, l, etc.)
-5. Valor Unitário (em R$, converter para número)
-6. Valor Total (em R$, converter para número)
+2. Categoria (campo "category"): "material", "labor" (mão de obra, tarefa, serviço, empreitada), ou "equipment" (equipamento, aluguel, locação)
+3. Família (campo "family"): a SUBCATEGORIA / agrupamento do item dentro da categoria. Ex: "Concreto", "Cimento", "Aço", "Madeira", "Agregados", "Auxiliares", "Locações", "Mão de Obra", "Hidráulica", "Elétrica". Geralmente aparece em uma coluna "FAMÍLIA", "GRUPO", "CATEGORIA" ou similar do orçamento.
+4. Quantidade (número decimal)
+5. Unidade de medida (m, m², m³, kg, un, pc, l, etc.)
+6. Valor Unitário (em R$, converter para número)
+7. Valor Total (em R$, converter para número)
 
-REGRAS DE CLASSIFICAÇÃO:
+REGRAS DE CLASSIFICAÇÃO da CATEGORIA:
 - "material": materiais físicos (cimento, areia, tijolo, tubo, fio, etc.)
 - "labor": serviços executados por pessoas (mão de obra, tarefa, instalação, montagem, assentamento, empreitada, serviço de pedreiro, etc.)
-- "equipment": equipamentos alugados ou próprios (betoneira, andaime, escora, aluguel de...)
+- "equipment": equipamentos alugados ou próprios (betoneira, andaime, escora, locação de placa vibratória, locação de retro-escavadeira, aluguel de...)
+
+REGRAS PARA FAMÍLIA:
+- Se o documento tiver uma coluna explícita de "FAMÍLIA" ou "GRUPO", use exatamente esse valor (com a primeira letra maiúscula).
+- Caso contrário, infira pela natureza do material (Concreto, Cimento, Aço, Madeira, Agregados, Hidráulica, Elétrica, Pintura, Esquadrias, Cobertura, Auxiliares, Locações, Mão de Obra...).
+${familyNames.length > 0 ? `- PRIORIZE reutilizar estas famílias já cadastradas (combine usando essa grafia exata quando o significado for o mesmo): ${familyNames.join(", ")}` : ''}
+- Para itens "labor" use por padrão a família "Mão de Obra" (a menos que o documento informe outra).
+- Para itens "equipment" use por padrão a família "Locações" (a menos que o documento informe outra).
+- NUNCA deixe family vazio. Se realmente não conseguir classificar, use "Geral".
 
 IMPORTANTE:
-- Extraia ABSOLUTAMENTE TODOS os itens linha por linha
+- Extraia ABSOLUTAMENTE TODOS os itens linha por linha (incluindo cabeçalhos de seção como "RADIER", "LOCAÇÃO DE OBRA" — esses são apenas seções, não devem virar itens; apenas extraia LINHAS DE INSUMO/SERVIÇO com quantidade e valor).
 - Converta valores monetários para número (ex: "R$ 1.000,00" -> 1000.00)
 - Se quantidade não estiver clara, use 1
 - Se valor não estiver claro, use 0
@@ -72,7 +84,7 @@ ${inputsContext ? `\nCONTEXTO: Alguns insumos já cadastrados no sistema para re
 
 Responda APENAS com JSON válido, SEM markdown, SEM \`\`\`json, SEM explicações.
 O formato deve ser exatamente:
-{"items":[{"name":"Nome do item","category":"material","quantity":1.5,"unit":"m²","unitValue":25.00,"totalValue":37.50}],"success":true,"message":"X itens extraídos"}`;
+{"items":[{"name":"Concreto usinado, Fck 25 MPa","category":"material","family":"Concreto","quantity":7.8,"unit":"m³","unitValue":622.50,"totalValue":4855.50}],"success":true,"message":"X itens extraídos"}`;
 
     console.log("Calling Lovable AI to parse budget items...");
 
@@ -161,9 +173,18 @@ O formato deve ser exatamente:
     if (parseResult.items && Array.isArray(parseResult.items)) {
       for (const item of parseResult.items) {
         if (item.name && typeof item.name === 'string' && item.name.trim()) {
+          const category = ["material", "labor", "equipment"].includes(item.category) ? item.category : "material";
+          const rawFamily = (item as any).family;
+          let family = typeof rawFamily === 'string' ? rawFamily.trim() : '';
+          if (!family) {
+            family = category === 'labor' ? 'Mão de Obra'
+                   : category === 'equipment' ? 'Locações'
+                   : 'Geral';
+          }
           validatedItems.push({
             name: item.name.trim(),
-            category: ["material", "labor", "equipment"].includes(item.category) ? item.category : "material",
+            category,
+            family,
             quantity: typeof item.quantity === "number" ? item.quantity : parseFloat(item.quantity) || 1,
             unit: item.unit || "un",
             unitValue: typeof item.unitValue === "number" ? item.unitValue : parseFloat(item.unitValue) || 0,

@@ -34,6 +34,8 @@ interface ExistingInput {
 interface ExtractedItem {
   name: string;
   category: 'material' | 'labor' | 'equipment';
+  /** Family name as extracted by AI (raw, may be new) */
+  extractedFamily?: string;
   quantity: number;
   unit: string;
   unitValue: number;
@@ -46,9 +48,11 @@ interface ExtractedItem {
   matchedInputValue?: number;
   matchedInputFamily?: string;
   matchConfidence: 'exact' | 'high' | 'medium' | 'low' | 'none';
-  // For creating new input
+  // For creating new input — user-selected family for the new cadastro
   createAsNewInput?: boolean;
   newInputFamily?: string;
+  /** True when newInputFamily does not exist in families list (will be created on import) */
+  isNewFamily?: boolean;
 }
 
 interface ImportBudgetItemsDialogProps {
@@ -186,7 +190,8 @@ export function ImportBudgetItemsDialog({
       const { data, error } = await supabase.functions.invoke('parse-budget-items', {
         body: {
           fileBase64,
-          existingInputs: existingInputs.slice(0, 100).map(i => ({ name: i.name, category: i.category }))
+          existingInputs: existingInputs.slice(0, 100).map(i => ({ name: i.name, category: i.category })),
+          existingFamilies: families.map(f => ({ name: f.name }))
         }
       });
 
@@ -197,12 +202,38 @@ export function ImportBudgetItemsDialog({
         return;
       }
 
+      // Helper: match family name to existing family (case-insensitive, accent-insensitive)
+      const findFamilyByName = (name?: string) => {
+        if (!name) return undefined;
+        const target = normalize(name);
+        return families.find(f => normalize(f.name) === target);
+      };
+
       // Process items and find matches
       const itemsWithMatching: ExtractedItem[] = data.items.map((item: any) => {
         const match = findMatchingInput(item.name, item.category);
-        
+        const extractedFamilyRaw = typeof item.family === 'string' ? item.family.trim() : '';
+        const matchedFamily = findFamilyByName(extractedFamilyRaw);
+
+        // Default family for the new cadastro:
+        //  1) family inherited from matched input (when linked)
+        //  2) family extracted by AI (matched to existing family)
+        //  3) AI-extracted name as a NEW family (will be created on import)
+        //  4) sensible default by category
+        const defaultByCategory = item.category === 'labor' ? 'Mão de Obra'
+          : item.category === 'equipment' ? 'Locações'
+          : (families[0]?.name || 'Geral');
+
+        const newInputFamily = match.input?.material_family_name
+          || matchedFamily?.name
+          || extractedFamilyRaw
+          || defaultByCategory;
+
+        const isNewFamily = !!extractedFamilyRaw && !matchedFamily && !match.input?.material_family_name;
+
         return {
           ...item,
+          extractedFamily: extractedFamilyRaw || undefined,
           selected: true,
           matchedInputId: match.input?.id,
           matchedInputName: match.input?.name,
@@ -211,7 +242,8 @@ export function ImportBudgetItemsDialog({
           matchedInputFamily: match.input?.material_family_name,
           matchConfidence: match.confidence,
           createAsNewInput: match.confidence === 'none',
-          newInputFamily: families[0]?.name || 'Geral'
+          newInputFamily,
+          isNewFamily,
         };
       });
 
@@ -304,14 +336,36 @@ export function ImportBudgetItemsDialog({
     setIsImporting(true);
 
     try {
-      // Create new inputs for items marked as createAsNewInput
+      // 1) Create any new families chosen by the user that don't exist yet
+      const familyMap: Record<string, string> = {};
+      families.forEach(f => { familyMap[normalize(f.name)] = f.id; });
+
+      const newFamilyNames = Array.from(new Set(
+        selectedItems
+          .map(i => (i.newInputFamily || '').trim())
+          .filter(name => name && !familyMap[normalize(name)])
+      ));
+
+      let newFamiliesCreated = 0;
+      for (const familyName of newFamilyNames) {
+        const { data: newFamily, error } = await supabase
+          .from('material_families')
+          .insert({ project_id: projectId, company_id: companyId!, name: familyName, color: '#3b82f6' })
+          .select()
+          .single();
+        if (!error && newFamily) {
+          familyMap[normalize(newFamily.name)] = newFamily.id;
+          newFamiliesCreated += 1;
+        }
+      }
+
+      // 2) Create new inputs for items marked as createAsNewInput
       const newInputsToCreate = selectedItems.filter(i => i.createAsNewInput && !i.matchedInputId);
-      
       const createdInputsMap: Record<string, string> = {};
-      
+
       for (const item of newInputsToCreate) {
-        const familyId = families.find(f => f.name === item.newInputFamily)?.id || null;
-        
+        const familyId = familyMap[normalize(item.newInputFamily || '')] || null;
+
         const { data: newInput, error } = await supabase
           .from('inputs')
           .insert({
@@ -326,30 +380,33 @@ export function ImportBudgetItemsDialog({
           })
           .select()
           .single();
-        
         if (!error && newInput) {
           createdInputsMap[item.name] = newInput.id;
         }
       }
 
-      // Prepare items for import
-      const itemsToImport = selectedItems.map(item => ({
-        name: item.matchedInputName || item.name,
-        category: item.category,
-        quantity: item.quantity,
-        unit: item.matchedInputUnit || item.unit,
-        unitValue: item.matchedInputValue ?? item.unitValue,
-        materialFamily: item.matchedInputFamily || item.newInputFamily || 'Geral',
-        inputId: item.matchedInputId || createdInputsMap[item.name]
-      }));
+      // 3) Prepare items for import (resolve final family from user selection)
+      const itemsToImport = selectedItems.map(item => {
+        const finalFamily = item.matchedInputId
+          ? (item.matchedInputFamily || item.newInputFamily || 'Geral')
+          : (item.newInputFamily || 'Geral');
+        return {
+          name: item.matchedInputName || item.name,
+          category: item.category,
+          quantity: item.quantity,
+          unit: item.matchedInputUnit || item.unit,
+          unitValue: item.matchedInputValue ?? item.unitValue,
+          materialFamily: finalFamily,
+          inputId: item.matchedInputId || createdInputsMap[item.name],
+        };
+      });
 
       onImport(itemsToImport);
 
       const newInputsCount = Object.keys(createdInputsMap).length;
       let message = `${selectedItems.length} itens importados!`;
-      if (newInputsCount > 0) {
-        message += ` ${newInputsCount} novo(s) insumo(s) cadastrado(s).`;
-      }
+      if (newInputsCount > 0) message += ` ${newInputsCount} novo(s) insumo(s) cadastrado(s).`;
+      if (newFamiliesCreated > 0) message += ` ${newFamiliesCreated} nova(s) família(s) criada(s).`;
       toast.success(message);
       handleClose();
     } catch (error) {
@@ -468,6 +525,7 @@ export function ImportBudgetItemsDialog({
                     <TableHead className="w-10"></TableHead>
                     <TableHead className="w-[280px]">Item Extraído</TableHead>
                     <TableHead className="w-[200px]">Vinculação</TableHead>
+                    <TableHead className="w-[170px]">Família (pré-cadastro)</TableHead>
                     <TableHead className="w-20">Qtd</TableHead>
                     <TableHead className="w-16">Un</TableHead>
                     <TableHead className="w-24">V. Unit</TableHead>
