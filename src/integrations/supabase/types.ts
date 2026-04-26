@@ -8497,7 +8497,9 @@ export type Database = {
           scope_name: string
           scope_order: number
           status: string
+          unit_label: string | null
           unit_revenue_value: number
+          unit_symbol: string | null
           updated_at: string
         }
         Insert: {
@@ -8515,7 +8517,9 @@ export type Database = {
           scope_name: string
           scope_order?: number
           status?: string
+          unit_label?: string | null
           unit_revenue_value?: number
+          unit_symbol?: string | null
           updated_at?: string
         }
         Update: {
@@ -8533,7 +8537,9 @@ export type Database = {
           scope_name?: string
           scope_order?: number
           status?: string
+          unit_label?: string | null
           unit_revenue_value?: number
+          unit_symbol?: string | null
           updated_at?: string
         }
         Relationships: [
