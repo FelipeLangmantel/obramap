@@ -402,19 +402,48 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
 
   const handleAddScope = () => {
     if (newScope && newScope.name.trim() && newScope.weight) {
-      confirmOrExecute(() => {
-        addScope(newScope.macroId, newScope.name.trim(), parseFloat(newScope.weight) || 1);
+      const captured = newScope;
+      confirmOrExecute(async () => {
+        await addScope(captured.macroId, captured.name.trim(), parseFloat(captured.weight) || 1);
+        // Após criação, persiste unidade se informada — busca scope_id pelo nome (mais recente)
+        if (captured.unit_symbol || captured.unit_label) {
+          // pequeno delay para o RPC sincronizar contract services
+          setTimeout(async () => {
+            const { data } = await supabase
+              .from("project_contract_services")
+              .select("scope_id, scope_name")
+              .eq("project_id", currentProject.id)
+              .eq("scope_name", captured.name.trim())
+              .order("created_at", { ascending: false })
+              .limit(1);
+            if (data && data[0]?.scope_id) {
+              await persistScopeUnit(data[0].scope_id, captured.unit_label, captured.unit_symbol);
+            }
+          }, 500);
+        }
         setNewScope(null);
       });
     }
   };
 
-  const handleUpdateScope = () => {
+  const handleUpdateScope = async () => {
     if (editingScope) {
-      updateScope(editingScope.macroId, editingScope.scope.id, {
+      await updateScope(editingScope.macroId, editingScope.scope.id, {
         name: editingScope.scope.name,
         weight: editingScope.scope.weight,
       });
+      // Persiste unidade alterada (se diferente do atual)
+      const current = scopeUnits[editingScope.scope.id];
+      if (
+        editingScope.unit_label !== (current?.unit_label || "") ||
+        editingScope.unit_symbol !== (current?.unit_symbol || "")
+      ) {
+        await persistScopeUnit(
+          editingScope.scope.id,
+          editingScope.unit_label,
+          editingScope.unit_symbol
+        );
+      }
       setEditingScope(null);
     }
   };
