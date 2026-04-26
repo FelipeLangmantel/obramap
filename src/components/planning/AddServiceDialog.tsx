@@ -16,9 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { UnitPresetSelector } from "@/components/shared/UnitPresetSelector";
 import { ServiceCapacityEditor } from "@/components/planning/ServiceCapacityEditor";
 import { isPhysicalUnit } from "@/hooks/useServiceCapacities";
@@ -91,6 +92,14 @@ export function AddServiceDialog({
     symbol: string;
   } | null>(null);
   const [totalHouses, setTotalHouses] = useState<number>(0);
+  const [serviceProductivity, setServiceProductivity] = useState<{
+    productivity_value: number;
+    productivity_unit: string;
+    default_team_count: number;
+    professionals_per_team: number;
+    helpers_per_team: number;
+  } | null>(null);
+  const [productivityChecked, setProductivityChecked] = useState(false);
 
   const isEditing = !!existingService;
 
@@ -160,8 +169,65 @@ export function AddServiceDialog({
         setUnitLabel("");
         setUnitSymbol("");
       }
+      setServiceProductivity(null);
+      setProductivityChecked(false);
     }
   }, [open, existingService]);
+
+  // Carrega a produtividade configurada do serviço escolhido (project_service_productivity)
+  // e pré-popula equipes + produtividade. Elimina o sintoma de capacidade negativa
+  // causado por valores zerados quando o usuário ainda não cadastrou nada.
+  useEffect(() => {
+    let cancelled = false;
+    const loadProductivity = async () => {
+      if (!projectId || !selectedScope) {
+        setServiceProductivity(null);
+        setProductivityChecked(false);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from("project_service_productivity" as any)
+          .select(
+            "productivity_value, productivity_unit, default_team_count, professionals_per_team, helpers_per_team"
+          )
+          .eq("project_id", projectId)
+          .eq("scope_id", selectedScope)
+          .eq("is_active", true)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error) throw error;
+
+        if (data) {
+          const prod = data as any;
+          setServiceProductivity({
+            productivity_value: Number(prod.productivity_value) || 0,
+            productivity_unit: prod.productivity_unit || "",
+            default_team_count: Number(prod.default_team_count) || 1,
+            professionals_per_team: Number(prod.professionals_per_team) || 0,
+            helpers_per_team: Number(prod.helpers_per_team) || 0,
+          });
+          // Só pré-popula em modo criação e quando os campos estão no default
+          if (!isEditing) {
+            setTeamCount((curr) => (curr <= 1 ? Number(prod.default_team_count) || 1 : curr));
+            setProductivityPerTeam((curr) =>
+              curr <= 0 ? Number(prod.productivity_value) || 0 : curr
+            );
+          }
+        } else {
+          setServiceProductivity(null);
+        }
+        setProductivityChecked(true);
+      } catch (err) {
+        console.error("[AddServiceDialog] loadProductivity", err);
+        if (!cancelled) setProductivityChecked(true);
+      }
+    };
+    loadProductivity();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, selectedScope, isEditing]);
 
   // Get unique macros
   const uniqueMacros = contractServices.reduce((acc, service) => {
@@ -341,6 +407,39 @@ export function AddServiceDialog({
                     </span>
                   </div>
                 </div>
+              )}
+
+              {/* Aviso: serviço sem produtividade configurada */}
+              {selectedScope && productivityChecked && !serviceProductivity && (
+                <Alert variant="default" className="border-amber-300 bg-amber-50">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertTitle className="text-amber-900 text-sm">
+                    Produtividade não configurada
+                  </AlertTitle>
+                  <AlertDescription className="text-xs text-amber-800">
+                    Este serviço ainda não tem produtividade e equipe definidas em{" "}
+                    <strong>Produtividade &amp; Equipes</strong>. Sem isso, o sistema usa
+                    valores zerados — o que faz o cálculo de capacidade ficar negativo.
+                    Configure antes para que o planejamento traga os valores prontos.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Info: serviço com produtividade configurada (origem dos defaults) */}
+              {selectedScope && serviceProductivity && (
+                <Alert className="border-emerald-300 bg-emerald-50">
+                  <Users className="h-4 w-4 text-emerald-700" />
+                  <AlertTitle className="text-emerald-900 text-sm">
+                    Produtividade carregada
+                  </AlertTitle>
+                  <AlertDescription className="text-xs text-emerald-800">
+                    Valores sugeridos a partir de <strong>Produtividade &amp; Equipes</strong>:{" "}
+                    {serviceProductivity.default_team_count} equipe(s) ×{" "}
+                    {serviceProductivity.productivity_value}{" "}
+                    {serviceProductivity.productivity_unit}. Você pode ajustar abaixo se
+                    este período precisar de algo diferente.
+                  </AlertDescription>
+                </Alert>
               )}
 
               {/* Unidade de produção (preset ou personalizada) */}
