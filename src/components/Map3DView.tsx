@@ -37,10 +37,10 @@ interface HouseMarker {
 }
 
 // GLTF model - calls onLoaded after it's in the scene
-function GLTFModel({ url, onLoaded, onSceneReady }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void }) {
+function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D) => void }) {
   const { scene } = useGLTF(url);
   const calledRef = useRef(false);
-  
+
   useEffect(() => {
     if (scene && !calledRef.current) {
       calledRef.current = true;
@@ -52,12 +52,21 @@ function GLTFModel({ url, onLoaded, onSceneReady }: { url: string; onLoaded: () 
       });
     }
   }, [scene, onLoaded, onSceneReady]);
-  
-  return <primitive object={scene} />;
+
+  return (
+    <primitive
+      object={scene}
+      onClick={(e: any) => {
+        if (!onMeshClick) return;
+        e.stopPropagation();
+        if (e.object) onMeshClick(e.object);
+      }}
+    />
+  );
 }
 
 // OBJ model - calls onLoaded after it's in the scene
-function OBJModel({ url, mtlUrl, onLoaded, onSceneReady }: { url: string; mtlUrl?: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void }) {
+function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick }: { url: string; mtlUrl?: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D) => void }) {
   const materials = mtlUrl ? useLoader(MTLLoader, mtlUrl) : null;
   const obj = useLoader(OBJLoader, url, (loader) => {
     if (materials) { materials.preload(); loader.setMaterials(materials); }
@@ -72,7 +81,16 @@ function OBJModel({ url, mtlUrl, onLoaded, onSceneReady }: { url: string; mtlUrl
     }
   }, [obj, onLoaded, onSceneReady]);
 
-  return <primitive object={obj} />;
+  return (
+    <primitive
+      object={obj}
+      onClick={(e: any) => {
+        if (!onMeshClick) return;
+        e.stopPropagation();
+        if (e.object) onMeshClick(e.object);
+      }}
+    />
+  );
 }
 
 // House marker
