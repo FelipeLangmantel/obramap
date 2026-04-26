@@ -309,9 +309,11 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       }
 
       try {
+        // ⚡ Carrega APENAS metadados dos projetos (sem houses) — houses só são
+        // hidratadas para o currentProjectId no useEffect abaixo.
         const { data: projectsData, error: projectsError } = await supabase
           .from("projects")
-          .select("*")
+          .select("id, name, location, contractor, start_date, expected_end_date, total_houses, unit_size, project_type, macros_template, created_at, setup_complete, setup_step, legend_follow_macros, custom_legend_items, display_order, weight_mode, logo_url, company_id")
           .order("display_order", { ascending: true });
 
         if (projectsError) {
