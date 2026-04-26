@@ -18,8 +18,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PlanningPeriod, PeriodService } from "@/hooks/usePeriodPlanning";
+import { AddServiceDialog } from "@/components/planning/AddServiceDialog";
 
 interface PeriodServicesDialogProps {
   open: boolean;
@@ -42,10 +45,16 @@ export function PeriodServicesDialog({
   services,
   isLoading,
   canEdit,
+  projectId,
+  companyId,
+  onRefresh,
+  onDeleteService,
   onUpdateHouses,
 }: PeriodServicesDialogProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [addServiceOpen, setAddServiceOpen] = useState(false);
+  const [editingService, setEditingService] = useState<any>(null);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -121,21 +130,35 @@ export function PeriodServicesDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[98vw] sm:max-w-[95vw] w-full max-h-[95vh] sm:max-h-[92vh] overflow-hidden flex flex-col p-3 sm:p-6">
         <DialogHeader className="pb-1">
-          <DialogTitle className="text-base sm:text-lg">
-            {period?.name || `Medição ${period?.period_number}`}
-          </DialogTitle>
-          {period && (
-            <p className="text-xs sm:text-sm text-muted-foreground">
-              {formatDateRange(period.start_date, period.end_date)}
-              {period.status !== "draft" && (
-                <Badge variant="secondary" className="ml-2 text-[10px] sm:text-xs">
-                  {period.status === "approved" ? "Aprovado" : 
-                   period.status === "released_to_weekly" ? "Liberado" : 
-                   period.status === "closed" ? "Fechado" : "Rascunho"}
-                </Badge>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="text-base sm:text-lg">
+                {period?.name || `Medição ${period?.period_number}`}
+              </DialogTitle>
+              {period && (
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {formatDateRange(period.start_date, period.end_date)}
+                  {period.status !== "draft" && (
+                    <Badge variant="secondary" className="ml-2 text-[10px] sm:text-xs">
+                      {period.status === "approved" ? "Aprovado" : 
+                       period.status === "released_to_weekly" ? "Liberado" : 
+                       period.status === "closed" ? "Fechado" : "Rascunho"}
+                    </Badge>
+                  )}
+                </p>
               )}
-            </p>
-          )}
+            </div>
+            {isEditable && (
+              <Button
+                size="sm"
+                onClick={() => { setEditingService(null); setAddServiceOpen(true); }}
+                className="gap-1.5 shrink-0"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Adicionar Serviço</span>
+              </Button>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="flex-1 overflow-auto">
@@ -248,6 +271,18 @@ export function PeriodServicesDialog({
           )}
         </div>
       </DialogContent>
+
+      {period && (
+        <AddServiceDialog
+          open={addServiceOpen}
+          onOpenChange={setAddServiceOpen}
+          projectId={projectId}
+          periodId={period.id}
+          companyId={companyId}
+          existingService={editingService}
+          onSave={() => { setAddServiceOpen(false); onRefresh(); }}
+        />
+      )}
     </Dialog>
   );
 }

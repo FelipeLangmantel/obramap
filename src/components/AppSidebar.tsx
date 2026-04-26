@@ -84,6 +84,7 @@ import { NewProjectDialog } from "@/components/NewProjectDialog";
 import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import { SettingsDialog } from "@/components/SettingsDialog";
+import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
 import obraMapLogoDark from "@/assets/obramap-logo-new.png";
 import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 
@@ -159,6 +160,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   
   const [usersDialogOpen, setUsersDialogOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [projectSettingsOpen, setProjectSettingsOpen] = useState(false);
   const [projectsListOpen, setProjectsListOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [linkPortfolioOpen, setLinkPortfolioOpen] = useState(false);
@@ -546,6 +548,17 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
+                {currentProject && canEdit && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setProjectSettingsOpen(true)}
+                      className="w-full justify-start gap-3 px-3 py-3 rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-150"
+                    >
+                      <Building2 className="h-5 w-5 shrink-0" />
+                      <span className="text-sm font-medium">Configurações da Obra</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     onClick={() => setSettingsDialogOpen(true)}
@@ -619,6 +632,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       </Sidebar>
 
       <SettingsDialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen} />
+      <ProjectSettingsDialog open={projectSettingsOpen} onOpenChange={setProjectSettingsOpen} />
 
       <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
