@@ -856,36 +856,61 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                               }`}
                             >
                               {editingScope?.scope.id === scope.id ? (
-                                <div className="flex gap-2 items-center flex-1">
-                                  <Input
-                                    value={editingScope.scope.name}
-                                    onChange={(e) => setEditingScope({ 
-                                      ...editingScope, 
-                                      scope: { ...editingScope.scope, name: e.target.value } 
-                                    })}
-                                    className="h-8 flex-1"
-                                    placeholder="Nome do serviço"
-                                  />
-                                  <Input
-                                    type="number"
-                                    value={editingScope.scope.weight}
-                                    onChange={(e) => setEditingScope({ 
-                                      ...editingScope, 
-                                      scope: { ...editingScope.scope, weight: parseFloat(e.target.value) || 0 } 
-                                    })}
-                                    onFocus={(e) => e.target.select()}
-                                    className="h-8 w-20"
-                                    placeholder="Peso"
-                                  />
-                                  <Button size="sm" variant="ghost" onClick={handleUpdateScope}>Salvar</Button>
-                                  <Button size="sm" variant="ghost" onClick={() => setEditingScope(null)}>X</Button>
+                                <div className="flex flex-col gap-2 flex-1">
+                                  <div className="flex gap-2 items-center">
+                                    <Input
+                                      value={editingScope.scope.name}
+                                      onChange={(e) => setEditingScope({ 
+                                        ...editingScope, 
+                                        scope: { ...editingScope.scope, name: e.target.value } 
+                                      })}
+                                      className="h-8 flex-1"
+                                      placeholder="Nome do serviço"
+                                    />
+                                    <Input
+                                      type="number"
+                                      value={editingScope.scope.weight}
+                                      onChange={(e) => setEditingScope({ 
+                                        ...editingScope, 
+                                        scope: { ...editingScope.scope, weight: parseFloat(e.target.value) || 0 } 
+                                      })}
+                                      onFocus={(e) => e.target.select()}
+                                      className="h-8 w-20"
+                                      placeholder="Peso"
+                                    />
+                                    <Button size="sm" variant="ghost" onClick={handleUpdateScope}>Salvar</Button>
+                                    <Button size="sm" variant="ghost" onClick={() => setEditingScope(null)}>X</Button>
+                                  </div>
+                                  <div className="px-1">
+                                    <UnitPresetSelector
+                                      compact
+                                      label="Unidade de medida do serviço"
+                                      value={{
+                                        unit_label: editingScope.unit_label,
+                                        unit_symbol: editingScope.unit_symbol,
+                                      }}
+                                      onChange={(v) =>
+                                        setEditingScope({
+                                          ...editingScope,
+                                          unit_label: v.unit_label,
+                                          unit_symbol: v.unit_symbol,
+                                        })
+                                      }
+                                    />
+                                  </div>
                                 </div>
                               ) : (
                                 <>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 flex-wrap">
                                     <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab" />
                                     <span className="text-sm">{scope.name}</span>
                                     <span className="text-xs text-muted-foreground">(Peso: {scope.weight}%)</span>
+                                    {scopeUnits[scope.id]?.unit_symbol && (
+                                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-1">
+                                        <Ruler className="w-2.5 h-2.5" />
+                                        {scopeUnits[scope.id].unit_symbol}
+                                      </Badge>
+                                    )}
                                     {currentProject.weightMode === "automatic" && (
                                       <Badge variant="outline" className="text-[10px] px-1 py-0">
                                         <Lock className="w-2 h-2 mr-0.5" />
@@ -917,7 +942,15 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                                         size="icon" 
                                         variant="ghost" 
                                         className="h-7 w-7"
-                                        onClick={() => setEditingScope({ macroId: macro.id, scope: { ...scope } })}
+                                        onClick={() => {
+                                          const u = scopeUnits[scope.id] || { unit_label: "", unit_symbol: "" };
+                                          setEditingScope({
+                                            macroId: macro.id,
+                                            scope: { ...scope },
+                                            unit_label: u.unit_label,
+                                            unit_symbol: u.unit_symbol,
+                                          });
+                                        }}
                                         disabled={currentProject.weightMode === "automatic"}
                                         title={currentProject.weightMode === "automatic" ? "Pesos bloqueados - modo automático ativo" : "Editar serviço"}
                                       >
