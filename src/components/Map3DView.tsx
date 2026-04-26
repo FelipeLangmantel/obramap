@@ -18,6 +18,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useModelLayers } from "./map3d/useModelLayers";
 import { LayersPanel } from "./map3d/LayersPanel";
 import { LinkLayersDialog } from "./map3d/LinkLayersDialog";
+import { AssignHousePopover } from "./map3d/AssignHousePopover";
+import { useMeshHouseAssignments } from "@/hooks/useMeshHouseAssignments";
 import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDrawer";
 
 interface ModelData {
