@@ -844,8 +844,8 @@ export function BudgetItemsEditor({
       </div>
 
       {/* Items list grouped by family */}
-      <ScrollArea className="flex-1" ref={scrollAreaRef}>
-        <div className="space-y-2 pr-2">
+      <ScrollArea className="flex-1 w-full min-w-0" ref={scrollAreaRef}>
+        <div className="space-y-2 pr-2 min-w-0">
           {Object.entries(itemsByFamily).map(([family, familyItems]) => {
             const isExpanded = expandedFamilies.has(family);
             const familyTotal = familyItems.reduce((sum, i) => sum + i.unitValue * i.quantity, 0);
