@@ -756,6 +756,23 @@ export function Map3DView() {
                 <Layers className="h-4 w-4 mr-1.5" />Camadas ({layerManager.layers.length})
               </Button>
             )}
+            {isAdmin && layerManager.layers.length > 0 && (currentProject?.houses?.length ?? 0) > 0 && (
+              <Button
+                variant={assignMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => { setAssignMode(p => !p); setPickedMesh(null); }}
+                disabled={isLoading}
+                title="Clique nas malhas do modelo para batizar cada casa"
+              >
+                <MousePointerClick className="h-4 w-4 mr-1.5" />
+                {assignMode ? "Sair do modo Atribuir" : "Atribuir Casas"}
+                {meshAssignments.assignments.length > 0 && (
+                  <Badge variant="secondary" className="ml-1.5 h-4 text-[10px] px-1">
+                    {meshAssignments.assignments.length}
+                  </Badge>
+                )}
+              </Button>
+            )}
             {isAdmin && (
               <AlertDialog>
                 <AlertDialogTrigger asChild><Button variant="outline" size="sm" disabled={isLoading}><RotateCcw className="h-4 w-4 mr-1.5" />Resetar Mapa</Button></AlertDialogTrigger>
