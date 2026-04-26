@@ -67,13 +67,15 @@ export function MinhaEmpresaView() {
       return;
     }
     setSaving(true);
-    const { error } = await supabase
+    // Sanitiza CNPJ: remove caracteres extras no fim (pontos órfãos)
+    const cnpjSanitized = form.cnpj.trim().replace(/\.+$/, "");
+    const { data, error } = await supabase
       .from("companies")
       .update({
         name: form.name || form.razao_social,
         razao_social: form.razao_social,
         nome_fantasia: form.nome_fantasia || null,
-        cnpj: form.cnpj,
+        cnpj: cnpjSanitized,
         endereco_rua: form.endereco_rua || null,
         endereco_numero: form.endereco_numero || null,
         endereco_cidade: form.endereco_cidade || null,
@@ -82,12 +84,18 @@ export function MinhaEmpresaView() {
         telefone: form.telefone || null,
         email: form.email || null,
       } as any)
-      .eq("id", company.id);
+      .eq("id", company.id)
+      .select("id");
     setSaving(false);
     if (error) {
       toast.error("Erro ao salvar: " + error.message);
       return;
     }
+    if (!data || data.length === 0) {
+      toast.error("Você não tem permissão para alterar os dados desta empresa. Solicite a um administrador da empresa.");
+      return;
+    }
+    setForm((f) => ({ ...f, cnpj: cnpjSanitized }));
     toast.success("Dados da empresa atualizados.");
     await refreshPermissions();
   };
