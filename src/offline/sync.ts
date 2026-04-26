@@ -86,13 +86,13 @@ async function syncEntry(entry: PendingDiaryEntry): Promise<string | null> {
     return existing.id;
   }
 
+  // `diary_entries` não tem `user_id` nem `data` (a coluna real é `entry_date`,
+  // já presente em `entry.payload`). Mantemos só os campos que existem na tabela.
   const insertPayload = {
     ...entry.payload,
     client_uuid: entry.client_uuid,
     project_id: entry.project_id,
     company_id: entry.company_id,
-    user_id: entry.user_id,
-    data: entry.data,
   };
 
   const { data, error } = await supabase
