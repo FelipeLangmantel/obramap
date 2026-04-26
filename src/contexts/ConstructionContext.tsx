@@ -1319,8 +1319,16 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     });
 
     if (error) {
-      console.error('Error in structure mutation:', error);
-      toast.error("Erro ao aplicar alteração estrutural");
+      console.error('Error in structure mutation:', error.message, error.details, error.hint);
+      // Mensagem específica por tipo de erro para facilitar diagnóstico
+      const msg = error.message?.includes('contract_not_found')
+        ? 'Configure o contrato da obra antes de adicionar etapas.'
+        : error.message?.includes('permission denied')
+        ? 'Sem permissão para alterar estrutura desta obra.'
+        : error.message?.includes('company_id')
+        ? 'Vincule sua empresa antes de configurar etapas (Gerenciamento → Minha Empresa).'
+        : `Erro ao salvar estrutura: ${error.message || 'erro desconhecido'}`;
+      toast.error(msg);
       return false;
     }
 
