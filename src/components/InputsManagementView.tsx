@@ -543,12 +543,12 @@ export function InputsManagementView() {
         <CardContent className="min-w-0 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <div className="flex flex-wrap gap-2 flex-1 min-w-0 w-full sm:w-auto">
-              <div className="relative flex-1 max-w-sm">
+              <div className="relative flex-1 min-w-[160px] sm:max-w-sm">
                 <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
                 <Input placeholder="Buscar por nome ou código..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} className="pl-8" />
               </div>
               <Select value={filterCategory} onValueChange={setFilterCategory}>
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-32 sm:w-40 shrink-0">
                   <SelectValue placeholder="Categoria" />
                 </SelectTrigger>
                 <SelectContent>
