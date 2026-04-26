@@ -61,11 +61,23 @@ export function LayersPanel({
             id="auto-mode"
             checked={autoMode}
             onCheckedChange={onAutoModeChange}
+            disabled={links.length === 0}
           />
           <Label htmlFor="auto-mode" className="text-xs cursor-pointer">
             {autoMode ? "Visão Atual (por produção)" : "Visão Completa"}
           </Label>
         </div>
+        {links.length === 0 && (
+          <p className="text-[11px] text-muted-foreground mt-2 leading-snug">
+            Vincule camadas a serviços para ativar a sincronização automática
+            com o lançamento de produção.
+          </p>
+        )}
+        {links.length > 0 && autoMode && (
+          <p className="text-[11px] text-muted-foreground mt-2 leading-snug">
+            Camadas atualizam em tempo real conforme a obra avança no Diário.
+          </p>
+        )}
       </CardHeader>
       <CardContent className="px-3 pb-3 flex-1 min-h-0 overflow-hidden">
         <div className="h-full overflow-y-auto pr-1" style={{ maxHeight: 'calc(100vh - 16rem)' }}>
