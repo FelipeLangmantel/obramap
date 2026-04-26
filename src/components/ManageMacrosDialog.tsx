@@ -79,8 +79,6 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
     return { macroWeights, overallTotalWeight };
   }, [macrosTemplate]);
 
-  if (!currentProject) return null;
-
   // Carrega unidades configuradas por scope (project_contract_services) ao abrir
   useEffect(() => {
     if (!open || !currentProject) return;
@@ -129,6 +127,9 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
     },
     [currentProject]
   );
+
+  // Early return AFTER all hooks (Rules of Hooks)
+  if (!currentProject) return null;
 
   const needsWeightAdjustment = weightAnalysis.overallTotalWeight !== 100;
 
