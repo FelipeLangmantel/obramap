@@ -11636,6 +11636,10 @@ export type Database = {
         Returns: Json
       }
       calculate_labor_needs: { Args: { p_project_id: string }; Returns: Json }
+      calculate_labor_needs_v2: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       calculate_service_planned_cost: {
         Args: {
           p_company_id: string

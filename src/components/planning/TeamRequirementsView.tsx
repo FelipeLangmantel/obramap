@@ -83,7 +83,7 @@ function exportCsv(data: PeriodTeamRequirements[]) {
 
 export function TeamRequirementsView() {
   const { currentProject } = useConstruction();
-  const { requirements, consolidatedByMacro, loading, refresh } =
+  const { requirements, consolidatedByMacro, consolidatedByRole, loading, refresh } =
     useTeamRequirementsByPeriod(currentProject?.id);
   const [tab, setTab] = useState("by-period");
 
@@ -94,9 +94,18 @@ export function TeamRequirementsView() {
         helpers: acc.helpers + p.totals.helpers,
         people: acc.people + p.totals.people,
         services_missing: acc.services_missing + p.totals.services_missing_productivity,
+        services_missing_team:
+          acc.services_missing_team + p.totals.services_missing_team,
         periods: acc.periods + (p.totals.services > 0 ? 1 : 0),
       }),
-      { professionals: 0, helpers: 0, people: 0, services_missing: 0, periods: 0 }
+      {
+        professionals: 0,
+        helpers: 0,
+        people: 0,
+        services_missing: 0,
+        services_missing_team: 0,
+        periods: 0,
+      }
     );
   }, [requirements]);
 
@@ -143,15 +152,30 @@ export function TeamRequirementsView() {
       </div>
 
       {/* Aviso de dados incompletos */}
-      {grandTotals.services_missing > 0 && (
+      {(grandTotals.services_missing > 0 || grandTotals.services_missing_team > 0) && (
         <Alert className="border-amber-300 bg-amber-50">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
           <AlertTitle className="text-amber-900 text-sm">
-            {grandTotals.services_missing} serviço(s) sem produtividade configurada
+            Configuração incompleta de produtividade
           </AlertTitle>
-          <AlertDescription className="text-xs text-amber-800">
-            Esses serviços aparecem com 0 pessoas no cálculo. Configure em{" "}
-            <strong>Produtividade &amp; Equipes</strong> para que a estimativa fique correta.
+          <AlertDescription className="text-xs text-amber-800 space-y-0.5">
+            {grandTotals.services_missing > 0 && (
+              <p>
+                • <strong>{grandTotals.services_missing}</strong> serviço(s) sem nenhuma
+                produtividade cadastrada — aparecem com 0 pessoas.
+              </p>
+            )}
+            {grandTotals.services_missing_team > 0 && (
+              <p>
+                • <strong>{grandTotals.services_missing_team}</strong> serviço(s) com
+                produtividade mas <em>sem composição detalhada de equipe</em> (não dá para
+                detalhar por profissão).
+              </p>
+            )}
+            <p className="pt-1">
+              Configure em <strong>Produtividade &amp; Equipes</strong> para ver o
+              dimensionamento por função (Pedreiro, Carpinteiro, Auxiliar de Pedreiro etc.).
+            </p>
           </AlertDescription>
         </Alert>
       )}
@@ -198,9 +222,12 @@ export function TeamRequirementsView() {
 
       {/* Tabs de visualização */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
+        <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="by-period">
             <CalendarRange className="h-4 w-4 mr-1.5" /> Por período
+          </TabsTrigger>
+          <TabsTrigger value="by-role">
+            <HardHat className="h-4 w-4 mr-1.5" /> Por profissão
           </TabsTrigger>
           <TabsTrigger value="by-macro">
             <Layers className="h-4 w-4 mr-1.5" /> Pico por etapa
@@ -277,54 +304,87 @@ export function TeamRequirementsView() {
                             </TableHeader>
                             <TableBody>
                               {period.rows.map((r) => (
-                                <TableRow
-                                  key={r.scope_id}
-                                  className={cn(
-                                    !r.has_productivity_config && "bg-amber-50/50"
-                                  )}
-                                >
-                                  <TableCell className="py-1.5">
-                                    <div className="flex items-center gap-2">
-                                      <span
-                                        className="h-2 w-2 rounded-full shrink-0"
-                                        style={{
-                                          backgroundColor: r.macro_color || "#9ca3af",
-                                        }}
-                                      />
-                                      <div className="min-w-0">
-                                        <p className="font-medium leading-tight truncate">
-                                          {r.scope_name}
-                                        </p>
-                                        <p className="text-[10px] text-muted-foreground leading-tight">
-                                          {r.macro_name}
-                                          {!r.has_productivity_config && (
-                                            <span className="text-amber-700 ml-1">
-                                              • produtividade não configurada
-                                            </span>
-                                          )}
-                                        </p>
+                                <>
+                                  <TableRow
+                                    key={r.scope_id}
+                                    className={cn(
+                                      !r.has_productivity_config && "bg-amber-50/50"
+                                    )}
+                                  >
+                                    <TableCell className="py-1.5">
+                                      <div className="flex items-center gap-2">
+                                        <span
+                                          className="h-2 w-2 rounded-full shrink-0"
+                                          style={{
+                                            backgroundColor: r.macro_color || "#9ca3af",
+                                          }}
+                                        />
+                                        <div className="min-w-0">
+                                          <p className="font-medium leading-tight truncate">
+                                            {r.scope_name}
+                                          </p>
+                                          <p className="text-[10px] text-muted-foreground leading-tight">
+                                            {r.macro_name}
+                                            {!r.has_productivity_config && (
+                                              <span className="text-amber-700 ml-1">
+                                                • produtividade não configurada
+                                              </span>
+                                            )}
+                                            {r.has_productivity_config &&
+                                              !r.has_team_composition && (
+                                                <span className="text-amber-700 ml-1">
+                                                  • sem composição de profissões
+                                                </span>
+                                              )}
+                                          </p>
+                                        </div>
                                       </div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="text-right py-1.5 font-mono">
-                                    {r.team_count}
-                                  </TableCell>
-                                  <TableCell className="text-right py-1.5 hidden sm:table-cell font-mono">
-                                    {r.professionals_per_team}
-                                  </TableCell>
-                                  <TableCell className="text-right py-1.5 hidden sm:table-cell font-mono">
-                                    {r.helpers_per_team}
-                                  </TableCell>
-                                  <TableCell className="text-right py-1.5 font-mono">
-                                    {r.total_professionals}
-                                  </TableCell>
-                                  <TableCell className="text-right py-1.5 font-mono">
-                                    {r.total_helpers}
-                                  </TableCell>
-                                  <TableCell className="text-right py-1.5 font-mono font-semibold">
-                                    {r.total_people}
-                                  </TableCell>
-                                </TableRow>
+                                    </TableCell>
+                                    <TableCell className="text-right py-1.5 font-mono">
+                                      {r.team_count}
+                                    </TableCell>
+                                    <TableCell className="text-right py-1.5 hidden sm:table-cell font-mono">
+                                      {r.professionals_per_team}
+                                    </TableCell>
+                                    <TableCell className="text-right py-1.5 hidden sm:table-cell font-mono">
+                                      {r.helpers_per_team}
+                                    </TableCell>
+                                    <TableCell className="text-right py-1.5 font-mono">
+                                      {r.total_professionals}
+                                    </TableCell>
+                                    <TableCell className="text-right py-1.5 font-mono">
+                                      {r.total_helpers}
+                                    </TableCell>
+                                    <TableCell className="text-right py-1.5 font-mono font-semibold">
+                                      {r.total_people}
+                                    </TableCell>
+                                  </TableRow>
+                                  {r.role_breakdown.length > 0 && (
+                                    <TableRow
+                                      key={`${r.scope_id}-roles`}
+                                      className="bg-muted/10 hover:bg-muted/10"
+                                    >
+                                      <TableCell colSpan={7} className="py-1.5">
+                                        <div className="flex flex-wrap gap-1.5 pl-4">
+                                          {r.role_breakdown.map((b, i) => (
+                                            <Badge
+                                              key={i}
+                                              variant={
+                                                b.role_type === "professional"
+                                                  ? "secondary"
+                                                  : "outline"
+                                              }
+                                              className="text-[10px] font-mono"
+                                              title={`${b.qty_per_team}/equipe × ${r.team_count} equipes`}
+                                            >
+                                              {b.role_name}: <strong className="ml-1">{b.total}</strong>
+                                            </Badge>
+                                          ))}
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                </>
                               ))}
                               <TableRow className="bg-muted/30 font-semibold">
                                 <TableCell className="py-1.5">Total do período</TableCell>
@@ -351,6 +411,61 @@ export function TeamRequirementsView() {
               </div>
             </ScrollArea>
           )}
+        </TabsContent>
+
+        {/* === Por profissão === */}
+        <TabsContent value="by-role" className="mt-3">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Pico por profissão</CardTitle>
+              <CardDescription className="text-xs">
+                Quantas pessoas de cada profissão a obra precisa simultaneamente, considerando
+                o pico em qualquer período.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {consolidatedByRole.length === 0 ? (
+                <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+                  <HardHat className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                  <p>Nenhuma composição de equipe configurada.</p>
+                  <p className="text-xs mt-1">
+                    Vá em <strong>Produtividade &amp; Equipes</strong> e adicione profissões
+                    (Pedreiro, Carpinteiro etc.) à composição de cada serviço.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-md border overflow-x-auto">
+                  <Table className="text-sm">
+                    <TableHeader className="bg-muted/40">
+                      <TableRow>
+                        <TableHead>Profissão</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead className="text-right">Pico (pessoas)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {consolidatedByRole.map((r) => (
+                        <TableRow key={r.role_name}>
+                          <TableCell className="font-medium">{r.role_name}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={r.role_type === "professional" ? "secondary" : "outline"}
+                              className="text-[10px]"
+                            >
+                              {r.role_type === "professional" ? "Profissional" : "Auxiliar"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-semibold">
+                            {r.total}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* === Pico por etapa === */}
