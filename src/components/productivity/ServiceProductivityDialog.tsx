@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ServiceProductivity } from '@/hooks/useServiceProductivity';
 import {
   Dialog,
@@ -18,7 +18,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Users, Calculator } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Users, Calculator, Ruler, Info } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useConstruction } from '@/contexts/ConstructionContext';
+import { isPhysicalUnit } from '@/hooks/useServiceCapacities';
 
 interface Props {
   service: {
@@ -43,18 +47,115 @@ interface Props {
   }) => Promise<any>;
 }
 
+/**
+ * Resolve a unidade base de produtividade para um serviço.
+ * Prioridade:
+ *   1. Unidade definida no serviço (project_contract_services.unit_symbol)
+ *   2. Unidade default da obra (projects.default_unit_symbol)
+ *   3. Fallback "casa" (sistema legado: 1 unidade = 1 casa)
+ */
+function buildProductivityUnit(symbol: string | null | undefined, label: string | null | undefined) {
+  const sym = (symbol || '').trim();
+  const lbl = (label || '').trim();
+
+  if (!sym) {
+    // Sem unidade configurada → usa modelo "casa" (legado)
+    return {
+      symbol: 'casa',
+      label: 'Casa',
+      perDay: 'casas/dia',
+      perWeek: 'casas/semana',
+      isPhysical: false,
+    };
+  }
+
+  // Unidade física → produtividade diária faz mais sentido
+  if (isPhysicalUnit(sym)) {
+    return {
+      symbol: sym,
+      label: lbl || sym,
+      perDay: `${sym}/dia`,
+      perWeek: `${sym}/semana`,
+      isPhysical: true,
+    };
+  }
+
+  // Unidade discreta (un, peça, etc.)
+  return {
+    symbol: sym,
+    label: lbl || sym,
+    perDay: `${sym}/dia`,
+    perWeek: `${sym}/semana`,
+    isPhysical: false,
+  };
+}
+
 export function ServiceProductivityDialog({ service, existingProductivity, onClose, onSave }: Props) {
+  const { currentProject } = useConstruction();
   const [isSaving, setIsSaving] = useState(false);
+  const [unitInfo, setUnitInfo] = useState(buildProductivityUnit(null, null));
+  const [unitLoaded, setUnitLoaded] = useState(false);
 
   const [formData, setFormData] = useState({
     productivity_value: existingProductivity?.productivity_value || 1,
-    productivity_unit: existingProductivity?.productivity_unit || 'casas/semana',
+    productivity_unit: existingProductivity?.productivity_unit || '',
     working_days_per_week: existingProductivity?.working_days_per_week || 5,
     default_team_count: existingProductivity?.default_team_count || 1,
     professionals_per_team: existingProductivity?.professionals_per_team || 1,
     helpers_per_team: existingProductivity?.helpers_per_team || 0,
     notes: existingProductivity?.notes || '',
   });
+
+  // Resolve unidade do serviço (contrato → projeto → fallback)
+  useEffect(() => {
+    let cancelled = false;
+    const resolveUnit = async () => {
+      if (!currentProject?.id) return;
+      try {
+        // 1) Unidade do serviço no contrato
+        const { data: contractRow } = await supabase
+          .from('project_contract_services')
+          .select('unit_label, unit_symbol')
+          .eq('project_id', currentProject.id)
+          .eq('scope_id', service.scopeId)
+          .maybeSingle();
+
+        let symbol = contractRow?.unit_symbol || null;
+        let label = contractRow?.unit_label || null;
+
+        // 2) Fallback: unidade default da obra
+        if (!symbol) {
+          const { data: projRow } = await supabase
+            .from('projects')
+            .select('default_unit_label, default_unit_symbol')
+            .eq('id', currentProject.id)
+            .maybeSingle();
+          symbol = projRow?.default_unit_symbol || null;
+          label = projRow?.default_unit_label || null;
+        }
+
+        if (cancelled) return;
+        const info = buildProductivityUnit(symbol, label);
+        setUnitInfo(info);
+
+        // Se ainda não há produtividade configurada, sugere unidade base "perWeek"
+        if (!existingProductivity) {
+          setFormData((prev) => ({
+            ...prev,
+            productivity_unit: prev.productivity_unit || info.perWeek,
+          }));
+        }
+        setUnitLoaded(true);
+      } catch (err) {
+        console.error('[ServiceProductivityDialog] resolveUnit', err);
+        setUnitLoaded(true);
+      }
+    };
+    resolveUnit();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentProject?.id, service.scopeId, existingProductivity]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -70,8 +171,15 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
     }
   };
 
-  const totalPeople = formData.default_team_count * (formData.professionals_per_team + formData.helpers_per_team);
+  const totalPeople =
+    formData.default_team_count * (formData.professionals_per_team + formData.helpers_per_team);
   const totalCapacity = formData.default_team_count * formData.productivity_value;
+
+  // Opções de unidade derivadas da unidade-base do serviço
+  const unitOptions = [
+    { value: unitInfo.perWeek, label: unitInfo.perWeek },
+    { value: unitInfo.perDay, label: unitInfo.perDay },
+  ];
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -87,6 +195,24 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
         </DialogHeader>
 
         <div className="space-y-5">
+          {/* Unidade base do serviço */}
+          <div className="rounded-lg border bg-muted/40 p-3 flex items-center gap-2">
+            <Ruler className="h-4 w-4 text-primary shrink-0" />
+            <div className="flex-1 text-sm">
+              <span className="text-muted-foreground">Unidade base do serviço:</span>{' '}
+              <Badge variant="secondary" className="font-mono ml-1">
+                {unitInfo.symbol}
+              </Badge>
+              {unitInfo.symbol === 'casa' && (
+                <p className="text-[11px] text-muted-foreground mt-1 flex items-start gap-1">
+                  <Info className="h-3 w-3 mt-0.5 shrink-0" />
+                  Esta obra não tem tipologia/unidade cadastrada — o sistema adota{' '}
+                  <strong>1 casa</strong> como unidade padrão.
+                </p>
+              )}
+            </div>
+          </div>
+
           {/* Produtividade */}
           <div className="space-y-3 rounded-lg border border-border p-4">
             <h4 className="font-semibold text-sm flex items-center gap-2">
@@ -111,15 +237,17 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
                 <Select
                   value={formData.productivity_unit}
                   onValueChange={(value) => setFormData({ ...formData, productivity_unit: value })}
+                  disabled={!unitLoaded}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder={unitLoaded ? 'Selecione...' : 'Carregando...'} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="casas/semana">casas/semana</SelectItem>
-                    <SelectItem value="casas/dia">casas/dia</SelectItem>
-                    <SelectItem value="m²/dia">m²/dia</SelectItem>
-                    <SelectItem value="unidades/dia">unidades/dia</SelectItem>
+                    {unitOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -216,7 +344,7 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
           <Button variant="outline" onClick={onClose} disabled={isSaving}>
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={isSaving}>
+          <Button onClick={handleSave} disabled={isSaving || !unitLoaded}>
             {isSaving ? 'Salvando...' : 'Salvar'}
           </Button>
         </div>
