@@ -83,7 +83,7 @@ function exportCsv(data: PeriodTeamRequirements[]) {
 
 export function TeamRequirementsView() {
   const { currentProject } = useConstruction();
-  const { requirements, consolidatedByMacro, loading, refresh } =
+  const { requirements, consolidatedByMacro, consolidatedByRole, loading, refresh } =
     useTeamRequirementsByPeriod(currentProject?.id);
   const [tab, setTab] = useState("by-period");
 
@@ -94,9 +94,18 @@ export function TeamRequirementsView() {
         helpers: acc.helpers + p.totals.helpers,
         people: acc.people + p.totals.people,
         services_missing: acc.services_missing + p.totals.services_missing_productivity,
+        services_missing_team:
+          acc.services_missing_team + p.totals.services_missing_team,
         periods: acc.periods + (p.totals.services > 0 ? 1 : 0),
       }),
-      { professionals: 0, helpers: 0, people: 0, services_missing: 0, periods: 0 }
+      {
+        professionals: 0,
+        helpers: 0,
+        people: 0,
+        services_missing: 0,
+        services_missing_team: 0,
+        periods: 0,
+      }
     );
   }, [requirements]);
 
