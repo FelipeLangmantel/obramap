@@ -190,7 +190,8 @@ export function ImportBudgetItemsDialog({
       const { data, error } = await supabase.functions.invoke('parse-budget-items', {
         body: {
           fileBase64,
-          existingInputs: existingInputs.slice(0, 100).map(i => ({ name: i.name, category: i.category }))
+          existingInputs: existingInputs.slice(0, 100).map(i => ({ name: i.name, category: i.category })),
+          existingFamilies: families.map(f => ({ name: f.name }))
         }
       });
 
@@ -201,12 +202,38 @@ export function ImportBudgetItemsDialog({
         return;
       }
 
+      // Helper: match family name to existing family (case-insensitive, accent-insensitive)
+      const findFamilyByName = (name?: string) => {
+        if (!name) return undefined;
+        const target = normalize(name);
+        return families.find(f => normalize(f.name) === target);
+      };
+
       // Process items and find matches
       const itemsWithMatching: ExtractedItem[] = data.items.map((item: any) => {
         const match = findMatchingInput(item.name, item.category);
-        
+        const extractedFamilyRaw = typeof item.family === 'string' ? item.family.trim() : '';
+        const matchedFamily = findFamilyByName(extractedFamilyRaw);
+
+        // Default family for the new cadastro:
+        //  1) family inherited from matched input (when linked)
+        //  2) family extracted by AI (matched to existing family)
+        //  3) AI-extracted name as a NEW family (will be created on import)
+        //  4) sensible default by category
+        const defaultByCategory = item.category === 'labor' ? 'Mão de Obra'
+          : item.category === 'equipment' ? 'Locações'
+          : (families[0]?.name || 'Geral');
+
+        const newInputFamily = match.input?.material_family_name
+          || matchedFamily?.name
+          || extractedFamilyRaw
+          || defaultByCategory;
+
+        const isNewFamily = !!extractedFamilyRaw && !matchedFamily && !match.input?.material_family_name;
+
         return {
           ...item,
+          extractedFamily: extractedFamilyRaw || undefined,
           selected: true,
           matchedInputId: match.input?.id,
           matchedInputName: match.input?.name,
@@ -215,7 +242,8 @@ export function ImportBudgetItemsDialog({
           matchedInputFamily: match.input?.material_family_name,
           matchConfidence: match.confidence,
           createAsNewInput: match.confidence === 'none',
-          newInputFamily: families[0]?.name || 'Geral'
+          newInputFamily,
+          isNewFamily,
         };
       });
 
