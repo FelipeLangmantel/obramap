@@ -808,7 +808,10 @@ export function Map3DView() {
             <Loader2 className="h-6 w-6 animate-spin mr-2" /><span>Carregando...</span>
           </div>
         )}
-        <div className="absolute inset-0">
+        <div
+          className="absolute inset-0"
+          style={assignMode ? { cursor: "crosshair" } : undefined}
+        >
           <Canvas shadows dpr={[1, 1.5]} frameloop="always"
             gl={{ antialias: true, powerPreference: "high-performance", stencil: false, depth: true }}
             onDoubleClick={centerCamera}
@@ -819,9 +822,25 @@ export function Map3DView() {
               resetTrigger={resetTrigger} fitTrigger={fitTrigger}
               savedPosition={savedPos} savedTarget={savedTgt}
               onCameraChange={handleCameraChange} sceneReady={sceneReady}
-              onModelLoaded={handleModelLoaded} onSceneReady={handleSceneReady} />
+              onModelLoaded={handleModelLoaded} onSceneReady={handleSceneReady}
+              onMeshClick={assignMode ? handleMeshClick : undefined} />
           </Canvas>
         </div>
+        {assignMode && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-xs font-medium shadow-lg flex items-center gap-1.5 pointer-events-none">
+            <MousePointerClick className="h-3.5 w-3.5" />
+            Clique numa parte do modelo para atribuir a uma casa
+          </div>
+        )}
+        <AssignHousePopover
+          picked={pickedMesh}
+          totalHouses={currentProject?.houses?.length ?? 0}
+          currentHouse={pickedMesh ? meshAssignments.assignmentMap.get(pickedMesh.name) ?? null : null}
+          saving={assignSaving}
+          onConfirm={confirmAssignment}
+          onClear={clearAssignment}
+          onClose={() => setPickedMesh(null)}
+        />
         {showLayers && layerManager.layers.length > 0 && (
           <LayersPanel
             layers={layerManager.layers}
