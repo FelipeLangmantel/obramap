@@ -183,6 +183,37 @@
   .scrollbar-none::-webkit-scrollbar {
     display: none;
   }
+
+  /* ───────────────────────────────────────────── */
+  /* Padronização de responsividade para tabelas  */
+  /* ───────────────────────────────────────────── */
+
+  /* Wrapper para Cards que contêm tabelas/listas: garante que o conteúdo
+     interno nunca empurre o layout (flex/grid pai) e habilita scroll horizontal
+     apenas dentro do card no mobile. */
+  .table-card {
+    @apply w-full max-w-full min-w-0 overflow-hidden;
+  }
+
+  .table-card > * {
+    @apply min-w-0;
+  }
+
+  /* Use em divs que fazem papel de "tabela manual" (listas com flex) para
+     permitir que filhos com truncate funcionem corretamente. */
+  .row-flex {
+    @apply flex items-center gap-2 min-w-0 w-full;
+  }
+
+  /* Texto que deve truncar em vez de empurrar a linha. */
+  .cell-truncate {
+    @apply min-w-0 flex-1 truncate;
+  }
+
+  /* Coluna fixa (valores monetários, ações) que não deve encolher nem quebrar. */
+  .cell-fixed {
+    @apply shrink-0 whitespace-nowrap;
+  }
 }
 
 /* ═══════════════════════════════════════════ */
