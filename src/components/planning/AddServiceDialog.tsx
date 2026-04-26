@@ -20,6 +20,8 @@ import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { UnitPresetSelector } from "@/components/shared/UnitPresetSelector";
+import { ServiceCapacityEditor } from "@/components/planning/ServiceCapacityEditor";
+import { isPhysicalUnit } from "@/hooks/useServiceCapacities";
 
 interface ContractService {
   macro_id: string;
@@ -88,6 +90,7 @@ export function AddServiceDialog({
     label: string;
     symbol: string;
   } | null>(null);
+  const [totalHouses, setTotalHouses] = useState<number>(0);
 
   const isEditing = !!existingService;
 
@@ -123,7 +126,7 @@ export function AddServiceDialog({
       if (!projectId || !open) return;
       const { data } = await supabase
         .from("projects")
-        .select("default_unit_label, default_unit_symbol")
+        .select("default_unit_label, default_unit_symbol, total_houses")
         .eq("id", projectId)
         .maybeSingle();
       if (data) {
@@ -131,6 +134,7 @@ export function AddServiceDialog({
           label: data.default_unit_label || "Casa",
           symbol: data.default_unit_symbol || "un",
         });
+        setTotalHouses(data.total_houses || 0);
       }
     };
     loadProjectUnit();
