@@ -82,29 +82,51 @@ export default function RelatorioObraView() {
   }, [currentProject?.id, dataInicio, dataFim]);
 
   // Realtime: recarregar quando diary_items, diary_entries ou desvios mudam
+  // Pausa o canal quando a aba está oculta para reduzir conexões simultâneas.
   useEffect(() => {
     if (!currentProject?.id) return;
-    const channel = supabase
-      .channel(`relatorio-obra-${currentProject.id}`)
-      .on("postgres_changes", {
-        event: "*",
-        schema: "public",
-        table: "diary_items",
-      }, () => loadData())
-      .on("postgres_changes", {
-        event: "*",
-        schema: "public",
-        table: "diary_entries",
-        filter: `project_id=eq.${currentProject.id}`,
-      }, () => loadData())
-      .on("postgres_changes", {
-        event: "*",
-        schema: "public",
-        table: "production_deviations",
-        filter: `project_id=eq.${currentProject.id}`,
-      }, () => loadData())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const subscribe = () => {
+      channel = supabase
+        .channel(`relatorio-obra-${currentProject.id}`)
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: "diary_items",
+        }, () => loadData())
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: "diary_entries",
+          filter: `project_id=eq.${currentProject.id}`,
+        }, () => loadData())
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: "production_deviations",
+          filter: `project_id=eq.${currentProject.id}`,
+        }, () => loadData())
+        .subscribe();
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (channel) { supabase.removeChannel(channel); channel = null; }
+      } else if (!channel) {
+        subscribe();
+        // Reload garante que nada foi perdido enquanto o canal estava pausado
+        loadData();
+      }
+    };
+
+    subscribe();
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [currentProject?.id]);
 
   const loadData = async () => {

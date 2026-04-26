@@ -586,35 +586,57 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
   useEffect(() => {
     if (!currentProject?.id) return;
-    const channel = supabase
-      .channel(`diary-productions-${currentProject.id}`)
-      .on("postgres_changes", {
-        event: "INSERT", schema: "public", table: "productions",
-        filter: `project_id=eq.${currentProject.id}`,
-      }, (payload) => {
-        if (payload.new && (payload.new as any).created_by !== user?.id) {
-          setRealtimeCount(prev => prev + 1);
-        }
-      })
-      .on("postgres_changes", {
-        event: "*", schema: "public", table: "diary_items",
-        filter: entryId ? `diary_entry_id=eq.${entryId}` : undefined,
-      }, async () => {
-        await loadEntry();
-        await refreshHousesFromDB();
-      })
-      .on("postgres_changes", {
-        event: "UPDATE", schema: "public", table: "diary_entries",
-        filter: `project_id=eq.${currentProject.id}`,
-      }, (payload) => {
-        const next: any = payload.new;
-        if (next?.id === entryId && next?.status === "finalizado") {
-          setEntryStatus("finalizado");
-          toast.info("Esta semana foi fechada pelo coordenador.");
-        }
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const subscribe = () => {
+      channel = supabase
+        .channel(`diary-productions-${currentProject.id}`)
+        .on("postgres_changes", {
+          event: "INSERT", schema: "public", table: "productions",
+          filter: `project_id=eq.${currentProject.id}`,
+        }, (payload) => {
+          if (payload.new && (payload.new as any).created_by !== user?.id) {
+            setRealtimeCount(prev => prev + 1);
+          }
+        })
+        .on("postgres_changes", {
+          event: "*", schema: "public", table: "diary_items",
+          filter: entryId ? `diary_entry_id=eq.${entryId}` : undefined,
+        }, async () => {
+          await loadEntry();
+          await refreshHousesFromDB();
+        })
+        .on("postgres_changes", {
+          event: "UPDATE", schema: "public", table: "diary_entries",
+          filter: `project_id=eq.${currentProject.id}`,
+        }, (payload) => {
+          const next: any = payload.new;
+          if (next?.id === entryId && next?.status === "finalizado") {
+            setEntryStatus("finalizado");
+            toast.info("Esta semana foi fechada pelo coordenador.");
+          }
+        })
+        .subscribe();
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (channel) { supabase.removeChannel(channel); channel = null; }
+      } else if (!channel) {
+        subscribe();
+        // Reload garante que nada foi perdido enquanto o canal estava pausado
+        void loadEntry();
+        void refreshHousesFromDB();
+      }
+    };
+
+    subscribe();
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [currentProject?.id, user?.id, entryId, refreshHousesFromDB]);
 
   // Reconciliação online: quando o navegador volta a ficar online e/ou

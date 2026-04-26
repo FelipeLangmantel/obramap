@@ -556,20 +556,42 @@ export function WeeklyProductionView() {
   };
 
   // Realtime: novos lançamentos do Diário recarregam a lista
+  // Pausa o canal quando a aba está oculta para reduzir conexões simultâneas.
   useEffect(() => {
     if (!currentProject?.id) return;
-    const channel = supabase
-      .channel(`weekly-prod-realtime-${currentProject.id}`)
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'productions',
-        filter: `project_id=eq.${currentProject.id}`,
-      }, () => { void reloadProductions(); })
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'weekly_productions',
-        filter: `project_id=eq.${currentProject.id}`,
-      }, () => { void reloadProductions(); })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const subscribe = () => {
+      channel = supabase
+        .channel(`weekly-prod-realtime-${currentProject.id}`)
+        .on('postgres_changes', {
+          event: '*', schema: 'public', table: 'productions',
+          filter: `project_id=eq.${currentProject.id}`,
+        }, () => { void reloadProductions(); })
+        .on('postgres_changes', {
+          event: '*', schema: 'public', table: 'weekly_productions',
+          filter: `project_id=eq.${currentProject.id}`,
+        }, () => { void reloadProductions(); })
+        .subscribe();
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (channel) { supabase.removeChannel(channel); channel = null; }
+      } else if (!channel) {
+        subscribe();
+        // Reload garante que nada foi perdido enquanto o canal estava pausado
+        void reloadProductions();
+      }
+    };
+
+    subscribe();
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      if (channel) supabase.removeChannel(channel);
+    };
   }, [currentProject?.id]);
 
   // State for selected planned period
