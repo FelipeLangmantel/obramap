@@ -1373,11 +1373,11 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 <CardContent className="space-y-4">
                   <div>
                     <label className="text-xs font-medium text-muted-foreground mb-2 block">1. Selecionar Etapa</label>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 min-w-0">
                       {macros.map(macro => (
                         <Button key={macro.id}
                           variant={selectedMacro?.id === macro.id ? "default" : "outline"}
-                          className={cn("min-h-[40px] justify-start gap-2 text-sm font-medium", selectedMacro?.id === macro.id && "ring-2")}
+                          className={cn("min-h-[40px] justify-start gap-2 text-xs sm:text-sm font-medium min-w-0 px-2 sm:px-3", selectedMacro?.id === macro.id && "ring-2")}
                           style={{
                             backgroundColor: selectedMacro?.id === macro.id ? macro.color : undefined,
                             borderColor: macro.color,
@@ -1390,7 +1390,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                             setSelectedScope(null); setSelectedHouses([]);
                           }}>
                           <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: macro.color }} />
-                          {macro.name}
+                          <span className="truncate min-w-0" title={macro.name}>{macro.name}</span>
                         </Button>
                       ))}
                     </div>
