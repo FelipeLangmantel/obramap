@@ -358,6 +358,20 @@ export function AddServiceDialog({
                 }
               />
 
+              {/* Capacidade por casa (apenas unidades físicas) */}
+              {selectedScope && isPhysicalUnit(unitSymbol || projectDefaultUnit?.symbol || "") && (
+                <ServiceCapacityEditor
+                  projectId={projectId}
+                  scopeId={selectedScope}
+                  scopeName={
+                    scopesForMacro.find((s) => s.scope_id === selectedScope)?.scope_name || ""
+                  }
+                  unitLabel={unitLabel || projectDefaultUnit?.label || ""}
+                  unitSymbol={unitSymbol || projectDefaultUnit?.symbol || ""}
+                  totalHouses={totalHouses}
+                />
+              )}
+
               {/* Quantity */}
               <div className="space-y-2">
                 <Label>
