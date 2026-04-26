@@ -304,54 +304,87 @@ export function TeamRequirementsView() {
                             </TableHeader>
                             <TableBody>
                               {period.rows.map((r) => (
-                                <TableRow
-                                  key={r.scope_id}
-                                  className={cn(
-                                    !r.has_productivity_config && "bg-amber-50/50"
-                                  )}
-                                >
-                                  <TableCell className="py-1.5">
-                                    <div className="flex items-center gap-2">
-                                      <span
-                                        className="h-2 w-2 rounded-full shrink-0"
-                                        style={{
-                                          backgroundColor: r.macro_color || "#9ca3af",
-                                        }}
-                                      />
-                                      <div className="min-w-0">
-                                        <p className="font-medium leading-tight truncate">
-                                          {r.scope_name}
-                                        </p>
-                                        <p className="text-[10px] text-muted-foreground leading-tight">
-                                          {r.macro_name}
-                                          {!r.has_productivity_config && (
-                                            <span className="text-amber-700 ml-1">
-                                              • produtividade não configurada
-                                            </span>
-                                          )}
-                                        </p>
+                                <>
+                                  <TableRow
+                                    key={r.scope_id}
+                                    className={cn(
+                                      !r.has_productivity_config && "bg-amber-50/50"
+                                    )}
+                                  >
+                                    <TableCell className="py-1.5">
+                                      <div className="flex items-center gap-2">
+                                        <span
+                                          className="h-2 w-2 rounded-full shrink-0"
+                                          style={{
+                                            backgroundColor: r.macro_color || "#9ca3af",
+                                          }}
+                                        />
+                                        <div className="min-w-0">
+                                          <p className="font-medium leading-tight truncate">
+                                            {r.scope_name}
+                                          </p>
+                                          <p className="text-[10px] text-muted-foreground leading-tight">
+                                            {r.macro_name}
+                                            {!r.has_productivity_config && (
+                                              <span className="text-amber-700 ml-1">
+                                                • produtividade não configurada
+                                              </span>
+                                            )}
+                                            {r.has_productivity_config &&
+                                              !r.has_team_composition && (
+                                                <span className="text-amber-700 ml-1">
+                                                  • sem composição de profissões
+                                                </span>
+                                              )}
+                                          </p>
+                                        </div>
                                       </div>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="text-right py-1.5 font-mono">
-                                    {r.team_count}
-                                  </TableCell>
-                                  <TableCell className="text-right py-1.5 hidden sm:table-cell font-mono">
-                                    {r.professionals_per_team}
-                                  </TableCell>
-                                  <TableCell className="text-right py-1.5 hidden sm:table-cell font-mono">
-                                    {r.helpers_per_team}
-                                  </TableCell>
-                                  <TableCell className="text-right py-1.5 font-mono">
-                                    {r.total_professionals}
-                                  </TableCell>
-                                  <TableCell className="text-right py-1.5 font-mono">
-                                    {r.total_helpers}
-                                  </TableCell>
-                                  <TableCell className="text-right py-1.5 font-mono font-semibold">
-                                    {r.total_people}
-                                  </TableCell>
-                                </TableRow>
+                                    </TableCell>
+                                    <TableCell className="text-right py-1.5 font-mono">
+                                      {r.team_count}
+                                    </TableCell>
+                                    <TableCell className="text-right py-1.5 hidden sm:table-cell font-mono">
+                                      {r.professionals_per_team}
+                                    </TableCell>
+                                    <TableCell className="text-right py-1.5 hidden sm:table-cell font-mono">
+                                      {r.helpers_per_team}
+                                    </TableCell>
+                                    <TableCell className="text-right py-1.5 font-mono">
+                                      {r.total_professionals}
+                                    </TableCell>
+                                    <TableCell className="text-right py-1.5 font-mono">
+                                      {r.total_helpers}
+                                    </TableCell>
+                                    <TableCell className="text-right py-1.5 font-mono font-semibold">
+                                      {r.total_people}
+                                    </TableCell>
+                                  </TableRow>
+                                  {r.role_breakdown.length > 0 && (
+                                    <TableRow
+                                      key={`${r.scope_id}-roles`}
+                                      className="bg-muted/10 hover:bg-muted/10"
+                                    >
+                                      <TableCell colSpan={7} className="py-1.5">
+                                        <div className="flex flex-wrap gap-1.5 pl-4">
+                                          {r.role_breakdown.map((b, i) => (
+                                            <Badge
+                                              key={i}
+                                              variant={
+                                                b.role_type === "professional"
+                                                  ? "secondary"
+                                                  : "outline"
+                                              }
+                                              className="text-[10px] font-mono"
+                                              title={`${b.qty_per_team}/equipe × ${r.team_count} equipes`}
+                                            >
+                                              {b.role_name}: <strong className="ml-1">{b.total}</strong>
+                                            </Badge>
+                                          ))}
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                </>
                               ))}
                               <TableRow className="bg-muted/30 font-semibold">
                                 <TableCell className="py-1.5">Total do período</TableCell>
