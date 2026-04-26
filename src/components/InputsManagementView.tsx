@@ -540,9 +540,9 @@ export function InputsManagementView() {
             Insumos cadastrados aqui ficam disponíveis para todas as obras do sistema.
           </p>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <div className="flex gap-2 flex-1">
+        <CardContent className="min-w-0 overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div className="flex flex-wrap gap-2 flex-1 min-w-0 w-full sm:w-auto">
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
                 <Input placeholder="Buscar por nome ou código..." value={searchInput} onChange={(e) => setSearchInput(e.target.value)} className="pl-8" />
@@ -560,7 +560,7 @@ export function InputsManagementView() {
               </Select>
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
               {selectedInputIds.size > 0 && (
                 <Button variant="secondary" size="sm" onClick={() => setBulkFamilyDialogOpen(true)}>
                   <ArrowRightLeft className="w-4 h-4 mr-1" />
@@ -738,8 +738,8 @@ export function InputsManagementView() {
             </div>
           </div>
 
-          <ScrollArea className="h-[calc(100vh-320px)]">
-            <div className="space-y-2 pr-4">
+          <ScrollArea className="h-[calc(100vh-320px)] w-full">
+            <div className="space-y-2 pr-2 min-w-0">
               {Object.entries(groupedByFamily).map(([familyName, familyInputs]) => {
                 const isExpanded = expandedFamilies.has(familyName);
                 const family = families.find(f => f.name === familyName);
@@ -776,8 +776,8 @@ export function InputsManagementView() {
                     <CollapsibleContent>
                       <div className="mt-1 space-y-1 ml-6">
                         {familyInputs.map(input => (
-                          <div key={input.id} className={`flex items-center justify-between p-2 border rounded-lg bg-card hover:bg-muted/30 ${selectedInputIds.has(input.id) ? 'ring-2 ring-primary/50 bg-primary/5' : ''}`}>
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <div key={input.id} className={`flex items-start sm:items-center justify-between gap-2 p-2 border rounded-lg bg-card hover:bg-muted/30 min-w-0 ${selectedInputIds.has(input.id) ? 'ring-2 ring-primary/50 bg-primary/5' : ''}`}>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 flex-1 min-w-0">
                               {canEdit && (
                                 <Checkbox
                                   checked={selectedInputIds.has(input.id)}
@@ -785,12 +785,12 @@ export function InputsManagementView() {
                                   className="shrink-0"
                                 />
                               )}
-                              {getCategoryIcon(input.category)}
+                              <span className="shrink-0">{getCategoryIcon(input.category)}</span>
                               {input.code && <Badge variant="outline" className="text-xs shrink-0 font-mono">{input.code}</Badge>}
-                              <span className="truncate">{input.name}</span>
+                              <span className="truncate min-w-0 max-w-full break-words" title={input.name}>{input.name}</span>
                               <Badge variant="outline" className="text-xs shrink-0">{input.unit}</Badge>
                               <Badge variant="secondary" className="text-xs shrink-0">{CATEGORY_LABELS[input.category]}</Badge>
-                              {input.unit_value > 0 && <span className="text-xs text-muted-foreground shrink-0">R$ {input.unit_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
+                              {input.unit_value > 0 && <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">R$ {input.unit_value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>}
                             </div>
                             {canEdit && (
                               <div className="flex gap-1 shrink-0">
