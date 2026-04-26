@@ -410,8 +410,19 @@ export function Map3DView() {
   const [sceneReady, setSceneReady] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [showLayers, setShowLayers] = useState(false);
-  
-  const layerManager = useModelLayers(projectId);
+
+  // Modo "Atribuir Casas" — clicar numa malha abre popover para batizá-la.
+  const [assignMode, setAssignMode] = useState(false);
+  const [pickedMesh, setPickedMesh] = useState<{
+    name: string;
+    groupName?: string;
+    childMeshes: string[];
+  } | null>(null);
+  const [assignSaving, setAssignSaving] = useState(false);
+
+  // Atribuição manual mesh→casa (persistida no banco) — fonte da verdade.
+  const meshAssignments = useMeshHouseAssignments(projectId);
+  const layerManager = useModelLayers(projectId, meshAssignments.assignmentMap);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mtlInputRef = useRef<HTMLInputElement>(null);
