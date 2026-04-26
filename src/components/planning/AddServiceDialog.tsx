@@ -169,8 +169,65 @@ export function AddServiceDialog({
         setUnitLabel("");
         setUnitSymbol("");
       }
+      setServiceProductivity(null);
+      setProductivityChecked(false);
     }
   }, [open, existingService]);
+
+  // Carrega a produtividade configurada do serviço escolhido (project_service_productivity)
+  // e pré-popula equipes + produtividade. Elimina o sintoma de capacidade negativa
+  // causado por valores zerados quando o usuário ainda não cadastrou nada.
+  useEffect(() => {
+    let cancelled = false;
+    const loadProductivity = async () => {
+      if (!projectId || !selectedScope) {
+        setServiceProductivity(null);
+        setProductivityChecked(false);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from("project_service_productivity" as any)
+          .select(
+            "productivity_value, productivity_unit, default_team_count, professionals_per_team, helpers_per_team"
+          )
+          .eq("project_id", projectId)
+          .eq("scope_id", selectedScope)
+          .eq("is_active", true)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error) throw error;
+
+        if (data) {
+          const prod = data as any;
+          setServiceProductivity({
+            productivity_value: Number(prod.productivity_value) || 0,
+            productivity_unit: prod.productivity_unit || "",
+            default_team_count: Number(prod.default_team_count) || 1,
+            professionals_per_team: Number(prod.professionals_per_team) || 0,
+            helpers_per_team: Number(prod.helpers_per_team) || 0,
+          });
+          // Só pré-popula em modo criação e quando os campos estão no default
+          if (!isEditing) {
+            setTeamCount((curr) => (curr <= 1 ? Number(prod.default_team_count) || 1 : curr));
+            setProductivityPerTeam((curr) =>
+              curr <= 0 ? Number(prod.productivity_value) || 0 : curr
+            );
+          }
+        } else {
+          setServiceProductivity(null);
+        }
+        setProductivityChecked(true);
+      } catch (err) {
+        console.error("[AddServiceDialog] loadProductivity", err);
+        if (!cancelled) setProductivityChecked(true);
+      }
+    };
+    loadProductivity();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, selectedScope, isEditing]);
 
   // Get unique macros
   const uniqueMacros = contractServices.reduce((acc, service) => {
