@@ -9,6 +9,7 @@ const corsHeaders = {
 interface ExtractedItem {
   name: string;
   category: "material" | "labor" | "equipment";
+  family: string;
   quantity: number;
   unit: string;
   unitValue: number;
