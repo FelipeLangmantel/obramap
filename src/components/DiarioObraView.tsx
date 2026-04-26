@@ -1135,11 +1135,11 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   }
 
   return (
-    <div className="pb-24 md:pb-4">
+    <div className="pb-24 md:pb-4 w-full max-w-full min-w-0 overflow-x-hidden">
       <OfflineBanner />
       {/* HEADER do RDO */}
-      <div className="bg-card border rounded-lg p-4 mb-4">
-        <div className="flex items-start justify-between gap-4 flex-wrap md:flex-nowrap">
+      <div className="bg-card border rounded-lg p-3 sm:p-4 mb-4 w-full max-w-full min-w-0 overflow-hidden">
+        <div className="flex items-start justify-between gap-3 sm:gap-4 flex-wrap md:flex-nowrap min-w-0">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               {onBack && (
@@ -1153,8 +1153,8 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                   <ChevronRight className="h-4 w-4 rotate-180" />
                 </Button>
               )}
-              <ClipboardList className="h-5 w-5 text-primary" />
-              <h2 className="text-base sm:text-lg font-bold">
+              <ClipboardList className="h-5 w-5 text-primary shrink-0" />
+              <h2 className="text-base sm:text-lg font-bold break-words min-w-0">
                 {entryId ? "Editar relatório" : "Novo relatório"}: {format(parseISO(entryDate), "dd/MM/yyyy")}
                 {numRelatorio != null && <span className="text-muted-foreground"> · n° {numRelatorio}</span>}
               </h2>
@@ -1171,26 +1171,28 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">⏳ Edição solicitada</Badge>
               )}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1 text-xs text-muted-foreground min-w-0">
               {projectInfo.location && (
-                <div className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />{projectInfo.location}</div>
+                <div className="flex items-center gap-1.5 min-w-0"><MapPin className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{projectInfo.location}</span></div>
               )}
               {legalConfig?.contratante_nome && (
-                <div className="flex items-center gap-1.5">
-                  <Building2 className="h-3.5 w-3.5" />
-                  Contratante: <span className="text-foreground font-medium truncate">{legalConfig.contratante_nome}</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Building2 className="h-3.5 w-3.5 shrink-0" />
+                  <span className="shrink-0">Contratante:</span>
+                  <span className="text-foreground font-medium truncate min-w-0">{legalConfig.contratante_nome}</span>
                 </div>
               )}
               {(legalConfig?.contratada_razao_social || company?.name) && (
-                <div className="flex items-center gap-1.5">
-                  <Building2 className="h-3.5 w-3.5" />
-                  Contratada: <span className="text-foreground font-medium truncate">{legalConfig?.contratada_razao_social || company?.name}</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Building2 className="h-3.5 w-3.5 shrink-0" />
+                  <span className="shrink-0">Contratada:</span>
+                  <span className="text-foreground font-medium truncate min-w-0">{legalConfig?.contratada_razao_social || company?.name}</span>
                 </div>
               )}
               {legalConfig?.contrato_numero && (
-                <div className="flex items-center gap-1.5">
-                  <FileSignature className="h-3.5 w-3.5" />
-                  Contrato nº <span className="text-foreground font-medium">{legalConfig.contrato_numero}</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <FileSignature className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Contrato nº <span className="text-foreground font-medium">{legalConfig.contrato_numero}</span></span>
                 </div>
               )}
               {projectInfo.engenheiroResidente && (
@@ -1214,7 +1216,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
               </button>
             )}
           </div>
-          <div className="flex gap-2 shrink-0 self-start flex-wrap">
+          <div className="flex gap-2 shrink-0 self-start flex-wrap w-full md:w-auto">
             {!isLocked && currentProject?.id && company?.id && (
               <ImportPreviousDayButton
                 projectId={currentProject.id}
@@ -1371,11 +1373,11 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 <CardContent className="space-y-4">
                   <div>
                     <label className="text-xs font-medium text-muted-foreground mb-2 block">1. Selecionar Etapa</label>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 min-w-0">
                       {macros.map(macro => (
                         <Button key={macro.id}
                           variant={selectedMacro?.id === macro.id ? "default" : "outline"}
-                          className={cn("min-h-[40px] justify-start gap-2 text-sm font-medium", selectedMacro?.id === macro.id && "ring-2")}
+                          className={cn("min-h-[40px] justify-start gap-2 text-xs sm:text-sm font-medium min-w-0 px-2 sm:px-3", selectedMacro?.id === macro.id && "ring-2")}
                           style={{
                             backgroundColor: selectedMacro?.id === macro.id ? macro.color : undefined,
                             borderColor: macro.color,
@@ -1388,7 +1390,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                             setSelectedScope(null); setSelectedHouses([]);
                           }}>
                           <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: macro.color }} />
-                          {macro.name}
+                          <span className="truncate min-w-0" title={macro.name}>{macro.name}</span>
                         </Button>
                       ))}
                     </div>
