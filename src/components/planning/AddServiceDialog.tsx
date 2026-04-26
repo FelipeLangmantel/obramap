@@ -16,9 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { UnitPresetSelector } from "@/components/shared/UnitPresetSelector";
 import { ServiceCapacityEditor } from "@/components/planning/ServiceCapacityEditor";
 import { isPhysicalUnit } from "@/hooks/useServiceCapacities";
