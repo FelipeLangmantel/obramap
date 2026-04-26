@@ -81,6 +81,55 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
 
   if (!currentProject) return null;
 
+  // Carrega unidades configuradas por scope (project_contract_services) ao abrir
+  useEffect(() => {
+    if (!open || !currentProject) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("project_contract_services")
+        .select("scope_id, unit_label, unit_symbol")
+        .eq("project_id", currentProject.id);
+      if (cancelled || !data) return;
+      const map: Record<string, { unit_label: string; unit_symbol: string }> = {};
+      data.forEach((row: any) => {
+        if (row.scope_id) {
+          map[row.scope_id] = {
+            unit_label: row.unit_label || "",
+            unit_symbol: row.unit_symbol || "",
+          };
+        }
+      });
+      setScopeUnits(map);
+    })();
+    return () => { cancelled = true; };
+  }, [open, currentProject?.id, currentProject?.macrosTemplate.length]);
+
+  const persistScopeUnit = useCallback(
+    async (scopeId: string, unit_label: string, unit_symbol: string) => {
+      if (!currentProject) return;
+      try {
+        const { error } = await supabase
+          .from("project_contract_services")
+          .update({
+            unit_label: unit_label || null,
+            unit_symbol: unit_symbol || null,
+          })
+          .eq("project_id", currentProject.id)
+          .eq("scope_id", scopeId);
+        if (error) throw error;
+        setScopeUnits((prev) => ({
+          ...prev,
+          [scopeId]: { unit_label, unit_symbol },
+        }));
+      } catch (err) {
+        console.error("Erro ao salvar unidade do serviço:", err);
+        toast.error("Erro ao salvar unidade do serviço");
+      }
+    },
+    [currentProject]
+  );
+
   const needsWeightAdjustment = weightAnalysis.overallTotalWeight !== 100;
 
   const suggestWeightDistribution = () => {
