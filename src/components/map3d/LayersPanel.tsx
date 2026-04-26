@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, EyeOff, Link2, Unlink, Pencil, Check, X } from "lucide-react";
+import { Eye, EyeOff, Link2, Unlink, Pencil, Check, X, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
@@ -126,6 +126,11 @@ export function LayersPanel({
                           <Pencil className="h-3 w-3" />
                         </button>
                       </>
+                    )}
+                    {!isEditing && layer.houseNumber != null && (
+                      <Badge variant="outline" className="text-[10px] h-4 px-1 flex-shrink-0 border-primary/40 text-primary">
+                        <Home className="h-2.5 w-2.5 mr-0.5" />C{String(layer.houseNumber).padStart(2, "0")}
+                      </Badge>
                     )}
                     {!isEditing && (link?.stage_id || link?.scope_id ? (
                       <Badge variant="secondary" className="text-[10px] h-4 px-1 flex-shrink-0">

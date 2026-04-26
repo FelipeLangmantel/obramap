@@ -414,12 +414,17 @@ export function Map3DView() {
   // ============================================================
   // Integração 3D ⇄ Produção em tempo real
   // ============================================================
-  // Calcula o progresso médio por (macro_id, scope_id) e por (macro_id)
-  // diretamente das casas em memória — sem query adicional. As casas já
-  // são mantidas atualizadas em tempo real pelo canal `houses-realtime-*`
-  // do ConstructionContext (recompute_house_progress_from_diary roda no
-  // backend a cada item de diário/produção). Assim, ao lançar uma produção,
-  // o 3D atualiza camada por camada automaticamente.
+  // Constrói DOIS mapas a partir de currentProject.houses:
+  //   1) progressMap (agregado): média da obra por macro / macro::scope
+  //      → alimenta camadas SEM house_number (vínculo geral)
+  //   2) perHouseProgress: progresso individual da casa
+  //      chave: `houseNumber::macro_id::scope_id` (ou `houseNumber::macro_id`)
+  //      → alimenta camadas COM house_number (cada casa acende sozinha)
+  //
+  // As casas já são mantidas atualizadas em tempo real pelo canal
+  // `houses-realtime-*` do ConstructionContext (recompute roda no backend
+  // a cada item de diário/produção). Assim, ao lançar produção em UMA casa,
+  // só os meshes daquela casa atualizam.
   useEffect(() => {
     if (!currentProject || !layerManager.autoMode || layerManager.links.length === 0) return;
 
@@ -427,52 +432,68 @@ export function Map3DView() {
     if (houses.length === 0) return;
 
     const totalHouses = houses.length;
-    const sumByScope = new Map<string, number>();   // chave: macro::scope
-    const sumByMacro = new Map<string, number>();   // chave: macro
-    const countByMacro = new Map<string, number>(); // nº de scopes por macro (para média)
+    const sumByScope = new Map<string, number>();
+    const sumByMacro = new Map<string, number>();
+    const countByMacro = new Map<string, number>();
+    const perHouseProgress = new Map<string, number>();
 
     houses.forEach(h => {
+      const houseNum = (h as any).houseNumber ?? (h as any).house_number ?? (h as any).number;
       (h.macros || []).forEach((m: any) => {
         let macroSum = 0;
         let macroCount = 0;
         (m.scopes || []).forEach((s: any) => {
-          const key = `${m.id}::${s.id}`;
-          sumByScope.set(key, (sumByScope.get(key) || 0) + (s.progress || 0));
-          macroSum += (s.progress || 0);
+          const progress = s.progress || 0;
+          const aggKey = `${m.id}::${s.id}`;
+          sumByScope.set(aggKey, (sumByScope.get(aggKey) || 0) + progress);
+          macroSum += progress;
           macroCount += 1;
+
+          // Mapa POR CASA
+          if (houseNum != null) {
+            perHouseProgress.set(`${houseNum}::${m.id}::${s.id}`, progress);
+          }
         });
-        // Progresso da etapa = média dos scopes daquela casa
         if (macroCount > 0) {
-          sumByMacro.set(m.id, (sumByMacro.get(m.id) || 0) + macroSum / macroCount);
+          const macroAvg = macroSum / macroCount;
+          sumByMacro.set(m.id, (sumByMacro.get(m.id) || 0) + macroAvg);
           countByMacro.set(m.id, (countByMacro.get(m.id) || 0) + 1);
+          if (houseNum != null) {
+            perHouseProgress.set(`${houseNum}::${m.id}`, macroAvg);
+          }
         }
       });
     });
 
     const progressMap = new Map<string, number>();
-    sumByScope.forEach((sum, key) => {
-      progressMap.set(key, sum / totalHouses);
-    });
+    sumByScope.forEach((sum, key) => progressMap.set(key, sum / totalHouses));
     sumByMacro.forEach((sum, macroId) => {
       const n = countByMacro.get(macroId) || totalHouses;
       progressMap.set(macroId, sum / n);
     });
 
     layerManager.updateFromMacroProgress(progressMap);
+    layerManager.updateFromHousesProgress(perHouseProgress);
   }, [
     currentProject?.id,
     currentProject?.houses,
     layerManager.autoMode,
     layerManager.links,
     layerManager.updateFromMacroProgress,
+    layerManager.updateFromHousesProgress,
   ]);
 
   // Realtime: lançamentos no Diário/Produção disparam refresh das casas,
-  // que por sua vez recalcula o progresso por camada acima. Pausa quando
-  // (refreshHousesFromDB já desestruturado acima)
+  // que por sua vez recalcula o progresso por camada acima.
   useEffect(() => {
     if (!projectId || !layerManager.autoMode) return;
     let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    // diary_items não tem project_id — filtramos pelo lado do cliente
+    // comparando com o conjunto de house_id do projeto atual.
+    const houseIdSet = new Set(
+      (currentProject?.houses || []).map((h: any) => h.id).filter(Boolean)
+    );
 
     const subscribe = () => {
       channel = supabase
@@ -487,7 +508,13 @@ export function Map3DView() {
         }, () => { void refreshHousesFromDB(); })
         .on("postgres_changes", {
           event: "*", schema: "public", table: "diary_items",
-        }, () => { void refreshHousesFromDB(); })
+        }, (payload: any) => {
+          // Só refazemos se o item alterado pertence a uma casa deste projeto
+          const houseId = payload?.new?.house_id ?? payload?.old?.house_id;
+          if (!houseId || houseIdSet.has(houseId)) {
+            void refreshHousesFromDB();
+          }
+        })
         .subscribe();
     };
 
@@ -506,7 +533,7 @@ export function Map3DView() {
       document.removeEventListener("visibilitychange", handleVisibility);
       if (channel) supabase.removeChannel(channel);
     };
-  }, [projectId, layerManager.autoMode, refreshHousesFromDB]);
+  }, [projectId, layerManager.autoMode, refreshHousesFromDB, currentProject?.houses]);
 
   // Also mark ready for markers
   useEffect(() => {
