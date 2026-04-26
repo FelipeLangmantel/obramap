@@ -336,14 +336,36 @@ export function ImportBudgetItemsDialog({
     setIsImporting(true);
 
     try {
-      // Create new inputs for items marked as createAsNewInput
+      // 1) Create any new families chosen by the user that don't exist yet
+      const familyMap: Record<string, string> = {};
+      families.forEach(f => { familyMap[normalize(f.name)] = f.id; });
+
+      const newFamilyNames = Array.from(new Set(
+        selectedItems
+          .map(i => (i.newInputFamily || '').trim())
+          .filter(name => name && !familyMap[normalize(name)])
+      ));
+
+      let newFamiliesCreated = 0;
+      for (const familyName of newFamilyNames) {
+        const { data: newFamily, error } = await supabase
+          .from('material_families')
+          .insert({ project_id: projectId, company_id: companyId!, name: familyName, color: '#3b82f6' })
+          .select()
+          .single();
+        if (!error && newFamily) {
+          familyMap[normalize(newFamily.name)] = newFamily.id;
+          newFamiliesCreated += 1;
+        }
+      }
+
+      // 2) Create new inputs for items marked as createAsNewInput
       const newInputsToCreate = selectedItems.filter(i => i.createAsNewInput && !i.matchedInputId);
-      
       const createdInputsMap: Record<string, string> = {};
-      
+
       for (const item of newInputsToCreate) {
-        const familyId = families.find(f => f.name === item.newInputFamily)?.id || null;
-        
+        const familyId = familyMap[normalize(item.newInputFamily || '')] || null;
+
         const { data: newInput, error } = await supabase
           .from('inputs')
           .insert({
@@ -358,30 +380,33 @@ export function ImportBudgetItemsDialog({
           })
           .select()
           .single();
-        
         if (!error && newInput) {
           createdInputsMap[item.name] = newInput.id;
         }
       }
 
-      // Prepare items for import
-      const itemsToImport = selectedItems.map(item => ({
-        name: item.matchedInputName || item.name,
-        category: item.category,
-        quantity: item.quantity,
-        unit: item.matchedInputUnit || item.unit,
-        unitValue: item.matchedInputValue ?? item.unitValue,
-        materialFamily: item.matchedInputFamily || item.newInputFamily || 'Geral',
-        inputId: item.matchedInputId || createdInputsMap[item.name]
-      }));
+      // 3) Prepare items for import (resolve final family from user selection)
+      const itemsToImport = selectedItems.map(item => {
+        const finalFamily = item.matchedInputId
+          ? (item.matchedInputFamily || item.newInputFamily || 'Geral')
+          : (item.newInputFamily || 'Geral');
+        return {
+          name: item.matchedInputName || item.name,
+          category: item.category,
+          quantity: item.quantity,
+          unit: item.matchedInputUnit || item.unit,
+          unitValue: item.matchedInputValue ?? item.unitValue,
+          materialFamily: finalFamily,
+          inputId: item.matchedInputId || createdInputsMap[item.name],
+        };
+      });
 
       onImport(itemsToImport);
 
       const newInputsCount = Object.keys(createdInputsMap).length;
       let message = `${selectedItems.length} itens importados!`;
-      if (newInputsCount > 0) {
-        message += ` ${newInputsCount} novo(s) insumo(s) cadastrado(s).`;
-      }
+      if (newInputsCount > 0) message += ` ${newInputsCount} novo(s) insumo(s) cadastrado(s).`;
+      if (newFamiliesCreated > 0) message += ` ${newFamiliesCreated} nova(s) família(s) criada(s).`;
       toast.success(message);
       handleClose();
     } catch (error) {
