@@ -271,6 +271,18 @@ export function PeriodServicesDialog({
           )}
         </div>
       </DialogContent>
+
+      {period && (
+        <AddServiceDialog
+          open={addServiceOpen}
+          onOpenChange={setAddServiceOpen}
+          projectId={projectId}
+          periodId={period.id}
+          companyId={companyId}
+          existingService={editingService}
+          onSave={() => { setAddServiceOpen(false); onRefresh(); }}
+        />
+      )}
     </Dialog>
   );
 }
