@@ -643,7 +643,7 @@ export function BudgetItemsEditor({
   }
 
   return (
-    <div className={`flex flex-col ${compact ? 'h-[400px]' : 'h-full'}`}>
+    <div className={`flex flex-col w-full min-w-0 overflow-hidden ${compact ? 'h-[400px]' : 'h-full'}`}>
       {/* Delete confirmation dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
@@ -844,8 +844,8 @@ export function BudgetItemsEditor({
       </div>
 
       {/* Items list grouped by family */}
-      <ScrollArea className="flex-1" ref={scrollAreaRef}>
-        <div className="space-y-2 pr-2">
+      <ScrollArea className="flex-1 w-full min-w-0" ref={scrollAreaRef}>
+        <div className="space-y-2 pr-2 min-w-0">
           {Object.entries(itemsByFamily).map(([family, familyItems]) => {
             const isExpanded = expandedFamilies.has(family);
             const familyTotal = familyItems.reduce((sum, i) => sum + i.unitValue * i.quantity, 0);
@@ -873,7 +873,7 @@ export function BudgetItemsEditor({
                       return (
                         <div
                           key={item.id || `new-${idx}`}
-                          className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${
+                          className={`flex items-center gap-2 p-2 rounded-lg border transition-colors min-w-0 ${
                             isEditing ? 'bg-accent border-primary/50' : 'bg-background hover:bg-muted/30'
                           }`}
                         >
@@ -955,7 +955,7 @@ export function BudgetItemsEditor({
                             </>
                           ) : (
                             <>
-                              <div className="w-5">{getCategoryIcon(item.category)}</div>
+                              <div className="w-5 shrink-0">{getCategoryIcon(item.category)}</div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1.5">
                                   {item.inputCode && <span className="text-[10px] font-mono text-muted-foreground shrink-0">{item.inputCode}</span>}
@@ -965,10 +965,10 @@ export function BudgetItemsEditor({
                                   {item.quantity} {item.unit} × {formatCurrency(item.unitValue)}
                                 </p>
                               </div>
-                              <div className="text-right">
-                                <p className="text-sm font-semibold">{formatCurrency(item.unitValue * item.quantity)}</p>
+                              <div className="text-right shrink-0">
+                                <p className="text-sm font-semibold whitespace-nowrap">{formatCurrency(item.unitValue * item.quantity)}</p>
                               </div>
-                              <div className="flex gap-1">
+                              <div className="flex gap-1 shrink-0">
                                 <Button
                                   size="icon"
                                   variant="ghost"
@@ -1006,22 +1006,22 @@ export function BudgetItemsEditor({
       </ScrollArea>
 
       {/* Summary footer */}
-      <div className="flex items-center justify-between pt-3 mt-3 border-t">
-        <div className="flex gap-4 text-sm">
-          <span className="flex items-center gap-1">
-            <Package className="w-4 h-4 text-blue-500" />
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-3 mt-3 border-t">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm min-w-0">
+          <span className="flex items-center gap-1 whitespace-nowrap">
+            <Package className="w-4 h-4 text-blue-500 shrink-0" />
             {formatCurrency(items.filter(i => i.category === 'material').reduce((s, i) => s + i.unitValue * i.quantity, 0))}
           </span>
-          <span className="flex items-center gap-1">
-            <Hammer className="w-4 h-4 text-orange-500" />
+          <span className="flex items-center gap-1 whitespace-nowrap">
+            <Hammer className="w-4 h-4 text-orange-500 shrink-0" />
             {formatCurrency(items.filter(i => i.category === 'labor').reduce((s, i) => s + i.unitValue * i.quantity, 0))}
           </span>
-          <span className="flex items-center gap-1">
-            <Wrench className="w-4 h-4 text-green-500" />
+          <span className="flex items-center gap-1 whitespace-nowrap">
+            <Wrench className="w-4 h-4 text-green-500 shrink-0" />
             {formatCurrency(items.filter(i => i.category === 'equipment').reduce((s, i) => s + i.unitValue * i.quantity, 0))}
           </span>
         </div>
-        <div className="font-bold">
+        <div className="font-bold whitespace-nowrap">
           Total: {formatCurrency(items.reduce((s, i) => s + i.unitValue * i.quantity, 0))}
         </div>
       </div>
