@@ -525,6 +525,7 @@ export function ImportBudgetItemsDialog({
                     <TableHead className="w-10"></TableHead>
                     <TableHead className="w-[280px]">Item Extraído</TableHead>
                     <TableHead className="w-[200px]">Vinculação</TableHead>
+                    <TableHead className="w-[170px]">Família (pré-cadastro)</TableHead>
                     <TableHead className="w-20">Qtd</TableHead>
                     <TableHead className="w-16">Un</TableHead>
                     <TableHead className="w-24">V. Unit</TableHead>
