@@ -44,8 +44,11 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
   const [newMacroName, setNewMacroName] = useState("");
   const [showAddMacro, setShowAddMacro] = useState(false);
   
-  const [editingScope, setEditingScope] = useState<{ macroId: string; scope: Scope } | null>(null);
-  const [newScope, setNewScope] = useState<{ macroId: string; name: string; weight: string } | null>(null);
+  const [editingScope, setEditingScope] = useState<{ macroId: string; scope: Scope; unit_label: string; unit_symbol: string } | null>(null);
+  const [newScope, setNewScope] = useState<{ macroId: string; name: string; weight: string; unit_label: string; unit_symbol: string } | null>(null);
+
+  // Map scope_id -> {unit_label, unit_symbol} carregado de project_contract_services
+  const [scopeUnits, setScopeUnits] = useState<Record<string, { unit_label: string; unit_symbol: string }>>({});
 
   const [showResetWarning, setShowResetWarning] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
