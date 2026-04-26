@@ -1006,22 +1006,22 @@ export function BudgetItemsEditor({
       </ScrollArea>
 
       {/* Summary footer */}
-      <div className="flex items-center justify-between pt-3 mt-3 border-t">
-        <div className="flex gap-4 text-sm">
-          <span className="flex items-center gap-1">
-            <Package className="w-4 h-4 text-blue-500" />
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-3 mt-3 border-t">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm min-w-0">
+          <span className="flex items-center gap-1 whitespace-nowrap">
+            <Package className="w-4 h-4 text-blue-500 shrink-0" />
             {formatCurrency(items.filter(i => i.category === 'material').reduce((s, i) => s + i.unitValue * i.quantity, 0))}
           </span>
-          <span className="flex items-center gap-1">
-            <Hammer className="w-4 h-4 text-orange-500" />
+          <span className="flex items-center gap-1 whitespace-nowrap">
+            <Hammer className="w-4 h-4 text-orange-500 shrink-0" />
             {formatCurrency(items.filter(i => i.category === 'labor').reduce((s, i) => s + i.unitValue * i.quantity, 0))}
           </span>
-          <span className="flex items-center gap-1">
-            <Wrench className="w-4 h-4 text-green-500" />
+          <span className="flex items-center gap-1 whitespace-nowrap">
+            <Wrench className="w-4 h-4 text-green-500 shrink-0" />
             {formatCurrency(items.filter(i => i.category === 'equipment').reduce((s, i) => s + i.unitValue * i.quantity, 0))}
           </span>
         </div>
-        <div className="font-bold">
+        <div className="font-bold whitespace-nowrap">
           Total: {formatCurrency(items.reduce((s, i) => s + i.unitValue * i.quantity, 0))}
         </div>
       </div>
