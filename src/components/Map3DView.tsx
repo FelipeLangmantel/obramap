@@ -368,7 +368,7 @@ function HouseDetailsPanel({ marker, onClose, customLegendItems, onOpenPhotoHist
 }
 
 export function Map3DView() {
-  const { currentProject } = useConstruction();
+  const { currentProject, refreshHousesFromDB } = useConstruction();
   const { isAdmin } = useAuth();
   const projectId = currentProject?.id;
   
@@ -469,8 +469,7 @@ export function Map3DView() {
 
   // Realtime: lançamentos no Diário/Produção disparam refresh das casas,
   // que por sua vez recalcula o progresso por camada acima. Pausa quando
-  // a aba está oculta para economizar conexões (limite Supabase Pro: 200).
-  const { refreshHousesFromDB } = useConstruction();
+  // (refreshHousesFromDB já desestruturado acima)
   useEffect(() => {
     if (!projectId || !layerManager.autoMode) return;
     let channel: ReturnType<typeof supabase.channel> | null = null;
