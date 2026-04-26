@@ -152,15 +152,30 @@ export function TeamRequirementsView() {
       </div>
 
       {/* Aviso de dados incompletos */}
-      {grandTotals.services_missing > 0 && (
+      {(grandTotals.services_missing > 0 || grandTotals.services_missing_team > 0) && (
         <Alert className="border-amber-300 bg-amber-50">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
           <AlertTitle className="text-amber-900 text-sm">
-            {grandTotals.services_missing} serviço(s) sem produtividade configurada
+            Configuração incompleta de produtividade
           </AlertTitle>
-          <AlertDescription className="text-xs text-amber-800">
-            Esses serviços aparecem com 0 pessoas no cálculo. Configure em{" "}
-            <strong>Produtividade &amp; Equipes</strong> para que a estimativa fique correta.
+          <AlertDescription className="text-xs text-amber-800 space-y-0.5">
+            {grandTotals.services_missing > 0 && (
+              <p>
+                • <strong>{grandTotals.services_missing}</strong> serviço(s) sem nenhuma
+                produtividade cadastrada — aparecem com 0 pessoas.
+              </p>
+            )}
+            {grandTotals.services_missing_team > 0 && (
+              <p>
+                • <strong>{grandTotals.services_missing_team}</strong> serviço(s) com
+                produtividade mas <em>sem composição detalhada de equipe</em> (não dá para
+                detalhar por profissão).
+              </p>
+            )}
+            <p className="pt-1">
+              Configure em <strong>Produtividade &amp; Equipes</strong> para ver o
+              dimensionamento por função (Pedreiro, Carpinteiro, Auxiliar de Pedreiro etc.).
+            </p>
           </AlertDescription>
         </Alert>
       )}
