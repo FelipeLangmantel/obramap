@@ -24,7 +24,7 @@ export interface PeriodTeamRow {
   total_people: number;
   has_productivity_config: boolean;
   has_team_composition: boolean;
-  /** Quebra detalhada por profissão (já multiplicada pelo nº de equipes) */
+  /** Quebra por profissão (já multiplicada pelo nº de equipes) */
   role_breakdown: RoleBreakdown[];
 }
 
@@ -42,8 +42,8 @@ export interface PeriodTeamRequirements {
     people: number;
     services: number;
     services_missing_productivity: number;
+    services_missing_team: number;
   };
-  /** Agrega profissionais por etapa (macro) — proxy de "profissão" no modelo atual */
   by_macro: Array<{
     macro_id: string;
     macro_name: string;
@@ -52,28 +52,36 @@ export interface PeriodTeamRequirements {
     helpers: number;
     people: number;
   }>;
+  /** Pico por profissão neste período (somatório de todos os serviços) */
+  by_role: Array<{
+    role_name: string;
+    role_type: 'professional' | 'helper';
+    total: number;
+  }>;
 }
 
-interface RawService {
-  id: string;
-  planning_period_id: string;
-  scope_id: string;
-  scope_name: string;
+interface RpcRow {
+  period_id: string;
+  period_number: number;
+  period_start: string;
+  period_end: string;
+  period_name: string | null;
   macro_id: string;
-  macro_name: string;
-  team_count: number | null;
-  productivity_per_team: number | null;
-  unit_symbol: string | null;
-  target_houses: number | null;
-}
-
-interface RawProductivity {
   scope_id: string;
-  productivity_value: number;
-  productivity_unit: string;
-  default_team_count: number;
-  professionals_per_team: number;
-  helpers_per_team: number;
+  macro_name: string;
+  scope_name: string;
+  planned_houses: number;
+  team_count: number;
+  productivity_value: number | null;
+  productivity_unit: string | null;
+  working_days_per_week: number | null;
+  professionals_per_team: number | null;
+  helpers_per_team: number | null;
+  team_breakdown: RoleBreakdown[];
+  total_professionals: number;
+  total_helpers: number;
+  has_productivity_config: boolean;
+  has_team_composition: boolean;
 }
 
 interface RawPeriod {
@@ -85,70 +93,42 @@ interface RawPeriod {
   status: string | null;
 }
 
-/**
- * Calcula a equipe necessária por período de medição:
- *   pessoas = team_count(período) × (professionals_per_team + helpers_per_team)(produtividade)
- *
- * Quando o serviço não tem produtividade cadastrada, marca a linha como
- * `has_productivity_config = false` para o usuário saber o que ainda falta.
- */
 export function useTeamRequirementsByPeriod(projectId: string | null | undefined) {
   const [periods, setPeriods] = useState<RawPeriod[]>([]);
-  const [services, setServices] = useState<RawService[]>([]);
-  const [productivity, setProductivity] = useState<RawProductivity[]>([]);
+  const [rpcRows, setRpcRows] = useState<RpcRow[]>([]);
   const [macroColors, setMacroColors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!projectId) {
       setPeriods([]);
-      setServices([]);
-      setProductivity([]);
+      setRpcRows([]);
       return;
     }
     setLoading(true);
     try {
-      const [periodsRes, servicesRes, productivityRes, macrosRes] = await Promise.all([
+      const [periodsRes, rpcRes, projRes] = await Promise.all([
         supabase
           .from("planning_periods")
           .select("id, name, period_number, start_date, end_date, status")
           .eq("project_id", projectId)
           .order("period_number", { ascending: true }),
+        supabase.rpc("calculate_labor_needs_v2" as any, { p_project_id: projectId }),
         supabase
-          .from("service_planning_by_period")
-          .select(
-            "id, planning_period_id, scope_id, scope_name, macro_id, macro_name, team_count, productivity_per_team, unit_symbol, target_houses"
-          )
-          .eq("project_id", projectId),
-        supabase
-          .from("project_service_productivity" as any)
-          .select(
-            "scope_id, productivity_value, productivity_unit, default_team_count, professionals_per_team, helpers_per_team"
-          )
-          .eq("project_id", projectId)
-          .eq("is_active", true),
-        supabase
-          .from("project_contract_services")
-          .select("macro_id")
-          .eq("project_id", projectId),
+          .from("projects")
+          .select("macros_template")
+          .eq("id", projectId)
+          .maybeSingle(),
       ]);
 
       if (periodsRes.error) throw periodsRes.error;
-      if (servicesRes.error) throw servicesRes.error;
-      if (productivityRes.error) throw productivityRes.error;
+      if (rpcRes.error) throw rpcRes.error;
 
       setPeriods((periodsRes.data || []) as RawPeriod[]);
-      setServices((servicesRes.data || []) as RawService[]);
-      setProductivity(((productivityRes.data as any[]) || []) as RawProductivity[]);
+      setRpcRows(((rpcRes.data as any[]) || []) as RpcRow[]);
 
-      // Cores por macro (busca em macros_template do projeto)
-      const { data: projRow } = await supabase
-        .from("projects")
-        .select("macros_template")
-        .eq("id", projectId)
-        .maybeSingle();
       const colors: Record<string, string> = {};
-      const tmpl = (projRow?.macros_template as any[]) || [];
+      const tmpl = (projRes.data?.macros_template as any[]) || [];
       tmpl.forEach((m) => {
         if (m?.id && m?.color) colors[m.id] = m.color;
       });
@@ -164,42 +144,39 @@ export function useTeamRequirementsByPeriod(projectId: string | null | undefined
     refresh();
   }, [refresh]);
 
-  const productivityByScope = useMemo(() => {
-    const map = new Map<string, RawProductivity>();
-    productivity.forEach((p) => map.set(p.scope_id, p));
-    return map;
-  }, [productivity]);
-
   const requirements = useMemo<PeriodTeamRequirements[]>(() => {
     return periods.map((period) => {
-      const periodServices = services.filter(
-        (s) => s.planning_period_id === period.id && (s.target_houses ?? 0) > 0
-      );
+      const periodRows = rpcRows.filter((r) => r.period_id === period.id);
 
-      const rows: PeriodTeamRow[] = periodServices.map((s) => {
-        const prod = productivityByScope.get(s.scope_id);
-        const teamCount = Number(s.team_count) || 0;
-        const productivityPerTeam = Number(s.productivity_per_team) || 0;
-        const profPerTeam = prod ? Number(prod.professionals_per_team) || 0 : 0;
-        const helpPerTeam = prod ? Number(prod.helpers_per_team) || 0 : 0;
-        const totalProf = teamCount * profPerTeam;
-        const totalHelp = teamCount * helpPerTeam;
+      const rows: PeriodTeamRow[] = periodRows.map((r) => {
+        const profPerTeam = Number(r.professionals_per_team) || 0;
+        const helpPerTeam = Number(r.helpers_per_team) || 0;
+        const totalProf = Number(r.total_professionals) || 0;
+        const totalHelp = Number(r.total_helpers) || 0;
+        const breakdown = (r.team_breakdown || []).map((b) => ({
+          role_name: b.role_name,
+          role_type: b.role_type,
+          qty_per_team: Number(b.qty_per_team) || 0,
+          total: Number(b.total) || 0,
+        }));
 
         return {
-          scope_id: s.scope_id,
-          scope_name: s.scope_name,
-          macro_id: s.macro_id,
-          macro_name: s.macro_name,
-          macro_color: macroColors[s.macro_id] || null,
-          team_count: teamCount,
-          productivity_per_team: productivityPerTeam,
-          productivity_unit: prod?.productivity_unit || s.unit_symbol || "un",
+          scope_id: r.scope_id,
+          scope_name: r.scope_name,
+          macro_id: r.macro_id,
+          macro_name: r.macro_name,
+          macro_color: macroColors[r.macro_id] || null,
+          team_count: Number(r.team_count) || 0,
+          productivity_per_team: Number(r.productivity_value) || 0,
+          productivity_unit: r.productivity_unit || "un",
           professionals_per_team: profPerTeam,
           helpers_per_team: helpPerTeam,
           total_professionals: totalProf,
           total_helpers: totalHelp,
           total_people: totalProf + totalHelp,
-          has_productivity_config: !!prod,
+          has_productivity_config: !!r.has_productivity_config,
+          has_team_composition: !!r.has_team_composition,
+          role_breakdown: breakdown,
         };
       });
 
@@ -211,11 +188,21 @@ export function useTeamRequirementsByPeriod(projectId: string | null | undefined
           services: acc.services + 1,
           services_missing_productivity:
             acc.services_missing_productivity + (r.has_productivity_config ? 0 : 1),
+          services_missing_team:
+            acc.services_missing_team +
+            (r.has_productivity_config && !r.has_team_composition ? 1 : 0),
         }),
-        { professionals: 0, helpers: 0, people: 0, services: 0, services_missing_productivity: 0 }
+        {
+          professionals: 0,
+          helpers: 0,
+          people: 0,
+          services: 0,
+          services_missing_productivity: 0,
+          services_missing_team: 0,
+        }
       );
 
-      // Agregação por etapa (macro)
+      // Agregação por etapa
       const byMacroMap = new Map<
         string,
         { macro_id: string; macro_name: string; macro_color?: string | null; professionals: number; helpers: number }
@@ -240,6 +227,23 @@ export function useTeamRequirementsByPeriod(projectId: string | null | undefined
         people: m.professionals + m.helpers,
       }));
 
+      // Agregação por profissão (somatório do período)
+      const byRoleMap = new Map<string, { role_name: string; role_type: 'professional' | 'helper'; total: number }>();
+      rows.forEach((r) => {
+        r.role_breakdown.forEach((b) => {
+          const key = b.role_name.toLowerCase();
+          const existing = byRoleMap.get(key);
+          if (existing) existing.total += b.total;
+          else
+            byRoleMap.set(key, {
+              role_name: b.role_name,
+              role_type: b.role_type,
+              total: b.total,
+            });
+        });
+      });
+      const by_role = Array.from(byRoleMap.values()).sort((a, b) => b.total - a.total);
+
       return {
         period_id: period.id,
         period_name: period.name || `Medição ${period.period_number}`,
@@ -250,11 +254,12 @@ export function useTeamRequirementsByPeriod(projectId: string | null | undefined
         rows,
         totals,
         by_macro,
+        by_role,
       };
     });
-  }, [periods, services, productivityByScope, macroColors]);
+  }, [periods, rpcRows, macroColors]);
 
-  /** Visão consolidada: profissionais por etapa, somando todos os períodos */
+  /** Pico de pessoas por etapa em qualquer período */
   const consolidatedByMacro = useMemo(() => {
     const map = new Map<
       string,
@@ -277,9 +282,24 @@ export function useTeamRequirementsByPeriod(projectId: string | null | undefined
     }));
   }, [requirements]);
 
+  /** Pico por profissão em qualquer período (útil para histograma) */
+  const consolidatedByRole = useMemo(() => {
+    const map = new Map<string, { role_name: string; role_type: 'professional' | 'helper'; total: number }>();
+    requirements.forEach((p) => {
+      p.by_role.forEach((r) => {
+        const key = r.role_name.toLowerCase();
+        const existing = map.get(key);
+        if (existing) existing.total = Math.max(existing.total, r.total);
+        else map.set(key, { ...r });
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [requirements]);
+
   return {
     requirements,
     consolidatedByMacro,
+    consolidatedByRole,
     loading,
     refresh,
   };
