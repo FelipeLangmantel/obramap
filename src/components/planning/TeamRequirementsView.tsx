@@ -413,6 +413,61 @@ export function TeamRequirementsView() {
           )}
         </TabsContent>
 
+        {/* === Por profissão === */}
+        <TabsContent value="by-role" className="mt-3">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Pico por profissão</CardTitle>
+              <CardDescription className="text-xs">
+                Quantas pessoas de cada profissão a obra precisa simultaneamente, considerando
+                o pico em qualquer período.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {consolidatedByRole.length === 0 ? (
+                <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+                  <HardHat className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                  <p>Nenhuma composição de equipe configurada.</p>
+                  <p className="text-xs mt-1">
+                    Vá em <strong>Produtividade &amp; Equipes</strong> e adicione profissões
+                    (Pedreiro, Carpinteiro etc.) à composição de cada serviço.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-md border overflow-x-auto">
+                  <Table className="text-sm">
+                    <TableHeader className="bg-muted/40">
+                      <TableRow>
+                        <TableHead>Profissão</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead className="text-right">Pico (pessoas)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {consolidatedByRole.map((r) => (
+                        <TableRow key={r.role_name}>
+                          <TableCell className="font-medium">{r.role_name}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={r.role_type === "professional" ? "secondary" : "outline"}
+                              className="text-[10px]"
+                            >
+                              {r.role_type === "professional" ? "Profissional" : "Auxiliar"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-semibold">
+                            {r.total}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* === Pico por etapa === */}
         <TabsContent value="by-macro" className="mt-3">
           <Card>
