@@ -23,7 +23,7 @@ import { FinancialFlowView } from "@/components/FinancialFlowView";
 import { BoardDecisionsView } from "@/components/BoardDecisionsView";
 import DeliveryView from "@/components/DeliveryView";
 import SmartPlanningView from "@/components/smart-planning/SmartPlanningView";
-import { ServiceProductivityView } from "@/components/productivity/ServiceProductivityView";
+import { ProductivityModule } from "@/components/productivity/ProductivityModule";
 import ContractorsModuleView from "@/components/contractors/ContractorsModuleView";
 import IndustrializationModuleView from "@/components/industrialization/IndustrializationModuleView";
 import HoldingDashboardView from "@/components/holding/HoldingDashboardView";
@@ -455,7 +455,7 @@ function Index() {
 
                 {activeView === "productivity" && (
                   <div className="flex-1">
-                    <ServiceProductivityView />
+                    <ProductivityModule />
                   </div>
                 )}
 
