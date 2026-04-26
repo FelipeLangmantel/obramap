@@ -484,11 +484,16 @@ export function Map3DView() {
   ]);
 
   // Realtime: lançamentos no Diário/Produção disparam refresh das casas,
-  // que por sua vez recalcula o progresso por camada acima. Pausa quando
-  // (refreshHousesFromDB já desestruturado acima)
+  // que por sua vez recalcula o progresso por camada acima.
   useEffect(() => {
     if (!projectId || !layerManager.autoMode) return;
     let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    // diary_items não tem project_id — filtramos pelo lado do cliente
+    // comparando com o conjunto de house_id do projeto atual.
+    const houseIdSet = new Set(
+      (currentProject?.houses || []).map((h: any) => h.id).filter(Boolean)
+    );
 
     const subscribe = () => {
       channel = supabase
@@ -503,9 +508,32 @@ export function Map3DView() {
         }, () => { void refreshHousesFromDB(); })
         .on("postgres_changes", {
           event: "*", schema: "public", table: "diary_items",
-        }, () => { void refreshHousesFromDB(); })
+        }, (payload: any) => {
+          // Só refazemos se o item alterado pertence a uma casa deste projeto
+          const houseId = payload?.new?.house_id ?? payload?.old?.house_id;
+          if (!houseId || houseIdSet.has(houseId)) {
+            void refreshHousesFromDB();
+          }
+        })
         .subscribe();
     };
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (channel) { supabase.removeChannel(channel); channel = null; }
+      } else if (!channel) {
+        subscribe();
+        void refreshHousesFromDB();
+      }
+    };
+
+    subscribe();
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [projectId, layerManager.autoMode, refreshHousesFromDB, currentProject?.houses]);
 
     const handleVisibility = () => {
       if (document.hidden) {
