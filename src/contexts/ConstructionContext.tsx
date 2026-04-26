@@ -51,6 +51,7 @@ export interface Project {
   displayOrder: number;
   weightMode: "automatic" | "manual";
   logoUrl?: string | null;
+  companyId?: string | null;
 }
 
 interface ConstructionContextType {
@@ -308,9 +309,11 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
       }
 
       try {
+        // ⚡ Carrega APENAS metadados dos projetos (sem houses) — houses só são
+        // hidratadas para o currentProjectId no useEffect abaixo.
         const { data: projectsData, error: projectsError } = await supabase
           .from("projects")
-          .select("*")
+          .select("id, name, location, contractor, start_date, expected_end_date, total_houses, unit_size, project_type, macros_template, created_at, setup_complete, setup_step, legend_follow_macros, custom_legend_items, display_order, weight_mode, logo_url, company_id")
           .order("display_order", { ascending: true });
 
         if (projectsError) {
@@ -343,6 +346,7 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
             displayOrder: p.display_order ?? 0,
             weightMode: (p as any).weight_mode || "manual",
             logoUrl: (p as any).logo_url ?? null,
+            companyId: (p as any).company_id ?? null,
           };
         });
 
@@ -1312,6 +1316,27 @@ export function ConstructionProvider({ children }: { children: ReactNode }) {
     successMessage: string
   ): Promise<boolean> => {
     if (!currentProject) return false;
+
+    // Garantir company_id antes de chamar a RPC (obras criadas por empresas novas
+    // podem ter company_id NULL no banco, fazendo apply_structure_mutation falhar).
+    if (!currentProject.companyId) {
+      const { data: cid } = await supabase.rpc('get_my_company_id');
+      if (cid) {
+        const { error: updErr } = await supabase
+          .from('projects')
+          .update({ company_id: cid })
+          .eq('id', currentProject.id);
+        if (!updErr) {
+          // Atualiza estado local para refletir o vínculo
+          setProjects(prev => prev.map(p =>
+            p.id === currentProject.id ? { ...p, companyId: cid as string } : p
+          ));
+        }
+      } else {
+        toast.error('Configure sua empresa em Gerenciamento → Minha Empresa antes de adicionar etapas.');
+        return false;
+      }
+    }
 
     const { data, error } = await supabase.rpc('apply_structure_mutation', {
       p_project_id: currentProject.id,

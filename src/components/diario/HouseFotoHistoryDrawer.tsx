@@ -25,7 +25,14 @@ export function HouseFotoHistoryDrawer({
   open, onOpenChange, houseId, projectId, houseLabel,
 }: Props) {
   const navigate = useNavigate();
-  const { photos, loading } = useHousePhotoHistory(open ? houseId : null, open ? projectId : null);
+  const {
+    photos,
+    loading,
+    loadingMore,
+    hasMore,
+    totalCount,
+    loadAll,
+  } = useHousePhotoHistory(open ? houseId : null, open ? projectId : null);
   const [view, setView] = useState<"servico" | "cronologico">("servico");
   const [preview, setPreview] = useState<HousePhotoEntry | null>(null);
 
@@ -59,6 +66,12 @@ export function HouseFotoHistoryDrawer({
             </SheetTitle>
             <SheetDescription>
               Fotos vinculadas a serviços executados nesta unidade. Base para auditoria.
+              {!loading && totalCount > 0 && (
+                <span className="block text-xs mt-1">
+                  Exibindo <strong>{photos.length}</strong> de <strong>{totalCount}</strong> fotos
+                  {hasMore ? " mais recentes" : ""}.
+                </span>
+              )}
             </SheetDescription>
           </SheetHeader>
 
@@ -123,6 +136,26 @@ export function HouseFotoHistoryDrawer({
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {!loading && hasMore && photos.length > 0 && (
+              <div className="mt-4 flex justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadAll()}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      Carregando...
+                    </>
+                  ) : (
+                    <>Ver todas ({totalCount} fotos)</>
+                  )}
+                </Button>
               </div>
             )}
           </div>
