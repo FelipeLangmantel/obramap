@@ -409,6 +409,39 @@ export function AddServiceDialog({
                 </div>
               )}
 
+              {/* Aviso: serviço sem produtividade configurada */}
+              {selectedScope && productivityChecked && !serviceProductivity && (
+                <Alert variant="default" className="border-amber-300 bg-amber-50">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertTitle className="text-amber-900 text-sm">
+                    Produtividade não configurada
+                  </AlertTitle>
+                  <AlertDescription className="text-xs text-amber-800">
+                    Este serviço ainda não tem produtividade e equipe definidas em{" "}
+                    <strong>Produtividade &amp; Equipes</strong>. Sem isso, o sistema usa
+                    valores zerados — o que faz o cálculo de capacidade ficar negativo.
+                    Configure antes para que o planejamento traga os valores prontos.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Info: serviço com produtividade configurada (origem dos defaults) */}
+              {selectedScope && serviceProductivity && (
+                <Alert className="border-emerald-300 bg-emerald-50">
+                  <Users className="h-4 w-4 text-emerald-700" />
+                  <AlertTitle className="text-emerald-900 text-sm">
+                    Produtividade carregada
+                  </AlertTitle>
+                  <AlertDescription className="text-xs text-emerald-800">
+                    Valores sugeridos a partir de <strong>Produtividade &amp; Equipes</strong>:{" "}
+                    {serviceProductivity.default_team_count} equipe(s) ×{" "}
+                    {serviceProductivity.productivity_value}{" "}
+                    {serviceProductivity.productivity_unit}. Você pode ajustar abaixo se
+                    este período precisar de algo diferente.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Unidade de produção (preset ou personalizada) */}
               <UnitPresetSelector
                 value={{ unit_label: unitLabel, unit_symbol: unitSymbol }}
