@@ -873,7 +873,7 @@ export function BudgetItemsEditor({
                       return (
                         <div
                           key={item.id || `new-${idx}`}
-                          className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${
+                          className={`flex items-center gap-2 p-2 rounded-lg border transition-colors min-w-0 ${
                             isEditing ? 'bg-accent border-primary/50' : 'bg-background hover:bg-muted/30'
                           }`}
                         >
