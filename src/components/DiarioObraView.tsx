@@ -1171,26 +1171,28 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">⏳ Edição solicitada</Badge>
               )}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1 text-xs text-muted-foreground min-w-0">
               {projectInfo.location && (
-                <div className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" />{projectInfo.location}</div>
+                <div className="flex items-center gap-1.5 min-w-0"><MapPin className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{projectInfo.location}</span></div>
               )}
               {legalConfig?.contratante_nome && (
-                <div className="flex items-center gap-1.5">
-                  <Building2 className="h-3.5 w-3.5" />
-                  Contratante: <span className="text-foreground font-medium truncate">{legalConfig.contratante_nome}</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Building2 className="h-3.5 w-3.5 shrink-0" />
+                  <span className="shrink-0">Contratante:</span>
+                  <span className="text-foreground font-medium truncate min-w-0">{legalConfig.contratante_nome}</span>
                 </div>
               )}
               {(legalConfig?.contratada_razao_social || company?.name) && (
-                <div className="flex items-center gap-1.5">
-                  <Building2 className="h-3.5 w-3.5" />
-                  Contratada: <span className="text-foreground font-medium truncate">{legalConfig?.contratada_razao_social || company?.name}</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Building2 className="h-3.5 w-3.5 shrink-0" />
+                  <span className="shrink-0">Contratada:</span>
+                  <span className="text-foreground font-medium truncate min-w-0">{legalConfig?.contratada_razao_social || company?.name}</span>
                 </div>
               )}
               {legalConfig?.contrato_numero && (
-                <div className="flex items-center gap-1.5">
-                  <FileSignature className="h-3.5 w-3.5" />
-                  Contrato nº <span className="text-foreground font-medium">{legalConfig.contrato_numero}</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <FileSignature className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">Contrato nº <span className="text-foreground font-medium">{legalConfig.contrato_numero}</span></span>
                 </div>
               )}
               {projectInfo.engenheiroResidente && (
