@@ -467,6 +467,48 @@ export function Map3DView() {
     layerManager.updateFromMacroProgress,
   ]);
 
+  // Realtime: lançamentos no Diário/Produção disparam refresh das casas,
+  // que por sua vez recalcula o progresso por camada acima. Pausa quando
+  // a aba está oculta para economizar conexões (limite Supabase Pro: 200).
+  const { refreshHousesFromDB } = useConstruction();
+  useEffect(() => {
+    if (!projectId || !layerManager.autoMode) return;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const subscribe = () => {
+      channel = supabase
+        .channel(`map3d-production-${projectId}`)
+        .on("postgres_changes", {
+          event: "*", schema: "public", table: "productions",
+          filter: `project_id=eq.${projectId}`,
+        }, () => { void refreshHousesFromDB(); })
+        .on("postgres_changes", {
+          event: "*", schema: "public", table: "weekly_productions",
+          filter: `project_id=eq.${projectId}`,
+        }, () => { void refreshHousesFromDB(); })
+        .on("postgres_changes", {
+          event: "*", schema: "public", table: "diary_items",
+        }, () => { void refreshHousesFromDB(); })
+        .subscribe();
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (channel) { supabase.removeChannel(channel); channel = null; }
+      } else if (!channel) {
+        subscribe();
+        void refreshHousesFromDB();
+      }
+    };
+
+    subscribe();
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [projectId, layerManager.autoMode, refreshHousesFromDB]);
+
   // Also mark ready for markers
   useEffect(() => {
     if (markers.length > 0 && !modelData) setSceneReady(true);
