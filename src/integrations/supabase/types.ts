@@ -5792,6 +5792,44 @@ export type Database = {
           },
         ]
       }
+      map_mesh_house_assignments: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          house_number: number
+          id: string
+          mesh_name: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          house_number: number
+          id?: string
+          mesh_name: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          house_number?: number
+          id?: string
+          mesh_name?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "map_mesh_house_assignments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       material_families: {
         Row: {
           color: string | null

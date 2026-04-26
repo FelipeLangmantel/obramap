@@ -10,7 +10,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers, Camera } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers, Camera, MousePointerClick } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
@@ -18,6 +19,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useModelLayers } from "./map3d/useModelLayers";
 import { LayersPanel } from "./map3d/LayersPanel";
 import { LinkLayersDialog } from "./map3d/LinkLayersDialog";
+import { AssignHousePopover } from "./map3d/AssignHousePopover";
+import { useMeshHouseAssignments } from "@/hooks/useMeshHouseAssignments";
 import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDrawer";
 
 interface ModelData {
@@ -35,10 +38,10 @@ interface HouseMarker {
 }
 
 // GLTF model - calls onLoaded after it's in the scene
-function GLTFModel({ url, onLoaded, onSceneReady }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void }) {
+function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D) => void }) {
   const { scene } = useGLTF(url);
   const calledRef = useRef(false);
-  
+
   useEffect(() => {
     if (scene && !calledRef.current) {
       calledRef.current = true;
@@ -50,12 +53,21 @@ function GLTFModel({ url, onLoaded, onSceneReady }: { url: string; onLoaded: () 
       });
     }
   }, [scene, onLoaded, onSceneReady]);
-  
-  return <primitive object={scene} />;
+
+  return (
+    <primitive
+      object={scene}
+      onClick={(e: any) => {
+        if (!onMeshClick) return;
+        e.stopPropagation();
+        if (e.object) onMeshClick(e.object);
+      }}
+    />
+  );
 }
 
 // OBJ model - calls onLoaded after it's in the scene
-function OBJModel({ url, mtlUrl, onLoaded, onSceneReady }: { url: string; mtlUrl?: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void }) {
+function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick }: { url: string; mtlUrl?: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D) => void }) {
   const materials = mtlUrl ? useLoader(MTLLoader, mtlUrl) : null;
   const obj = useLoader(OBJLoader, url, (loader) => {
     if (materials) { materials.preload(); loader.setMaterials(materials); }
@@ -70,7 +82,16 @@ function OBJModel({ url, mtlUrl, onLoaded, onSceneReady }: { url: string; mtlUrl
     }
   }, [obj, onLoaded, onSceneReady]);
 
-  return <primitive object={obj} />;
+  return (
+    <primitive
+      object={obj}
+      onClick={(e: any) => {
+        if (!onMeshClick) return;
+        e.stopPropagation();
+        if (e.object) onMeshClick(e.object);
+      }}
+    />
+  );
 }
 
 // House marker
@@ -265,8 +286,9 @@ function AutoFitCamera({
 
 // Scene
 function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLegendItems,
-  resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady
-}: { 
+  resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady,
+  onMeshClick,
+}: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
   resetTrigger: number; fitTrigger: number;
@@ -274,6 +296,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   onCameraChange?: (p: [number, number, number], t: [number, number, number]) => void;
   sceneReady: boolean; onModelLoaded: () => void;
   onSceneReady?: (scene: THREE.Object3D) => void;
+  onMeshClick?: (mesh: THREE.Object3D) => void;
 }) {
   return (
     <>
@@ -286,17 +309,17 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
       <directionalLight position={[-10, 10, -5]} intensity={0.5} />
       <hemisphereLight args={["#87ceeb", "#4a7c59", 0.4]} />
-      
+
       {modelData && (
         <Suspense fallback={<Html center><div className="bg-background/90 px-4 py-2 rounded-lg border border-border">Carregando modelo...</div></Html>}>
           {modelData.type === "gltf" ? (
-            <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} />
+            <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} />
           ) : (
-            <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} />
+            <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} />
           )}
         </Suspense>
       )}
-      
+
       {markers.map((m) => (
         <HouseMarker3D key={m.id} marker={m} onClick={() => onMarkerClick(m)}
           isSelected={selectedMarkerId === m.id} customLegendItems={customLegendItems} />
@@ -388,8 +411,19 @@ export function Map3DView() {
   const [sceneReady, setSceneReady] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [showLayers, setShowLayers] = useState(false);
-  
-  const layerManager = useModelLayers(projectId);
+
+  // Modo "Atribuir Casas" — clicar numa malha abre popover para batizá-la.
+  const [assignMode, setAssignMode] = useState(false);
+  const [pickedMesh, setPickedMesh] = useState<{
+    name: string;
+    groupName?: string;
+    childMeshes: string[];
+  } | null>(null);
+  const [assignSaving, setAssignSaving] = useState(false);
+
+  // Atribuição manual mesh→casa (persistida no banco) — fonte da verdade.
+  const meshAssignments = useMeshHouseAssignments(projectId);
+  const layerManager = useModelLayers(projectId, meshAssignments.assignmentMap);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mtlInputRef = useRef<HTMLInputElement>(null);
@@ -410,6 +444,61 @@ export function Map3DView() {
     layerManager.extractLayers(scene);
     console.log('[3D] Layers extracted from model');
   }, [layerManager.extractLayers]);
+
+  // ====================================================
+  // Modo "Atribuir Casas": clique numa malha abre popover
+  // ====================================================
+  const handleMeshClick = useCallback((obj: THREE.Object3D) => {
+    if (!assignMode) return;
+    if (!(obj as THREE.Mesh).isMesh) return;
+
+    const meshName = obj.name || `Mesh_${obj.id}`;
+
+    // Sobe um nível: o "grupo pai" agrupa peças da mesma casa
+    // (telhado + paredes + piso de uma mesma casa, no SketchUp).
+    const parent = obj.parent;
+    const isRealGroup = parent && parent.type !== "Scene" && (parent.children?.length ?? 0) > 1;
+    const groupName = isRealGroup ? (parent?.name || undefined) : undefined;
+
+    const childMeshes: string[] = [];
+    if (isRealGroup && parent) {
+      parent.traverse(c => {
+        if ((c as THREE.Mesh).isMesh) {
+          const n = c.name || `Mesh_${c.id}`;
+          if (n !== meshName) childMeshes.push(n);
+        }
+      });
+    }
+
+    setPickedMesh({ name: meshName, groupName, childMeshes });
+  }, [assignMode]);
+
+  const confirmAssignment = useCallback(async (houseNumber: number, includeChildren: boolean) => {
+    if (!pickedMesh) return;
+    setAssignSaving(true);
+    const targets = includeChildren
+      ? [pickedMesh.name, ...pickedMesh.childMeshes]
+      : [pickedMesh.name];
+    const { error } = await meshAssignments.assignMeshes(targets, houseNumber);
+    setAssignSaving(false);
+    if (error) {
+      toast.error("Erro ao atribuir casa: " + error.message);
+      return;
+    }
+    toast.success(
+      `${targets.length} mesh(es) atribuído(s) à Casa ${String(houseNumber).padStart(2, "0")}`
+    );
+    setPickedMesh(null);
+  }, [pickedMesh, meshAssignments]);
+
+  const clearAssignment = useCallback(async () => {
+    if (!pickedMesh) return;
+    setAssignSaving(true);
+    await meshAssignments.clearMesh(pickedMesh.name);
+    setAssignSaving(false);
+    toast.success("Atribuição removida");
+    setPickedMesh(null);
+  }, [pickedMesh, meshAssignments]);
 
   // ============================================================
   // Integração 3D ⇄ Produção em tempo real
@@ -668,6 +757,23 @@ export function Map3DView() {
                 <Layers className="h-4 w-4 mr-1.5" />Camadas ({layerManager.layers.length})
               </Button>
             )}
+            {isAdmin && layerManager.layers.length > 0 && (currentProject?.houses?.length ?? 0) > 0 && (
+              <Button
+                variant={assignMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => { setAssignMode(p => !p); setPickedMesh(null); }}
+                disabled={isLoading}
+                title="Clique nas malhas do modelo para batizar cada casa"
+              >
+                <MousePointerClick className="h-4 w-4 mr-1.5" />
+                {assignMode ? "Sair do modo Atribuir" : "Atribuir Casas"}
+                {meshAssignments.assignments.length > 0 && (
+                  <Badge variant="secondary" className="ml-1.5 h-4 text-[10px] px-1">
+                    {meshAssignments.assignments.length}
+                  </Badge>
+                )}
+              </Button>
+            )}
             {isAdmin && (
               <AlertDialog>
                 <AlertDialogTrigger asChild><Button variant="outline" size="sm" disabled={isLoading}><RotateCcw className="h-4 w-4 mr-1.5" />Resetar Mapa</Button></AlertDialogTrigger>
@@ -702,7 +808,10 @@ export function Map3DView() {
             <Loader2 className="h-6 w-6 animate-spin mr-2" /><span>Carregando...</span>
           </div>
         )}
-        <div className="absolute inset-0">
+        <div
+          className="absolute inset-0"
+          style={assignMode ? { cursor: "crosshair" } : undefined}
+        >
           <Canvas shadows dpr={[1, 1.5]} frameloop="always"
             gl={{ antialias: true, powerPreference: "high-performance", stencil: false, depth: true }}
             onDoubleClick={centerCamera}
@@ -713,9 +822,25 @@ export function Map3DView() {
               resetTrigger={resetTrigger} fitTrigger={fitTrigger}
               savedPosition={savedPos} savedTarget={savedTgt}
               onCameraChange={handleCameraChange} sceneReady={sceneReady}
-              onModelLoaded={handleModelLoaded} onSceneReady={handleSceneReady} />
+              onModelLoaded={handleModelLoaded} onSceneReady={handleSceneReady}
+              onMeshClick={assignMode ? handleMeshClick : undefined} />
           </Canvas>
         </div>
+        {assignMode && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-primary text-primary-foreground px-3 py-1.5 rounded-full text-xs font-medium shadow-lg flex items-center gap-1.5 pointer-events-none">
+            <MousePointerClick className="h-3.5 w-3.5" />
+            Clique numa parte do modelo para atribuir a uma casa
+          </div>
+        )}
+        <AssignHousePopover
+          picked={pickedMesh}
+          totalHouses={currentProject?.houses?.length ?? 0}
+          currentHouse={pickedMesh ? meshAssignments.assignmentMap.get(pickedMesh.name) ?? null : null}
+          saving={assignSaving}
+          onConfirm={confirmAssignment}
+          onClear={clearAssignment}
+          onClose={() => setPickedMesh(null)}
+        />
         {showLayers && layerManager.layers.length > 0 && (
           <LayersPanel
             layers={layerManager.layers}

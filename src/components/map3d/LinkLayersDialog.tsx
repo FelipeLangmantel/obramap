@@ -8,6 +8,7 @@ import { Link2, Unlink, Save, Loader2, Home, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { matchServiceForMesh } from "./serviceKeywordMap";
 import type { ModelLayer, LayerStageLink } from "./useModelLayers";
 
 interface ServiceOption {
@@ -85,6 +86,7 @@ export function LinkLayersDialog({
   }, [open, projectId]);
 
   // Inicializa estado local a partir dos vínculos existentes + auto-detecção da casa
+  // E sugere serviço pelo nome do mesh quando ainda não há vínculo (auto + ajuste fino)
   useEffect(() => {
     const map: Record<string, string> = {};
     const houses: Record<string, string> = {};
@@ -98,13 +100,15 @@ export function LinkLayersDialog({
         }
         houses[l.name] = existing.house_number != null ? String(existing.house_number) : "_all";
       } else {
-        // Auto-preenche casa detectada do nome do mesh
+        // Sem vínculo: sugere serviço pelo nome + casa detectada/atribuída
+        const suggested = services.length > 0 ? matchServiceForMesh(l.name, services) : null;
+        map[l.name] = suggested ? suggested.id : "_none";
         houses[l.name] = l.houseNumber != null ? String(l.houseNumber) : "_all";
       }
     });
     setLocalLinks(map);
     setLocalHouses(houses);
-  }, [links, layers, open]);
+  }, [links, layers, open, services]);
 
   const handleSave = async () => {
     setSaving(true);
