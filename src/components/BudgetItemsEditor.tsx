@@ -643,7 +643,7 @@ export function BudgetItemsEditor({
   }
 
   return (
-    <div className={`flex flex-col ${compact ? 'h-[400px]' : 'h-full'}`}>
+    <div className={`flex flex-col w-full min-w-0 overflow-hidden ${compact ? 'h-[400px]' : 'h-full'}`}>
       {/* Delete confirmation dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
