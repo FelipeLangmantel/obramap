@@ -1,5 +1,6 @@
-import { useState, DragEvent, useMemo, useCallback } from "react";
-import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy, Eye, Scale, Upload, FileUp, Download, Printer, Calculator, Lock, Unlock, Layers } from "lucide-react";
+import { useState, DragEvent, useMemo, useCallback, useEffect } from "react";
+import { Plus, Pencil, Trash2, GripVertical, AlertTriangle, ArrowUp, ArrowDown, Copy, Eye, Scale, Upload, FileUp, Download, Printer, Calculator, Lock, Unlock, Layers, Ruler } from "lucide-react";
+import { UnitPresetSelector } from "@/components/shared/UnitPresetSelector";
 import { CopyMacrosDialog } from "./CopyMacrosDialog";
 import { ImportMacrosDialog } from "./ImportMacrosDialog";
 import { ImportWeightsFromBudgetDialog } from "./ImportWeightsFromBudgetDialog";
