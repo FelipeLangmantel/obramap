@@ -8,6 +8,7 @@ import { Link2, Unlink, Save, Loader2, Home, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useConstruction } from "@/contexts/ConstructionContext";
+import { matchServiceForMesh } from "./serviceKeywordMap";
 import type { ModelLayer, LayerStageLink } from "./useModelLayers";
 
 interface ServiceOption {
