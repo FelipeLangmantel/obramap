@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ServiceProductivity } from '@/hooks/useServiceProductivity';
+import { useEffect, useMemo, useState } from 'react';
+import { ServiceProductivity, TeamMemberRow } from '@/hooks/useServiceProductivity';
 import {
   Dialog,
   DialogContent,
@@ -13,16 +13,24 @@ import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Users, Calculator, Ruler, Info } from 'lucide-react';
+import { Users, Calculator, Ruler, Info, Plus, Trash2, HardHat } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useConstruction } from '@/contexts/ConstructionContext';
 import { isPhysicalUnit } from '@/hooks/useServiceCapacities';
+import {
+  groupProfessionsByCategory,
+  findProfession,
+  PROFESSIONS_CATALOG,
+} from '@/data/professionsCatalog';
+import { cn } from '@/lib/utils';
 
 interface Props {
   service: {
@@ -44,22 +52,14 @@ interface Props {
     professionals_per_team?: number;
     helpers_per_team?: number;
     notes?: string;
+    team_composition?: TeamMemberRow[];
   }) => Promise<any>;
 }
 
-/**
- * Resolve a unidade base de produtividade para um serviço.
- * Prioridade:
- *   1. Unidade definida no serviço (project_contract_services.unit_symbol)
- *   2. Unidade default da obra (projects.default_unit_symbol)
- *   3. Fallback "casa" (sistema legado: 1 unidade = 1 casa)
- */
 function buildProductivityUnit(symbol: string | null | undefined, label: string | null | undefined) {
   const sym = (symbol || '').trim();
   const lbl = (label || '').trim();
-
   if (!sym) {
-    // Sem unidade configurada → usa modelo "casa" (legado)
     return {
       symbol: 'casa',
       label: 'Casa',
@@ -68,8 +68,6 @@ function buildProductivityUnit(symbol: string | null | undefined, label: string 
       isPhysical: false,
     };
   }
-
-  // Unidade física → produtividade diária faz mais sentido
   if (isPhysicalUnit(sym)) {
     return {
       symbol: sym,
@@ -79,8 +77,6 @@ function buildProductivityUnit(symbol: string | null | undefined, label: string 
       isPhysical: true,
     };
   }
-
-  // Unidade discreta (un, peça, etc.)
   return {
     symbol: sym,
     label: lbl || sym,
@@ -101,18 +97,24 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
     productivity_unit: existingProductivity?.productivity_unit || '',
     working_days_per_week: existingProductivity?.working_days_per_week || 5,
     default_team_count: existingProductivity?.default_team_count || 1,
-    professionals_per_team: existingProductivity?.professionals_per_team || 1,
-    helpers_per_team: existingProductivity?.helpers_per_team || 0,
     notes: existingProductivity?.notes || '',
   });
 
-  // Resolve unidade do serviço (contrato → projeto → fallback)
+  // Composição da equipe (cada linha = uma profissão por equipe)
+  const [team, setTeam] = useState<TeamMemberRow[]>(
+    existingProductivity?.team_composition?.length
+      ? existingProductivity.team_composition.map((t) => ({ ...t }))
+      : []
+  );
+  const [picker, setPicker] = useState<string>('');
+
+  const grouped = useMemo(() => groupProfessionsByCategory(), []);
+
   useEffect(() => {
     let cancelled = false;
     const resolveUnit = async () => {
       if (!currentProject?.id) return;
       try {
-        // 1) Unidade do serviço no contrato
         const { data: contractRow } = await supabase
           .from('project_contract_services')
           .select('unit_label, unit_symbol')
@@ -123,7 +125,6 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
         let symbol = contractRow?.unit_symbol || null;
         let label = contractRow?.unit_label || null;
 
-        // 2) Fallback: unidade default da obra
         if (!symbol) {
           const { data: projRow } = await supabase
             .from('projects')
@@ -138,7 +139,6 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
         const info = buildProductivityUnit(symbol, label);
         setUnitInfo(info);
 
-        // Se ainda não há produtividade configurada, sugere unidade base "perWeek"
         if (!existingProductivity) {
           setFormData((prev) => ({
             ...prev,
@@ -157,13 +157,68 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
     };
   }, [currentProject?.id, service.scopeId, existingProductivity]);
 
+  const addRoleFromPicker = (name: string) => {
+    if (!name) return;
+    if (team.some((t) => t.role_name.toLowerCase() === name.toLowerCase())) return;
+    const cat = findProfession(name);
+    setTeam((prev) => [
+      ...prev,
+      {
+        role_name: name,
+        role_type: cat?.type || 'professional',
+        quantity: 1,
+      },
+    ]);
+    setPicker('');
+  };
+
+  const updateRow = (idx: number, patch: Partial<TeamMemberRow>) => {
+    setTeam((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  };
+
+  const removeRow = (idx: number) => {
+    setTeam((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const totals = useMemo(() => {
+    const profPerTeam = team
+      .filter((t) => t.role_type === 'professional')
+      .reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+    const helpPerTeam = team
+      .filter((t) => t.role_type === 'helper')
+      .reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+    const teams = formData.default_team_count;
+    return {
+      profPerTeam,
+      helpPerTeam,
+      perTeam: profPerTeam + helpPerTeam,
+      totalProf: profPerTeam * teams,
+      totalHelp: helpPerTeam * teams,
+      totalPeople: (profPerTeam + helpPerTeam) * teams,
+    };
+  }, [team, formData.default_team_count]);
+
   const handleSave = async () => {
+    if (team.length === 0) {
+      // Permitir mas avisar
+      const ok = window.confirm(
+        'Você não adicionou nenhuma profissão à equipe. Deseja salvar mesmo assim? (O serviço aparecerá como "sem equipe configurada" no histograma.)'
+      );
+      if (!ok) return;
+    }
     setIsSaving(true);
     try {
       await onSave({
         macro_id: service.macroId,
         scope_id: service.scopeId,
-        ...formData,
+        productivity_value: formData.productivity_value,
+        productivity_unit: formData.productivity_unit,
+        working_days_per_week: formData.working_days_per_week,
+        default_team_count: formData.default_team_count,
+        professionals_per_team: totals.profPerTeam,
+        helpers_per_team: totals.helpPerTeam,
+        notes: formData.notes,
+        team_composition: team,
       });
       onClose();
     } finally {
@@ -171,34 +226,35 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
     }
   };
 
-  const totalPeople =
-    formData.default_team_count * (formData.professionals_per_team + formData.helpers_per_team);
   const totalCapacity = formData.default_team_count * formData.productivity_value;
 
-  // Opções de unidade derivadas da unidade-base do serviço
   const unitOptions = [
     { value: unitInfo.perWeek, label: unitInfo.perWeek },
     { value: unitInfo.perDay, label: unitInfo.perDay },
   ];
 
+  // Profissões disponíveis (que ainda não foram adicionadas)
+  const isAlreadyAdded = (name: string) =>
+    team.some((t) => t.role_name.toLowerCase() === name.toLowerCase());
+
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <div className="h-3 w-3 rounded-full" style={{ backgroundColor: service.macroColor }} />
-            {service.scopeName}
+            <span className="truncate">{service.scopeName}</span>
           </DialogTitle>
           <DialogDescription>
-            Configure produtividade e equipe para {service.macroName}
+            Configure produtividade e a composição detalhada da equipe para {service.macroName}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* Unidade base do serviço */}
+          {/* Unidade base */}
           <div className="rounded-lg border bg-muted/40 p-3 flex items-center gap-2">
             <Ruler className="h-4 w-4 text-primary shrink-0" />
-            <div className="flex-1 text-sm">
+            <div className="flex-1 text-sm min-w-0">
               <span className="text-muted-foreground">Unidade base do serviço:</span>{' '}
               <Badge variant="secondary" className="font-mono ml-1">
                 {unitInfo.symbol}
@@ -219,7 +275,7 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
               <Calculator className="h-4 w-4 text-primary" />
               Produtividade Base
             </h4>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Valor *</Label>
                 <Input
@@ -252,29 +308,21 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
                 </Select>
               </div>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Dias úteis por semana</Label>
-              <Input
-                type="number"
-                min={1}
-                max={7}
-                value={formData.working_days_per_week}
-                onChange={(e) =>
-                  setFormData({ ...formData, working_days_per_week: parseInt(e.target.value) || 5 })
-                }
-              />
-            </div>
-          </div>
-
-          {/* Composição da equipe */}
-          <div className="space-y-3 rounded-lg border border-border p-4">
-            <h4 className="font-semibold text-sm flex items-center gap-2">
-              <Users className="h-4 w-4 text-primary" />
-              Composição da Equipe
-            </h4>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Equipes</Label>
+                <Label className="text-xs">Dias úteis por semana</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={7}
+                  value={formData.working_days_per_week}
+                  onChange={(e) =>
+                    setFormData({ ...formData, working_days_per_week: parseInt(e.target.value) || 5 })
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Equipes simultâneas</Label>
                 <Input
                   type="number"
                   min={1}
@@ -284,41 +332,166 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
                   }
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Prof./equipe</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={formData.professionals_per_team}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      professionals_per_team: parseInt(e.target.value) || 0,
-                    })
-                  }
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Aux./equipe</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={formData.helpers_per_team}
-                  onChange={(e) =>
-                    setFormData({ ...formData, helpers_per_team: parseInt(e.target.value) || 0 })
-                  }
-                />
-              </div>
             </div>
+          </div>
+
+          {/* Composição da equipe — DETALHADA POR PROFISSÃO */}
+          <div className="space-y-3 rounded-lg border border-border p-4">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <h4 className="font-semibold text-sm flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" />
+                Composição da Equipe (por profissão)
+              </h4>
+              <p className="text-[11px] text-muted-foreground">
+                Defina <strong>1 equipe-padrão</strong> — multiplicada pelo nº de equipes simultâneas.
+              </p>
+            </div>
+
+            {/* Picker rápido */}
+            <div className="flex gap-2">
+              <Select value={picker} onValueChange={(v) => addRoleFromPicker(v)}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="+ Adicionar profissão..." />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {grouped.map(([cat, items]) => (
+                    <SelectGroup key={cat}>
+                      <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {cat}
+                      </SelectLabel>
+                      {items.map((p) => (
+                        <SelectItem
+                          key={p.name}
+                          value={p.name}
+                          disabled={isAlreadyAdded(p.name)}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                'h-1.5 w-1.5 rounded-full',
+                                p.type === 'professional' ? 'bg-primary' : 'bg-amber-500'
+                              )}
+                            />
+                            {p.name}
+                            <span className="text-[10px] text-muted-foreground ml-1">
+                              {p.type === 'professional' ? 'prof.' : 'aux.'}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() =>
+                  setTeam((prev) => [
+                    ...prev,
+                    { role_name: '', role_type: 'professional', quantity: 1 },
+                  ])
+                }
+                title="Adicionar profissão personalizada"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Lista das funções */}
+            {team.length === 0 ? (
+              <div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
+                Nenhuma profissão adicionada ainda. Selecione acima
+                (ex.: <strong>Pedreiro</strong>, <strong>Auxiliar de Pedreiro</strong>).
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {team.map((row, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center gap-2 rounded-md border bg-muted/30 p-2"
+                  >
+                    <Input
+                      list="profession-suggestions"
+                      placeholder="Nome da profissão"
+                      value={row.role_name}
+                      onChange={(e) => updateRow(idx, { role_name: e.target.value })}
+                      className="flex-1 min-w-0 h-8 text-sm"
+                    />
+                    <Select
+                      value={row.role_type}
+                      onValueChange={(v) =>
+                        updateRow(idx, { role_type: v as 'professional' | 'helper' })
+                      }
+                    >
+                      <SelectTrigger className="w-[120px] h-8 text-xs shrink-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="professional">Profissional</SelectItem>
+                        <SelectItem value="helper">Auxiliar</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={row.quantity}
+                      onChange={(e) =>
+                        updateRow(idx, { quantity: parseInt(e.target.value) || 1 })
+                      }
+                      className="w-16 h-8 text-sm shrink-0"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
+                      onClick={() => removeRow(idx)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+                <datalist id="profession-suggestions">
+                  {PROFESSIONS_CATALOG.map((p) => (
+                    <option key={p.name} value={p.name} />
+                  ))}
+                </datalist>
+              </div>
+            )}
+
+            {/* Resumo da equipe */}
+            {team.length > 0 && (
+              <div className="grid grid-cols-3 gap-2 text-xs pt-2 border-t">
+                <Badge variant="secondary" className="justify-center font-mono">
+                  {totals.profPerTeam} prof./eq.
+                </Badge>
+                <Badge variant="outline" className="justify-center font-mono">
+                  {totals.helpPerTeam} aux./eq.
+                </Badge>
+                <Badge className="justify-center font-mono bg-primary/10 text-primary border-primary/20">
+                  {totals.perTeam} pessoas/eq.
+                </Badge>
+              </div>
+            )}
           </div>
 
           {/* Resumo */}
           <div className="rounded-lg bg-muted/50 p-4 space-y-2">
-            <h4 className="font-semibold text-sm">Resumo</h4>
+            <h4 className="font-semibold text-sm flex items-center gap-2">
+              <HardHat className="h-4 w-4 text-primary" />
+              Resumo do dimensionamento
+            </h4>
             <p className="text-sm text-muted-foreground">
-              {formData.default_team_count} equipe(s) com{' '}
-              {formData.professionals_per_team + formData.helpers_per_team} pessoa(s) cada ={' '}
-              <span className="font-semibold text-foreground">{totalPeople} pessoa(s) total</span>
+              <strong className="text-foreground">{formData.default_team_count}</strong>{' '}
+              equipe(s) × <strong className="text-foreground">{totals.perTeam}</strong>{' '}
+              pessoa(s) por equipe ={' '}
+              <span className="font-semibold text-foreground">
+                {totals.totalPeople} pessoa(s) total
+              </span>
+            </p>
+            <p className="text-sm text-muted-foreground">
+              ({totals.totalProf} profissionais + {totals.totalHelp} auxiliares)
             </p>
             <p className="text-sm text-muted-foreground">
               Capacidade estimada:{' '}
@@ -335,7 +508,7 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
               placeholder="Notas opcionais..."
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={3}
+              rows={2}
             />
           </div>
         </div>
