@@ -244,6 +244,11 @@ export default function DiarioTabContent() {
   }, [items]);
 
   const hasOpenEntries = entries.some(e => e.status !== "finalizado");
+  const todasEmRevisao = entries.length > 0 &&
+    entries.every(e => e.status === "finalizado" || e.status_aprovacao === "revisando");
+  const pendentesEnvio = entries.filter(
+    e => e.status !== "finalizado" && e.status_aprovacao !== "revisando"
+  ).length;
 
   const handleCloseWeek = async () => {
     if (!currentProject?.id) return;
