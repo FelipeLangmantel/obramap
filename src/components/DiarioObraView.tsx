@@ -1031,7 +1031,67 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     }
   };
 
-  const summaryStats = useMemo(() => {
+  // ─── Edição de lançamento (somente antes de "Enviar para aprovação")
+  const [editItem, setEditItem] = useState<EditableDiaryItem | null>(null);
+
+  const handleApplyEditItem = useCallback(async (params: {
+    item: EditableDiaryItem;
+    newHouseIds: number[];
+    newPercent: number;
+    newObs: string;
+  }) => {
+    const { item, newHouseIds, newPercent, newObs } = params;
+
+    // 1) Reverte o item antigo casa-a-casa
+    const revertMap: Record<number, number> = {};
+    for (const houseId of item.house_ids) {
+      const house = houses.find(h => h.id === houseId);
+      const hMacros = (house?.macros as any[]) || [];
+      const hMacro = hMacros.find((m: any) => m.id === item.macro_id);
+      const hScope = hMacro?.scopes?.find((s: any) => s.id === item.scope_id);
+      const current = hScope?.progress || 0;
+      revertMap[houseId] = Math.max(0, current - item.percentual_executado);
+    }
+    await updateBatchScopeProgress(item.house_ids, item.macro_id, item.scope_id, 100, revertMap);
+
+    // 2) Atualiza diary_items + production
+    const { error: updErr } = await supabase
+      .from("diary_items")
+      .update({
+        house_ids: newHouseIds,
+        houses_count: newHouseIds.length,
+        percentual_executado: newPercent,
+        observacao: newObs || null,
+      } as any)
+      .eq("id", item.id);
+    if (updErr) throw updErr;
+
+    if (item.production_id) {
+      await supabase
+        .from("productions")
+        .update({ house_ids: newHouseIds, percentage: newPercent } as any)
+        .eq("id", item.production_id);
+    }
+
+    // 3) Aplica o novo a partir do baseline já revertido
+    const applyMap: Record<number, number> = {};
+    for (const houseId of newHouseIds) {
+      const house = houses.find(h => h.id === houseId);
+      const hMacros = (house?.macros as any[]) || [];
+      const hMacro = hMacros.find((m: any) => m.id === item.macro_id);
+      const hScope = hMacro?.scopes?.find((s: any) => s.id === item.scope_id);
+      let baseline = hScope?.progress || 0;
+      if (revertMap[houseId] !== undefined) baseline = revertMap[houseId];
+      applyMap[houseId] = Math.min(100, baseline + newPercent);
+    }
+    await updateBatchScopeProgress(newHouseIds, item.macro_id, item.scope_id, 100, applyMap);
+
+    queryClient.invalidateQueries({ queryKey: ["productions"] });
+    queryClient.invalidateQueries({ queryKey: ["weekly_productions"] });
+    queryClient.invalidateQueries({ queryKey: ["houses"] });
+    if (entryId) await loadItems(entryId);
+  }, [houses, updateBatchScopeProgress, queryClient, entryId]);
+
     const totalServicos = diaryItems.length;
     const servicosConcluidos = diaryItems.filter(it => it.percentual_executado >= 100).length;
     const casasUnicas = new Set<number>();
