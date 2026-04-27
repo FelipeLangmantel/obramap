@@ -3,15 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { PenLine, Loader2 } from "lucide-react";
+import { PenLine } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { SignatureCanvasDialog } from "./SignatureCanvasDialog";
 
-export type StatusAprovacao = "preenchendo" | "revisando" | "aprovado";
+export type StatusAprovacao = "preenchendo" | "revisando" | "aprovado" | "solicitando_edicao";
 
 interface SignatureRow {
   id: string;
@@ -34,11 +32,10 @@ interface Props {
 }
 
 export function RdoApprovalSection({
-  entryId, companyId, status, onStatusChange, canApprove, signerId, signerName, isLocked,
+  entryId, companyId, status, signerId, signerName, isLocked,
 }: Props) {
   const [signatures, setSignatures] = useState<SignatureRow[]>([]);
   const [openSlot, setOpenSlot] = useState<1 | 2 | null>(null);
-  const [savingStatus, setSavingStatus] = useState(false);
 
   const loadSignatures = async () => {
     if (!entryId) { setSignatures([]); return; }
@@ -61,30 +58,13 @@ export function RdoApprovalSection({
 
   useEffect(() => { loadSignatures(); }, [entryId]);
 
-  const handleStatusChange = async (newStatus: StatusAprovacao) => {
-    if (!entryId || newStatus === status) return;
-    setSavingStatus(true);
-    try {
-      const updates: any = { status_aprovacao: newStatus };
-      if (newStatus === "aprovado") updates.status = "finalizado";
-      else if (status === "aprovado") updates.status = "rascunho";
-      const { error } = await supabase.from("diary_entries").update(updates).eq("id", entryId);
-      if (error) throw error;
-      onStatusChange(newStatus);
-      toast.success("Status atualizado.");
-    } catch (err: any) {
-      toast.error("Erro: " + (err?.message || ""));
-    } finally {
-      setSavingStatus(false);
-    }
-  };
-
   const slot1 = signatures.find(s => s.slot === 1);
   const slot2 = signatures.find(s => s.slot === 2);
 
   const statusBadge = () => {
     if (status === "aprovado") return <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">✅ Aprovado</Badge>;
-    if (status === "revisando") return <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">🔍 Revisando</Badge>;
+    if (status === "revisando") return <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30">🔍 Em revisão</Badge>;
+    if (status === "solicitando_edicao") return <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">⏳ Edição solicitada</Badge>;
     return <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">📝 Preenchendo</Badge>;
   };
 
@@ -98,44 +78,9 @@ export function RdoApprovalSection({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Status workflow */}
-          <div>
-            <Label className="text-xs text-muted-foreground mb-2 block">Fluxo de aprovação</Label>
-            <RadioGroup
-              value={status}
-              onValueChange={(v) => handleStatusChange(v as StatusAprovacao)}
-              disabled={savingStatus || !entryId}
-              className="grid grid-cols-1 sm:grid-cols-3 gap-2"
-            >
-              {([
-                { v: "preenchendo", l: "1° Preenchendo", adminOnly: false },
-                { v: "revisando", l: "2° Revisando", adminOnly: false },
-                { v: "aprovado", l: "3° Aprovado", adminOnly: true },
-              ] as const).map(opt => {
-                const itemDisabled = opt.adminOnly && !canApprove;
-                return (
-                  <label
-                    key={opt.v}
-                    className={`flex items-center gap-2 border rounded-lg p-2 transition-colors ${
-                      itemDisabled
-                        ? "opacity-50 cursor-not-allowed"
-                        : "cursor-pointer hover:bg-accent/50"
-                    }`}
-                    htmlFor={`status-${opt.v}`}
-                    title={itemDisabled ? "Somente o coordenador/administrador pode aprovar" : undefined}
-                  >
-                    <RadioGroupItem id={`status-${opt.v}`} value={opt.v} disabled={itemDisabled} />
-                    <span className="text-sm">{opt.l}</span>
-                  </label>
-                );
-              })}
-            </RadioGroup>
-            {!canApprove && (
-              <p className="text-[11px] text-muted-foreground mt-1">
-                Somente o coordenador (ou administrador) pode aprovar o RDO no fim da semana.
-              </p>
-            )}
-          </div>
+          <p className="text-xs text-muted-foreground">
+            O fluxo de aprovação é controlado pelos botões do cabeçalho (Enviar p/ aprovação) e pelo fechamento da semana no painel do coordenador.
+          </p>
 
           {/* Assinaturas */}
           <div>
@@ -174,12 +119,6 @@ export function RdoApprovalSection({
               })}
             </div>
           </div>
-
-          {savingStatus && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" /> Atualizando status…
-            </div>
-          )}
         </CardContent>
       </Card>
 
