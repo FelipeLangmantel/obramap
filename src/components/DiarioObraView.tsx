@@ -1943,6 +1943,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         onOpenChange={(v) => { if (!v) setEditItem(null); }}
         item={editItem}
         houses={houses.map(h => ({ id: h.id, quadra: h.quadra }))}
+        getHouseProgress={getProgressFor}
         onApply={handleApplyEditItem}
       />
     </div>
