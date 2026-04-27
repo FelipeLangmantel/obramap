@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Loader2, Save, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -28,8 +27,12 @@ interface Props {
   /** Lista de casas do projeto (id = house_number). */
   houses: { id: number; quadra: string }[];
   /**
+   * Devolve o progresso atual (0–100) da casa para o macro/escopo deste item.
+   * Usado para esconder casas já finalizadas e mostrar o % atual no botão.
+   */
+  getHouseProgress: (houseId: number, macroId: string, scopeId: string) => number;
+  /**
    * Aplica a alteração: reverte o item antigo e aplica o novo.
-   * Devolve `Promise<void>` em sucesso, lança em erro.
    */
   onApply: (params: {
     item: EditableDiaryItem;
@@ -41,11 +44,14 @@ interface Props {
 
 /**
  * Dialog para corrigir um lançamento ANTES de enviar para aprovação.
- * Permite ajustar percentual e seleção de casas. A persistência fica a
- * cargo do callback `onApply` para reaproveitar a lógica atômica de
- * revert+reaplicação que já existe no DiarioObraView.
+ * Permite ajustar percentual e seleção de casas. Mantém o padrão visual
+ * do seletor de casas usado no fluxo principal de lançamento (cores
+ * âmbar para em andamento, esmeralda para 100%, % visível no card).
+ *
+ * Casas que já estão 100% executadas (descontando o próprio lançamento
+ * em edição) ficam desabilitadas — não podem ser re-selecionadas.
  */
-export function EditDiaryItemDialog({ open, onOpenChange, item, houses, onApply }: Props) {
+export function EditDiaryItemDialog({ open, onOpenChange, item, houses, getHouseProgress, onApply }: Props) {
   const [selected, setSelected] = useState<number[]>([]);
   const [percent, setPercent] = useState(100);
   const [obs, setObs] = useState("");
@@ -72,7 +78,22 @@ export function EditDiaryItemDialog({ open, onOpenChange, item, houses, onApply 
     }));
   }, [houses]);
 
+  /**
+   * Para cada casa devolvemos o progresso atual já descontando o próprio
+   * lançamento que está sendo editado. Isso evita que uma casa apareça
+   * como "100%" só porque ela faz parte deste lançamento.
+   */
+  const baselineProgressFor = (houseId: number) => {
+    if (!item) return 0;
+    const raw = getHouseProgress(houseId, item.macro_id, item.scope_id);
+    if (item.house_ids.includes(houseId)) {
+      return Math.max(0, raw - (item.percentual_executado || 0));
+    }
+    return raw;
+  };
+
   const toggleHouse = (id: number) => {
+    if (baselineProgressFor(id) >= 100) return;
     setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id].sort((a, b) => a - b));
   };
 
@@ -100,6 +121,14 @@ export function EditDiaryItemDialog({ open, onOpenChange, item, houses, onApply 
 
   if (!item) return null;
 
+  // Filtra grupos para esconder casas já 100% (mantém padrão "menos ruído visual")
+  const groupedFiltered = grouped
+    .map(g => ({
+      ...g,
+      ids: g.ids.filter(id => baselineProgressFor(id) < 100),
+    }))
+    .filter(g => g.ids.length > 0);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -119,24 +148,43 @@ export function EditDiaryItemDialog({ open, onOpenChange, item, houses, onApply 
             <label className="text-xs font-medium text-muted-foreground mb-2 block">
               Casas do lançamento
             </label>
-            {grouped.map(g => (
+            {groupedFiltered.length === 0 && (
+              <p className="text-xs text-muted-foreground italic px-1">
+                Não há casas pendentes deste serviço para selecionar.
+              </p>
+            )}
+            {groupedFiltered.map(g => (
               <div key={g.name} className="mb-3">
                 <div className="text-xs font-semibold text-muted-foreground mb-1">{g.name}</div>
                 <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5">
                   {g.ids.map(id => {
                     const isSelected = selected.includes(id);
+                    const prog = baselineProgressFor(id);
+                    const isDone = prog >= 100;
                     return (
                       <Button
                         key={id}
                         type="button"
                         variant="outline"
+                        disabled={isDone}
                         className={cn(
-                          "h-12 w-full p-0 text-xs font-bold",
-                          isSelected && "ring-2 ring-primary bg-primary/20 border-primary"
+                          "h-14 w-full p-0 flex flex-col items-center justify-center gap-0 text-xs font-bold relative",
+                          isSelected && "ring-2 ring-primary bg-primary/20 border-primary",
+                          !isSelected && prog === 0 && "bg-background",
+                          !isSelected && prog > 0 && prog < 100 &&
+                            "bg-amber-50 dark:bg-amber-900/20 border-amber-400 text-amber-800 dark:text-amber-300",
+                          isDone &&
+                            "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-400 text-emerald-700 dark:text-emerald-300 opacity-70 cursor-not-allowed"
                         )}
                         onClick={() => toggleHouse(id)}
                       >
-                        {String(id).padStart(2, "0")}
+                        <span className="text-xs font-bold leading-tight">{String(id).padStart(2, "0")}</span>
+                        {prog > 0 && prog < 100 && (
+                          <span className="text-[9px] font-medium leading-tight text-amber-600 dark:text-amber-400">
+                            {prog}%
+                          </span>
+                        )}
+                        {isDone && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
                       </Button>
                     );
                   })}
