@@ -1267,10 +1267,13 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
               {entryStatus !== "finalizado" && statusAprovacao === "revisando" && (
                 <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">🔍 Em revisão</Badge>
               )}
+              {entryStatus !== "finalizado" && statusAprovacao === "solicitando_edicao" && (
+                <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">⏳ Edição solicitada</Badge>
+              )}
               {entryStatus !== "finalizado" && statusAprovacao === "preenchendo" && entryId && (
                 <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">📝 Preenchendo</Badge>
               )}
-              {pendingEditRequest && (
+              {pendingEditRequest && statusAprovacao !== "solicitando_edicao" && (
                 <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">⏳ Edição solicitada</Badge>
               )}
             </div>
@@ -1940,6 +1943,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         onOpenChange={(v) => { if (!v) setEditItem(null); }}
         item={editItem}
         houses={houses.map(h => ({ id: h.id, quadra: h.quadra }))}
+        getHouseProgress={getProgressFor}
         onApply={handleApplyEditItem}
       />
     </div>

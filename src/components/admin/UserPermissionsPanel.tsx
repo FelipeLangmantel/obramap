@@ -68,6 +68,7 @@ import { cn } from "@/lib/utils";
 import { AuditLogPanel } from "./AuditLogPanel";
 import { EditRequestsPanel } from "./EditRequestsPanel";
 import { ProductionApprovalPanel } from "./ProductionApprovalPanel";
+import { useCoordenadorAccess } from "@/hooks/useCoordenadorAccess";
 
 type AppRole = "admin" | "editor" | "viewer";
 
@@ -160,6 +161,7 @@ const createUserSchema = z.object({
 
 export function UserPermissionsPanel() {
   const { isAdmin, user, company } = useAuth();
+  const { canApprove: isCoordenadorGlobal } = useCoordenadorAccess(undefined);
   const { projects } = useConstruction();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [permissions, setPermissions] = useState<Record<string, UserPermission>>({});
@@ -636,7 +638,7 @@ export function UserPermissionsPanel() {
     }
   };
 
-  if (!isAdmin) {
+  if (!isAdmin && !isCoordenadorGlobal) {
     return (
       <div className="p-6 text-center text-muted-foreground">
         <Shield className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />

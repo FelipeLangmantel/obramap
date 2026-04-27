@@ -26,6 +26,7 @@ import { format, startOfWeek, endOfWeek, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CheckCircle2, Loader2, BookOpen, ChevronLeft, ChevronRight, History, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { useCoordenadorAccess } from "@/hooks/useCoordenadorAccess";
 
 interface EntryRow {
   id: string;
@@ -34,6 +35,7 @@ interface EntryRow {
   clima: string | null;
   equipe_presente: number | null;
   status: string;
+  status_aprovacao: string | null;
 }
 interface ItemRow {
   id: string;
@@ -89,7 +91,31 @@ export default function DiarioTabContent() {
   const houses = currentProject?.houses || [];
   const { user, profile, isCompanyAdmin, isSystemAdmin } = useAuth();
   const queryClient = useQueryClient();
-  const podeCorrigir = isCompanyAdmin || isSystemAdmin;
+  const { canApprove } = useCoordenadorAccess(currentProject?.id || null);
+  const podeCorrigir = isCompanyAdmin || isSystemAdmin || canApprove;
+  const podeFecharSemana = isCompanyAdmin || isSystemAdmin || canApprove;
+  const [coordenadorName, setCoordenadorName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!currentProject?.id) { setCoordenadorName(null); return; }
+      const { data: proj } = await (supabase as any)
+        .from("projects")
+        .select("coordenador_user_id")
+        .eq("id", currentProject.id)
+        .maybeSingle();
+      const coordId = (proj as any)?.coordenador_user_id;
+      if (!coordId) { if (!cancelled) setCoordenadorName(null); return; }
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("display_name, email")
+        .eq("user_id", coordId)
+        .maybeSingle();
+      if (!cancelled) setCoordenadorName((prof as any)?.display_name || (prof as any)?.email || null);
+    })();
+    return () => { cancelled = true; };
+  }, [currentProject?.id]);
 
   const [weekRef, setWeekRef] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const semanaInicio = format(weekRef, "yyyy-MM-dd");
@@ -135,13 +161,13 @@ export default function DiarioTabContent() {
     try {
       const { data: entriesData } = await supabase
         .from("diary_entries")
-        .select("id, entry_date, engineer_name, clima, equipe_presente, status")
+        .select("id, entry_date, engineer_name, clima, equipe_presente, status, status_aprovacao")
         .eq("project_id", currentProject.id)
         .gte("entry_date", semanaInicio)
         .lte("entry_date", semanaFim)
         .order("entry_date", { ascending: true });
 
-      setEntries(entriesData || []);
+      setEntries((entriesData || []) as EntryRow[]);
 
       const ids = (entriesData || []).map(e => e.id);
       let itemsData: ItemRow[] = [];
@@ -218,6 +244,11 @@ export default function DiarioTabContent() {
   }, [items]);
 
   const hasOpenEntries = entries.some(e => e.status !== "finalizado");
+  const todasEmRevisao = entries.length > 0 &&
+    entries.every(e => e.status === "finalizado" || e.status_aprovacao === "revisando");
+  const pendentesEnvio = entries.filter(
+    e => e.status !== "finalizado" && e.status_aprovacao !== "revisando"
+  ).length;
 
   const handleCloseWeek = async () => {
     if (!currentProject?.id) return;
@@ -429,14 +460,31 @@ export default function DiarioTabContent() {
             />
             <Button
               variant="default"
-              disabled={!hasOpenEntries || entries.length === 0 || closing}
+              disabled={!hasOpenEntries || entries.length === 0 || closing || !podeFecharSemana || !todasEmRevisao}
               onClick={() => setConfirmOpen(true)}
               className="ml-auto bg-emerald-600 hover:bg-emerald-700"
+              title={
+                !podeFecharSemana
+                  ? "Apenas administrador ou coordenador da obra pode fechar a semana"
+                  : !todasEmRevisao && hasOpenEntries
+                    ? "Aguarde todos os engenheiros enviarem o RDO para revisão"
+                    : undefined
+              }
             >
               {closing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
               Fechar Semana
             </Button>
           </div>
+          {coordenadorName && (
+            <p className="text-xs text-muted-foreground mt-2">
+              👷 Coordenador da obra: <strong className="text-foreground">{coordenadorName}</strong>
+            </p>
+          )}
+          {hasOpenEntries && !todasEmRevisao && entries.length > 0 && (
+            <p className="text-xs text-amber-600 mt-1">
+              ⚠️ {pendentesEnvio} diário(s) ainda não enviados para revisão.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -479,11 +527,19 @@ export default function DiarioTabContent() {
                       <TableCell>
                         {e.status === "finalizado" ? (
                           <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300">
-                            Finalizado
+                            ✅ Aprovado
+                          </Badge>
+                        ) : e.status_aprovacao === "revisando" ? (
+                          <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300">
+                            🔍 Em revisão
+                          </Badge>
+                        ) : e.status_aprovacao === "solicitando_edicao" ? (
+                          <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300">
+                            ⏳ Edição solicitada
                           </Badge>
                         ) : (
                           <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300">
-                            Rascunho
+                            📝 Preenchendo
                           </Badge>
                         )}
                       </TableCell>

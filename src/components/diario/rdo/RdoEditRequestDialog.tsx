@@ -47,6 +47,11 @@ export function RdoEditRequestDialog({
       setSending(false);
       return;
     }
+    // Marca o RDO como "solicitando_edicao" para sinalizar visualmente no painel do coordenador.
+    await (supabase as any)
+      .from("diary_entries")
+      .update({ status_aprovacao: "solicitando_edicao" })
+      .eq("id", diaryEntryId);
     toast.success("Solicitação enviada ao administrador.");
     setJustificativa("");
     setSending(false);
