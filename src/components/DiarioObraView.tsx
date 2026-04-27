@@ -1634,6 +1634,27 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                                 disabled={isLocked}
                               />
                             )}
+                            {!isLocked && statusAprovacao === "preenchendo" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-blue-600 hover:text-blue-700"
+                                onClick={() => setEditItem({
+                                  id: item.id,
+                                  macro_id: item.macro_id,
+                                  macro_name: item.macro_name,
+                                  scope_id: item.scope_id,
+                                  scope_name: item.scope_name,
+                                  house_ids: item.house_ids,
+                                  percentual_executado: item.percentual_executado,
+                                  observacao: item.observacao,
+                                  production_id: item.production_id,
+                                })}
+                                title="Editar lançamento"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            )}
                             <Button variant="ghost" size="icon" className="text-destructive"
                               onClick={() => handleDeleteItem(item)} disabled={isLocked}>
                               <Trash2 className="h-4 w-4" />
