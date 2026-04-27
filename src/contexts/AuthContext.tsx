@@ -289,19 +289,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchUserData(session.user.id).finally(() => {
+    // Get initial session — com timeout para nunca travar o boot.
+    // Se a rede estiver lenta/inexistente, liberamos isLoading em até 3s
+    // (o onAuthStateChange completa o fluxo quando a sessão chegar).
+    const sessionTimeout = setTimeout(() => {
+      // Não travar a UI se o getSession() não responder
+      setIsLoading(false);
+    }, 3000);
+
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        clearTimeout(sessionTimeout);
+        setSession(session);
+        setUser(session?.user ?? null);
+
+        if (session?.user) {
+          fetchUserData(session.user.id).finally(() => {
+            setIsLoading(false);
+          });
+        } else {
           setIsLoading(false);
-        });
-      } else {
+        }
+      })
+      .catch(() => {
+        clearTimeout(sessionTimeout);
         setIsLoading(false);
-      }
-    });
+      });
 
     return () => {
       subscription.unsubscribe();
