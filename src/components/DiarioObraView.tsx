@@ -266,8 +266,27 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [entryId]);
 
-  const handleSendForApproval = () => {
+  const handleSendForApproval = async () => {
     if (!entryId) return;
+    // Verifica serviços sem foto e pede confirmação ao usuário
+    try {
+      const itemIds = diaryItems.map(i => i.id);
+      if (itemIds.length > 0) {
+        const { data: photoRows } = await supabase
+          .from("diary_photos")
+          .select("diary_item_id")
+          .in("diary_item_id", itemIds);
+        const withPhotos = new Set((photoRows || []).map((p: any) => p.diary_item_id));
+        const semFoto = diaryItems.filter(i => !withPhotos.has(i.id));
+        if (semFoto.length > 0) {
+          const lista = semFoto.map(i => `• ${i.macro_name} · ${i.scope_name}`).join("\n");
+          const ok = window.confirm(
+            `${semFoto.length} serviço(s) sem foto:\n\n${lista}\n\nDeseja enviar mesmo assim?`
+          );
+          if (!ok) return;
+        }
+      }
+    } catch {/* não bloqueia envio se a verificação falhar */}
     // Abre confirmação de pluviometria — engenharia exige fechamento desse índice
     setConfirmRainOpen(true);
   };
