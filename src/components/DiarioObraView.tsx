@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, parseISO, differenceInDays } from "date-fns";
 import {
   Save, Trash2, ClipboardList, CheckCircle2, ChevronRight, Users,
-  Loader2, Camera, X, Printer, MapPin, Building2,
+  Loader2, Camera, X, Printer, MapPin, Building2, Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { geocodeMunicipio, fetchClimaHoje } from "@/lib/geocode";
