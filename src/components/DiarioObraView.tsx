@@ -1092,6 +1092,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     if (entryId) await loadItems(entryId);
   }, [houses, updateBatchScopeProgress, queryClient, entryId]);
 
+  const summaryStats = useMemo(() => {
     const totalServicos = diaryItems.length;
     const servicosConcluidos = diaryItems.filter(it => it.percentual_executado >= 100).length;
     const casasUnicas = new Set<number>();
