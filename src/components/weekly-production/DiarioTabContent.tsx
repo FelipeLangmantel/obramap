@@ -460,14 +460,31 @@ export default function DiarioTabContent() {
             />
             <Button
               variant="default"
-              disabled={!hasOpenEntries || entries.length === 0 || closing}
+              disabled={!hasOpenEntries || entries.length === 0 || closing || !podeFecharSemana || !todasEmRevisao}
               onClick={() => setConfirmOpen(true)}
               className="ml-auto bg-emerald-600 hover:bg-emerald-700"
+              title={
+                !podeFecharSemana
+                  ? "Apenas administrador ou coordenador da obra pode fechar a semana"
+                  : !todasEmRevisao && hasOpenEntries
+                    ? "Aguarde todos os engenheiros enviarem o RDO para revisão"
+                    : undefined
+              }
             >
               {closing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
               Fechar Semana
             </Button>
           </div>
+          {coordenadorName && (
+            <p className="text-xs text-muted-foreground mt-2">
+              👷 Coordenador da obra: <strong className="text-foreground">{coordenadorName}</strong>
+            </p>
+          )}
+          {hasOpenEntries && !todasEmRevisao && entries.length > 0 && (
+            <p className="text-xs text-amber-600 mt-1">
+              ⚠️ {pendentesEnvio} diário(s) ainda não enviados para revisão.
+            </p>
+          )}
         </CardContent>
       </Card>
 
