@@ -161,6 +161,7 @@ const createUserSchema = z.object({
 
 export function UserPermissionsPanel() {
   const { isAdmin, user, company } = useAuth();
+  const { canApprove: isCoordenadorGlobal } = useCoordenadorAccess(undefined);
   const { projects } = useConstruction();
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [permissions, setPermissions] = useState<Record<string, UserPermission>>({});
