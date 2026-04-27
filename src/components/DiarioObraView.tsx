@@ -1913,6 +1913,15 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         itemDescription={deleteRequestItem ? `${deleteRequestItem.macro_name} · ${deleteRequestItem.scope_name} (${deleteRequestItem.percentual_executado}%)` : undefined}
         onRequested={() => { if (entryId) loadItems(entryId); }}
       />
+
+      {/* Editar lançamento (antes da aprovação) */}
+      <EditDiaryItemDialog
+        open={!!editItem}
+        onOpenChange={(v) => { if (!v) setEditItem(null); }}
+        item={editItem}
+        houses={houses.map(h => ({ id: h.id, quadra: h.quadra }))}
+        onApply={handleApplyEditItem}
+      />
     </div>
   );
 }
