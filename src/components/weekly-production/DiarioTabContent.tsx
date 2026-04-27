@@ -26,6 +26,7 @@ import { format, startOfWeek, endOfWeek, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CheckCircle2, Loader2, BookOpen, ChevronLeft, ChevronRight, History, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { useCoordenadorAccess } from "@/hooks/useCoordenadorAccess";
 
 interface EntryRow {
   id: string;
@@ -34,6 +35,7 @@ interface EntryRow {
   clima: string | null;
   equipe_presente: number | null;
   status: string;
+  status_aprovacao: string | null;
 }
 interface ItemRow {
   id: string;
