@@ -129,17 +129,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navegações: network-first → fallback ao app shell para abrir offline
+  // Navegações: network-first com TIMEOUT curto → fallback ao app shell
+  // para abrir offline ou em redes muito lentas (canteiro de obra).
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((res) => {
+    event.respondWith((async () => {
+      try {
+        const networkPromise = fetch(request).then((res) => {
           const clone = res.clone();
           caches.open(SHELL_CACHE).then((cache) => cache.put(request, clone));
           return res;
-        })
-        .catch(() => caches.match(request).then((c) => c || caches.match('/index.html')))
-    );
+        });
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('nav-timeout')), NAV_NETWORK_TIMEOUT_MS)
+        );
+        return await Promise.race([networkPromise, timeoutPromise]);
+      } catch {
+        const cached = await caches.match(request);
+        return cached || (await caches.match('/index.html')) || (await caches.match('/'));
+      }
+    })());
     return;
   }
 
