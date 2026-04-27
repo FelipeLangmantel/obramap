@@ -137,13 +137,13 @@ export default function DiarioTabContent() {
     try {
       const { data: entriesData } = await supabase
         .from("diary_entries")
-        .select("id, entry_date, engineer_name, clima, equipe_presente, status")
+        .select("id, entry_date, engineer_name, clima, equipe_presente, status, status_aprovacao")
         .eq("project_id", currentProject.id)
         .gte("entry_date", semanaInicio)
         .lte("entry_date", semanaFim)
         .order("entry_date", { ascending: true });
 
-      setEntries(entriesData || []);
+      setEntries((entriesData || []) as EntryRow[]);
 
       const ids = (entriesData || []).map(e => e.id);
       let itemsData: ItemRow[] = [];
