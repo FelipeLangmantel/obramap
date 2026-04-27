@@ -68,6 +68,7 @@ import { cn } from "@/lib/utils";
 import { AuditLogPanel } from "./AuditLogPanel";
 import { EditRequestsPanel } from "./EditRequestsPanel";
 import { ProductionApprovalPanel } from "./ProductionApprovalPanel";
+import { useCoordenadorAccess } from "@/hooks/useCoordenadorAccess";
 
 type AppRole = "admin" | "editor" | "viewer";
 
