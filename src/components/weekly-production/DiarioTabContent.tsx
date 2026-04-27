@@ -91,7 +91,31 @@ export default function DiarioTabContent() {
   const houses = currentProject?.houses || [];
   const { user, profile, isCompanyAdmin, isSystemAdmin } = useAuth();
   const queryClient = useQueryClient();
-  const podeCorrigir = isCompanyAdmin || isSystemAdmin;
+  const { canApprove } = useCoordenadorAccess(currentProject?.id || null);
+  const podeCorrigir = isCompanyAdmin || isSystemAdmin || canApprove;
+  const podeFecharSemana = isCompanyAdmin || isSystemAdmin || canApprove;
+  const [coordenadorName, setCoordenadorName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!currentProject?.id) { setCoordenadorName(null); return; }
+      const { data: proj } = await (supabase as any)
+        .from("projects")
+        .select("coordenador_user_id")
+        .eq("id", currentProject.id)
+        .maybeSingle();
+      const coordId = (proj as any)?.coordenador_user_id;
+      if (!coordId) { if (!cancelled) setCoordenadorName(null); return; }
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("display_name, email")
+        .eq("user_id", coordId)
+        .maybeSingle();
+      if (!cancelled) setCoordenadorName((prof as any)?.display_name || (prof as any)?.email || null);
+    })();
+    return () => { cancelled = true; };
+  }, [currentProject?.id]);
 
   const [weekRef, setWeekRef] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
   const semanaInicio = format(weekRef, "yyyy-MM-dd");
