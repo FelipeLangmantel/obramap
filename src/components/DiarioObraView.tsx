@@ -1631,6 +1631,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                                 diaryEntryId={entryId}
                                 diaryItemId={item.id}
                                 companyId={company.id}
+                                houseIds={item.house_ids}
                                 disabled={isLocked}
                               />
                             )}
