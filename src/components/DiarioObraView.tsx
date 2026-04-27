@@ -26,6 +26,7 @@ import { ConfirmRainDialog } from "./diario/ConfirmRainDialog";
 import { ImportPreviousDayButton } from "./diario/ImportPreviousDayButton";
 import { RequestDeleteItemDialog } from "./diario/RequestDeleteItemDialog";
 import { DiaryItemPhotoButton } from "./diario/DiaryItemPhotoButton";
+import { EditDiaryItemDialog, type EditableDiaryItem } from "./diario/EditDiaryItemDialog";
 import { useDiaryLegalConfig } from "@/hooks/useDiaryLegalConfig";
 import { useNavigate } from "react-router-dom";
 import { FileSignature } from "lucide-react";
