@@ -3,10 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Camera, Loader2, Trash2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
-// Compressão simples — espelha a usada em DiarioObraView
 async function comprimirImagem(file: File, maxDim = 1024, quality = 0.7): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -32,6 +35,7 @@ interface FotoServico {
   id: string;
   storage_path: string;
   legenda: string | null;
+  house_number: number | null;
   url: string;
 }
 
@@ -39,19 +43,27 @@ interface Props {
   diaryEntryId: string;
   diaryItemId: string;
   companyId: string;
+  /** Casas disponíveis nesse lançamento (para escolher casa antes da foto). */
+  houseIds: number[];
   disabled?: boolean;
   onChanged?: () => void;
 }
 
 /**
- * Botão compacto para anexar fotos a um serviço específico do diário.
- * As fotos ficam vinculadas via `diary_photos.diary_item_id` — base do
- * histórico fotográfico por casa exibido nos mapas.
+ * Anexa fotos a um serviço do diário. Cada foto pode opcionalmente
+ * ser vinculada a UMA casa específica (`house_number`) — assim o
+ * histórico fotográfico da casa só mostra fotos relevantes a ela.
+ *
+ * Fluxo:
+ *  1) Usuário escolhe a casa (ou "Todas" para vincular ao serviço como um todo).
+ *  2) Faz upload de uma ou várias fotos.
+ *  3) Pode trocar a casa entre uploads.
  */
 export function DiaryItemPhotoButton({
   diaryEntryId,
   diaryItemId,
   companyId,
+  houseIds,
   disabled,
   onChanged,
 }: Props) {
@@ -60,9 +72,11 @@ export function DiaryItemPhotoButton({
   const [fotos, setFotos] = useState<FotoServico[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [selectedHouse, setSelectedHouse] = useState<string>(
+    houseIds.length === 1 ? String(houseIds[0]) : "all"
+  );
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Conta fotos atuais (leve)
   const refreshCount = async () => {
     const { count: c } = await supabase
       .from("diary_photos")
@@ -77,11 +91,11 @@ export function DiaryItemPhotoButton({
     setLoading(true);
     const { data } = await supabase
       .from("diary_photos")
-      .select("id, storage_path, legenda")
+      .select("id, storage_path, legenda, house_number")
       .eq("diary_item_id", diaryItemId)
       .order("created_at", { ascending: true });
     if (!data) { setFotos([]); setLoading(false); return; }
-    const withUrl = await Promise.all(data.map(async (f) => {
+    const withUrl = await Promise.all(data.map(async (f: any) => {
       const { data: signed } = await supabase.storage
         .from("diary-photos").createSignedUrl(f.storage_path, 60 * 60);
       return { ...f, url: signed?.signedUrl || "" } as FotoServico;
@@ -98,13 +112,15 @@ export function DiaryItemPhotoButton({
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
     const arquivos = Array.from(e.target.files).slice(0, 10);
+    const houseNum = selectedHouse === "all" ? null : Number(selectedHouse);
     setUploading(true);
     let uploaded = 0;
     try {
       for (const arquivo of arquivos) {
         const blob = await comprimirImagem(arquivo, 1024, 0.7);
         const safe = arquivo.name.replace(/[^a-zA-Z0-9.]/g, "_");
-        const path = `${companyId}/${diaryEntryId}/${diaryItemId}/${Date.now()}_${safe}`;
+        const houseSeg = houseNum != null ? `casa-${houseNum}/` : "geral/";
+        const path = `${companyId}/${diaryEntryId}/${diaryItemId}/${houseSeg}${Date.now()}_${safe}`;
         const { error: upErr } = await supabase.storage
           .from("diary-photos")
           .upload(path, blob, { contentType: "image/jpeg", upsert: false });
@@ -114,14 +130,16 @@ export function DiaryItemPhotoButton({
           diary_item_id: diaryItemId,
           storage_path: path,
           legenda: null,
-        });
+          house_number: houseNum,
+        } as any);
         if (dbErr) {
           await supabase.storage.from("diary-photos").remove([path]);
           throw dbErr;
         }
         uploaded++;
       }
-      toast.success(`${uploaded} foto(s) anexada(s) ao serviço.`);
+      const houseLabel = houseNum != null ? `casa ${String(houseNum).padStart(2, "0")}` : "todas as casas";
+      toast.success(`${uploaded} foto(s) anexada(s) à ${houseLabel}.`);
       await loadFotos();
       await refreshCount();
       onChanged?.();
@@ -145,6 +163,8 @@ export function DiaryItemPhotoButton({
       toast.error("Erro ao remover foto.");
     }
   };
+
+  const sortedHouses = [...houseIds].sort((a, b) => a - b);
 
   return (
     <>
@@ -175,18 +195,39 @@ export function DiaryItemPhotoButton({
           </DialogHeader>
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Estas fotos ficam vinculadas a este serviço e aparecem no histórico
-                de cada casa envolvida — base para auditoria.
-              </p>
+            <p className="text-sm text-muted-foreground">
+              Escolha a casa, depois envie a(s) foto(s). A foto vai para o
+              histórico daquela casa específica.
+            </p>
+
+            <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+              <div className="flex-1">
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Vincular foto à casa:
+                </label>
+                <Select value={selectedHouse} onValueChange={setSelectedHouse}>
+                  <SelectTrigger className="h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    <SelectItem value="all">Todas as casas (foto geral do serviço)</SelectItem>
+                    {sortedHouses.map(h => (
+                      <SelectItem key={h} value={String(h)}>
+                        Casa {String(h).padStart(2, "0")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Button
-                size="sm"
                 onClick={() => inputRef.current?.click()}
                 disabled={uploading || disabled}
+                className="h-10"
               >
-                {uploading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Camera className="h-4 w-4 mr-1" />}
-                Anexar fotos
+                {uploading
+                  ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  : <Camera className="h-4 w-4 mr-1" />}
+                Anexar foto(s)
               </Button>
               <input
                 ref={inputRef}
@@ -209,8 +250,19 @@ export function DiaryItemPhotoButton({
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {fotos.map(f => (
-                  <div key={f.id} className="relative group rounded-md overflow-hidden border bg-muted">
+                  <div
+                    key={f.id}
+                    className={cn(
+                      "relative group rounded-md overflow-hidden border bg-muted",
+                      f.house_number != null && "ring-1 ring-primary/40"
+                    )}
+                  >
                     <img src={f.url} alt={f.legenda || "Foto do serviço"} className="w-full h-32 object-cover" />
+                    <div className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                      {f.house_number != null
+                        ? `Casa ${String(f.house_number).padStart(2, "0")}`
+                        : "Geral"}
+                    </div>
                     {!disabled && (
                       <Button
                         size="icon"

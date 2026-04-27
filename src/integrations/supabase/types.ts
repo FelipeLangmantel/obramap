@@ -2668,25 +2668,31 @@ export type Database = {
       }
       diary_photos: {
         Row: {
+          categoria: string | null
           created_at: string | null
           diary_entry_id: string
           diary_item_id: string | null
+          house_number: number | null
           id: string
           legenda: string | null
           storage_path: string
         }
         Insert: {
+          categoria?: string | null
           created_at?: string | null
           diary_entry_id: string
           diary_item_id?: string | null
+          house_number?: number | null
           id?: string
           legenda?: string | null
           storage_path: string
         }
         Update: {
+          categoria?: string | null
           created_at?: string | null
           diary_entry_id?: string
           diary_item_id?: string | null
+          house_number?: number | null
           id?: string
           legenda?: string | null
           storage_path?: string

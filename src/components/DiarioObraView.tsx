@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, parseISO, differenceInDays } from "date-fns";
 import {
   Save, Trash2, ClipboardList, CheckCircle2, ChevronRight, Users,
-  Loader2, Camera, X, Printer, MapPin, Building2,
+  Loader2, Camera, X, Printer, MapPin, Building2, Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { geocodeMunicipio, fetchClimaHoje } from "@/lib/geocode";
@@ -26,6 +26,7 @@ import { ConfirmRainDialog } from "./diario/ConfirmRainDialog";
 import { ImportPreviousDayButton } from "./diario/ImportPreviousDayButton";
 import { RequestDeleteItemDialog } from "./diario/RequestDeleteItemDialog";
 import { DiaryItemPhotoButton } from "./diario/DiaryItemPhotoButton";
+import { EditDiaryItemDialog, type EditableDiaryItem } from "./diario/EditDiaryItemDialog";
 import { useDiaryLegalConfig } from "@/hooks/useDiaryLegalConfig";
 import { useNavigate } from "react-router-dom";
 import { FileSignature } from "lucide-react";
@@ -265,8 +266,27 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [entryId]);
 
-  const handleSendForApproval = () => {
+  const handleSendForApproval = async () => {
     if (!entryId) return;
+    // Verifica serviços sem foto e pede confirmação ao usuário
+    try {
+      const itemIds = diaryItems.map(i => i.id);
+      if (itemIds.length > 0) {
+        const { data: photoRows } = await supabase
+          .from("diary_photos")
+          .select("diary_item_id")
+          .in("diary_item_id", itemIds);
+        const withPhotos = new Set((photoRows || []).map((p: any) => p.diary_item_id));
+        const semFoto = diaryItems.filter(i => !withPhotos.has(i.id));
+        if (semFoto.length > 0) {
+          const lista = semFoto.map(i => `• ${i.macro_name} · ${i.scope_name}`).join("\n");
+          const ok = window.confirm(
+            `${semFoto.length} serviço(s) sem foto:\n\n${lista}\n\nDeseja enviar mesmo assim?`
+          );
+          if (!ok) return;
+        }
+      }
+    } catch {/* não bloqueia envio se a verificação falhar */}
     // Abre confirmação de pluviometria — engenharia exige fechamento desse índice
     setConfirmRainOpen(true);
   };
@@ -1030,6 +1050,67 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     }
   };
 
+  // ─── Edição de lançamento (somente antes de "Enviar para aprovação")
+  const [editItem, setEditItem] = useState<EditableDiaryItem | null>(null);
+
+  const handleApplyEditItem = useCallback(async (params: {
+    item: EditableDiaryItem;
+    newHouseIds: number[];
+    newPercent: number;
+    newObs: string;
+  }) => {
+    const { item, newHouseIds, newPercent, newObs } = params;
+
+    // 1) Reverte o item antigo casa-a-casa
+    const revertMap: Record<number, number> = {};
+    for (const houseId of item.house_ids) {
+      const house = houses.find(h => h.id === houseId);
+      const hMacros = (house?.macros as any[]) || [];
+      const hMacro = hMacros.find((m: any) => m.id === item.macro_id);
+      const hScope = hMacro?.scopes?.find((s: any) => s.id === item.scope_id);
+      const current = hScope?.progress || 0;
+      revertMap[houseId] = Math.max(0, current - item.percentual_executado);
+    }
+    await updateBatchScopeProgress(item.house_ids, item.macro_id, item.scope_id, 100, revertMap);
+
+    // 2) Atualiza diary_items + production
+    const { error: updErr } = await supabase
+      .from("diary_items")
+      .update({
+        house_ids: newHouseIds,
+        houses_count: newHouseIds.length,
+        percentual_executado: newPercent,
+        observacao: newObs || null,
+      } as any)
+      .eq("id", item.id);
+    if (updErr) throw updErr;
+
+    if (item.production_id) {
+      await supabase
+        .from("productions")
+        .update({ house_ids: newHouseIds, percentage: newPercent } as any)
+        .eq("id", item.production_id);
+    }
+
+    // 3) Aplica o novo a partir do baseline já revertido
+    const applyMap: Record<number, number> = {};
+    for (const houseId of newHouseIds) {
+      const house = houses.find(h => h.id === houseId);
+      const hMacros = (house?.macros as any[]) || [];
+      const hMacro = hMacros.find((m: any) => m.id === item.macro_id);
+      const hScope = hMacro?.scopes?.find((s: any) => s.id === item.scope_id);
+      let baseline = hScope?.progress || 0;
+      if (revertMap[houseId] !== undefined) baseline = revertMap[houseId];
+      applyMap[houseId] = Math.min(100, baseline + newPercent);
+    }
+    await updateBatchScopeProgress(newHouseIds, item.macro_id, item.scope_id, 100, applyMap);
+
+    queryClient.invalidateQueries({ queryKey: ["productions"] });
+    queryClient.invalidateQueries({ queryKey: ["weekly_productions"] });
+    queryClient.invalidateQueries({ queryKey: ["houses"] });
+    if (entryId) await loadItems(entryId);
+  }, [houses, updateBatchScopeProgress, queryClient, entryId]);
+
   const summaryStats = useMemo(() => {
     const totalServicos = diaryItems.length;
     const servicosConcluidos = diaryItems.filter(it => it.percentual_executado >= 100).length;
@@ -1569,8 +1650,30 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                                 diaryEntryId={entryId}
                                 diaryItemId={item.id}
                                 companyId={company.id}
+                                houseIds={item.house_ids}
                                 disabled={isLocked}
                               />
+                            )}
+                            {!isLocked && statusAprovacao === "preenchendo" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-blue-600 hover:text-blue-700"
+                                onClick={() => setEditItem({
+                                  id: item.id,
+                                  macro_id: item.macro_id,
+                                  macro_name: item.macro_name,
+                                  scope_id: item.scope_id,
+                                  scope_name: item.scope_name,
+                                  house_ids: item.house_ids,
+                                  percentual_executado: item.percentual_executado,
+                                  observacao: item.observacao,
+                                  production_id: item.production_id,
+                                })}
+                                title="Editar lançamento"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
                             )}
                             <Button variant="ghost" size="icon" className="text-destructive"
                               onClick={() => handleDeleteItem(item)} disabled={isLocked}>
@@ -1829,6 +1932,15 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         itemId={deleteRequestItem?.id || null}
         itemDescription={deleteRequestItem ? `${deleteRequestItem.macro_name} · ${deleteRequestItem.scope_name} (${deleteRequestItem.percentual_executado}%)` : undefined}
         onRequested={() => { if (entryId) loadItems(entryId); }}
+      />
+
+      {/* Editar lançamento (antes da aprovação) */}
+      <EditDiaryItemDialog
+        open={!!editItem}
+        onOpenChange={(v) => { if (!v) setEditItem(null); }}
+        item={editItem}
+        houses={houses.map(h => ({ id: h.id, quadra: h.quadra }))}
+        onApply={handleApplyEditItem}
       />
     </div>
   );

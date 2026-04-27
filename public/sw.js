@@ -8,21 +8,20 @@
 //  - APIs do Supabase (REST/Auth/Realtime) — sempre rede
 //  - Rotas de OAuth callback
 //  - Métodos não-GET
-const SHELL_CACHE = 'obramap-shell-v4';
-const ASSET_CACHE = 'obramap-assets-v4';
-const TILES_CACHE = 'obramap-tiles-v4';
-const STORAGE_CACHE = 'obramap-storage-v4';
+const SHELL_CACHE = 'obramap-shell-v5';
+const ASSET_CACHE = 'obramap-assets-v5';
+const TILES_CACHE = 'obramap-tiles-v5';
+const STORAGE_CACHE = 'obramap-storage-v5';
 const ALL_CACHES = [SHELL_CACHE, ASSET_CACHE, TILES_CACHE, STORAGE_CACHE];
 const SHELL_ASSETS = ['/', '/index.html', '/manifest.json'];
 
-// Caps para evitar estourar quota em celulares
 const TILES_MAX_ENTRIES = 500;
 const STORAGE_MAX_ENTRIES = 200;
 
-// Hosts que NUNCA devem ser cacheados — sempre rede
-// IMPORTANTE: não bloqueamos *.supabase.co inteiro porque o Storage
-// (imagens, modelos 3D) precisa ser cacheado para offline. Diferenciamos
-// pelo path mais abaixo.
+// Timeout para network-first em navegação — cai no cache offline em ~2.5s
+// (em vez dos ~30s padrão do navegador). Resolve o "app não abre na obra".
+const NAV_NETWORK_TIMEOUT_MS = 2500;
+
 const BYPASS_PATH_PATTERNS = [
   /^\/~oauth/,
   /^\/auth\/callback/,
@@ -130,17 +129,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navegações: network-first → fallback ao app shell para abrir offline
+  // Navegações: network-first com TIMEOUT curto → fallback ao app shell
+  // para abrir offline ou em redes muito lentas (canteiro de obra).
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((res) => {
+    event.respondWith((async () => {
+      try {
+        const networkPromise = fetch(request).then((res) => {
           const clone = res.clone();
           caches.open(SHELL_CACHE).then((cache) => cache.put(request, clone));
           return res;
-        })
-        .catch(() => caches.match(request).then((c) => c || caches.match('/index.html')))
-    );
+        });
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('nav-timeout')), NAV_NETWORK_TIMEOUT_MS)
+        );
+        return await Promise.race([networkPromise, timeoutPromise]);
+      } catch {
+        const cached = await caches.match(request);
+        return cached || (await caches.match('/index.html')) || (await caches.match('/'));
+      }
+    })());
     return;
   }
 
