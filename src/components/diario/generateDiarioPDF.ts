@@ -488,6 +488,14 @@ async function renderOrgaoPublico(
     const rodapeBase = rodapeLines.join("  ·  ") || data.companyName;
     doc.text(rodapeBase, margin, pageH - 9);
     doc.text(`RDO ${data.reportNumber ?? "—"} · ${dateFmt} · Página ${i}/${pageCount}`, pageW - margin, pageH - 9, { align: "right" });
+    // Marca ObraMap (identidade do software)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6);
+    doc.setTextColor(37, 99, 235);
+    doc.text("ObraMap", pageW / 2, pageH - 9, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(140);
+    doc.text(" · sistema de gestão de obras", pageW / 2 + 8, pageH - 9);
   }
 }
 
@@ -712,6 +720,15 @@ async function renderCorporativoModerno(
     doc.setTextColor(100, 116, 139);
     doc.text(legal?.rodape_observacoes || data.companyName, margin, pageH - 8);
     doc.text(`RDO ${data.reportNumber ?? "—"} · ${dateFmt} · ${i}/${pageCount}`, pageW - margin, pageH - 8, { align: "right" });
+    // Marca ObraMap (identidade do software)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6);
+    doc.setTextColor(255, 255, 255);
+    doc.text("ObraMap", pageW / 2, pageH - 1, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(140);
+    doc.setFontSize(6);
+    doc.text("ObraMap · sistema de gestão de obras", pageW / 2, pageH - 8, { align: "center" });
   }
 }
 
