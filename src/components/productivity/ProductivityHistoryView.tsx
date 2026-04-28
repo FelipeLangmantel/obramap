@@ -39,6 +39,8 @@ interface ServiceRup {
   days: number;
   rup_min: number;
   rup_max: number;
+  /** RUP planejado a partir de project_service_productivity (HH / un). null se não cadastrado. */
+  rup_planned: number | null;
 }
 
 const DAILY_HOURS = 8; // jornada padrão para cálculo de HH
@@ -46,12 +48,14 @@ const DAILY_HOURS = 8; // jornada padrão para cálculo de HH
 /**
  * Painel de RUP (Razão Unitária de Produção) por serviço.
  * Cruza weekly_productions (em unidade física) com diary_labor (mão de obra
- * presente naquela data) para calcular HH/unidade.
+ * presente naquela data) para calcular HH/unidade — e compara com a
+ * produtividade planejada cadastrada em "Produtividade & Equipes".
  */
 export function ProductivityHistoryView() {
   const { currentProject } = useConstruction();
   const [loading, setLoading] = useState(false);
   const [daily, setDaily] = useState<DailyAggregate[]>([]);
+  const [planned, setPlanned] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (!currentProject?.id) return;
