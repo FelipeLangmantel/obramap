@@ -887,10 +887,23 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const housesGroupedByQuadra = useMemo(() => {
     if (!currentProject) return [];
     const quadras = currentProject.quadras || [];
-    return quadras.map(q => ({
-      name: q.name,
-      houses: houses.filter(h => q.houses.includes(h.id)).sort((a, b) => a.id - b.id),
-    })).filter(g => g.houses.length > 0);
+    // Fallback: sem quadras configuradas ou casas não vinculadas a nenhuma quadra,
+    // exibe todas as casas em um grupo único para não bloquear o lançamento.
+    if (quadras.length === 0 && houses.length > 0) {
+      return [{ name: "Casas", houses: [...houses].sort((a, b) => a.id - b.id) }];
+    }
+    const grouped = quadras
+      .map(q => ({
+        name: q.name,
+        houses: houses.filter(h => q.houses.includes(h.id)).sort((a, b) => a.id - b.id),
+      }))
+      .filter(g => g.houses.length > 0);
+    // Segundo fallback: quadras existem mas nenhuma casa foi vinculada a elas
+    // (ex: projeto novo ainda não configurado ou cache incompleto)
+    if (grouped.length === 0 && houses.length > 0) {
+      return [{ name: "Casas", houses: [...houses].sort((a, b) => a.id - b.id) }];
+    }
+    return grouped;
   }, [currentProject, houses]);
 
   const getHouseProgress = useCallback((houseId: number): number => {
@@ -1572,6 +1585,11 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                   {selectedScope && (
                     <div>
                       <label className="text-xs font-medium text-muted-foreground mb-2 block">3. Selecionar Casas</label>
+                      {selectedScope && houses.length === 0 && (
+                        <p className="text-xs text-muted-foreground italic py-2">
+                          Carregando casas da obra…
+                        </p>
+                      )}
                       {housesGroupedByQuadra.map(group => (
                         <div key={group.name} className="mb-3">
                           <div className="flex items-center gap-2 mb-1">
