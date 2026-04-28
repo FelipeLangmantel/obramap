@@ -1755,7 +1755,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
           {/* GRÁFICOS DE PRODUÇÃO DO DIA */}
           {entryId && (
-            <RdoProductionCharts items={diaryItems} totalCasas={houses.length} projectId={currentProject?.id} entryDate={entryDate} />
+            <RdoProductionCharts items={diaryItems} totalCasas={houses.length} projectId={currentProject?.id} entryDate={entryDate} contractValueOverride={legalConfig?.contrato_valor ?? null} />
           )}
 
           {/* OCORRÊNCIAS */}
