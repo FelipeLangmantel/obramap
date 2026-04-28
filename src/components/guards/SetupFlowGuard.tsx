@@ -67,6 +67,16 @@ export function SetupFlowGuard({ children }: SetupFlowGuardProps) {
 
     checkingRef.current = true;
 
+    // ⚡ OFFLINE: se sem internet e usuário autenticado, pular a verificação remota.
+    // Admin já existe se o usuário tem sessão ativa — sistema está configurado.
+    if (typeof navigator !== "undefined" && !navigator.onLine && user?.id) {
+      sessionStorage.setItem(SETUP_CACHE_KEY, cacheKey);
+      setSystemCheckComplete(true);
+      checkingRef.current = false;
+      checkedRef.current = true;
+      return;
+    }
+
     try {
       // Verificar se admin existe
       const { data: adminExists, error: adminError } = await withTimeout(

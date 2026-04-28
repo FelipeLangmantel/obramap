@@ -96,6 +96,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     isFetchingUserData.current = true;
 
+    // ⚡ BOOT OFFLINE INSTANTÂNEO: se offline, usar cache local do perfil
+    // Evita esperar timeout de 3s antes de mostrar a tela
+    const PROFILE_CACHE_KEY = `obramap_profile_${userId}`;
+    const COMPANY_CACHE_KEY = `obramap_company_${userId}`;
+    if (!navigator.onLine) {
+      try {
+        const cachedProfile = localStorage.getItem(PROFILE_CACHE_KEY);
+        const cachedCompany = localStorage.getItem(COMPANY_CACHE_KEY);
+        if (cachedProfile) {
+          const p = JSON.parse(cachedProfile) as Profile;
+          setProfile(p);
+          setSystemRole(p.system_role);
+          hasFetchedUserData.current = userId;
+          if (cachedCompany) setCompany(JSON.parse(cachedCompany));
+          isFetchingUserData.current = false;
+          return; // Boot offline completo em <50ms
+        }
+      } catch { /* se cache corrompido, continua com fluxo normal */ }
+    }
+
     try {
       // Fetch profile with new fields
       const { data: profileData, error: profileError } = await supabase
@@ -136,6 +156,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
       setProfile(typedProfile);
       setSystemRole(typedProfile.system_role);
+      // ⚡ Persistir perfil localmente para boot offline futuro (<50ms no próximo boot)
+      try { localStorage.setItem(`obramap_profile_${userId}`, JSON.stringify(typedProfile)); } catch { /* quota */ }
 
       // ── Fase 2: Q2 + Q3 + Q4 em paralelo (todas independentes após profile) ──
       const parallelResults = await Promise.all([
@@ -153,7 +175,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const roleData    = parallelResults[1].data;
       const permData    = parallelResults[2].data;
 
-      if (companyData) setCompany(companyData as any);
+      if (companyData) {
+        setCompany(companyData as any);
+        // ⚡ Cache company para boot offline
+        try { localStorage.setItem(`obramap_company_${userId}`, JSON.stringify(companyData)); } catch { /* quota */ }
+      }
       if (roleData)    setRole(roleData as AppRole);
 
       // ── Fase 3: Q5 condicional (depende de Q1.company_id + Q4.department) ──
@@ -294,8 +320,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // (o onAuthStateChange completa o fluxo quando a sessão chegar).
     const sessionTimeout = setTimeout(() => {
       // Não travar a UI se o getSession() não responder
+      // ⚡ 800ms (era 3000ms) — Supabase Auth usa localStorage, retorna rápido offline
       setIsLoading(false);
-    }, 3000);
+    }, 800);
 
     supabase.auth.getSession()
       .then(({ data: { session } }) => {
