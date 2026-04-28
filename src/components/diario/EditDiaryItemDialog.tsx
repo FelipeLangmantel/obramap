@@ -90,7 +90,11 @@ export function EditDiaryItemDialog({ open, onOpenChange, item, housesGrouped, g
   };
 
   const toggleHouse = (id: number) => {
-    if (baselineProgressFor(id) >= 100) return;
+    // Permite desmarcar uma casa que pertence a este lançamento (mesmo se baseline+pct=100).
+    // Bloqueia adicionar uma casa que JÁ está 100% por outros lançamentos.
+    if (!item) return;
+    const isInItem = item.house_ids.includes(id);
+    if (!isInItem && baselineProgressFor(id) >= 100) return;
     setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id].sort((a, b) => a - b));
   };
 
@@ -118,11 +122,14 @@ export function EditDiaryItemDialog({ open, onOpenChange, item, housesGrouped, g
 
   if (!item) return null;
 
-  // Filtra grupos para esconder casas já 100% (mantém padrão "menos ruído visual")
+  // Mostra: casas que estão neste lançamento (sempre — para poder reduzir/remover)
+  // + casas com baseline < 100 (para poder adicionar). Esconde casas 100% por OUTROS.
   const groupedFiltered = grouped
     .map(g => ({
       ...g,
-      ids: g.ids.filter(id => baselineProgressFor(id) < 100),
+      ids: g.ids.filter(id =>
+        item.house_ids.includes(id) || baselineProgressFor(id) < 100
+      ),
     }))
     .filter(g => g.ids.length > 0);
 
@@ -156,32 +163,40 @@ export function EditDiaryItemDialog({ open, onOpenChange, item, housesGrouped, g
                 <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5">
                   {g.ids.map(id => {
                     const isSelected = selected.includes(id);
-                    const prog = baselineProgressFor(id);
-                    const isDone = prog >= 100;
+                    const baseline = baselineProgressFor(id);
+                    const isInThisItem = item.house_ids.includes(id);
+                    const liveTotal = Math.min(100, baseline + (isSelected ? percent : 0));
+                    const isFullByOthers = !isInThisItem && baseline >= 100;
                     return (
                       <Button
                         key={id}
                         type="button"
                         variant="outline"
-                        disabled={isDone}
+                        disabled={isFullByOthers}
+                        title={`Outros lançamentos: ${baseline}%`}
                         className={cn(
                           "h-14 w-full p-0 flex flex-col items-center justify-center gap-0 text-xs font-bold relative",
                           isSelected && "ring-2 ring-primary bg-primary/20 border-primary",
-                          !isSelected && prog === 0 && "bg-background",
-                          !isSelected && prog > 0 && prog < 100 &&
+                          !isSelected && baseline === 0 && "bg-background",
+                          !isSelected && baseline > 0 && baseline < 100 &&
                             "bg-amber-50 dark:bg-amber-900/20 border-amber-400 text-amber-800 dark:text-amber-300",
-                          isDone &&
+                          isFullByOthers &&
                             "bg-emerald-50 dark:bg-emerald-900/20 border-emerald-400 text-emerald-700 dark:text-emerald-300 opacity-70 cursor-not-allowed"
                         )}
                         onClick={() => toggleHouse(id)}
                       >
                         <span className="text-xs font-bold leading-tight">{String(id).padStart(2, "0")}</span>
-                        {prog > 0 && prog < 100 && (
-                          <span className="text-[9px] font-medium leading-tight text-amber-600 dark:text-amber-400">
-                            {prog}%
+                        {isSelected ? (
+                          <span className="text-[9px] font-medium leading-tight text-primary">
+                            {liveTotal}%
                           </span>
-                        )}
-                        {isDone && <CheckCircle2 className="h-3 w-3 text-emerald-500" />}
+                        ) : baseline > 0 && baseline < 100 ? (
+                          <span className="text-[9px] font-medium leading-tight text-amber-600 dark:text-amber-400">
+                            {baseline}%
+                          </span>
+                        ) : isFullByOthers ? (
+                          <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                        ) : null}
                       </Button>
                     );
                   })}
