@@ -24,8 +24,11 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   item: EditableDiaryItem | null;
-  /** Lista de casas do projeto (id = house_number). */
-  houses: { id: number; quadra: string }[];
+  /**
+   * Casas do projeto agrupadas por quadra (com NOME real da quadra, não UUID).
+   * Use o mesmo `housesGroupedByQuadra` que o fluxo principal de lançamento usa.
+   */
+  housesGrouped: { name: string; houses: { id: number }[] }[];
   /**
    * Devolve o progresso atual (0–100) da casa para o macro/escopo deste item.
    * Usado para esconder casas já finalizadas e mostrar o % atual no botão.
@@ -51,7 +54,7 @@ interface Props {
  * Casas que já estão 100% executadas (descontando o próprio lançamento
  * em edição) ficam desabilitadas — não podem ser re-selecionadas.
  */
-export function EditDiaryItemDialog({ open, onOpenChange, item, houses, getHouseProgress, onApply }: Props) {
+export function EditDiaryItemDialog({ open, onOpenChange, item, housesGrouped, getHouseProgress, onApply }: Props) {
   const [selected, setSelected] = useState<number[]>([]);
   const [percent, setPercent] = useState(100);
   const [obs, setObs] = useState("");
@@ -66,17 +69,11 @@ export function EditDiaryItemDialog({ open, onOpenChange, item, houses, getHouse
   }, [item]);
 
   const grouped = useMemo(() => {
-    const map = new Map<string, number[]>();
-    houses.forEach(h => {
-      const k = h.quadra || "—";
-      if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push(h.id);
-    });
-    return Array.from(map.entries()).map(([name, ids]) => ({
-      name,
-      ids: ids.sort((a, b) => a - b),
+    return (housesGrouped || []).map(g => ({
+      name: g.name || "—",
+      ids: g.houses.map(h => h.id).sort((a, b) => a - b),
     }));
-  }, [houses]);
+  }, [housesGrouped]);
 
   /**
    * Para cada casa devolvemos o progresso atual já descontando o próprio
