@@ -13,6 +13,7 @@ import { Slider } from "@/components/ui/slider";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, parseISO, differenceInDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import {
   Save, Trash2, ClipboardList, CheckCircle2, ChevronRight, Users,
   Loader2, Camera, X, Printer, MapPin, Building2, Pencil,
@@ -309,6 +310,42 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       setClimaState(prev => ({ ...prev, mmChuva: mmFinal }));
       setStatusAprovacao("revisando");
       toast.success("RDO enviado ao coordenador para revisão e aprovação.");
+
+      // ── Notificar coordenador da obra (in-app + e-mail via trigger) ──
+      try {
+        if (currentProject?.id && company?.id) {
+          // Busca coordenador específico da obra; fallback: admins (user_id null)
+          const { data: projData } = await (supabase as any)
+            .from("projects")
+            .select("coordenador_user_id, name")
+            .eq("id", currentProject.id)
+            .maybeSingle();
+
+          // Tenta vincular à obra do portfólio (necessário pelo NOT NULL de obra_id).
+          const { data: obra } = await (supabase as any)
+            .from("obras_portfolio")
+            .select("id, nome")
+            .eq("obramap_project_id", currentProject.id)
+            .maybeSingle();
+
+          if (obra?.id) {
+            const dateFmt = format(parseISO(entryDate), "dd/MM/yyyy", { locale: ptBR });
+            const projName = projData?.name || currentProject.name || "Obra";
+            const autor = profile?.display_name || user?.email || "Usuário";
+            await (supabase as any).from("system_notifications").insert({
+              company_id: company.id,
+              obra_id: obra.id,
+              tipo: "rdo_aguardando_aprovacao",
+              titulo: `RDO aguardando aprovação — ${projName}`,
+              mensagem: `${autor} enviou o Diário de Obras de ${dateFmt} para revisão e aprovação.`,
+              modulo: "diario",
+              user_id: projData?.coordenador_user_id || null,
+            });
+          }
+        }
+      } catch (notifyErr) {
+        console.warn("[DiarioObraView] Falha ao notificar coordenador:", notifyErr);
+      }
     } finally {
       setSendingForApproval(false);
     }
@@ -1353,8 +1390,8 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 className="min-h-[40px] bg-blue-600 hover:bg-blue-700"
               >
                 {sendingForApproval ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-                <span className="hidden sm:inline">Enviar p/ aprovação</span>
-                <span className="sm:hidden">Aprovar</span>
+                <span className="hidden sm:inline">Enviar para aprovação</span>
+                <span className="sm:hidden">Enviar</span>
               </Button>
             )}
             {entryId && isLocked && !pendingEditRequest && !isAdmin && (
@@ -1700,7 +1737,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
           {/* GRÁFICOS DE PRODUÇÃO DO DIA */}
           {entryId && (
-            <RdoProductionCharts items={diaryItems} totalCasas={houses.length} />
+            <RdoProductionCharts items={diaryItems} totalCasas={houses.length} projectId={currentProject?.id} entryDate={entryDate} />
           )}
 
           {/* OCORRÊNCIAS */}
@@ -1942,7 +1979,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         open={!!editItem}
         onOpenChange={(v) => { if (!v) setEditItem(null); }}
         item={editItem}
-        houses={houses.map(h => ({ id: h.id, quadra: h.quadra }))}
+        housesGrouped={housesGroupedByQuadra}
         getHouseProgress={getProgressFor}
         onApply={handleApplyEditItem}
       />

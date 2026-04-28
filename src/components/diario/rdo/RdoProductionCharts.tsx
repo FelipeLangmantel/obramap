@@ -1,16 +1,20 @@
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from "recharts";
+import { supabase } from "@/integrations/supabase/client";
+import { startOfWeek, endOfWeek, format, parseISO } from "date-fns";
+import { useContractWeights } from "@/hooks/useContractWeights";
 
 interface DiaryItem {
   id: string;
   macro_id: string;
   macro_name: string;
   macro_color: string;
+  scope_id?: string;
   scope_name: string;
   house_ids: number[];
   percentual_executado: number;
@@ -19,9 +23,53 @@ interface DiaryItem {
 interface Props {
   items: DiaryItem[];
   totalCasas: number;
+  /** Project id — necessário para calcular % do contrato. */
+  projectId?: string | null;
+  /** Data do RDO (YYYY-MM-DD) — usada para somar a semana corrente. */
+  entryDate?: string;
 }
 
-export function RdoProductionCharts({ items, totalCasas }: Props) {
+export function RdoProductionCharts({ items, totalCasas, projectId, entryDate }: Props) {
+  const { unitValueByScope, contractTotalValue } = useContractWeights(projectId);
+  const [weekItems, setWeekItems] = useState<DiaryItem[]>([]);
+
+  // Carrega lançamentos da semana (segunda → domingo) para o acumulado semanal
+  useEffect(() => {
+    if (!projectId || !entryDate) {
+      setWeekItems([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const ref = parseISO(entryDate);
+      const wkStart = format(startOfWeek(ref, { weekStartsOn: 1 }), "yyyy-MM-dd");
+      const wkEnd = format(endOfWeek(ref, { weekStartsOn: 1 }), "yyyy-MM-dd");
+      // Busca diary_entries dessa semana e seus diary_items
+      const { data: entries } = await (supabase as any)
+        .from("diary_entries")
+        .select("id")
+        .eq("project_id", projectId)
+        .gte("entry_date", wkStart)
+        .lte("entry_date", wkEnd);
+      const ids = (entries || []).map((e: any) => e.id);
+      if (ids.length === 0) {
+        if (!cancelled) setWeekItems([]);
+        return;
+      }
+      const { data: di } = await (supabase as any)
+        .from("diary_items")
+        .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, house_ids, percentual_executado")
+        .in("diary_entry_id", ids);
+      if (!cancelled) {
+        setWeekItems((di || []).map((d: any) => ({
+          ...d,
+          percentual_executado: Number(d.percentual_executado || 0),
+        })));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [projectId, entryDate, items.length]);
+
   const { byMacro, byScope, totalCasasAtendidas, totalLancamentos } = useMemo(() => {
     const macroMap = new Map<string, { name: string; color: string; casas: number; lancamentos: number }>();
     const scopeMap = new Map<string, { name: string; macro: string; color: string; casas: number; pctMedio: number; n: number }>();
@@ -52,6 +100,29 @@ export function RdoProductionCharts({ items, totalCasas }: Props) {
     };
   }, [items]);
 
+  // ─── % do contrato lançado HOJE e ACUMULADO NA SEMANA ───
+  const { pctContratoHoje, pctContratoSemana } = useMemo(() => {
+    const computeContractPct = (list: DiaryItem[]) => {
+      if (!contractTotalValue || contractTotalValue <= 0) return null;
+      let valor = 0;
+      for (const it of list) {
+        const unitValue = it.scope_id ? (unitValueByScope.get(it.scope_id) || 0) : 0;
+        if (!unitValue) continue;
+        const casas = it.house_ids?.length || 0;
+        const pct = Math.min(100, Math.max(0, it.percentual_executado || 0)) / 100;
+        valor += unitValue * casas * pct;
+      }
+      return (valor / contractTotalValue) * 100;
+    };
+    return {
+      pctContratoHoje: computeContractPct(items),
+      pctContratoSemana: computeContractPct(weekItems),
+    };
+  }, [items, weekItems, unitValueByScope, contractTotalValue]);
+
+  const fmtPct = (v: number | null) =>
+    v == null ? "—" : v < 0.01 ? "<0,01%" : `${v.toFixed(2)}%`;
+
   if (items.length === 0) {
     return (
       <Card>
@@ -70,8 +141,6 @@ export function RdoProductionCharts({ items, totalCasas }: Props) {
     );
   }
 
-  const cobertura = totalCasas > 0 ? Math.round((totalCasasAtendidas / totalCasas) * 100) : 0;
-
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -82,18 +151,34 @@ export function RdoProductionCharts({ items, totalCasas }: Props) {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* KPIs */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           <div className="rounded-lg border p-3 bg-muted/30">
             <p className="text-[10px] uppercase text-muted-foreground">Lançamentos</p>
             <p className="text-2xl font-bold">{totalLancamentos}</p>
           </div>
           <div className="rounded-lg border p-3 bg-muted/30">
             <p className="text-[10px] uppercase text-muted-foreground">Casas atendidas</p>
-            <p className="text-2xl font-bold">{totalCasasAtendidas}<span className="text-sm text-muted-foreground">/{totalCasas}</span></p>
+            <p className="text-2xl font-bold">
+              {totalCasasAtendidas}<span className="text-sm text-muted-foreground">/{totalCasas}</span>
+            </p>
           </div>
-          <div className="rounded-lg border p-3 bg-muted/30">
-            <p className="text-[10px] uppercase text-muted-foreground">Cobertura</p>
-            <p className="text-2xl font-bold">{cobertura}%</p>
+          <div
+            className="rounded-lg border p-3 bg-blue-50 dark:bg-blue-950/30 border-blue-300/60"
+            title="Soma do valor financeiro lançado hoje (peso PLE × casas × %) ÷ Valor total do contrato"
+          >
+            <p className="text-[10px] uppercase text-blue-700 dark:text-blue-300">% Contrato (hoje)</p>
+            <p className="text-2xl font-bold text-blue-700 dark:text-blue-300 tabular-nums">
+              {fmtPct(pctContratoHoje)}
+            </p>
+          </div>
+          <div
+            className="rounded-lg border p-3 bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300/60"
+            title="Acumulado da semana (segunda a domingo) em % do contrato"
+          >
+            <p className="text-[10px] uppercase text-emerald-700 dark:text-emerald-300">% Contrato (semana)</p>
+            <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">
+              {fmtPct(pctContratoSemana)}
+            </p>
           </div>
         </div>
 
