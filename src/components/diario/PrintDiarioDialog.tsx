@@ -2,9 +2,12 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Printer } from "lucide-react";
+import { Loader2, Printer, FileText, Building2 } from "lucide-react";
 import { generateDiarioPDF, DEFAULT_PDF_CONFIG, type DiarioPDFConfig, type DiarioPDFData } from "./generateDiarioPDF";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
+type PdfTemplate = "orgao_publico" | "corporativo_moderno";
 
 interface PrintDiarioDialogProps {
   open: boolean;
@@ -26,6 +29,7 @@ const SECTIONS: { key: keyof DiarioPDFConfig; label: string; description: string
 
 export function PrintDiarioDialog({ open, onOpenChange, buildData }: PrintDiarioDialogProps) {
   const [config, setConfig] = useState<DiarioPDFConfig>(DEFAULT_PDF_CONFIG);
+  const [template, setTemplate] = useState<PdfTemplate | null>(null);
   const [generating, setGenerating] = useState(false);
 
   const toggle = (key: keyof DiarioPDFConfig) =>
@@ -39,7 +43,11 @@ export function PrintDiarioDialog({ open, onOpenChange, buildData }: PrintDiario
         toast.error("Não foi possível carregar os dados do diário.");
         return;
       }
-      await generateDiarioPDF(data, config);
+      // Override template if user picked one in this dialog session
+      const finalData: DiarioPDFData = template && data.legal
+        ? { ...data, legal: { ...data.legal, pdf_template: template } }
+        : data;
+      await generateDiarioPDF(finalData, config);
       toast.success("PDF gerado com sucesso.");
       onOpenChange(false);
     } catch (err: any) {
@@ -62,7 +70,52 @@ export function PrintDiarioDialog({ open, onOpenChange, buildData }: PrintDiario
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 max-h-[55vh] overflow-y-auto py-2">
+        <div className="space-y-3 max-h-[60vh] overflow-y-auto py-2">
+          {/* Template selector — sobrescreve a escolha por obra apenas neste PDF */}
+          <div>
+            <div className="text-xs font-semibold text-muted-foreground mb-2">
+              Template do PDF (opcional — usa o padrão da obra se não escolher)
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setTemplate(t => t === "orgao_publico" ? null : "orgao_publico")}
+                className={cn(
+                  "flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all text-center",
+                  template === "orgao_publico"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/40"
+                )}
+              >
+                <FileText className="h-6 w-6 text-slate-700" />
+                <div className="text-xs font-semibold leading-tight">Órgão Público</div>
+                <div className="text-[10px] text-muted-foreground leading-tight">
+                  Formal, jurídico, fonte serifada
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTemplate(t => t === "corporativo_moderno" ? null : "corporativo_moderno")}
+                className={cn(
+                  "flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 transition-all text-center",
+                  template === "corporativo_moderno"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/40"
+                )}
+              >
+                <Building2 className="h-6 w-6 text-blue-700" />
+                <div className="text-xs font-semibold leading-tight">Corporativo Moderno</div>
+                <div className="text-[10px] text-muted-foreground leading-tight">
+                  Limpo, sans-serif, identidade visual
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t pt-3">
+            <div className="text-xs font-semibold text-muted-foreground mb-2">Seções do PDF</div>
+          </div>
+
           {SECTIONS.map(s => (
             <label
               key={s.key}

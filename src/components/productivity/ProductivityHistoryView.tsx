@@ -39,6 +39,8 @@ interface ServiceRup {
   days: number;
   rup_min: number;
   rup_max: number;
+  /** RUP planejado a partir de project_service_productivity (HH / un). null se não cadastrado. */
+  rup_planned: number | null;
 }
 
 const DAILY_HOURS = 8; // jornada padrão para cálculo de HH
@@ -46,12 +48,14 @@ const DAILY_HOURS = 8; // jornada padrão para cálculo de HH
 /**
  * Painel de RUP (Razão Unitária de Produção) por serviço.
  * Cruza weekly_productions (em unidade física) com diary_labor (mão de obra
- * presente naquela data) para calcular HH/unidade.
+ * presente naquela data) para calcular HH/unidade — e compara com a
+ * produtividade planejada cadastrada em "Produtividade & Equipes".
  */
 export function ProductivityHistoryView() {
   const { currentProject } = useConstruction();
   const [loading, setLoading] = useState(false);
   const [daily, setDaily] = useState<DailyAggregate[]>([]);
+  const [planned, setPlanned] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (!currentProject?.id) return;
@@ -95,6 +99,30 @@ export function ProductivityHistoryView() {
           laborByDate.set(date, (laborByDate.get(date) || 0) + (l.quantidade || 0));
         });
       }
+
+      // 2.5) Produtividade planejada (RUP planejado = HH / un)
+      const { data: prodPlan } = await supabase
+        .from("project_service_productivity" as any)
+        .select(
+          "scope_id, productivity_value, productivity_unit, professionals_per_team, helpers_per_team, default_team_count"
+        )
+        .eq("project_id", projectId)
+        .eq("is_active", true);
+
+      const plannedMap = new Map<string, number>();
+      ((prodPlan as any[]) || []).forEach((p) => {
+        // produtividade = un / dia (por equipe). Equipe total = (prof + help) * teams.
+        // RUP planejado = (workers * 8h) / (productivity_value * teams)
+        const workers =
+          (Number(p.professionals_per_team) || 0) +
+          (Number(p.helpers_per_team) || 0);
+        const teams = Math.max(1, Number(p.default_team_count) || 1);
+        const dailyOutput = (Number(p.productivity_value) || 0) * teams;
+        if (dailyOutput > 0 && workers > 0) {
+          plannedMap.set(p.scope_id, (workers * teams * DAILY_HOURS) / dailyOutput);
+        }
+      });
+      setPlanned(plannedMap);
 
       // 3) Consolida por serviço × dia (distribui qty pelos dias úteis do período)
       const out: DailyAggregate[] = [];
@@ -147,6 +175,7 @@ export function ProductivityHistoryView() {
           days: 1,
           rup_min: d.rup,
           rup_max: d.rup,
+          rup_planned: planned.get(d.scope_id) ?? null,
         });
       } else {
         cur.total_qty += d.quantity;
@@ -158,7 +187,7 @@ export function ProductivityHistoryView() {
       }
     });
     return Array.from(map.values()).sort((a, b) => a.rup - b.rup);
-  }, [daily]);
+  }, [daily, planned]);
 
   const totals = useMemo(() => {
     const totalHH = daily.reduce((s, d) => s + d.hh_total, 0);
@@ -267,37 +296,52 @@ export function ProductivityHistoryView() {
                     <TableHead>Etapa / Serviço</TableHead>
                     <TableHead className="text-right">Qtd total</TableHead>
                     <TableHead className="text-right">HH total</TableHead>
-                    <TableHead className="text-right">RUP médio</TableHead>
-                    <TableHead className="text-right hidden sm:table-cell">Min / Max</TableHead>
+                    <TableHead className="text-right">RUP real</TableHead>
+                    <TableHead className="text-right hidden sm:table-cell">RUP planejado</TableHead>
+                    <TableHead className="text-right hidden sm:table-cell">Desvio</TableHead>
                     <TableHead className="text-right hidden md:table-cell">Dias</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {byService.map((s) => (
-                    <TableRow key={s.scope_id}>
-                      <TableCell>
-                        <div className="font-medium text-sm">{s.scope_name}</div>
-                        <Badge variant="outline" className="text-[10px] mt-0.5">
-                          {s.macro_name}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-sm">
-                        {s.total_qty.toFixed(1)} {s.unit_symbol}
-                      </TableCell>
-                      <TableCell className="text-right text-sm">
-                        {s.total_hh.toFixed(0)}
-                      </TableCell>
-                      <TableCell className="text-right font-bold">
-                        {s.rup.toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground hidden sm:table-cell">
-                        {s.rup_min.toFixed(2)} / {s.rup_max.toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-right text-sm hidden md:table-cell">
-                        {s.days}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {byService.map((s) => {
+                    const dev = s.rup_planned && s.rup_planned > 0
+                      ? ((s.rup - s.rup_planned) / s.rup_planned) * 100
+                      : null;
+                    return (
+                      <TableRow key={s.scope_id}>
+                        <TableCell>
+                          <div className="font-medium text-sm">{s.scope_name}</div>
+                          <Badge variant="outline" className="text-[10px] mt-0.5">
+                            {s.macro_name}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right text-sm">
+                          {s.total_qty.toFixed(1)} {s.unit_symbol}
+                        </TableCell>
+                        <TableCell className="text-right text-sm">
+                          {s.total_hh.toFixed(0)}
+                        </TableCell>
+                        <TableCell className="text-right font-bold">
+                          {s.rup.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right text-xs hidden sm:table-cell">
+                          {s.rup_planned != null ? s.rup_planned.toFixed(2) : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="text-right text-xs font-semibold hidden sm:table-cell">
+                          {dev == null ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            <span className={dev <= 0 ? "text-emerald-600" : dev <= 15 ? "text-amber-600" : "text-red-600"}>
+                              {dev > 0 ? "+" : ""}{dev.toFixed(0)}%
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-sm hidden md:table-cell">
+                          {s.days}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </ScrollArea>
