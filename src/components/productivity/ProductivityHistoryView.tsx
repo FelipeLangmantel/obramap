@@ -296,37 +296,52 @@ export function ProductivityHistoryView() {
                     <TableHead>Etapa / Serviço</TableHead>
                     <TableHead className="text-right">Qtd total</TableHead>
                     <TableHead className="text-right">HH total</TableHead>
-                    <TableHead className="text-right">RUP médio</TableHead>
-                    <TableHead className="text-right hidden sm:table-cell">Min / Max</TableHead>
+                    <TableHead className="text-right">RUP real</TableHead>
+                    <TableHead className="text-right hidden sm:table-cell">RUP planejado</TableHead>
+                    <TableHead className="text-right hidden sm:table-cell">Desvio</TableHead>
                     <TableHead className="text-right hidden md:table-cell">Dias</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {byService.map((s) => (
-                    <TableRow key={s.scope_id}>
-                      <TableCell>
-                        <div className="font-medium text-sm">{s.scope_name}</div>
-                        <Badge variant="outline" className="text-[10px] mt-0.5">
-                          {s.macro_name}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-sm">
-                        {s.total_qty.toFixed(1)} {s.unit_symbol}
-                      </TableCell>
-                      <TableCell className="text-right text-sm">
-                        {s.total_hh.toFixed(0)}
-                      </TableCell>
-                      <TableCell className="text-right font-bold">
-                        {s.rup.toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-right text-xs text-muted-foreground hidden sm:table-cell">
-                        {s.rup_min.toFixed(2)} / {s.rup_max.toFixed(2)}
-                      </TableCell>
-                      <TableCell className="text-right text-sm hidden md:table-cell">
-                        {s.days}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {byService.map((s) => {
+                    const dev = s.rup_planned && s.rup_planned > 0
+                      ? ((s.rup - s.rup_planned) / s.rup_planned) * 100
+                      : null;
+                    return (
+                      <TableRow key={s.scope_id}>
+                        <TableCell>
+                          <div className="font-medium text-sm">{s.scope_name}</div>
+                          <Badge variant="outline" className="text-[10px] mt-0.5">
+                            {s.macro_name}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right text-sm">
+                          {s.total_qty.toFixed(1)} {s.unit_symbol}
+                        </TableCell>
+                        <TableCell className="text-right text-sm">
+                          {s.total_hh.toFixed(0)}
+                        </TableCell>
+                        <TableCell className="text-right font-bold">
+                          {s.rup.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right text-xs hidden sm:table-cell">
+                          {s.rup_planned != null ? s.rup_planned.toFixed(2) : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="text-right text-xs font-semibold hidden sm:table-cell">
+                          {dev == null ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            <span className={dev <= 0 ? "text-emerald-600" : dev <= 15 ? "text-amber-600" : "text-red-600"}>
+                              {dev > 0 ? "+" : ""}{dev.toFixed(0)}%
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-sm hidden md:table-cell">
+                          {s.days}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </ScrollArea>
