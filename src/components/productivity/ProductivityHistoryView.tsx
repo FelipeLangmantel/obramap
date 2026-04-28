@@ -175,6 +175,7 @@ export function ProductivityHistoryView() {
           days: 1,
           rup_min: d.rup,
           rup_max: d.rup,
+          rup_planned: planned.get(d.scope_id) ?? null,
         });
       } else {
         cur.total_qty += d.quantity;
@@ -186,7 +187,7 @@ export function ProductivityHistoryView() {
       }
     });
     return Array.from(map.values()).sort((a, b) => a.rup - b.rup);
-  }, [daily]);
+  }, [daily, planned]);
 
   const totals = useMemo(() => {
     const totalHH = daily.reduce((s, d) => s + d.hh_total, 0);
