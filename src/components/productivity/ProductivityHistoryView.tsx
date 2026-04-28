@@ -100,6 +100,30 @@ export function ProductivityHistoryView() {
         });
       }
 
+      // 2.5) Produtividade planejada (RUP planejado = HH / un)
+      const { data: prodPlan } = await supabase
+        .from("project_service_productivity" as any)
+        .select(
+          "scope_id, productivity_value, productivity_unit, professionals_per_team, helpers_per_team, default_team_count"
+        )
+        .eq("project_id", projectId)
+        .eq("is_active", true);
+
+      const plannedMap = new Map<string, number>();
+      ((prodPlan as any[]) || []).forEach((p) => {
+        // produtividade = un / dia (por equipe). Equipe total = (prof + help) * teams.
+        // RUP planejado = (workers * 8h) / (productivity_value * teams)
+        const workers =
+          (Number(p.professionals_per_team) || 0) +
+          (Number(p.helpers_per_team) || 0);
+        const teams = Math.max(1, Number(p.default_team_count) || 1);
+        const dailyOutput = (Number(p.productivity_value) || 0) * teams;
+        if (dailyOutput > 0 && workers > 0) {
+          plannedMap.set(p.scope_id, (workers * teams * DAILY_HOURS) / dailyOutput);
+        }
+      });
+      setPlanned(plannedMap);
+
       // 3) Consolida por serviço × dia (distribui qty pelos dias úteis do período)
       const out: DailyAggregate[] = [];
       (prods || []).forEach((p: any) => {
