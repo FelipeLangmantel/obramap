@@ -13,6 +13,7 @@ import { Slider } from "@/components/ui/slider";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, parseISO, differenceInDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import {
   Save, Trash2, ClipboardList, CheckCircle2, ChevronRight, Users,
   Loader2, Camera, X, Printer, MapPin, Building2, Pencil,
