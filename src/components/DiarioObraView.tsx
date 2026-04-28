@@ -1942,7 +1942,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         open={!!editItem}
         onOpenChange={(v) => { if (!v) setEditItem(null); }}
         item={editItem}
-        houses={houses.map(h => ({ id: h.id, quadra: h.quadra }))}
+        housesGrouped={housesGroupedByQuadra}
         getHouseProgress={getProgressFor}
         onApply={handleApplyEditItem}
       />
