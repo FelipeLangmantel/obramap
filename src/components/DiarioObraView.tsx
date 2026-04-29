@@ -1765,6 +1765,21 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                                 disabled={isLocked}
                               />
                             )}
+                            {entryId && company?.id && (
+                              <DiaryItemAssignmentPopover
+                                diaryItemId={item.id}
+                                contractorContractId={item.contractor_contract_id}
+                                workers={dWorkers.workers}
+                                links={dWorkers.links}
+                                contractors={contractorContracts}
+                                companyId={company.id}
+                                disabled={isLocked}
+                                onChanged={() => {
+                                  dWorkers.reload(entryId);
+                                  loadItems(entryId);
+                                }}
+                              />
+                            )}
                             {!isLocked && statusAprovacao === "preenchendo" && (
                               <Button
                                 variant="ghost"
