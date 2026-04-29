@@ -216,13 +216,24 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     if (!currentProject?.id) { setContractorContracts([]); return; }
     let cancelled = false;
     (async () => {
-      const { data } = await (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("contractor_contracts")
-        .select("id, contractor_name, status")
-        .eq("project_id", currentProject.id)
-        .in("status", ["active", "ativo", "Ativo", "vigente"])
-        .order("contractor_name");
-      if (!cancelled) setContractorContracts((data || []) as any);
+        .select("id, status, contractor:contractors(name)")
+        .eq("project_id", currentProject.id);
+      if (error) { console.error("[Diario] contractor_contracts:", error); return; }
+      const mapped = ((data || []) as any[])
+        .map((r) => ({
+          id: r.id,
+          status: r.status,
+          contractor_name: r.contractor?.name || "(sem nome)",
+        }))
+        .filter((c) => {
+          const s = (c.status || "").toLowerCase();
+          // aceita ativos / vigentes; ignora encerrados/cancelados
+          return !["encerrado", "cancelado", "finalizado", "closed", "cancelled"].includes(s);
+        })
+        .sort((a, b) => a.contractor_name.localeCompare(b.contractor_name));
+      if (!cancelled) setContractorContracts(mapped as any);
     })();
     return () => { cancelled = true; };
   }, [currentProject?.id]);
