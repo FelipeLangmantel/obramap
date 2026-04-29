@@ -82,7 +82,7 @@ export default function CameraCapturePage() {
         storage_path: path,
         legenda: null,
         house_number: houseNumber,
-      } as any);
+      });
 
       if (dbError) {
         await supabase.storage.from("diary-photos").remove([path]);
@@ -92,8 +92,8 @@ export default function CameraCapturePage() {
       sessionStorage.removeItem("obramap_camera_capture_status");
       setMessage("Foto enviada. Voltando ao diário...");
       goBack();
-    } catch (err: any) {
-      setMessage("Erro ao enviar foto: " + (err.message || ""));
+    } catch (err: unknown) {
+      setMessage("Erro ao enviar foto: " + (err instanceof Error ? err.message : ""));
     } finally {
       setUploading(false);
       e.target.value = "";
