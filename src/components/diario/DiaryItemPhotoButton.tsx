@@ -149,6 +149,38 @@ export function DiaryItemPhotoButton({
     }
   };
 
+  const uploadCapturedPhoto = async (blob: Blob) => {
+    const houseNum = selectedHouse === "all" ? null : Number(selectedHouse);
+    setUploading(true);
+    try {
+      const houseSeg = houseNum != null ? `casa-${houseNum}/` : "geral/";
+      const path = `${companyId}/${diaryEntryId}/${diaryItemId}/${houseSeg}${Date.now()}_camera.jpg`;
+      const { error: upErr } = await supabase.storage
+        .from("diary-photos")
+        .upload(path, blob, { contentType: "image/jpeg", upsert: false });
+      if (upErr) throw upErr;
+      const { error: dbErr } = await supabase.from("diary_photos").insert({
+        diary_entry_id: diaryEntryId,
+        diary_item_id: diaryItemId,
+        storage_path: path,
+        legenda: null,
+        house_number: houseNum,
+      } as any);
+      if (dbErr) {
+        await supabase.storage.from("diary-photos").remove([path]);
+        throw dbErr;
+      }
+      await loadFotos();
+      await refreshCount();
+      onChanged?.();
+      toast.success("Foto anexada.");
+    } catch (err: any) {
+      toast.error("Erro: " + (err.message || ""));
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const sortedHouses = [...houseIds].sort((a, b) => a - b);
 
   return (
