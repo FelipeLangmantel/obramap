@@ -116,8 +116,7 @@ const App = () => {
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
-            <ConstructionProvider>
-              <Routes>
+            <Routes>
                 {/* Public routes */}
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/auth" element={<Auth />} />
@@ -126,17 +125,22 @@ const App = () => {
                 {/* Legacy redirect */}
                 <Route path="/landing" element={<LandingPage />} />
 
-                {/* ========== ROTAS DE SISTEMA (System Admin) ========== */}
-                <Route element={<SystemLayout />}>
-                  <Route path="/system/dashboard" element={<SystemDashboard />} />
-                  <Route path="/system/modules" element={<SystemModulesPage />} />
-                  <Route path="/system/migration" element={<LegacyDataMigration />} />
-                  <Route path="/admin/dashboard" element={<SystemDashboard />} />
-                  <Route path="/admin/migration" element={<LegacyDataMigration />} />
+                {/* Captura isolada: evita carregar a obra inteira antes de abrir a câmera */}
+                <Route element={<CompanyUserGuard><Outlet /></CompanyUserGuard>}>
+                  <Route path="/camera-capture" element={<CameraCapturePage />} />
                 </Route>
 
+                {/* ========== ROTAS DE SISTEMA (System Admin) ========== */}
+                <Route element={<ConstructionProvider><SystemLayout /></ConstructionProvider>}>
+                    <Route path="/system/dashboard" element={<SystemDashboard />} />
+                    <Route path="/system/modules" element={<SystemModulesPage />} />
+                    <Route path="/system/migration" element={<LegacyDataMigration />} />
+                    <Route path="/admin/dashboard" element={<SystemDashboard />} />
+                    <Route path="/admin/migration" element={<LegacyDataMigration />} />
+                  </Route>
+
                 {/* ========== ROTAS DE EMPRESA (Usuários comuns) ========== */}
-                <Route element={<CompanyLayout />}>
+                <Route element={<ConstructionProvider><CompanyLayout /></ConstructionProvider>}>
                   <Route path="/measurement-planning" element={<MeasurementPlanningPage />} />
                   <Route path="/long-term-planning" element={<LongTermPlanningPage />} />
                   <Route path="/project-contract" element={<ProjectContractPage />} />
@@ -151,14 +155,12 @@ const App = () => {
                   <Route path="/purchase-panel" element={<PurchasePanelPage />} />
                   <Route path="/diario-fila-offline" element={<DiarioOfflineQueuePage />} />
                   <Route path="/diario-config" element={<DiarioConfigPage />} />
-                  <Route path="/camera-capture" element={<CameraCapturePage />} />
                   <Route path="/casa/:houseId/historico" element={<HouseHistoryPage />} />
                   <Route path="/dashboard" element={<Index />} />
                   <Route path="/index" element={<Navigate to="/dashboard" replace />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>
               </Routes>
-            </ConstructionProvider>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
