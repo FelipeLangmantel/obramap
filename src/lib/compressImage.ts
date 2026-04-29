@@ -31,7 +31,7 @@ export interface CompressOptions {
 }
 
 const DEFAULTS: Required<CompressOptions> = {
-  maxSide: 1280,
+  maxSide: 1024,
   quality: 0.7,
   mime: "image/jpeg",
   maxInputBytes: 25 * 1024 * 1024,
