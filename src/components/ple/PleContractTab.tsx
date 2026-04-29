@@ -524,9 +524,11 @@ export function PleContractTab(props: PleDataReturn) {
             <p className="text-sm sm:text-base font-bold font-mono text-primary tabular-nums truncate">{fmtCur(stats.totalContractual)}</p>
           </div>
         </div>
+
+        {stats.ungroupedCount > 0 && (
           <div className="mb-2 px-3 py-2 rounded-md bg-amber-500/10 border border-amber-500/30 flex items-center gap-2">
             <span className="text-xs text-amber-700 dark:text-amber-400 font-medium">
-              ⚠️ {stats.ungroupedCount} itens importados sem grupo atribuído — eles aparecem abaixo para edição/exclusão.
+              ⚠️ {stats.ungroupedCount} itens importados sem grupo atribuído — use o seletor "Mover para subetapa" abaixo de cada linha.
             </span>
           </div>
         )}
