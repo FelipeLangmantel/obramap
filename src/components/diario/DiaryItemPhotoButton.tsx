@@ -308,6 +308,12 @@ export function DiaryItemPhotoButton({
           </div>
         </DialogContent>
       </Dialog>
+      <LowMemoryCameraDialog
+        open={lowMemoryCameraOpen}
+        onOpenChange={setLowMemoryCameraOpen}
+        onCapture={uploadCapturedPhoto}
+        disabled={uploading || disabled}
+      />
     </>
   );
 }
