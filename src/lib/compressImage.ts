@@ -71,19 +71,47 @@ async function readImageDimensions(file: File): Promise<{ width: number; height:
   }
 
   if (view.byteLength >= 4 && view.getUint16(0) === 0xffd8) {
+    let orientation = 1;
     let offset = 2;
     while (offset + 9 < view.byteLength) {
       if (view.getUint8(offset) !== 0xff) { offset++; continue; }
       const marker = view.getUint8(offset + 1);
       const length = view.getUint16(offset + 2);
       if (length < 2) break;
+      if (marker === 0xe1 && offset + length + 2 <= view.byteLength) {
+        orientation = readJpegOrientation(view, offset + 4, length - 2) || orientation;
+      }
       if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
-        return { height: view.getUint16(offset + 5), width: view.getUint16(offset + 7) };
+        const height = view.getUint16(offset + 5);
+        const width = view.getUint16(offset + 7);
+        return orientation >= 5 && orientation <= 8 ? { width: height, height: width } : { width, height };
       }
       offset += 2 + length;
     }
   }
 
+  return null;
+}
+
+function readJpegOrientation(view: DataView, start: number, length: number): number | null {
+  if (length < 14) return null;
+  const exif = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00];
+  for (let i = 0; i < exif.length; i++) {
+    if (view.getUint8(start + i) !== exif[i]) return null;
+  }
+  const tiff = start + 6;
+  const little = view.getUint16(tiff) === 0x4949;
+  const big = view.getUint16(tiff) === 0x4d4d;
+  if (!little && !big) return null;
+  const ifdOffset = view.getUint32(tiff + 4, little);
+  const ifd = tiff + ifdOffset;
+  if (ifd + 2 > start + length) return null;
+  const entries = view.getUint16(ifd, little);
+  for (let i = 0; i < entries; i++) {
+    const entry = ifd + 2 + i * 12;
+    if (entry + 12 > start + length) return null;
+    if (view.getUint16(entry, little) === 0x0112) return view.getUint16(entry + 8, little);
+  }
   return null;
 }
 
