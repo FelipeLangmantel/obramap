@@ -438,8 +438,10 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     }
     const fotosComUrl = await Promise.all(
       fotosData.map(async (f) => {
-        const { data: signed } = await supabase.storage
-          .from("diary-photos").createSignedUrl(f.storage_path, 60 * 60);
+        const { data: signed } = await (supabase.storage
+          .from("diary-photos") as any).createSignedUrl(f.storage_path, 60 * 60, {
+            transform: { width: 900, resize: "contain", quality: 70 },
+          });
         return {
           id: f.id, storage_path: f.storage_path, legenda: f.legenda,
           url: signed?.signedUrl || "",
