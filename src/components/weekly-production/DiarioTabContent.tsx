@@ -86,7 +86,11 @@ const CLIMA_LABEL: Record<string, string> = {
   chuva_forte: "⛈️ Chuva forte", vento: "💨 Vento",
 };
 
-export default function DiarioTabContent() {
+interface DiarioTabContentProps {
+  onOpenDiary?: (dateISO: string) => void;
+}
+
+export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps = {}) {
   const { currentProject, updateBatchScopeProgress } = useConstruction();
   const houses = currentProject?.houses || [];
   const { user, profile, isCompanyAdmin, isSystemAdmin } = useAuth();
@@ -325,6 +329,20 @@ export default function DiarioTabContent() {
     }
   };
 
+  const handleApproveEntry = async (entry: EntryRow) => {
+    if (!podeFecharSemana) return;
+    const { error } = await supabase
+      .from("diary_entries")
+      .update({ status: "finalizado", status_aprovacao: "aprovado" } as any)
+      .eq("id", entry.id);
+    if (error) {
+      toast.error("Erro ao aprovar diário: " + error.message);
+      return;
+    }
+    toast.success("Diário aprovado.");
+    await loadData();
+  };
+
   const shiftWeek = (delta: number) => {
     const newRef = new Date(weekRef);
     newRef.setDate(newRef.getDate() + delta * 7);
@@ -516,7 +534,11 @@ export default function DiarioTabContent() {
                 </TableHeader>
                 <TableBody>
                   {entries.map(e => (
-                    <TableRow key={e.id}>
+                    <TableRow
+                      key={e.id}
+                      className={onOpenDiary ? "cursor-pointer" : undefined}
+                      onClick={() => onOpenDiary?.(e.entry_date)}
+                    >
                       <TableCell className="font-medium">
                         {format(parseISO(e.entry_date), "EEE dd/MM", { locale: ptBR })}
                       </TableCell>
@@ -530,9 +552,16 @@ export default function DiarioTabContent() {
                             ✅ Aprovado
                           </Badge>
                         ) : e.status_aprovacao === "revisando" ? (
-                          <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300">
-                            🔍 Em revisão
-                          </Badge>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300">
+                              🔍 Em revisão
+                            </Badge>
+                            {podeFecharSemana && (
+                              <Button size="sm" className="h-7 text-xs" onClick={(ev) => { ev.stopPropagation(); void handleApproveEntry(e); }}>
+                                Aprovar
+                              </Button>
+                            )}
+                          </div>
                         ) : e.status_aprovacao === "solicitando_edicao" ? (
                           <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300">
                             ⏳ Edição solicitada

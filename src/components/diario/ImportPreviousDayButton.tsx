@@ -121,7 +121,6 @@ export function ImportPreviousDayButton({
         inserts.push(Promise.resolve(supabase.from("diary_items").insert(
           Array.from(uniq.values()).map(r => ({
             diary_entry_id: targetId,
-            company_id: companyId,
             macro_id: r.macro_id,
             macro_name: r.macro_name,
             macro_color: r.macro_color,

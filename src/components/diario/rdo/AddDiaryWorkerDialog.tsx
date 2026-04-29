@@ -16,6 +16,7 @@ interface ContractorContract {
   id: string;
   contractor_name: string;
   status: string;
+  is_internal?: boolean;
 }
 
 interface Props {
@@ -205,7 +206,7 @@ export function AddDiaryWorkerDialog({
                 <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>Mão de obra própria</SelectItem>
-                  {contractors.map((c) => (
+                  {contractors.filter((c) => !c.is_internal).map((c) => (
                     <SelectItem key={c.id} value={c.id}>{c.contractor_name}</SelectItem>
                   ))}
                 </SelectContent>
