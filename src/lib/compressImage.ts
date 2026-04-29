@@ -46,6 +46,47 @@ function calcDims(srcW: number, srcH: number, maxSide: number) {
   return { w: Math.max(1, Math.round(srcW * ratio)), h: Math.max(1, Math.round(srcH * ratio)) };
 }
 
+async function readImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
+  const buffer = await file.slice(0, HEADER_READ_BYTES).arrayBuffer();
+  const view = new DataView(buffer);
+
+  if (view.byteLength >= 24 && view.getUint32(0) === 0x89504e47 && view.getUint32(4) === 0x0d0a1a0a) {
+    return { width: view.getUint32(16), height: view.getUint32(20) };
+  }
+
+  if (view.byteLength >= 30 && view.getUint32(0, true) === 0x46464952 && view.getUint32(8, true) === 0x50424557) {
+    const chunk = String.fromCharCode(view.getUint8(12), view.getUint8(13), view.getUint8(14), view.getUint8(15));
+    if (chunk === "VP8X" && view.byteLength >= 30) {
+      const width = 1 + view.getUint8(24) + (view.getUint8(25) << 8) + (view.getUint8(26) << 16);
+      const height = 1 + view.getUint8(27) + (view.getUint8(28) << 8) + (view.getUint8(29) << 16);
+      return { width, height };
+    }
+    if (chunk === "VP8 " && view.byteLength >= 30) {
+      return { width: view.getUint16(26, true) & 0x3fff, height: view.getUint16(28, true) & 0x3fff };
+    }
+    if (chunk === "VP8L" && view.byteLength >= 25) {
+      const b0 = view.getUint8(21), b1 = view.getUint8(22), b2 = view.getUint8(23), b3 = view.getUint8(24);
+      return { width: 1 + (((b1 & 0x3f) << 8) | b0), height: 1 + (((b3 & 0x0f) << 10) | (b2 << 2) | ((b1 & 0xc0) >> 6)) };
+    }
+  }
+
+  if (view.byteLength >= 4 && view.getUint16(0) === 0xffd8) {
+    let offset = 2;
+    while (offset + 9 < view.byteLength) {
+      if (view.getUint8(offset) !== 0xff) { offset++; continue; }
+      const marker = view.getUint8(offset + 1);
+      const length = view.getUint16(offset + 2);
+      if (length < 2) break;
+      if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+        return { height: view.getUint16(offset + 5), width: view.getUint16(offset + 7) };
+      }
+      offset += 2 + length;
+    }
+  }
+
+  return null;
+}
+
 function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
