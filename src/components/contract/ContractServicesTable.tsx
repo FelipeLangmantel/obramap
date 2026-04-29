@@ -124,6 +124,26 @@ export function ContractServicesTable({
   isEditing,
   costPercent,
 }: ContractServicesTableProps) {
+  const { currentProject } = useConstruction();
+  const [linkDialog, setLinkDialog] = useState<{ macroId: string; macroName: string; scopeId: string; scopeName: string } | null>(null);
+  const [hasPleProject, setHasPleProject] = useState(false);
+
+  // Check if there is a PLE project linked to current obramap project
+  useEffect(() => {
+    if (!currentProject?.id) { setHasPleProject(false); return; }
+    let cancelled = false;
+    (async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data } = await supabase
+        .from("ple_projects")
+        .select("id")
+        .eq("obramap_project_id", currentProject.id)
+        .maybeSingle();
+      if (!cancelled) setHasPleProject(!!data);
+    })();
+    return () => { cancelled = true; };
+  }, [currentProject?.id]);
+
   // Group services by macro
   const groupedServices = services.reduce((acc, service) => {
     const key = service.macro_id;
@@ -153,8 +173,8 @@ export function ContractServicesTable({
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">
-                <TableHead className="w-[200px] font-semibold">Etapa (Macro)</TableHead>
-                <TableHead className="w-[250px] font-semibold">Serviço (Scope)</TableHead>
+                <TableHead className="w-[180px] font-semibold">Etapa (Macro)</TableHead>
+                <TableHead className="w-[230px] font-semibold">Serviço (Scope)</TableHead>
                 <TableHead className="w-[150px] text-right font-semibold">
                   Preço Contrato (R$)
                 </TableHead>
@@ -166,6 +186,9 @@ export function ContractServicesTable({
                 </TableHead>
                 <TableHead className="w-[80px] text-center font-semibold">% Custo</TableHead>
                 <TableHead className="w-[100px] text-center font-semibold">Status</TableHead>
+                {hasPleProject && (
+                  <TableHead className="w-[140px] text-center font-semibold">PLE</TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
