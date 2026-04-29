@@ -200,9 +200,15 @@ export function PleContractTab(props: PleDataReturn) {
   const substageOptions = useMemo(() => {
     const opts: { id: string; label: string }[] = [];
     stages.forEach(stage => {
-      (substagesByStage.get(stage.id) || []).forEach(sub => {
-        opts.push({ id: sub.id, label: `${stage.code} ${stage.name} › ${sub.code} ${sub.name}` });
-      });
+      const subs = substagesByStage.get(stage.id) || [];
+      if (subs.length === 0) {
+        // Etapa sem subetapas: permitir vincular diretamente à etapa
+        opts.push({ id: stage.id, label: `${stage.code} ${stage.name}` });
+      } else {
+        subs.forEach(sub => {
+          opts.push({ id: sub.id, label: `${stage.code} ${stage.name} › ${sub.code} ${sub.name}` });
+        });
+      }
     });
     return opts;
   }, [stages, substagesByStage]);
@@ -211,7 +217,8 @@ export function PleContractTab(props: PleDataReturn) {
     if (!requireEdit()) return;
     if (!groupId || groupId === "__none__") return;
     await updateEvent(eventId, { group_id: groupId } as any);
-    toast.success("Item movido para a subetapa");
+    const isStage = stages.some(s => s.id === groupId);
+    toast.success(isStage ? "Item movido para a etapa" : "Item movido para a subetapa");
   };
 
   const toggleStage = (id: string) => {
@@ -808,10 +815,10 @@ export function PleContractTab(props: PleDataReturn) {
                     </div>
                     {/* Mover para subetapa */}
                     <div className="flex items-center gap-2 border-b bg-amber-500/5 px-2 sm:px-3 py-1.5">
-                      <span className="text-[10px] text-amber-700 dark:text-amber-300 shrink-0">Mover para subetapa:</span>
+                      <span className="text-[10px] text-amber-700 dark:text-amber-300 shrink-0">Mover para etapa/subetapa:</span>
                       <Select value="__none__" onValueChange={(v) => moveEventToGroup(ev.id, v)}>
                         <SelectTrigger className="h-6 text-[10px] flex-1 max-w-[420px] border-dashed border-amber-500/50">
-                          <SelectValue placeholder="Selecionar subetapa..." />
+                          <SelectValue placeholder="Selecionar etapa/subetapa..." />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__none__" disabled>
