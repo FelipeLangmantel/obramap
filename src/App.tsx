@@ -32,7 +32,6 @@ import PurchasePanelPage from "./pages/PurchasePanelPage";
 import DiarioOfflineQueuePage from "./pages/DiarioOfflineQueuePage";
 import DiarioConfigPage from "./pages/DiarioConfigPage";
 import HouseHistoryPage from "./pages/HouseHistoryPage";
-import CameraCapturePage from "./pages/CameraCapturePage";
 import Unsubscribe from "./pages/Unsubscribe";
 import { bootstrapSyncWorker } from "@/offline/sync";
 
@@ -124,11 +123,6 @@ const App = () => {
                 <Route path="/unsubscribe" element={<Unsubscribe />} />
                 {/* Legacy redirect */}
                 <Route path="/landing" element={<LandingPage />} />
-
-                {/* Captura isolada: evita carregar a obra inteira antes de abrir a câmera */}
-                <Route element={<CompanyUserGuard><Outlet /></CompanyUserGuard>}>
-                  <Route path="/camera-capture" element={<CameraCapturePage />} />
-                </Route>
 
                 {/* ========== ROTAS DE SISTEMA (System Admin) ========== */}
                 <Route element={<ConstructionProvider><SystemLayout /></ConstructionProvider>}>
