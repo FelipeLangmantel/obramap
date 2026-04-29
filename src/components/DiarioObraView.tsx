@@ -1427,7 +1427,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             )}
           </div>
           <div className="flex gap-2 shrink-0 self-start flex-wrap w-full xl:w-auto">
-            {!isLocked && currentProject?.id && company?.id && (
+            {!editingDisabled && currentProject?.id && company?.id && (
               <ImportPreviousDayButton
                 projectId={currentProject.id}
                 companyId={company.id}
@@ -1443,13 +1443,13 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 ensureEntryExists={ensureEntryExists}
               />
             )}
-            {!isLocked && (
+            {!editingDisabled && (
               <Button onClick={handleSaveHeader} disabled={savingHeader} className="min-h-[40px]">
                 {savingHeader ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                 Salvar
               </Button>
             )}
-            {entryId && !isLocked && statusAprovacao === "preenchendo" && (
+            {entryId && !editingDisabled && statusAprovacao === "preenchendo" && (
               <Button
                 variant="default"
                 onClick={handleSendForApproval}
@@ -1461,7 +1461,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 <span className="sm:hidden">Enviar</span>
               </Button>
             )}
-            {entryId && isLocked && !pendingEditRequest && !isAdmin && (
+            {entryId && editingDisabled && !pendingEditRequest && (
               <Button
                 variant="outline"
                 onClick={() => setEditRequestOpen(true)}
@@ -1511,7 +1511,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Data</label>
                     <Input type="date" value={entryDate} onChange={e => setEntryDate(e.target.value)}
-                      className="mt-1" disabled={isLocked} />
+                      className="mt-1" disabled={editingDisabled} />
                   </div>
                   <div>
                     <label className="text-xs font-medium text-muted-foreground">Equipe presente</label>
@@ -1526,7 +1526,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">Observação geral</label>
                   <Textarea value={obsGeral} onChange={e => setObsGeral(e.target.value)}
-                    placeholder="Observações do dia..." className="mt-1 min-h-[60px]" disabled={isLocked} />
+                    placeholder="Observações do dia..." className="mt-1 min-h-[60px]" disabled={editingDisabled} />
                 </div>
               </CardContent>
             </Card>
@@ -1542,7 +1542,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             <RdoClimaSection
               value={climaState}
               onChange={(v) => { setClimaState(v); setClimaAutoPreenchido(false); }}
-              disabled={isLocked}
+              disabled={editingDisabled}
             />
           </section>
 
@@ -1550,7 +1550,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           <RdoLaborSection
             items={rdo.labor}
             onAdd={() => openDialogWithEntry(() => setAddLaborOpen(true))}
-            disabled={isLocked}
+            disabled={editingDisabled}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
@@ -1562,7 +1562,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
               entryId={entryId}
               companyId={company.id}
               projectId={currentProject.id}
-              disabled={isLocked}
+              disabled={editingDisabled}
               onChanged={() => dWorkers.reload(entryId)}
             />
           )}
@@ -1571,7 +1571,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           <RdoEquipmentSection
             items={rdo.equipment}
             onAdd={() => openDialogWithEntry(() => setAddEquipOpen(true))}
-            disabled={isLocked}
+            disabled={editingDisabled}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
@@ -1579,12 +1579,12 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           <RdoActivitiesSection
             items={rdo.activities}
             onAdd={() => openDialogWithEntry(() => setAddActivityOpen(true))}
-            disabled={isLocked}
+            disabled={editingDisabled}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
           {/* PRODUÇÃO POR CASA (existente) */}
-          {!isLocked && (
+          {!editingDisabled && (
             <section id="producao" className="scroll-mt-4">
               <Card>
                 <CardHeader className="pb-3">
@@ -1777,7 +1777,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                                 companyId={company.id}
                                 houseIds={item.house_ids}
                                 entryDate={entryDate}
-                                disabled={isLocked}
+                                disabled={editingDisabled}
                               />
                             )}
                             {entryId && company?.id && (
@@ -1788,7 +1788,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                                 links={dWorkers.links}
                                 contractors={contractorContracts}
                                 companyId={company.id}
-                                disabled={isLocked}
+                                disabled={editingDisabled}
                                 onChanged={() => {
                                   dWorkers.reload(entryId);
                                   loadItems(entryId);
@@ -1817,7 +1817,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                               </Button>
                             )}
                             <Button variant="ghost" size="icon" className="text-destructive"
-                              onClick={() => handleDeleteItem(item)} disabled={isLocked}>
+                              onClick={() => handleDeleteItem(item)} disabled={editingDisabled}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -1845,7 +1845,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           <RdoOccurrencesSection
             items={rdo.occurrences}
             onAdd={() => openDialogWithEntry(() => setAddOccurOpen(true))}
-            disabled={isLocked}
+            disabled={editingDisabled}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
@@ -1853,7 +1853,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           <RdoChecklistSection
             items={rdo.checklist}
             onAdd={() => openDialogWithEntry(() => setAddChecklistOpen(true))}
-            disabled={isLocked}
+            disabled={editingDisabled}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
 
@@ -1861,7 +1861,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           <RdoCommentsSection
             items={rdo.comments}
             onAdd={() => openDialogWithEntry(() => setAddCommentOpen(true))}
-            disabled={isLocked}
+            disabled={editingDisabled}
             currentUserId={user?.id || null}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
@@ -1871,7 +1871,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             id="fotos"
             title="Fotos"
             count={fotos.length}
-            onAdd={!isLocked && fotos.length < 10 ? handleOpenFotoPicker : undefined}
+            onAdd={!editingDisabled && fotos.length < 10 ? handleOpenFotoPicker : undefined}
             disabled={uploadingFoto}
             alwaysShowChildren
           >
@@ -1894,7 +1894,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                         <img src={foto.url} alt={foto.legenda || "Foto do diário"}
                           className="w-20 h-20 object-cover rounded-lg border" />
                       </button>
-                      {!isLocked && (
+                      {!editingDisabled && (
                         <button type="button" onClick={() => handleRemoverFoto(foto.id, foto.storage_path)}
                           className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow">
                           <X className="h-3 w-3" />
@@ -1922,7 +1922,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             videos={rdo.videos}
             entryId={entryId}
             companyId={company?.id || null}
-            disabled={isLocked}
+            disabled={editingDisabled}
             onChanged={() => entryId && rdo.loadAttachments(entryId)}
             onRequestCreateEntry={ensureEntryExists}
           />
@@ -1932,7 +1932,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             attachments={rdo.attachments}
             entryId={entryId}
             companyId={company?.id || null}
-            disabled={isLocked}
+            disabled={editingDisabled}
             onChanged={() => entryId && rdo.loadAttachments(entryId)}
             onRequestCreateEntry={ensureEntryExists}
           />
@@ -1950,7 +1950,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             canApprove={isAdmin}
             signerId={user?.id || null}
             signerName={profile?.display_name || user?.email || null}
-            isLocked={isLocked && !isAdmin}
+            isLocked={editingDisabled}
           />
 
           {/* FOOTER: navegação + log + visualizações */}
@@ -1996,7 +1996,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       </div>
 
       {/* Botão Registrar fixo em mobile */}
-      {entryId && selectedHouses.length > 0 && !isLocked && (
+      {entryId && selectedHouses.length > 0 && !editingDisabled && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t z-50 md:static md:border-0 md:p-0 md:bg-transparent md:mt-4">
           <Button onClick={handleRegister} disabled={registering || !selectedMacro || !selectedScope}
             className="w-full min-h-[48px] text-base font-semibold">
