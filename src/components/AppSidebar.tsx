@@ -549,6 +549,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                     <span className="text-sm font-medium">Cadastro de Profissões</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                {(isAdmin || isCompanyAdmin) && canAccessManagement("usuarios") && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => setUsersDialogOpen(true)}
