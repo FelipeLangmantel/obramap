@@ -759,6 +759,7 @@ export type Database = {
           created_at: string
           end_date: string | null
           id: string
+          is_internal: boolean
           notes: string | null
           project_id: string
           retention_percent: number
@@ -777,6 +778,7 @@ export type Database = {
           created_at?: string
           end_date?: string | null
           id?: string
+          is_internal?: boolean
           notes?: string | null
           project_id: string
           retention_percent?: number
@@ -795,6 +797,7 @@ export type Database = {
           created_at?: string
           end_date?: string | null
           id?: string
+          is_internal?: boolean
           notes?: string | null
           project_id?: string
           retention_percent?: number
@@ -1097,6 +1100,7 @@ export type Database = {
           created_at: string
           email: string | null
           id: string
+          is_internal: boolean
           name: string
           notes: string | null
           phone: string | null
@@ -1119,6 +1123,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          is_internal?: boolean
           name: string
           notes?: string | null
           phone?: string | null
@@ -1141,6 +1146,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           id?: string
+          is_internal?: boolean
           name?: string
           notes?: string | null
           phone?: string | null
@@ -3098,6 +3104,54 @@ export type Database = {
           id?: string
           token?: string
           used_at?: string | null
+        }
+        Relationships: []
+      }
+      employees: {
+        Row: {
+          active: boolean
+          company_id: string
+          cost_per_hour: number | null
+          cpf: string | null
+          created_at: string
+          created_by: string | null
+          hire_date: string | null
+          id: string
+          name: string
+          notes: string | null
+          profession: string | null
+          updated_at: string
+          worker_type: string
+        }
+        Insert: {
+          active?: boolean
+          company_id: string
+          cost_per_hour?: number | null
+          cpf?: string | null
+          created_at?: string
+          created_by?: string | null
+          hire_date?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          profession?: string | null
+          updated_at?: string
+          worker_type?: string
+        }
+        Update: {
+          active?: boolean
+          company_id?: string
+          cost_per_hour?: number | null
+          cpf?: string | null
+          created_at?: string
+          created_by?: string | null
+          hire_date?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          profession?: string | null
+          updated_at?: string
+          worker_type?: string
         }
         Relationships: []
       }
@@ -8590,6 +8644,42 @@ export type Database = {
         }
         Relationships: []
       }
+      professions: {
+        Row: {
+          active: boolean
+          category: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          updated_at: string
+          worker_type: string
+        }
+        Insert: {
+          active?: boolean
+          category?: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+          worker_type?: string
+        }
+        Update: {
+          active?: boolean
+          category?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+          worker_type?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           company_id: string | null
@@ -11943,6 +12033,14 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      ensure_internal_contract: {
+        Args: { _project_id: string }
+        Returns: string
+      }
+      ensure_internal_contractor: {
+        Args: { _company_id: string }
+        Returns: string
+      }
       estimate_service_duration_days: {
         Args: {
           p_planned_houses: number
@@ -12613,6 +12711,10 @@ export type Database = {
       }
       resolve_risk_alert: {
         Args: { p_alert_id: string; p_resolved_by?: string }
+        Returns: undefined
+      }
+      seed_professions_for_company: {
+        Args: { _company_id: string }
         Returns: undefined
       }
       set_contract_macro_value: {
