@@ -404,7 +404,13 @@ export function usePleData() {
 
   // Computed totals – value per house = quantity * unit_value (total item value)
   const totals = useMemo(() => {
-    const contractValue = currentProject?.contract_value || 0;
+    // ✅ Soma do orçamento lançado (planilha PLE) — sempre reflete o estado atual
+    const budgetTotal = events.reduce((s, e) => s + (e.quantity || 0) * (e.unit_value || 0), 0);
+    const totalMat = events.reduce((s, e) => s + (e.quantity || 0) * (e.mat_unit_value || 0), 0);
+    const totalMo = events.reduce((s, e) => s + (e.quantity || 0) * (e.mo_unit_value || 0), 0);
+    // Usa contract_value salvo se houver; caso contrário, cai para soma do orçamento
+    const storedContract = Number(currentProject?.contract_value) || 0;
+    const contractValue = storedContract > 0 ? storedContract : budgetTotal;
     let totalMeasured = 0;
     events.forEach(event => {
       const measuredQty = entries.filter(e => e.event_id === event.id).length;
@@ -412,7 +418,7 @@ export function usePleData() {
     });
     const balance = contractValue - totalMeasured;
     const progress = contractValue > 0 ? (totalMeasured / contractValue) * 100 : 0;
-    return { contractValue, totalMeasured, balance, progress };
+    return { contractValue, totalMeasured, balance, progress, budgetTotal, totalMat, totalMo };
   }, [currentProject, events, entries]);
 
   return {
