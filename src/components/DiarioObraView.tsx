@@ -560,16 +560,17 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
   const loadItems = async (eId: string) => {
     setLoadingItems(true);
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("diary_items")
-      .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, house_ids, houses_count, percentual_executado, observacao, production_id")
+      .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, house_ids, houses_count, percentual_executado, observacao, production_id, contractor_contract_id")
       .eq("diary_entry_id", eId)
       .order("created_at", { ascending: true });
-    setDiaryItems((data || []).map(d => ({
+    setDiaryItems((data || []).map((d: any) => ({
       id: d.id, macro_id: d.macro_id, macro_name: d.macro_name, macro_color: d.macro_color,
       scope_id: d.scope_id, scope_name: d.scope_name, house_ids: d.house_ids || [],
       houses_count: d.houses_count, percentual_executado: Number(d.percentual_executado),
       observacao: d.observacao, production_id: d.production_id,
+      contractor_contract_id: d.contractor_contract_id ?? null,
     })));
     setLoadingItems(false);
   };
