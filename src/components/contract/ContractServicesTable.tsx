@@ -134,6 +134,9 @@ export function ContractServicesTable({
     return acc;
   }, {} as Record<string, { macro_name: string; services: ContractService[] }>);
 
+  // Receita total (soma de todos os preços de contrato)
+  const totalRevenue = services.reduce((s, sv) => s + (sv.unit_revenue_value || 0), 0);
+
   return (
     <Card className="border-none shadow-sm">
       <CardHeader className="pb-4">
@@ -151,6 +154,9 @@ export function ContractServicesTable({
                 <TableHead className="w-[250px] font-semibold">Serviço (Scope)</TableHead>
                 <TableHead className="w-[150px] text-right font-semibold">
                   Preço Contrato (R$)
+                </TableHead>
+                <TableHead className="w-[90px] text-center font-semibold" title="Participação deste serviço na receita total do contrato">
+                  % Receita
                 </TableHead>
                 <TableHead className="w-[150px] text-right font-semibold">
                   Custo Máx. (R$)
@@ -180,6 +186,15 @@ export function ContractServicesTable({
                         isEditing={isEditing}
                       />
                     </TableCell>
+                    <TableCell className="text-center">
+                      {service.unit_revenue_value > 0 && totalRevenue > 0 ? (
+                        <Badge variant="secondary" className="font-mono text-xs">
+                          {((service.unit_revenue_value / totalRevenue) * 100).toFixed(2)}%
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right font-mono text-muted-foreground">
                       {formatCurrency(service.max_cost_value)}
                     </TableCell>
@@ -206,7 +221,7 @@ export function ContractServicesTable({
               ))}
               {services.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Nenhum serviço encontrado. Cadastre serviços em "Etapas e Serviços" primeiro.
                   </TableCell>
                 </TableRow>
