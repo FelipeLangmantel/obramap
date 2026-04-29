@@ -86,7 +86,11 @@ const CLIMA_LABEL: Record<string, string> = {
   chuva_forte: "⛈️ Chuva forte", vento: "💨 Vento",
 };
 
-export default function DiarioTabContent() {
+interface DiarioTabContentProps {
+  onOpenDiary?: (dateISO: string) => void;
+}
+
+export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps = {}) {
   const { currentProject, updateBatchScopeProgress } = useConstruction();
   const houses = currentProject?.houses || [];
   const { user, profile, isCompanyAdmin, isSystemAdmin } = useAuth();
@@ -323,6 +327,20 @@ export default function DiarioTabContent() {
       setClosing(false);
       setConfirmOpen(false);
     }
+  };
+
+  const handleApproveEntry = async (entry: EntryRow) => {
+    if (!podeFecharSemana) return;
+    const { error } = await supabase
+      .from("diary_entries")
+      .update({ status: "finalizado", status_aprovacao: "aprovado" } as any)
+      .eq("id", entry.id);
+    if (error) {
+      toast.error("Erro ao aprovar diário: " + error.message);
+      return;
+    }
+    toast.success("Diário aprovado.");
+    await loadData();
   };
 
   const shiftWeek = (delta: number) => {
