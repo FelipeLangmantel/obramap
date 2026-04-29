@@ -1532,22 +1532,6 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             />
           </section>
 
-          {/* MÃO DE OBRA */}
-          <RdoLaborSection
-            items={rdo.labor}
-            onAdd={() => openDialogWithEntry(() => setAddLaborOpen(true))}
-            disabled={isLocked}
-            onChanged={() => entryId && rdo.reload(entryId)}
-          />
-
-          {/* EQUIPAMENTOS */}
-          <RdoEquipmentSection
-            items={rdo.equipment}
-            onAdd={() => openDialogWithEntry(() => setAddEquipOpen(true))}
-            disabled={isLocked}
-            onChanged={() => entryId && rdo.reload(entryId)}
-          />
-
           {/* MÃO DE OBRA (resumo por categoria) */}
           <RdoLaborSection
             items={rdo.labor}
