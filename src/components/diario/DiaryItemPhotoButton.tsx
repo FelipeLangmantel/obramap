@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Camera, Loader2, Trash2, ImageIcon } from "lucide-react";
+import { Camera, Loader2, Trash2, ImageIcon, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { compressImageSafe } from "@/lib/compressImage";
