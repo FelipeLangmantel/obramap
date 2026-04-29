@@ -10,6 +10,7 @@ import { Camera, Loader2, Trash2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { compressImageSafe } from "@/lib/compressImage";
+import { LowMemoryCameraDialog } from "./LowMemoryCameraDialog";
 
 interface FotoServico {
   id: string;
@@ -55,9 +56,8 @@ export function DiaryItemPhotoButton({
   const [selectedHouse, setSelectedHouse] = useState<string>(
     houseIds.length === 1 ? String(houseIds[0]) : "all"
   );
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
-  const photoSourceRef = useRef<"camera" | "gallery">("gallery");
+  const [lowMemoryCameraOpen, setLowMemoryCameraOpen] = useState(false);
 
   const refreshCount = async () => {
     const { count: c } = await supabase
@@ -97,19 +97,18 @@ export function DiaryItemPhotoButton({
     if (!e.target.files?.length) return;
     const arquivos = Array.from(e.target.files).slice(0, 10);
     const houseNum = selectedHouse === "all" ? null : Number(selectedHouse);
-    const fromCamera = photoSourceRef.current === "camera";
     setUploading(true);
     let uploaded = 0;
     try {
       for (const arquivo of arquivos) {
-        const payload = fromCamera ? arquivo : await compressImageSafe(arquivo, { maxSide: 1024, quality: 0.7 });
+        const payload = await compressImageSafe(arquivo, { maxSide: 1024, quality: 0.7 });
         const safe = arquivo.name.replace(/[^a-zA-Z0-9.]/g, "_");
         const houseSeg = houseNum != null ? `casa-${houseNum}/` : "geral/";
-        const extSafeName = fromCamera ? safe : safe.replace(/\.[^.]+$/, ".jpg");
+        const extSafeName = safe.replace(/\.[^.]+$/, ".jpg");
         const path = `${companyId}/${diaryEntryId}/${diaryItemId}/${houseSeg}${Date.now()}_${extSafeName}`;
         const { error: upErr } = await supabase.storage
           .from("diary-photos")
-          .upload(path, payload, { contentType: fromCamera ? (arquivo.type || "image/jpeg") : "image/jpeg", upsert: false });
+          .upload(path, payload, { contentType: "image/jpeg", upsert: false });
         if (upErr) throw upErr;
         const { error: dbErr } = await supabase.from("diary_photos").insert({
           diary_entry_id: diaryEntryId,
