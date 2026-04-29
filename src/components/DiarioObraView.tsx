@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, parseISO, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -189,7 +189,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const [fotosPorServico, setFotosPorServico] = useState<Record<string, { url: string; legenda: string | null }[]>>({});
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState<{ id: string; url: string; legenda: string | null } | null>(null);
-  const fotoInputRef = React.useRef<HTMLInputElement>(null);
+  const cameraInputRef = React.useRef<HTMLInputElement>(null);
+  const galleryInputRef = React.useRef<HTMLInputElement>(null);
+  const [photoSourceOpen, setPhotoSourceOpen] = useState(false);
 
   // RDO data
   const rdo = useRdoData(entryId);
@@ -823,15 +825,18 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     if (ensuredEntryId) openDialog();
   }, [ensureEntryExists]);
 
-  const handleOpenFotoPicker = useCallback(async () => {
-    if (entryId) {
-      fotoInputRef.current?.click();
-      return;
-    }
+  const handleOpenFotoPicker = useCallback(() => {
+    setPhotoSourceOpen(true);
+  }, []);
 
-    const ensuredEntryId = await ensureEntryExists();
+  const handlePickPhotoSource = useCallback(async (source: "camera" | "gallery") => {
+    const ensuredEntryId = entryId || await ensureEntryExists();
     if (!ensuredEntryId) return;
-    toast.info("Relatório iniciado. Toque novamente para selecionar as fotos.");
+    setPhotoSourceOpen(false);
+    window.setTimeout(() => {
+      if (source === "camera") cameraInputRef.current?.click();
+      else galleryInputRef.current?.click();
+    }, 80);
   }, [entryId, ensureEntryExists]);
 
   // Save header (cabeçalho + clima novo)
