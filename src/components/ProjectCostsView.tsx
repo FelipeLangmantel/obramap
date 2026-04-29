@@ -651,9 +651,13 @@ export function ProjectCostsView() {
       const pageCount = doc.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
+        const pageH = doc.internal.pageSize.getHeight();
         doc.setFontSize(8);
         doc.setTextColor(150);
-        doc.text(`Página ${i} de ${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth / 2, pageH - 10, { align: 'center' });
+        doc.setFontSize(7);
+        doc.setTextColor(120);
+        doc.text("© 2026 ObraMap | Engenharia Digital", pageWidth / 2, pageH - 4, { align: 'center' });
       }
       
       // Save PDF

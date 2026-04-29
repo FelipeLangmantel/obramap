@@ -360,12 +360,18 @@ export default function RelatorioObraView() {
       const pageCount = (doc as any).internal.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
+        const pageH = doc.internal.pageSize.getHeight();
+        const pageW = doc.internal.pageSize.getWidth();
         doc.setFontSize(8);
         doc.setFont("helvetica", "normal");
+        doc.setTextColor(80);
         doc.text(
           `Gerado em ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })} • Página ${i} de ${pageCount}`,
-          14, doc.internal.pageSize.getHeight() - 8
+          14, pageH - 8
         );
+        doc.setFontSize(7);
+        doc.setTextColor(120);
+        doc.text("© 2026 ObraMap | Engenharia Digital", pageW / 2, pageH - 3, { align: "center" });
       }
 
       const safeName = currentProject.name.replace(/[^\w\-]+/g, "_");

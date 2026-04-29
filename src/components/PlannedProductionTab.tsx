@@ -537,6 +537,7 @@ export function PlannedProductionTab() {
         </tbody></table>
         <div class="footer"><div>Emitido em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</div></div>
         <div style="display:flex;justify-content:space-between;margin-top:60px"><div class="signature-line">Responsável Técnico</div><div class="signature-line">Encarregado da Obra</div></div>
+        <div style="margin-top:30px;padding-top:10px;border-top:1px solid #e5e7eb;text-align:center;font-size:11px;color:#6b7280;font-weight:600;">© 2026 ObraMap | Engenharia Digital</div>
       </body></html>`;
 
     const printWindow = window.open('', '_blank');
