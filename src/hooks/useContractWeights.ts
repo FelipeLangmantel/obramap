@@ -36,7 +36,7 @@ export function useContractWeights(projectId?: string | null): ContractWeights {
     setLoading(true);
     (async () => {
       try {
-        const [{ data: services }, { data: obra }] = await Promise.all([
+        const [{ data: services }, { data: obra }, { count: housesCount }] = await Promise.all([
           (supabase as any)
             .from("project_contract_services")
             .select("scope_id, unit_revenue_value")
@@ -46,24 +46,35 @@ export function useContractWeights(projectId?: string | null): ContractWeights {
             .select("valor_contrato, aditivo_valor_total")
             .eq("obramap_project_id", projectId)
             .maybeSingle(),
+          (supabase as any)
+            .from("houses")
+            .select("id", { count: "exact", head: true })
+            .eq("project_id", projectId),
         ]);
 
         if (cancelled) return;
 
         const m = new Map<string, number>();
+        let sumUnitValues = 0;
         (services || []).forEach((s: any) => {
-          if (s.scope_id) m.set(s.scope_id, Number(s.unit_revenue_value) || 0);
+          if (s.scope_id) {
+            const v = Number(s.unit_revenue_value) || 0;
+            m.set(s.scope_id, v);
+            sumUnitValues += v;
+          }
         });
         setMap(m);
 
-        const total =
+        const portfolioTotal =
           (Number(obra?.valor_contrato) || 0) +
           (Number(obra?.aditivo_valor_total) || 0);
 
-        // Fallback: se obra não vinculada, usa soma de serviços × num casas
-        // (não temos num_houses aqui — usamos só os serviços × 1 como heurística)
-        // — preferimos 0 e o componente exibe "—".
-        setTotal(total);
+        // Fallback (obra sem vínculo a holding): total = soma(unit_revenue) × nº casas.
+        // Cada serviço tem valor unitário POR casa, então o contrato vale
+        // sumUnitValues × housesCount.
+        const fallbackTotal = sumUnitValues * (Number(housesCount) || 0);
+
+        setTotal(portfolioTotal > 0 ? portfolioTotal : fallbackTotal);
       } finally {
         if (!cancelled) setLoading(false);
       }
