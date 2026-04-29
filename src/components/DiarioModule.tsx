@@ -13,21 +13,33 @@ type TabKey = "calendario" | "editor" | "fotos" | "config";
  * Abas: Calendário (visão mensal), Editor (RDO), Fotos Gerais (sem casa) e Configuração.
  */
 export function DiarioModule() {
-  const [tab, setTab] = useState<TabKey>("calendario");
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const restored = (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem("obramap_diario_tab") || "null") as { tab?: TabKey; selectedDate?: string | null } | null;
+    } catch {
+      return null;
+    }
+  })();
+  const [tab, setTab] = useState<TabKey>(restored?.tab || "calendario");
+  const [selectedDate, setSelectedDate] = useState<string | null>(restored?.selectedDate || null);
+
+  const setPersistedTab = (nextTab: TabKey, nextDate = selectedDate) => {
+    setTab(nextTab);
+    try { sessionStorage.setItem("obramap_diario_tab", JSON.stringify({ tab: nextTab, selectedDate: nextDate })); } catch { /* noop */ }
+  };
 
   const openDay = (dateISO: string) => {
     setSelectedDate(dateISO);
-    setTab("editor");
+    setPersistedTab("editor", dateISO);
   };
 
   const backToCalendar = () => {
-    setTab("calendario");
+    setPersistedTab("calendario");
   };
 
   return (
     <div className="px-2 sm:px-4 lg:px-6 py-3 sm:py-4 w-full max-w-full min-w-0 overflow-x-hidden">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="w-full">
+      <Tabs value={tab} onValueChange={(v) => setPersistedTab(v as TabKey)} className="w-full">
         <TabsList className="grid grid-cols-4 w-full max-w-3xl mb-4 h-auto">
           <TabsTrigger value="calendario" className="flex items-center gap-1.5 py-2 text-xs sm:text-sm">
             <Calendar className="h-4 w-4" />
