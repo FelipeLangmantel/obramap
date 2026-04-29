@@ -191,7 +191,13 @@ Responda APENAS com JSON válido (sem markdown, sem \`\`\`):
       group_name: (it.group_name || "").trim(),
       stage_code: (it.stage_code || "").trim(),
       stage_name: (it.stage_name || "").trim(),
-    }));
+    })).map((it: any) => {
+      // Garantir consistência: unit_value = mat + mo quando possível
+      const sum = (it.mat_unit_value || 0) + (it.mo_unit_value || 0);
+      if (!it.unit_value && sum > 0) it.unit_value = sum;
+      // Se temos unit_value mas não temos mat/mo, deixar como está (não inferir)
+      return it;
+    });
 
     console.log(`Extracted ${stages.length} stages, ${substages.length} substages, ${validItems.length} items`);
     console.log("Stages:", JSON.stringify(stages));
