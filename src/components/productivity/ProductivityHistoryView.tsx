@@ -82,7 +82,7 @@ export function ProductivityHistoryView() {
         .gt("quantity", 0)
         .in("unit_symbol", ["m²", "m2", "m³", "m3", "m", "ml"]);
 
-      // 2) Mão de obra de todos os diários da obra
+      // 2) Diários da obra
       const { data: entries } = await supabase
         .from("diary_entries")
         .select("id, entry_date")
@@ -90,9 +90,10 @@ export function ProductivityHistoryView() {
 
       const entryById = new Map<string, string>();
       (entries || []).forEach((e: any) => entryById.set(e.id, e.entry_date));
-
       const entryIds = (entries || []).map((e: any) => e.id);
-      let laborByDate = new Map<string, number>(); // data -> total trabalhadores
+
+      // 2a) Mão de obra agregada (fallback)
+      const laborByDate = new Map<string, number>(); // data -> total trabalhadores
       if (entryIds.length > 0) {
         const { data: labor } = await supabase
           .from("diary_labor")
@@ -105,6 +106,53 @@ export function ProductivityHistoryView() {
         });
       }
 
+      // 2b) NEW: trabalhadores individuais (horas reais + custo)
+      type WorkerRow = { id: string; diary_entry_id: string; hours_worked: number; cost_per_hour: number | null };
+      let workers: WorkerRow[] = [];
+      let workerById = new Map<string, WorkerRow>();
+      let itemWorkerLinks: { diary_item_id: string; diary_worker_id: string; hours_allocated: number | null }[] = [];
+      let diaryItems: { id: string; diary_entry_id: string; scope_id: string }[] = [];
+      if (entryIds.length > 0) {
+        const { data: w } = await (supabase as any)
+          .from("diary_workers")
+          .select("id, diary_entry_id, hours_worked, cost_per_hour")
+          .in("diary_entry_id", entryIds);
+        workers = (w || []) as WorkerRow[];
+        workerById = new Map(workers.map((x) => [x.id, x]));
+
+        if (workers.length > 0) {
+          const { data: links } = await (supabase as any)
+            .from("diary_item_workers")
+            .select("diary_item_id, diary_worker_id, hours_allocated")
+            .in("diary_worker_id", workers.map((x) => x.id));
+          itemWorkerLinks = (links || []) as any;
+
+          const { data: items } = await supabase
+            .from("diary_items")
+            .select("id, diary_entry_id, scope_id")
+            .in("diary_entry_id", entryIds);
+          diaryItems = (items || []) as any;
+        }
+      }
+
+      // Indexa: scope_id × data → { hh_real, cost_real }
+      const realByScopeDate = new Map<string, { hh: number; cost: number }>();
+      const itemById = new Map(diaryItems.map((i) => [i.id, i]));
+      itemWorkerLinks.forEach((lk) => {
+        const item = itemById.get(lk.diary_item_id);
+        const w = workerById.get(lk.diary_worker_id);
+        if (!item || !w) return;
+        const date = entryById.get(item.diary_entry_id);
+        if (!date) return;
+        const hours = lk.hours_allocated ?? w.hours_worked ?? 0;
+        const cost = hours * (Number(w.cost_per_hour) || 0);
+        const key = `${item.scope_id}::${date}`;
+        const cur = realByScopeDate.get(key) || { hh: 0, cost: 0 };
+        cur.hh += hours;
+        cur.cost += cost;
+        realByScopeDate.set(key, cur);
+      });
+
       // 2.5) Produtividade planejada (RUP planejado = HH / un)
       const { data: prodPlan } = await supabase
         .from("project_service_productivity" as any)
@@ -116,15 +164,13 @@ export function ProductivityHistoryView() {
 
       const plannedMap = new Map<string, number>();
       ((prodPlan as any[]) || []).forEach((p) => {
-        // produtividade = un / dia (por equipe). Equipe total = (prof + help) * teams.
-        // RUP planejado = (workers * 8h) / (productivity_value * teams)
-        const workers =
+        const wks =
           (Number(p.professionals_per_team) || 0) +
           (Number(p.helpers_per_team) || 0);
         const teams = Math.max(1, Number(p.default_team_count) || 1);
         const dailyOutput = (Number(p.productivity_value) || 0) * teams;
-        if (dailyOutput > 0 && workers > 0) {
-          plannedMap.set(p.scope_id, (workers * teams * DAILY_HOURS) / dailyOutput);
+        if (dailyOutput > 0 && wks > 0) {
+          plannedMap.set(p.scope_id, (wks * teams * DAILY_HOURS) / dailyOutput);
         }
       });
       setPlanned(plannedMap);
@@ -142,8 +188,19 @@ export function ProductivityHistoryView() {
         }
         const qPerDay = (p.quantity || 0) / Math.max(1, days.length);
         days.forEach((d) => {
-          const workers = laborByDate.get(d) || 0;
-          const hh = workers * DAILY_HOURS;
+          const realKey = `${p.scope_id}::${d}`;
+          const real = realByScopeDate.get(realKey);
+          let hh = 0;
+          let cost = 0;
+          let source: "real" | "estimated" = "estimated";
+          if (real && real.hh > 0) {
+            hh = real.hh;
+            cost = real.cost;
+            source = "real";
+          } else {
+            const wk = laborByDate.get(d) || 0;
+            hh = wk * DAILY_HOURS;
+          }
           if (qPerDay > 0 && hh > 0) {
             out.push({
               scope_id: p.scope_id,
@@ -153,6 +210,8 @@ export function ProductivityHistoryView() {
               date: d,
               quantity: qPerDay,
               hh_total: hh,
+              cost_total: cost,
+              source,
               rup: hh / qPerDay,
             });
           }
@@ -176,7 +235,10 @@ export function ProductivityHistoryView() {
           unit_symbol: d.unit_symbol,
           total_qty: d.quantity,
           total_hh: d.hh_total,
+          total_cost: d.cost_total,
+          has_real: d.source === "real",
           rup: d.hh_total / d.quantity,
+          cost_per_unit: d.cost_total > 0 ? d.cost_total / d.quantity : 0,
           days: 1,
           rup_min: d.rup,
           rup_max: d.rup,
@@ -185,7 +247,10 @@ export function ProductivityHistoryView() {
       } else {
         cur.total_qty += d.quantity;
         cur.total_hh += d.hh_total;
+        cur.total_cost += d.cost_total;
+        cur.has_real = cur.has_real || d.source === "real";
         cur.rup = cur.total_hh / cur.total_qty;
+        cur.cost_per_unit = cur.total_cost > 0 ? cur.total_cost / cur.total_qty : 0;
         cur.days += 1;
         cur.rup_min = Math.min(cur.rup_min, d.rup);
         cur.rup_max = Math.max(cur.rup_max, d.rup);
@@ -196,11 +261,13 @@ export function ProductivityHistoryView() {
 
   const totals = useMemo(() => {
     const totalHH = daily.reduce((s, d) => s + d.hh_total, 0);
+    const totalCost = daily.reduce((s, d) => s + d.cost_total, 0);
     const totalQty = daily.reduce((s, d) => s + d.quantity, 0);
     return {
       services: byService.length,
       days: daily.length,
       hh: totalHH,
+      cost: totalCost,
       qty: totalQty,
       rup: totalQty > 0 ? totalHH / totalQty : 0,
     };
