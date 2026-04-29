@@ -78,8 +78,10 @@ export function DiaryItemPhotoButton({
       .order("created_at", { ascending: true });
     if (!data) { setFotos([]); setLoading(false); return; }
     const withUrl = await Promise.all(data.map(async (f: any) => {
-      const { data: signed } = await supabase.storage
-        .from("diary-photos").createSignedUrl(f.storage_path, 60 * 60);
+      const { data: signed } = await (supabase.storage
+        .from("diary-photos") as any).createSignedUrl(f.storage_path, 60 * 60, {
+          transform: { width: 700, resize: "contain", quality: 70 },
+        });
       return { ...f, url: signed?.signedUrl || "" } as FotoServico;
     }));
     setFotos(withUrl);
