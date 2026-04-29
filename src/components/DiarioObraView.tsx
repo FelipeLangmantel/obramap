@@ -838,7 +838,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   }, [entryId, ensureEntryExists]);
 
   const handlePickPhotoSource = useCallback((source: "camera" | "gallery") => {
-    if (source === "camera") setLowMemoryCameraOpen(true);
+    if (source === "camera") cameraInputRef.current?.click();
     else galleryInputRef.current?.click();
     setPhotoSourceOpen(false);
   }, []);
@@ -1870,7 +1870,16 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
               accept="image/jpeg,image/png,image/webp"
               multiple
               className="hidden"
-              onChange={handleUploadFotos}
+              onChange={(e) => handleUploadFotos(e, "gallery")}
+              disabled={uploadingFoto}
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => handleUploadFotos(e, "camera")}
               disabled={uploadingFoto}
             />
             <div className="space-y-3">
@@ -2022,13 +2031,6 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           </div>
         </DialogContent>
       </Dialog>
-
-      <LowMemoryCameraDialog
-        open={lowMemoryCameraOpen}
-        onOpenChange={setLowMemoryCameraOpen}
-        onCapture={uploadCapturedPhoto}
-        disabled={uploadingFoto}
-      />
 
       {/* Print dialog */}
       <PrintDiarioDialog open={printOpen} onOpenChange={setPrintOpen} buildData={buildPrintData} />
