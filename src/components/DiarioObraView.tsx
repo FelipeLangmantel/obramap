@@ -832,11 +832,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const handlePickPhotoSource = useCallback(async (source: "camera" | "gallery") => {
     const ensuredEntryId = entryId || await ensureEntryExists();
     if (!ensuredEntryId) return;
+    if (source === "camera") cameraInputRef.current?.click();
+    else galleryInputRef.current?.click();
     setPhotoSourceOpen(false);
-    window.setTimeout(() => {
-      if (source === "camera") cameraInputRef.current?.click();
-      else galleryInputRef.current?.click();
-    }, 80);
   }, [entryId, ensureEntryExists]);
 
   // Save header (cabeçalho + clima novo)
