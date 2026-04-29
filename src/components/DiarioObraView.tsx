@@ -1856,16 +1856,23 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             id="fotos"
             title="Fotos"
             count={fotos.length}
-            addAsLabel={!isLocked && fotos.length < 10 ? { htmlFor: "rdo-photo-input" } : undefined}
+            onAdd={!isLocked && fotos.length < 10 ? handleOpenFotoPicker : undefined}
             disabled={uploadingFoto}
             alwaysShowChildren
           >
             <input
-              id="rdo-photo-input"
-              ref={fotoInputRef}
+              ref={cameraInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               capture="environment"
+              className="hidden"
+              onChange={handleUploadFotos}
+              disabled={uploadingFoto}
+            />
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
               multiple
               className="hidden"
               onChange={handleUploadFotos}
