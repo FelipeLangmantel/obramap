@@ -322,6 +322,29 @@ export function DiaryItemPhotoButton({
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     )}
+                    {!disabled && (
+                      <div className="p-1.5 bg-background border-t">
+                        <Select
+                          value={f.house_number != null ? String(f.house_number) : "all"}
+                          onValueChange={(v) => handleRelink(f, v)}
+                        >
+                          <SelectTrigger className="h-7 text-[11px] px-2">
+                            <div className="flex items-center gap-1 truncate">
+                              <Link2 className="h-3 w-3 shrink-0" />
+                              <SelectValue />
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            <SelectItem value="all">Geral (sem casa)</SelectItem>
+                            {sortedHouses.map(h => (
+                              <SelectItem key={h} value={String(h)}>
+                                Casa {String(h).padStart(2, "0")}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
