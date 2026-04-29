@@ -24,7 +24,9 @@ interface DailyAggregate {
   unit_symbol: string;
   date: string;
   quantity: number;
-  hh_total: number; // homem-hora (assumimos jornada de 8h por trabalhador)
+  hh_total: number; // homem-hora real (Σ horas dos trabalhadores vinculados) ou estimado
+  cost_total: number; // R$ real (Σ horas × custo/hora) — só quando houver vínculo individual
+  source: "real" | "estimated"; // real = horas individuais, estimated = diary_labor × 8h
   rup: number; // hh / qtd  (menor é melhor)
 }
 
@@ -35,7 +37,10 @@ interface ServiceRup {
   unit_symbol: string;
   total_qty: number;
   total_hh: number;
+  total_cost: number;
+  has_real: boolean;
   rup: number;
+  cost_per_unit: number;
   days: number;
   rup_min: number;
   rup_max: number;
