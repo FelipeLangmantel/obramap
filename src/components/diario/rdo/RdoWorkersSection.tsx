@@ -16,6 +16,7 @@ interface ContractorContract {
   id: string;
   contractor_name: string;
   status: string;
+  is_internal?: boolean;
 }
 
 interface Props {
