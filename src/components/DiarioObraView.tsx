@@ -1881,15 +1881,6 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
               onChange={(e) => handleUploadFotos(e, "gallery")}
               disabled={uploadingFoto}
             />
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => handleUploadFotos(e, "camera")}
-              disabled={uploadingFoto}
-            />
             <div className="space-y-3">
               {fotos.length > 0 && (
                 <div className="flex flex-wrap gap-2">
