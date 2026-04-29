@@ -8,13 +8,14 @@
 // pelo SO ("insuficiência de memória").
 //
 // Esta versão:
-//  1) Tenta `createImageBitmap` com `resizeWidth/Height` — o navegador
+//  1) Lê dimensões pelo cabeçalho do arquivo (JPEG/PNG/WebP), sem decodificar
+//     o bitmap full-size só para medir a imagem.
+//  2) Tenta `createImageBitmap` com `resizeWidth/Height` — o navegador
 //     decodifica diretamente no tamanho final (não aloca a versão full).
-//  2) Fecha o bitmap (`.close()`) imediatamente após desenhar.
-//  3) Limpa o canvas (1x1) ao terminar.
-//  4) Em fallback (Safari iOS antigo) usa `new Image()` mas SEMPRE
-//     revoga o objectURL e zera o canvas.
-//  5) Pré-validação de tamanho do arquivo cru.
+//  3) Fecha o bitmap (`.close()`) imediatamente após desenhar.
+//  4) Limpa o canvas (1x1) ao terminar.
+//  5) Só usa fallback `new Image()` para arquivos pequenos ou quando aceito.
+//  6) Pré-validação de tamanho do arquivo cru.
 
 export interface CompressOptions {
   /** Maior lado em pixels (default 1280). */
@@ -25,14 +26,20 @@ export interface CompressOptions {
   mime?: string;
   /** Tamanho máximo do arquivo cru em bytes (default 25 MB). Acima disso recusa. */
   maxInputBytes?: number;
+  /** Permite fallback com `new Image()` para arquivos grandes quando o header não for lido. */
+  allowUnsafeFallback?: boolean;
 }
 
-const DEFAULTS: Required<Omit<CompressOptions, "maxInputBytes">> & { maxInputBytes: number } = {
+const DEFAULTS: Required<CompressOptions> = {
   maxSide: 1280,
   quality: 0.7,
   mime: "image/jpeg",
   maxInputBytes: 25 * 1024 * 1024,
+  allowUnsafeFallback: false,
 };
+
+const SAFE_FALLBACK_BYTES = 4 * 1024 * 1024;
+const HEADER_READ_BYTES = 512 * 1024;
 
 function calcDims(srcW: number, srcH: number, maxSide: number) {
   const ratio = Math.min(1, maxSide / Math.max(srcW, srcH));
