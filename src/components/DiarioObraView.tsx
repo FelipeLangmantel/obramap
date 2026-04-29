@@ -1328,7 +1328,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       <OfflineBanner />
       {/* HEADER do RDO */}
       <div className="bg-card border rounded-lg p-3 sm:p-4 mb-4 w-full max-w-full min-w-0 overflow-hidden">
-        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3 sm:gap-4 min-w-0">
+        <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3 sm:gap-4 min-w-0">
           <div className="flex-1 min-w-0">
             {/* Linha 1: voltar + ícone + título (sem badges para não comprimir) */}
             <div className="flex items-center gap-2 mb-1 min-w-0">
