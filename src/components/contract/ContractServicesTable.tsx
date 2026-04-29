@@ -3,9 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { ContractService } from "@/hooks/useProjectContract";
+import { useConstruction } from "@/contexts/ConstructionContext";
 import { cn } from "@/lib/utils";
-import { Layers, Check, AlertTriangle } from "lucide-react";
+import { Layers, Check, AlertTriangle, Link2 } from "lucide-react";
+import { LinkPleItemsDialog } from "./LinkPleItemsDialog";
 
 interface ContractServicesTableProps {
   services: ContractService[];
