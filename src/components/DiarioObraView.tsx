@@ -195,7 +195,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   // RDO data
   const rdo = useRdoData(entryId);
   const dWorkers = useDiaryWorkers(entryId);
-  const [contractorContracts, setContractorContracts] = useState<Array<{ id: string; contractor_name: string; status: string }>>([]);
+  const [contractorContracts, setContractorContracts] = useState<Array<{ id: string; contractor_name: string; status: string; is_internal?: boolean }>>([]);
+  const canEditLockedDiary = isAdmin;
+  const editingDisabled = isLocked && !canEditLockedDiary;
 
   useEffect(() => {
     if (!currentProject?.id) { setContractorContracts([]); return; }
@@ -203,13 +205,14 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     (async () => {
       const { data, error } = await (supabase as any)
         .from("contractor_contracts")
-        .select("id, status, contractor:contractors(name)")
+        .select("id, status, is_internal, contractor:contractors(name)")
         .eq("project_id", currentProject.id);
       if (error) { console.error("[Diario] contractor_contracts:", error); return; }
       const mapped = ((data || []) as any[])
         .map((r) => ({
           id: r.id,
           status: r.status,
+          is_internal: !!r.is_internal,
           contractor_name: r.contractor?.name || "(sem nome)",
         }))
         .filter((c) => {
