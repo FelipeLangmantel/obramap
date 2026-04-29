@@ -190,7 +190,6 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState<{ id: string; url: string; legenda: string | null } | null>(null);
   const galleryInputRef = React.useRef<HTMLInputElement>(null);
-  const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const [photoSourceOpen, setPhotoSourceOpen] = useState(false);
 
   // RDO data
@@ -838,10 +837,18 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   }, [entryId, ensureEntryExists]);
 
   const handlePickPhotoSource = useCallback((source: "camera" | "gallery") => {
-    if (source === "camera") cameraInputRef.current?.click();
-    else galleryInputRef.current?.click();
     setPhotoSourceOpen(false);
-  }, []);
+    if (source === "camera" && entryId && company?.id) {
+      try {
+        sessionStorage.setItem("obramap_route_state_root", JSON.stringify({ activeView: "diario-obra" }));
+        sessionStorage.setItem("obramap_diario_tab", JSON.stringify({ tab: "editor", selectedDate: entryDate }));
+      } catch { /* noop */ }
+      const params = new URLSearchParams({ entryId, companyId: company.id, date: entryDate, returnTo: "/dashboard" });
+      navigate(`/camera-capture?${params.toString()}`);
+    } else {
+      galleryInputRef.current?.click();
+    }
+  }, [company?.id, entryDate, entryId, navigate]);
 
   // Save header (cabeçalho + clima novo)
   const handleSaveHeader = async () => {
