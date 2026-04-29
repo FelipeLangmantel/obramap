@@ -17,6 +17,49 @@ export interface ContractService {
   status: string;
   macro_order: number;
   scope_order: number;
+  ple_linked_count?: number;
+}
+
+// Aggregates totals from PLE events linked to (macro_id, scope_id) of an obramap project.
+// Returns Map keyed by `${macroId}-${scopeId}` => { total, count }.
+async function loadPleLinkedTotals(
+  obramapProjectId: string
+): Promise<Map<string, { total: number; count: number }>> {
+  const result = new Map<string, { total: number; count: number }>();
+  // Find PLE project linked to this obramap project
+  const { data: pleProj } = await supabase
+    .from("ple_projects")
+    .select("id")
+    .eq("obramap_project_id", obramapProjectId)
+    .maybeSingle();
+  if (!pleProj) return result;
+
+  const { data: linked } = await supabase
+    .from("ple_events")
+    .select("obramap_macro_id, obramap_scope_id, quantity, unit_value, billing_type")
+    .eq("ple_project_id", pleProj.id)
+    .not("obramap_scope_id", "is", null);
+
+  if (!linked) return result;
+
+  // We need total houses to multiply per_house items
+  const { data: project } = await supabase
+    .from("projects")
+    .select("total_houses")
+    .eq("id", obramapProjectId)
+    .maybeSingle();
+  const houses = (project as any)?.total_houses || 1;
+
+  linked.forEach((e: any) => {
+    const k = `${e.obramap_macro_id}-${e.obramap_scope_id}`;
+    const lineTotal = Number(e.quantity || 0) * Number(e.unit_value || 0);
+    const v = e.billing_type === "fixed" ? lineTotal : lineTotal * houses;
+    const cur = result.get(k) || { total: 0, count: 0 };
+    cur.total += v;
+    cur.count += 1;
+    result.set(k, cur);
+  });
+  return result;
 }
 
 export interface ProjectContract {
