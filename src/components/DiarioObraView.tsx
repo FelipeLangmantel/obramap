@@ -191,6 +191,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const [fotoAmpliada, setFotoAmpliada] = useState<{ id: string; url: string; legenda: string | null } | null>(null);
   const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const galleryInputRef = React.useRef<HTMLInputElement>(null);
+  const photoSourceRef = React.useRef<"camera" | "gallery">("gallery");
   const [photoSourceOpen, setPhotoSourceOpen] = useState(false);
 
   // RDO data
@@ -596,17 +597,19 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const handleUploadFotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const resolvedEntryId = entryId || await ensureEntryExists();
     if (!resolvedEntryId || !e.target.files?.length || !company?.id) return;
+    const fromCamera = photoSourceRef.current === "camera";
     setUploadingFoto(true);
     try {
       const arquivos = Array.from(e.target.files).slice(0, 10 - fotos.length);
       let uploaded = 0;
       for (const arquivo of arquivos) {
-        const comprimido = await comprimirImagem(arquivo, 1024, 0.7);
+        const payload = fromCamera ? arquivo : await comprimirImagem(arquivo, 1024, 0.7);
         const safeName = arquivo.name.replace(/[^a-zA-Z0-9.]/g, "_");
-        const path = `${company.id}/${resolvedEntryId}/${Date.now()}_${safeName}`;
+        const extSafeName = fromCamera ? safeName : safeName.replace(/\.[^.]+$/, ".jpg");
+        const path = `${company.id}/${resolvedEntryId}/${Date.now()}_${extSafeName}`;
         const { error: uploadError } = await supabase.storage
           .from("diary-photos")
-          .upload(path, comprimido, { contentType: "image/jpeg", upsert: false });
+          .upload(path, payload, { contentType: fromCamera ? (arquivo.type || "image/jpeg") : "image/jpeg", upsert: false });
         if (uploadError) throw uploadError;
         const { error: dbError } = await supabase.from("diary_photos").insert({
           diary_entry_id: resolvedEntryId, storage_path: path, legenda: null,
@@ -832,6 +835,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   }, [entryId, ensureEntryExists]);
 
   const handlePickPhotoSource = useCallback((source: "camera" | "gallery") => {
+    photoSourceRef.current = source;
     if (source === "camera") cameraInputRef.current?.click();
     else galleryInputRef.current?.click();
     setPhotoSourceOpen(false);
