@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { format, startOfWeek, endOfWeek, parseISO, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -189,7 +189,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const [fotosPorServico, setFotosPorServico] = useState<Record<string, { url: string; legenda: string | null }[]>>({});
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState<{ id: string; url: string; legenda: string | null } | null>(null);
-  const fotoInputRef = React.useRef<HTMLInputElement>(null);
+  const cameraInputRef = React.useRef<HTMLInputElement>(null);
+  const galleryInputRef = React.useRef<HTMLInputElement>(null);
+  const [photoSourceOpen, setPhotoSourceOpen] = useState(false);
 
   // RDO data
   const rdo = useRdoData(entryId);
@@ -824,15 +826,16 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   }, [ensureEntryExists]);
 
   const handleOpenFotoPicker = useCallback(async () => {
-    if (entryId) {
-      fotoInputRef.current?.click();
-      return;
-    }
-
-    const ensuredEntryId = await ensureEntryExists();
+    const ensuredEntryId = entryId || await ensureEntryExists();
     if (!ensuredEntryId) return;
-    toast.info("Relatório iniciado. Toque novamente para selecionar as fotos.");
+    setPhotoSourceOpen(true);
   }, [entryId, ensureEntryExists]);
+
+  const handlePickPhotoSource = useCallback((source: "camera" | "gallery") => {
+    if (source === "camera") cameraInputRef.current?.click();
+    else galleryInputRef.current?.click();
+    setPhotoSourceOpen(false);
+  }, []);
 
   // Save header (cabeçalho + clima novo)
   const handleSaveHeader = async () => {
@@ -1851,16 +1854,23 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             id="fotos"
             title="Fotos"
             count={fotos.length}
-            addAsLabel={!isLocked && fotos.length < 10 ? { htmlFor: "rdo-photo-input" } : undefined}
+            onAdd={!isLocked && fotos.length < 10 ? handleOpenFotoPicker : undefined}
             disabled={uploadingFoto}
             alwaysShowChildren
           >
             <input
-              id="rdo-photo-input"
-              ref={fotoInputRef}
+              ref={cameraInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               capture="environment"
+              className="hidden"
+              onChange={handleUploadFotos}
+              disabled={uploadingFoto}
+            />
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
               multiple
               className="hidden"
               onChange={handleUploadFotos}
@@ -1999,6 +2009,22 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           </DialogContent>
         </Dialog>
       )}
+
+      <Dialog open={photoSourceOpen} onOpenChange={setPhotoSourceOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Adicionar foto</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Button type="button" onClick={() => handlePickPhotoSource("camera")} disabled={uploadingFoto} className="h-11 justify-start">
+              <Camera className="h-4 w-4 mr-2" /> Tirar foto
+            </Button>
+            <Button type="button" variant="outline" onClick={() => handlePickPhotoSource("gallery")} disabled={uploadingFoto} className="h-11 justify-start">
+              <ClipboardList className="h-4 w-4 mr-2" /> Escolher da galeria
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Print dialog */}
       <PrintDiarioDialog open={printOpen} onOpenChange={setPrintOpen} buildData={buildPrintData} />
