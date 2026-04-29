@@ -2047,6 +2047,13 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         </DialogContent>
       </Dialog>
 
+      <LowMemoryCameraDialog
+        open={lowMemoryCameraOpen}
+        onOpenChange={setLowMemoryCameraOpen}
+        onCapture={uploadCapturedPhoto}
+        disabled={uploadingFoto}
+      />
+
       {/* Print dialog */}
       <PrintDiarioDialog open={printOpen} onOpenChange={setPrintOpen} buildData={buildPrintData} />
       <ConfirmRainDialog
