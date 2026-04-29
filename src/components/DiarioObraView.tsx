@@ -209,6 +209,23 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
   // RDO data
   const rdo = useRdoData(entryId);
+  const dWorkers = useDiaryWorkers(entryId);
+  const [contractorContracts, setContractorContracts] = useState<Array<{ id: string; contractor_name: string; status: string }>>([]);
+
+  useEffect(() => {
+    if (!currentProject?.id) { setContractorContracts([]); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("contractor_contracts")
+        .select("id, contractor_name, status")
+        .eq("project_id", currentProject.id)
+        .in("status", ["active", "ativo", "Ativo", "vigente"])
+        .order("contractor_name");
+      if (!cancelled) setContractorContracts((data || []) as any);
+    })();
+    return () => { cancelled = true; };
+  }, [currentProject?.id]);
 
   // Active section (sidebar)
   const [activeSection, setActiveSection] = useState<RdoSectionKey>("detalhes");
