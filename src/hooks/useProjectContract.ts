@@ -453,6 +453,115 @@ export function useProjectContract() {
     }
   };
 
+  // Persiste imediatamente o valor de um único serviço (usado após vincular itens PLE)
+  const persistServiceValue = useCallback(async (
+    macroId: string,
+    scopeId: string,
+    revenueValue: number,
+    pleLinkedCount: number,
+  ): Promise<boolean> => {
+    if (!canEdit || !currentProject?.id || !company?.id || !contract) return false;
+    try {
+      const cp = contract.cost_target_percent || 70;
+      const maxCost = revenueValue * (cp / 100);
+
+      // Atualizar estado local primeiro para feedback imediato
+      setServices(prev => prev.map(s =>
+        s.macro_id === macroId && s.scope_id === scopeId
+          ? { ...s, unit_revenue_value: revenueValue, max_cost_value: maxCost, cost_percent: revenueValue > 0 ? cp : 0, status: revenueValue > 0 ? "ok" : "pending", ple_linked_count: pleLinkedCount }
+          : s
+      ));
+
+      // Garantir que o contrato exista no banco para podermos referenciá-lo
+      let contractId = contract.id;
+      if (!contractId) {
+        const { data, error } = await supabase
+          .from("project_contracts")
+          .insert({
+            company_id: company.id,
+            project_id: currentProject.id,
+            contract_number: contract.contract_number,
+            contract_date: contract.contract_date,
+            contract_value_total: 0,
+            cost_target_percent: cp,
+            target_margin_percent: contract.target_margin_percent,
+            target_profit_value: 0,
+            notes: contract.notes,
+          })
+          .select("id")
+          .single();
+        if (error) throw error;
+        contractId = data.id;
+        setContract(prev => prev ? { ...prev, id: contractId } : null);
+
+        // Sincronizar serviços (cria linhas vazias para todos os escopos)
+        await supabase.rpc("sync_contract_services", {
+          p_project_id: currentProject.id,
+          p_company_id: company.id,
+        });
+      }
+
+      // Atualizar a linha específica em project_contract_services
+      const { data: existing } = await supabase
+        .from("project_contract_services")
+        .select("id")
+        .eq("contract_id", contractId!)
+        .eq("macro_id", macroId)
+        .eq("scope_id", scopeId)
+        .maybeSingle();
+
+      if (existing?.id) {
+        const { error } = await supabase
+          .from("project_contract_services")
+          .update({
+            unit_revenue_value: revenueValue,
+            max_cost_value: maxCost,
+            cost_percent: revenueValue > 0 ? cp : 0,
+            status: revenueValue > 0 ? "ok" : "pending",
+          })
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        // Criar a linha se ainda não existir
+        const svc = services.find(s => s.macro_id === macroId && s.scope_id === scopeId);
+        const { error } = await supabase
+          .from("project_contract_services")
+          .insert({
+            company_id: company.id,
+            project_id: currentProject.id,
+            contract_id: contractId!,
+            macro_id: macroId,
+            macro_name: svc?.macro_name ?? "",
+            scope_id: scopeId,
+            scope_name: svc?.scope_name ?? "",
+            unit_revenue_value: revenueValue,
+            max_cost_value: maxCost,
+            cost_percent: revenueValue > 0 ? cp : 0,
+            status: revenueValue > 0 ? "ok" : "pending",
+            macro_order: svc?.macro_order ?? 0,
+            scope_order: svc?.scope_order ?? 0,
+          });
+        if (error) throw error;
+      }
+
+      // Atualizar contract_value_total no contrato
+      const newTotal = services.reduce((acc, s) => {
+        if (s.macro_id === macroId && s.scope_id === scopeId) return acc + revenueValue;
+        return acc + s.unit_revenue_value;
+      }, 0);
+      await supabase
+        .from("project_contracts")
+        .update({ contract_value_total: newTotal, updated_at: new Date().toISOString() })
+        .eq("id", contractId!);
+
+      return true;
+    } catch (err) {
+      console.error("Erro ao persistir serviço:", err);
+      toast.error("Erro ao salvar vínculo PLE no contrato");
+      return false;
+    }
+  }, [canEdit, currentProject?.id, company?.id, contract, services]);
+
   return {
     contract,
     setContract,
@@ -464,6 +573,7 @@ export function useProjectContract() {
     updateServiceValue,
     updateCostTarget,
     saveContract,
+    persistServiceValue,
     reload: loadData,
   };
 }
