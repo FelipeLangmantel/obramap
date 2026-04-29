@@ -68,27 +68,11 @@ import {
 } from "@/offline/diaryAdapter";
 import { OfflineBanner } from "@/components/offline/OfflineStatusBadge";
 import { recomputeProjectProgress, subscribeSync } from "@/offline/sync";
+import { compressImageSafe } from "@/lib/compressImage";
 
-// Compressão simples via Canvas — reduz tamanho das fotos antes do upload
+// Compressão segura via createImageBitmap (evita estouro de memória em mobile)
 async function comprimirImagem(file: File, maxDim = 1024, quality = 0.7): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      let w = img.width, h = img.height;
-      if (w > maxDim || h > maxDim) {
-        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
-        else { w = Math.round(w * maxDim / h); h = maxDim; }
-      }
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("canvas")); return; }
-      ctx.drawImage(img, 0, 0, w, h);
-      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("blob")), "image/jpeg", quality);
-    };
-    img.onerror = () => reject(new Error("img"));
-    img.src = URL.createObjectURL(file);
-  });
+  return compressImageSafe(file, { maxSide: maxDim, quality });
 }
 
 // Mapeia código antigo de clima (sol/nublado/chuva_*) → novo (claro/nublado/chuvoso)
