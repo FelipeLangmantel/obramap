@@ -772,7 +772,23 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                                       />
                                     ))}
                                   </div>
-                                  <p className="text-xs text-muted-foreground mt-2 text-center">{DEFAULT_MACRO_COLORS.length} cores disponíveis</p>
+                                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+                                    <span className="text-xs text-muted-foreground">Cor personalizada:</span>
+                                    <input
+                                      type="color"
+                                      value={editingMacro.color}
+                                      onChange={(e) => setEditingMacro({ ...editingMacro, color: e.target.value })}
+                                      className="w-8 h-8 rounded cursor-pointer border border-border bg-transparent"
+                                      aria-label="Selecionar cor personalizada"
+                                    />
+                                    <Input
+                                      value={editingMacro.color}
+                                      onChange={(e) => setEditingMacro({ ...editingMacro, color: e.target.value })}
+                                      className="h-8 text-xs font-mono w-24"
+                                      placeholder="#000000"
+                                    />
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-2 text-center">{DEFAULT_MACRO_COLORS.length} cores predefinidas + personalizada</p>
                                 </PopoverContent>
                               </Popover>
                               <Input
