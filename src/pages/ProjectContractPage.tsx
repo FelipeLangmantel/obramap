@@ -165,6 +165,7 @@ export default function ProjectContractPage() {
             <ContractServicesTable
               services={services}
               updateServiceValue={updateServiceValue}
+              persistServiceValue={persistServiceValue}
               isEditing={isEditing}
               costPercent={contract?.cost_target_percent || 70}
             />
