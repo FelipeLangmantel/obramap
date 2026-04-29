@@ -8,6 +8,8 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { groupProfessionsByCategory, findProfession } from "@/data/professionsCatalog";
+import { useProfessions } from "@/hooks/useProfessions";
+import { useEmployees } from "@/hooks/useEmployees";
 import type { DiaryWorker } from "@/hooks/useDiaryWorkers";
 
 interface ContractorContract {
