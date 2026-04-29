@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { compressImageSafe } from "@/lib/compressImage";
 
 function sanitizeFileName(name: string) {
   const clean = (name || "foto.jpg").replace(/[^a-zA-Z0-9.]/g, "_");
@@ -32,7 +33,9 @@ export default function CameraCapturePage() {
   }, [houseParam]);
 
   const goBack = () => {
-    navigate(returnTo, { replace: true });
+    // Hard navigation de volta — mantém consistência com a ida (window.location.href).
+    // Garante que a câmera encerra limpo antes de recarregar o app.
+    window.location.href = returnTo;
   };
 
   const handleCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,14 +49,25 @@ export default function CameraCapturePage() {
         sessionStorage.setItem("obramap_diario_tab", JSON.stringify({ tab: "editor", selectedDate: date }));
       }
 
-      const safeName = sanitizeFileName(file.name);
+      // Comprimir antes do upload: câmera gera 10-20MB; reducão para <500KB
+      // evita alocar buffer enorme na heap do WebView após o crash de OOM.
+      let payload: Blob = file;
+      try {
+        payload = await compressImageSafe(file, { maxSide: 1280, quality: 0.72, allowUnsafeFallback: true });
+      } catch (compressErr) {
+        // Se compressão falhar, tentar enviar o arquivo original mesmo
+        console.warn("[camera] compressão falhou, usando arquivo original:", compressErr);
+        payload = file;
+      }
+
+      const safeName = sanitizeFileName(file.name).replace(/\.[^.]+$/, ".jpg");
       const houseSeg = itemId ? (houseNumber != null ? `casa-${houseNumber}/` : "geral/") : "";
       const path = `${companyId}/${entryId}/${itemId ? `${itemId}/` : ""}${houseSeg}${Date.now()}_${safeName}`;
-      const contentType = file.type || "image/jpeg";
+      const contentType = "image/jpeg";
 
       const { error: uploadError } = await supabase.storage
         .from("diary-photos")
-        .upload(path, file, { contentType, upsert: false });
+        .upload(path, payload, { contentType, upsert: false });
       if (uploadError) throw uploadError;
 
       const { error: dbError } = await supabase.from("diary_photos").insert({

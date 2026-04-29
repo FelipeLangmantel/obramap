@@ -108,7 +108,9 @@ export function DiaryItemPhotoButton({
       returnTo: "/dashboard",
     });
     if (entryDate) params.set("date", entryDate);
-    navigate(`/camera-capture?${params.toString()}`);
+    // Hard navigation: descarrega o SPA inteiro da memória antes de abrir a câmera.
+    // navigate() mantém todo o ConstructionContext/houses/diário na RAM → OOM no WebView.
+    window.location.href = `/camera-capture?${params.toString()}`;
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, source: "camera" | "gallery" = "gallery") => {
