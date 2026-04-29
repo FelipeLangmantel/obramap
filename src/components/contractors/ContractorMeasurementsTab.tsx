@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Plus, CheckCircle, ArrowLeft, Clock, Pencil, Trash2, Save, X, MapPin } from "lucide-react";
+import { Plus, CheckCircle, ArrowLeft, Clock, Pencil, Trash2, Save, X, MapPin, Download } from "lucide-react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -148,6 +149,74 @@ export function ContractorMeasurementsTab({
       house_ids: Array.from({ length: housesCount }, (_, i) => i + 1),
     });
     await loadItems(selectedMeasurement.id);
+  };
+
+  /**
+   * Importa a execução real do RDO: conta casas executadas no período,
+   * por scope_id, filtrando diary_items com contractor_contract_id = este contrato.
+   * Sobrescreve os houses_measured de cada item da medição.
+   */
+  const handleImportFromDiary = async () => {
+    if (!requireEdit()) return;
+    if (!selectedMeasurement || !currentProject?.id) return;
+    setSaving(true);
+    try {
+      // Diários do projeto no período
+      const { data: entries } = await supabase
+        .from("diary_entries")
+        .select("id")
+        .eq("project_id", currentProject.id)
+        .gte("entry_date", selectedMeasurement.period_start)
+        .lte("entry_date", selectedMeasurement.period_end);
+
+      const entryIds = (entries || []).map((e: any) => e.id);
+      if (entryIds.length === 0) {
+        toast.info("Nenhum RDO encontrado neste período.");
+        setSaving(false);
+        return;
+      }
+
+      // Itens executados pelo contrato
+      const { data: items } = await supabase
+        .from("diary_items")
+        .select("scope_id, house_ids, quantity")
+        .in("diary_entry_id", entryIds)
+        .eq("contractor_contract_id", contract.id);
+
+      // scope_id → Set(houseId)
+      const housesByScope = new Map<string, Set<number>>();
+      (items || []).forEach((it: any) => {
+        const set = housesByScope.get(it.scope_id) || new Set<number>();
+        (it.house_ids || []).forEach((h: number) => set.add(h));
+        housesByScope.set(it.scope_id, set);
+      });
+
+      let updated = 0;
+      for (const svc of services) {
+        const set = housesByScope.get(svc.scope_id);
+        if (!set || set.size === 0) continue;
+        // Limita às casas do contrato
+        const contractHouses = new Set(svc.house_ids || []);
+        const inside = Array.from(set).filter((h) => contractHouses.has(h));
+        if (inside.length === 0) continue;
+        const existing = measurementItems.find((i) => i.contract_service_id === svc.id);
+        await saveMeasurementItem({
+          id: existing?.id,
+          measurement_id: selectedMeasurement.id,
+          contract_service_id: svc.id,
+          houses_measured: inside.length,
+          unit_value: svc.negotiated_unit_value,
+          house_ids: inside,
+        });
+        updated++;
+      }
+      await loadItems(selectedMeasurement.id);
+      toast.success(`${updated} serviço(s) atualizado(s) com a execução do RDO.`);
+    } catch (e: any) {
+      toast.error("Falha ao importar do RDO: " + (e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleApprove = async () => {
@@ -384,9 +453,21 @@ export function ContractorMeasurementsTab({
                   </Badge>
                 </div>
                 {selectedMeasurement.status === "draft" && (
-                  <Button size="sm" className="gap-1.5 text-xs h-7 bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove} disabled={!canEdit}>
-                    <CheckCircle className="h-3.5 w-3.5" /> Aprovar
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-xs h-7"
+                      onClick={handleImportFromDiary}
+                      disabled={!canEdit || saving}
+                      title="Conta as casas executadas no RDO no período, filtrando por este contrato"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Importar do RDO
+                    </Button>
+                    <Button size="sm" className="gap-1.5 text-xs h-7 bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove} disabled={!canEdit}>
+                      <CheckCircle className="h-3.5 w-3.5" /> Aprovar
+                    </Button>
+                  </div>
                 )}
               </div>
 
