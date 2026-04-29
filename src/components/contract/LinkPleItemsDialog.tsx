@@ -39,7 +39,7 @@ interface Props {
   macroName: string;
   scopeId: string;
   scopeName: string;
-  onConfirm: (totalRevenue: number) => void;
+  onConfirm: (totalRevenue: number, linkedCount: number) => void;
 }
 
 export function LinkPleItemsDialog({
@@ -200,7 +200,7 @@ export function LinkPleItemsDialog({
           } as any)
           .in("id", toLink);
       }
-      onConfirm(totalRevenue);
+      onConfirm(totalRevenue, selected.size);
       toast.success(`${selected.size} itens PLE vinculados ao serviço`);
       onClose();
     } catch (err: any) {

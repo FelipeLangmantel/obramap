@@ -13,6 +13,7 @@ import { LinkPleItemsDialog } from "./LinkPleItemsDialog";
 interface ContractServicesTableProps {
   services: ContractService[];
   updateServiceValue: (macroId: string, scopeId: string, value: number) => void;
+  persistServiceValue?: (macroId: string, scopeId: string, value: number, pleLinkedCount: number) => Promise<boolean>;
   isEditing: boolean;
   costPercent: number;
 }
@@ -121,6 +122,7 @@ function EditableCell({ value, onSave, isEditing }: EditableCellProps) {
 export function ContractServicesTable({
   services,
   updateServiceValue,
+  persistServiceValue,
   isEditing,
   costPercent,
 }: ContractServicesTableProps) {
@@ -245,7 +247,7 @@ export function ContractServicesTable({
                     {hasPleProject && (
                       <TableCell className="text-center">
                         <Button
-                          variant="outline"
+                          variant={service.ple_linked_count ? "default" : "outline"}
                           size="sm"
                           className="h-7 text-[11px] gap-1.5"
                           disabled={!isEditing}
@@ -257,7 +259,9 @@ export function ContractServicesTable({
                           })}
                         >
                           <Link2 className="h-3 w-3" />
-                          Vincular PLE
+                          {service.ple_linked_count
+                            ? `${service.ple_linked_count} ${service.ple_linked_count === 1 ? "item" : "itens"}`
+                            : "Vincular PLE"}
                         </Button>
                       </TableCell>
                     )}
@@ -286,8 +290,12 @@ export function ContractServicesTable({
           macroName={linkDialog.macroName}
           scopeId={linkDialog.scopeId}
           scopeName={linkDialog.scopeName}
-          onConfirm={(totalRevenueCalc) => {
-            updateServiceValue(linkDialog.macroId, linkDialog.scopeId, totalRevenueCalc);
+          onConfirm={async (totalRevenueCalc, linkedCount) => {
+            if (persistServiceValue) {
+              await persistServiceValue(linkDialog.macroId, linkDialog.scopeId, totalRevenueCalc, linkedCount);
+            } else {
+              updateServiceValue(linkDialog.macroId, linkDialog.scopeId, totalRevenueCalc);
+            }
           }}
         />
       )}

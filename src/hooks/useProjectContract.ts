@@ -17,6 +17,49 @@ export interface ContractService {
   status: string;
   macro_order: number;
   scope_order: number;
+  ple_linked_count?: number;
+}
+
+// Aggregates totals from PLE events linked to (macro_id, scope_id) of an obramap project.
+// Returns Map keyed by `${macroId}-${scopeId}` => { total, count }.
+async function loadPleLinkedTotals(
+  obramapProjectId: string
+): Promise<Map<string, { total: number; count: number }>> {
+  const result = new Map<string, { total: number; count: number }>();
+  // Find PLE project linked to this obramap project
+  const { data: pleProj } = await supabase
+    .from("ple_projects")
+    .select("id")
+    .eq("obramap_project_id", obramapProjectId)
+    .maybeSingle();
+  if (!pleProj) return result;
+
+  const { data: linked } = await supabase
+    .from("ple_events")
+    .select("obramap_macro_id, obramap_scope_id, quantity, unit_value, billing_type")
+    .eq("ple_project_id", pleProj.id)
+    .not("obramap_scope_id", "is", null);
+
+  if (!linked) return result;
+
+  // We need total houses to multiply per_house items
+  const { data: project } = await supabase
+    .from("projects")
+    .select("total_houses")
+    .eq("id", obramapProjectId)
+    .maybeSingle();
+  const houses = (project as any)?.total_houses || 1;
+
+  linked.forEach((e: any) => {
+    const k = `${e.obramap_macro_id}-${e.obramap_scope_id}`;
+    const lineTotal = Number(e.quantity || 0) * Number(e.unit_value || 0);
+    const v = e.billing_type === "fixed" ? lineTotal : lineTotal * houses;
+    const cur = result.get(k) || { total: 0, count: 0 };
+    cur.total += v;
+    cur.count += 1;
+    result.set(k, cur);
+  });
+  return result;
 }
 
 export interface ProjectContract {
@@ -105,20 +148,33 @@ export function useProjectContract() {
         if (servicesError) throw servicesError;
 
         if (servicesData && servicesData.length > 0) {
+          // Load PLE links for this project to recompute revenue from linked items
+          const pleAggByScope = await loadPleLinkedTotals(currentProject.id);
+          const housesQty = currentProject.totalHouses || (currentProject.houses?.length ?? 1);
+
           setServices(
-            servicesData.map((s) => ({
-              id: s.id,
-              macro_id: s.macro_id,
-              macro_name: s.macro_name,
-              scope_id: s.scope_id,
-              scope_name: s.scope_name,
-              unit_revenue_value: Number(s.unit_revenue_value),
-              max_cost_value: Number(s.max_cost_value),
-              cost_percent: Number(s.cost_percent),
-              status: s.status,
-              macro_order: Number((s as any).macro_order ?? 0),
-              scope_order: Number((s as any).scope_order ?? 0),
-            }))
+            servicesData.map((s) => {
+              const pleAgg = pleAggByScope.get(`${s.macro_id}-${s.scope_id}`);
+              const baseRevenue = Number(s.unit_revenue_value);
+              // Se há itens PLE vinculados, eles são a fonte da verdade
+              const finalRevenue = pleAgg ? pleAgg.total : baseRevenue;
+              const cp = Number(s.cost_percent) || (contractData.cost_target_percent ?? 70);
+              const finalMaxCost = pleAgg ? finalRevenue * (cp / 100) : Number(s.max_cost_value);
+              return {
+                id: s.id,
+                macro_id: s.macro_id,
+                macro_name: s.macro_name,
+                scope_id: s.scope_id,
+                scope_name: s.scope_name,
+                unit_revenue_value: finalRevenue,
+                max_cost_value: finalMaxCost,
+                cost_percent: finalRevenue > 0 ? cp : 0,
+                status: finalRevenue > 0 ? "ok" : s.status,
+                macro_order: Number((s as any).macro_order ?? 0),
+                scope_order: Number((s as any).scope_order ?? 0),
+                ple_linked_count: pleAgg?.count ?? 0,
+              } as ContractService;
+            })
           );
         } else {
           // Load services from scope_costs (budget) as fallback
@@ -397,6 +453,115 @@ export function useProjectContract() {
     }
   };
 
+  // Persiste imediatamente o valor de um único serviço (usado após vincular itens PLE)
+  const persistServiceValue = useCallback(async (
+    macroId: string,
+    scopeId: string,
+    revenueValue: number,
+    pleLinkedCount: number,
+  ): Promise<boolean> => {
+    if (!canEdit || !currentProject?.id || !company?.id || !contract) return false;
+    try {
+      const cp = contract.cost_target_percent || 70;
+      const maxCost = revenueValue * (cp / 100);
+
+      // Atualizar estado local primeiro para feedback imediato
+      setServices(prev => prev.map(s =>
+        s.macro_id === macroId && s.scope_id === scopeId
+          ? { ...s, unit_revenue_value: revenueValue, max_cost_value: maxCost, cost_percent: revenueValue > 0 ? cp : 0, status: revenueValue > 0 ? "ok" : "pending", ple_linked_count: pleLinkedCount }
+          : s
+      ));
+
+      // Garantir que o contrato exista no banco para podermos referenciá-lo
+      let contractId = contract.id;
+      if (!contractId) {
+        const { data, error } = await supabase
+          .from("project_contracts")
+          .insert({
+            company_id: company.id,
+            project_id: currentProject.id,
+            contract_number: contract.contract_number,
+            contract_date: contract.contract_date,
+            contract_value_total: 0,
+            cost_target_percent: cp,
+            target_margin_percent: contract.target_margin_percent,
+            target_profit_value: 0,
+            notes: contract.notes,
+          })
+          .select("id")
+          .single();
+        if (error) throw error;
+        contractId = data.id;
+        setContract(prev => prev ? { ...prev, id: contractId } : null);
+
+        // Sincronizar serviços (cria linhas vazias para todos os escopos)
+        await supabase.rpc("sync_contract_services", {
+          p_project_id: currentProject.id,
+          p_company_id: company.id,
+        });
+      }
+
+      // Atualizar a linha específica em project_contract_services
+      const { data: existing } = await supabase
+        .from("project_contract_services")
+        .select("id")
+        .eq("contract_id", contractId!)
+        .eq("macro_id", macroId)
+        .eq("scope_id", scopeId)
+        .maybeSingle();
+
+      if (existing?.id) {
+        const { error } = await supabase
+          .from("project_contract_services")
+          .update({
+            unit_revenue_value: revenueValue,
+            max_cost_value: maxCost,
+            cost_percent: revenueValue > 0 ? cp : 0,
+            status: revenueValue > 0 ? "ok" : "pending",
+          })
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        // Criar a linha se ainda não existir
+        const svc = services.find(s => s.macro_id === macroId && s.scope_id === scopeId);
+        const { error } = await supabase
+          .from("project_contract_services")
+          .insert({
+            company_id: company.id,
+            project_id: currentProject.id,
+            contract_id: contractId!,
+            macro_id: macroId,
+            macro_name: svc?.macro_name ?? "",
+            scope_id: scopeId,
+            scope_name: svc?.scope_name ?? "",
+            unit_revenue_value: revenueValue,
+            max_cost_value: maxCost,
+            cost_percent: revenueValue > 0 ? cp : 0,
+            status: revenueValue > 0 ? "ok" : "pending",
+            macro_order: svc?.macro_order ?? 0,
+            scope_order: svc?.scope_order ?? 0,
+          });
+        if (error) throw error;
+      }
+
+      // Atualizar contract_value_total no contrato
+      const newTotal = services.reduce((acc, s) => {
+        if (s.macro_id === macroId && s.scope_id === scopeId) return acc + revenueValue;
+        return acc + s.unit_revenue_value;
+      }, 0);
+      await supabase
+        .from("project_contracts")
+        .update({ contract_value_total: newTotal, updated_at: new Date().toISOString() })
+        .eq("id", contractId!);
+
+      return true;
+    } catch (err) {
+      console.error("Erro ao persistir serviço:", err);
+      toast.error("Erro ao salvar vínculo PLE no contrato");
+      return false;
+    }
+  }, [canEdit, currentProject?.id, company?.id, contract, services]);
+
   return {
     contract,
     setContract,
@@ -408,6 +573,7 @@ export function useProjectContract() {
     updateServiceValue,
     updateCostTarget,
     saveContract,
+    persistServiceValue,
     reload: loadData,
   };
 }

@@ -42,6 +42,7 @@ export default function ProjectContractPage() {
     updateServiceValue,
     updateCostTarget,
     saveContract,
+    persistServiceValue,
   } = useProjectContract();
 
   const [showPlanningWarning, setShowPlanningWarning] = useState(false);
@@ -164,6 +165,7 @@ export default function ProjectContractPage() {
             <ContractServicesTable
               services={services}
               updateServiceValue={updateServiceValue}
+              persistServiceValue={persistServiceValue}
               isEditing={isEditing}
               costPercent={contract?.cost_target_percent || 70}
             />
