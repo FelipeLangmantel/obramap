@@ -61,6 +61,7 @@ import {
   Sparkles,
   ShoppingCart,
   BookOpen,
+  Briefcase,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -85,6 +86,7 @@ import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
+import { ProfessionsManagementDialog } from "@/components/professions/ProfessionsManagementDialog";
 import obraMapLogoDark from "@/assets/obramap-logo-new.png";
 import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 
@@ -166,6 +168,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const [linkPortfolioOpen, setLinkPortfolioOpen] = useState(false);
   const [macrosDialogOpen, setMacrosDialogOpen] = useState(false);
   const [quadrasDialogOpen, setQuadrasDialogOpen] = useState(false);
+  const [professionsDialogOpen, setProfessionsDialogOpen] = useState(false);
   const [companyModules, setCompanyModules] = useState<CompanyModule[]>([]);
   const [devModuleDialog, setDevModuleDialog] = useState<CompanyModule | null>(null);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
