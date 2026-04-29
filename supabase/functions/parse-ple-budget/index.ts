@@ -52,8 +52,22 @@ Exemplos: "1.1.1", "1.1.2", "1.2.1", "2.1.1", "2.1.2"
 | DESCRIÇÃO | description | Texto descritivo completo do serviço |
 | UNID | unit | Unidade de medida: UN, M, M2, M3, KG, etc. |
 | QTDE | quantity | Quantidade numérica |
-| PREÇO UNITÁRIO | unit_value | Valor unitário em reais (converter "R$ 2.975,86" → 2975.86) |
-| PREÇO TOTAL | total_value | Valor total = qtde × unitário |
+| MAT UNIT. (PREÇO UNITÁRIO MATERIAL) | mat_unit_value | Valor unitário SOMENTE de MATERIAL em reais (a planilha SINAPI/PLE tem composição: MAT + MO = TOTAL) |
+| MO UNIT. (PREÇO UNITÁRIO MÃO DE OBRA) | mo_unit_value | Valor unitário SOMENTE de MÃO DE OBRA em reais |
+| PREÇO UNITÁRIO TOTAL | unit_value | Valor unitário TOTAL = mat_unit_value + mo_unit_value (converter "R$ 2.975,86" → 2975.86) |
+| PREÇO TOTAL | total_value | Valor total = qtde × unit_value (TOTAL) |
+
+## ATENÇÃO ESPECIAL — COLUNAS DE PREÇO UNITÁRIO
+
+A planilha PLE/SINAPI tipicamente tem **3 colunas de preço unitário lado a lado**, antes do TOTAL:
+1. **MAT** (Material) — pode estar vazio ou ter valor (ex: "R$ -" ou "R$ 1.347,19")
+2. **MO** (Mão de Obra) — pode estar vazio ou ter valor (ex: "R$ 2.975,86" ou "R$ 577,38")
+3. **TOTAL UNITÁRIO** (= MAT + MO) — sempre presente (ex: "R$ 2.975,86" ou "R$ 1.924,57")
+
+→ Você DEVE extrair os 3 valores separadamente quando aparecerem.
+→ Se só houver 1 coluna unitária, considere que é apenas o `unit_value` e mat=0, mo=0.
+→ Se MAT for vazio/traço, use 0. Se MO for vazio/traço, use 0.
+→ Sempre garanta: `unit_value ≈ mat_unit_value + mo_unit_value` (tolerância de centavos).
 
 ## REGRAS DE EXTRAÇÃO
 
@@ -93,6 +107,8 @@ Responda APENAS com JSON válido (sem markdown, sem \`\`\`):
       "description": "ADMINISTRAÇÃO DE OBRA – ENGENHEIRO HORISTA E MESTRE DE OBRAS MENSALISTA",
       "unit": "UN",
       "quantity": 4.00,
+      "mat_unit_value": 0,
+      "mo_unit_value": 2975.86,
       "unit_value": 2975.86,
       "total_value": 11903.43,
       "group_code": "1.1",
@@ -167,6 +183,8 @@ Responda APENAS com JSON válido (sem markdown, sem \`\`\`):
       description: (it.description || "").trim(),
       unit: (it.unit || "UN").trim(),
       quantity: typeof it.quantity === "number" ? it.quantity : parseFloat(String(it.quantity || 0)) || 0,
+      mat_unit_value: typeof it.mat_unit_value === "number" ? it.mat_unit_value : parseFloat(String(it.mat_unit_value || 0)) || 0,
+      mo_unit_value: typeof it.mo_unit_value === "number" ? it.mo_unit_value : parseFloat(String(it.mo_unit_value || 0)) || 0,
       unit_value: typeof it.unit_value === "number" ? it.unit_value : parseFloat(String(it.unit_value || 0)) || 0,
       total_value: typeof it.total_value === "number" ? it.total_value : parseFloat(String(it.total_value || 0)) || 0,
       group_code: (it.group_code || "").trim(),
