@@ -99,13 +99,11 @@ function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number):
 
 /** Caminho rápido com createImageBitmap + resize nativo. */
 async function compressWithImageBitmap(file: File, opts: Required<CompressOptions>): Promise<Blob> {
-  // Primeiro decodifica metadata para saber dimensões originais.
-  // `imageOrientation: "from-image"` corrige fotos rotacionadas (EXIF).
-  const meta = await createImageBitmap(file, { imageOrientation: "from-image" });
-  const { w, h } = calcDims(meta.width, meta.height, opts.maxSide);
-  meta.close();
+  const dimensions = await readImageDimensions(file);
+  if (!dimensions) throw new Error("Não foi possível ler o tamanho da imagem sem abrir o bitmap.");
+  const { w, h } = calcDims(dimensions.width, dimensions.height, opts.maxSide);
 
-  // Segunda decodificação JÁ no tamanho alvo — economiza muita RAM.
+  // Decodificação JÁ no tamanho alvo — economiza muita RAM.
   const bmp = await createImageBitmap(file, {
     imageOrientation: "from-image",
     resizeWidth: w,
@@ -164,7 +162,7 @@ async function compressWithImgFallback(file: File, opts: Required<CompressOption
  * 1280px). Seguro para fotos grandes de câmeras de celular.
  */
 export async function compressImageSafe(file: File, opts: CompressOptions = {}): Promise<Blob> {
-  const merged: Required<CompressOptions> = { ...DEFAULTS, ...opts } as any;
+  const merged: Required<CompressOptions> = { ...DEFAULTS, ...opts };
 
   if (file.size > merged.maxInputBytes) {
     throw new Error(
@@ -182,6 +180,12 @@ export async function compressImageSafe(file: File, opts: CompressOptions = {}):
       // alguns Androids antigos rejeitam resizeWidth — cai no fallback
       console.warn("[compressImageSafe] bitmap path falhou, usando fallback:", err);
     }
+  }
+  if (!merged.allowUnsafeFallback && file.size > SAFE_FALLBACK_BYTES) {
+    throw new Error(
+      "Não foi possível reduzir esta foto com segurança neste aparelho. " +
+      "Tente tirar a foto em resolução menor ou anexar uma imagem menor."
+    );
   }
   return compressWithImgFallback(file, merged);
 }
