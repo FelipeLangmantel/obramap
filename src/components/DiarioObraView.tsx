@@ -27,6 +27,7 @@ import { ConfirmRainDialog } from "./diario/ConfirmRainDialog";
 import { ImportPreviousDayButton } from "./diario/ImportPreviousDayButton";
 import { RequestDeleteItemDialog } from "./diario/RequestDeleteItemDialog";
 import { DiaryItemPhotoButton } from "./diario/DiaryItemPhotoButton";
+import { LowMemoryCameraDialog } from "./diario/LowMemoryCameraDialog";
 import { EditDiaryItemDialog, type EditableDiaryItem } from "./diario/EditDiaryItemDialog";
 import { useDiaryLegalConfig } from "@/hooks/useDiaryLegalConfig";
 import { useNavigate } from "react-router-dom";
@@ -189,10 +190,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const [fotosPorServico, setFotosPorServico] = useState<Record<string, { url: string; legenda: string | null }[]>>({});
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState<{ id: string; url: string; legenda: string | null } | null>(null);
-  const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const galleryInputRef = React.useRef<HTMLInputElement>(null);
-  const photoSourceRef = React.useRef<"camera" | "gallery">("gallery");
   const [photoSourceOpen, setPhotoSourceOpen] = useState(false);
+  const [lowMemoryCameraOpen, setLowMemoryCameraOpen] = useState(false);
 
   // RDO data
   const rdo = useRdoData(entryId);
