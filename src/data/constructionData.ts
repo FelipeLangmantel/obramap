@@ -31,30 +31,31 @@ export interface Quadra {
   houses: number[];
 }
 
-// Default colors for macros - Extended palette
+// Default colors for macros - Extended palette (60 cores)
 export const DEFAULT_MACRO_COLORS = [
-  "#9ca3af", // gray - Não Iniciado
-  "#ef4444", // red - Fundação
-  "#f59e0b", // amber - Estrutura
-  "#3b82f6", // blue - Acabamento
-  "#22c55e", // green - Concluído
-  "#8b5cf6", // purple
-  "#ec4899", // pink
-  "#14b8a6", // teal
-  "#f97316", // orange
-  "#06b6d4", // cyan
-  "#84cc16", // lime
-  "#a855f7", // violet
-  "#e11d48", // rose
-  "#0ea5e9", // sky
-  "#eab308", // yellow
-  "#10b981", // emerald
-  "#6366f1", // indigo
-  "#dc2626", // red-600
-  "#7c3aed", // violet-600
-  "#059669", // emerald-600
-  "#d946ef", // fuchsia
-  "#0891b2", // cyan-600
+  // Tons neutros
+  "#9ca3af", "#6b7280", "#4b5563", "#1f2937", "#0f172a",
+  // Vermelhos
+  "#fca5a5", "#ef4444", "#dc2626", "#b91c1c", "#7f1d1d",
+  // Laranjas
+  "#fdba74", "#f97316", "#ea580c", "#c2410c", "#9a3412",
+  // Âmbar / amarelo
+  "#fcd34d", "#f59e0b", "#d97706", "#eab308", "#ca8a04",
+  // Verde lima / verde
+  "#bef264", "#84cc16", "#65a30d", "#22c55e", "#16a34a",
+  // Esmeralda / Teal
+  "#6ee7b7", "#10b981", "#059669", "#14b8a6", "#0d9488",
+  // Ciano / Sky
+  "#67e8f9", "#06b6d4", "#0891b2", "#0ea5e9", "#0284c7",
+  // Azul / Indigo
+  "#93c5fd", "#3b82f6", "#2563eb", "#6366f1", "#4338ca",
+  // Violet / Purple
+  "#c4b5fd", "#8b5cf6", "#7c3aed", "#a855f7", "#9333ea",
+  // Fuchsia / Pink / Rose
+  "#f0abfc", "#d946ef", "#c026d3", "#ec4899", "#db2777",
+  "#fda4af", "#f43f5e", "#e11d48", "#be123c", "#9f1239",
+  // Marrons / earthy
+  "#a16207", "#92400e", "#78350f", "#7c2d12", "#451a03",
 ];
 
 // Template vazio para novas obras - usuário deve configurar manualmente
