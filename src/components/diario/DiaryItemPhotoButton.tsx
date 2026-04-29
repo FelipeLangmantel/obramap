@@ -238,7 +238,7 @@ export function DiaryItemPhotoButton({
               </div>
               <div className="flex gap-2">
                 <Button
-                  onClick={() => { photoSourceRef.current = "camera"; cameraInputRef.current?.click(); }}
+                  onClick={() => setLowMemoryCameraOpen(true)}
                   disabled={uploading || disabled}
                   className="h-10"
                 >
@@ -250,21 +250,13 @@ export function DiaryItemPhotoButton({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => { photoSourceRef.current = "gallery"; galleryInputRef.current?.click(); }}
+                  onClick={() => galleryInputRef.current?.click()}
                   disabled={uploading || disabled}
                   className="h-10"
                 >
                   Galeria
                 </Button>
               </div>
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                capture="environment"
-                className="hidden"
-                onChange={handleUpload}
-              />
               <input
                 ref={galleryInputRef}
                 type="file"
