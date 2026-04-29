@@ -295,14 +295,22 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       if (itemIds.length > 0) {
         const { data: photoRows } = await supabase
           .from("diary_photos")
-          .select("diary_item_id")
+          .select("diary_item_id, house_number")
           .in("diary_item_id", itemIds);
-        const withPhotos = new Set((photoRows || []).map((p: any) => p.diary_item_id));
-        const semFoto = diaryItems.filter(i => !withPhotos.has(i.id));
+        const photosByItem = new Map<string, Set<number | null>>();
+        (photoRows || []).forEach((p: any) => {
+          if (!photosByItem.has(p.diary_item_id)) photosByItem.set(p.diary_item_id, new Set());
+          photosByItem.get(p.diary_item_id)!.add(p.house_number ?? null);
+        });
+        const semFoto = diaryItems.flatMap(i => {
+          const linked = photosByItem.get(i.id) || new Set<number | null>();
+          if (linked.has(null)) return [];
+          return (i.house_ids || []).filter(h => !linked.has(h)).map(h => ({ item: i, house: h }));
+        });
         if (semFoto.length > 0) {
-          const lista = semFoto.map(i => `• ${i.macro_name} · ${i.scope_name}`).join("\n");
+          const lista = semFoto.map(({ item, house }) => `• Casa ${String(house).padStart(2, "0")} — ${item.macro_name} · ${item.scope_name}`).join("\n");
           const ok = window.confirm(
-            `${semFoto.length} serviço(s) sem foto:\n\n${lista}\n\nDeseja enviar mesmo assim?`
+            `${semFoto.length} casa(s) com serviço sem foto vinculada:\n\n${lista}\n\nDeseja enviar mesmo assim?`
           );
           if (!ok) return;
         }
@@ -1433,7 +1441,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 companyId={company.id}
                 currentEntryId={entryId}
                 currentEntryDate={entryDate}
-                isLocked={isLocked}
+                isLocked={editingDisabled}
                 onImported={async () => {
                   if (entryId) {
                     await rdo.reload(entryId);
