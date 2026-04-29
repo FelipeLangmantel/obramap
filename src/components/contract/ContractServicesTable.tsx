@@ -290,8 +290,12 @@ export function ContractServicesTable({
           macroName={linkDialog.macroName}
           scopeId={linkDialog.scopeId}
           scopeName={linkDialog.scopeName}
-          onConfirm={(totalRevenueCalc) => {
-            updateServiceValue(linkDialog.macroId, linkDialog.scopeId, totalRevenueCalc);
+          onConfirm={async (totalRevenueCalc, linkedCount) => {
+            if (persistServiceValue) {
+              await persistServiceValue(linkDialog.macroId, linkDialog.scopeId, totalRevenueCalc, linkedCount);
+            } else {
+              updateServiceValue(linkDialog.macroId, linkDialog.scopeId, totalRevenueCalc);
+            }
           }}
         />
       )}
