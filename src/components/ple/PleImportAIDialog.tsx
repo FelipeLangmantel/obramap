@@ -242,7 +242,7 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
               <div className="overflow-x-auto max-h-[45vh]">
                 <div className="min-w-[900px]">
                   {/* Table Header */}
-                  <div className="grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_85px_100px] gap-0 bg-muted/30 border-b px-2 py-1.5 sticky top-0 z-10">
+                  <div className="grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_75px_75px_85px_100px] gap-0 bg-muted/30 border-b px-2 py-1.5 sticky top-0 z-10">
                     <span />
                     <span className="text-[9px] font-bold text-muted-foreground uppercase">ITEM</span>
                     <span className="text-[9px] font-bold text-muted-foreground uppercase">DISCRIM.</span>
@@ -264,7 +264,7 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
                       <div key={stageCode}>
                         {/* ETAPA ROW */}
                         <div
-                          className="grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_85px_100px] gap-0 bg-primary/15 border-b border-primary/25 px-2 py-1.5 cursor-pointer hover:bg-primary/20 transition-colors items-center"
+                          className="grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_75px_75px_85px_100px] gap-0 bg-primary/15 border-b border-primary/25 px-2 py-1.5 cursor-pointer hover:bg-primary/20 transition-colors items-center"
                           onClick={() => toggleStageExpand(stageCode)}
                         >
                           <span className="flex items-center justify-center">
@@ -285,7 +285,7 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
                           return (
                             <div key={subCode}>
                               {/* SUBETAPA ROW */}
-                              <div className="grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_85px_100px] gap-0 bg-accent/40 border-b px-2 py-1 items-center">
+                              <div className="grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_75px_75px_85px_100px] gap-0 bg-accent/40 border-b px-2 py-1 items-center">
                                 <span />
                                 <span className="text-[11px] font-bold text-foreground pl-2">{substage.code}</span>
                                 <span className="text-[10px] text-muted-foreground">Subetapa</span>
@@ -299,7 +299,7 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
 
                               {/* SERVIÇOS */}
                               {subItems.map(it => (
-                                <div key={it.idx} className={`grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_85px_100px] gap-0 border-b px-2 py-1 items-center ${!it.selected ? "opacity-40" : ""}`}>
+                                <div key={it.idx} className={`grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_75px_75px_85px_100px] gap-0 border-b px-2 py-1 items-center ${!it.selected ? "opacity-40" : ""}`}>
                                   <span className="flex items-center justify-center pl-1">
                                     <Checkbox checked={it.selected} onCheckedChange={() => toggleItem(it.idx)} />
                                   </span>
@@ -323,13 +323,13 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
                   {/* Orphaned items */}
                   {orphanedItems.length > 0 && (
                     <div>
-                      <div className="grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_85px_100px] gap-0 bg-amber-500/10 border-b px-2 py-1.5 items-center">
+                      <div className="grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_75px_75px_85px_100px] gap-0 bg-amber-500/10 border-b px-2 py-1.5 items-center">
                         <span />
                         <span className="text-[11px] font-bold text-amber-600 col-span-4">ITENS SEM GRUPO ({orphanedItems.length})</span>
                         <span /><span /><span /><span />
                       </div>
                       {orphanedItems.map(it => (
-                        <div key={it.idx} className={`grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_85px_100px] gap-0 border-b px-2 py-1 items-center ${!it.selected ? "opacity-40" : ""}`}>
+                        <div key={it.idx} className={`grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_75px_75px_85px_100px] gap-0 border-b px-2 py-1 items-center ${!it.selected ? "opacity-40" : ""}`}>
                           <span className="flex items-center justify-center">
                             <Checkbox checked={it.selected} onCheckedChange={() => toggleItem(it.idx)} />
                           </span>
