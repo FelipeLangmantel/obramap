@@ -798,6 +798,31 @@ export function PleContractTab(props: PleDataReturn) {
                       <span className="text-[10px] text-center text-muted-foreground">{ev.unit}</span>
                       <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
                     </div>
+                    {/* Mover para subetapa */}
+                    <div className="flex items-center gap-2 border-b bg-amber-500/5 px-2 sm:px-3 py-1.5">
+                      <span className="text-[10px] text-amber-700 dark:text-amber-300 shrink-0">Mover para subetapa:</span>
+                      <Select value="__none__" onValueChange={(v) => moveEventToGroup(ev.id, v)}>
+                        <SelectTrigger className="h-6 text-[10px] flex-1 max-w-[420px] border-dashed border-amber-500/50">
+                          <SelectValue placeholder="Selecionar subetapa..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__" disabled>
+                            <span className="text-muted-foreground">Selecionar subetapa...</span>
+                          </SelectItem>
+                          {substageOptions.length === 0 ? (
+                            <SelectItem value="__empty__" disabled>
+                              <span className="text-muted-foreground">Nenhuma subetapa cadastrada</span>
+                            </SelectItem>
+                          ) : (
+                            substageOptions.map(opt => (
+                              <SelectItem key={opt.id} value={opt.id}>
+                                {opt.label}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 ))}
               </div>
