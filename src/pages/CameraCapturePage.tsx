@@ -1,10 +1,7 @@
-import React, { useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, Loader2, ArrowLeft } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 import { compressImageSafe } from "@/lib/compressImage";
 
 function sanitizeFileName(name: string) {
@@ -13,18 +10,17 @@ function sanitizeFileName(name: string) {
 }
 
 export default function CameraCapturePage() {
-  const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const { user, company } = useAuth();
+  const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
 
   const entryId = params.get("entryId") || "";
   const itemId = params.get("itemId") || null;
   const date = params.get("date") || null;
   const houseParam = params.get("house") || "all";
   const returnTo = params.get("returnTo") || "/dashboard";
-  const companyId = params.get("companyId") || company?.id || "";
+  const companyId = params.get("companyId") || "";
 
   const houseNumber = useMemo(() => {
     if (houseParam === "all" || houseParam === "none") return null;
@@ -38,9 +34,20 @@ export default function CameraCapturePage() {
     window.location.href = returnTo;
   };
 
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("obramap_camera_capture_status");
+      if (!raw) return;
+      const pending = JSON.parse(raw);
+      if (pending?.entryId === entryId && Date.now() - Number(pending.startedAt || 0) < 10 * 60 * 1000) {
+        setMessage("A câmera foi fechada pelo Android antes de devolver a foto. Tente novamente nesta tela leve; se repetir, use Galeria após tirar a foto pela câmera do celular.");
+      }
+    } catch { /* noop */ }
+  }, [entryId]);
+
   const handleCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !entryId || !companyId || !user?.id) return;
+    if (!file || !entryId || !companyId) return;
 
     setUploading(true);
     try {
@@ -49,13 +56,12 @@ export default function CameraCapturePage() {
         sessionStorage.setItem("obramap_diario_tab", JSON.stringify({ tab: "editor", selectedDate: date }));
       }
 
-      // Comprimir antes do upload: câmera gera 10-20MB; reducão para <500KB
-      // evita alocar buffer enorme na heap do WebView após o crash de OOM.
+      // Android WebView: nunca usar fallback com new Image/canvas em foto da câmera.
+      // Se createImageBitmap não reduzir com segurança, envia o arquivo original.
       let payload: Blob = file;
       try {
-        payload = await compressImageSafe(file, { maxSide: 1280, quality: 0.72, allowUnsafeFallback: true });
+        payload = await compressImageSafe(file, { maxSide: 1024, quality: 0.68, allowUnsafeFallback: false });
       } catch (compressErr) {
-        // Se compressão falhar, tentar enviar o arquivo original mesmo
         console.warn("[camera] compressão falhou, usando arquivo original:", compressErr);
         payload = file;
       }
@@ -76,7 +82,7 @@ export default function CameraCapturePage() {
         storage_path: path,
         legenda: null,
         house_number: houseNumber,
-      } as any);
+      });
 
       if (dbError) {
         await supabase.storage.from("diary-photos").remove([path]);
@@ -84,10 +90,10 @@ export default function CameraCapturePage() {
       }
 
       sessionStorage.removeItem("obramap_camera_capture_status");
-      toast.success("Foto enviada.");
+      setMessage("Foto enviada. Voltando ao diário...");
       goBack();
-    } catch (err: any) {
-      toast.error("Erro ao enviar foto: " + (err.message || ""));
+    } catch (err: unknown) {
+      setMessage("Erro ao enviar foto: " + (err instanceof Error ? err.message : ""));
     } finally {
       setUploading(false);
       e.target.value = "";
