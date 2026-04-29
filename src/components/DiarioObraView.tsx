@@ -2012,6 +2012,22 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         </Dialog>
       )}
 
+      <Dialog open={photoSourceOpen} onOpenChange={setPhotoSourceOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Adicionar foto</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Button type="button" onClick={() => handlePickPhotoSource("camera")} disabled={uploadingFoto} className="h-11 justify-start">
+              <Camera className="h-4 w-4 mr-2" /> Tirar foto
+            </Button>
+            <Button type="button" variant="outline" onClick={() => handlePickPhotoSource("gallery")} disabled={uploadingFoto} className="h-11 justify-start">
+              <ClipboardList className="h-4 w-4 mr-2" /> Escolher da galeria
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Print dialog */}
       <PrintDiarioDialog open={printOpen} onOpenChange={setPrintOpen} buildData={buildPrintData} />
       <ConfirmRainDialog
