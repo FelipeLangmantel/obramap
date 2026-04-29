@@ -65,7 +65,7 @@ A planilha PLE/SINAPI tipicamente tem **3 colunas de preço unitário lado a lad
 3. **TOTAL UNITÁRIO** (= MAT + MO) — sempre presente (ex: "R$ 2.975,86" ou "R$ 1.924,57")
 
 → Você DEVE extrair os 3 valores separadamente quando aparecerem.
-→ Se só houver 1 coluna unitária, considere que é apenas o `unit_value` e mat=0, mo=0.
+→ Se só houver 1 coluna unitária, considere que é apenas o unit_value e mat=0, mo=0.
 → Se MAT for vazio/traço, use 0. Se MO for vazio/traço, use 0.
 → Sempre garanta: unit_value ~= mat_unit_value + mo_unit_value (tolerância de centavos).
 
