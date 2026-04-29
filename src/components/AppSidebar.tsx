@@ -61,6 +61,7 @@ import {
   Sparkles,
   ShoppingCart,
   BookOpen,
+  Briefcase,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -85,6 +86,7 @@ import { ManageMacrosDialog } from "@/components/ManageMacrosDialog";
 import { ManageQuadrasDialog } from "@/components/ManageQuadrasDialog";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
+import { ProfessionsManagementDialog } from "@/components/professions/ProfessionsManagementDialog";
 import obraMapLogoDark from "@/assets/obramap-logo-new.png";
 import obraMapLogoLight from "@/assets/obramap-logo-light.png";
 
@@ -166,6 +168,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const [linkPortfolioOpen, setLinkPortfolioOpen] = useState(false);
   const [macrosDialogOpen, setMacrosDialogOpen] = useState(false);
   const [quadrasDialogOpen, setQuadrasDialogOpen] = useState(false);
+  const [professionsDialogOpen, setProfessionsDialogOpen] = useState(false);
   const [companyModules, setCompanyModules] = useState<CompanyModule[]>([]);
   const [devModuleDialog, setDevModuleDialog] = useState<CompanyModule | null>(null);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains('dark'));
@@ -537,6 +540,15 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setProfessionsDialogOpen(true)}
+                    className="w-full justify-start gap-3 px-3 py-3 rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-150"
+                  >
+                    <Briefcase className="h-5 w-5 shrink-0" />
+                    <span className="text-sm font-medium">Cadastro de Profissões</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 {(isAdmin || isCompanyAdmin) && canAccessManagement("usuarios") && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
@@ -633,6 +645,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
 
       <SettingsDialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen} />
       <ProjectSettingsDialog open={projectSettingsOpen} onOpenChange={setProjectSettingsOpen} />
+      <ProfessionsManagementDialog open={professionsDialogOpen} onOpenChange={setProfessionsDialogOpen} />
 
       <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">

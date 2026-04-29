@@ -8,6 +8,8 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { groupProfessionsByCategory, findProfession } from "@/data/professionsCatalog";
+import { useProfessions } from "@/hooks/useProfessions";
+import { useEmployees } from "@/hooks/useEmployees";
 import type { DiaryWorker } from "@/hooks/useDiaryWorkers";
 
 interface ContractorContract {
@@ -54,7 +56,24 @@ export function AddDiaryWorkerDialog({
     setNotes(worker?.notes || "");
   });
 
-  const grouped = groupProfessionsByCategory();
+  // Catálogos dinâmicos (com fallback para hardcoded se vazio)
+  const { professions: dbProfessions, groupedByCategory } = useProfessions({ onlyActive: true });
+  const { employees, internalContractId, ensureInternalContract } = useEmployees({ onlyActive: true });
+  const useDynamic = dbProfessions.length > 0;
+  const grouped = useDynamic
+    ? groupedByCategory().map(([cat, list]) => [cat, list.map(p => ({ name: p.name, type: p.worker_type }))] as const)
+    : groupProfessionsByCategory().map(([cat, list]) => [cat, list.map(p => ({ name: p.name, type: p.type }))] as const);
+
+  const handlePickEmployee = async (empId: string) => {
+    const e = employees.find(x => x.id === empId);
+    if (!e) return;
+    setName(e.name);
+    if (e.profession) setProfession(e.profession);
+    if (e.cost_per_hour != null) setCostPerHour(String(e.cost_per_hour));
+    // Vincula ao contrato interno
+    const cid = internalContractId || (await ensureInternalContract());
+    if (cid) setContractorId(cid);
+  };
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -67,8 +86,10 @@ export function AddDiaryWorkerDialog({
     }
     setSaving(true);
     try {
-      const prof = findProfession(profession);
-      const workerType = prof?.type || "professional";
+      // worker_type a partir do catálogo dinâmico ou fallback
+      const dynProf = dbProfessions.find(p => p.name === profession);
+      const fallbackProf = findProfession(profession);
+      const workerType = dynProf?.worker_type || fallbackProf?.type || "professional";
       const payload: any = {
         worker_name: name.trim(),
         profession,
@@ -117,6 +138,23 @@ export function AddDiaryWorkerDialog({
         </DialogHeader>
 
         <div className="space-y-3">
+          {employees.length > 0 && !isEdit && (
+            <div>
+              <Label className="text-xs">Selecionar funcionário próprio (opcional)</Label>
+              <Select value={NONE} onValueChange={(v) => v !== NONE && handlePickEmployee(v)}>
+                <SelectTrigger><SelectValue placeholder="— preenche automaticamente —" /></SelectTrigger>
+                <SelectContent className="max-h-64">
+                  <SelectItem value={NONE}>— digitar manualmente —</SelectItem>
+                  {employees.map(e => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.name} {e.profession && <span className="text-muted-foreground text-xs">— {e.profession}</span>}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div>
             <Label className="text-xs">Nome *</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: João da Silva" />

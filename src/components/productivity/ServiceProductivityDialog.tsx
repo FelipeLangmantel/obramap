@@ -30,6 +30,7 @@ import {
   findProfession,
   PROFESSIONS_CATALOG,
 } from '@/data/professionsCatalog';
+import { useProfessions } from '@/hooks/useProfessions';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -108,7 +109,16 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
   );
   const [picker, setPicker] = useState<string>('');
 
-  const grouped = useMemo(() => groupProfessionsByCategory(), []);
+  // Catálogo dinâmico (com fallback para hardcoded se vazio)
+  const { professions: dbProfessions, groupedByCategory } = useProfessions({ onlyActive: true });
+  const grouped = useMemo(() => {
+    if (dbProfessions.length > 0) {
+      return groupedByCategory().map(([cat, list]) =>
+        [cat, list.map(p => ({ name: p.name, type: p.worker_type, category: cat }))] as const
+      );
+    }
+    return groupProfessionsByCategory();
+  }, [dbProfessions, groupedByCategory]);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,7 +170,8 @@ export function ServiceProductivityDialog({ service, existingProductivity, onClo
   const addRoleFromPicker = (name: string) => {
     if (!name) return;
     if (team.some((t) => t.role_name.toLowerCase() === name.toLowerCase())) return;
-    const cat = findProfession(name);
+    const dyn = dbProfessions.find(p => p.name.toLowerCase() === name.toLowerCase());
+    const cat = dyn ? { type: dyn.worker_type } : findProfession(name);
     setTeam((prev) => [
       ...prev,
       {
