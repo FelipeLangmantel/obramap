@@ -64,7 +64,11 @@ export function LogoUploader({
     setUploading(true);
     try {
       const isPng = file.type.includes("png");
-      const comprimido = await comprimirImagem(file, 600, 0.85);
+      const comprimido = await compressImageSafe(file, {
+        maxSide: 600,
+        quality: 0.85,
+        mime: isPng ? "image/png" : "image/jpeg",
+      });
       const ext = isPng ? "png" : "jpg";
       const path = `${pathPrefix}/logo_${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
