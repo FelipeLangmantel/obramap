@@ -10,6 +10,7 @@ import { Camera, Loader2, Trash2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { compressImageSafe } from "@/lib/compressImage";
+import { LowMemoryCameraDialog } from "./LowMemoryCameraDialog";
 
 interface FotoServico {
   id: string;
@@ -55,8 +56,8 @@ export function DiaryItemPhotoButton({
   const [selectedHouse, setSelectedHouse] = useState<string>(
     houseIds.length === 1 ? String(houseIds[0]) : "all"
   );
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const [lowMemoryCameraOpen, setLowMemoryCameraOpen] = useState(false);
 
   const refreshCount = async () => {
     const { count: c } = await supabase
@@ -77,8 +78,10 @@ export function DiaryItemPhotoButton({
       .order("created_at", { ascending: true });
     if (!data) { setFotos([]); setLoading(false); return; }
     const withUrl = await Promise.all(data.map(async (f: any) => {
-      const { data: signed } = await supabase.storage
-        .from("diary-photos").createSignedUrl(f.storage_path, 60 * 60);
+      const { data: signed } = await (supabase.storage
+        .from("diary-photos") as any).createSignedUrl(f.storage_path, 60 * 60, {
+          transform: { width: 700, resize: "contain", quality: 70 },
+        });
       return { ...f, url: signed?.signedUrl || "" } as FotoServico;
     }));
     setFotos(withUrl);
@@ -98,13 +101,14 @@ export function DiaryItemPhotoButton({
     let uploaded = 0;
     try {
       for (const arquivo of arquivos) {
-        const blob = await compressImageSafe(arquivo, { maxSide: 1280, quality: 0.7 });
+        const payload = await compressImageSafe(arquivo, { maxSide: 1024, quality: 0.7 });
         const safe = arquivo.name.replace(/[^a-zA-Z0-9.]/g, "_");
         const houseSeg = houseNum != null ? `casa-${houseNum}/` : "geral/";
-        const path = `${companyId}/${diaryEntryId}/${diaryItemId}/${houseSeg}${Date.now()}_${safe}`;
+        const extSafeName = safe.replace(/\.[^.]+$/, ".jpg");
+        const path = `${companyId}/${diaryEntryId}/${diaryItemId}/${houseSeg}${Date.now()}_${extSafeName}`;
         const { error: upErr } = await supabase.storage
           .from("diary-photos")
-          .upload(path, blob, { contentType: "image/jpeg", upsert: false });
+          .upload(path, payload, { contentType: "image/jpeg", upsert: false });
         if (upErr) throw upErr;
         const { error: dbErr } = await supabase.from("diary_photos").insert({
           diary_entry_id: diaryEntryId,
@@ -142,6 +146,38 @@ export function DiaryItemPhotoButton({
       toast.success("Foto removida.");
     } catch {
       toast.error("Erro ao remover foto.");
+    }
+  };
+
+  const uploadCapturedPhoto = async (blob: Blob) => {
+    const houseNum = selectedHouse === "all" ? null : Number(selectedHouse);
+    setUploading(true);
+    try {
+      const houseSeg = houseNum != null ? `casa-${houseNum}/` : "geral/";
+      const path = `${companyId}/${diaryEntryId}/${diaryItemId}/${houseSeg}${Date.now()}_camera.jpg`;
+      const { error: upErr } = await supabase.storage
+        .from("diary-photos")
+        .upload(path, blob, { contentType: "image/jpeg", upsert: false });
+      if (upErr) throw upErr;
+      const { error: dbErr } = await supabase.from("diary_photos").insert({
+        diary_entry_id: diaryEntryId,
+        diary_item_id: diaryItemId,
+        storage_path: path,
+        legenda: null,
+        house_number: houseNum,
+      } as any);
+      if (dbErr) {
+        await supabase.storage.from("diary-photos").remove([path]);
+        throw dbErr;
+      }
+      await loadFotos();
+      await refreshCount();
+      onChanged?.();
+      toast.success("Foto anexada.");
+    } catch (err: any) {
+      toast.error("Erro: " + (err.message || ""));
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -202,7 +238,7 @@ export function DiaryItemPhotoButton({
               </div>
               <div className="flex gap-2">
                 <Button
-                  onClick={() => cameraInputRef.current?.click()}
+                  onClick={() => setLowMemoryCameraOpen(true)}
                   disabled={uploading || disabled}
                   className="h-10"
                 >
@@ -221,14 +257,6 @@ export function DiaryItemPhotoButton({
                   Galeria
                 </Button>
               </div>
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                capture="environment"
-                className="hidden"
-                onChange={handleUpload}
-              />
               <input
                 ref={galleryInputRef}
                 type="file"
@@ -280,6 +308,12 @@ export function DiaryItemPhotoButton({
           </div>
         </DialogContent>
       </Dialog>
+      <LowMemoryCameraDialog
+        open={lowMemoryCameraOpen}
+        onOpenChange={setLowMemoryCameraOpen}
+        onCapture={uploadCapturedPhoto}
+        disabled={uploading || disabled}
+      />
     </>
   );
 }
