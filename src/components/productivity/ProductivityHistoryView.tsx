@@ -450,9 +450,10 @@ export function ProductivityHistoryView() {
       <Alert>
         <Info className="h-4 w-4" />
         <AlertDescription className="text-xs">
-          Cálculo: <code>HH = trabalhadores × {DAILY_HOURS}h</code>. A produção é
-          distribuída uniformemente pelos dias do período de medição. Para resultados
-          mais precisos, lance produção em períodos curtos (preferencialmente diários).
+          <strong>Real</strong>: usa horas individuais lançadas em "Mão de obra do dia"
+          do RDO + vínculo trabalhador→serviço. <strong>Estimado</strong>: fallback
+          <code> HH = trabalhadores × {DAILY_HOURS}h</code> (sem vínculo individual).
+          A produção é distribuída uniformemente pelos dias do período de medição.
         </AlertDescription>
       </Alert>
     </div>
