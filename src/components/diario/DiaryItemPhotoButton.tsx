@@ -97,7 +97,7 @@ export function DiaryItemPhotoButton({
     let uploaded = 0;
     try {
       for (const arquivo of arquivos) {
-        const blob = await comprimirImagem(arquivo, 1024, 0.7);
+        const blob = await compressImageSafe(arquivo, { maxSide: 1280, quality: 0.7 });
         const safe = arquivo.name.replace(/[^a-zA-Z0-9.]/g, "_");
         const houseSeg = houseNum != null ? `casa-${houseNum}/` : "geral/";
         const path = `${companyId}/${diaryEntryId}/${diaryItemId}/${houseSeg}${Date.now()}_${safe}`;
