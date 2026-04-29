@@ -242,12 +242,31 @@ export function ContractServicesTable({
                         </Badge>
                       )}
                     </TableCell>
+                    {hasPleProject && (
+                      <TableCell className="text-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-[11px] gap-1.5"
+                          disabled={!isEditing}
+                          onClick={() => setLinkDialog({
+                            macroId: service.macro_id,
+                            macroName: service.macro_name,
+                            scopeId: service.scope_id,
+                            scopeName: service.scope_name,
+                          })}
+                        >
+                          <Link2 className="h-3 w-3" />
+                          Vincular PLE
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               ))}
               {services.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={hasPleProject ? 8 : 7} className="text-center py-8 text-muted-foreground">
                     Nenhum serviço encontrado. Cadastre serviços em "Etapas e Serviços" primeiro.
                   </TableCell>
                 </TableRow>
@@ -256,6 +275,22 @@ export function ContractServicesTable({
           </Table>
         </div>
       </CardContent>
+
+      {linkDialog && currentProject && (
+        <LinkPleItemsDialog
+          open={!!linkDialog}
+          onClose={() => setLinkDialog(null)}
+          projectId={currentProject.id}
+          totalHouses={currentProject.totalHouses || (currentProject.houses?.length ?? 1)}
+          macroId={linkDialog.macroId}
+          macroName={linkDialog.macroName}
+          scopeId={linkDialog.scopeId}
+          scopeName={linkDialog.scopeName}
+          onConfirm={(totalRevenueCalc) => {
+            updateServiceValue(linkDialog.macroId, linkDialog.scopeId, totalRevenueCalc);
+          }}
+        />
+      )}
     </Card>
   );
 }
