@@ -759,7 +759,7 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                                   />
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-3" align="start">
-                                  <div className="grid grid-cols-6 gap-2">
+                                  <div className="grid grid-cols-6 gap-2 max-h-64 overflow-y-auto pr-1">
                                     {DEFAULT_MACRO_COLORS.map((color) => (
                                       <button
                                         key={color}
@@ -772,7 +772,7 @@ export function ManageMacrosDialog({ open, onOpenChange }: ManageMacrosDialogPro
                                       />
                                     ))}
                                   </div>
-                                  <p className="text-xs text-muted-foreground mt-2 text-center">24 cores disponíveis</p>
+                                  <p className="text-xs text-muted-foreground mt-2 text-center">{DEFAULT_MACRO_COLORS.length} cores disponíveis</p>
                                 </PopoverContent>
                               </Popover>
                               <Input
