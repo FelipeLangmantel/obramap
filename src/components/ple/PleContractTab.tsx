@@ -182,15 +182,37 @@ export function PleContractTab(props: PleDataReturn) {
 
   const stats = useMemo(() => {
     const totalContractual = events.reduce((s, e) => s + e.quantity * e.unit_value, 0);
+    const totalMat = events.reduce((s, e) => s + e.quantity * (e.mat_unit_value || 0), 0);
+    const totalMo = events.reduce((s, e) => s + e.quantity * (e.mo_unit_value || 0), 0);
     return {
       totalStages: stages.length,
       totalSubstages: groups.filter(g => g.parent_id).length,
       totalEvents: events.length,
       totalContractual,
+      totalMat,
+      totalMo,
       ungroupedCount: ungroupedEvents.length,
       mappedCount: events.filter(e => e.obramap_scope_id).length,
     };
   }, [groups, events, stages, ungroupedEvents]);
+
+  // Lista de subetapas (com nome do pai) — usada no seletor "mover para"
+  const substageOptions = useMemo(() => {
+    const opts: { id: string; label: string }[] = [];
+    stages.forEach(stage => {
+      (substagesByStage.get(stage.id) || []).forEach(sub => {
+        opts.push({ id: sub.id, label: `${stage.code} ${stage.name} › ${sub.code} ${sub.name}` });
+      });
+    });
+    return opts;
+  }, [stages, substagesByStage]);
+
+  const moveEventToGroup = async (eventId: string, groupId: string) => {
+    if (!requireEdit()) return;
+    if (!groupId || groupId === "__none__") return;
+    await updateEvent(eventId, { group_id: groupId } as any);
+    toast.success("Item movido para a subetapa");
+  };
 
   const toggleStage = (id: string) => {
     setExpandedStages(prev => {
