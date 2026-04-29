@@ -1108,10 +1108,18 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     newHouseIds: number[];
     newPercent: number;
     newObs: string;
+    housePercents?: Record<number, number>;
   }) => {
-    const { item, newHouseIds, newPercent, newObs } = params;
+    const { item, newHouseIds, newPercent, newObs, housePercents } = params;
 
-    // 1) Reverte o item antigo casa-a-casa
+    // Resolve o percentual a aplicar em cada casa: usa per-casa quando vier,
+    // caso contrário usa o valor único (newPercent) para todas.
+    const pctFor = (houseId: number) =>
+      housePercents && housePercents[houseId] != null
+        ? Number(housePercents[houseId])
+        : newPercent;
+
+    // 1) Reverte o item antigo casa-a-casa (sempre o percentual original do item)
     const revertMap: Record<number, number> = {};
     for (const houseId of item.house_ids) {
       const house = houses.find(h => h.id === houseId);
@@ -1123,13 +1131,19 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     }
     await updateBatchScopeProgress(item.house_ids, item.macro_id, item.scope_id, 100, revertMap);
 
+    // O diary_items grava UM percentual (representativo). Quando há valores
+    // por casa, salvamos a MÉDIA — o valor real por casa fica nas houses.
+    const avgPct = housePercents && newHouseIds.length > 0
+      ? Math.round(newHouseIds.reduce((s, id) => s + pctFor(id), 0) / newHouseIds.length)
+      : newPercent;
+
     // 2) Atualiza diary_items + production
     const { error: updErr } = await supabase
       .from("diary_items")
       .update({
         house_ids: newHouseIds,
         houses_count: newHouseIds.length,
-        percentual_executado: newPercent,
+        percentual_executado: avgPct,
         observacao: newObs || null,
       } as any)
       .eq("id", item.id);
@@ -1138,11 +1152,11 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     if (item.production_id) {
       await supabase
         .from("productions")
-        .update({ house_ids: newHouseIds, percentage: newPercent } as any)
+        .update({ house_ids: newHouseIds, percentage: avgPct } as any)
         .eq("id", item.production_id);
     }
 
-    // 3) Aplica o novo a partir do baseline já revertido
+    // 3) Aplica o novo a partir do baseline já revertido (per-house quando houver)
     const applyMap: Record<number, number> = {};
     for (const houseId of newHouseIds) {
       const house = houses.find(h => h.id === houseId);
@@ -1151,7 +1165,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       const hScope = hMacro?.scopes?.find((s: any) => s.id === item.scope_id);
       let baseline = hScope?.progress || 0;
       if (revertMap[houseId] !== undefined) baseline = revertMap[houseId];
-      applyMap[houseId] = Math.min(100, baseline + newPercent);
+      applyMap[houseId] = Math.min(100, baseline + pctFor(houseId));
     }
     await updateBatchScopeProgress(newHouseIds, item.macro_id, item.scope_id, 100, applyMap);
 
@@ -1307,7 +1321,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 </Button>
               )}
               <ClipboardList className="h-5 w-5 text-primary shrink-0" />
-              <h2 className="text-base sm:text-lg font-bold break-words min-w-0">
+              <h2 className="text-base sm:text-lg font-bold min-w-0 flex-1 truncate">
                 {entryId ? "Editar relatório" : "Novo relatório"}: {format(parseISO(entryDate), "dd/MM/yyyy")}
                 {numRelatorio != null && <span className="text-muted-foreground"> · n° {numRelatorio}</span>}
               </h2>
