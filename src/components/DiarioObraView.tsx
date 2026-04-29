@@ -855,7 +855,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         sessionStorage.setItem("obramap_diario_tab", JSON.stringify({ tab: "editor", selectedDate: entryDate }));
       } catch { /* noop */ }
       const params = new URLSearchParams({ entryId, companyId: company.id, date: entryDate, returnTo: "/dashboard" });
-      navigate(`/camera-capture?${params.toString()}`);
+      window.location.href = `/camera-capture?${params.toString()}`;
     } else {
       galleryInputRef.current?.click();
     }
