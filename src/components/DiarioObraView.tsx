@@ -1306,9 +1306,10 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       <OfflineBanner />
       {/* HEADER do RDO */}
       <div className="bg-card border rounded-lg p-3 sm:p-4 mb-4 w-full max-w-full min-w-0 overflow-hidden">
-        <div className="flex items-start justify-between gap-3 sm:gap-4 flex-wrap md:flex-nowrap min-w-0">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3 sm:gap-4 min-w-0">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
+            {/* Linha 1: voltar + ícone + título (sem badges para não comprimir) */}
+            <div className="flex items-center gap-2 mb-1 min-w-0">
               {onBack && (
                 <Button
                   variant="ghost"
@@ -1325,6 +1326,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 {entryId ? "Editar relatório" : "Novo relatório"}: {format(parseISO(entryDate), "dd/MM/yyyy")}
                 {numRelatorio != null && <span className="text-muted-foreground"> · n° {numRelatorio}</span>}
               </h2>
+            </div>
+            {/* Linha 2: status badges */}
+            <div className="flex items-center gap-1.5 mb-2 flex-wrap">
               {entryStatus === "finalizado" && (
                 <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">✅ Aprovado</Badge>
               )}
@@ -1386,7 +1390,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
               </button>
             )}
           </div>
-          <div className="flex gap-2 shrink-0 self-start flex-wrap w-full md:w-auto">
+          <div className="flex gap-2 shrink-0 self-start flex-wrap w-full lg:w-auto">
             {!isLocked && currentProject?.id && company?.id && (
               <ImportPreviousDayButton
                 projectId={currentProject.id}

@@ -101,12 +101,18 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate }:
   }, [items]);
 
   // ─── % do contrato lançado HOJE e ACUMULADO NA SEMANA ───
-  const { pctContratoHoje, pctContratoSemana } = useMemo(() => {
-    const computeContractPct = (list: DiaryItem[]) => {
+  const { pctContratoHoje, pctContratoSemana, semPesoCount, totalLancHoje } = useMemo(() => {
+    let semPeso = 0;
+    let totalHoje = 0;
+    const computeContractPct = (list: DiaryItem[], countMissing: boolean) => {
       if (!contractTotalValue || contractTotalValue <= 0) return null;
       let valor = 0;
       for (const it of list) {
         const unitValue = it.scope_id ? (unitValueByScope.get(it.scope_id) || 0) : 0;
+        if (countMissing) {
+          totalHoje += 1;
+          if (!unitValue) semPeso += 1;
+        }
         if (!unitValue) continue;
         const casas = it.house_ids?.length || 0;
         const pct = Math.min(100, Math.max(0, it.percentual_executado || 0)) / 100;
@@ -114,14 +120,15 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate }:
       }
       return (valor / contractTotalValue) * 100;
     };
-    return {
-      pctContratoHoje: computeContractPct(items),
-      pctContratoSemana: computeContractPct(weekItems),
-    };
+    const hoje = computeContractPct(items, true);
+    const semana = computeContractPct(weekItems, false);
+    return { pctContratoHoje: hoje, pctContratoSemana: semana, semPesoCount: semPeso, totalLancHoje: totalHoje };
   }, [items, weekItems, unitValueByScope, contractTotalValue]);
 
   const fmtPct = (v: number | null) =>
     v == null ? "—" : v < 0.01 ? "<0,01%" : `${v.toFixed(2)}%`;
+
+  const semContrato = !contractTotalValue || contractTotalValue <= 0;
 
   if (items.length === 0) {
     return (
@@ -181,6 +188,16 @@ export function RdoProductionCharts({ items, totalCasas, projectId, entryDate }:
             </p>
           </div>
         </div>
+
+        {(semContrato || (semPesoCount > 0 && totalLancHoje > 0)) && (
+          <div className="rounded-md border border-amber-300/60 bg-amber-50 dark:bg-amber-950/20 px-3 py-2 text-[11px] text-amber-800 dark:text-amber-200">
+            {semContrato ? (
+              <>⚠️ Valor total do contrato não definido. Preencha em <strong>Contrato da Obra</strong> para habilitar o % do contrato.</>
+            ) : (
+              <>⚠️ {semPesoCount} de {totalLancHoje} serviço(s) lançado(s) hoje sem valor unitário no contrato (PLE) — não entram no cálculo. Ajuste em <strong>Contrato da Obra</strong>.</>
+            )}
+          </div>
+        )}
 
         {/* Gráfico de barras: Casas por etapa */}
         <div>
