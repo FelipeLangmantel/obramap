@@ -2358,9 +2358,52 @@ export type Database = {
           },
         ]
       }
+      diary_item_workers: {
+        Row: {
+          company_id: string
+          created_at: string
+          diary_item_id: string
+          diary_worker_id: string
+          hours_allocated: number | null
+          id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          diary_item_id: string
+          diary_worker_id: string
+          hours_allocated?: number | null
+          id?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          diary_item_id?: string
+          diary_worker_id?: string
+          hours_allocated?: number | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_item_workers_diary_item_id_fkey"
+            columns: ["diary_item_id"]
+            isOneToOne: false
+            referencedRelation: "diary_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diary_item_workers_diary_worker_id_fkey"
+            columns: ["diary_worker_id"]
+            isOneToOne: false
+            referencedRelation: "diary_workers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       diary_items: {
         Row: {
           client_uuid: string | null
+          contractor_contract_id: string | null
           created_at: string | null
           created_by: string | null
           deleted_at: string | null
@@ -2388,6 +2431,7 @@ export type Database = {
         }
         Insert: {
           client_uuid?: string | null
+          contractor_contract_id?: string | null
           created_at?: string | null
           created_by?: string | null
           deleted_at?: string | null
@@ -2415,6 +2459,7 @@ export type Database = {
         }
         Update: {
           client_uuid?: string | null
+          contractor_contract_id?: string | null
           created_at?: string | null
           created_by?: string | null
           deleted_at?: string | null
@@ -2800,6 +2845,65 @@ export type Database = {
           },
           {
             foreignKeyName: "diary_views_diary_entry_id_fkey"
+            columns: ["diary_entry_id"]
+            isOneToOne: false
+            referencedRelation: "diary_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diary_workers: {
+        Row: {
+          company_id: string
+          contractor_contract_id: string | null
+          cost_per_hour: number | null
+          created_at: string
+          created_by: string | null
+          diary_entry_id: string
+          hours_worked: number
+          id: string
+          notes: string | null
+          profession: string
+          project_id: string
+          updated_at: string
+          worker_name: string
+          worker_type: string
+        }
+        Insert: {
+          company_id: string
+          contractor_contract_id?: string | null
+          cost_per_hour?: number | null
+          created_at?: string
+          created_by?: string | null
+          diary_entry_id: string
+          hours_worked?: number
+          id?: string
+          notes?: string | null
+          profession: string
+          project_id: string
+          updated_at?: string
+          worker_name: string
+          worker_type?: string
+        }
+        Update: {
+          company_id?: string
+          contractor_contract_id?: string | null
+          cost_per_hour?: number | null
+          created_at?: string
+          created_by?: string | null
+          diary_entry_id?: string
+          hours_worked?: number
+          id?: string
+          notes?: string | null
+          profession?: string
+          project_id?: string
+          updated_at?: string
+          worker_name?: string
+          worker_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diary_workers_diary_entry_id_fkey"
             columns: ["diary_entry_id"]
             isOneToOne: false
             referencedRelation: "diary_entries"
