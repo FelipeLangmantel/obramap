@@ -55,7 +55,8 @@ export function DiaryItemPhotoButton({
   const [selectedHouse, setSelectedHouse] = useState<string>(
     houseIds.length === 1 ? String(houseIds[0]) : "all"
   );
-  const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const refreshCount = async () => {
     const { count: c } = await supabase
@@ -199,20 +200,39 @@ export function DiaryItemPhotoButton({
                   </SelectContent>
                 </Select>
               </div>
-              <Button
-                onClick={() => inputRef.current?.click()}
-                disabled={uploading || disabled}
-                className="h-10"
-              >
-                {uploading
-                  ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                  : <Camera className="h-4 w-4 mr-1" />}
-                Anexar foto(s)
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => cameraInputRef.current?.click()}
+                  disabled={uploading || disabled}
+                  className="h-10"
+                >
+                  {uploading
+                    ? <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                    : <Camera className="h-4 w-4 mr-1" />}
+                  Tirar foto
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => galleryInputRef.current?.click()}
+                  disabled={uploading || disabled}
+                  className="h-10"
+                >
+                  Galeria
+                </Button>
+              </div>
               <input
-                ref={inputRef}
+                ref={cameraInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
+                capture="environment"
+                className="hidden"
+                onChange={handleUpload}
+              />
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
                 multiple
                 className="hidden"
                 onChange={handleUpload}
