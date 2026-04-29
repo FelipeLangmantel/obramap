@@ -247,7 +247,7 @@ export function ContractServicesTable({
                     {hasPleProject && (
                       <TableCell className="text-center">
                         <Button
-                          variant="outline"
+                          variant={service.ple_linked_count ? "default" : "outline"}
                           size="sm"
                           className="h-7 text-[11px] gap-1.5"
                           disabled={!isEditing}
@@ -259,7 +259,9 @@ export function ContractServicesTable({
                           })}
                         >
                           <Link2 className="h-3 w-3" />
-                          Vincular PLE
+                          {service.ple_linked_count
+                            ? `${service.ple_linked_count} ${service.ple_linked_count === 1 ? "item" : "itens"}`
+                            : "Vincular PLE"}
                         </Button>
                       </TableCell>
                     )}
