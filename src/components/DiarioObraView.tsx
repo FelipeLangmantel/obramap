@@ -1307,7 +1307,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                 </Button>
               )}
               <ClipboardList className="h-5 w-5 text-primary shrink-0" />
-              <h2 className="text-base sm:text-lg font-bold break-words min-w-0">
+              <h2 className="text-base sm:text-lg font-bold min-w-0 flex-1 truncate">
                 {entryId ? "Editar relatório" : "Novo relatório"}: {format(parseISO(entryDate), "dd/MM/yyyy")}
                 {numRelatorio != null && <span className="text-muted-foreground"> · n° {numRelatorio}</span>}
               </h2>
