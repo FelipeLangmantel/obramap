@@ -24,46 +24,49 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   item: EditableDiaryItem | null;
-  /**
-   * Casas do projeto agrupadas por quadra (com NOME real da quadra, não UUID).
-   * Use o mesmo `housesGroupedByQuadra` que o fluxo principal de lançamento usa.
-   */
   housesGrouped: { name: string; houses: { id: number }[] }[];
-  /**
-   * Devolve o progresso atual (0–100) da casa para o macro/escopo deste item.
-   * Usado para esconder casas já finalizadas e mostrar o % atual no botão.
-   */
   getHouseProgress: (houseId: number, macroId: string, scopeId: string) => number;
   /**
-   * Aplica a alteração: reverte o item antigo e aplica o novo.
+   * Aplica a alteração: reverte o item antigo e aplica o novo. Quando
+   * `housePercents` é fornecido, cada casa recebe o seu próprio percentual.
+   * Caso contrário usa `newPercent` para todas as casas selecionadas.
    */
   onApply: (params: {
     item: EditableDiaryItem;
     newHouseIds: number[];
     newPercent: number;
     newObs: string;
+    housePercents?: Record<number, number>;
   }) => Promise<void>;
 }
 
 /**
- * Dialog para corrigir um lançamento ANTES de enviar para aprovação.
- * Permite ajustar percentual e seleção de casas. Mantém o padrão visual
- * do seletor de casas usado no fluxo principal de lançamento (cores
- * âmbar para em andamento, esmeralda para 100%, % visível no card).
+ * Edita um lançamento ANTES da aprovação. Permite ajustar:
+ *  • a seleção de casas (mantendo o padrão visual do fluxo principal),
+ *  • o percentual de cada casa individualmente,
+ *  • a observação.
  *
- * Casas que já estão 100% executadas (descontando o próprio lançamento
- * em edição) ficam desabilitadas — não podem ser re-selecionadas.
+ * Casas 100% por OUTROS lançamentos ficam bloqueadas. Casas que pertencem
+ * a este item podem ser desmarcadas mesmo que estejam em 100% (porque
+ * desmarcar é justamente reverter este lançamento na casa).
  */
 export function EditDiaryItemDialog({ open, onOpenChange, item, housesGrouped, getHouseProgress, onApply }: Props) {
   const [selected, setSelected] = useState<number[]>([]);
-  const [percent, setPercent] = useState(100);
+  /** Percentual aplicado por casa selecionada. */
+  const [percents, setPercents] = useState<Record<number, number>>({});
+  /** Percentual "global" usado como default ao selecionar uma casa nova. */
+  const [globalPercent, setGlobalPercent] = useState(100);
   const [obs, setObs] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (item) {
-      setSelected([...item.house_ids].sort((a, b) => a - b));
-      setPercent(item.percentual_executado);
+      const ids = [...item.house_ids].sort((a, b) => a - b);
+      setSelected(ids);
+      const init: Record<number, number> = {};
+      ids.forEach(id => { init[id] = item.percentual_executado; });
+      setPercents(init);
+      setGlobalPercent(item.percentual_executado);
       setObs(item.observacao || "");
     }
   }, [item]);
@@ -75,11 +78,7 @@ export function EditDiaryItemDialog({ open, onOpenChange, item, housesGrouped, g
     }));
   }, [housesGrouped]);
 
-  /**
-   * Para cada casa devolvemos o progresso atual já descontando o próprio
-   * lançamento que está sendo editado. Isso evita que uma casa apareça
-   * como "100%" só porque ela faz parte deste lançamento.
-   */
+  /** Progresso atual da casa descontando o próprio lançamento em edição. */
   const baselineProgressFor = (houseId: number) => {
     if (!item) return 0;
     const raw = getHouseProgress(houseId, item.macro_id, item.scope_id);
@@ -90,12 +89,41 @@ export function EditDiaryItemDialog({ open, onOpenChange, item, housesGrouped, g
   };
 
   const toggleHouse = (id: number) => {
-    // Permite desmarcar uma casa que pertence a este lançamento (mesmo se baseline+pct=100).
-    // Bloqueia adicionar uma casa que JÁ está 100% por outros lançamentos.
     if (!item) return;
     const isInItem = item.house_ids.includes(id);
-    if (!isInItem && baselineProgressFor(id) >= 100) return;
-    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id].sort((a, b) => a - b));
+    const baseline = baselineProgressFor(id);
+    if (!isInItem && baseline >= 100) return;
+    setSelected(prev => {
+      if (prev.includes(id)) {
+        const next = prev.filter(x => x !== id);
+        setPercents(p => { const n = { ...p }; delete n[id]; return n; });
+        return next;
+      } else {
+        const maxAllowed = Math.max(1, 100 - baseline);
+        const def = Math.min(globalPercent, maxAllowed);
+        setPercents(p => ({ ...p, [id]: def }));
+        return [...prev, id].sort((a, b) => a - b);
+      }
+    });
+  };
+
+  const updateHousePercent = (id: number, value: number) => {
+    const baseline = baselineProgressFor(id);
+    const max = Math.max(1, 100 - baseline);
+    const v = Math.max(1, Math.min(max, Math.round(value)));
+    setPercents(p => ({ ...p, [id]: v }));
+  };
+
+  const applyGlobalToAll = () => {
+    setPercents(prev => {
+      const n: Record<number, number> = {};
+      selected.forEach(id => {
+        const baseline = baselineProgressFor(id);
+        const max = Math.max(1, 100 - baseline);
+        n[id] = Math.min(globalPercent, max);
+      });
+      return n;
+    });
   };
 
   const handleSave = async () => {
@@ -104,13 +132,22 @@ export function EditDiaryItemDialog({ open, onOpenChange, item, housesGrouped, g
       toast.error("Selecione ao menos uma casa.");
       return;
     }
-    if (percent < 1 || percent > 100) {
-      toast.error("Percentual deve estar entre 1 e 100.");
-      return;
+    for (const id of selected) {
+      const p = percents[id];
+      if (!p || p < 1 || p > 100) {
+        toast.error(`Percentual inválido na casa ${String(id).padStart(2, "0")}.`);
+        return;
+      }
     }
     setSaving(true);
     try {
-      await onApply({ item, newHouseIds: selected, newPercent: percent, newObs: obs });
+      await onApply({
+        item,
+        newHouseIds: selected,
+        newPercent: globalPercent,
+        newObs: obs,
+        housePercents: percents,
+      });
       toast.success("Lançamento atualizado.");
       onOpenChange(false);
     } catch (err: any) {
@@ -122,8 +159,6 @@ export function EditDiaryItemDialog({ open, onOpenChange, item, housesGrouped, g
 
   if (!item) return null;
 
-  // Mostra: casas que estão neste lançamento (sempre — para poder reduzir/remover)
-  // + casas com baseline < 100 (para poder adicionar). Esconde casas 100% por OUTROS.
   const groupedFiltered = grouped
     .map(g => ({
       ...g,
@@ -144,7 +179,7 @@ export function EditDiaryItemDialog({ open, onOpenChange, item, housesGrouped, g
           <div className="rounded-lg border p-3 bg-muted/30">
             <div className="text-sm font-medium">{item.macro_name} · {item.scope_name}</div>
             <div className="text-xs text-muted-foreground mt-1">
-              {item.house_ids.length} casa(s) — {item.percentual_executado}% atual
+              {item.house_ids.length} casa(s) · {item.percentual_executado}% original
             </div>
           </div>
 
@@ -165,7 +200,8 @@ export function EditDiaryItemDialog({ open, onOpenChange, item, housesGrouped, g
                     const isSelected = selected.includes(id);
                     const baseline = baselineProgressFor(id);
                     const isInThisItem = item.house_ids.includes(id);
-                    const liveTotal = Math.min(100, baseline + (isSelected ? percent : 0));
+                    const hp = percents[id];
+                    const liveTotal = Math.min(100, baseline + (isSelected ? (hp || 0) : 0));
                     const isFullByOthers = !isInThisItem && baseline >= 100;
                     return (
                       <Button
@@ -188,7 +224,7 @@ export function EditDiaryItemDialog({ open, onOpenChange, item, housesGrouped, g
                         <span className="text-xs font-bold leading-tight">{String(id).padStart(2, "0")}</span>
                         {isSelected ? (
                           <span className="text-[9px] font-medium leading-tight text-primary">
-                            {liveTotal}%
+                            +{hp || 0}%
                           </span>
                         ) : baseline > 0 && baseline < 100 ? (
                           <span className="text-[9px] font-medium leading-tight text-amber-600 dark:text-amber-400">
@@ -208,18 +244,65 @@ export function EditDiaryItemDialog({ open, onOpenChange, item, housesGrouped, g
             </Badge>
           </div>
 
+          {/* Slider global — atalho para aplicar o mesmo % em todas as casas */}
           <div className="space-y-2 rounded-lg border p-3 bg-muted/30">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Percentual executado:</span>
-              <span className="text-2xl font-bold text-primary">{percent}%</span>
+              <span className="text-xs text-muted-foreground">Percentual padrão (atalho):</span>
+              <span className="text-xl font-bold text-primary">{globalPercent}%</span>
             </div>
-            <Slider min={10} max={100} step={10} value={[percent]} onValueChange={v => setPercent(v[0])} />
-            <Input
-              type="number" min={1} max={100} value={percent}
-              onChange={e => setPercent(Math.max(1, Math.min(100, Number(e.target.value) || 0)))}
-              className="h-9"
-            />
+            <Slider min={10} max={100} step={10} value={[globalPercent]}
+              onValueChange={v => setGlobalPercent(v[0])} />
+            <div className="flex gap-2">
+              <Input
+                type="number" min={1} max={100} value={globalPercent}
+                onChange={e => setGlobalPercent(Math.max(1, Math.min(100, Number(e.target.value) || 0)))}
+                className="h-9"
+              />
+              <Button type="button" variant="outline" className="h-9 shrink-0"
+                onClick={applyGlobalToAll} disabled={selected.length === 0}>
+                Aplicar a todas
+              </Button>
+            </div>
           </div>
+
+          {/* Editor individual — uma linha por casa selecionada */}
+          {selected.length > 0 && (
+            <div className="rounded-lg border p-3 space-y-2">
+              <div className="text-xs font-semibold text-muted-foreground">
+                Percentual por casa
+              </div>
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {selected.map(id => {
+                  const baseline = baselineProgressFor(id);
+                  const max = Math.max(1, 100 - baseline);
+                  const v = percents[id] ?? 0;
+                  const total = Math.min(100, baseline + v);
+                  return (
+                    <div key={id} className="flex items-center gap-2 text-xs">
+                      <Badge variant="outline" className="w-14 justify-center shrink-0">
+                        Casa {String(id).padStart(2, "0")}
+                      </Badge>
+                      <span className="text-muted-foreground tabular-nums w-20 shrink-0">
+                        base: {baseline}%
+                      </span>
+                      <Input
+                        type="number" min={1} max={max} value={v}
+                        onChange={e => updateHousePercent(id, Number(e.target.value) || 0)}
+                        className="h-8 w-20 text-right tabular-nums"
+                      />
+                      <span className="text-muted-foreground">%</span>
+                      <span className={cn(
+                        "ml-auto text-[11px] font-medium tabular-nums",
+                        total >= 100 ? "text-emerald-600" : "text-primary"
+                      )}>
+                        → {total}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">
