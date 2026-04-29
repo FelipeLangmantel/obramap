@@ -196,8 +196,6 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const rdo = useRdoData(entryId);
   const dWorkers = useDiaryWorkers(entryId);
   const [contractorContracts, setContractorContracts] = useState<Array<{ id: string; contractor_name: string; status: string; is_internal?: boolean }>>([]);
-  const canEditLockedDiary = isAdmin;
-  const editingDisabled = isLocked && !canEditLockedDiary;
 
   useEffect(() => {
     if (!currentProject?.id) { setContractorContracts([]); return; }
@@ -252,6 +250,8 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   // 'isAdmin' aqui significa "pode aprovar/corrigir sem restrição": admin global, coordenador global ou coordenador desta obra
   const isAdmin = canApproveObra;
   const isLocked = entryStatus === "finalizado" || statusAprovacao === "aprovado";
+  const canEditLockedDiary = isAdmin;
+  const editingDisabled = isLocked && !canEditLockedDiary;
 
   // Verifica se há solicitação de edição pendente para este RDO
   useEffect(() => {
