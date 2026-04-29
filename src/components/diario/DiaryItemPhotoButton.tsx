@@ -149,6 +149,27 @@ export function DiaryItemPhotoButton({
     }
   };
 
+  const handleRelink = async (foto: FotoServico, newHouseValue: string) => {
+    const newHouse = newHouseValue === "all" ? null : Number(newHouseValue);
+    if (newHouse === foto.house_number) return;
+    try {
+      const { error } = await supabase
+        .from("diary_photos")
+        .update({ house_number: newHouse } as any)
+        .eq("id", foto.id);
+      if (error) throw error;
+      setFotos(prev => prev.map(f => f.id === foto.id ? { ...f, house_number: newHouse } : f));
+      onChanged?.();
+      toast.success(
+        newHouse != null
+          ? `Foto vinculada à Casa ${String(newHouse).padStart(2, "0")}.`
+          : "Foto marcada como geral."
+      );
+    } catch (err: any) {
+      toast.error("Erro ao revincular: " + (err.message || ""));
+    }
+  };
+
   const uploadCapturedPhoto = async (blob: Blob) => {
     const houseNum = selectedHouse === "all" ? null : Number(selectedHouse);
     setUploading(true);
