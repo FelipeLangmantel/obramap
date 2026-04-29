@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Calculator, Download, Pencil, Lock, Unlock, AlertTriangle, FileText, Check, Home } from "lucide-react";
+import { Calculator, Download, Pencil, Lock, Unlock, AlertTriangle, FileText, Check, Home, FileSignature } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -17,200 +17,200 @@ interface ImportWeightsFromBudgetDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-interface BudgetSummary {
-  unitValue: number; // Valor unitário da casa
-  scopeCount: number;
-  macroCount: number;
+type ImportSource = "budget" | "contract";
+
+interface SourceSummary {
+  totalValue: number; // valor total considerado (orçamento unitário ou receita contrato)
+  scopeMatched: number;
+  totalsByScopeId: Record<string, number>;
   hasData: boolean;
 }
 
 export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeightsFromBudgetDialogProps) {
   const { currentProject, updateProject } = useConstruction();
   const [selectedMode, setSelectedMode] = useState<"automatic" | "manual">("manual");
-  const [budgetSummary, setBudgetSummary] = useState<BudgetSummary | null>(null);
+  const [selectedSource, setSelectedSource] = useState<ImportSource>("budget");
+  const [budgetSummary, setBudgetSummary] = useState<SourceSummary | null>(null);
+  const [contractSummary, setContractSummary] = useState<SourceSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
 
-  // Load budget summary when dialog opens
   useEffect(() => {
     if (open && currentProject) {
-      loadBudgetSummary();
-      setSelectedMode(currentProject.weightMode as "automatic" | "manual" || "manual");
+      loadSummaries();
+      setSelectedMode((currentProject.weightMode as "automatic" | "manual") || "manual");
     }
   }, [open, currentProject?.id]);
 
-  const loadBudgetSummary = async () => {
+  const loadSummaries = async () => {
     if (!currentProject) return;
     setIsLoading(true);
 
     try {
-      const { data: itemsData, error } = await supabase
-        .from("scope_items")
-        .select("scope_id, unit_value, quantity")
-        .eq("project_id", currentProject.id);
-
-      if (error) throw error;
-
-      // Only consider items whose scope_id exists in the current macros template
       const validScopeIds = new Set(
         currentProject.macrosTemplate.flatMap((m) => m.scopes.map((s) => s.id))
       );
 
-      const matchedItems = (itemsData || []).filter((i) => validScopeIds.has(i.scope_id));
+      // ---------- Orçamento (scope_items) ----------
+      const { data: itemsData } = await supabase
+        .from("scope_items")
+        .select("scope_id, unit_value, quantity")
+        .eq("project_id", currentProject.id);
 
-      const unitValue = matchedItems.reduce(
-        (sum, item) => sum + Number(item.unit_value || 0) * Number(item.quantity || 0),
-        0
-      );
-
-      const macroCount = currentProject.macrosTemplate.length;
-      const scopeCount = currentProject.macrosTemplate.reduce((acc, m) => acc + m.scopes.length, 0);
+      const budgetTotalsByScope: Record<string, number> = {};
+      let budgetTotal = 0;
+      let budgetMatched = 0;
+      (itemsData || [])
+        .filter((i) => validScopeIds.has(i.scope_id))
+        .forEach((i) => {
+          const v = Number(i.unit_value || 0) * Number(i.quantity || 0);
+          budgetTotalsByScope[i.scope_id] = (budgetTotalsByScope[i.scope_id] || 0) + v;
+          budgetTotal += v;
+          budgetMatched++;
+        });
 
       setBudgetSummary({
-        unitValue,
-        scopeCount,
-        macroCount,
-        hasData: unitValue > 0,
+        totalValue: budgetTotal,
+        scopeMatched: Object.keys(budgetTotalsByScope).length,
+        totalsByScopeId: budgetTotalsByScope,
+        hasData: budgetTotal > 0,
       });
+
+      // ---------- Contrato (project_contract_services) ----------
+      const { data: contractServices } = await supabase
+        .from("project_contract_services")
+        .select("scope_id, unit_revenue_value")
+        .eq("project_id", currentProject.id);
+
+      const contractTotalsByScope: Record<string, number> = {};
+      let contractTotal = 0;
+      (contractServices || [])
+        .filter((s) => validScopeIds.has(s.scope_id))
+        .forEach((s) => {
+          const v = Number(s.unit_revenue_value || 0);
+          if (v > 0) {
+            contractTotalsByScope[s.scope_id] =
+              (contractTotalsByScope[s.scope_id] || 0) + v;
+            contractTotal += v;
+          }
+        });
+
+      setContractSummary({
+        totalValue: contractTotal,
+        scopeMatched: Object.keys(contractTotalsByScope).length,
+        totalsByScopeId: contractTotalsByScope,
+        hasData: contractTotal > 0,
+      });
+
+      // Default source: contrato se houver dados, senão orçamento
+      if (contractTotal > 0) setSelectedSource("contract");
+      else setSelectedSource("budget");
     } catch (error) {
-      console.error("Error loading budget summary:", error);
-      setBudgetSummary({ unitValue: 0, scopeCount: 0, macroCount: 0, hasData: false });
+      console.error("Error loading summaries:", error);
+      setBudgetSummary({ totalValue: 0, scopeMatched: 0, totalsByScopeId: {}, hasData: false });
+      setContractSummary({ totalValue: 0, scopeMatched: 0, totalsByScopeId: {}, hasData: false });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleApply = async () => {
+  const applyAutomaticWeights = async (summary: SourceSummary, sourceLabel: string) => {
     if (!currentProject) return;
 
-    // Prevent double-click
-    if (isApplying) return;
+    if (!summary.hasData || summary.totalValue <= 0) {
+      toast.error(
+        `Não foi possível calcular os pesos a partir de ${sourceLabel}. Verifique se há valores cadastrados.`
+      );
+      return;
+    }
+
+    let totalWeight = 0;
+    const updatedMacros = currentProject.macrosTemplate.map((macro) => {
+      const updatedScopes = macro.scopes.map((scope) => {
+        const scopeTotal = summary.totalsByScopeId[scope.id] || 0;
+        const newWeight = Math.round(((scopeTotal / summary.totalValue) * 100) * 10) / 10;
+        totalWeight += newWeight;
+        return { ...scope, weight: newWeight };
+      });
+      return { ...macro, scopes: updatedScopes };
+    });
+
+    // Normaliza para 100% exato
+    if (totalWeight > 0) {
+      const factor = 100 / totalWeight;
+      let adjustedTotal = 0;
+      updatedMacros.forEach((macro) => {
+        macro.scopes.forEach((scope) => {
+          scope.weight = Math.round(scope.weight * factor * 10) / 10;
+          adjustedTotal += scope.weight;
+        });
+      });
+      const diff = Math.round((100 - adjustedTotal) * 10) / 10;
+      if (diff !== 0) {
+        outer: for (let i = updatedMacros.length - 1; i >= 0; i--) {
+          for (let j = updatedMacros[i].scopes.length - 1; j >= 0; j--) {
+            if (updatedMacros[i].scopes[j].weight > 0) {
+              updatedMacros[i].scopes[j].weight =
+                Math.round((updatedMacros[i].scopes[j].weight + diff) * 10) / 10;
+              break outer;
+            }
+          }
+        }
+      }
+    }
+
+    const finalSum =
+      Math.round(
+        updatedMacros.reduce(
+          (sum, m) => sum + m.scopes.reduce((s, sc) => s + sc.weight, 0),
+          0
+        ) * 10
+      ) / 10;
+    if (finalSum !== 100) {
+      toast.error(`Falha ao normalizar pesos (total = ${finalSum}%). Tente novamente.`);
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from("projects")
+      .update({
+        macros_template: updatedMacros as unknown as Json,
+        weight_mode: "automatic",
+      })
+      .eq("id", currentProject.id);
+
+    if (updateError) throw updateError;
+
+    updateProject(currentProject.id, {
+      macrosTemplate: updatedMacros,
+      weightMode: "automatic",
+    });
+
+    toast.success(
+      `Pesos importados de ${sourceLabel}: ${formatCurrency(summary.totalValue)} distribuídos em ${summary.scopeMatched} serviço(s).`
+    );
+  };
+
+  const handleApply = async () => {
+    if (!currentProject || isApplying) return;
     setIsApplying(true);
 
     try {
       if (selectedMode === "automatic") {
-        // Validate unit value
-        if (!budgetSummary?.hasData || budgetSummary.unitValue <= 0) {
-          toast.error(
-            "Não foi encontrado custo unitário válido. Verifique se os itens do orçamento estão vinculados aos serviços do projeto."
-          );
-          return;
+        if (selectedSource === "contract") {
+          await applyAutomaticWeights(contractSummary!, "Contrato");
+        } else {
+          await applyAutomaticWeights(budgetSummary!, "Orçamento");
         }
-
-        const { data: itemsData, error: itemsError } = await supabase
-          .from("scope_items")
-          .select("scope_id, unit_value, quantity")
-          .eq("project_id", currentProject.id);
-
-        if (itemsError) throw itemsError;
-
-        const validScopeIds = new Set(
-          currentProject.macrosTemplate.flatMap((m) => m.scopes.map((s) => s.id))
-        );
-
-        const matchedItems = (itemsData || []).filter((i) => validScopeIds.has(i.scope_id));
-
-        if (matchedItems.length === 0) {
-          toast.error(
-            "Nenhum item do orçamento está vinculado aos serviços atuais (IDs não correspondem). Ajuste o orçamento para usar os mesmos serviços do projeto."
-          );
-          return;
-        }
-
-        // Base value MUST be the unit value of the house (same calculation as Custos de Obra)
-        const unitValue = matchedItems.reduce(
-          (sum, item) => sum + Number(item.unit_value || 0) * Number(item.quantity || 0),
-          0
-        );
-
-        if (unitValue <= 0) {
-          toast.error("O valor unitário da casa é zero. Adicione valores aos itens primeiro.");
-          return;
-        }
-
-        // Totals per scope_id
-        const totalsByScopeId: Record<string, number> = {};
-        for (const item of matchedItems) {
-          const itemTotal = Number(item.unit_value || 0) * Number(item.quantity || 0);
-          totalsByScopeId[item.scope_id] = (totalsByScopeId[item.scope_id] || 0) + itemTotal;
-        }
-
-        // Calculate weights and normalize to exactly 100%
-        let totalWeight = 0;
-        const updatedMacros = currentProject.macrosTemplate.map((macro) => {
-          const updatedScopes = macro.scopes.map((scope) => {
-            const scopeTotal = totalsByScopeId[scope.id] || 0;
-            const newWeight = Math.round(((scopeTotal / unitValue) * 100) * 10) / 10; // 1 decimal
-            totalWeight += newWeight;
-            return { ...scope, weight: newWeight };
-          });
-          return { ...macro, scopes: updatedScopes };
-        });
-
-        // Normalize (handle rounding) to force exactly 100%
-        if (totalWeight > 0) {
-          const factor = 100 / totalWeight;
-          let adjustedTotal = 0;
-
-          updatedMacros.forEach((macro) => {
-            macro.scopes.forEach((scope) => {
-              scope.weight = Math.round(scope.weight * factor * 10) / 10;
-              adjustedTotal += scope.weight;
-            });
-          });
-
-          const diff = Math.round((100 - adjustedTotal) * 10) / 10;
-          if (diff !== 0) {
-            outer: for (let i = updatedMacros.length - 1; i >= 0; i--) {
-              for (let j = updatedMacros[i].scopes.length - 1; j >= 0; j--) {
-                if (updatedMacros[i].scopes[j].weight > 0) {
-                  updatedMacros[i].scopes[j].weight =
-                    Math.round((updatedMacros[i].scopes[j].weight + diff) * 10) / 10;
-                  break outer;
-                }
-              }
-            }
-          }
-        }
-
-        // Final validation
-        const finalSum = Math.round(
-          updatedMacros.reduce((sum, m) => sum + m.scopes.reduce((s, sc) => s + sc.weight, 0), 0) * 10
-        ) / 10;
-        if (finalSum !== 100) {
-          toast.error(`Falha ao normalizar pesos (total = ${finalSum}%). Tente novamente.`);
-          return;
-        }
-
-        // Persist in one write (prevents UI loops and is faster)
-        const { error: updateError } = await supabase
-          .from("projects")
-          .update({
-            macros_template: updatedMacros as unknown as Json,
-            weight_mode: "automatic",
-          })
-          .eq("id", currentProject.id);
-
-        if (updateError) throw updateError;
-
-        updateProject(currentProject.id, {
-          macrosTemplate: updatedMacros,
-          weightMode: "automatic",
-        });
-
-        toast.success(`Pesos importados com base no valor unitário: ${formatCurrency(unitValue)}`);
       } else {
         const { error: updateError } = await supabase
           .from("projects")
           .update({ weight_mode: "manual" })
           .eq("id", currentProject.id);
-
         if (updateError) throw updateError;
-
         updateProject(currentProject.id, { weightMode: "manual" });
         toast.success("Modo de pesos alterado para manual.");
       }
-
       onOpenChange(false);
     } catch (error) {
       console.error("Error applying weights:", error);
@@ -220,76 +220,143 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  };
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
   if (!currentProject) return null;
 
   const currentMode = currentProject.weightMode || "manual";
-  const hasBudget = budgetSummary?.hasData || false;
+  const activeSummary = selectedSource === "contract" ? contractSummary : budgetSummary;
+  const hasActiveData = activeSummary?.hasData || false;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] max-w-lg">
+      <DialogContent className="w-[95vw] max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calculator className="w-5 h-5" />
             Configurar Pesos das Etapas
           </DialogTitle>
           <DialogDescription>
-            Os pesos são calculados com base no custo por unidade habitacional
+            Importe os pesos a partir do orçamento ou do contrato — todos os cálculos se ajustam automaticamente.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Current Mode Indicator */}
+          {/* Modo atual */}
           <div className="flex items-center gap-2 p-3 rounded-lg bg-secondary/50 border border-border">
             <span className="text-sm text-muted-foreground">Modo atual:</span>
             <Badge variant={currentMode === "automatic" ? "default" : "secondary"}>
               {currentMode === "automatic" ? (
-                <>
-                  <Lock className="w-3 h-3 mr-1" />
-                  Pesos do Orçamento
-                </>
+                <><Lock className="w-3 h-3 mr-1" />Automático</>
               ) : (
-                <>
-                  <Pencil className="w-3 h-3 mr-1" />
-                  Pesos Manuais
-                </>
+                <><Pencil className="w-3 h-3 mr-1" />Manual</>
               )}
             </Badge>
           </div>
 
-          {/* Budget Summary - UNIT VALUE PER HOUSE */}
-          {isLoading ? (
-            <div className="p-4 text-center text-muted-foreground">Carregando dados do orçamento...</div>
-          ) : (
-            <div className="p-3 rounded-lg border border-border bg-card">
-              <div className="flex items-center gap-2 mb-2">
-                <Home className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Custo por Unidade Habitacional</span>
-              </div>
-              {hasBudget ? (
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div>
-                    <p className="text-lg font-semibold text-primary">{formatCurrency(budgetSummary!.unitValue)}</p>
-                    <p className="text-xs text-muted-foreground">Valor Unitário</p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-semibold">{budgetSummary!.macroCount}</p>
-                    <p className="text-xs text-muted-foreground">Etapas</p>
-                  </div>
-                  <div>
-                    <p className="text-lg font-semibold">{budgetSummary!.scopeCount}</p>
-                    <p className="text-xs text-muted-foreground">Serviços</p>
+          {/* Fonte de dados (apenas se modo automático) */}
+          {selectedMode === "automatic" && (
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Fonte dos valores</Label>
+              <RadioGroup
+                value={selectedSource}
+                onValueChange={(v) => setSelectedSource(v as ImportSource)}
+                className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+              >
+                {/* Orçamento */}
+                <div
+                  className={`flex items-start space-x-2 p-3 rounded-lg border transition-colors ${
+                    selectedSource === "budget"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:bg-secondary/30"
+                  } ${!budgetSummary?.hasData ? "opacity-60" : ""}`}
+                >
+                  <RadioGroupItem
+                    value="budget"
+                    id="src-budget"
+                    disabled={!budgetSummary?.hasData}
+                    className="mt-1"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <Label
+                      htmlFor="src-budget"
+                      className="flex items-center gap-1 font-medium cursor-pointer text-sm"
+                    >
+                      <Home className="w-3.5 h-3.5" />
+                      Orçamento
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Usa custo unitário da casa.
+                    </p>
+                    {budgetSummary?.hasData ? (
+                      <p className="text-xs font-mono text-primary mt-1">
+                        {formatCurrency(budgetSummary.totalValue)}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-destructive mt-1">Sem dados</p>
+                    )}
                   </div>
                 </div>
-              ) : (
+
+                {/* Contrato */}
+                <div
+                  className={`flex items-start space-x-2 p-3 rounded-lg border transition-colors ${
+                    selectedSource === "contract"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:bg-secondary/30"
+                  } ${!contractSummary?.hasData ? "opacity-60" : ""}`}
+                >
+                  <RadioGroupItem
+                    value="contract"
+                    id="src-contract"
+                    disabled={!contractSummary?.hasData}
+                    className="mt-1"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <Label
+                      htmlFor="src-contract"
+                      className="flex items-center gap-1 font-medium cursor-pointer text-sm"
+                    >
+                      <FileSignature className="w-3.5 h-3.5" />
+                      Contrato
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Usa preço de contrato por serviço.
+                    </p>
+                    {contractSummary?.hasData ? (
+                      <p className="text-xs font-mono text-primary mt-1">
+                        {formatCurrency(contractSummary.totalValue)}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-destructive mt-1">Sem dados</p>
+                    )}
+                  </div>
+                </div>
+              </RadioGroup>
+
+              {isLoading && (
+                <p className="text-xs text-muted-foreground text-center">Carregando dados...</p>
+              )}
+
+              {!isLoading && activeSummary && (
                 <Alert>
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>
-                    Nenhum orçamento unitário cadastrado. Adicione itens em "Custos de Obra" para usar pesos automáticos.
+                  <FileText className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    {hasActiveData ? (
+                      <>
+                        Serão atribuídos pesos a <strong>{activeSummary.scopeMatched}</strong> de{" "}
+                        <strong>
+                          {currentProject.macrosTemplate.reduce((s, m) => s + m.scopes.length, 0)}
+                        </strong>{" "}
+                        serviços. Os demais ficarão com peso 0% (você poderá ajustar depois no modo manual).
+                      </>
+                    ) : (
+                      <>
+                        Nenhum dado disponível para esta fonte. Cadastre valores em{" "}
+                        {selectedSource === "contract" ? '"Contrato da Obra"' : '"Custos de Obra"'} primeiro.
+                      </>
+                    )}
                   </AlertDescription>
                 </Alert>
               )}
@@ -298,52 +365,42 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
 
           <Separator />
 
-          {/* Mode Selection */}
-          <RadioGroup 
-            value={selectedMode} 
+          {/* Modo de pesos */}
+          <RadioGroup
+            value={selectedMode}
             onValueChange={(value) => setSelectedMode(value as "automatic" | "manual")}
-            className="space-y-3"
+            className="space-y-2"
           >
-            <div className={`flex items-start space-x-3 p-3 rounded-lg border transition-colors ${
-              selectedMode === "automatic" 
-                ? "border-primary bg-primary/5" 
-                : "border-border hover:bg-secondary/30"
-            } ${!hasBudget ? "opacity-50 cursor-not-allowed" : ""}`}>
-              <RadioGroupItem 
-                value="automatic" 
-                id="automatic" 
-                disabled={!hasBudget}
-                className="mt-1"
-              />
+            <div
+              className={`flex items-start space-x-3 p-3 rounded-lg border transition-colors ${
+                selectedMode === "automatic"
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:bg-secondary/30"
+              }`}
+            >
+              <RadioGroupItem value="automatic" id="automatic" className="mt-1" />
               <div className="flex-1">
-                <Label 
-                  htmlFor="automatic" 
-                  className={`flex items-center gap-2 font-medium ${!hasBudget ? "cursor-not-allowed" : "cursor-pointer"}`}
-                >
+                <Label htmlFor="automatic" className="flex items-center gap-2 font-medium cursor-pointer">
                   <Download className="w-4 h-4" />
-                  Usar pesos do orçamento
+                  Importar pesos automaticamente
                   <Badge variant="outline" className="ml-auto">
                     <Lock className="w-3 h-3 mr-1" />
-                    Automático
+                    Auto
                   </Badge>
                 </Label>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Os pesos serão calculados com base no valor unitário da casa. 
-                  A edição manual ficará bloqueada.
+                  Calcula os pesos proporcionalmente aos valores da fonte selecionada.
                 </p>
-                {!hasBudget && (
-                  <p className="text-xs text-destructive mt-1">
-                    Indisponível - cadastre itens no orçamento primeiro
-                  </p>
-                )}
               </div>
             </div>
 
-            <div className={`flex items-start space-x-3 p-3 rounded-lg border transition-colors ${
-              selectedMode === "manual" 
-                ? "border-primary bg-primary/5" 
-                : "border-border hover:bg-secondary/30"
-            }`}>
+            <div
+              className={`flex items-start space-x-3 p-3 rounded-lg border transition-colors ${
+                selectedMode === "manual"
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:bg-secondary/30"
+              }`}
+            >
               <RadioGroupItem value="manual" id="manual" className="mt-1" />
               <div className="flex-1">
                 <Label htmlFor="manual" className="flex items-center gap-2 font-medium cursor-pointer">
@@ -355,19 +412,16 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
                   </Badge>
                 </Label>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Você poderá editar livremente os pesos de cada etapa e serviço. 
-                  A soma dos pesos deve totalizar 100%.
+                  Você define livremente os pesos. A soma deve totalizar 100%.
                 </p>
               </div>
             </div>
           </RadioGroup>
 
-          {/* Weight Formula Info */}
           <div className="p-3 rounded-lg bg-muted/50 border border-border">
             <p className="text-xs text-muted-foreground">
-              <strong>Fórmula de cálculo:</strong><br />
-              Peso do serviço = (valor do serviço ÷ valor unitário da casa) × 100<br />
-              Peso da etapa = soma dos pesos dos serviços
+              <strong>Fórmula:</strong> Peso (%) = (valor do serviço ÷ valor total da fonte) × 100.
+              Os cálculos de progresso, KPIs e relatórios usam estes pesos automaticamente.
             </p>
           </div>
         </div>
@@ -376,9 +430,11 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isApplying}>
             Cancelar
           </Button>
-          <Button 
-            onClick={handleApply} 
-            disabled={isApplying || (selectedMode === "automatic" && !hasBudget)}
+          <Button
+            onClick={handleApply}
+            disabled={
+              isApplying || (selectedMode === "automatic" && !hasActiveData)
+            }
           >
             {isApplying ? (
               "Aplicando..."
