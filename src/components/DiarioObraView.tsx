@@ -110,6 +110,7 @@ interface DiaryItem {
   percentual_executado: number;
   observacao: string | null;
   production_id: string | null;
+  contractor_contract_id: string | null;
 }
 
 type HousePercentMap = Record<number, number>;
