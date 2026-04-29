@@ -4,6 +4,7 @@ import { Loader2, Upload, X, ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { compressImageSafe } from "@/lib/compressImage";
 
 interface LogoUploaderProps {
   /** URL atual (signed ou pública) */
@@ -20,30 +21,6 @@ interface LogoUploaderProps {
   size?: "sm" | "md";
 }
 
-async function comprimirImagem(file: File, maxDim = 600, quality = 0.85): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      let w = img.width, h = img.height;
-      if (w > maxDim || h > maxDim) {
-        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
-        else { w = Math.round(w * maxDim / h); h = maxDim; }
-      }
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("canvas")); return; }
-      ctx.drawImage(img, 0, 0, w, h);
-      canvas.toBlob(
-        blob => blob ? resolve(blob) : reject(new Error("blob")),
-        file.type.includes("png") ? "image/png" : "image/jpeg",
-        quality
-      );
-    };
-    img.onerror = () => reject(new Error("img"));
-    img.src = URL.createObjectURL(file);
-  });
-}
 
 export function LogoUploader({
   currentLogoUrl,
@@ -64,7 +41,11 @@ export function LogoUploader({
     setUploading(true);
     try {
       const isPng = file.type.includes("png");
-      const comprimido = await comprimirImagem(file, 600, 0.85);
+      const comprimido = await compressImageSafe(file, {
+        maxSide: 600,
+        quality: 0.85,
+        mime: isPng ? "image/png" : "image/jpeg",
+      });
       const ext = isPng ? "png" : "jpg";
       const path = `${pathPrefix}/logo_${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage

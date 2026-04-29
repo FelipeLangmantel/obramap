@@ -9,27 +9,7 @@ import {
 import { Camera, Loader2, Trash2, ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-
-async function comprimirImagem(file: File, maxDim = 1024, quality = 0.7): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      let w = img.width, h = img.height;
-      if (w > maxDim || h > maxDim) {
-        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
-        else { w = Math.round(w * maxDim / h); h = maxDim; }
-      }
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("canvas")); return; }
-      ctx.drawImage(img, 0, 0, w, h);
-      canvas.toBlob(b => b ? resolve(b) : reject(new Error("blob")), "image/jpeg", quality);
-    };
-    img.onerror = () => reject(new Error("img"));
-    img.src = URL.createObjectURL(file);
-  });
-}
+import { compressImageSafe } from "@/lib/compressImage";
 
 interface FotoServico {
   id: string;
@@ -117,7 +97,7 @@ export function DiaryItemPhotoButton({
     let uploaded = 0;
     try {
       for (const arquivo of arquivos) {
-        const blob = await comprimirImagem(arquivo, 1024, 0.7);
+        const blob = await compressImageSafe(arquivo, { maxSide: 1280, quality: 0.7 });
         const safe = arquivo.name.replace(/[^a-zA-Z0-9.]/g, "_");
         const houseSeg = houseNum != null ? `casa-${houseNum}/` : "geral/";
         const path = `${companyId}/${diaryEntryId}/${diaryItemId}/${houseSeg}${Date.now()}_${safe}`;
