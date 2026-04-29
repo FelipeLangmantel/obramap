@@ -218,6 +218,8 @@ export function ContractorMeasurementsTab({
       setSaving(false);
     }
   };
+
+  const handleApprove = async () => {
     if (!requireEdit()) return;
     if (!selectedMeasurement) return;
     const ok = await approveMeasurement(selectedMeasurement.id);
