@@ -176,7 +176,7 @@ function SetupContent({ onCreated, ...props }: Props) {
 
   const handleAIImport = async (
     newGroups: { code: string; name: string }[],
-    importedEvents: { item_code: string; discrimination: string; sinapi_code: string; description: string; unit: string; quantity: number; unit_value: number; group_code: string; group_name: string }[]
+    importedEvents: { item_code: string; discrimination: string; sinapi_code: string; description: string; unit: string; quantity: number; unit_value: number; mat_unit_value?: number; mo_unit_value?: number; group_code: string; group_name: string }[]
   ) => {
     const groupIdMap = new Map<string, string>();
     groups.forEach(g => groupIdMap.set(g.code, g.id));
@@ -186,10 +186,14 @@ function SetupContent({ onCreated, ...props }: Props) {
     }
     for (const ev of importedEvents) {
       const groupId = groupIdMap.get(ev.group_code) || null;
+      const mat = ev.mat_unit_value || 0;
+      const mo = ev.mo_unit_value || 0;
+      const unit = (mat + mo) > 0 ? mat + mo : (ev.unit_value || 0);
       await createEvent({
         group_id: groupId, item_code: ev.item_code, description: ev.description,
         discrimination: ev.discrimination, sinapi_code: ev.sinapi_code,
-        unit: ev.unit, quantity: ev.quantity, unit_value: ev.unit_value,
+        unit: ev.unit, quantity: ev.quantity, unit_value: unit,
+        mat_unit_value: mat, mo_unit_value: mo,
       } as any);
     }
   };

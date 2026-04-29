@@ -3,9 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { ContractService } from "@/hooks/useProjectContract";
+import { useConstruction } from "@/contexts/ConstructionContext";
 import { cn } from "@/lib/utils";
-import { Layers, Check, AlertTriangle } from "lucide-react";
+import { Layers, Check, AlertTriangle, Link2 } from "lucide-react";
+import { LinkPleItemsDialog } from "./LinkPleItemsDialog";
 
 interface ContractServicesTableProps {
   services: ContractService[];
@@ -121,6 +124,26 @@ export function ContractServicesTable({
   isEditing,
   costPercent,
 }: ContractServicesTableProps) {
+  const { currentProject } = useConstruction();
+  const [linkDialog, setLinkDialog] = useState<{ macroId: string; macroName: string; scopeId: string; scopeName: string } | null>(null);
+  const [hasPleProject, setHasPleProject] = useState(false);
+
+  // Check if there is a PLE project linked to current obramap project
+  useEffect(() => {
+    if (!currentProject?.id) { setHasPleProject(false); return; }
+    let cancelled = false;
+    (async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data } = await supabase
+        .from("ple_projects")
+        .select("id")
+        .eq("obramap_project_id", currentProject.id)
+        .maybeSingle();
+      if (!cancelled) setHasPleProject(!!data);
+    })();
+    return () => { cancelled = true; };
+  }, [currentProject?.id]);
+
   // Group services by macro
   const groupedServices = services.reduce((acc, service) => {
     const key = service.macro_id;
@@ -150,8 +173,8 @@ export function ContractServicesTable({
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">
-                <TableHead className="w-[200px] font-semibold">Etapa (Macro)</TableHead>
-                <TableHead className="w-[250px] font-semibold">Serviço (Scope)</TableHead>
+                <TableHead className="w-[180px] font-semibold">Etapa (Macro)</TableHead>
+                <TableHead className="w-[230px] font-semibold">Serviço (Scope)</TableHead>
                 <TableHead className="w-[150px] text-right font-semibold">
                   Preço Contrato (R$)
                 </TableHead>
@@ -163,6 +186,9 @@ export function ContractServicesTable({
                 </TableHead>
                 <TableHead className="w-[80px] text-center font-semibold">% Custo</TableHead>
                 <TableHead className="w-[100px] text-center font-semibold">Status</TableHead>
+                {hasPleProject && (
+                  <TableHead className="w-[140px] text-center font-semibold">PLE</TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -216,12 +242,31 @@ export function ContractServicesTable({
                         </Badge>
                       )}
                     </TableCell>
+                    {hasPleProject && (
+                      <TableCell className="text-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-[11px] gap-1.5"
+                          disabled={!isEditing}
+                          onClick={() => setLinkDialog({
+                            macroId: service.macro_id,
+                            macroName: service.macro_name,
+                            scopeId: service.scope_id,
+                            scopeName: service.scope_name,
+                          })}
+                        >
+                          <Link2 className="h-3 w-3" />
+                          Vincular PLE
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               ))}
               {services.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={hasPleProject ? 8 : 7} className="text-center py-8 text-muted-foreground">
                     Nenhum serviço encontrado. Cadastre serviços em "Etapas e Serviços" primeiro.
                   </TableCell>
                 </TableRow>
@@ -230,6 +275,22 @@ export function ContractServicesTable({
           </Table>
         </div>
       </CardContent>
+
+      {linkDialog && currentProject && (
+        <LinkPleItemsDialog
+          open={!!linkDialog}
+          onClose={() => setLinkDialog(null)}
+          projectId={currentProject.id}
+          totalHouses={currentProject.totalHouses || (currentProject.houses?.length ?? 1)}
+          macroId={linkDialog.macroId}
+          macroName={linkDialog.macroName}
+          scopeId={linkDialog.scopeId}
+          scopeName={linkDialog.scopeName}
+          onConfirm={(totalRevenueCalc) => {
+            updateServiceValue(linkDialog.macroId, linkDialog.scopeId, totalRevenueCalc);
+          }}
+        />
+      )}
     </Card>
   );
 }
