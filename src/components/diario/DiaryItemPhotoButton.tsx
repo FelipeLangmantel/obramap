@@ -57,6 +57,7 @@ export function DiaryItemPhotoButton({
   );
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const photoSourceRef = useRef<"camera" | "gallery">("gallery");
 
   const refreshCount = async () => {
     const { count: c } = await supabase
@@ -94,17 +95,19 @@ export function DiaryItemPhotoButton({
     if (!e.target.files?.length) return;
     const arquivos = Array.from(e.target.files).slice(0, 10);
     const houseNum = selectedHouse === "all" ? null : Number(selectedHouse);
+    const fromCamera = photoSourceRef.current === "camera";
     setUploading(true);
     let uploaded = 0;
     try {
       for (const arquivo of arquivos) {
-        const blob = await compressImageSafe(arquivo, { maxSide: 1280, quality: 0.7 });
+        const payload = fromCamera ? arquivo : await compressImageSafe(arquivo, { maxSide: 1024, quality: 0.7 });
         const safe = arquivo.name.replace(/[^a-zA-Z0-9.]/g, "_");
         const houseSeg = houseNum != null ? `casa-${houseNum}/` : "geral/";
-        const path = `${companyId}/${diaryEntryId}/${diaryItemId}/${houseSeg}${Date.now()}_${safe}`;
+        const extSafeName = fromCamera ? safe : safe.replace(/\.[^.]+$/, ".jpg");
+        const path = `${companyId}/${diaryEntryId}/${diaryItemId}/${houseSeg}${Date.now()}_${extSafeName}`;
         const { error: upErr } = await supabase.storage
           .from("diary-photos")
-          .upload(path, blob, { contentType: "image/jpeg", upsert: false });
+          .upload(path, payload, { contentType: fromCamera ? (arquivo.type || "image/jpeg") : "image/jpeg", upsert: false });
         if (upErr) throw upErr;
         const { error: dbErr } = await supabase.from("diary_photos").insert({
           diary_entry_id: diaryEntryId,
@@ -202,7 +205,7 @@ export function DiaryItemPhotoButton({
               </div>
               <div className="flex gap-2">
                 <Button
-                  onClick={() => cameraInputRef.current?.click()}
+                  onClick={() => { photoSourceRef.current = "camera"; cameraInputRef.current?.click(); }}
                   disabled={uploading || disabled}
                   className="h-10"
                 >
@@ -214,7 +217,7 @@ export function DiaryItemPhotoButton({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => galleryInputRef.current?.click()}
+                  onClick={() => { photoSourceRef.current = "gallery"; galleryInputRef.current?.click(); }}
                   disabled={uploading || disabled}
                   className="h-10"
                 >
