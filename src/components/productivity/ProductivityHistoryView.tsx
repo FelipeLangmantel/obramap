@@ -384,6 +384,7 @@ export function ProductivityHistoryView() {
                     <TableHead className="text-right">RUP real</TableHead>
                     <TableHead className="text-right hidden sm:table-cell">RUP planejado</TableHead>
                     <TableHead className="text-right hidden sm:table-cell">Desvio</TableHead>
+                    <TableHead className="text-right hidden md:table-cell">Custo/un</TableHead>
                     <TableHead className="text-right hidden md:table-cell">Dias</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -395,7 +396,14 @@ export function ProductivityHistoryView() {
                     return (
                       <TableRow key={s.scope_id}>
                         <TableCell>
-                          <div className="font-medium text-sm">{s.scope_name}</div>
+                          <div className="font-medium text-sm flex items-center gap-1.5">
+                            {s.scope_name}
+                            {s.has_real ? (
+                              <Badge variant="default" className="text-[9px] h-4 px-1">real</Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-[9px] h-4 px-1">estimado</Badge>
+                            )}
+                          </div>
                           <Badge variant="outline" className="text-[10px] mt-0.5">
                             {s.macro_name}
                           </Badge>
@@ -420,6 +428,11 @@ export function ProductivityHistoryView() {
                               {dev > 0 ? "+" : ""}{dev.toFixed(0)}%
                             </span>
                           )}
+                        </TableCell>
+                        <TableCell className="text-right text-xs font-mono hidden md:table-cell">
+                          {s.cost_per_unit > 0
+                            ? s.cost_per_unit.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+                            : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell className="text-right text-sm hidden md:table-cell">
                           {s.days}
