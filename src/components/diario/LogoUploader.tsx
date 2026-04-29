@@ -21,30 +21,6 @@ interface LogoUploaderProps {
   size?: "sm" | "md";
 }
 
-async function comprimirImagem(file: File, maxDim = 600, quality = 0.85): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      let w = img.width, h = img.height;
-      if (w > maxDim || h > maxDim) {
-        if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
-        else { w = Math.round(w * maxDim / h); h = maxDim; }
-      }
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("canvas")); return; }
-      ctx.drawImage(img, 0, 0, w, h);
-      canvas.toBlob(
-        blob => blob ? resolve(blob) : reject(new Error("blob")),
-        file.type.includes("png") ? "image/png" : "image/jpeg",
-        quality
-      );
-    };
-    img.onerror = () => reject(new Error("img"));
-    img.src = URL.createObjectURL(file);
-  });
-}
 
 export function LogoUploader({
   currentLogoUrl,
