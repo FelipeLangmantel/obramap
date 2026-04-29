@@ -1863,15 +1863,6 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             alwaysShowChildren
           >
             <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              capture="environment"
-              className="hidden"
-              onChange={handleUploadFotos}
-              disabled={uploadingFoto}
-            />
-            <input
               ref={galleryInputRef}
               type="file"
               accept="image/jpeg,image/png,image/webp"
