@@ -222,7 +222,20 @@
 @media print {
   @page {
     size: A3 landscape;
-    margin: 6mm;
+    margin: 6mm 6mm 14mm 6mm; /* margem extra no rodapé p/ marca ObraMap */
+  }
+
+  /* Marca ObraMap fixa em todas as páginas impressas via window.print */
+  body::after {
+    content: "© 2026 ObraMap | Engenharia Digital";
+    position: fixed;
+    bottom: 4mm;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 9pt;
+    color: #6b7280;
+    font-family: Arial, sans-serif;
   }
 
   /* ── Esconder navegação e UI ── */

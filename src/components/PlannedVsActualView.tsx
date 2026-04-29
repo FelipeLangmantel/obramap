@@ -353,6 +353,7 @@ export function PlannedVsActualView({
         `).join('')}
         <div class="footer"><div>Emitido: ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })}</div><div>${comparisons.length} atividades</div></div>
         <div style="display: flex; justify-content: space-between; margin-top: 40px;"><div class="signature-line">Responsável</div><div class="signature-line">Gerente</div><div class="signature-line">Encarregado</div></div>
+        <div style="margin-top:25px;padding-top:10px;border-top:1px solid #e5e7eb;text-align:center;font-size:10px;color:#6b7280;font-weight:600;">© 2026 ObraMap | Engenharia Digital</div>
       </body></html>
     `;
 

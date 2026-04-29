@@ -702,6 +702,17 @@ export default function HoldingDashboardView() {
         });
       }
 
+      // Rodapé padrão obrigatório em todas as páginas
+      const pageCount = (doc as any).getNumberOfPages();
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(120);
+        doc.text("© 2026 ObraMap | Engenharia Digital", pageW / 2, pageH - 5, { align: "center" });
+      }
+
       doc.save(`portfolio-holding-${format(new Date(), "yyyy-MM-dd")}.pdf`);
       toast.success("PDF gerado com sucesso!");
     } catch (e) {
