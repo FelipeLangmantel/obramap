@@ -3,6 +3,12 @@
 // - Thumbnails: 300px JPEG 60% (~10-20KB) — usado para preview rápido
 // - Vídeos: valida duração ≤ 30s e tamanho ≤ 50MB. Sem transcode no client
 //   (transcode pesado consumiria bateria do celular)
+//
+// IMPORTANTE: Usa `compressImageSafe` (createImageBitmap + resize nativo)
+// para evitar estouro de memória em câmeras de celular modernas — antes
+// usava `new Image()` + canvas full, que descomprimia ~50MB de bitmap.
+
+import { compressImageSafe } from "@/lib/compressImage";
 
 const MAX_PHOTO_SIDE = 1600;
 const PHOTO_QUALITY = 0.7;
@@ -24,55 +30,36 @@ export interface CompressedPhoto {
   compressed_size: number;
 }
 
-async function loadImage(file: File): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Imagem inválida.")); };
-    img.src = url;
-  });
-}
-
-function drawScaled(img: HTMLImageElement, maxSide: number): HTMLCanvasElement {
-  const ratio = Math.min(1, maxSide / Math.max(img.width, img.height));
-  const w = Math.round(img.width * ratio);
-  const h = Math.round(img.height * ratio);
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas indisponível");
-  ctx.drawImage(img, 0, 0, w, h);
-  return canvas;
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error("Falha ao gerar blob"))),
-      type,
-      quality
-    );
-  });
-}
-
 export async function compressPhoto(file: File): Promise<CompressedPhoto> {
   if (file.size > MEDIA_LIMITS.PHOTO_MAX_INPUT_BYTES) {
     throw new Error("Foto excede 25 MB.");
   }
-  const img = await loadImage(file);
-  const mainCanvas = drawScaled(img, MAX_PHOTO_SIDE);
-  const thumbCanvas = drawScaled(img, THUMB_SIDE);
-  const [blob, thumbnail] = await Promise.all([
-    canvasToBlob(mainCanvas, "image/jpeg", PHOTO_QUALITY),
-    canvasToBlob(thumbCanvas, "image/jpeg", THUMB_QUALITY),
-  ]);
+  // SEQUENCIAL — em paralelo dobra o pico de memória (2 bitmaps simultâneos).
+  const blob = await compressImageSafe(file, {
+    maxSide: MAX_PHOTO_SIDE,
+    quality: PHOTO_QUALITY,
+    maxInputBytes: MEDIA_LIMITS.PHOTO_MAX_INPUT_BYTES,
+  });
+  // Thumbnail a partir do blob já reduzido (não do arquivo cru)
+  const thumbInput = new File([blob], file.name, { type: blob.type });
+  const thumbnail = await compressImageSafe(thumbInput, {
+    maxSide: THUMB_SIDE,
+    quality: THUMB_QUALITY,
+  });
+
+  let width = 0, height = 0;
+  try {
+    const probe = await createImageBitmap(blob);
+    width = probe.width;
+    height = probe.height;
+    probe.close();
+  } catch { /* ignore */ }
+
   return {
     blob,
     thumbnail,
-    width: mainCanvas.width,
-    height: mainCanvas.height,
+    width,
+    height,
     original_size: file.size,
     compressed_size: blob.size,
   };
