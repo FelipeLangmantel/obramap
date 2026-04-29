@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Camera, Loader2, Trash2, ImageIcon } from "lucide-react";
+import { Camera, Loader2, Trash2, ImageIcon, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { compressImageSafe } from "@/lib/compressImage";
@@ -146,6 +146,27 @@ export function DiaryItemPhotoButton({
       toast.success("Foto removida.");
     } catch {
       toast.error("Erro ao remover foto.");
+    }
+  };
+
+  const handleRelink = async (foto: FotoServico, newHouseValue: string) => {
+    const newHouse = newHouseValue === "all" ? null : Number(newHouseValue);
+    if (newHouse === foto.house_number) return;
+    try {
+      const { error } = await supabase
+        .from("diary_photos")
+        .update({ house_number: newHouse } as any)
+        .eq("id", foto.id);
+      if (error) throw error;
+      setFotos(prev => prev.map(f => f.id === foto.id ? { ...f, house_number: newHouse } : f));
+      onChanged?.();
+      toast.success(
+        newHouse != null
+          ? `Foto vinculada à Casa ${String(newHouse).padStart(2, "0")}.`
+          : "Foto marcada como geral."
+      );
+    } catch (err: any) {
+      toast.error("Erro ao revincular: " + (err.message || ""));
     }
   };
 
@@ -300,6 +321,29 @@ export function DiaryItemPhotoButton({
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
+                    )}
+                    {!disabled && (
+                      <div className="p-1.5 bg-background border-t">
+                        <Select
+                          value={f.house_number != null ? String(f.house_number) : "all"}
+                          onValueChange={(v) => handleRelink(f, v)}
+                        >
+                          <SelectTrigger className="h-7 text-[11px] px-2">
+                            <div className="flex items-center gap-1 truncate">
+                              <Link2 className="h-3 w-3 shrink-0" />
+                              <SelectValue />
+                            </div>
+                          </SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            <SelectItem value="all">Geral (sem casa)</SelectItem>
+                            {sortedHouses.map(h => (
+                              <SelectItem key={h} value={String(h)}>
+                                Casa {String(h).padStart(2, "0")}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     )}
                   </div>
                 ))}
