@@ -122,6 +122,7 @@ function EditableCell({ value, onSave, isEditing }: EditableCellProps) {
 export function ContractServicesTable({
   services,
   updateServiceValue,
+  persistServiceValue,
   isEditing,
   costPercent,
 }: ContractServicesTableProps) {
