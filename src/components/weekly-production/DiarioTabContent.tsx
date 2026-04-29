@@ -534,7 +534,11 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
                 </TableHeader>
                 <TableBody>
                   {entries.map(e => (
-                    <TableRow key={e.id}>
+                    <TableRow
+                      key={e.id}
+                      className={onOpenDiary ? "cursor-pointer" : undefined}
+                      onClick={() => onOpenDiary?.(e.entry_date)}
+                    >
                       <TableCell className="font-medium">
                         {format(parseISO(e.entry_date), "EEE dd/MM", { locale: ptBR })}
                       </TableCell>
@@ -548,9 +552,16 @@ export default function DiarioTabContent({ onOpenDiary }: DiarioTabContentProps 
                             ✅ Aprovado
                           </Badge>
                         ) : e.status_aprovacao === "revisando" ? (
-                          <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300">
-                            🔍 Em revisão
-                          </Badge>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300">
+                              🔍 Em revisão
+                            </Badge>
+                            {podeFecharSemana && (
+                              <Button size="sm" className="h-7 text-xs" onClick={(ev) => { ev.stopPropagation(); void handleApproveEntry(e); }}>
+                                Aprovar
+                              </Button>
+                            )}
+                          </div>
                         ) : e.status_aprovacao === "solicitando_edicao" ? (
                           <Badge className="bg-purple-100 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300">
                             ⏳ Edição solicitada
