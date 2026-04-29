@@ -10,7 +10,6 @@ import { Camera, Loader2, Trash2, ImageIcon, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { compressImageSafe } from "@/lib/compressImage";
-import { LowMemoryCameraDialog } from "./LowMemoryCameraDialog";
 
 interface FotoServico {
   id: string;
@@ -56,8 +55,8 @@ export function DiaryItemPhotoButton({
   const [selectedHouse, setSelectedHouse] = useState<string>(
     houseIds.length === 1 ? String(houseIds[0]) : "all"
   );
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
-  const [lowMemoryCameraOpen, setLowMemoryCameraOpen] = useState(false);
 
   const refreshCount = async () => {
     const { count: c } = await supabase
@@ -93,7 +92,7 @@ export function DiaryItemPhotoButton({
     loadFotos();
   };
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, source: "camera" | "gallery" = "gallery") => {
     if (!e.target.files?.length) return;
     const arquivos = Array.from(e.target.files).slice(0, 10);
     const houseNum = selectedHouse === "all" ? null : Number(selectedHouse);
@@ -101,14 +100,17 @@ export function DiaryItemPhotoButton({
     let uploaded = 0;
     try {
       for (const arquivo of arquivos) {
-        const payload = await compressImageSafe(arquivo, { maxSide: 1024, quality: 0.7 });
+        const isCamera = source === "camera";
+        const payload = isCamera ? arquivo : await compressImageSafe(arquivo, { maxSide: 1024, quality: 0.7 });
         const safe = arquivo.name.replace(/[^a-zA-Z0-9.]/g, "_");
         const houseSeg = houseNum != null ? `casa-${houseNum}/` : "geral/";
-        const extSafeName = safe.replace(/\.[^.]+$/, ".jpg");
+        const ext = isCamera ? (arquivo.type.includes("png") ? "png" : arquivo.type.includes("webp") ? "webp" : "jpg") : "jpg";
+        const extSafeName = safe.includes(".") ? safe.replace(/\.[^.]+$/, `.${ext}`) : `${safe}.${ext}`;
+        const contentType = isCamera ? (arquivo.type || "image/jpeg") : "image/jpeg";
         const path = `${companyId}/${diaryEntryId}/${diaryItemId}/${houseSeg}${Date.now()}_${extSafeName}`;
         const { error: upErr } = await supabase.storage
           .from("diary-photos")
-          .upload(path, payload, { contentType: "image/jpeg", upsert: false });
+          .upload(path, payload, { contentType, upsert: false });
         if (upErr) throw upErr;
         const { error: dbErr } = await supabase.from("diary_photos").insert({
           diary_entry_id: diaryEntryId,
@@ -167,38 +169,6 @@ export function DiaryItemPhotoButton({
       );
     } catch (err: any) {
       toast.error("Erro ao revincular: " + (err.message || ""));
-    }
-  };
-
-  const uploadCapturedPhoto = async (blob: Blob) => {
-    const houseNum = selectedHouse === "all" ? null : Number(selectedHouse);
-    setUploading(true);
-    try {
-      const houseSeg = houseNum != null ? `casa-${houseNum}/` : "geral/";
-      const path = `${companyId}/${diaryEntryId}/${diaryItemId}/${houseSeg}${Date.now()}_camera.jpg`;
-      const { error: upErr } = await supabase.storage
-        .from("diary-photos")
-        .upload(path, blob, { contentType: "image/jpeg", upsert: false });
-      if (upErr) throw upErr;
-      const { error: dbErr } = await supabase.from("diary_photos").insert({
-        diary_entry_id: diaryEntryId,
-        diary_item_id: diaryItemId,
-        storage_path: path,
-        legenda: null,
-        house_number: houseNum,
-      } as any);
-      if (dbErr) {
-        await supabase.storage.from("diary-photos").remove([path]);
-        throw dbErr;
-      }
-      await loadFotos();
-      await refreshCount();
-      onChanged?.();
-      toast.success("Foto anexada.");
-    } catch (err: any) {
-      toast.error("Erro: " + (err.message || ""));
-    } finally {
-      setUploading(false);
     }
   };
 
