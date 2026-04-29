@@ -96,7 +96,11 @@ export function PleSpreadsheetTab({ groups, events, measurements, entries, curre
         const subRows = rows.filter(r => r.event.group_id === sub.id).sort((a, b) => a.event.display_order - b.event.display_order);
         subRows.forEach(row => result.push({ type: "item", row }));
       });
+      // Renderizar itens vinculados diretamente à etapa (sem subetapa intermediária)
+      const directRows = rows.filter(r => r.event.group_id === stage.id).sort((a, b) => a.event.display_order - b.event.display_order);
+      directRows.forEach(row => result.push({ type: "item", row }));
     });
+    // Orphans: sem group_id OU group_id inválido (não existe em groups)
     const orphanRows = rows.filter(r => !r.event.group_id || !groups.find(g => g.id === r.event.group_id));
     orphanRows.forEach(row => result.push({ type: "item", row }));
     return result;

@@ -594,6 +594,14 @@ export function PleContractTab(props: PleDataReturn) {
 
                   {isExpanded && (
                     <>
+                      {/* Itens vinculados diretamente à etapa (sem subetapa) */}
+                      {(eventsByGroup.get(stage.id) || []).sort((a, b) => a.display_order - b.display_order).map(ev => (
+                        <div key={ev.id} className="border-b px-2 py-1.5 bg-accent/10 hover:bg-accent/20 transition-colors text-xs text-muted-foreground pl-4">
+                          <span className="font-mono mr-2">{ev.item_code}</span>
+                          <span className="text-foreground">{ev.description}</span>
+                          <span className="float-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                        </div>
+                      ))}
                       {subs.map(sub => {
                         const subEvents = (eventsByGroup.get(sub.id) || []).sort((a, b) => a.display_order - b.display_order);
                         const subTotal = getSubstageTotal(sub.id);
