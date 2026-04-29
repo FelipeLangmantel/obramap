@@ -250,6 +250,8 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
                     <span className="text-[9px] font-bold text-muted-foreground uppercase">DESCRIÇÃO</span>
                     <span className="text-[9px] font-bold text-muted-foreground uppercase text-center">UNID</span>
                     <span className="text-[9px] font-bold text-muted-foreground uppercase text-right">QTDE</span>
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase text-right">MAT</span>
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase text-right">MO</span>
                     <span className="text-[9px] font-bold text-muted-foreground uppercase text-right">UNITÁRIO</span>
                     <span className="text-[9px] font-bold text-muted-foreground uppercase text-right">TOTAL</span>
                   </div>
@@ -277,6 +279,8 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
                           <span />
                           <span />
                           <span />
+                          <span />
+                          <span />
                           <span className="text-[11px] font-extrabold text-right font-mono text-primary">{fmtCur(stageTotal)}</span>
                         </div>
 
@@ -294,6 +298,8 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
                                 <span />
                                 <span className="text-[10px] text-muted-foreground text-right">{subItems.length} itens</span>
                                 <span />
+                                <span />
+                                <span />
                                 <span className="text-[11px] font-bold text-right font-mono">{fmtCur(subTotal)}</span>
                               </div>
 
@@ -309,6 +315,8 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
                                   <span className="text-[10px] text-foreground truncate pr-2" title={it.description}>{it.description}</span>
                                   <span className="text-[10px] text-center text-muted-foreground">{it.unit}</span>
                                   <span className="text-[10px] text-right font-mono">{fmt(it.quantity)}</span>
+                                  <span className="text-[10px] text-right font-mono text-blue-600 dark:text-blue-400">{it.mat_unit_value > 0 ? fmtCur(it.mat_unit_value) : "—"}</span>
+                                  <span className="text-[10px] text-right font-mono text-emerald-600 dark:text-emerald-400">{it.mo_unit_value > 0 ? fmtCur(it.mo_unit_value) : "—"}</span>
                                   <span className="text-[10px] text-right font-mono">{fmtCur(it.unit_value)}</span>
                                   <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(it.total_value)}</span>
                                 </div>
@@ -326,7 +334,7 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
                       <div className="grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_75px_75px_85px_100px] gap-0 bg-amber-500/10 border-b px-2 py-1.5 items-center">
                         <span />
                         <span className="text-[11px] font-bold text-amber-600 col-span-4">ITENS SEM GRUPO ({orphanedItems.length})</span>
-                        <span /><span /><span /><span />
+                        <span /><span /><span /><span /><span /><span />
                       </div>
                       {orphanedItems.map(it => (
                         <div key={it.idx} className={`grid grid-cols-[32px_60px_80px_70px_1fr_45px_65px_75px_75px_85px_100px] gap-0 border-b px-2 py-1 items-center ${!it.selected ? "opacity-40" : ""}`}>
@@ -339,6 +347,8 @@ export function PleImportAIDialog({ open, onClose, existingGroups, onImport }: P
                           <span className="text-[10px] truncate">{it.description}</span>
                           <span className="text-[10px] text-center">{it.unit}</span>
                           <span className="text-[10px] text-right font-mono">{fmt(it.quantity)}</span>
+                          <span className="text-[10px] text-right font-mono text-blue-600 dark:text-blue-400">{it.mat_unit_value > 0 ? fmtCur(it.mat_unit_value) : "—"}</span>
+                          <span className="text-[10px] text-right font-mono text-emerald-600 dark:text-emerald-400">{it.mo_unit_value > 0 ? fmtCur(it.mo_unit_value) : "—"}</span>
                           <span className="text-[10px] text-right font-mono">{fmtCur(it.unit_value)}</span>
                           <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(it.total_value)}</span>
                         </div>
