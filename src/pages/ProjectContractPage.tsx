@@ -42,6 +42,7 @@ export default function ProjectContractPage() {
     updateServiceValue,
     updateCostTarget,
     saveContract,
+    persistServiceValue,
   } = useProjectContract();
 
   const [showPlanningWarning, setShowPlanningWarning] = useState(false);
