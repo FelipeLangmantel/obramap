@@ -540,7 +540,15 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )}
-                {(isAdmin || isCompanyAdmin) && canAccessManagement("usuarios") && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => setProfessionsDialogOpen(true)}
+                    className="w-full justify-start gap-3 px-3 py-3 rounded-lg text-foreground hover:bg-accent hover:text-accent-foreground transition-all duration-150"
+                  >
+                    <Briefcase className="h-5 w-5 shrink-0" />
+                    <span className="text-sm font-medium">Cadastro de Profissões</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       onClick={() => setUsersDialogOpen(true)}
@@ -636,6 +644,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
 
       <SettingsDialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen} />
       <ProjectSettingsDialog open={projectSettingsOpen} onOpenChange={setProjectSettingsOpen} />
+      <ProfessionsManagementDialog open={professionsDialogOpen} onOpenChange={setProfessionsDialogOpen} />
 
       <Dialog open={usersDialogOpen} onOpenChange={setUsersDialogOpen}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
