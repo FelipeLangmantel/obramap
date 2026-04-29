@@ -4,6 +4,7 @@ import { Loader2, Upload, X, ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { compressImageSafe } from "@/lib/compressImage";
 
 interface LogoUploaderProps {
   /** URL atual (signed ou pública) */
