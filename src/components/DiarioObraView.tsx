@@ -51,6 +51,9 @@ import { AddOccurrenceDialog } from "./diario/rdo/AddOccurrenceDialog";
 import { AddChecklistDialog } from "./diario/rdo/AddChecklistDialog";
 import { AddCommentDialog } from "./diario/rdo/AddCommentDialog";
 import { useRdoData } from "./diario/rdo/useRdoData";
+import { useDiaryWorkers } from "@/hooks/useDiaryWorkers";
+import { RdoWorkersSection } from "./diario/rdo/RdoWorkersSection";
+import { DiaryItemAssignmentPopover } from "./diario/rdo/DiaryItemAssignmentPopover";
 import type { RdoSectionKey } from "./diario/rdo/types";
 import { RdoApprovalSection, type StatusAprovacao } from "./diario/rdo/RdoApprovalSection";
 import { RdoFooterNav } from "./diario/rdo/RdoFooterNav";
@@ -110,6 +113,7 @@ interface DiaryItem {
   percentual_executado: number;
   observacao: string | null;
   production_id: string | null;
+  contractor_contract_id: string | null;
 }
 
 type HousePercentMap = Record<number, number>;
@@ -205,6 +209,23 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
   // RDO data
   const rdo = useRdoData(entryId);
+  const dWorkers = useDiaryWorkers(entryId);
+  const [contractorContracts, setContractorContracts] = useState<Array<{ id: string; contractor_name: string; status: string }>>([]);
+
+  useEffect(() => {
+    if (!currentProject?.id) { setContractorContracts([]); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await (supabase as any)
+        .from("contractor_contracts")
+        .select("id, contractor_name, status")
+        .eq("project_id", currentProject.id)
+        .in("status", ["active", "ativo", "Ativo", "vigente"])
+        .order("contractor_name");
+      if (!cancelled) setContractorContracts((data || []) as any);
+    })();
+    return () => { cancelled = true; };
+  }, [currentProject?.id]);
 
   // Active section (sidebar)
   const [activeSection, setActiveSection] = useState<RdoSectionKey>("detalhes");
@@ -559,16 +580,17 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
   const loadItems = async (eId: string) => {
     setLoadingItems(true);
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from("diary_items")
-      .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, house_ids, houses_count, percentual_executado, observacao, production_id")
+      .select("id, macro_id, macro_name, macro_color, scope_id, scope_name, house_ids, houses_count, percentual_executado, observacao, production_id, contractor_contract_id")
       .eq("diary_entry_id", eId)
       .order("created_at", { ascending: true });
-    setDiaryItems((data || []).map(d => ({
+    setDiaryItems((data || []).map((d: any) => ({
       id: d.id, macro_id: d.macro_id, macro_name: d.macro_name, macro_color: d.macro_color,
       scope_id: d.scope_id, scope_name: d.scope_name, house_ids: d.house_ids || [],
       houses_count: d.houses_count, percentual_executado: Number(d.percentual_executado),
       observacao: d.observacao, production_id: d.production_id,
+      contractor_contract_id: d.contractor_contract_id ?? null,
     })));
     setLoadingItems(false);
   };
@@ -1510,13 +1532,26 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
             />
           </section>
 
-          {/* MÃO DE OBRA */}
+          {/* MÃO DE OBRA (resumo por categoria) */}
           <RdoLaborSection
             items={rdo.labor}
             onAdd={() => openDialogWithEntry(() => setAddLaborOpen(true))}
             disabled={isLocked}
             onChanged={() => entryId && rdo.reload(entryId)}
           />
+
+          {/* EQUIPE DO DIA (horas individuais por nome) */}
+          {entryId && currentProject?.id && company?.id && (
+            <RdoWorkersSection
+              workers={dWorkers.workers}
+              contractors={contractorContracts}
+              entryId={entryId}
+              companyId={company.id}
+              projectId={currentProject.id}
+              disabled={isLocked}
+              onChanged={() => dWorkers.reload(entryId)}
+            />
+          )}
 
           {/* EQUIPAMENTOS */}
           <RdoEquipmentSection
@@ -1728,6 +1763,21 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                                 companyId={company.id}
                                 houseIds={item.house_ids}
                                 disabled={isLocked}
+                              />
+                            )}
+                            {entryId && company?.id && (
+                              <DiaryItemAssignmentPopover
+                                diaryItemId={item.id}
+                                contractorContractId={item.contractor_contract_id}
+                                workers={dWorkers.workers}
+                                links={dWorkers.links}
+                                contractors={contractorContracts}
+                                companyId={company.id}
+                                disabled={isLocked}
+                                onChanged={() => {
+                                  dWorkers.reload(entryId);
+                                  loadItems(entryId);
+                                }}
                               />
                             )}
                             {!isLocked && statusAprovacao === "preenchendo" && (
