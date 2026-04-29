@@ -16,6 +16,8 @@ interface ExtractedItem {
   description: string;
   unit: string;
   quantity: number;
+  mat_unit_value: number;
+  mo_unit_value: number;
   unit_value: number;
   total_value: number;
   group_code: string;
