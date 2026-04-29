@@ -27,19 +27,10 @@ interface Props {
   projectId?: string | null;
   /** Data do RDO (YYYY-MM-DD) — usada para somar a semana corrente. */
   entryDate?: string;
-  /**
-   * Valor total do contrato como fallback (ex: de legalConfig.contrato_valor).
-   * Usado quando obras_portfolio não está vinculado ao projeto.
-   */
-  contractValueOverride?: number | null;
 }
 
-export function RdoProductionCharts({ items, totalCasas, projectId, entryDate, contractValueOverride }: Props) {
-  const { unitValueByScope, contractTotalValue: contractTotalFromPLE } = useContractWeights(projectId);
-  // Fallback: se obras_portfolio não vinculado, usar valor passado via prop (ex: legalConfig.contrato_valor)
-  const contractTotalValue = contractTotalFromPLE > 0
-    ? contractTotalFromPLE
-    : (contractValueOverride ?? 0);
+export function RdoProductionCharts({ items, totalCasas, projectId, entryDate }: Props) {
+  const { unitValueByScope, contractTotalValue } = useContractWeights(projectId);
   const [weekItems, setWeekItems] = useState<DiaryItem[]>([]);
 
   // Carrega lançamentos da semana (segunda → domingo) para o acumulado semanal
