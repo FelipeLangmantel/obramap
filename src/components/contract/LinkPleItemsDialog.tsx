@@ -39,7 +39,7 @@ interface Props {
   macroName: string;
   scopeId: string;
   scopeName: string;
-  onConfirm: (totalRevenue: number) => void;
+  onConfirm: (totalRevenue: number, linkedCount: number) => void;
 }
 
 export function LinkPleItemsDialog({
