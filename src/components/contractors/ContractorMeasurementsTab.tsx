@@ -453,9 +453,21 @@ export function ContractorMeasurementsTab({
                   </Badge>
                 </div>
                 {selectedMeasurement.status === "draft" && (
-                  <Button size="sm" className="gap-1.5 text-xs h-7 bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove} disabled={!canEdit}>
-                    <CheckCircle className="h-3.5 w-3.5" /> Aprovar
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-xs h-7"
+                      onClick={handleImportFromDiary}
+                      disabled={!canEdit || saving}
+                      title="Conta as casas executadas no RDO no período, filtrando por este contrato"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Importar do RDO
+                    </Button>
+                    <Button size="sm" className="gap-1.5 text-xs h-7 bg-emerald-600 hover:bg-emerald-700" onClick={handleApprove} disabled={!canEdit}>
+                      <CheckCircle className="h-3.5 w-3.5" /> Aprovar
+                    </Button>
+                  </div>
                 )}
               </div>
 
