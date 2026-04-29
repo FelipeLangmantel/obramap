@@ -182,15 +182,37 @@ export function PleContractTab(props: PleDataReturn) {
 
   const stats = useMemo(() => {
     const totalContractual = events.reduce((s, e) => s + e.quantity * e.unit_value, 0);
+    const totalMat = events.reduce((s, e) => s + e.quantity * (e.mat_unit_value || 0), 0);
+    const totalMo = events.reduce((s, e) => s + e.quantity * (e.mo_unit_value || 0), 0);
     return {
       totalStages: stages.length,
       totalSubstages: groups.filter(g => g.parent_id).length,
       totalEvents: events.length,
       totalContractual,
+      totalMat,
+      totalMo,
       ungroupedCount: ungroupedEvents.length,
       mappedCount: events.filter(e => e.obramap_scope_id).length,
     };
   }, [groups, events, stages, ungroupedEvents]);
+
+  // Lista de subetapas (com nome do pai) — usada no seletor "mover para"
+  const substageOptions = useMemo(() => {
+    const opts: { id: string; label: string }[] = [];
+    stages.forEach(stage => {
+      (substagesByStage.get(stage.id) || []).forEach(sub => {
+        opts.push({ id: sub.id, label: `${stage.code} ${stage.name} › ${sub.code} ${sub.name}` });
+      });
+    });
+    return opts;
+  }, [stages, substagesByStage]);
+
+  const moveEventToGroup = async (eventId: string, groupId: string) => {
+    if (!requireEdit()) return;
+    if (!groupId || groupId === "__none__") return;
+    await updateEvent(eventId, { group_id: groupId } as any);
+    toast.success("Item movido para a subetapa");
+  };
 
   const toggleStage = (id: string) => {
     setExpandedStages(prev => {
@@ -487,10 +509,26 @@ export function PleContractTab(props: PleDataReturn) {
           </div>
         </div>
 
+        {/* KPIs MAT / MO / Total — sempre refletem o orçamento lançado */}
+        <div className="grid grid-cols-3 gap-2 mb-2">
+          <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 px-3 py-2 min-w-0">
+            <p className="text-[9px] sm:text-[10px] uppercase font-semibold text-blue-700 dark:text-blue-300">Material (MAT)</p>
+            <p className="text-sm sm:text-base font-bold font-mono text-blue-700 dark:text-blue-300 tabular-nums truncate">{fmtCur(stats.totalMat)}</p>
+          </div>
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 min-w-0">
+            <p className="text-[9px] sm:text-[10px] uppercase font-semibold text-emerald-700 dark:text-emerald-300">Mão de obra (MO)</p>
+            <p className="text-sm sm:text-base font-bold font-mono text-emerald-700 dark:text-emerald-300 tabular-nums truncate">{fmtCur(stats.totalMo)}</p>
+          </div>
+          <div className="rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 min-w-0">
+            <p className="text-[9px] sm:text-[10px] uppercase font-semibold text-primary">Total Orçamento</p>
+            <p className="text-sm sm:text-base font-bold font-mono text-primary tabular-nums truncate">{fmtCur(stats.totalContractual)}</p>
+          </div>
+        </div>
+
         {stats.ungroupedCount > 0 && (
           <div className="mb-2 px-3 py-2 rounded-md bg-amber-500/10 border border-amber-500/30 flex items-center gap-2">
             <span className="text-xs text-amber-700 dark:text-amber-400 font-medium">
-              ⚠️ {stats.ungroupedCount} itens importados sem grupo atribuído — eles aparecem abaixo para edição/exclusão.
+              ⚠️ {stats.ungroupedCount} itens importados sem grupo atribuído — use o seletor "Mover para subetapa" abaixo de cada linha.
             </span>
           </div>
         )}
@@ -759,6 +797,31 @@ export function PleContractTab(props: PleDataReturn) {
                       <span className="text-[10px] text-foreground truncate pr-1">{ev.description}</span>
                       <span className="text-[10px] text-center text-muted-foreground">{ev.unit}</span>
                       <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                    </div>
+                    {/* Mover para subetapa */}
+                    <div className="flex items-center gap-2 border-b bg-amber-500/5 px-2 sm:px-3 py-1.5">
+                      <span className="text-[10px] text-amber-700 dark:text-amber-300 shrink-0">Mover para subetapa:</span>
+                      <Select value="__none__" onValueChange={(v) => moveEventToGroup(ev.id, v)}>
+                        <SelectTrigger className="h-6 text-[10px] flex-1 max-w-[420px] border-dashed border-amber-500/50">
+                          <SelectValue placeholder="Selecionar subetapa..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__" disabled>
+                            <span className="text-muted-foreground">Selecionar subetapa...</span>
+                          </SelectItem>
+                          {substageOptions.length === 0 ? (
+                            <SelectItem value="__empty__" disabled>
+                              <span className="text-muted-foreground">Nenhuma subetapa cadastrada</span>
+                            </SelectItem>
+                          ) : (
+                            substageOptions.map(opt => (
+                              <SelectItem key={opt.id} value={opt.id}>
+                                {opt.label}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 ))}
