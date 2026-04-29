@@ -200,7 +200,7 @@ export function LinkPleItemsDialog({
           } as any)
           .in("id", toLink);
       }
-      onConfirm(totalRevenue);
+      onConfirm(totalRevenue, selected.size);
       toast.success(`${selected.size} itens PLE vinculados ao serviço`);
       onClose();
     } catch (err: any) {
