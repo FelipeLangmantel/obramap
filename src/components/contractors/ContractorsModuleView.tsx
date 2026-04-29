@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Building2, FileText, Link2 } from "lucide-react";
+import { Building2, FileText, Link2, Users } from "lucide-react";
 import { useContractors } from "@/hooks/useContractors";
 import { ContractorRegistrationTab } from "./ContractorRegistrationTab";
 import { ContractorContractsTab } from "./ContractorContractsTab";
 import { ContractorMeasurementsTab } from "./ContractorMeasurementsTab";
 import { ContractorLinksTab } from "./ContractorLinksTab";
+import { ContractorEmployeesTab } from "./ContractorEmployeesTab";
 import type { ContractorContract } from "@/hooks/useContractors";
 
 export default function ContractorsModuleView() {
@@ -48,6 +49,9 @@ export default function ContractorsModuleView() {
           <TabsTrigger value="registration" className="gap-1.5 text-xs px-3 h-7">
             <Building2 className="h-3.5 w-3.5" /> Cadastro
           </TabsTrigger>
+          <TabsTrigger value="employees" className="gap-1.5 text-xs px-3 h-7">
+            <Users className="h-3.5 w-3.5" /> Funcionários
+          </TabsTrigger>
           <TabsTrigger value="links" className="gap-1.5 text-xs px-3 h-7">
             <Link2 className="h-3.5 w-3.5" /> Vínculos
           </TabsTrigger>
@@ -71,6 +75,10 @@ export default function ContractorsModuleView() {
             onCreateContractor={data.createContractor}
             onUpdateContractor={data.updateContractor}
           />
+        </TabsContent>
+
+        <TabsContent value="employees" className="flex-1 min-h-0 mt-3 overflow-auto">
+          <ContractorEmployeesTab />
         </TabsContent>
 
         <TabsContent value="links" className="flex-1 min-h-0 mt-3 overflow-auto">
