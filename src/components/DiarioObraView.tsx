@@ -27,7 +27,6 @@ import { ConfirmRainDialog } from "./diario/ConfirmRainDialog";
 import { ImportPreviousDayButton } from "./diario/ImportPreviousDayButton";
 import { RequestDeleteItemDialog } from "./diario/RequestDeleteItemDialog";
 import { DiaryItemPhotoButton } from "./diario/DiaryItemPhotoButton";
-import { LowMemoryCameraDialog } from "./diario/LowMemoryCameraDialog";
 import { EditDiaryItemDialog, type EditableDiaryItem } from "./diario/EditDiaryItemDialog";
 import { useDiaryLegalConfig } from "@/hooks/useDiaryLegalConfig";
 import { useNavigate } from "react-router-dom";
@@ -191,8 +190,8 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState<{ id: string; url: string; legenda: string | null } | null>(null);
   const galleryInputRef = React.useRef<HTMLInputElement>(null);
+  const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const [photoSourceOpen, setPhotoSourceOpen] = useState(false);
-  const [lowMemoryCameraOpen, setLowMemoryCameraOpen] = useState(false);
 
   // RDO data
   const rdo = useRdoData(entryId);
@@ -596,7 +595,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   };
 
   // Upload de fotos
-  const handleUploadFotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadFotos = async (e: React.ChangeEvent<HTMLInputElement>, source: "camera" | "gallery" = "gallery") => {
     const resolvedEntryId = entryId || await ensureEntryExists();
     if (!resolvedEntryId || !e.target.files?.length || !company?.id) return;
     setUploadingFoto(true);
@@ -604,13 +603,16 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       const arquivos = Array.from(e.target.files).slice(0, 10 - fotos.length);
       let uploaded = 0;
       for (const arquivo of arquivos) {
-        const payload = await comprimirImagem(arquivo, 1024, 0.7);
+        const isCamera = source === "camera";
+        const payload = isCamera ? arquivo : await comprimirImagem(arquivo, 1024, 0.7);
         const safeName = arquivo.name.replace(/[^a-zA-Z0-9.]/g, "_");
-        const extSafeName = safeName.replace(/\.[^.]+$/, ".jpg");
+        const ext = isCamera ? (arquivo.type.includes("png") ? "png" : arquivo.type.includes("webp") ? "webp" : "jpg") : "jpg";
+        const extSafeName = safeName.includes(".") ? safeName.replace(/\.[^.]+$/, `.${ext}`) : `${safeName}.${ext}`;
+        const contentType = isCamera ? (arquivo.type || "image/jpeg") : "image/jpeg";
         const path = `${company.id}/${resolvedEntryId}/${Date.now()}_${extSafeName}`;
         const { error: uploadError } = await supabase.storage
           .from("diary-photos")
-          .upload(path, payload, { contentType: "image/jpeg", upsert: false });
+          .upload(path, payload, { contentType, upsert: false });
         if (uploadError) throw uploadError;
         const { error: dbError } = await supabase.from("diary_photos").insert({
           diary_entry_id: resolvedEntryId, storage_path: path, legenda: null,
@@ -628,32 +630,6 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     } finally {
       setUploadingFoto(false);
       e.target.value = "";
-    }
-  };
-
-  const uploadCapturedPhoto = async (blob: Blob) => {
-    const resolvedEntryId = entryId || await ensureEntryExists();
-    if (!resolvedEntryId || !company?.id) return;
-    setUploadingFoto(true);
-    try {
-      const path = `${company.id}/${resolvedEntryId}/${Date.now()}_camera.jpg`;
-      const { error: uploadError } = await supabase.storage
-        .from("diary-photos")
-        .upload(path, blob, { contentType: "image/jpeg", upsert: false });
-      if (uploadError) throw uploadError;
-      const { error: dbError } = await supabase.from("diary_photos").insert({
-        diary_entry_id: resolvedEntryId, storage_path: path, legenda: null,
-      });
-      if (dbError) {
-        await supabase.storage.from("diary-photos").remove([path]);
-        throw dbError;
-      }
-      await loadFotos(resolvedEntryId);
-      toast.success("Foto enviada.");
-    } catch (err: any) {
-      toast.error("Erro ao enviar foto: " + (err.message || ""));
-    } finally {
-      setUploadingFoto(false);
     }
   };
 
@@ -862,7 +838,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   }, [entryId, ensureEntryExists]);
 
   const handlePickPhotoSource = useCallback((source: "camera" | "gallery") => {
-    if (source === "camera") setLowMemoryCameraOpen(true);
+    if (source === "camera") cameraInputRef.current?.click();
     else galleryInputRef.current?.click();
     setPhotoSourceOpen(false);
   }, []);
@@ -1894,7 +1870,16 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
               accept="image/jpeg,image/png,image/webp"
               multiple
               className="hidden"
-              onChange={handleUploadFotos}
+              onChange={(e) => handleUploadFotos(e, "gallery")}
+              disabled={uploadingFoto}
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => handleUploadFotos(e, "camera")}
               disabled={uploadingFoto}
             />
             <div className="space-y-3">
@@ -2046,13 +2031,6 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
           </div>
         </DialogContent>
       </Dialog>
-
-      <LowMemoryCameraDialog
-        open={lowMemoryCameraOpen}
-        onOpenChange={setLowMemoryCameraOpen}
-        onCapture={uploadCapturedPhoto}
-        disabled={uploadingFoto}
-      />
 
       {/* Print dialog */}
       <PrintDiarioDialog open={printOpen} onOpenChange={setPrintOpen} buildData={buildPrintData} />
