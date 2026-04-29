@@ -151,7 +151,73 @@ export function ContractorMeasurementsTab({
     await loadItems(selectedMeasurement.id);
   };
 
-  const handleApprove = async () => {
+  /**
+   * Importa a execução real do RDO: conta casas executadas no período,
+   * por scope_id, filtrando diary_items com contractor_contract_id = este contrato.
+   * Sobrescreve os houses_measured de cada item da medição.
+   */
+  const handleImportFromDiary = async () => {
+    if (!requireEdit()) return;
+    if (!selectedMeasurement || !currentProject?.id) return;
+    setSaving(true);
+    try {
+      // Diários do projeto no período
+      const { data: entries } = await supabase
+        .from("diary_entries")
+        .select("id")
+        .eq("project_id", currentProject.id)
+        .gte("entry_date", selectedMeasurement.period_start)
+        .lte("entry_date", selectedMeasurement.period_end);
+
+      const entryIds = (entries || []).map((e: any) => e.id);
+      if (entryIds.length === 0) {
+        toast.info("Nenhum RDO encontrado neste período.");
+        setSaving(false);
+        return;
+      }
+
+      // Itens executados pelo contrato
+      const { data: items } = await supabase
+        .from("diary_items")
+        .select("scope_id, house_ids, quantity")
+        .in("diary_entry_id", entryIds)
+        .eq("contractor_contract_id", contract.id);
+
+      // scope_id → Set(houseId)
+      const housesByScope = new Map<string, Set<number>>();
+      (items || []).forEach((it: any) => {
+        const set = housesByScope.get(it.scope_id) || new Set<number>();
+        (it.house_ids || []).forEach((h: number) => set.add(h));
+        housesByScope.set(it.scope_id, set);
+      });
+
+      let updated = 0;
+      for (const svc of services) {
+        const set = housesByScope.get(svc.scope_id);
+        if (!set || set.size === 0) continue;
+        // Limita às casas do contrato
+        const contractHouses = new Set(svc.house_ids || []);
+        const inside = Array.from(set).filter((h) => contractHouses.has(h));
+        if (inside.length === 0) continue;
+        const existing = measurementItems.find((i) => i.contract_service_id === svc.id);
+        await saveMeasurementItem({
+          id: existing?.id,
+          measurement_id: selectedMeasurement.id,
+          contract_service_id: svc.id,
+          houses_measured: inside.length,
+          unit_value: svc.negotiated_unit_value,
+          house_ids: inside,
+        });
+        updated++;
+      }
+      await loadItems(selectedMeasurement.id);
+      toast.success(`${updated} serviço(s) atualizado(s) com a execução do RDO.`);
+    } catch (e: any) {
+      toast.error("Falha ao importar do RDO: " + (e?.message || e));
+    } finally {
+      setSaving(false);
+    }
+  };
     if (!requireEdit()) return;
     if (!selectedMeasurement) return;
     const ok = await approveMeasurement(selectedMeasurement.id);
