@@ -631,6 +631,32 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
     }
   };
 
+  const uploadCapturedPhoto = async (blob: Blob) => {
+    const resolvedEntryId = entryId || await ensureEntryExists();
+    if (!resolvedEntryId || !company?.id) return;
+    setUploadingFoto(true);
+    try {
+      const path = `${company.id}/${resolvedEntryId}/${Date.now()}_camera.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from("diary-photos")
+        .upload(path, blob, { contentType: "image/jpeg", upsert: false });
+      if (uploadError) throw uploadError;
+      const { error: dbError } = await supabase.from("diary_photos").insert({
+        diary_entry_id: resolvedEntryId, storage_path: path, legenda: null,
+      });
+      if (dbError) {
+        await supabase.storage.from("diary-photos").remove([path]);
+        throw dbError;
+      }
+      await loadFotos(resolvedEntryId);
+      toast.success("Foto enviada.");
+    } catch (err: any) {
+      toast.error("Erro ao enviar foto: " + (err.message || ""));
+    } finally {
+      setUploadingFoto(false);
+    }
+  };
+
   const handleRemoverFoto = async (fotoId: string, storagePath: string) => {
     try {
       await supabase.storage.from("diary-photos").remove([storagePath]);
