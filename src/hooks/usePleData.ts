@@ -441,7 +441,7 @@ export function usePleData() {
     groups, events, measurements, entries, glosses, auditLogs,
     isLoading, isSaving,
     totals, nextMeasurementNumber,
-    loadProjects, createProject, updateProject,
+    loadProjects, createProject, updateProject, deleteProject,
     createGroup, updateGroup, deleteGroup,
     createEvent, updateEvent, deleteEvent,
     createMeasurement, approveMeasurement, undoMeasurementApproval,
