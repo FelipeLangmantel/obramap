@@ -311,7 +311,9 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   // Filter menu items based on permissions, company modules, and system governance
   const getVisibleItems = (items: MenuItem[]) => items.filter(item => {
     if (!canAccessMenu(item.permissionId)) return false;
-    if (!isSystemAdmin && !isModuleEnabled(item.view)) return false;
+    // System admin enxerga tudo (governança global)
+    if (isSystemAdmin) return true;
+    if (!isModuleEnabled(item.view)) return false;
     const moduleStatus = getModuleStatus(item.view);
     if (moduleStatus === "disabled") return false;
     return true;
