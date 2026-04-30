@@ -202,7 +202,13 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const getModuleStatus = (viewKey: string): "active" | "development" | "disabled" | null => {
     // Agora as chaves são iguais entre system_modules e company_modules
     const module = companyModules.find(m => m.module_key === viewKey);
-    return module?.status || "active"; // Default ativo se não configurado
+    if (module) return module.status;
+    // Se o módulo está cadastrado em system_modules mas a empresa ainda não o ativou,
+    // o padrão é DESATIVADO — admin da empresa precisa ativar explicitamente.
+    const isRegisteredSystemModule = allSystemModules.some(m => m.key === viewKey);
+    if (isRegisteredSystemModule) return "disabled";
+    // Itens fora do catálogo (ex.: Painel Inicial / página core) seguem ativos.
+    return "active";
   };
 
   const getModuleInfo = (viewKey: string): CompanyModule | null => {
