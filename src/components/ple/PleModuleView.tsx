@@ -51,6 +51,7 @@ export function PleModuleView(props: PleDataReturn) {
         projects={projects}
         onSelectProject={(id) => setCurrentProjectId(id)}
         onCreateProject={() => setShowCreateProject(true)}
+        onDeleteProject={props.deleteProject}
       />
     );
   }

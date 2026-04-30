@@ -1,21 +1,30 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Building2, Home, TrendingUp, AlertCircle, Plus, ArrowLeft, ArrowRight, FileText,
+  Building2, Home, TrendingUp, AlertCircle, Plus, ArrowLeft, ArrowRight, FileText, Trash2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { PleProject } from "@/hooks/usePleData";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Props {
   projects: PleProject[];
   onSelectProject: (id: string) => void;
   onCreateProject: () => void;
+  onDeleteProject?: (id: string) => Promise<boolean>;
 }
 
-export function PleDashboard({ projects, onSelectProject, onCreateProject }: Props) {
+export function PleDashboard({ projects, onSelectProject, onCreateProject, onDeleteProject }: Props) {
   const navigate = useNavigate();
+  const { canEdit } = useAuth();
+  const [toDelete, setToDelete] = useState<PleProject | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const summary = useMemo(() => {
     const totalHouses = projects.reduce((s, p) => s + (p.total_houses || 0), 0);
@@ -131,6 +140,17 @@ export function PleDashboard({ projects, onSelectProject, onCreateProject }: Pro
                       {(p as any).obras_portfolio_id && (
                         <Badge className="text-[9px] bg-amber-500/90 hover:bg-amber-500 px-1.5 py-0">Holding</Badge>
                       )}
+                      {canEdit && onDeleteProject && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          onClick={(e) => { e.stopPropagation(); setToDelete(p); }}
+                          title="Excluir obra"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                     </div>
                   </div>
@@ -164,6 +184,38 @@ export function PleDashboard({ projects, onSelectProject, onCreateProject }: Pro
           <ArrowLeft className="h-4 w-4" /> Voltar ao Menu
         </Button>
       </div>
+
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir obra PLE?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir <strong>{toDelete?.name}</strong>?
+              <br /><br />
+              <span className="text-destructive font-semibold">⚠ Esta ação não pode ser desfeita.</span>
+              <br />
+              Todos os itens orçados, medições, lançamentos e histórico vinculados a esta obra serão removidos permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!toDelete || !onDeleteProject) return;
+                setDeleting(true);
+                const ok = await onDeleteProject(toDelete.id);
+                setDeleting(false);
+                if (ok) setToDelete(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

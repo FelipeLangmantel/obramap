@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useProjectContract } from "@/hooks/useProjectContract";
 import { useConstruction } from "@/contexts/ConstructionContext";
@@ -11,7 +11,7 @@ import { ContractSummaryCards } from "@/components/contract/ContractSummaryCards
 import { ContractServicesTable } from "@/components/contract/ContractServicesTable";
 import { ContractConfigCard } from "@/components/contract/ContractConfigCard";
 import { Button } from "@/components/ui/button";
-import { Loader2, Save, ArrowRight, AlertTriangle, Edit } from "lucide-react";
+import { Loader2, Save, ArrowRight, AlertTriangle, Edit, Menu } from "lucide-react";
 import { toast } from "sonner";
 import { ModuleAccessGuard } from "@/components/guards/ModuleAccessGuard";
 import {
@@ -124,6 +124,12 @@ export default function ProjectContractPage() {
           <div className="flex min-h-screen w-full bg-background">
             <AppSidebar activeView="costs" onViewChange={() => {}} />
             <SidebarInset className="flex-1">
+              <header className="h-10 sm:h-12 flex items-center gap-2 border-b border-border bg-background/80 backdrop-blur px-2 sm:px-3 shrink-0">
+                <SidebarTrigger className="p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors">
+                  <Menu className="h-5 w-5" />
+                </SidebarTrigger>
+                <span className="text-xs sm:text-sm font-medium text-muted-foreground">Contrato da Obra</span>
+              </header>
               <div className="flex items-center justify-center h-full">
                 <div className="text-center space-y-4">
                   <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
@@ -143,6 +149,12 @@ export default function ProjectContractPage() {
         <div className="flex min-h-screen w-full bg-background">
           <AppSidebar activeView="costs" onViewChange={() => {}} />
         <SidebarInset className="flex-1">
+          <header className="h-10 sm:h-12 flex items-center gap-2 border-b border-border bg-background/80 backdrop-blur px-2 sm:px-3 shrink-0">
+            <SidebarTrigger className="p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors">
+              <Menu className="h-5 w-5" />
+            </SidebarTrigger>
+            <span className="text-xs sm:text-sm font-medium text-muted-foreground">Contrato da Obra</span>
+          </header>
           <div className="container mx-auto py-6 px-4 space-y-6 max-w-7xl">
             <ContractHeader 
               isEditing={isEditing} 
