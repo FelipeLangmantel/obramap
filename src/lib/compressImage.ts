@@ -159,12 +159,37 @@ async function compressWithImageBitmap(file: File, opts: Required<CompressOption
 
 /** Fallback para navegadores sem createImageBitmap (Safari iOS < 15). */
 async function compressWithImgFallback(file: File, opts: Required<CompressOptions>): Promise<Blob> {
+  // PROTEÇÃO: Rejeitar se arquivo é muito grande para fallback
+  // Isto evita tentar decodificar 40MB+ na RAM, que causa Out of Memory
+  if (file.size > SAFE_FALLBACK_BYTES) {
+    console.error(
+      `[compressWithImgFallback] Arquivo muito grande: ${(file.size / 1024 / 1024).toFixed(1)}MB ` +
+      `(limite seguro: ${(SAFE_FALLBACK_BYTES / 1024 / 1024).toFixed(0)}MB)`
+    );
+    throw new Error(
+      `Imagem muito grande para este aparelho. ` +
+      `Tamanho: ${(file.size / 1024 / 1024).toFixed(1)}MB, ` +
+      `Limite seguro: ${(SAFE_FALLBACK_BYTES / 1024 / 1024).toFixed(0)}MB. ` +
+      `Tente tirar a foto em menor resolução (não use zoom).`
+    );
+  }
+
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const i = new Image();
-      i.onload = () => resolve(i);
-      i.onerror = () => reject(new Error("Imagem inválida"));
+      // Timeout para evitar hang infinito
+      const timeout = setTimeout(() => {
+        reject(new Error("Timeout ao carregar imagem (aparelho sobrecarregado)"));
+      }, 10000);
+      i.onload = () => {
+        clearTimeout(timeout);
+        resolve(i);
+      };
+      i.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error("Imagem inválida ou corrompida"));
+      };
       i.src = url;
     });
     const { w, h } = calcDims(img.naturalWidth, img.naturalHeight, opts.maxSide);
