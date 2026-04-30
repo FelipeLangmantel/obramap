@@ -40,6 +40,44 @@ export function PleContractTab(props: PleDataReturn) {
   const [batchMappings, setBatchMappings] = useState<Record<string, string>>({});
   const [syncResult, setSyncResult] = useState<{ synced: number; projectName: string } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  // Edição de composição (descrição completa, qtde, valores)
+  const [editingEvent, setEditingEvent] = useState<PleEvent | null>(null);
+  const [editForm, setEditForm] = useState({ item_code: "", description: "", discrimination: "", sinapi_code: "", unit: "", quantity: 0, mat_unit_value: 0, mo_unit_value: 0, unit_value: 0 });
+
+  const openEditEvent = (ev: PleEvent) => {
+    setEditingEvent(ev);
+    setEditForm({
+      item_code: ev.item_code || "",
+      description: ev.description || "",
+      discrimination: ev.discrimination || "",
+      sinapi_code: ev.sinapi_code || "",
+      unit: ev.unit || "UN",
+      quantity: Number(ev.quantity) || 0,
+      mat_unit_value: Number(ev.mat_unit_value) || 0,
+      mo_unit_value: Number(ev.mo_unit_value) || 0,
+      unit_value: Number(ev.unit_value) || 0,
+    });
+  };
+
+  const saveEditEvent = async () => {
+    if (!editingEvent || !requireEdit()) return;
+    const sum = (editForm.mat_unit_value || 0) + (editForm.mo_unit_value || 0);
+    const finalUnit = sum > 0 ? sum : (editForm.unit_value || 0);
+    await updateEvent(editingEvent.id, {
+      item_code: editForm.item_code,
+      description: editForm.description,
+      discrimination: editForm.discrimination,
+      sinapi_code: editForm.sinapi_code,
+      unit: editForm.unit,
+      quantity: editForm.quantity,
+      mat_unit_value: editForm.mat_unit_value,
+      mo_unit_value: editForm.mo_unit_value,
+      unit_value: finalUnit,
+    } as any);
+    setEditingEvent(null);
+    toast.success("Composição atualizada");
+  };
+
 
   // Inline editable number cell
   const InlineNumber = ({ value, eventId, field, ev }: { value: number; eventId: string; field: 'mat_unit_value' | 'mo_unit_value' | 'unit_value'; ev: PleEvent }) => {
