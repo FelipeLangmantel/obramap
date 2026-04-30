@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { useProjectContract } from "@/hooks/useProjectContract";
 import { useConstruction } from "@/contexts/ConstructionContext";
@@ -11,7 +11,7 @@ import { ContractSummaryCards } from "@/components/contract/ContractSummaryCards
 import { ContractServicesTable } from "@/components/contract/ContractServicesTable";
 import { ContractConfigCard } from "@/components/contract/ContractConfigCard";
 import { Button } from "@/components/ui/button";
-import { Loader2, Save, ArrowRight, AlertTriangle, Edit } from "lucide-react";
+import { Loader2, Save, ArrowRight, AlertTriangle, Edit, Menu } from "lucide-react";
 import { toast } from "sonner";
 import { ModuleAccessGuard } from "@/components/guards/ModuleAccessGuard";
 import {
