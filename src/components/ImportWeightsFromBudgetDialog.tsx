@@ -366,16 +366,38 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
               )}
 
               {!isLoading && activeSummary && (
-                <Alert>
+                <Alert variant={activeSummary.scopesWithoutValue > 0 ? "destructive" : "default"}>
                   <FileText className="h-4 w-4" />
-                  <AlertDescription className="text-xs">
+                  <AlertDescription className="text-xs space-y-2">
                     {hasActiveData ? (
                       <>
-                        Serão atribuídos pesos a <strong>{activeSummary.scopeMatched}</strong> de{" "}
-                        <strong>
-                          {currentProject.macrosTemplate.reduce((s, m) => s + m.scopes.length, 0)}
-                        </strong>{" "}
-                        serviços. Os demais ficarão com peso 0% (você poderá ajustar depois no modo manual).
+                        <div>
+                          Serão atribuídos pesos a{" "}
+                          <strong>{activeSummary.scopesWithValue}</strong> de{" "}
+                          <strong>{activeSummary.totalScopes}</strong> serviços
+                          {" "}({formatCurrency(activeSummary.totalValue)} total).
+                        </div>
+                        {activeSummary.scopesWithoutValue > 0 && (
+                          <div className="space-y-1">
+                            <div className="font-semibold flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              {activeSummary.scopesWithoutValue} serviço(s) sem valor cadastrado em
+                              {selectedSource === "contract" ? " Contrato da Obra" : " Custos da Obra"}:
+                            </div>
+                            <ul className="list-disc list-inside text-[11px] opacity-90 max-h-24 overflow-auto">
+                              {activeSummary.missingScopeNames.map((n) => (
+                                <li key={n}>{n}</li>
+                              ))}
+                              {activeSummary.scopesWithoutValue > activeSummary.missingScopeNames.length && (
+                                <li>… e mais {activeSummary.scopesWithoutValue - activeSummary.missingScopeNames.length}</li>
+                              )}
+                            </ul>
+                            <div className="text-[11px]">
+                              Esses serviços ficarão com peso 0%. Para distribuir 100%, preencha os valores em
+                              {selectedSource === "contract" ? " Contrato da Obra" : " Custos da Obra"} e reimporte.
+                            </div>
+                          </div>
+                        )}
                       </>
                     ) : (
                       <>
