@@ -9,6 +9,13 @@ function sanitizeFileName(name: string) {
   return clean.includes(".") ? clean : `${clean}.jpg`;
 }
 
+const MAX_CAMERA_FILE_MB = 50;
+const MAX_DIRECT_UPLOAD_MB = 20;
+
+function canUploadOriginalSafely(file: File) {
+  return file.type.startsWith("image/") && file.size <= MAX_DIRECT_UPLOAD_MB * 1024 * 1024;
+}
+
 export default function CameraCapturePage() {
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -50,11 +57,10 @@ export default function CameraCapturePage() {
     if (!file || !entryId || !companyId) return;
 
     // 1. Validar tamanho do arquivo ANTES
-    const maxFileMB = 50;
-    if (file.size > maxFileMB * 1024 * 1024) {
+    if (file.size > MAX_CAMERA_FILE_MB * 1024 * 1024) {
       setMessage(
         `Erro: foto com ${(file.size / 1024 / 1024).toFixed(0)}MB. ` +
-        `Máximo: ${maxFileMB}MB. Tente tirar a foto em menor resolução.`
+        `Máximo: ${MAX_CAMERA_FILE_MB}MB. Tente tirar a foto em menor resolução.`
       );
       e.target.value = "";
       return;
@@ -69,6 +75,7 @@ export default function CameraCapturePage() {
 
       // 2. Comprimir com fallback seguro (sem fallback inseguro de enviar original)
       let payload: Blob;
+      let contentType = "image/jpeg";
       try {
         console.log(`[camera] Iniciando compressão: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
         payload = await compressImageSafe(file, {
@@ -82,11 +89,16 @@ export default function CameraCapturePage() {
         );
       } catch (compressErr) {
         console.warn("[camera] Compressão falhou:", compressErr);
-        setMessage(
-          `Erro de compressão: ${compressErr instanceof Error ? compressErr.message : 'Desconhecido'}. ` +
-          `Tente tirar a foto em menor resolução.`
-        );
-        throw compressErr;
+        if (!canUploadOriginalSafely(file)) {
+          throw new Error(
+            `Este aparelho não conseguiu reduzir a foto e o arquivo original tem ${(file.size / 1024 / 1024).toFixed(1)}MB. ` +
+            `Limite seguro para envio direto: ${MAX_DIRECT_UPLOAD_MB}MB. Tente reduzir a resolução da câmera.`
+          );
+        }
+        payload = file;
+        contentType = file.type || "image/jpeg";
+        setMessage("Não foi possível comprimir neste aparelho; enviando a foto original com segurança...");
+        console.log(`[camera] Upload direto do original: ${(payload.size / 1024 / 1024).toFixed(1)}MB`);
       }
 
       // 3. Verificar tamanho final antes de enviar
@@ -100,7 +112,6 @@ export default function CameraCapturePage() {
       const safeName = sanitizeFileName(file.name).replace(/\.[^.]+$/, ".jpg");
       const houseSeg = itemId ? (houseNumber != null ? `casa-${houseNumber}/` : "geral/") : "";
       const path = `${companyId}/${entryId}/${itemId ? `${itemId}/` : ""}${houseSeg}${Date.now()}_${safeName}`;
-      const contentType = "image/jpeg";
 
       console.log(`[camera] Enviando para storage: ${path} (${(payload.size / 1024 / 1024).toFixed(1)}MB)`);
 
@@ -166,6 +177,12 @@ export default function CameraCapturePage() {
             Voltar
           </Button>
         </div>
+
+        {message && (
+          <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
+            {message}
+          </p>
+        )}
       </section>
     </main>
   );
