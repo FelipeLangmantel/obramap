@@ -152,8 +152,15 @@ export function useProjectContract() {
           const pleAggByScope = await loadPleLinkedTotals(currentProject.id);
           const housesQty = currentProject.totalHouses || (currentProject.houses?.length ?? 1);
 
-          setServices(
-            servicesData.map((s) => {
+          // ✅ Build canonical order map from project's macrosTemplate to enforce stable sequence
+          const canonicalOrder = new Map<string, { macro_order: number; scope_order: number }>();
+          currentProject.macrosTemplate?.forEach((macro, mi) => {
+            macro.scopes.forEach((scope, si) => {
+              canonicalOrder.set(`${macro.id}-${scope.id}`, { macro_order: mi, scope_order: si });
+            });
+          });
+
+          const mapped = servicesData.map((s) => {
               const pleAgg = pleAggByScope.get(`${s.macro_id}-${s.scope_id}`);
               const baseRevenue = Number(s.unit_revenue_value);
               // Se há itens PLE vinculados, eles são a fonte da verdade
