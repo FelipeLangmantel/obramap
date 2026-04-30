@@ -1,21 +1,30 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Building2, Home, TrendingUp, AlertCircle, Plus, ArrowLeft, ArrowRight, FileText,
+  Building2, Home, TrendingUp, AlertCircle, Plus, ArrowLeft, ArrowRight, FileText, Trash2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import type { PleProject } from "@/hooks/usePleData";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Props {
   projects: PleProject[];
   onSelectProject: (id: string) => void;
   onCreateProject: () => void;
+  onDeleteProject?: (id: string) => Promise<boolean>;
 }
 
-export function PleDashboard({ projects, onSelectProject, onCreateProject }: Props) {
+export function PleDashboard({ projects, onSelectProject, onCreateProject, onDeleteProject }: Props) {
   const navigate = useNavigate();
+  const { canEdit } = useAuth();
+  const [toDelete, setToDelete] = useState<PleProject | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const summary = useMemo(() => {
     const totalHouses = projects.reduce((s, p) => s + (p.total_houses || 0), 0);
