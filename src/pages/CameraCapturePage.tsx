@@ -49,6 +49,17 @@ export default function CameraCapturePage() {
     const file = e.target.files?.[0];
     if (!file || !entryId || !companyId) return;
 
+    // 1. Validar tamanho do arquivo ANTES
+    const maxFileMB = 50;
+    if (file.size > maxFileMB * 1024 * 1024) {
+      setMessage(
+        `Erro: foto com ${(file.size / 1024 / 1024).toFixed(0)}MB. ` +
+        `Máximo: ${maxFileMB}MB. Tente tirar a foto em menor resolução.`
+      );
+      e.target.value = "";
+      return;
+    }
+
     setUploading(true);
     try {
       sessionStorage.setItem("obramap_camera_capture_status", JSON.stringify({ entryId, itemId, date, startedAt: Date.now() }));
@@ -56,20 +67,42 @@ export default function CameraCapturePage() {
         sessionStorage.setItem("obramap_diario_tab", JSON.stringify({ tab: "editor", selectedDate: date }));
       }
 
-      // Android WebView: nunca usar fallback com new Image/canvas em foto da câmera.
-      // Se createImageBitmap não reduzir com segurança, envia o arquivo original.
-      let payload: Blob = file;
+      // 2. Comprimir com fallback seguro (sem fallback inseguro de enviar original)
+      let payload: Blob;
       try {
-        payload = await compressImageSafe(file, { maxSide: 1024, quality: 0.68, allowUnsafeFallback: false });
+        console.log(`[camera] Iniciando compressão: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+        payload = await compressImageSafe(file, {
+          maxSide: 1024,
+          quality: 0.68,
+          allowUnsafeFallback: true,
+          maxInputBytes: 50 * 1024 * 1024,
+        });
+        console.log(
+          `[camera] Compressão ok: ${(file.size / 1024 / 1024).toFixed(1)}MB → ${(payload.size / 1024 / 1024).toFixed(1)}MB`
+        );
       } catch (compressErr) {
-        console.warn("[camera] compressão falhou, usando arquivo original:", compressErr);
-        payload = file;
+        console.warn("[camera] Compressão falhou:", compressErr);
+        setMessage(
+          `Erro de compressão: ${compressErr instanceof Error ? compressErr.message : 'Desconhecido'}. ` +
+          `Tente tirar a foto em menor resolução.`
+        );
+        throw compressErr;
+      }
+
+      // 3. Verificar tamanho final antes de enviar
+      if (payload.size > 50 * 1024 * 1024) {
+        throw new Error(
+          `Arquivo comprimido ainda muito grande: ${(payload.size / 1024 / 1024).toFixed(0)}MB. ` +
+          `Tente tirar a foto em menor resolução.`
+        );
       }
 
       const safeName = sanitizeFileName(file.name).replace(/\.[^.]+$/, ".jpg");
       const houseSeg = itemId ? (houseNumber != null ? `casa-${houseNumber}/` : "geral/") : "";
       const path = `${companyId}/${entryId}/${itemId ? `${itemId}/` : ""}${houseSeg}${Date.now()}_${safeName}`;
       const contentType = "image/jpeg";
+
+      console.log(`[camera] Enviando para storage: ${path} (${(payload.size / 1024 / 1024).toFixed(1)}MB)`);
 
       const { error: uploadError } = await supabase.storage
         .from("diary-photos")
@@ -90,10 +123,12 @@ export default function CameraCapturePage() {
       }
 
       sessionStorage.removeItem("obramap_camera_capture_status");
-      setMessage("Foto enviada. Voltando ao diário...");
-      goBack();
+      setMessage("✅ Foto enviada com sucesso! Voltando ao diário...");
+      setTimeout(() => goBack(), 1500);
     } catch (err: unknown) {
-      setMessage("Erro ao enviar foto: " + (err instanceof Error ? err.message : ""));
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error("[camera] Erro:", errorMsg);
+      setMessage(`Erro ao enviar foto: ${errorMsg}`);
     } finally {
       setUploading(false);
       e.target.value = "";
