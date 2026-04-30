@@ -378,6 +378,21 @@ export function usePleData() {
     setProjects(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
   }, [canEdit]);
 
+  // Delete project (cascades via FK to events/measurements/entries/etc.)
+  const deleteProject = useCallback(async (id: string) => {
+    if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de exclusão"); return false; }
+    const { error } = await supabase.from("ple_projects").delete().eq("id", id);
+    if (error) {
+      console.error("Erro ao excluir obra PLE:", error);
+      toast.error("Erro ao excluir obra: " + error.message);
+      return false;
+    }
+    setProjects(prev => prev.filter(p => p.id !== id));
+    if (currentProjectId === id) setCurrentProjectId(null as any);
+    toast.success("Obra excluída com sucesso");
+    return true;
+  }, [canEdit, currentProjectId]);
+
   // Computed: get measurement number for an entry
   const getMeasurementNumber = useCallback((eventId: string, houseNumber: number): number | null => {
     const entry = entries.find(e => e.event_id === eventId && e.house_number === houseNumber);
