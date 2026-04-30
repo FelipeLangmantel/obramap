@@ -155,7 +155,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const supplyOverdueCount = useSupplyOverdueCount(currentProject?.id);
 
   // ✅ Hook para governança global de módulos
-  const { isModuleEnabled, isModuleBeta } = useSystemModules();
+  const { modules: allSystemModules, isModuleEnabled, isModuleBeta } = useSystemModules();
   
   // Filtrar projetos acessíveis pelo usuário
   const accessibleProjects = projects.filter(project => canAccessProject(project.id));
@@ -202,7 +202,13 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const getModuleStatus = (viewKey: string): "active" | "development" | "disabled" | null => {
     // Agora as chaves são iguais entre system_modules e company_modules
     const module = companyModules.find(m => m.module_key === viewKey);
-    return module?.status || "active"; // Default ativo se não configurado
+    if (module) return module.status;
+    // Se o módulo está cadastrado em system_modules mas a empresa ainda não o ativou,
+    // o padrão é DESATIVADO — admin da empresa precisa ativar explicitamente.
+    const isRegisteredSystemModule = allSystemModules.some(m => m.key === viewKey);
+    if (isRegisteredSystemModule) return "disabled";
+    // Itens fora do catálogo (ex.: Painel Inicial / página core) seguem ativos.
+    return "active";
   };
 
   const getModuleInfo = (viewKey: string): CompanyModule | null => {
@@ -305,7 +311,9 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   // Filter menu items based on permissions, company modules, and system governance
   const getVisibleItems = (items: MenuItem[]) => items.filter(item => {
     if (!canAccessMenu(item.permissionId)) return false;
-    if (!isSystemAdmin && !isModuleEnabled(item.view)) return false;
+    // System admin enxerga tudo (governança global)
+    if (isSystemAdmin) return true;
+    if (!isModuleEnabled(item.view)) return false;
     const moduleStatus = getModuleStatus(item.view);
     if (moduleStatus === "disabled") return false;
     return true;
