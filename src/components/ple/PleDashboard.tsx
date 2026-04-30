@@ -140,6 +140,17 @@ export function PleDashboard({ projects, onSelectProject, onCreateProject, onDel
                       {(p as any).obras_portfolio_id && (
                         <Badge className="text-[9px] bg-amber-500/90 hover:bg-amber-500 px-1.5 py-0">Holding</Badge>
                       )}
+                      {canEdit && onDeleteProject && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          onClick={(e) => { e.stopPropagation(); setToDelete(p); }}
+                          title="Excluir obra"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
                     </div>
                   </div>
