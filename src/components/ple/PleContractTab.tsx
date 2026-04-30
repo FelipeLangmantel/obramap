@@ -482,6 +482,7 @@ export function PleContractTab(props: PleDataReturn) {
   const totalHouses = currentProject.total_houses || 1;
 
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="h-full flex flex-col gap-3 sm:gap-4 overflow-hidden">
       {/* Sync bar for integrated mode */}
       {isIntegrated && (
