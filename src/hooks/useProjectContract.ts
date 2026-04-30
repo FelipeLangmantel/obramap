@@ -161,28 +161,33 @@ export function useProjectContract() {
           });
 
           const mapped = servicesData.map((s) => {
-              const pleAgg = pleAggByScope.get(`${s.macro_id}-${s.scope_id}`);
-              const baseRevenue = Number(s.unit_revenue_value);
-              // Se há itens PLE vinculados, eles são a fonte da verdade
-              const finalRevenue = pleAgg ? pleAgg.total : baseRevenue;
-              const cp = Number(s.cost_percent) || (contractData.cost_target_percent ?? 70);
-              const finalMaxCost = pleAgg ? finalRevenue * (cp / 100) : Number(s.max_cost_value);
-              return {
-                id: s.id,
-                macro_id: s.macro_id,
-                macro_name: s.macro_name,
-                scope_id: s.scope_id,
-                scope_name: s.scope_name,
-                unit_revenue_value: finalRevenue,
-                max_cost_value: finalMaxCost,
-                cost_percent: finalRevenue > 0 ? cp : 0,
-                status: finalRevenue > 0 ? "ok" : s.status,
-                macro_order: Number((s as any).macro_order ?? 0),
-                scope_order: Number((s as any).scope_order ?? 0),
-                ple_linked_count: pleAgg?.count ?? 0,
-              } as ContractService;
-            })
-          );
+            const pleAgg = pleAggByScope.get(`${s.macro_id}-${s.scope_id}`);
+            const baseRevenue = Number(s.unit_revenue_value);
+            // Se há itens PLE vinculados, eles são a fonte da verdade
+            const finalRevenue = pleAgg ? pleAgg.total : baseRevenue;
+            const cp = Number(s.cost_percent) || (contractData.cost_target_percent ?? 70);
+            const finalMaxCost = pleAgg ? finalRevenue * (cp / 100) : Number(s.max_cost_value);
+            // ✅ Sempre usar a ordem canônica do projeto (macrosTemplate) se disponível
+            const canon = canonicalOrder.get(`${s.macro_id}-${s.scope_id}`);
+            return {
+              id: s.id,
+              macro_id: s.macro_id,
+              macro_name: s.macro_name,
+              scope_id: s.scope_id,
+              scope_name: s.scope_name,
+              unit_revenue_value: finalRevenue,
+              max_cost_value: finalMaxCost,
+              cost_percent: finalRevenue > 0 ? cp : 0,
+              status: finalRevenue > 0 ? "ok" : s.status,
+              macro_order: canon?.macro_order ?? Number((s as any).macro_order ?? 0),
+              scope_order: canon?.scope_order ?? Number((s as any).scope_order ?? 0),
+              ple_linked_count: pleAgg?.count ?? 0,
+            } as ContractService;
+          });
+
+          // ✅ Ordena pela sequência canônica para garantir que sempre apareça igual
+          mapped.sort((a, b) => a.macro_order - b.macro_order || a.scope_order - b.scope_order);
+          setServices(mapped);
         } else {
           // Load services from scope_costs (budget) as fallback
           await loadServicesFromBudget();
