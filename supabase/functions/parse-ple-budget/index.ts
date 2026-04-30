@@ -83,6 +83,13 @@ A planilha PLE/SINAPI tipicamente tem **3 colunas de preço unitário lado a lad
 6. Se a coluna DISCRIMINAÇÃO mostrar "Composição", "SINAPI", etc., copie exatamente
 7. Se houver texto longo quebrado em múltiplas linhas na mesma célula, junte tudo em uma string
 
+## REGRA CRÍTICA — SUBETAPA AUSENTE
+Se a planilha tiver itens com código de 2 níveis (ex: "11.1", "11.2") DIRETAMENTE sob uma ETAPA, sem subetapa intermediária:
+→ Você DEVE criar AUTOMATICAMENTE uma subetapa "Geral" para essa etapa
+→ Use código "{stage_code_sem_pontoZero}.0.GERAL" ou similar único (ex: para etapa "11.0" → subetapa "11.G Geral")
+→ Vincule todos os itens dessa etapa a essa subetapa "Geral"
+→ NUNCA deixe um serviço sem group_code/group_name preenchidos
+
 ## GRUPOS EXISTENTES NO SISTEMA
 ${groupNames.length > 0 ? groupNames.join('\n') : 'Nenhum cadastrado'}
 
@@ -199,13 +206,29 @@ Responda APENAS com JSON válido (sem markdown, sem \`\`\`):
       return it;
     });
 
-    console.log(`Extracted ${stages.length} stages, ${substages.length} substages, ${validItems.length} items`);
+    // ✅ Garantia: para qualquer item sem subetapa (group_code vazio) mas com etapa,
+    // criar automaticamente uma subetapa "Geral" e vincular o item a ela.
+    const ensuredSubstages = [...substages];
+    const subsByCode = new Set(ensuredSubstages.map(s => s.code));
+    validItems.forEach((it: any) => {
+      if (!it.group_code && it.stage_code) {
+        const autoCode = `${it.stage_code.replace(/\.0$/, '')}.G`;
+        if (!subsByCode.has(autoCode)) {
+          ensuredSubstages.push({ code: autoCode, name: "Geral", stage_code: it.stage_code });
+          subsByCode.add(autoCode);
+        }
+        it.group_code = autoCode;
+        it.group_name = "Geral";
+      }
+    });
+
+    console.log(`Extracted ${stages.length} stages, ${ensuredSubstages.length} substages, ${validItems.length} items`);
     console.log("Stages:", JSON.stringify(stages));
-    console.log("Substages:", JSON.stringify(substages));
+    console.log("Substages:", JSON.stringify(ensuredSubstages));
 
     return new Response(JSON.stringify({ 
-      stages, substages, items: validItems, success: true, 
-      message: `${validItems.length} serviços, ${stages.length} etapas e ${substages.length} subetapas extraídos` 
+      stages, substages: ensuredSubstages, items: validItems, success: true, 
+      message: `${validItems.length} serviços, ${stages.length} etapas e ${ensuredSubstages.length} subetapas extraídos` 
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

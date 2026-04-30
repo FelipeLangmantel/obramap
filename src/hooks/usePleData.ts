@@ -175,6 +175,28 @@ export function usePleData() {
   useEffect(() => { loadProjects(); }, [loadProjects]);
   useEffect(() => { if (currentProjectId) loadProjectData(currentProjectId); }, [currentProjectId, loadProjectData]);
 
+  // ✅ Auto-sincroniza contract_value de ple_projects com a soma do orçamento (events).
+  // Garante que o card "Suas Obras" mostre o valor atualizado em tempo real.
+  useEffect(() => {
+    if (!currentProjectId || !canEdit) return;
+    const proj = projects.find(p => p.id === currentProjectId);
+    if (!proj) return;
+    const budgetTotal = events.reduce((s, e) => s + (Number(e.quantity) || 0) * (Number(e.unit_value) || 0), 0);
+    const stored = Number(proj.contract_value) || 0;
+    if (Math.abs(budgetTotal - stored) < 0.01) return;
+    const t = setTimeout(async () => {
+      const { error } = await supabase
+        .from("ple_projects")
+        .update({ contract_value: budgetTotal } as any)
+        .eq("id", currentProjectId);
+      if (!error) {
+        setProjects(prev => prev.map(p => p.id === currentProjectId ? { ...p, contract_value: budgetTotal } : p));
+      }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [events, currentProjectId, canEdit, projects]);
+
+
   // Create project
   const createProject = useCallback(async (data: Partial<PleProject>) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
@@ -354,13 +376,33 @@ export function usePleData() {
     }
   }, [currentProjectId, entries, getUserName]);
 
-  // Delete group
+  // Delete group + cascading deletion of child substages and events under them
   const deleteGroup = useCallback(async (id: string) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
+    // Coletar IDs de subgrupos (filhos diretos) e todos os grupos afetados
+    const childGroupIds = groups.filter(g => g.parent_id === id).map(g => g.id);
+    const allGroupIds = [id, ...childGroupIds];
+    // Excluir todos os eventos vinculados a esses grupos
+    const eventsToDelete = events.filter(e => e.group_id && allGroupIds.includes(e.group_id)).map(e => e.id);
+    if (eventsToDelete.length > 0) {
+      await supabase.from("ple_events").delete().in("id", eventsToDelete);
+    }
+    // Excluir subgrupos primeiro (FK)
+    if (childGroupIds.length > 0) {
+      await supabase.from("ple_event_groups").delete().in("id", childGroupIds);
+    }
     const { error } = await supabase.from("ple_event_groups").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir grupo"); return; }
-    setGroups(prev => prev.filter(g => g.id !== id));
-  }, [canEdit]);
+    // Atualizar estado local imediatamente para refletir nos KPIs
+    setGroups(prev => prev.filter(g => !allGroupIds.includes(g.id)));
+    setEvents(prev => prev.filter(e => !eventsToDelete.includes(e.id)));
+    setEntries(prev => prev.filter(e => !eventsToDelete.includes(e.event_id)));
+    toast.success(
+      childGroupIds.length > 0 || eventsToDelete.length > 0
+        ? `Grupo excluído (${childGroupIds.length} subetapa(s), ${eventsToDelete.length} serviço(s))`
+        : "Grupo excluído"
+    );
+  }, [canEdit, groups, events]);
 
   // Update group
   const updateGroup = useCallback(async (id: string, data: Partial<PleEventGroup>) => {
@@ -423,9 +465,8 @@ export function usePleData() {
     const budgetTotal = events.reduce((s, e) => s + (e.quantity || 0) * (e.unit_value || 0), 0);
     const totalMat = events.reduce((s, e) => s + (e.quantity || 0) * (e.mat_unit_value || 0), 0);
     const totalMo = events.reduce((s, e) => s + (e.quantity || 0) * (e.mo_unit_value || 0), 0);
-    // Usa contract_value salvo se houver; caso contrário, cai para soma do orçamento
-    const storedContract = Number(currentProject?.contract_value) || 0;
-    const contractValue = storedContract > 0 ? storedContract : budgetTotal;
+    // ✅ Sempre prioriza a soma do orçamento lançado (atualiza em tempo real ao adicionar/excluir)
+    const contractValue = budgetTotal > 0 ? budgetTotal : Number(currentProject?.contract_value) || 0;
     let totalMeasured = 0;
     events.forEach(event => {
       const measuredQty = entries.filter(e => e.event_id === event.id).length;

@@ -5,8 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Trash2, Sparkles, ChevronDown, ChevronRight, Check, X, ChevronsUpDown, Link2, RefreshCw, Layers } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Plus, Trash2, Sparkles, ChevronDown, ChevronRight, Check, X, ChevronsUpDown, Link2, RefreshCw, Layers, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { PleImportAIDialog } from "./PleImportAIDialog";
@@ -37,6 +40,44 @@ export function PleContractTab(props: PleDataReturn) {
   const [batchMappings, setBatchMappings] = useState<Record<string, string>>({});
   const [syncResult, setSyncResult] = useState<{ synced: number; projectName: string } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  // Edição de composição (descrição completa, qtde, valores)
+  const [editingEvent, setEditingEvent] = useState<PleEvent | null>(null);
+  const [editForm, setEditForm] = useState({ item_code: "", description: "", discrimination: "", sinapi_code: "", unit: "", quantity: 0, mat_unit_value: 0, mo_unit_value: 0, unit_value: 0 });
+
+  const openEditEvent = (ev: PleEvent) => {
+    setEditingEvent(ev);
+    setEditForm({
+      item_code: ev.item_code || "",
+      description: ev.description || "",
+      discrimination: ev.discrimination || "",
+      sinapi_code: ev.sinapi_code || "",
+      unit: ev.unit || "UN",
+      quantity: Number(ev.quantity) || 0,
+      mat_unit_value: Number(ev.mat_unit_value) || 0,
+      mo_unit_value: Number(ev.mo_unit_value) || 0,
+      unit_value: Number(ev.unit_value) || 0,
+    });
+  };
+
+  const saveEditEvent = async () => {
+    if (!editingEvent || !requireEdit()) return;
+    const sum = (editForm.mat_unit_value || 0) + (editForm.mo_unit_value || 0);
+    const finalUnit = sum > 0 ? sum : (editForm.unit_value || 0);
+    await updateEvent(editingEvent.id, {
+      item_code: editForm.item_code,
+      description: editForm.description,
+      discrimination: editForm.discrimination,
+      sinapi_code: editForm.sinapi_code,
+      unit: editForm.unit,
+      quantity: editForm.quantity,
+      mat_unit_value: editForm.mat_unit_value,
+      mo_unit_value: editForm.mo_unit_value,
+      unit_value: finalUnit,
+    } as any);
+    setEditingEvent(null);
+    toast.success("Composição atualizada");
+  };
+
 
   // Inline editable number cell
   const InlineNumber = ({ value, eventId, field, ev }: { value: number; eventId: string; field: 'mat_unit_value' | 'mo_unit_value' | 'unit_value'; ev: PleEvent }) => {
@@ -389,8 +430,11 @@ export function PleContractTab(props: PleDataReturn) {
   };
 
   const getStageTotal = (stageId: string) => {
+    // ✅ Soma serviços diretos da etapa + todas as subetapas
+    const directTotal = (eventsByGroup.get(stageId) || []).reduce((s, e) => s + e.quantity * e.unit_value, 0);
     const substages = substagesByStage.get(stageId) || [];
-    return substages.reduce((s, sub) => s + getSubstageTotal(sub.id), 0);
+    const subsTotal = substages.reduce((s, sub) => s + getSubstageTotal(sub.id), 0);
+    return directTotal + subsTotal;
   };
 
   const ServiceMappingSelect = ({ event }: { event: PleEvent }) => {
@@ -438,6 +482,7 @@ export function PleContractTab(props: PleDataReturn) {
   const totalHouses = currentProject.total_houses || 1;
 
   return (
+    <TooltipProvider delayDuration={200}>
     <div className="h-full flex flex-col gap-3 sm:gap-4 overflow-hidden">
       {/* Sync bar for integrated mode */}
       {isIntegrated && (
@@ -644,7 +689,15 @@ export function PleContractTab(props: PleDataReturn) {
                                       <span className="text-[11px] font-mono text-muted-foreground pl-3">{ev.item_code}</span>
                                       <span className="text-[10px] text-muted-foreground truncate">{ev.discrimination || "—"}</span>
                                       <span className="text-[10px] font-mono text-muted-foreground">{ev.sinapi_code || "—"}</span>
-                                      <span className="text-[11px] text-foreground truncate pr-2" title={ev.description}>{ev.description}</span>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="text-[11px] text-foreground truncate pr-2 cursor-help block">{ev.description}</span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" align="start" className="max-w-md text-xs">
+                                          <p className="font-mono text-[10px] text-muted-foreground mb-1">{ev.item_code} · {ev.discrimination || "—"} {ev.sinapi_code ? `· SINAPI ${ev.sinapi_code}` : ""}</p>
+                                          <p className="whitespace-pre-wrap">{ev.description}</p>
+                                        </TooltipContent>
+                                      </Tooltip>
                                       <span className="text-[11px] text-center text-muted-foreground">{ev.unit}</span>
                                       <span className="text-[11px] text-right font-mono">{fmt(ev.quantity)}</span>
                                       {isIntegrated && (
@@ -668,8 +721,11 @@ export function PleContractTab(props: PleDataReturn) {
                                           )}
                                         </span>
                                       )}
-                                      <span className="flex justify-center opacity-0 group-hover/row:opacity-100 transition-opacity">
-                                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deleteEvent(ev.id)}>
+                                      <span className="flex justify-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => openEditEvent(ev)} title="Editar composição">
+                                          <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deleteEvent(ev.id)} title="Excluir">
                                           <Trash2 className="h-3 w-3 text-destructive/60 hover:text-destructive" />
                                         </Button>
                                       </span>
@@ -784,7 +840,15 @@ export function PleContractTab(props: PleDataReturn) {
                       <span className="text-[11px] font-mono text-muted-foreground pl-3">{ev.item_code}</span>
                       <span className="text-[10px] text-muted-foreground truncate">{ev.discrimination || "—"}</span>
                       <span className="text-[10px] font-mono text-muted-foreground">{ev.sinapi_code || "—"}</span>
-                      <span className="text-[11px] text-foreground truncate pr-2" title={ev.description}>{ev.description}</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-[11px] text-foreground truncate pr-2 cursor-help block">{ev.description}</span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-md text-xs">
+                          <p className="font-mono text-[10px] text-muted-foreground mb-1">{ev.item_code} · {ev.discrimination || "—"} {ev.sinapi_code ? `· SINAPI ${ev.sinapi_code}` : ""}</p>
+                          <p className="whitespace-pre-wrap">{ev.description}</p>
+                        </TooltipContent>
+                      </Tooltip>
                       <span className="text-[11px] text-center text-muted-foreground">{ev.unit}</span>
                       <span className="text-[11px] text-right font-mono">{fmt(ev.quantity)}</span>
                       {isIntegrated && (
@@ -801,8 +865,11 @@ export function PleContractTab(props: PleDataReturn) {
                           <ServiceMappingSelect event={ev} />
                         </span>
                       )}
-                      <span className="flex justify-center opacity-0 group-hover/row:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deleteEvent(ev.id)}>
+                      <span className="flex justify-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => openEditEvent(ev)} title="Editar composição">
+                          <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deleteEvent(ev.id)} title="Excluir">
                           <Trash2 className="h-3 w-3 text-destructive/60 hover:text-destructive" />
                         </Button>
                       </span>
@@ -927,6 +994,34 @@ export function PleContractTab(props: PleDataReturn) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Editar composição completa */}
+      <Dialog open={!!editingEvent} onOpenChange={(o) => !o && setEditingEvent(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-sm flex items-center gap-2">
+              <Pencil className="h-4 w-4" /> Editar composição do serviço
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="col-span-1"><Label className="text-xs">Item</Label><Input value={editForm.item_code} onChange={e => setEditForm(f => ({ ...f, item_code: e.target.value }))} className="h-8 text-xs" /></div>
+            <div className="col-span-1"><Label className="text-xs">Discriminação</Label><Input value={editForm.discrimination} onChange={e => setEditForm(f => ({ ...f, discrimination: e.target.value }))} className="h-8 text-xs" /></div>
+            <div className="col-span-1"><Label className="text-xs">Cód. SINAPI</Label><Input value={editForm.sinapi_code} onChange={e => setEditForm(f => ({ ...f, sinapi_code: e.target.value }))} className="h-8 text-xs" /></div>
+            <div className="col-span-1"><Label className="text-xs">Unidade</Label><Input value={editForm.unit} onChange={e => setEditForm(f => ({ ...f, unit: e.target.value }))} className="h-8 text-xs" /></div>
+            <div className="col-span-2 sm:col-span-4"><Label className="text-xs">Descrição completa</Label><Textarea value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} rows={3} className="text-xs" /></div>
+            <div><Label className="text-xs">Quantidade</Label><Input type="number" step="0.01" value={editForm.quantity} onChange={e => setEditForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))} className="h-8 text-xs text-right" /></div>
+            <div><Label className="text-xs">MAT unit. (R$)</Label><Input type="number" step="0.01" value={editForm.mat_unit_value} onChange={e => { const v = parseFloat(e.target.value) || 0; setEditForm(f => ({ ...f, mat_unit_value: v, unit_value: v + f.mo_unit_value })); }} className="h-8 text-xs text-right" /></div>
+            <div><Label className="text-xs">MO unit. (R$)</Label><Input type="number" step="0.01" value={editForm.mo_unit_value} onChange={e => { const v = parseFloat(e.target.value) || 0; setEditForm(f => ({ ...f, mo_unit_value: v, unit_value: f.mat_unit_value + v })); }} className="h-8 text-xs text-right" /></div>
+            <div><Label className="text-xs">Unitário (R$)</Label><Input type="number" step="0.01" value={editForm.unit_value} onChange={e => setEditForm(f => ({ ...f, unit_value: parseFloat(e.target.value) || 0 }))} className="h-8 text-xs text-right" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setEditingEvent(null)}>Cancelar</Button>
+            <Button size="sm" onClick={saveEditEvent}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+    </TooltipProvider>
   );
 }
+
