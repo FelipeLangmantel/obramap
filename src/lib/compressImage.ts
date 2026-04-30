@@ -200,7 +200,7 @@ async function compressWithImgFallback(file: File, opts: Required<CompressOption
     if (!ctx) throw new Error("Canvas indisponível");
     ctx.drawImage(img, 0, 0, w, h);
     // libera referência ao bitmap full
-    (img as any).src = "";
+    img.src = "";
     const blob = await canvasToBlob(canvas, opts.mime, opts.quality);
     canvas.width = 1;
     canvas.height = 1;
