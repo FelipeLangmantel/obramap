@@ -26,9 +26,10 @@ export type NativeCameraResult = {
 export async function isNativePlatform(): Promise<boolean> {
   try {
     // Import dinâmico — só carrega se a dependência existir (build nativo).
+    // @ts-ignore - módulo opcional, presente apenas em build Capacitor
     const cap = await import(/* @vite-ignore */ "@capacitor/core").catch(() => null);
     if (!cap) return false;
-    // @ts-expect-error - Capacitor pode não estar tipado
+    // @ts-ignore - tipos opcionais
     return !!cap.Capacitor?.isNativePlatform?.();
   } catch {
     return false;
@@ -48,11 +49,12 @@ export async function captureWithNativePlugin(opts?: {
   quality?: number;
   width?: number;
 }): Promise<NativeCameraResult> {
+  // @ts-ignore - módulo opcional
   const cameraMod = await import(/* @vite-ignore */ "@capacitor/camera").catch(() => null);
   if (!cameraMod) {
     throw new Error("Plugin nativo de câmera não disponível neste ambiente.");
   }
-  // @ts-expect-error - tipos opcionais
+  // @ts-ignore - tipos opcionais
   const { Camera, CameraResultType, CameraSource } = cameraMod;
 
   const photo = await Camera.getPhoto({
