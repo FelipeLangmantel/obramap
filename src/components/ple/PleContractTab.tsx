@@ -389,8 +389,11 @@ export function PleContractTab(props: PleDataReturn) {
   };
 
   const getStageTotal = (stageId: string) => {
+    // ✅ Soma serviços diretos da etapa + todas as subetapas
+    const directTotal = (eventsByGroup.get(stageId) || []).reduce((s, e) => s + e.quantity * e.unit_value, 0);
     const substages = substagesByStage.get(stageId) || [];
-    return substages.reduce((s, sub) => s + getSubstageTotal(sub.id), 0);
+    const subsTotal = substages.reduce((s, sub) => s + getSubstageTotal(sub.id), 0);
+    return directTotal + subsTotal;
   };
 
   const ServiceMappingSelect = ({ event }: { event: PleEvent }) => {
