@@ -864,8 +864,11 @@ export function PleContractTab(props: PleDataReturn) {
                           <ServiceMappingSelect event={ev} />
                         </span>
                       )}
-                      <span className="flex justify-center opacity-0 group-hover/row:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deleteEvent(ev.id)}>
+                      <span className="flex justify-center gap-0.5 opacity-0 group-hover/row:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => openEditEvent(ev)} title="Editar composição">
+                          <Pencil className="h-3 w-3 text-muted-foreground hover:text-primary" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => deleteEvent(ev.id)} title="Excluir">
                           <Trash2 className="h-3 w-3 text-destructive/60 hover:text-destructive" />
                         </Button>
                       </span>
