@@ -423,9 +423,8 @@ export function usePleData() {
     const budgetTotal = events.reduce((s, e) => s + (e.quantity || 0) * (e.unit_value || 0), 0);
     const totalMat = events.reduce((s, e) => s + (e.quantity || 0) * (e.mat_unit_value || 0), 0);
     const totalMo = events.reduce((s, e) => s + (e.quantity || 0) * (e.mo_unit_value || 0), 0);
-    // Usa contract_value salvo se houver; caso contrário, cai para soma do orçamento
-    const storedContract = Number(currentProject?.contract_value) || 0;
-    const contractValue = storedContract > 0 ? storedContract : budgetTotal;
+    // ✅ Sempre prioriza a soma do orçamento lançado (atualiza em tempo real ao adicionar/excluir)
+    const contractValue = budgetTotal > 0 ? budgetTotal : Number(currentProject?.contract_value) || 0;
     let totalMeasured = 0;
     events.forEach(event => {
       const measuredQty = entries.filter(e => e.event_id === event.id).length;
