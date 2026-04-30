@@ -6,12 +6,13 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { useProjectContract } from "@/hooks/useProjectContract";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
+import { useCoordenadorAccess } from "@/hooks/useCoordenadorAccess";
 import { ContractHeader } from "@/components/contract/ContractHeader";
 import { ContractSummaryCards } from "@/components/contract/ContractSummaryCards";
 import { ContractServicesTable } from "@/components/contract/ContractServicesTable";
 import { ContractConfigCard } from "@/components/contract/ContractConfigCard";
 import { Button } from "@/components/ui/button";
-import { Loader2, Save, ArrowRight, AlertTriangle, Edit, Menu } from "lucide-react";
+import { Loader2, Save, ArrowRight, AlertTriangle, Edit, Menu, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { ModuleAccessGuard } from "@/components/guards/ModuleAccessGuard";
 import {
@@ -29,7 +30,11 @@ export default function ProjectContractPage() {
   const navigate = useNavigate();
   const { currentProject } = useConstruction();
   const { canEdit } = useAuth();
+  const { canApprove } = useCoordenadorAccess(currentProject?.id);
   const { advanceToStep, currentStep } = useProjectSetupFlow();
+
+  // ✅ Apenas admin/coordenador da obra pode editar o contrato
+  const canEditContract = canEdit && canApprove;
 
   const {
     contract,
