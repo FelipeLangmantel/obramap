@@ -376,13 +376,33 @@ export function usePleData() {
     }
   }, [currentProjectId, entries, getUserName]);
 
-  // Delete group
+  // Delete group + cascading deletion of child substages and events under them
   const deleteGroup = useCallback(async (id: string) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return; }
+    // Coletar IDs de subgrupos (filhos diretos) e todos os grupos afetados
+    const childGroupIds = groups.filter(g => g.parent_id === id).map(g => g.id);
+    const allGroupIds = [id, ...childGroupIds];
+    // Excluir todos os eventos vinculados a esses grupos
+    const eventsToDelete = events.filter(e => e.group_id && allGroupIds.includes(e.group_id)).map(e => e.id);
+    if (eventsToDelete.length > 0) {
+      await supabase.from("ple_events").delete().in("id", eventsToDelete);
+    }
+    // Excluir subgrupos primeiro (FK)
+    if (childGroupIds.length > 0) {
+      await supabase.from("ple_event_groups").delete().in("id", childGroupIds);
+    }
     const { error } = await supabase.from("ple_event_groups").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir grupo"); return; }
-    setGroups(prev => prev.filter(g => g.id !== id));
-  }, [canEdit]);
+    // Atualizar estado local imediatamente para refletir nos KPIs
+    setGroups(prev => prev.filter(g => !allGroupIds.includes(g.id)));
+    setEvents(prev => prev.filter(e => !eventsToDelete.includes(e.id)));
+    setEntries(prev => prev.filter(e => !eventsToDelete.includes(e.event_id)));
+    toast.success(
+      childGroupIds.length > 0 || eventsToDelete.length > 0
+        ? `Grupo excluído (${childGroupIds.length} subetapa(s), ${eventsToDelete.length} serviço(s))`
+        : "Grupo excluído"
+    );
+  }, [canEdit, groups, events]);
 
   // Update group
   const updateGroup = useCallback(async (id: string, data: Partial<PleEventGroup>) => {
