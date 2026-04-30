@@ -24,6 +24,10 @@ interface SourceSummary {
   scopeMatched: number;
   totalsByScopeId: Record<string, number>;
   hasData: boolean;
+  totalScopes: number;            // total de serviços no template
+  scopesWithValue: number;        // quantos têm valor > 0
+  scopesWithoutValue: number;     // quantos estão zerados
+  missingScopeNames: string[];    // nomes dos serviços sem valor (top 10)
 }
 
 export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeightsFromBudgetDialogProps) {
@@ -47,9 +51,13 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
     setIsLoading(true);
 
     try {
-      const validScopeIds = new Set(
-        currentProject.macrosTemplate.flatMap((m) => m.scopes.map((s) => s.id))
+      // Mapa scope_id -> scope_name (para listar serviços sem valor)
+      const scopeNameById = new Map<string, string>();
+      currentProject.macrosTemplate.forEach((m) =>
+        m.scopes.forEach((s) => scopeNameById.set(s.id, s.name))
       );
+      const validScopeIds = new Set(scopeNameById.keys());
+      const totalScopes = validScopeIds.size;
 
       // ---------- Orçamento (scope_items) ----------
       const { data: itemsData } = await supabase
@@ -59,21 +67,27 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
 
       const budgetTotalsByScope: Record<string, number> = {};
       let budgetTotal = 0;
-      let budgetMatched = 0;
       (itemsData || [])
         .filter((i) => validScopeIds.has(i.scope_id))
         .forEach((i) => {
           const v = Number(i.unit_value || 0) * Number(i.quantity || 0);
           budgetTotalsByScope[i.scope_id] = (budgetTotalsByScope[i.scope_id] || 0) + v;
           budgetTotal += v;
-          budgetMatched++;
         });
+
+      const budgetMissing = Array.from(validScopeIds)
+        .filter((id) => !((budgetTotalsByScope[id] || 0) > 0))
+        .map((id) => scopeNameById.get(id) || id);
 
       setBudgetSummary({
         totalValue: budgetTotal,
-        scopeMatched: Object.keys(budgetTotalsByScope).length,
+        scopeMatched: Object.keys(budgetTotalsByScope).filter((k) => budgetTotalsByScope[k] > 0).length,
         totalsByScopeId: budgetTotalsByScope,
         hasData: budgetTotal > 0,
+        totalScopes,
+        scopesWithValue: Object.keys(budgetTotalsByScope).filter((k) => budgetTotalsByScope[k] > 0).length,
+        scopesWithoutValue: budgetMissing.length,
+        missingScopeNames: budgetMissing.slice(0, 10),
       });
 
       // ---------- Contrato (project_contract_services) ----------
@@ -95,11 +109,19 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
           }
         });
 
+      const contractMissing = Array.from(validScopeIds)
+        .filter((id) => !((contractTotalsByScope[id] || 0) > 0))
+        .map((id) => scopeNameById.get(id) || id);
+
       setContractSummary({
         totalValue: contractTotal,
         scopeMatched: Object.keys(contractTotalsByScope).length,
         totalsByScopeId: contractTotalsByScope,
         hasData: contractTotal > 0,
+        totalScopes,
+        scopesWithValue: Object.keys(contractTotalsByScope).length,
+        scopesWithoutValue: contractMissing.length,
+        missingScopeNames: contractMissing.slice(0, 10),
       });
 
       // Default source: contrato se houver dados, senão orçamento
@@ -107,8 +129,12 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
       else setSelectedSource("budget");
     } catch (error) {
       console.error("Error loading summaries:", error);
-      setBudgetSummary({ totalValue: 0, scopeMatched: 0, totalsByScopeId: {}, hasData: false });
-      setContractSummary({ totalValue: 0, scopeMatched: 0, totalsByScopeId: {}, hasData: false });
+      const empty: SourceSummary = {
+        totalValue: 0, scopeMatched: 0, totalsByScopeId: {}, hasData: false,
+        totalScopes: 0, scopesWithValue: 0, scopesWithoutValue: 0, missingScopeNames: [],
+      };
+      setBudgetSummary(empty);
+      setContractSummary(empty);
     } finally {
       setIsLoading(false);
     }
@@ -340,16 +366,38 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
               )}
 
               {!isLoading && activeSummary && (
-                <Alert>
+                <Alert variant={activeSummary.scopesWithoutValue > 0 ? "destructive" : "default"}>
                   <FileText className="h-4 w-4" />
-                  <AlertDescription className="text-xs">
+                  <AlertDescription className="text-xs space-y-2">
                     {hasActiveData ? (
                       <>
-                        Serão atribuídos pesos a <strong>{activeSummary.scopeMatched}</strong> de{" "}
-                        <strong>
-                          {currentProject.macrosTemplate.reduce((s, m) => s + m.scopes.length, 0)}
-                        </strong>{" "}
-                        serviços. Os demais ficarão com peso 0% (você poderá ajustar depois no modo manual).
+                        <div>
+                          Serão atribuídos pesos a{" "}
+                          <strong>{activeSummary.scopesWithValue}</strong> de{" "}
+                          <strong>{activeSummary.totalScopes}</strong> serviços
+                          {" "}({formatCurrency(activeSummary.totalValue)} total).
+                        </div>
+                        {activeSummary.scopesWithoutValue > 0 && (
+                          <div className="space-y-1">
+                            <div className="font-semibold flex items-center gap-1">
+                              <AlertTriangle className="w-3.5 h-3.5" />
+                              {activeSummary.scopesWithoutValue} serviço(s) sem valor cadastrado em
+                              {selectedSource === "contract" ? " Contrato da Obra" : " Custos da Obra"}:
+                            </div>
+                            <ul className="list-disc list-inside text-[11px] opacity-90 max-h-24 overflow-auto">
+                              {activeSummary.missingScopeNames.map((n) => (
+                                <li key={n}>{n}</li>
+                              ))}
+                              {activeSummary.scopesWithoutValue > activeSummary.missingScopeNames.length && (
+                                <li>… e mais {activeSummary.scopesWithoutValue - activeSummary.missingScopeNames.length}</li>
+                              )}
+                            </ul>
+                            <div className="text-[11px]">
+                              Esses serviços ficarão com peso 0%. Para distribuir 100%, preencha os valores em
+                              {selectedSource === "contract" ? " Contrato da Obra" : " Custos da Obra"} e reimporte.
+                            </div>
+                          </div>
+                        )}
                       </>
                     ) : (
                       <>
