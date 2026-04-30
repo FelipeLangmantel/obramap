@@ -994,6 +994,34 @@ export function PleContractTab(props: PleDataReturn) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Editar composição completa */}
+      <Dialog open={!!editingEvent} onOpenChange={(o) => !o && setEditingEvent(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-sm flex items-center gap-2">
+              <Pencil className="h-4 w-4" /> Editar composição do serviço
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="col-span-1"><Label className="text-xs">Item</Label><Input value={editForm.item_code} onChange={e => setEditForm(f => ({ ...f, item_code: e.target.value }))} className="h-8 text-xs" /></div>
+            <div className="col-span-1"><Label className="text-xs">Discriminação</Label><Input value={editForm.discrimination} onChange={e => setEditForm(f => ({ ...f, discrimination: e.target.value }))} className="h-8 text-xs" /></div>
+            <div className="col-span-1"><Label className="text-xs">Cód. SINAPI</Label><Input value={editForm.sinapi_code} onChange={e => setEditForm(f => ({ ...f, sinapi_code: e.target.value }))} className="h-8 text-xs" /></div>
+            <div className="col-span-1"><Label className="text-xs">Unidade</Label><Input value={editForm.unit} onChange={e => setEditForm(f => ({ ...f, unit: e.target.value }))} className="h-8 text-xs" /></div>
+            <div className="col-span-2 sm:col-span-4"><Label className="text-xs">Descrição completa</Label><Textarea value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} rows={3} className="text-xs" /></div>
+            <div><Label className="text-xs">Quantidade</Label><Input type="number" step="0.01" value={editForm.quantity} onChange={e => setEditForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))} className="h-8 text-xs text-right" /></div>
+            <div><Label className="text-xs">MAT unit. (R$)</Label><Input type="number" step="0.01" value={editForm.mat_unit_value} onChange={e => { const v = parseFloat(e.target.value) || 0; setEditForm(f => ({ ...f, mat_unit_value: v, unit_value: v + f.mo_unit_value })); }} className="h-8 text-xs text-right" /></div>
+            <div><Label className="text-xs">MO unit. (R$)</Label><Input type="number" step="0.01" value={editForm.mo_unit_value} onChange={e => { const v = parseFloat(e.target.value) || 0; setEditForm(f => ({ ...f, mo_unit_value: v, unit_value: f.mat_unit_value + v })); }} className="h-8 text-xs text-right" /></div>
+            <div><Label className="text-xs">Unitário (R$)</Label><Input type="number" step="0.01" value={editForm.unit_value} onChange={e => setEditForm(f => ({ ...f, unit_value: parseFloat(e.target.value) || 0 }))} className="h-8 text-xs text-right" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setEditingEvent(null)}>Cancelar</Button>
+            <Button size="sm" onClick={saveEditEvent}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+    </TooltipProvider>
   );
 }
+
