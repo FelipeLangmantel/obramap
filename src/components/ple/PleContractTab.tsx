@@ -839,7 +839,15 @@ export function PleContractTab(props: PleDataReturn) {
                       <span className="text-[11px] font-mono text-muted-foreground pl-3">{ev.item_code}</span>
                       <span className="text-[10px] text-muted-foreground truncate">{ev.discrimination || "—"}</span>
                       <span className="text-[10px] font-mono text-muted-foreground">{ev.sinapi_code || "—"}</span>
-                      <span className="text-[11px] text-foreground truncate pr-2" title={ev.description}>{ev.description}</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-[11px] text-foreground truncate pr-2 cursor-help block">{ev.description}</span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-md text-xs">
+                          <p className="font-mono text-[10px] text-muted-foreground mb-1">{ev.item_code} · {ev.discrimination || "—"} {ev.sinapi_code ? `· SINAPI ${ev.sinapi_code}` : ""}</p>
+                          <p className="whitespace-pre-wrap">{ev.description}</p>
+                        </TooltipContent>
+                      </Tooltip>
                       <span className="text-[11px] text-center text-muted-foreground">{ev.unit}</span>
                       <span className="text-[11px] text-right font-mono">{fmt(ev.quantity)}</span>
                       {isIntegrated && (
