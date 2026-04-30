@@ -369,7 +369,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
     } finally {
       setLoading(false);
     }
-  }, [projectId, company?.id, activeVersion?.id, periods, totalHouses]);
+  }, [projectId, company?.id, activeVersion?.id, periods, totalHouses, currentProject?.macrosTemplate]);
 
   // Atualizar valor de uma célula
   const updateCellValue = useCallback((
