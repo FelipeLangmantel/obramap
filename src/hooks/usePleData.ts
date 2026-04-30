@@ -175,6 +175,28 @@ export function usePleData() {
   useEffect(() => { loadProjects(); }, [loadProjects]);
   useEffect(() => { if (currentProjectId) loadProjectData(currentProjectId); }, [currentProjectId, loadProjectData]);
 
+  // ✅ Auto-sincroniza contract_value de ple_projects com a soma do orçamento (events).
+  // Garante que o card "Suas Obras" mostre o valor atualizado em tempo real.
+  useEffect(() => {
+    if (!currentProjectId || !canEdit) return;
+    const proj = projects.find(p => p.id === currentProjectId);
+    if (!proj) return;
+    const budgetTotal = events.reduce((s, e) => s + (Number(e.quantity) || 0) * (Number(e.unit_value) || 0), 0);
+    const stored = Number(proj.contract_value) || 0;
+    if (Math.abs(budgetTotal - stored) < 0.01) return;
+    const t = setTimeout(async () => {
+      const { error } = await supabase
+        .from("ple_projects")
+        .update({ contract_value: budgetTotal } as any)
+        .eq("id", currentProjectId);
+      if (!error) {
+        setProjects(prev => prev.map(p => p.id === currentProjectId ? { ...p, contract_value: budgetTotal } : p));
+      }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [events, currentProjectId, canEdit, projects]);
+
+
   // Create project
   const createProject = useCallback(async (data: Partial<PleProject>) => {
     if (!canEdit) { console.warn("[PermissãoNegada] Usuário sem permissão de edição tentou salvar"); return null; }
