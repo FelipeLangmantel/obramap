@@ -155,7 +155,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
   const supplyOverdueCount = useSupplyOverdueCount(currentProject?.id);
 
   // ✅ Hook para governança global de módulos
-  const { isModuleEnabled, isModuleBeta } = useSystemModules();
+  const { modules: allSystemModules, isModuleEnabled, isModuleBeta } = useSystemModules();
   
   // Filtrar projetos acessíveis pelo usuário
   const accessibleProjects = projects.filter(project => canAccessProject(project.id));
