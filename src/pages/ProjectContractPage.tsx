@@ -54,15 +54,15 @@ export default function ProjectContractPage() {
   const [pendingNavigate, setPendingNavigate] = useState(false);
   
   // ✅ isEditing: true se não tem contrato salvo e pode editar, false se já tem ou não pode editar
-  const [isEditing, setIsEditing] = useState(canEdit);
-  
+  const [isEditing, setIsEditing] = useState(canEditContract);
+
   // Atualizar estado de edição quando contrato carregar
   useEffect(() => {
     if (!loading && contract) {
       // Se já tem contrato salvo, começa em modo visualização
-      setIsEditing(!contract.id && canEdit);
+      setIsEditing(!contract.id && canEditContract);
     }
-  }, [loading, contract?.id, canEdit]);
+  }, [loading, contract?.id, canEditContract]);
 
   const handleSaveAndContinue = async () => {
     if (hasPlanning) {
@@ -189,7 +189,7 @@ export default function ProjectContractPage() {
 
             {/* Action Buttons */}
             <div className="flex justify-end gap-3 pt-4 border-t">
-              {!isEditing && contract?.id && canEdit && (
+              {!isEditing && contract?.id && canEditContract && (
                 <Button
                   variant="outline"
                   onClick={() => setIsEditing(true)}
@@ -198,8 +198,15 @@ export default function ProjectContractPage() {
                   Editar Contrato
                 </Button>
               )}
-              
-              {isEditing && canEdit && (
+
+              {!isEditing && contract?.id && !canEditContract && canEdit && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 px-3 py-2 rounded-md border">
+                  <ShieldAlert className="h-4 w-4 text-amber-500" />
+                  Apenas o coordenador da obra ou administrador pode editar o contrato.
+                </div>
+              )}
+
+              {isEditing && canEditContract && (
                 <>
                   {contract?.id && (
                     <Button
