@@ -184,6 +184,38 @@ export function PleDashboard({ projects, onSelectProject, onCreateProject, onDel
           <ArrowLeft className="h-4 w-4" /> Voltar ao Menu
         </Button>
       </div>
+
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir obra PLE?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir <strong>{toDelete?.name}</strong>?
+              <br /><br />
+              <span className="text-destructive font-semibold">⚠ Esta ação não pode ser desfeita.</span>
+              <br />
+              Todos os itens orçados, medições, lançamentos e histórico vinculados a esta obra serão removidos permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleting}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!toDelete || !onDeleteProject) return;
+                setDeleting(true);
+                const ok = await onDeleteProject(toDelete.id);
+                setDeleting(false);
+                if (ok) setToDelete(null);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
