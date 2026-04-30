@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ObraMap — Diagnóstico Câmera</title>
+  <style>
+    body { font-family: monospace; padding: 16px; background: #111; color: #eee; }
+    h2 { color: #60a5fa; }
+    .log { background: #1e1e1e; border: 1px solid #333; padding: 8px; margin: 8px 0; font-size: 12px; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
+    .ok  { color: #4ade80; }
+    .err { color: #f87171; }
+    .warn{ color: #fbbf24; }
+    button { padding: 12px 20px; margin: 6px; background: #2563eb; color: white; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; }
+    input[type=file] { display: none; }
+    .section { border: 1px solid #374151; padding: 12px; margin: 12px 0; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h2>📷 ObraMap — Diagnóstico de Câmera</h2>
+  <p style="color:#94a3b8;font-size:12px">Página HTML pura — zero React, zero Auth, zero contextos de app.</p>
+
+  <div class="section">
+    <strong>1. Memória antes da câmera</strong>
+    <div id="mem-before" class="log">Aguardando...</div>
+    <button onclick="logMemory('before')">Medir memória agora</button>
+  </div>
+
+  <div class="section">
+    <strong>2. Teste câmera — sem processamento</strong>
+    <p style="font-size:12px;color:#94a3b8">Só abre a câmera e loga metadados. Não comprime, não faz upload, não aloca canvas.</p>
+    <button onclick="document.getElementById('input-minimal').click()">
+      📷 Abrir câmera (MÍNIMO — sem processar)
+    </button>
+    <input type="file" id="input-minimal" accept="image/*" capture="environment">
+  </div>
+
+  <div class="section">
+    <strong>3. Teste câmera — com compressão canvas</strong>
+    <p style="font-size:12px;color:#94a3b8">Abre câmera E processa com canvas. Se só este crashar, é a compressão.</p>
+    <button onclick="document.getElementById('input-canvas').click()">
+      📷 Abrir câmera (COM canvas/compress)
+    </button>
+    <input type="file" id="input-canvas" accept="image/*" capture="environment">
+  </div>
+
+  <div class="section">
+    <strong>4. Memória após retorno da câmera</strong>
+    <div id="mem-after" class="log">Aguardando retorno da câmera...</div>
+  </div>
+
+  <div class="section">
+    <strong>📋 Log de eventos</strong>
+    <div id="log" class="log"></div>
+    <button onclick="document.getElementById('log').textContent=''">Limpar log</button>
+  </div>
+
+  <script>
+    const logEl = document.getElementById('log');
+    const startTime = Date.now();
+    let captureCount = 0;
+
+    function log(msg, type = '') {
+      const ts = ((Date.now() - startTime) / 1000).toFixed(2);
+      const line = `[${ts}s] ${msg}\n`;
+      const span = document.createElement('span');
+      span.className = type;
+      span.textContent = line;
+      logEl.appendChild(span);
+      logEl.scrollTop = logEl.scrollHeight;
+      console.log(line);
+    }
+
+    function logMemory(label) {
+      const el = document.getElementById('mem-' + label) || logEl;
+      if (performance.memory) {
+        const used = (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1);
+        const total = (performance.memory.totalJSHeapSize / 1024 / 1024).toFixed(1);
+        const limit = (performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(1);
+        const text = `Heap usado: ${used} MB\nHeap total: ${total} MB\nLimite: ${limit} MB`;
+        el.textContent = text;
+        log(`Memória [${label}]: ${used}MB / ${limit}MB`, used > limit * 0.7 ? 'warn' : 'ok');
+      } else {
+        el.textContent = 'performance.memory não disponível neste browser.';
+        log('performance.memory indisponível (comum em iOS/Firefox)', 'warn');
+      }
+      // Navigator device info
+      log(`UA: ${navigator.userAgent.substring(0, 120)}`);
+      log(`deviceMemory: ${navigator.deviceMemory || 'N/A'} GB`);
+      log(`hardwareConcurrency: ${navigator.hardwareConcurrency || 'N/A'} cores`);
+    }
+
+    // TESTE MÍNIMO: só loga metadados, não processa
+    document.getElementById('input-minimal').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) { log('Câmera cancelada ou sem arquivo', 'warn'); return; }
+      captureCount++;
+      log(`✅ Arquivo recebido [mínimo #${captureCount}]`, 'ok');
+      log(`  Nome: ${file.name}`, 'ok');
+      log(`  Tamanho: ${(file.size / 1024 / 1024).toFixed(2)} MB`, file.size > 5e6 ? 'warn' : 'ok');
+      log(`  Tipo: ${file.type}`, 'ok');
+      log(`  Última modificação: ${new Date(file.lastModified).toISOString()}`, 'ok');
+      logMemory('after');
+      document.getElementById('mem-after').textContent += '\n(após câmera mínima)';
+    });
+
+    // TESTE COM CANVAS
+    document.getElementById('input-canvas').addEventListener('change', async function(e) {
+      const file = e.target.files[0];
+      if (!file) { log('Câmera cancelada', 'warn'); return; }
+      log(`📁 Arquivo para compressão: ${(file.size/1024/1024).toFixed(2)} MB`, 'warn');
+      logMemory('after');
+
+      log('Iniciando compressão via canvas...');
+      try {
+        const bmp = await createImageBitmap(file, {
+          resizeWidth: 1280,
+          resizeQuality: 'medium'
+        });
+        log(`Bitmap criado: ${bmp.width}x${bmp.height}`, 'ok');
+        const canvas = document.createElement('canvas');
+        canvas.width = bmp.width;
+        canvas.height = bmp.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bmp, 0, 0);
+        bmp.close();
+        canvas.toBlob(blob => {
+          log(`✅ Compressão OK: ${(blob.size/1024).toFixed(0)} KB`, 'ok');
+          canvas.width = 1; canvas.height = 1;
+          logMemory('after');
+        }, 'image/jpeg', 0.72);
+      } catch (err) {
+        log(`❌ Erro na compressão: ${err.message}`, 'err');
+        // Tentar fallback com <img>
+        log('Tentando fallback com <img> tag...');
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          log(`Imagem carregada via img tag: ${img.naturalWidth}x${img.naturalHeight}`, 'ok');
+          URL.revokeObjectURL(url);
+          logMemory('after');
+        };
+        img.onerror = () => { log('Fallback também falhou', 'err'); URL.revokeObjectURL(url); };
+        img.src = url;
+      }
+    });
+
+    // Detectar se processo foi reiniciado (process death recovery)
+    const sessionKey = 'obramap_diag_session';
+    const prevSession = sessionStorage.getItem(sessionKey);
+    const thisSession = Date.now().toString();
+    sessionStorage.setItem(sessionKey, thisSession);
+
+    if (prevSession && (thisSession - prevSession) < 10000) {
+      log('⚠️ POSSÍVEL PROCESS DEATH: sessão anterior há menos de 10s', 'err');
+    } else if (prevSession) {
+      log(`Sessão anterior encontrada (${((thisSession - prevSession)/1000).toFixed(0)}s atrás)`, 'warn');
+    } else {
+      log('Primeira visita nesta sessão.', 'ok');
+    }
+
+    // Medir memória inicial
+    logMemory('before');
+    log('Página de diagnóstico carregada. Zero React, zero Auth, zero contextos.');
+    log(`URL: ${location.href}`);
+  </script>
+</body>
+</html>
