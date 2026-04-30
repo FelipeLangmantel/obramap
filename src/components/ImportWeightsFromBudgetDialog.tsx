@@ -24,6 +24,10 @@ interface SourceSummary {
   scopeMatched: number;
   totalsByScopeId: Record<string, number>;
   hasData: boolean;
+  totalScopes: number;            // total de serviços no template
+  scopesWithValue: number;        // quantos têm valor > 0
+  scopesWithoutValue: number;     // quantos estão zerados
+  missingScopeNames: string[];    // nomes dos serviços sem valor (top 10)
 }
 
 export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeightsFromBudgetDialogProps) {
