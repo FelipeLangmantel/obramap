@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ContractService } from "@/hooks/useProjectContract";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { cn } from "@/lib/utils";
@@ -188,9 +189,9 @@ export function ContractServicesTable({
                 </TableHead>
                 <TableHead className="w-[80px] text-center font-semibold">% Custo</TableHead>
                 <TableHead className="w-[100px] text-center font-semibold">Status</TableHead>
-                {hasPleProject && (
-                  <TableHead className="w-[140px] text-center font-semibold">PLE</TableHead>
-                )}
+                <TableHead className="w-[160px] text-center font-semibold" title="Vincular itens orçados no PLE para puxar o valor automaticamente">
+                  PLE
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -244,33 +245,46 @@ export function ContractServicesTable({
                         </Badge>
                       )}
                     </TableCell>
-                    {hasPleProject && (
-                      <TableCell className="text-center">
-                        <Button
-                          variant={service.ple_linked_count ? "default" : "outline"}
-                          size="sm"
-                          className="h-7 text-[11px] gap-1.5"
-                          disabled={!isEditing}
-                          onClick={() => setLinkDialog({
-                            macroId: service.macro_id,
-                            macroName: service.macro_name,
-                            scopeId: service.scope_id,
-                            scopeName: service.scope_name,
-                          })}
-                        >
-                          <Link2 className="h-3 w-3" />
-                          {service.ple_linked_count
-                            ? `${service.ple_linked_count} ${service.ple_linked_count === 1 ? "item" : "itens"}`
-                            : "Vincular PLE"}
-                        </Button>
-                      </TableCell>
-                    )}
+                    <TableCell className="text-center">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="inline-block">
+                              <Button
+                                variant={service.ple_linked_count ? "default" : "outline"}
+                                size="sm"
+                                className="h-7 text-[11px] gap-1.5"
+                                disabled={!isEditing || !hasPleProject}
+                                onClick={() => setLinkDialog({
+                                  macroId: service.macro_id,
+                                  macroName: service.macro_name,
+                                  scopeId: service.scope_id,
+                                  scopeName: service.scope_name,
+                                })}
+                              >
+                                <Link2 className="h-3 w-3" />
+                                {service.ple_linked_count
+                                  ? `${service.ple_linked_count} ${service.ple_linked_count === 1 ? "item" : "itens"}`
+                                  : "Vincular PLE"}
+                              </Button>
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {!hasPleProject
+                              ? "Crie um projeto no módulo Medições PLE vinculado a esta obra para habilitar."
+                              : !isEditing
+                                ? "Clique em \"Editar Contrato\" para vincular itens PLE."
+                                : "Vincular itens orçados no PLE a este serviço"}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </TableCell>
                   </TableRow>
                 ))
               ))}
               {services.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={hasPleProject ? 8 : 7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Nenhum serviço encontrado. Cadastre serviços em "Etapas e Serviços" primeiro.
                   </TableCell>
                 </TableRow>

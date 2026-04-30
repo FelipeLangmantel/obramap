@@ -6,12 +6,13 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { useProjectContract } from "@/hooks/useProjectContract";
 import { useConstruction } from "@/contexts/ConstructionContext";
 import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
+import { useCoordenadorAccess } from "@/hooks/useCoordenadorAccess";
 import { ContractHeader } from "@/components/contract/ContractHeader";
 import { ContractSummaryCards } from "@/components/contract/ContractSummaryCards";
 import { ContractServicesTable } from "@/components/contract/ContractServicesTable";
 import { ContractConfigCard } from "@/components/contract/ContractConfigCard";
 import { Button } from "@/components/ui/button";
-import { Loader2, Save, ArrowRight, AlertTriangle, Edit, Menu } from "lucide-react";
+import { Loader2, Save, ArrowRight, AlertTriangle, Edit, Menu, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { ModuleAccessGuard } from "@/components/guards/ModuleAccessGuard";
 import {
@@ -29,7 +30,11 @@ export default function ProjectContractPage() {
   const navigate = useNavigate();
   const { currentProject } = useConstruction();
   const { canEdit } = useAuth();
+  const { canApprove } = useCoordenadorAccess(currentProject?.id);
   const { advanceToStep, currentStep } = useProjectSetupFlow();
+
+  // ✅ Apenas admin/coordenador da obra pode editar o contrato
+  const canEditContract = canEdit && canApprove;
 
   const {
     contract,
@@ -49,15 +54,15 @@ export default function ProjectContractPage() {
   const [pendingNavigate, setPendingNavigate] = useState(false);
   
   // ✅ isEditing: true se não tem contrato salvo e pode editar, false se já tem ou não pode editar
-  const [isEditing, setIsEditing] = useState(canEdit);
-  
+  const [isEditing, setIsEditing] = useState(canEditContract);
+
   // Atualizar estado de edição quando contrato carregar
   useEffect(() => {
     if (!loading && contract) {
       // Se já tem contrato salvo, começa em modo visualização
-      setIsEditing(!contract.id && canEdit);
+      setIsEditing(!contract.id && canEditContract);
     }
-  }, [loading, contract?.id, canEdit]);
+  }, [loading, contract?.id, canEditContract]);
 
   const handleSaveAndContinue = async () => {
     if (hasPlanning) {
@@ -184,7 +189,7 @@ export default function ProjectContractPage() {
 
             {/* Action Buttons */}
             <div className="flex justify-end gap-3 pt-4 border-t">
-              {!isEditing && contract?.id && canEdit && (
+              {!isEditing && contract?.id && canEditContract && (
                 <Button
                   variant="outline"
                   onClick={() => setIsEditing(true)}
@@ -193,8 +198,15 @@ export default function ProjectContractPage() {
                   Editar Contrato
                 </Button>
               )}
-              
-              {isEditing && canEdit && (
+
+              {!isEditing && contract?.id && !canEditContract && canEdit && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 px-3 py-2 rounded-md border">
+                  <ShieldAlert className="h-4 w-4 text-amber-500" />
+                  Apenas o coordenador da obra ou administrador pode editar o contrato.
+                </div>
+              )}
+
+              {isEditing && canEditContract && (
                 <>
                   {contract?.id && (
                     <Button

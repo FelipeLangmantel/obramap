@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useConstruction } from "@/contexts/ConstructionContext";
 import { useProjectSetupFlow } from "@/hooks/useProjectSetupFlow";
 import { toast } from "sonner";
 
@@ -59,6 +60,7 @@ export interface PeriodSummary {
 
 export function useLongTermPlanning(projectId: string | undefined) {
   const { company, canEdit } = useAuth();
+  const { currentProject } = useConstruction();
   const { currentStep, advanceToStep } = useProjectSetupFlow();
   const [activeVersion, setActiveVersion] = useState<PlanningVersion | null>(null);
   const [periods, setPeriods] = useState<PlanningPeriod[]>([]);
@@ -278,7 +280,24 @@ export function useLongTermPlanning(projectId: string | undefined) {
         }
       });
 
-      const uniqueServices = Array.from(uniqueServicesMap.values());
+      const uniqueServicesArr = Array.from(uniqueServicesMap.values());
+
+      // ✅ Aplicar ordem canônica do macrosTemplate (sequência fixa de etapas/serviços)
+      const canonicalOrder = new Map<string, number>();
+      let orderIdx = 0;
+      currentProject?.macrosTemplate?.forEach((macro) => {
+        macro.scopes.forEach((scope) => {
+          canonicalOrder.set(`${macro.id}_${scope.id}`, orderIdx++);
+        });
+      });
+      const uniqueServices = uniqueServicesArr.sort((a, b) => {
+        const ka = canonicalOrder.get(`${a.macro_id}_${a.scope_id}`);
+        const kb = canonicalOrder.get(`${b.macro_id}_${b.scope_id}`);
+        if (ka == null && kb == null) return 0;
+        if (ka == null) return 1;
+        if (kb == null) return -1;
+        return ka - kb;
+      });
 
       // Mapa de planejamento
       const planningMap = new Map<string, typeof planningResult.data[0]>();
@@ -350,7 +369,7 @@ export function useLongTermPlanning(projectId: string | undefined) {
     } finally {
       setLoading(false);
     }
-  }, [projectId, company?.id, activeVersion?.id, periods, totalHouses]);
+  }, [projectId, company?.id, activeVersion?.id, periods, totalHouses, currentProject?.macrosTemplate]);
 
   // Atualizar valor de uma célula
   const updateCellValue = useCallback((
