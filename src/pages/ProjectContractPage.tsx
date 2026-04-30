@@ -149,6 +149,12 @@ export default function ProjectContractPage() {
         <div className="flex min-h-screen w-full bg-background">
           <AppSidebar activeView="costs" onViewChange={() => {}} />
         <SidebarInset className="flex-1">
+          <header className="h-10 sm:h-12 flex items-center gap-2 border-b border-border bg-background/80 backdrop-blur px-2 sm:px-3 shrink-0">
+            <SidebarTrigger className="p-2 -ml-1 text-foreground hover:text-primary hover:bg-accent rounded-md transition-colors">
+              <Menu className="h-5 w-5" />
+            </SidebarTrigger>
+            <span className="text-xs sm:text-sm font-medium text-muted-foreground">Contrato da Obra</span>
+          </header>
           <div className="container mx-auto py-6 px-4 space-y-6 max-w-7xl">
             <ContractHeader 
               isEditing={isEditing} 
