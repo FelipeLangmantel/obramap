@@ -687,8 +687,11 @@ export function Map3DView() {
 
   const uploadFile = async (file: File, folder: string): Promise<string | null> => {
     if (!projectId) return null;
+    const companyId = profile?.company_id;
+    if (!companyId) { toast.error("Empresa não identificada para upload."); return null; }
     const ext = file.name.split('.').pop();
-    const path = `${projectId}/${folder}/${Date.now()}.${ext}`;
+    // RLS exige que a primeira pasta seja o company_id
+    const path = `${companyId}/${projectId}/${folder}/${Date.now()}.${ext}`;
     const { data, error } = await supabase.storage.from('3d-models').upload(path, file, { cacheControl: '3600', upsert: true });
     if (error) { toast.error(`Upload falhou: ${error.message}`); return null; }
     return supabase.storage.from('3d-models').getPublicUrl(data.path).data.publicUrl;
