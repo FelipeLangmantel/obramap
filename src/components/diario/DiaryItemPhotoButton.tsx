@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,7 +49,6 @@ export function DiaryItemPhotoButton({
   disabled,
   onChanged,
 }: Props) {
-  const navigate = useNavigate();
   const [count, setCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [fotos, setFotos] = useState<FotoServico[]>([]);
@@ -60,6 +58,7 @@ export function DiaryItemPhotoButton({
     houseIds.length === 1 ? String(houseIds[0]) : "all"
   );
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const refreshCount = async () => {
     const { count: c } = await supabase
@@ -95,23 +94,7 @@ export function DiaryItemPhotoButton({
     loadFotos();
   };
 
-  const openCameraCapture = () => {
-    try {
-      sessionStorage.setItem("obramap_route_state_root", JSON.stringify({ activeView: "diario-obra" }));
-      sessionStorage.setItem("obramap_diario_tab", JSON.stringify({ tab: "editor", selectedDate: entryDate || null }));
-    } catch { /* noop */ }
-    const params = new URLSearchParams({
-      entryId: diaryEntryId,
-      itemId: diaryItemId,
-      companyId,
-      house: selectedHouse,
-      returnTo: "/dashboard",
-    });
-    if (entryDate) params.set("date", entryDate);
-    // Hard navigation: descarrega o SPA inteiro da memória antes de abrir a câmera.
-    // navigate() mantém todo o ConstructionContext/houses/diário na RAM → OOM no WebView.
-    window.location.href = `/camera-capture?${params.toString()}`;
-  };
+
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>, source: "camera" | "gallery" = "gallery") => {
     if (!e.target.files?.length) return;
@@ -250,7 +233,8 @@ export function DiaryItemPhotoButton({
               </div>
               <div className="flex gap-2">
                 <Button
-                  onClick={openCameraCapture}
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
                   disabled={uploading || disabled}
                   className="h-10"
                 >
@@ -276,6 +260,14 @@ export function DiaryItemPhotoButton({
                 multiple
                 className="hidden"
                 onChange={(e) => handleUpload(e, "gallery")}
+              />
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => handleUpload(e, "camera")}
               />
             </div>
 

@@ -190,6 +190,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
   const [uploadingFoto, setUploadingFoto] = useState(false);
   const [fotoAmpliada, setFotoAmpliada] = useState<{ id: string; url: string; legenda: string | null } | null>(null);
   const galleryInputRef = React.useRef<HTMLInputElement>(null);
+  const inlineCameraInputRef = React.useRef<HTMLInputElement>(null);
   const [photoSourceOpen, setPhotoSourceOpen] = useState(false);
 
   // RDO data
@@ -854,8 +855,8 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
         sessionStorage.setItem("obramap_route_state_root", JSON.stringify({ activeView: "diario-obra" }));
         sessionStorage.setItem("obramap_diario_tab", JSON.stringify({ tab: "editor", selectedDate: entryDate }));
       } catch { /* noop */ }
-      const params = new URLSearchParams({ entryId, companyId: company.id, date: entryDate, returnTo: "/dashboard" });
-      window.location.href = `/camera-capture?${params.toString()}`;
+      // Câmera inline — sem navegar para outra página
+      inlineCameraInputRef.current?.click();
     } else {
       galleryInputRef.current?.click();
     }
@@ -1892,6 +1893,15 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
               onChange={(e) => handleUploadFotos(e, "gallery")}
               disabled={uploadingFoto}
             />
+              <input
+                ref={inlineCameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => handleUploadFotos(e, "camera")}
+                disabled={uploadingFoto}
+              />
             <div className="space-y-3">
               {fotos.length > 0 && (
                 <div className="flex flex-wrap gap-2">
