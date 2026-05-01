@@ -50,8 +50,10 @@ export async function captureWithNativePlugin(opts?: {
   quality?: number;
   width?: number;
 }): Promise<NativeCameraResult> {
+  // Specifier em variável → Vite ignora no build web; só resolve em runtime nativo.
+  const mod = "@capacitor/camera";
   // @ts-ignore - módulo opcional
-  const cameraMod = await import(/* @vite-ignore */ "@capacitor/camera").catch(() => null);
+  const cameraMod = await import(/* @vite-ignore */ mod).catch(() => null);
   if (!cameraMod) {
     throw new Error("Plugin nativo de câmera não disponível neste ambiente.");
   }
