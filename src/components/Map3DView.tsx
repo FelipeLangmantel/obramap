@@ -392,7 +392,7 @@ function HouseDetailsPanel({ marker, onClose, customLegendItems, onOpenPhotoHist
 
 export function Map3DView() {
   const { currentProject, refreshHousesFromDB } = useConstruction();
-  const { isAdmin } = useAuth();
+  const { isAdmin, profile } = useAuth();
   const projectId = currentProject?.id;
   
   const [modelData, setModelData] = useState<ModelData | null>(null);
