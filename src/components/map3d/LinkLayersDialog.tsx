@@ -141,8 +141,8 @@ export function LinkLayersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl h-[85vh] sm:h-[85vh] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogHeader className="p-6 pb-3 flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5" />
             Vincular Camadas aos Serviços
@@ -157,8 +157,8 @@ export function LinkLayersDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 pr-4">
-          <div className="space-y-2">
+        <ScrollArea className="flex-1 min-h-0 px-6">
+          <div className="space-y-2 py-2">
             {layers.map((layer) => {
               const currentKey = localLinks[layer.name] || "_none";
               const currentHouse = localHouses[layer.name] || "_all";
@@ -186,7 +186,7 @@ export function LinkLayersDialog({
                         <SelectTrigger className="h-8 text-xs">
                           <SelectValue placeholder="Selecionar serviço..." />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-[300px]">
                           <SelectItem value="_none">
                             <span className="flex items-center gap-1.5 text-muted-foreground">
                               <Unlink className="h-3 w-3" /> Sem vínculo
@@ -207,7 +207,9 @@ export function LinkLayersDialog({
                       </Select>
                     </div>
                     <div>
-                      <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Casa</label>
+                      <label className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                        Casa {totalHouses > 0 && <span className="normal-case text-muted-foreground/70">({totalHouses} no projeto)</span>}
+                      </label>
                       <Select
                         value={currentHouse}
                         onValueChange={(v) => setLocalHouses(prev => ({ ...prev, [layer.name]: v }))}
@@ -215,7 +217,7 @@ export function LinkLayersDialog({
                         <SelectTrigger className="h-8 text-xs">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-h-[300px]">
                           <SelectItem value="_all">
                             <span className="flex items-center gap-1.5">
                               <Building2 className="h-3 w-3" /> Toda a obra (média)
@@ -244,14 +246,14 @@ export function LinkLayersDialog({
         </ScrollArea>
 
         {services.length === 0 && layers.length > 0 && (
-          <div className="text-center py-4">
+          <div className="text-center py-2 px-6 flex-shrink-0">
             <Badge variant="outline" className="text-xs">
               Nenhum serviço cadastrado no projeto
             </Badge>
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="p-6 pt-3 flex-shrink-0 border-t">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
