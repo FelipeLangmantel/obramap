@@ -224,34 +224,49 @@ export default function CameraCapturePage() {
         />
 
         <div className="grid gap-2">
-          {/* Botão principal: câmera nativa se disponível, senão câmera web */}
-          <Button
-            type="button"
-            size="lg"
-            onClick={hasNative ? handleNativeCamera : () => cameraInputRef.current?.click()}
-            disabled={uploading || !ready}
-          >
-            {uploading ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : hasNative ? (
-              <Smartphone className="h-4 w-4 mr-2" />
-            ) : (
-              <Camera className="h-4 w-4 mr-2" />
-            )}
-            {hasNative ? "Tirar foto (nativo)" : "Tirar foto"}
-          </Button>
+          {/* Nativo disponível: só mostra botão nativo */}
+          {hasNative && (
+            <Button
+              type="button"
+              size="lg"
+              onClick={handleNativeCamera}
+              disabled={uploading || !ready}
+            >
+              {uploading
+                ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                : <Smartphone className="h-4 w-4 mr-2" />}
+              Tirar foto
+            </Button>
+          )}
 
-          {/* Fallback universal — sempre visível */}
-          <Button
-            type="button"
-            size="lg"
-            variant="secondary"
-            onClick={() => galleryInputRef.current?.click()}
-            disabled={uploading || !ready}
-          >
-            <ImageIcon className="h-4 w-4 mr-2" />
-            Anexar da galeria
-          </Button>
+          {/* PWA/web: galeria é o botão PRINCIPAL (confiável em 100% dos aparelhos) */}
+          {!hasNative && (
+            <>
+              <Button
+                type="button"
+                size="lg"
+                onClick={() => galleryInputRef.current?.click()}
+                disabled={uploading || !ready}
+              >
+                <ImageIcon className="h-4 w-4 mr-2" />
+                Selecionar foto
+              </Button>
+
+              {/* Câmera web: secundário com aviso */}
+              <Button
+                type="button"
+                size="lg"
+                variant="secondary"
+                onClick={() => cameraInputRef.current?.click()}
+                disabled={uploading || !ready}
+              >
+                {uploading
+                  ? <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  : <Camera className="h-4 w-4 mr-2" />}
+                Abrir câmera
+              </Button>
+            </>
+          )}
 
           <Button type="button" variant="outline" onClick={goBack} disabled={uploading}>
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -261,8 +276,8 @@ export default function CameraCapturePage() {
 
         {!hasNative && (
           <p className="text-xs text-muted-foreground/80">
-            💡 Se "Tirar foto" travar no seu aparelho (comum em Motorola/Samsung), use{" "}
-            <strong>Anexar da galeria</strong>: tire a foto pela câmera do celular e depois selecione aqui.
+            💡 <strong>Fluxo recomendado:</strong> tire a foto com a câmera do celular e use{" "}
+            <strong>Selecionar foto</strong> para anexar. O botão{" "}            <em>Abrir câmera</em> pode travar em alguns aparelhos (Motorola, Samsung).
           </p>
         )}
 
