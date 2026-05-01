@@ -25,9 +25,10 @@ export type NativeCameraResult = {
  */
 export async function isNativePlatform(): Promise<boolean> {
   try {
-    // Import dinâmico — só carrega se a dependência existir (build nativo).
+    // Specifier construído em runtime para que o Vite não tente resolver no build web.
+    const mod = "@capacitor/core";
     // @ts-ignore - módulo opcional, presente apenas em build Capacitor
-    const cap = await import(/* @vite-ignore */ "@capacitor/core").catch(() => null);
+    const cap = await import(/* @vite-ignore */ mod).catch(() => null);
     if (!cap) return false;
     // @ts-ignore - tipos opcionais
     return !!cap.Capacitor?.isNativePlatform?.();
