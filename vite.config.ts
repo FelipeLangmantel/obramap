@@ -45,25 +45,5 @@ export default defineConfig(({ mode }) => {
         "@": path.resolve(__dirname, "./src"),
       },
     },
-    build: {
-      rollupOptions: {
-        // Capacitor plugins só existem em build nativo (Android/iOS).
-        // No build web são importados dinamicamente e devem ser tratados como externos.
-        external: [/^@capacitor\//],
-        onwarn(warning, warn) {
-          if (
-            warning.code === "UNRESOLVED_IMPORT" &&
-            typeof warning.message === "string" &&
-            warning.message.includes("@capacitor/")
-          ) {
-            return;
-          }
-          warn(warning);
-        },
-      },
-    },
-    optimizeDeps: {
-      exclude: ["@capacitor/core", "@capacitor/camera"],
-    },
   };
 });
