@@ -250,8 +250,8 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       label: "Produção & Planejamento",
       items: [
         { title: "Produção", view: "production", icon: ClipboardList, permissionId: "producao" },
-        { title: "Diário de Obras", view: "diario-obra", icon: ClipboardCheck, permissionId: "producao" },
-        { title: "Relatório de Obra", view: "relatorio-obra", icon: FileText, permissionId: "producao" },
+        { title: "Diário de Obras", view: "diario-obra", icon: ClipboardCheck, permissionId: "diario_obra" },
+        { title: "Relatório de Obra", view: "relatorio-obra", icon: FileText, permissionId: "relatorio_obra" },
         { title: "Produtividade e Equipes", view: "productivity", icon: Users, permissionId: "productivity" },
         { title: "Planej. Semanal", view: "planning", icon: Target, permissionId: "planejamento_semanal" },
         { title: "Planej. Período", view: "measurement-planning", icon: Calculator, permissionId: "planejamento_periodo" },
@@ -310,10 +310,16 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
 
   // Filter menu items based on permissions, company modules, and system governance
   const getVisibleItems = (items: MenuItem[]) => items.filter(item => {
-    if (!canAccessMenu(item.permissionId)) return false;
     // System admin enxerga tudo (governança global)
     if (isSystemAdmin) return true;
+    // Bloqueio global do System Admin do ObraMap (system_modules.is_enabled=false)
     if (!isModuleEnabled(item.view)) return false;
+    // Admin da empresa SEMPRE vê todos os módulos liberados pelo System Admin,
+    // independente de company_modules ter ou não registro. Regra de negócio:
+    // o admin da empresa nunca pode ficar sem acesso a módulos disponíveis.
+    if (isCompanyAdmin) return true;
+    // Demais usuários: respeitam permissões individuais + status do módulo na empresa
+    if (!canAccessMenu(item.permissionId)) return false;
     const moduleStatus = getModuleStatus(item.view);
     if (moduleStatus === "disabled") return false;
     return true;

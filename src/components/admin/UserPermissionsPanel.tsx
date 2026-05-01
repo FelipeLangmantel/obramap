@@ -1231,7 +1231,7 @@ export function UserPermissionsPanel() {
 
       {/* Permission Dialog - Professional Redesign */}
       <Dialog open={isPermissionDialogOpen} onOpenChange={setIsPermissionDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh]">
+        <DialogContent className="max-w-5xl max-h-[92vh] w-[95vw]">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">Configurar Permissões</DialogTitle>
             <DialogDescription className="text-sm">
