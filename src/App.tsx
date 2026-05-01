@@ -14,6 +14,7 @@ import Auth from "./pages/Auth";
 import LandingPage from "./pages/LandingPage";
 import ChangePassword from "./pages/ChangePassword";
 import NotFound from "./pages/NotFound";
+import { CameraTestPage } from "./pages/CameraTestPage";
 import SystemDashboard from "./pages/system/SystemDashboard";
 import SystemModulesPage from "./pages/system/SystemModulesPage";
 import LegacyDataMigration from "./pages/admin/LegacyDataMigration";
@@ -121,6 +122,8 @@ const App = () => {
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/change-password" element={<ChangePassword />} />
                 <Route path="/unsubscribe" element={<Unsubscribe />} />
+                {/* Diagnóstico de câmera — rota pública sem contextos pesados */}
+                <Route path="/camera-test" element={<CameraTestPage />} />
                 {/* Legacy redirect */}
                 <Route path="/landing" element={<LandingPage />} />
 
