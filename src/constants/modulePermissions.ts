@@ -92,17 +92,17 @@ export const MENU_TO_MODULE_KEY: Record<string, string> = MENU_MODULES.reduce((a
 export const DEFAULT_MENUS_BY_ROLE: Record<string, string[]> = {
   admin: [
     'painel_inicial','mapa','mapa_interativo','mapa_3d','graficos','diretoria',
-    'producao','planejamento_semanal','planejamento_periodo','planejamento_estrategico',
+    'producao','diario_obra','relatorio_obra','planejamento_semanal','planejamento_periodo','planejamento_estrategico',
     'smart_planning','productivity','entrega','simulador_desembolsos',
-    'contrato','ple_medicoes','custos','suprimentos','financeiro','empreiteiros',
+    'contrato','ple_medicoes','custos','suprimentos','painel_compras','financeiro','empreiteiros',
     'industrializacao',
     'holding','holding_receitas','holding_despesas','holding_documentos',
     'holding_prd','holding_insights','holding_config',
   ],
   editor: [
     'painel_inicial','mapa','mapa_interativo','graficos',
-    'producao','planejamento_semanal','planejamento_periodo',
-    'contrato','custos','suprimentos','empreiteiros','industrializacao',
+    'producao','diario_obra','relatorio_obra','planejamento_semanal','planejamento_periodo',
+    'contrato','custos','suprimentos','painel_compras','empreiteiros','industrializacao',
   ],
   viewer: [
     'painel_inicial','graficos','mapa',
