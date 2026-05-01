@@ -1231,7 +1231,7 @@ export function UserPermissionsPanel() {
 
       {/* Permission Dialog - Professional Redesign */}
       <Dialog open={isPermissionDialogOpen} onOpenChange={setIsPermissionDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh]">
+        <DialogContent className="max-w-5xl max-h-[92vh] w-[95vw]">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">Configurar Permissões</DialogTitle>
             <DialogDescription className="text-sm">
@@ -1310,7 +1310,7 @@ export function UserPermissionsPanel() {
                   <Menu className="h-3.5 w-3.5" />
                   Módulos do Sistema
                 </Label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5">
                   {MENU_OPTIONS.filter((menu) => {
                     // Filtrar módulos desativados pela empresa
                     const moduleKey = MENU_TO_MODULE_KEY[menu.id];
@@ -1352,7 +1352,7 @@ export function UserPermissionsPanel() {
                   <FolderCog className="h-3.5 w-3.5" />
                   Seções de Gerenciamento
                 </Label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1.5">
                   {MANAGEMENT_OPTIONS.map((section) => {
                     const isChecked = editingPermission?.visible_management_sections?.includes(section.id) || false;
                     return (
