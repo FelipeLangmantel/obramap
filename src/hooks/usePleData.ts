@@ -175,13 +175,41 @@ export function usePleData() {
   useEffect(() => { loadProjects(); }, [loadProjects]);
   useEffect(() => { if (currentProjectId) loadProjectData(currentProjectId); }, [currentProjectId, loadProjectData]);
 
+  // ✅ Realtime: mantém groups/events/projects sincronizados entre abas/dispositivos.
+  // Importante para os KPIs (MAT, MO, Total) refletirem exclusões/edições em tempo real.
+  useEffect(() => {
+    if (!currentProjectId) return;
+    const channel = supabase
+      .channel(`ple-data-${currentProjectId}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'ple_events', filter: `ple_project_id=eq.${currentProjectId}` },
+        () => { void loadProjectData(currentProjectId); })
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'ple_event_groups', filter: `ple_project_id=eq.${currentProjectId}` },
+        () => { void loadProjectData(currentProjectId); })
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'ple_projects', filter: `id=eq.${currentProjectId}` },
+        (payload: any) => {
+          const updated = payload.new;
+          if (updated) setProjects(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [currentProjectId, loadProjectData]);
+
   // ✅ Auto-sincroniza contract_value de ple_projects com a soma do orçamento (events).
   // Garante que o card "Suas Obras" mostre o valor atualizado em tempo real.
+  // ⚠️ Multiplica por total_houses quando billing_type='per_house' (cada item por casa).
   useEffect(() => {
     if (!currentProjectId || !canEdit) return;
     const proj = projects.find(p => p.id === currentProjectId);
     if (!proj) return;
-    const budgetTotal = events.reduce((s, e) => s + (Number(e.quantity) || 0) * (Number(e.unit_value) || 0), 0);
+    const houses = Math.max(1, Number(proj.total_houses) || 1);
+    const budgetTotal = events.reduce((s, e) => {
+      const lineUnit = (Number(e.quantity) || 0) * (Number(e.unit_value) || 0);
+      const factor = (e.billing_type || 'per_house') === 'per_house' ? houses : 1;
+      return s + lineUnit * factor;
+    }, 0);
     const stored = Number(proj.contract_value) || 0;
     if (Math.abs(budgetTotal - stored) < 0.01) return;
     const t = setTimeout(async () => {
