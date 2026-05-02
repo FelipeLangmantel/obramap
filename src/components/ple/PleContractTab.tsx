@@ -435,12 +435,12 @@ export function PleContractTab(props: PleDataReturn) {
   };
 
   const getSubstageTotal = (substageId: string) => {
-    return (eventsByGroup.get(substageId) || []).reduce((s, e) => s + e.quantity * e.unit_value, 0);
+    return (eventsByGroup.get(substageId) || []).reduce((s, e) => s + lineTotal(e), 0);
   };
 
   const getStageTotal = (stageId: string) => {
-    // ✅ Soma serviços diretos da etapa + todas as subetapas
-    const directTotal = (eventsByGroup.get(stageId) || []).reduce((s, e) => s + e.quantity * e.unit_value, 0);
+    // ✅ Soma serviços diretos da etapa + todas as subetapas (já considera billing_type)
+    const directTotal = (eventsByGroup.get(stageId) || []).reduce((s, e) => s + lineTotal(e), 0);
     const substages = substagesByStage.get(stageId) || [];
     const subsTotal = substages.reduce((s, sub) => s + getSubstageTotal(sub.id), 0);
     return directTotal + subsTotal;
