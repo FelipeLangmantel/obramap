@@ -487,17 +487,18 @@ export function usePleData() {
     return Math.max(...measurements.map(m => m.measurement_number)) + 1;
   }, [measurements]);
 
-  // Computed totals – value per house = quantity * unit_value (total item value)
+  // Computed totals – considera billing_type ('per_house' multiplica por total_houses; 'fixed' = total único).
   const totals = useMemo(() => {
-    // ✅ Soma do orçamento lançado (planilha PLE) — sempre reflete o estado atual
-    const budgetTotal = events.reduce((s, e) => s + (e.quantity || 0) * (e.unit_value || 0), 0);
-    const totalMat = events.reduce((s, e) => s + (e.quantity || 0) * (e.mat_unit_value || 0), 0);
-    const totalMo = events.reduce((s, e) => s + (e.quantity || 0) * (e.mo_unit_value || 0), 0);
-    // ✅ Sempre prioriza a soma do orçamento lançado (atualiza em tempo real ao adicionar/excluir)
+    const houses = Math.max(1, Number(currentProject?.total_houses) || 1);
+    const factor = (e: PleEvent) => (e.billing_type || 'per_house') === 'per_house' ? houses : 1;
+    const budgetTotal = events.reduce((s, e) => s + (e.quantity || 0) * (e.unit_value || 0) * factor(e), 0);
+    const totalMat = events.reduce((s, e) => s + (e.quantity || 0) * (e.mat_unit_value || 0) * factor(e), 0);
+    const totalMo = events.reduce((s, e) => s + (e.quantity || 0) * (e.mo_unit_value || 0) * factor(e), 0);
     const contractValue = budgetTotal > 0 ? budgetTotal : Number(currentProject?.contract_value) || 0;
     let totalMeasured = 0;
     events.forEach(event => {
       const measuredQty = entries.filter(e => e.event_id === event.id).length;
+      // medição: cada entry = 1 casa medida; valor medido = qty * unit_value (1 casa).
       totalMeasured += measuredQty * (event.quantity * event.unit_value);
     });
     const balance = contractValue - totalMeasured;
