@@ -60,10 +60,11 @@ export function LinkLayersDialog({
         .eq("project_id", projectId)
         .order("macro_name, scope_name");
 
+      const colors = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#ec4899","#14b8a6","#f97316"];
+      const macroColorMap = new Map<string, string>();
+      let colorIdx = 0;
+
       if (contractServices && contractServices.length > 0) {
-        const colors = ["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6","#ec4899","#14b8a6","#f97316"];
-        const macroColorMap = new Map<string, string>();
-        let colorIdx = 0;
         const opts: ServiceOption[] = contractServices.map(s => {
           if (!macroColorMap.has(s.macro_id)) {
             macroColorMap.set(s.macro_id, colors[colorIdx % colors.length]);
@@ -80,6 +81,28 @@ export function LinkLayersDialog({
           };
         });
         setServices(opts);
+      } else {
+        // Fallback: projeto sem PLE configurado — usar macrosTemplate diretamente
+        const template = currentProject?.macrosTemplate ?? [];
+        const opts: ServiceOption[] = [];
+        template.forEach(macro => {
+          if (!macroColorMap.has(macro.id)) {
+            macroColorMap.set(macro.id, colors[colorIdx % colors.length]);
+            colorIdx++;
+          }
+          (macro.scopes ?? []).forEach(scope => {
+            opts.push({
+              id: `${macro.id}__${scope.id}`,
+              label: `${macro.name} → ${scope.name}`,
+              macro_id: macro.id,
+              macro_name: macro.name,
+              scope_id: scope.id,
+              scope_name: scope.name,
+              color: macroColorMap.get(macro.id) || "#6b7280",
+            });
+          });
+        });
+        if (opts.length > 0) setServices(opts);
       }
     };
     load();
