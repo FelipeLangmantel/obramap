@@ -660,7 +660,7 @@ export function PleContractTab(props: PleDataReturn) {
                         <div key={ev.id} className="border-b px-2 py-1.5 bg-accent/10 hover:bg-accent/20 transition-colors text-xs text-muted-foreground pl-4">
                           <span className="font-mono mr-2">{ev.item_code}</span>
                           <span className="text-foreground">{ev.description}</span>
-                          <span className="float-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                          <span className="float-right font-mono font-semibold">{fmtCur(lineTotal(ev))}</span>
                         </div>
                       ))}
                       {subs.map(sub => {
@@ -717,7 +717,7 @@ export function PleContractTab(props: PleDataReturn) {
                                         </>
                                       )}
                                       <span className="text-[11px] text-right font-mono">{fmtCur(ev.unit_value)}</span>
-                                      <span className="text-[11px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                                      <span className="text-[11px] text-right font-mono font-semibold">{fmtCur(lineTotal(ev))}</span>
                                       {isIntegrated && (
                                         <span className="flex justify-center">
                                           {ev.obramap_scope_name ? (
@@ -744,7 +744,7 @@ export function PleContractTab(props: PleDataReturn) {
                                       <span className="text-[10px] font-mono text-muted-foreground">{ev.item_code}</span>
                                       <span className="text-[10px] text-foreground truncate pr-1" title={ev.description}>{ev.description}</span>
                                       <span className="text-[10px] text-center text-muted-foreground">{ev.unit}</span>
-                                      <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                                      <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(lineTotal(ev))}</span>
                                     </div>
                                   </div>
                                 ))}
@@ -868,7 +868,7 @@ export function PleContractTab(props: PleDataReturn) {
                         </>
                       )}
                       <span className="text-[11px] text-right font-mono">{fmtCur(ev.unit_value)}</span>
-                      <span className="text-[11px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                      <span className="text-[11px] text-right font-mono font-semibold">{fmtCur(lineTotal(ev))}</span>
                       {isIntegrated && (
                         <span className="flex justify-center">
                           <ServiceMappingSelect event={ev} />
@@ -887,7 +887,7 @@ export function PleContractTab(props: PleDataReturn) {
                       <span className="text-[10px] font-mono text-muted-foreground">{ev.item_code}</span>
                       <span className="text-[10px] text-foreground truncate pr-1">{ev.description}</span>
                       <span className="text-[10px] text-center text-muted-foreground">{ev.unit}</span>
-                      <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                      <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(lineTotal(ev))}</span>
                     </div>
                     {/* Mover para subetapa */}
                     <div className="flex items-center gap-2 border-b bg-amber-500/5 px-2 sm:px-3 py-1.5">
