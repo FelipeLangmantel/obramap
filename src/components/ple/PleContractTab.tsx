@@ -381,7 +381,7 @@ export function PleContractTab(props: PleDataReturn) {
     }
   };
 
-  // Sync summary data
+  // Sync summary data — totais por escopo já considerando billing_type
   const syncSummary = useMemo(() => {
     if (!isIntegrated) return [];
     const byScope = new Map<string, { scopeName: string; count: number; totalMat: number; totalMo: number; totalUnit: number }>();
@@ -389,13 +389,13 @@ export function PleContractTab(props: PleDataReturn) {
       const key = e.obramap_scope_id!;
       const existing = byScope.get(key) || { scopeName: e.obramap_scope_name || "", count: 0, totalMat: 0, totalMo: 0, totalUnit: 0 };
       existing.count++;
-      existing.totalMat += e.quantity * (e.mat_unit_value || 0);
-      existing.totalMo += e.quantity * (e.mo_unit_value || 0);
-      existing.totalUnit += e.quantity * e.unit_value;
+      existing.totalMat += lineMat(e);
+      existing.totalMo += lineMo(e);
+      existing.totalUnit += lineTotal(e);
       byScope.set(key, existing);
     });
     return Array.from(byScope.values());
-  }, [events, isIntegrated]);
+  }, [events, isIntegrated, houseCount]);
 
   const handleAIImport = async (
     newGroups: { code: string; name: string; parent_code?: string }[],
