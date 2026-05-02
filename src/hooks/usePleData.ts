@@ -175,13 +175,41 @@ export function usePleData() {
   useEffect(() => { loadProjects(); }, [loadProjects]);
   useEffect(() => { if (currentProjectId) loadProjectData(currentProjectId); }, [currentProjectId, loadProjectData]);
 
+  // ✅ Realtime: mantém groups/events/projects sincronizados entre abas/dispositivos.
+  // Importante para os KPIs (MAT, MO, Total) refletirem exclusões/edições em tempo real.
+  useEffect(() => {
+    if (!currentProjectId) return;
+    const channel = supabase
+      .channel(`ple-data-${currentProjectId}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'ple_events', filter: `ple_project_id=eq.${currentProjectId}` },
+        () => { void loadProjectData(currentProjectId); })
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'ple_event_groups', filter: `ple_project_id=eq.${currentProjectId}` },
+        () => { void loadProjectData(currentProjectId); })
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'ple_projects', filter: `id=eq.${currentProjectId}` },
+        (payload: any) => {
+          const updated = payload.new;
+          if (updated) setProjects(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [currentProjectId, loadProjectData]);
+
   // ✅ Auto-sincroniza contract_value de ple_projects com a soma do orçamento (events).
   // Garante que o card "Suas Obras" mostre o valor atualizado em tempo real.
+  // ⚠️ Multiplica por total_houses quando billing_type='per_house' (cada item por casa).
   useEffect(() => {
     if (!currentProjectId || !canEdit) return;
     const proj = projects.find(p => p.id === currentProjectId);
     if (!proj) return;
-    const budgetTotal = events.reduce((s, e) => s + (Number(e.quantity) || 0) * (Number(e.unit_value) || 0), 0);
+    const houses = Math.max(1, Number(proj.total_houses) || 1);
+    const budgetTotal = events.reduce((s, e) => {
+      const lineUnit = (Number(e.quantity) || 0) * (Number(e.unit_value) || 0);
+      const factor = (e.billing_type || 'per_house') === 'per_house' ? houses : 1;
+      return s + lineUnit * factor;
+    }, 0);
     const stored = Number(proj.contract_value) || 0;
     if (Math.abs(budgetTotal - stored) < 0.01) return;
     const t = setTimeout(async () => {
@@ -459,17 +487,18 @@ export function usePleData() {
     return Math.max(...measurements.map(m => m.measurement_number)) + 1;
   }, [measurements]);
 
-  // Computed totals – value per house = quantity * unit_value (total item value)
+  // Computed totals – considera billing_type ('per_house' multiplica por total_houses; 'fixed' = total único).
   const totals = useMemo(() => {
-    // ✅ Soma do orçamento lançado (planilha PLE) — sempre reflete o estado atual
-    const budgetTotal = events.reduce((s, e) => s + (e.quantity || 0) * (e.unit_value || 0), 0);
-    const totalMat = events.reduce((s, e) => s + (e.quantity || 0) * (e.mat_unit_value || 0), 0);
-    const totalMo = events.reduce((s, e) => s + (e.quantity || 0) * (e.mo_unit_value || 0), 0);
-    // ✅ Sempre prioriza a soma do orçamento lançado (atualiza em tempo real ao adicionar/excluir)
+    const houses = Math.max(1, Number(currentProject?.total_houses) || 1);
+    const factor = (e: PleEvent) => (e.billing_type || 'per_house') === 'per_house' ? houses : 1;
+    const budgetTotal = events.reduce((s, e) => s + (e.quantity || 0) * (e.unit_value || 0) * factor(e), 0);
+    const totalMat = events.reduce((s, e) => s + (e.quantity || 0) * (e.mat_unit_value || 0) * factor(e), 0);
+    const totalMo = events.reduce((s, e) => s + (e.quantity || 0) * (e.mo_unit_value || 0) * factor(e), 0);
     const contractValue = budgetTotal > 0 ? budgetTotal : Number(currentProject?.contract_value) || 0;
     let totalMeasured = 0;
     events.forEach(event => {
       const measuredQty = entries.filter(e => e.event_id === event.id).length;
+      // medição: cada entry = 1 casa medida; valor medido = qty * unit_value (1 casa).
       totalMeasured += measuredQty * (event.quantity * event.unit_value);
     });
     const balance = contractValue - totalMeasured;

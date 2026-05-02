@@ -191,6 +191,15 @@ export function PleContractTab(props: PleDataReturn) {
   const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtCur = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+  // ✅ Total de uma linha do orçamento, considerando billing_type:
+  //    - 'per_house' (default): qty * unit_value * total_houses (cada item se repete por casa)
+  //    - 'fixed': qty * unit_value (custo único do empreendimento, ex.: canteiro de obras)
+  const houseCount = Math.max(1, Number(currentProject?.total_houses) || 1);
+  const lineFactor = (ev: PleEvent) => (ev.billing_type || 'per_house') === 'per_house' ? houseCount : 1;
+  const lineTotal = (ev: PleEvent) => (ev.quantity || 0) * (ev.unit_value || 0) * lineFactor(ev);
+  const lineMat = (ev: PleEvent) => (ev.quantity || 0) * (ev.mat_unit_value || 0) * lineFactor(ev);
+  const lineMo = (ev: PleEvent) => (ev.quantity || 0) * (ev.mo_unit_value || 0) * lineFactor(ev);
+
   const stages = useMemo(() => groups.filter(g => !g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
   const substagesByStage = useMemo(() => {
     const map = new Map<string, typeof groups>();
@@ -222,9 +231,9 @@ export function PleContractTab(props: PleDataReturn) {
   );
 
   const stats = useMemo(() => {
-    const totalContractual = events.reduce((s, e) => s + e.quantity * e.unit_value, 0);
-    const totalMat = events.reduce((s, e) => s + e.quantity * (e.mat_unit_value || 0), 0);
-    const totalMo = events.reduce((s, e) => s + e.quantity * (e.mo_unit_value || 0), 0);
+    const totalContractual = events.reduce((s, e) => s + lineTotal(e), 0);
+    const totalMat = events.reduce((s, e) => s + lineMat(e), 0);
+    const totalMo = events.reduce((s, e) => s + lineMo(e), 0);
     return {
       totalStages: stages.length,
       totalSubstages: groups.filter(g => g.parent_id).length,
@@ -235,7 +244,7 @@ export function PleContractTab(props: PleDataReturn) {
       ungroupedCount: ungroupedEvents.length,
       mappedCount: events.filter(e => e.obramap_scope_id).length,
     };
-  }, [groups, events, stages, ungroupedEvents]);
+  }, [groups, events, stages, ungroupedEvents, houseCount]);
 
   // Lista de subetapas (com nome do pai) — usada no seletor "mover para"
   const substageOptions = useMemo(() => {
@@ -372,7 +381,7 @@ export function PleContractTab(props: PleDataReturn) {
     }
   };
 
-  // Sync summary data
+  // Sync summary data — totais por escopo já considerando billing_type
   const syncSummary = useMemo(() => {
     if (!isIntegrated) return [];
     const byScope = new Map<string, { scopeName: string; count: number; totalMat: number; totalMo: number; totalUnit: number }>();
@@ -380,13 +389,13 @@ export function PleContractTab(props: PleDataReturn) {
       const key = e.obramap_scope_id!;
       const existing = byScope.get(key) || { scopeName: e.obramap_scope_name || "", count: 0, totalMat: 0, totalMo: 0, totalUnit: 0 };
       existing.count++;
-      existing.totalMat += e.quantity * (e.mat_unit_value || 0);
-      existing.totalMo += e.quantity * (e.mo_unit_value || 0);
-      existing.totalUnit += e.quantity * e.unit_value;
+      existing.totalMat += lineMat(e);
+      existing.totalMo += lineMo(e);
+      existing.totalUnit += lineTotal(e);
       byScope.set(key, existing);
     });
     return Array.from(byScope.values());
-  }, [events, isIntegrated]);
+  }, [events, isIntegrated, houseCount]);
 
   const handleAIImport = async (
     newGroups: { code: string; name: string; parent_code?: string }[],
@@ -426,12 +435,12 @@ export function PleContractTab(props: PleDataReturn) {
   };
 
   const getSubstageTotal = (substageId: string) => {
-    return (eventsByGroup.get(substageId) || []).reduce((s, e) => s + e.quantity * e.unit_value, 0);
+    return (eventsByGroup.get(substageId) || []).reduce((s, e) => s + lineTotal(e), 0);
   };
 
   const getStageTotal = (stageId: string) => {
-    // ✅ Soma serviços diretos da etapa + todas as subetapas
-    const directTotal = (eventsByGroup.get(stageId) || []).reduce((s, e) => s + e.quantity * e.unit_value, 0);
+    // ✅ Soma serviços diretos da etapa + todas as subetapas (já considera billing_type)
+    const directTotal = (eventsByGroup.get(stageId) || []).reduce((s, e) => s + lineTotal(e), 0);
     const substages = substagesByStage.get(stageId) || [];
     const subsTotal = substages.reduce((s, sub) => s + getSubstageTotal(sub.id), 0);
     return directTotal + subsTotal;
@@ -651,7 +660,7 @@ export function PleContractTab(props: PleDataReturn) {
                         <div key={ev.id} className="border-b px-2 py-1.5 bg-accent/10 hover:bg-accent/20 transition-colors text-xs text-muted-foreground pl-4">
                           <span className="font-mono mr-2">{ev.item_code}</span>
                           <span className="text-foreground">{ev.description}</span>
-                          <span className="float-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                          <span className="float-right font-mono font-semibold">{fmtCur(lineTotal(ev))}</span>
                         </div>
                       ))}
                       {subs.map(sub => {
@@ -708,7 +717,7 @@ export function PleContractTab(props: PleDataReturn) {
                                         </>
                                       )}
                                       <span className="text-[11px] text-right font-mono">{fmtCur(ev.unit_value)}</span>
-                                      <span className="text-[11px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                                      <span className="text-[11px] text-right font-mono font-semibold">{fmtCur(lineTotal(ev))}</span>
                                       {isIntegrated && (
                                         <span className="flex justify-center">
                                           {ev.obramap_scope_name ? (
@@ -735,7 +744,7 @@ export function PleContractTab(props: PleDataReturn) {
                                       <span className="text-[10px] font-mono text-muted-foreground">{ev.item_code}</span>
                                       <span className="text-[10px] text-foreground truncate pr-1" title={ev.description}>{ev.description}</span>
                                       <span className="text-[10px] text-center text-muted-foreground">{ev.unit}</span>
-                                      <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                                      <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(lineTotal(ev))}</span>
                                     </div>
                                   </div>
                                 ))}
@@ -826,7 +835,7 @@ export function PleContractTab(props: PleDataReturn) {
                 <div className="flex items-center gap-2 bg-amber-500/10 border-b border-amber-500/30 px-2 py-2">
                   <span className="text-[10px] sm:text-xs font-extrabold text-amber-600 dark:text-amber-400">ITENS SEM GRUPO ({ungroupedEvents.length})</span>
                   <span className="ml-auto text-[10px] sm:text-xs font-extrabold font-mono text-amber-600 dark:text-amber-400">
-                    {fmtCur(ungroupedEvents.reduce((s, e) => s + e.quantity * e.unit_value, 0))}
+                    {fmtCur(ungroupedEvents.reduce((s, e) => s + lineTotal(e), 0))}
                   </span>
                 </div>
                 {ungroupedEvents.map(ev => (
@@ -859,7 +868,7 @@ export function PleContractTab(props: PleDataReturn) {
                         </>
                       )}
                       <span className="text-[11px] text-right font-mono">{fmtCur(ev.unit_value)}</span>
-                      <span className="text-[11px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                      <span className="text-[11px] text-right font-mono font-semibold">{fmtCur(lineTotal(ev))}</span>
                       {isIntegrated && (
                         <span className="flex justify-center">
                           <ServiceMappingSelect event={ev} />
@@ -878,7 +887,7 @@ export function PleContractTab(props: PleDataReturn) {
                       <span className="text-[10px] font-mono text-muted-foreground">{ev.item_code}</span>
                       <span className="text-[10px] text-foreground truncate pr-1">{ev.description}</span>
                       <span className="text-[10px] text-center text-muted-foreground">{ev.unit}</span>
-                      <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(ev.quantity * ev.unit_value)}</span>
+                      <span className="text-[10px] text-right font-mono font-semibold">{fmtCur(lineTotal(ev))}</span>
                     </div>
                     {/* Mover para subetapa */}
                     <div className="flex items-center gap-2 border-b bg-amber-500/5 px-2 sm:px-3 py-1.5">
