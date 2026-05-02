@@ -6,7 +6,6 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Home, Save, X, MousePointerClick, Trash2 } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface MeshPickItem {
   name: string;
@@ -94,17 +93,15 @@ export function AssignHousePopover({
             <SelectTrigger className="h-9">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
-              <ScrollArea className="max-h-[260px]">
-                {houseOptions.map(n => (
-                  <SelectItem key={n} value={String(n)}>
-                    <span className="flex items-center gap-1.5">
-                      <Home className="h-3 w-3" />
-                      Casa {String(n).padStart(2, "0")}
-                    </span>
-                  </SelectItem>
-                ))}
-              </ScrollArea>
+            <SelectContent className="max-h-[300px]">
+              {houseOptions.map(n => (
+                <SelectItem key={n} value={String(n)}>
+                  <span className="flex items-center gap-1.5">
+                    <Home className="h-3 w-3" />
+                    Casa {String(n).padStart(2, "0")}
+                  </span>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

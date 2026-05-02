@@ -454,15 +454,25 @@ export function Map3DView() {
 
     const meshName = obj.name || `Mesh_${obj.id}`;
 
-    // Sobe um nível: o "grupo pai" agrupa peças da mesma casa
-    // (telhado + paredes + piso de uma mesma casa, no SketchUp).
-    const parent = obj.parent;
-    const isRealGroup = parent && parent.type !== "Scene" && (parent.children?.length ?? 0) > 1;
-    const groupName = isRealGroup ? (parent?.name || undefined) : undefined;
+    // Sobe até o "componente raiz" da casa: no SketchUp cada casa é um
+    // Component/Group; ao exportar para GLB vira um Object3D filho direto
+    // da Scene (ou de um wrapper raiz). Subimos enquanto houver pai que
+    // NÃO seja a Scene nem o wrapper raiz, para pegar a casa inteira em
+    // vez de apenas o subgrupo (ex.: "Telhado") clicado.
+    let rootGroup: THREE.Object3D | null = null;
+    let cursor: THREE.Object3D | null = obj.parent ?? null;
+    while (cursor && cursor.parent && cursor.parent.type !== "Scene") {
+      cursor = cursor.parent;
+    }
+    // cursor agora é o filho direto da Scene (ou null se obj era topo).
+    rootGroup = cursor && cursor.type !== "Scene" ? cursor : (obj.parent ?? null);
+
+    const isRealGroup = !!rootGroup && rootGroup.type !== "Scene" && (rootGroup.children?.length ?? 0) > 0;
+    const groupName = isRealGroup ? (rootGroup?.name || undefined) : undefined;
 
     const childMeshes: string[] = [];
-    if (isRealGroup && parent) {
-      parent.traverse(c => {
+    if (isRealGroup && rootGroup) {
+      rootGroup.traverse(c => {
         if ((c as THREE.Mesh).isMesh) {
           const n = c.name || `Mesh_${c.id}`;
           if (n !== meshName) childMeshes.push(n);
