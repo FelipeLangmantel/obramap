@@ -1028,11 +1028,20 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
 
     setRegistering(true);
     try {
+      // Garantir que a entry existe antes de criar lançamentos.
+      // Só cria o diary_entry agora — quando o usuário efetivamente lança.
+      const guaranteedEntryId = entryId || await ensureEntryExists();
+      if (!guaranteedEntryId) {
+        toast.error("Não foi possível iniciar o relatório. Tente novamente.");
+        setRegistering(false);
+        return;
+      }
+
       const productionDate = entryDate;
       const isOffline = !navigator.onLine;
 
       // 1) productions
-      const prodResult = await createProductionAware(entryId, {
+      const prodResult = await createProductionAware(guaranteedEntryId, {
         project_id: currentProject.id,
         macro_id: selectedMacro.id, macro_name: selectedMacro.name, macro_color: selectedMacro.color,
         scope_id: selectedScope.id, scope_name: selectedScope.name,
@@ -1045,7 +1054,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       const entryDateObj = parseISO(entryDate);
       const weekStart = format(startOfWeek(entryDateObj, { weekStartsOn: 1 }), "yyyy-MM-dd");
       const weekEnd = format(endOfWeek(entryDateObj, { weekStartsOn: 1 }), "yyyy-MM-dd");
-      await createWeeklyProductionAware(entryId, {
+      await createWeeklyProductionAware(guaranteedEntryId, {
         project_id: currentProject.id, week_start: weekStart, week_end: weekEnd,
         scope_id: selectedScope.id, scope_name: selectedScope.name,
         macro_id: selectedMacro.id, macro_name: selectedMacro.name, macro_color: selectedMacro.color,
@@ -1055,7 +1064,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       });
 
       // 3) diary_items (vincula à production criada acima — id local quando offline)
-      await createDiaryItemAware(entryId, prodResult.id, {
+      await createDiaryItemAware(guaranteedEntryId, prodResult.id, {
         macro_id: selectedMacro.id, macro_name: selectedMacro.name, macro_color: selectedMacro.color,
         scope_id: selectedScope.id, scope_name: selectedScope.name,
         house_ids: selectedHouses, houses_count: selectedHouses.length,
@@ -1615,9 +1624,9 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
                             borderColor: macro.color,
                             color: selectedMacro?.id === macro.id ? "#fff" : undefined,
                           }}
-                          onClick={async () => {
-                            const ensuredEntryId = await ensureEntryExists();
-                            if (!ensuredEntryId) return;
+                          onClick={() => {
+                            // Não criar entry aqui — só registrar seleção.
+                            // Entry é criada apenas quando o lançamento for salvo (handleRegister).
                             setSelectedMacro(selectedMacro?.id === macro.id ? null : { id: macro.id, name: macro.name, color: macro.color });
                             setSelectedScope(null); setSelectedHouses([]);
                           }}>
