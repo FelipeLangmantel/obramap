@@ -835,7 +835,7 @@ export function PleContractTab(props: PleDataReturn) {
                 <div className="flex items-center gap-2 bg-amber-500/10 border-b border-amber-500/30 px-2 py-2">
                   <span className="text-[10px] sm:text-xs font-extrabold text-amber-600 dark:text-amber-400">ITENS SEM GRUPO ({ungroupedEvents.length})</span>
                   <span className="ml-auto text-[10px] sm:text-xs font-extrabold font-mono text-amber-600 dark:text-amber-400">
-                    {fmtCur(ungroupedEvents.reduce((s, e) => s + e.quantity * e.unit_value, 0))}
+                    {fmtCur(ungroupedEvents.reduce((s, e) => s + lineTotal(e), 0))}
                   </span>
                 </div>
                 {ungroupedEvents.map(ev => (
