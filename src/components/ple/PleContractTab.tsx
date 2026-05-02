@@ -191,6 +191,15 @@ export function PleContractTab(props: PleDataReturn) {
   const fmt = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtCur = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+  // ✅ Total de uma linha do orçamento, considerando billing_type:
+  //    - 'per_house' (default): qty * unit_value * total_houses (cada item se repete por casa)
+  //    - 'fixed': qty * unit_value (custo único do empreendimento, ex.: canteiro de obras)
+  const houseCount = Math.max(1, Number(currentProject?.total_houses) || 1);
+  const lineFactor = (ev: PleEvent) => (ev.billing_type || 'per_house') === 'per_house' ? houseCount : 1;
+  const lineTotal = (ev: PleEvent) => (ev.quantity || 0) * (ev.unit_value || 0) * lineFactor(ev);
+  const lineMat = (ev: PleEvent) => (ev.quantity || 0) * (ev.mat_unit_value || 0) * lineFactor(ev);
+  const lineMo = (ev: PleEvent) => (ev.quantity || 0) * (ev.mo_unit_value || 0) * lineFactor(ev);
+
   const stages = useMemo(() => groups.filter(g => !g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
   const substagesByStage = useMemo(() => {
     const map = new Map<string, typeof groups>();
@@ -222,9 +231,9 @@ export function PleContractTab(props: PleDataReturn) {
   );
 
   const stats = useMemo(() => {
-    const totalContractual = events.reduce((s, e) => s + e.quantity * e.unit_value, 0);
-    const totalMat = events.reduce((s, e) => s + e.quantity * (e.mat_unit_value || 0), 0);
-    const totalMo = events.reduce((s, e) => s + e.quantity * (e.mo_unit_value || 0), 0);
+    const totalContractual = events.reduce((s, e) => s + lineTotal(e), 0);
+    const totalMat = events.reduce((s, e) => s + lineMat(e), 0);
+    const totalMo = events.reduce((s, e) => s + lineMo(e), 0);
     return {
       totalStages: stages.length,
       totalSubstages: groups.filter(g => g.parent_id).length,
@@ -235,7 +244,7 @@ export function PleContractTab(props: PleDataReturn) {
       ungroupedCount: ungroupedEvents.length,
       mappedCount: events.filter(e => e.obramap_scope_id).length,
     };
-  }, [groups, events, stages, ungroupedEvents]);
+  }, [groups, events, stages, ungroupedEvents, houseCount]);
 
   // Lista de subetapas (com nome do pai) — usada no seletor "mover para"
   const substageOptions = useMemo(() => {
