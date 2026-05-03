@@ -516,8 +516,154 @@ export function Map3DView() {
   }, [layerManager.extractLayers, projectId, meshHooks]);
 
   // ====================================================
-  // Modo "Atribuir Casas": clique numa malha abre popover
+  // Modo "Revisar Modelo": clique destaca a mesh
   // ====================================================
+  const handleReviewMeshClick = useCallback((obj: THREE.Object3D) => {
+    if (!reviewMode) return;
+    if (!(obj as THREE.Mesh).isMesh) return;
+    setSelectedMeshKey((obj as THREE.Mesh).uuid);
+  }, [reviewMode]);
+
+  const handleIsolate = useCallback((key: string) => {
+    setIsolatedKeys(prev => (prev?.has(key) ? null : new Set([key])));
+  }, []);
+
+  // Lista de casas para o painel de revisão
+  const houseNumbers = useMemo(() => {
+    const arr = (currentProject?.houses || [])
+      .map((h: any) => h.houseNumber ?? h.house_number ?? h.number)
+      .filter((n: any) => typeof n === "number");
+    return Array.from(new Set(arr)).sort((a, b) => a - b);
+  }, [currentProject?.houses]);
+
+  // Lista de serviços (macro→scope) do projeto
+  const serviceOptions: ServiceOption[] = useMemo(() => {
+    const tpl = (currentProject as any)?.macrosTemplate || [];
+    const opts: ServiceOption[] = [];
+    tpl.forEach((macro: any) => {
+      (macro.scopes || []).forEach((scope: any) => {
+        opts.push({
+          id: `${macro.id}::${scope.id}`,
+          label: `${macro.name} → ${scope.name}`,
+          macro_id: macro.id,
+          scope_id: scope.id,
+        });
+      });
+    });
+    return opts;
+  }, [currentProject]);
+
+  // Aplica modo de visualização à cena
+  const applyViewMode = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    if (!sceneObj) return;
+    sceneObj.traverse((child) => {
+      if (!(child as THREE.Mesh).isMesh) return;
+      const saved = meshHooks.meshMap.get(child.uuid);
+      if (!saved) return;
+      if (saved.ignored) { child.visible = false; return; }
+      switch (mode) {
+        case "complete":
+          child.visible = saved.visible;
+          break;
+        case "real": {
+          const hasLink = saved.assigned_house_number != null && saved.service_macro_id != null;
+          child.visible = hasLink && saved.production_visible;
+          break;
+        }
+        case "simulation":
+          child.visible = saved.visible;
+          break;
+      }
+    });
+  }, [sceneObj, meshHooks.meshMap]);
+
+  // Re-aplica modo quando meshMap chega/atualiza ou cena fica pronta
+  useEffect(() => {
+    if (meshHooks.meshMap.size > 0 && sceneObj) applyViewMode(viewMode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meshHooks.meshMap, sceneObj]);
+
+  // Aplica isolamento (sobrepõe modo de visão)
+  useEffect(() => {
+    if (!sceneObj) return;
+    if (!isolatedKeys) { applyViewMode(viewMode); return; }
+    sceneObj.traverse((child) => {
+      if (!(child as THREE.Mesh).isMesh) return;
+      child.visible = isolatedKeys.has(child.uuid);
+    });
+  }, [isolatedKeys, sceneObj, applyViewMode, viewMode]);
+
+  // Desabilita autoMode (LayersPanel) fora do modo simulação
+  useEffect(() => {
+    if (viewMode !== "simulation" && layerManager.autoMode) {
+      layerManager.setAutoMode(false);
+    }
+  }, [viewMode, layerManager]);
+
+  const pendingMeshCount = useMemo(() => {
+    let n = 0;
+    meshHooks.meshMap.forEach((m) => {
+      if (m.ignored) return;
+      if (m.assigned_house_number == null || m.service_macro_id == null) n++;
+    });
+    return n;
+  }, [meshHooks.meshMap]);
+
+  // Sincronização 3D Real
+  const handleSync3DReal = useCallback(async () => {
+    if (!projectId) return;
+    setIsSyncing(true);
+    try {
+      const meshes = Array.from(meshHooks.meshMap.values()).filter(m => !m.ignored);
+      if (meshes.length === 0) { toast.info("Nenhuma mesh registrada."); return; }
+
+      const progressMap = new Map<string, number>();
+      (currentProject?.houses || []).forEach((h: any) => {
+        const hn = h.houseNumber ?? h.house_number ?? h.number;
+        (h.macros || []).forEach((macro: any) => {
+          (macro.scopes || []).forEach((scope: any) => {
+            progressMap.set(`${hn}::${macro.id}::${scope.id}`, scope.progress || 0);
+          });
+        });
+      });
+
+      let visible = 0, hidden = 0, unlinked = 0;
+      const now = new Date().toISOString();
+
+      await Promise.all(meshes.map(async (mesh) => {
+        const hasLink = mesh.assigned_house_number != null && mesh.service_macro_id != null && mesh.service_scope_id != null;
+        let progress = 0; let pv = false;
+        if (!hasLink) {
+          unlinked++;
+        } else {
+          progress = progressMap.get(`${mesh.assigned_house_number}::${mesh.service_macro_id}::${mesh.service_scope_id}`) ?? 0;
+          pv = progress > 0;
+          if (pv) visible++; else hidden++;
+        }
+        await supabase.from("project_model_meshes" as any).update({
+          production_visible: pv, progress_percent: progress, last_synced_at: now,
+        }).eq("id", (mesh as any).id);
+      }));
+
+      await meshHooks.refresh();
+      applyViewMode(viewMode);
+      setLastSyncResult({ total: meshes.length, visible, hidden, unlinked, syncedAt: new Date() });
+      toast.success(`Sincronizado: ${visible} visíveis · ${hidden} ocultas · ${unlinked} sem vínculo`);
+    } catch (err) {
+      console.error("[Sync3D]", err);
+      toast.error("Erro ao sincronizar");
+    } finally { setIsSyncing(false); }
+  }, [projectId, meshHooks, currentProject, applyViewMode, viewMode]);
+
+  // Auto-sync após realtime, debounced (somente se já sincronizou ao menos 1x)
+  const autoSync = useCallback(() => {
+    if (!lastSyncResult) return;
+    if (syncDebounceRef.current) clearTimeout(syncDebounceRef.current);
+    syncDebounceRef.current = setTimeout(() => { void handleSync3DReal(); }, 800);
+  }, [lastSyncResult, handleSync3DReal]);
+
+
   const handleMeshClick = useCallback((obj: THREE.Object3D) => {
     if (!assignMode) return;
     if (!(obj as THREE.Mesh).isMesh) return;
