@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers, Camera, MousePointerClick } from "lucide-react";
+import { Upload, RotateCcw, Move3D, X, ChevronDown, ChevronRight, Save, Loader2, Home, AlertTriangle, Target, Layers, Camera, MousePointerClick, ScanSearch, RefreshCw } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
@@ -21,6 +21,9 @@ import { LayersPanel } from "./map3d/LayersPanel";
 import { LinkLayersDialog } from "./map3d/LinkLayersDialog";
 import { AssignHousePopover } from "./map3d/AssignHousePopover";
 import { useMeshHouseAssignments } from "@/hooks/useMeshHouseAssignments";
+import { useProjectModelMeshes, type ProjectModelMesh } from "@/hooks/useProjectModelMeshes";
+import { MeshReviewPanel, type ServiceOption } from "./map3d/MeshReviewPanel";
+import { parseHouseNumberFromMesh } from "./map3d/parseHouseFromMeshName";
 import { HouseFotoHistoryDrawer } from "@/components/diario/HouseFotoHistoryDrawer";
 
 interface ModelData {
