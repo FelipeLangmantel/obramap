@@ -3,7 +3,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, FileText, BarChart3, History, Grid3X3, ClipboardList, ArrowLeft, MapPin } from "lucide-react";
+import { Plus, FileText, BarChart3, History, Grid3X3, ClipboardList, ArrowLeft, MapPin, RefreshCw } from "lucide-react";
 import { PleSpreadsheetTab } from "./PleSpreadsheetTab";
 import { PleGridTab } from "./PleGridTab";
 import { PleChartsTab } from "./PleChartsTab";
@@ -14,6 +14,7 @@ import { PleProjectSetup } from "./PleProjectSetup";
 import { PleNewMeasurementDialog } from "./PleNewMeasurementDialog";
 import { PleDashboard } from "./PleDashboard";
 import { PleContractInfoTab } from "./PleContractInfoTab";
+import { PleSyncTab } from "./PleSyncTab";
 import type { usePleData } from "@/hooks/usePleData";
 
 type PleDataReturn = ReturnType<typeof usePleData>;
