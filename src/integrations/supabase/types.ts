@@ -8922,6 +8922,71 @@ export type Database = {
           },
         ]
       }
+      project_model_meshes: {
+        Row: {
+          assigned_house_number: number | null
+          created_at: string
+          detected_house_number: number | null
+          id: string
+          ignored: boolean
+          last_synced_at: string | null
+          layer_key: string
+          material_name: string | null
+          mesh_name: string | null
+          production_visible: boolean
+          progress_percent: number
+          project_id: string
+          service_macro_id: string | null
+          service_scope_id: string | null
+          updated_at: string
+          visible: boolean
+        }
+        Insert: {
+          assigned_house_number?: number | null
+          created_at?: string
+          detected_house_number?: number | null
+          id?: string
+          ignored?: boolean
+          last_synced_at?: string | null
+          layer_key: string
+          material_name?: string | null
+          mesh_name?: string | null
+          production_visible?: boolean
+          progress_percent?: number
+          project_id: string
+          service_macro_id?: string | null
+          service_scope_id?: string | null
+          updated_at?: string
+          visible?: boolean
+        }
+        Update: {
+          assigned_house_number?: number | null
+          created_at?: string
+          detected_house_number?: number | null
+          id?: string
+          ignored?: boolean
+          last_synced_at?: string | null
+          layer_key?: string
+          material_name?: string | null
+          mesh_name?: string | null
+          production_visible?: boolean
+          progress_percent?: number
+          project_id?: string
+          service_macro_id?: string | null
+          service_scope_id?: string | null
+          updated_at?: string
+          visible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_model_meshes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_modules: {
         Row: {
           created_at: string
