@@ -451,29 +451,69 @@ export function Map3DView() {
   } | null>(null);
   const [assignSaving, setAssignSaving] = useState(false);
 
+  // Modo "Revisar Modelo"
+  const [reviewMode, setReviewMode] = useState(false);
+  const [selectedMeshKey, setSelectedMeshKey] = useState<string | null>(null);
+  const [isolatedKeys, setIsolatedKeys] = useState<Set<string> | null>(null);
+
+  // Modo de visualização
+  type ViewMode = "complete" | "real" | "simulation";
+  const [viewMode, setViewMode] = useState<ViewMode>("complete");
+
+  // Sincronização 3D Real
+  const [isSyncing, setIsSyncing] = useState(false);
+  interface SyncResult { total: number; visible: number; hidden: number; unlinked: number; syncedAt: Date; }
+  const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
+  const syncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cena ref para aplicar visibilidade fora do JSX
+  const [sceneObj, setSceneObj] = useState<THREE.Object3D | null>(null);
+
   // Atribuição manual mesh→casa (persistida no banco) — fonte da verdade.
   const meshAssignments = useMeshHouseAssignments(projectId);
   const layerManager = useModelLayers(projectId, meshAssignments.assignmentMap);
-  
+
+  // Inventário de meshes do modelo
+  const meshHooks = useProjectModelMeshes(projectId);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mtlInputRef = useRef<HTMLInputElement>(null);
   const [pendingObjFile, setPendingObjFile] = useState<File | null>(null);
-  
+
   const handleCameraChange = useCallback((p: [number, number, number], t: [number, number, number]) => {
     setPendingPos(p); setPendingTgt(t);
   }, []);
 
-  // Called by the actual 3D model component when geometry is in scene
   const handleModelLoaded = useCallback(() => {
     console.log('[3D] Model geometry loaded in scene');
     setSceneReady(true);
   }, []);
 
-  // Extract layers when 3D scene is ready
-  const handleSceneReady = useCallback((scene: THREE.Object3D) => {
+  // Inventário automático: extrai todas as meshes para o banco.
+  const handleSceneReady = useCallback(async (scene: THREE.Object3D) => {
+    setSceneObj(scene);
     layerManager.extractLayers(scene);
     console.log('[3D] Layers extracted from model');
-  }, [layerManager.extractLayers]);
+
+    if (!projectId) return;
+    const meshesToUpsert: { layer_key: string; mesh_name: string; material_name: string; detected_house_number: number | null }[] = [];
+    scene.traverse((child) => {
+      if (!(child as THREE.Mesh).isMesh) return;
+      const mesh = child as THREE.Mesh;
+      const materialName = Array.isArray(mesh.material)
+        ? mesh.material.map((m: any) => m.name).filter(Boolean).join(", ")
+        : (mesh.material as any)?.name || "";
+      meshesToUpsert.push({
+        layer_key: mesh.uuid,
+        mesh_name: mesh.name || "",
+        material_name: materialName,
+        detected_house_number: parseHouseNumberFromMesh(mesh.name || ""),
+      });
+    });
+    if (meshesToUpsert.length > 0) {
+      void meshHooks.bulkUpsertMeshes(meshesToUpsert);
+    }
+  }, [layerManager.extractLayers, projectId, meshHooks]);
 
   // ====================================================
   // Modo "Atribuir Casas": clique numa malha abre popover
