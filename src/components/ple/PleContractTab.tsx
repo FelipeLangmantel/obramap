@@ -493,62 +493,7 @@ export function PleContractTab(props: PleDataReturn) {
   return (
     <TooltipProvider delayDuration={200}>
     <div className="h-full flex flex-col gap-3 sm:gap-4 overflow-hidden">
-      {/* Sync bar for integrated mode */}
-      {isIntegrated && (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-2 px-2">
-            {stats.mappedCount > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleSync}
-                disabled={isSyncing}
-                className="gap-1.5 text-xs h-7 border-primary/40 text-primary hover:bg-primary/10"
-              >
-                <RefreshCw className={`h-3 w-3 ${isSyncing ? "animate-spin" : ""}`} />
-                Sincronizar com Contrato da Obra
-              </Button>
-            )}
-            {unmappedEvents.length > 0 && (
-              <Button size="sm" variant="outline" onClick={() => setShowBatchMapping(true)} className="gap-1.5 text-xs h-7">
-                <Layers className="h-3 w-3" /> Mapear em lote ({unmappedEvents.length})
-              </Button>
-            )}
-            <Badge variant="outline" className="text-[10px]">
-              {stats.mappedCount}/{stats.totalEvents} mapeados
-            </Badge>
-          </div>
-
-          {/* Sync result summary */}
-          {syncResult && (
-            <div className="mx-2 p-2 rounded-md bg-green-500/10 border border-green-500/30 text-xs text-green-700 dark:text-green-400">
-              ✓ {syncResult.synced} serviços sincronizados com o contrato de <strong>{syncResult.projectName}</strong>
-            </div>
-          )}
-
-          {/* Sync summary table */}
-          {syncSummary.length > 0 && (
-            <div className="mx-2 border rounded-md overflow-hidden">
-              <div className="grid grid-cols-[1fr_60px_80px_80px_80px] gap-0 bg-muted/50 px-2 py-1 text-[9px] font-bold text-muted-foreground uppercase">
-                <span>Serviço</span>
-                <span className="text-center">Itens</span>
-                <span className="text-right">MAT</span>
-                <span className="text-right">MO</span>
-                <span className="text-right">Unit./casa</span>
-              </div>
-              {syncSummary.map((s, i) => (
-                <div key={i} className="grid grid-cols-[1fr_60px_80px_80px_80px] gap-0 px-2 py-1 border-t text-[10px]">
-                  <span className="truncate font-medium">{s.scopeName}</span>
-                  <span className="text-center text-muted-foreground">{s.count}</span>
-                  <span className="text-right font-mono">{fmtCur(s.totalMat)}</span>
-                  <span className="text-right font-mono">{fmtCur(s.totalMo)}</span>
-                  <span className="text-right font-mono font-semibold">{fmtCur(s.totalUnit / totalHouses)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Sincronização movida para a aba "Sincronização" */}
 
       {/* Budget Spreadsheet */}
       <div className="flex-1 flex flex-col min-h-0">
