@@ -3,7 +3,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Link2, ChevronDown, ChevronRight, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -214,7 +213,7 @@ export function LinkPleItemsDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-6xl w-[95vw] h-[90vh] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-[98vw] w-[98vw] h-[90vh] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-3 flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5 text-primary" />
@@ -244,7 +243,7 @@ export function LinkPleItemsDialog({
           </Badge>
         </div>
 
-        <ScrollArea className="flex-1 min-h-0 px-6">
+        <div className="flex-1 min-h-0 overflow-auto px-6">
           {loading ? (
             <div className="flex items-center justify-center h-40">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -254,7 +253,7 @@ export function LinkPleItemsDialog({
               Nenhum item cadastrado na PLE deste projeto.
             </div>
           ) : (
-            <div className="space-y-1 pb-2">
+            <div className="min-w-[1200px] space-y-1 pb-2">
               {stages.map(stage => {
                 const isExp = expanded.has(stage.id);
                 const subs = substagesByStage.get(stage.id) || [];
@@ -297,30 +296,30 @@ export function LinkPleItemsDialog({
                             return (
                               <div
                                 key={e.id}
-                                className={`flex items-center gap-2 px-6 py-1.5 border-t hover:bg-muted/30 cursor-pointer ${selected.has(e.id) ? "bg-primary/5" : ""}`}
+                                className={`flex items-center gap-2 min-w-[1200px] px-6 py-1.5 border-t hover:bg-muted/30 cursor-pointer ${selected.has(e.id) ? "bg-primary/5" : ""}`}
                                 onClick={() => toggleEvent(e.id)}
                               >
                                 <Checkbox checked={selected.has(e.id)} onCheckedChange={() => toggleEvent(e.id)} />
-                                <span className="text-[10px] font-mono w-14 text-muted-foreground">{e.item_code}</span>
-                                <span className="text-[11px] flex-1 truncate" title={e.description}>{e.description}</span>
+                                <span className="text-[10px] font-mono w-14 flex-shrink-0 text-muted-foreground">{e.item_code}</span>
+                                <span className="text-[11px] flex-1 min-w-0 truncate" title={e.description}>{e.description}</span>
                                 {isLinkedHere && (
-                                  <Badge variant="outline" className="text-[9px] bg-primary/10 text-primary border-primary/30">
+                                  <Badge variant="outline" className="flex-shrink-0 text-[9px] bg-primary/10 text-primary border-primary/30">
                                     Vinculado aqui
                                   </Badge>
                                 )}
                                 {isLinkedElsewhere && (
                                   <Badge
                                     variant="outline"
-                                    className="max-w-48 truncate text-[9px] bg-amber-500/10 text-amber-600 border-amber-500/30"
+                                    className="max-w-56 flex-shrink-0 truncate text-[9px] bg-amber-500/10 text-amber-600 border-amber-500/30"
                                     title={`Já vinculado: ${linkedMacroName} → ${linkedScopeName}`}
                                   >
                                     Já vinculado: {linkedMacroName} → {linkedScopeName}
                                   </Badge>
                                 )}
-                                <span className="text-[10px] text-muted-foreground w-8 text-right">{e.unit}</span>
-                                <span className="text-[10px] font-mono w-16 text-right">{e.quantity.toFixed(2)}</span>
-                                <span className="text-[10px] font-mono w-24 text-right">{fmt(e.unit_value)}</span>
-                                <span className="text-[10px] font-mono w-28 text-right font-semibold text-primary">{fmt(valueShown)}</span>
+                                <span className="text-[10px] text-muted-foreground w-8 flex-shrink-0 text-right">{e.unit}</span>
+                                <span className="text-[10px] font-mono w-16 flex-shrink-0 text-right">{e.quantity.toFixed(2)}</span>
+                                <span className="text-[10px] font-mono w-24 flex-shrink-0 text-right">{fmt(e.unit_value)}</span>
+                                <span className="text-[10px] font-mono w-28 flex-shrink-0 text-right font-semibold text-primary">{fmt(valueShown)}</span>
                               </div>
                             );
                           })}
@@ -332,7 +331,7 @@ export function LinkPleItemsDialog({
               })}
             </div>
           )}
-        </ScrollArea>
+        </div>
 
         <DialogFooter className="border-t px-6 py-3 flex-shrink-0">
           <div className="text-xs text-muted-foreground mr-auto">
