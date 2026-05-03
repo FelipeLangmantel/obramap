@@ -15,6 +15,42 @@ interface Props extends PleDataReturn {
   selectedMeasurement: PleMeasurement | null;
 }
 
+const compareCodeParts = (a: string, b: string) => {
+  const aParts = String(a || "").split(".");
+  const bParts = String(b || "").split(".");
+  const len = Math.max(aParts.length, bParts.length);
+  for (let i = 0; i < len; i++) {
+    const aPart = aParts[i];
+    const bPart = bParts[i];
+    if (aPart === undefined) return -1;
+    if (bPart === undefined) return 1;
+
+    const aNum = Number(aPart);
+    const bNum = Number(bPart);
+    const bothNumeric = Number.isFinite(aNum) && Number.isFinite(bNum) && aPart.trim() !== "" && bPart.trim() !== "";
+    const result = bothNumeric
+      ? aNum - bNum
+      : aPart.localeCompare(bPart, "pt-BR", { numeric: true, sensitivity: "base" });
+    if (result !== 0) return result;
+  }
+  return 0;
+};
+
+const compareNaturalOrder = (
+  a: { display_order?: number | null },
+  b: { display_order?: number | null },
+  aCode: string | null | undefined,
+  bCode: string | null | undefined,
+  aLabel: string | null | undefined,
+  bLabel: string | null | undefined,
+) => {
+  const codeResult = compareCodeParts(aCode || "", bCode || "");
+  if (codeResult !== 0) return codeResult;
+  const orderResult = Number(a.display_order ?? 0) - Number(b.display_order ?? 0);
+  if (orderResult !== 0) return orderResult;
+  return String(aLabel || "").localeCompare(String(bLabel || ""), "pt-BR", { numeric: true, sensitivity: "base" });
+};
+
 // Memoized cell - ultra lightweight
 const GridCell = memo(function GridCell({
   measNum, colorClass, wasGlossed, isApproved, isLocked,
@@ -90,8 +126,14 @@ export function PleGridTab({ groups, events, measurements, entries, glosses, cur
     });
   }, [groups, isMobile]);
 
-  const stages = useMemo(() => groups.filter(g => !g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
-  const substages = useMemo(() => groups.filter(g => g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
+  const stages = useMemo(
+    () => groups.filter(g => !g.parent_id).sort((a, b) => compareNaturalOrder(a, b, a.code, b.code, a.name, b.name)),
+    [groups]
+  );
+  const substages = useMemo(
+    () => groups.filter(g => g.parent_id).sort((a, b) => compareNaturalOrder(a, b, a.code, b.code, a.name, b.name)),
+    [groups]
+  );
 
   const allExpanded = useMemo(() => groups.length > 0 && groups.every(g => expandedGroups.has(g.id)), [groups, expandedGroups]);
   const toggleAll = () => {
@@ -114,7 +156,9 @@ export function PleGridTab({ groups, events, measurements, entries, glosses, cur
       subs.forEach(sub => {
         result.push({ type: "substage", substage: sub });
         if (!expandedGroups.has(sub.id)) return;
-        const subEvents = events.filter(e => e.group_id === sub.id).sort((a, b) => a.display_order - b.display_order);
+        const subEvents = events
+          .filter(e => e.group_id === sub.id)
+          .sort((a, b) => compareNaturalOrder(a, b, a.item_code, b.item_code, a.description, b.description));
         subEvents.forEach(ev => result.push({ type: "event", event: ev }));
       });
     });

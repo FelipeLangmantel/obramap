@@ -25,6 +25,42 @@ interface ObraMapService {
   scope_name: string;
 }
 
+const compareCodeParts = (a: string, b: string) => {
+  const aParts = String(a || "").split(".");
+  const bParts = String(b || "").split(".");
+  const len = Math.max(aParts.length, bParts.length);
+  for (let i = 0; i < len; i++) {
+    const aPart = aParts[i];
+    const bPart = bParts[i];
+    if (aPart === undefined) return -1;
+    if (bPart === undefined) return 1;
+
+    const aNum = Number(aPart);
+    const bNum = Number(bPart);
+    const bothNumeric = Number.isFinite(aNum) && Number.isFinite(bNum) && aPart.trim() !== "" && bPart.trim() !== "";
+    const result = bothNumeric
+      ? aNum - bNum
+      : aPart.localeCompare(bPart, "pt-BR", { numeric: true, sensitivity: "base" });
+    if (result !== 0) return result;
+  }
+  return 0;
+};
+
+const compareNaturalOrder = (
+  a: { display_order?: number | null },
+  b: { display_order?: number | null },
+  aCode: string | null | undefined,
+  bCode: string | null | undefined,
+  aLabel: string | null | undefined,
+  bLabel: string | null | undefined,
+) => {
+  const codeResult = compareCodeParts(aCode || "", bCode || "");
+  if (codeResult !== 0) return codeResult;
+  const orderResult = Number(a.display_order ?? 0) - Number(b.display_order ?? 0);
+  if (orderResult !== 0) return orderResult;
+  return String(aLabel || "").localeCompare(String(bLabel || ""), "pt-BR", { numeric: true, sensitivity: "base" });
+};
+
 export function PleContractTab(props: PleDataReturn) {
   const { canEdit, requireEdit } = useAuth();
   const {
@@ -200,11 +236,17 @@ export function PleContractTab(props: PleDataReturn) {
   const lineMat = (ev: PleEvent) => (ev.quantity || 0) * (ev.mat_unit_value || 0) * lineFactor(ev);
   const lineMo = (ev: PleEvent) => (ev.quantity || 0) * (ev.mo_unit_value || 0) * lineFactor(ev);
 
-  const stages = useMemo(() => groups.filter(g => !g.parent_id).sort((a, b) => a.display_order - b.display_order), [groups]);
+  const stages = useMemo(
+    () => groups.filter(g => !g.parent_id).sort((a, b) => compareNaturalOrder(a, b, a.code, b.code, a.name, b.name)),
+    [groups]
+  );
   const substagesByStage = useMemo(() => {
     const map = new Map<string, typeof groups>();
     stages.forEach(s => map.set(s.id, []));
-    groups.filter(g => g.parent_id).sort((a, b) => a.display_order - b.display_order).forEach(g => {
+    groups
+      .filter(g => g.parent_id)
+      .sort((a, b) => compareNaturalOrder(a, b, a.code, b.code, a.name, b.name))
+      .forEach(g => {
       const arr = map.get(g.parent_id!) || [];
       arr.push(g);
       map.set(g.parent_id!, arr);
@@ -222,11 +264,12 @@ export function PleContractTab(props: PleDataReturn) {
         map.set(e.group_id, arr);
       }
     });
+    map.forEach(arr => arr.sort((a, b) => compareNaturalOrder(a, b, a.item_code, b.item_code, a.description, b.description)));
     return map;
   }, [events, groups]);
 
   const ungroupedEvents = useMemo(() =>
-    events.filter(e => !e.group_id).sort((a, b) => a.display_order - b.display_order),
+    events.filter(e => !e.group_id).sort((a, b) => compareNaturalOrder(a, b, a.item_code, b.item_code, a.description, b.description)),
     [events]
   );
 
