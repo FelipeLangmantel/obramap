@@ -180,17 +180,23 @@ export function PleGridTab({ groups, events, measurements, entries, glosses, cur
   }, [glosses]);
 
   // Flush pending DB operations in batch
-  const flushPendingOps = useCallback(() => {
+  const flushPendingOps = useCallback(async () => {
     const ops = new Map(pendingOpsRef.current);
     pendingOpsRef.current.clear();
-    ops.forEach(({ eventId, houseNumber, measurementId }) => {
-      setEntry(eventId, houseNumber, measurementId);
-    });
+    try {
+      await Promise.all(
+        Array.from(ops.values()).map(({ eventId, houseNumber, measurementId }) =>
+          setEntry(eventId, houseNumber, measurementId)
+        )
+      );
+    } catch (error) {
+      console.error("Error saving PLE grid entries:", error);
+    }
   }, [setEntry]);
 
   const scheduledFlush = useCallback(() => {
     if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
-    flushTimerRef.current = setTimeout(flushPendingOps, 150);
+    flushTimerRef.current = setTimeout(() => { void flushPendingOps(); }, 150);
   }, [flushPendingOps]);
 
   // Flush on mouse up
@@ -198,10 +204,29 @@ export function PleGridTab({ groups, events, measurements, entries, glosses, cur
     return () => {
       if (flushTimerRef.current) {
         clearTimeout(flushTimerRef.current);
-        flushPendingOps();
+        void flushPendingOps();
       }
     };
   }, [flushPendingOps]);
+
+  useEffect(() => {
+    if (localEntries.size === 0) return;
+
+    let changed = false;
+    const next = new Map(localEntries);
+    localEntries.forEach((measurementId, key) => {
+      const realEntry = entryMap.get(key);
+      if (
+        (measurementId && realEntry?.measurement_id === measurementId) ||
+        (measurementId === null && !realEntry)
+      ) {
+        next.delete(key);
+        changed = true;
+      }
+    });
+
+    if (changed) setLocalEntries(next);
+  }, [entryMap, localEntries]);
 
   // Get effective measurement number (local override or from entries)
   const getEffectiveMeasNum = useCallback((key: string): number | null => {
@@ -294,9 +319,7 @@ export function PleGridTab({ groups, events, measurements, entries, glosses, cur
     setCursorMode("");
     // Flush immediately on mouse up
     if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
-    flushPendingOps();
-    // Clear local entries after a delay to let real entries propagate
-    setTimeout(() => setLocalEntries(new Map()), 500);
+    void flushPendingOps();
   }, [flushPendingOps]);
 
   useEffect(() => {
