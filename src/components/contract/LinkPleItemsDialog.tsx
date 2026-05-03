@@ -19,7 +19,9 @@ interface PleEventLite {
   billing_type: string;
   group_id: string | null;
   obramap_macro_id: string | null;
+  obramap_macro_name: string | null;
   obramap_scope_id: string | null;
+  obramap_scope_name: string | null;
 }
 
 interface PleGroupLite {
@@ -282,7 +284,14 @@ export function LinkPleItemsDialog({
                             <span className="ml-auto text-[10px] text-muted-foreground">{subItems.length} itens</span>
                           </div>
                           {subItems.map(e => {
-                            const isLinkedElsewhere = e.obramap_scope_id && e.obramap_scope_id !== scopeId;
+                            const isLinkedHere =
+                              e.obramap_macro_id === macroId &&
+                              e.obramap_scope_id === scopeId;
+                            const isLinkedElsewhere =
+                              Boolean(e.obramap_scope_id) &&
+                              !isLinkedHere;
+                            const linkedMacroName = e.obramap_macro_name || "Macro";
+                            const linkedScopeName = e.obramap_scope_name || "Serviço";
                             const lineTotal = e.quantity * e.unit_value;
                             const valueShown = e.billing_type === "fixed" ? lineTotal : lineTotal * (totalHouses || 1);
                             return (
@@ -294,9 +303,18 @@ export function LinkPleItemsDialog({
                                 <Checkbox checked={selected.has(e.id)} onCheckedChange={() => toggleEvent(e.id)} />
                                 <span className="text-[10px] font-mono w-14 text-muted-foreground">{e.item_code}</span>
                                 <span className="text-[11px] flex-1 truncate" title={e.description}>{e.description}</span>
+                                {isLinkedHere && (
+                                  <Badge variant="outline" className="text-[9px] bg-primary/10 text-primary border-primary/30">
+                                    Vinculado aqui
+                                  </Badge>
+                                )}
                                 {isLinkedElsewhere && (
-                                  <Badge variant="outline" className="text-[9px] bg-amber-500/10 text-amber-600 border-amber-500/30">
-                                    Já vinculado
+                                  <Badge
+                                    variant="outline"
+                                    className="max-w-48 truncate text-[9px] bg-amber-500/10 text-amber-600 border-amber-500/30"
+                                    title={`Já vinculado: ${linkedMacroName} → ${linkedScopeName}`}
+                                  >
+                                    Já vinculado: {linkedMacroName} → {linkedScopeName}
                                   </Badge>
                                 )}
                                 <span className="text-[10px] text-muted-foreground w-8 text-right">{e.unit}</span>
