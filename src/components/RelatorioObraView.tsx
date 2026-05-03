@@ -38,6 +38,7 @@ interface DiaryItemRow {
   scope_name: string;
   house_ids: number[];
   percentual_executado: number;
+  observacao: string | null;
 }
 interface PhotoReportRow {
   id: string;
@@ -75,6 +76,7 @@ export default function RelatorioObraView() {
   const [dataInicioCustom, setDataInicioCustom] = useState<string>(format(subDays(new Date(), 7), "yyyy-MM-dd"));
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingPhotos, setExportingPhotos] = useState(false);
 
   const [entries, setEntries] = useState<DiaryEntryRow[]>([]);
   const [items, setItems] = useState<DiaryItemRow[]>([]);
@@ -166,7 +168,7 @@ export default function RelatorioObraView() {
       let itemsData: DiaryItemRow[] = [];
       const { data } = await supabase
         .from("diary_items")
-        .select("id, diary_entry_id, macro_id, macro_name, scope_id, scope_name, house_ids, percentual_executado")
+        .select("id, diary_entry_id, macro_id, macro_name, scope_id, scope_name, house_ids, percentual_executado, observacao")
         .in("diary_entry_id", entryIds);
       itemsData = (data || []).map(d => ({
         ...d,
@@ -246,6 +248,7 @@ export default function RelatorioObraView() {
       scope_name: string;
       house_ids: number[];
       percentual_executado: number;
+      observacao: string | null;
       photos: PhotoReportRow[];
     }>();
 
@@ -265,6 +268,7 @@ export default function RelatorioObraView() {
           scope_name: item.scope_name,
           house_ids: item.house_ids,
           percentual_executado: item.percentual_executado,
+          observacao: item.observacao,
           photos: [],
         });
       }
@@ -352,6 +356,299 @@ export default function RelatorioObraView() {
     let acum = 0;
     return ordered.map(([d, v]) => ({ data: d, dia: v, acum: (acum += v) }));
   }, [entries, items]);
+
+  const loadImageAsDataUrl = async (url: string): Promise<string | null> => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const blob = await response.blob();
+
+      return await new Promise<string | null>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(typeof reader.result === "string" ? reader.result : null);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  const handleGeneratePhotoPDF = async () => {
+    if (!currentProject) return;
+    if (photos.length === 0) {
+      toast.info("Não há fotos no período selecionado.");
+      return;
+    }
+
+    setExportingPhotos(true);
+    try {
+      const { jsPDF } = await import("jspdf");
+      const doc = new jsPDF({ orientation: "portrait", format: "a4" });
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const margin = 14;
+      const footerH = 14;
+      const contentW = pageW - margin * 2;
+      const periodText = `${format(parseISO(dataInicio), "dd/MM/yyyy")} a ${format(parseISO(dataFim), "dd/MM/yyyy")}`;
+      const issuedAt = format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR });
+      const projectLocation =
+        (currentProject as any).location ||
+        (currentProject as any).address ||
+        (currentProject as any).endereco ||
+        "";
+      const allHouseNumbers = new Set<number>();
+
+      photosByServicePeriod.forEach(group => {
+        group.house_ids.forEach(house => allHouseNumbers.add(house));
+        group.photos.forEach(photo => {
+          if (photo.house_number != null) allHouseNumbers.add(photo.house_number);
+        });
+      });
+      generalPhotosPeriod.forEach(photo => {
+        if (photo.house_number != null) allHouseNumbers.add(photo.house_number);
+      });
+
+      const ensurePage = (y: number, needed = 20) => {
+        if (y + needed <= pageH - footerH) return y;
+        doc.addPage();
+        return margin;
+      };
+
+      const drawUnavailable = (x: number, y: number, w: number, h: number) => {
+        doc.setDrawColor(200);
+        doc.setFillColor(245, 245, 245);
+        doc.rect(x, y, w, h, "FD");
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(120);
+        doc.text("Imagem indisponível", x + w / 2, y + h / 2, { align: "center" });
+        doc.setTextColor(30);
+      };
+
+      const addWrappedText = (text: string, x: number, y: number, maxW: number, lineH = 5) => {
+        const lines = doc.splitTextToSize(text, maxW);
+        doc.text(lines, x, y);
+        return y + lines.length * lineH;
+      };
+
+      const renderPhotoCell = async (
+        photo: PhotoReportRow,
+        x: number,
+        y: number,
+        cellW: number,
+        imageH: number,
+        meta: string
+      ) => {
+        doc.setDrawColor(215);
+        doc.rect(x, y, cellW, imageH);
+        const dataUrl = await loadImageAsDataUrl(photo.url);
+
+        if (dataUrl) {
+          try {
+            const imageFormat = dataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
+            doc.addImage(dataUrl, imageFormat, x, y, cellW, imageH, undefined, "FAST");
+          } catch {
+            drawUnavailable(x, y, cellW, imageH);
+          }
+        } else {
+          drawUnavailable(x, y, cellW, imageH);
+        }
+
+        let captionY = y + imageH + 5;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        captionY = addWrappedText(meta, x, captionY, cellW, 4);
+
+        if (photo.legenda) {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8);
+          captionY = addWrappedText(photo.legenda, x, captionY + 1, cellW, 4);
+        }
+
+        return captionY + 3;
+      };
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("RELATÓRIO FOTOGRÁFICO DA MEDIÇÃO", margin, 24);
+      doc.setDrawColor(37, 99, 235);
+      doc.setLineWidth(0.8);
+      doc.line(margin, 29, pageW - margin, 29);
+
+      doc.setFontSize(14);
+      doc.setTextColor(30);
+      doc.text(currentProject.name, margin, 42);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      let y = 50;
+      if (projectLocation) {
+        doc.text(`Local da obra: ${projectLocation}`, margin, y);
+        y += 7;
+      }
+      doc.text(`Período: ${periodText}`, margin, y);
+      y += 7;
+      doc.text(`Emissão: ${issuedAt}`, margin, y);
+      y += 12;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text("Resumo fotográfico", margin, y);
+      y += 8;
+
+      const summaryRows = [
+        ["Total de fotos", photoKpis.totalPhotos],
+        ["Fotos vinculadas a serviços", photoKpis.linkedPhotos],
+        ["Fotos avulsas", photoKpis.generalPhotos],
+        ["Serviços com fotos", photoKpis.servicesWithPhotos],
+        ["Dias com registros fotográficos", photoKpis.daysWithPhotos],
+        ["Casas registradas", allHouseNumbers.size],
+      ];
+
+      doc.setFontSize(10);
+      summaryRows.forEach(([label, value]) => {
+        doc.setFont("helvetica", "normal");
+        doc.text(String(label), margin, y);
+        doc.setFont("helvetica", "bold");
+        doc.text(String(value), pageW - margin, y, { align: "right" });
+        y += 7;
+      });
+
+      y += 8;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text("Registro fotográfico por serviço", margin, y);
+      y += 8;
+
+      const serviceGroupsByDate = new Map<string, typeof photosByServicePeriod>();
+      photosByServicePeriod
+        .slice()
+        .sort((a, b) => a.entry_date.localeCompare(b.entry_date) || a.macro_name.localeCompare(b.macro_name) || a.scope_name.localeCompare(b.scope_name))
+        .forEach(group => {
+          if (!serviceGroupsByDate.has(group.entry_date)) serviceGroupsByDate.set(group.entry_date, []);
+          serviceGroupsByDate.get(group.entry_date)!.push(group);
+        });
+
+      for (const [entryDate, groups] of serviceGroupsByDate.entries()) {
+        y = ensurePage(y, 24);
+        doc.setFillColor(239, 246, 255);
+        doc.setDrawColor(191, 219, 254);
+        doc.rect(margin, y - 5, contentW, 9, "FD");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.setTextColor(30);
+        doc.text(format(parseISO(entryDate), "dd/MM/yyyy"), margin + 3, y + 1);
+        y += 12;
+
+        for (const group of groups) {
+          y = ensurePage(y, 36);
+          const houses = group.house_ids.length > 0
+            ? group.house_ids.map(n => String(n).padStart(2, "0")).join(", ")
+            : "Não informado";
+
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(10);
+          y = addWrappedText(`${group.macro_name} / ${group.scope_name}`, margin, y, contentW, 5);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8);
+          y = addWrappedText(`Casas vinculadas: ${houses} · Percentual executado: ${group.percentual_executado}%`, margin, y + 1, contentW, 4);
+
+          if (group.observacao) {
+            y = addWrappedText(`Observação: ${group.observacao}`, margin, y + 1, contentW, 4);
+          }
+          y += 4;
+
+          const gap = 6;
+          const cellW = (contentW - gap) / 2;
+          const imageH = 62;
+          const minCellH = imageH + 18;
+
+          for (let i = 0; i < group.photos.length; i += 2) {
+            y = ensurePage(y, minCellH);
+            const rowPhotos = group.photos.slice(i, i + 2);
+            let rowBottom = y;
+
+            for (let col = 0; col < rowPhotos.length; col++) {
+              const photo = rowPhotos[col];
+              const x = margin + col * (cellW + gap);
+              const metaParts = [];
+              if (photo.house_number != null) metaParts.push(`Casa ${String(photo.house_number).padStart(2, "0")}`);
+              if (photo.created_at) metaParts.push(format(parseISO(photo.created_at), "dd/MM/yyyy HH:mm"));
+              const meta = metaParts.join(" · ") || format(parseISO(entryDate), "dd/MM/yyyy");
+              const bottom = await renderPhotoCell(photo, x, y, cellW, imageH, meta);
+              rowBottom = Math.max(rowBottom, bottom);
+            }
+
+            y = rowBottom + 4;
+          }
+
+          y += 4;
+        }
+      }
+
+      if (generalPhotosPeriod.length > 0) {
+        y = ensurePage(y, 28);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(12);
+        doc.text("FOTOS GERAIS / AVULSAS DO PERÍODO", margin, y);
+        y += 8;
+
+        const entryMap = new Map(entries.map(entry => [entry.id, entry]));
+        const sortedGeneralPhotos = generalPhotosPeriod
+          .slice()
+          .sort((a, b) => {
+            const dateA = entryMap.get(a.diary_entry_id)?.entry_date || "";
+            const dateB = entryMap.get(b.diary_entry_id)?.entry_date || "";
+            return dateA.localeCompare(dateB) || (a.created_at || "").localeCompare(b.created_at || "");
+          });
+
+        const gap = 6;
+        const cellW = (contentW - gap) / 2;
+        const imageH = 62;
+        const minCellH = imageH + 18;
+
+        for (let i = 0; i < sortedGeneralPhotos.length; i += 2) {
+          y = ensurePage(y, minCellH);
+          const rowPhotos = sortedGeneralPhotos.slice(i, i + 2);
+          let rowBottom = y;
+
+          for (let col = 0; col < rowPhotos.length; col++) {
+            const photo = rowPhotos[col];
+            const entryDate = entryMap.get(photo.diary_entry_id)?.entry_date;
+            const metaParts = [];
+            if (entryDate) metaParts.push(format(parseISO(entryDate), "dd/MM/yyyy"));
+            if (photo.house_number != null) metaParts.push(`Casa ${String(photo.house_number).padStart(2, "0")}`);
+            const bottom = await renderPhotoCell(photo, margin + col * (cellW + gap), y, cellW, imageH, metaParts.join(" · ") || "Foto avulsa");
+            rowBottom = Math.max(rowBottom, bottom);
+          }
+
+          y = rowBottom + 4;
+        }
+      }
+
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      for (let page = 1; page <= pageCount; page++) {
+        doc.setPage(page);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(80);
+        doc.text(currentProject.name, margin, pageH - 10);
+        doc.text(`Período: ${periodText}`, margin, pageH - 5);
+        doc.text(`Página ${page}/${pageCount}`, pageW - margin, pageH - 10, { align: "right" });
+        doc.setFontSize(7);
+        doc.setTextColor(120);
+        doc.text("© ObraMap | Engenharia Digital", pageW - margin, pageH - 5, { align: "right" });
+      }
+
+      const safeName = currentProject.name.replace(/[^\w\-]+/g, "_");
+      doc.save(`relatorio-fotografico-${safeName}-${dataInicio}-${dataFim}.pdf`);
+      toast.success("Relatório fotográfico gerado!");
+    } catch (err: any) {
+      toast.error("Erro ao gerar relatório fotográfico: " + (err.message || ""));
+    } finally {
+      setExportingPhotos(false);
+    }
+  };
 
   const handleGeneratePDF = async () => {
     if (!currentProject) return;
@@ -533,6 +830,10 @@ export default function RelatorioObraView() {
             <Button onClick={handleGeneratePDF} disabled={exporting || loading} className="ml-auto">
               {exporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
               Gerar PDF
+            </Button>
+            <Button onClick={handleGeneratePhotoPDF} disabled={exportingPhotos || loading} variant="outline">
+              {exportingPhotos ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Camera className="h-4 w-4 mr-2" />}
+              Gerar Relatório Fotográfico
             </Button>
           </div>
         </CardContent>
