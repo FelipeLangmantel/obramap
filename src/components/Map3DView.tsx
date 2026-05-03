@@ -316,7 +316,7 @@ function AutoFitCamera({
 // Scene
 function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLegendItems,
   resetTrigger, fitTrigger, savedPosition, savedTarget, onCameraChange, sceneReady, onModelLoaded, onSceneReady,
-  onMeshClick,
+  onMeshClick, selectedMeshKey,
 }: {
   modelData: ModelData | null; markers: HouseMarker[]; selectedMarkerId: number | null;
   onMarkerClick: (m: HouseMarker) => void; customLegendItems: any[];
@@ -326,6 +326,7 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
   sceneReady: boolean; onModelLoaded: () => void;
   onSceneReady?: (scene: THREE.Object3D) => void;
   onMeshClick?: (mesh: THREE.Object3D) => void;
+  selectedMeshKey?: string | null;
 }) {
   return (
     <>
@@ -342,9 +343,9 @@ function Scene({ modelData, markers, selectedMarkerId, onMarkerClick, customLege
       {modelData && (
         <Suspense fallback={<Html center><div className="bg-background/90 px-4 py-2 rounded-lg border border-border">Carregando modelo...</div></Html>}>
           {modelData.type === "gltf" ? (
-            <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} />
+            <GLTFModel url={modelData.url} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
           ) : (
-            <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} />
+            <OBJModel url={modelData.url} mtlUrl={modelData.mtlUrl} onLoaded={onModelLoaded} onSceneReady={onSceneReady} onMeshClick={onMeshClick} selectedMeshKey={selectedMeshKey} />
           )}
         </Suspense>
       )}
