@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,32 +9,33 @@ import { ConstructionProvider } from "./contexts/ConstructionContext";
 import { SetupFlowGuard } from "./components/guards/SetupFlowGuard";
 import { SystemAdminGuard } from "./components/guards/SystemAdminGuard";
 import { CompanyUserGuard } from "./components/guards/CompanyUserGuard";
-import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import LandingPage from "./pages/LandingPage";
 import ChangePassword from "./pages/ChangePassword";
 import NotFound from "./pages/NotFound";
 import { CameraTestPage } from "./pages/CameraTestPage";
-import SystemDashboard from "./pages/system/SystemDashboard";
-import SystemModulesPage from "./pages/system/SystemModulesPage";
-import LegacyDataMigration from "./pages/admin/LegacyDataMigration";
-import MeasurementPlanningPage from "./pages/MeasurementPlanningPage";
-import LongTermPlanningPage from "./pages/LongTermPlanningPage";
-import ProjectContractPage from "./pages/ProjectContractPage";
-import PleMeasurementsPage from "./pages/PleMeasurementsPage";
-import HoldingReceitasPage from "./pages/HoldingReceitasPage";
-import HoldingDespesasPage from "./pages/HoldingDespesasPage";
-import HoldingDocumentosPage from "./pages/HoldingDocumentosPage";
-import HoldingPrdPage from "./pages/HoldingPrdPage";
-import HoldingInsightsPage from "./pages/HoldingInsightsPage";
-import HoldingConfigPage from "./pages/HoldingConfigPage";
-import CashflowSimulatorPage from "./pages/CashflowSimulatorPage";
-import PurchasePanelPage from "./pages/PurchasePanelPage";
-import DiarioOfflineQueuePage from "./pages/DiarioOfflineQueuePage";
-import DiarioConfigPage from "./pages/DiarioConfigPage";
-import HouseHistoryPage from "./pages/HouseHistoryPage";
 import Unsubscribe from "./pages/Unsubscribe";
 import { bootstrapSyncWorker } from "@/offline/sync";
+
+const Index = React.lazy(() => import("./pages/Index"));
+const SystemDashboard = React.lazy(() => import("./pages/system/SystemDashboard"));
+const SystemModulesPage = React.lazy(() => import("./pages/system/SystemModulesPage"));
+const LegacyDataMigration = React.lazy(() => import("./pages/admin/LegacyDataMigration"));
+const MeasurementPlanningPage = React.lazy(() => import("./pages/MeasurementPlanningPage"));
+const LongTermPlanningPage = React.lazy(() => import("./pages/LongTermPlanningPage"));
+const ProjectContractPage = React.lazy(() => import("./pages/ProjectContractPage"));
+const PleMeasurementsPage = React.lazy(() => import("./pages/PleMeasurementsPage"));
+const HoldingReceitasPage = React.lazy(() => import("./pages/HoldingReceitasPage"));
+const HoldingDespesasPage = React.lazy(() => import("./pages/HoldingDespesasPage"));
+const HoldingDocumentosPage = React.lazy(() => import("./pages/HoldingDocumentosPage"));
+const HoldingPrdPage = React.lazy(() => import("./pages/HoldingPrdPage"));
+const HoldingInsightsPage = React.lazy(() => import("./pages/HoldingInsightsPage"));
+const HoldingConfigPage = React.lazy(() => import("./pages/HoldingConfigPage"));
+const CashflowSimulatorPage = React.lazy(() => import("./pages/CashflowSimulatorPage"));
+const PurchasePanelPage = React.lazy(() => import("./pages/PurchasePanelPage"));
+const DiarioOfflineQueuePage = React.lazy(() => import("./pages/DiarioOfflineQueuePage"));
+const DiarioConfigPage = React.lazy(() => import("./pages/DiarioConfigPage"));
+const HouseHistoryPage = React.lazy(() => import("./pages/HouseHistoryPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -116,7 +117,8 @@ const App = () => {
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
-            <Routes>
+            <Suspense fallback={<div>Carregando...</div>}>
+              <Routes>
                 {/* Public routes */}
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/auth" element={<Auth />} />
@@ -158,6 +160,7 @@ const App = () => {
                   <Route path="*" element={<NotFound />} />
                 </Route>
               </Routes>
+            </Suspense>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
