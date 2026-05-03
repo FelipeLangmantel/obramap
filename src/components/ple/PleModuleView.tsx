@@ -181,6 +181,10 @@ export function PleModuleView(props: PleDataReturn) {
               <FileText className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               Contrato
             </TabsTrigger>
+            <TabsTrigger value="sync" className="gap-1 text-[9px] sm:text-xs px-1.5 sm:px-3 h-6 sm:h-8">
+              <RefreshCw className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+              Sincronização
+            </TabsTrigger>
           </TabsList>
         </div>
 
