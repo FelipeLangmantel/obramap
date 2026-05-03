@@ -570,19 +570,22 @@ export function PleContractTab(props: PleDataReturn) {
           </div>
         </div>
 
-        {/* KPIs MAT / MO / Total — sempre refletem o orçamento lançado */}
+        {/* KPIs MAT / MO / Total — global e por unidade habitacional */}
         <div className="grid grid-cols-3 gap-2 mb-2">
           <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 px-3 py-2 min-w-0">
             <p className="text-[9px] sm:text-[10px] uppercase font-semibold text-blue-700 dark:text-blue-300">Material (MAT)</p>
             <p className="text-sm sm:text-base font-bold font-mono text-blue-700 dark:text-blue-300 tabular-nums truncate">{fmtCur(stats.totalMat)}</p>
+            <p className="text-[9px] font-mono text-blue-700/70 dark:text-blue-300/70 truncate">{fmtCur(stats.totalMat / houseCount)} / un. hab.</p>
           </div>
           <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 min-w-0">
             <p className="text-[9px] sm:text-[10px] uppercase font-semibold text-emerald-700 dark:text-emerald-300">Mão de obra (MO)</p>
             <p className="text-sm sm:text-base font-bold font-mono text-emerald-700 dark:text-emerald-300 tabular-nums truncate">{fmtCur(stats.totalMo)}</p>
+            <p className="text-[9px] font-mono text-emerald-700/70 dark:text-emerald-300/70 truncate">{fmtCur(stats.totalMo / houseCount)} / un. hab.</p>
           </div>
           <div className="rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 min-w-0">
             <p className="text-[9px] sm:text-[10px] uppercase font-semibold text-primary">Total Orçamento</p>
             <p className="text-sm sm:text-base font-bold font-mono text-primary tabular-nums truncate">{fmtCur(stats.totalContractual)}</p>
+            <p className="text-[9px] font-mono text-primary/70 truncate">{fmtCur(stats.totalContractual / houseCount)} / un. hab. · {houseCount} casas</p>
           </div>
         </div>
 
