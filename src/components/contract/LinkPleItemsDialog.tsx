@@ -41,7 +41,7 @@ interface Props {
   macroName: string;
   scopeId: string;
   scopeName: string;
-  onConfirm: (totalRevenue: number, linkedCount: number) => void;
+  onConfirm: (totalRevenue: number, linkedCount: number) => void | Promise<void>;
 }
 
 export function LinkPleItemsDialog({
@@ -202,7 +202,7 @@ export function LinkPleItemsDialog({
           } as any)
           .in("id", toLink);
       }
-      onConfirm(totalRevenue, selected.size);
+      await onConfirm(totalRevenue, selected.size);
       toast.success(`${selected.size} itens PLE vinculados ao serviço`);
       onClose();
     } catch (err: any) {
@@ -300,7 +300,11 @@ export function LinkPleItemsDialog({
                                 className={`flex items-center gap-2 min-w-[1150px] px-6 py-1.5 border-t hover:bg-muted/30 cursor-pointer ${selected.has(e.id) ? "bg-primary/5" : ""}`}
                                 onClick={() => toggleEvent(e.id)}
                               >
-                                <Checkbox checked={selected.has(e.id)} onCheckedChange={() => toggleEvent(e.id)} />
+                                <Checkbox
+                                  checked={selected.has(e.id)}
+                                  onClick={(event) => event.stopPropagation()}
+                                  onCheckedChange={() => toggleEvent(e.id)}
+                                />
                                 <span className="text-[10px] font-mono w-14 flex-shrink-0 text-muted-foreground">{e.item_code}</span>
                                 <span className="text-[11px] flex-1 min-w-0 truncate" title={e.description}>{e.description}</span>
                                 {isLinkedHere && (

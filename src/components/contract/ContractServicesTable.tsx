@@ -15,6 +15,7 @@ interface ContractServicesTableProps {
   services: ContractService[];
   updateServiceValue: (macroId: string, scopeId: string, value: number) => void;
   persistServiceValue?: (macroId: string, scopeId: string, value: number, pleLinkedCount: number) => Promise<boolean>;
+  reloadContract?: () => Promise<void> | void;
   isEditing: boolean;
   costPercent: number;
 }
@@ -124,6 +125,7 @@ export function ContractServicesTable({
   services,
   updateServiceValue,
   persistServiceValue,
+  reloadContract,
   isEditing,
   costPercent,
 }: ContractServicesTableProps) {
@@ -310,6 +312,7 @@ export function ContractServicesTable({
             } else {
               updateServiceValue(linkDialog.macroId, linkDialog.scopeId, totalRevenueCalc);
             }
+            await reloadContract?.();
           }}
         />
       )}
