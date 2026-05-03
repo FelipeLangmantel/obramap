@@ -316,7 +316,7 @@ export function LinkPleItemsDialog({
           )}
         </ScrollArea>
 
-        <DialogFooter className="border-t pt-3">
+        <DialogFooter className="border-t px-6 py-3 flex-shrink-0">
           <div className="text-xs text-muted-foreground mr-auto">
             {totalHouses} casas · O valor "por casa" multiplica pelo nº de casas; "fixo" usa o total do item.
           </div>
