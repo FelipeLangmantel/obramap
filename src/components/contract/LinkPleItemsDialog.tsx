@@ -3,7 +3,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Link2, ChevronDown, ChevronRight, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -244,7 +243,7 @@ export function LinkPleItemsDialog({
           </Badge>
         </div>
 
-        <ScrollArea className="flex-1 min-h-0 px-6 overflow-x-auto">
+        <div className="flex-1 min-h-0 overflow-auto px-6">
           {loading ? (
             <div className="flex items-center justify-center h-40">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -254,7 +253,7 @@ export function LinkPleItemsDialog({
               Nenhum item cadastrado na PLE deste projeto.
             </div>
           ) : (
-            <div className="space-y-1 pb-2 min-w-[1150px]">
+            <div className="min-w-[1200px] space-y-1 pb-2">
               {stages.map(stage => {
                 const isExp = expanded.has(stage.id);
                 const subs = substagesByStage.get(stage.id) || [];
@@ -297,7 +296,7 @@ export function LinkPleItemsDialog({
                             return (
                               <div
                                 key={e.id}
-                                className={`flex items-center gap-2 min-w-[1150px] px-6 py-1.5 border-t hover:bg-muted/30 cursor-pointer ${selected.has(e.id) ? "bg-primary/5" : ""}`}
+                                className={`flex items-center gap-2 min-w-[1200px] px-6 py-1.5 border-t hover:bg-muted/30 cursor-pointer ${selected.has(e.id) ? "bg-primary/5" : ""}`}
                                 onClick={() => toggleEvent(e.id)}
                               >
                                 <Checkbox checked={selected.has(e.id)} onCheckedChange={() => toggleEvent(e.id)} />
@@ -332,7 +331,7 @@ export function LinkPleItemsDialog({
               })}
             </div>
           )}
-        </ScrollArea>
+        </div>
 
         <DialogFooter className="border-t px-6 py-3 flex-shrink-0">
           <div className="text-xs text-muted-foreground mr-auto">
