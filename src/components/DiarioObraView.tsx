@@ -1107,7 +1107,7 @@ export default function DiarioObraView({ initialDate, onBack, hideLegalConfigAle
       } catch { /* silencioso */ }
 
       setSelectedHouses([]); setHousePercents({}); setObsItem(""); setPercentual(100);
-      if (!isOffline) loadItems(entryId);
+      if (!isOffline) loadItems(guaranteedEntryId);
     } catch (err: any) {
       const msg = err?.message || "";
       if (msg.includes("Capacidade excedida")) {
