@@ -493,62 +493,7 @@ export function PleContractTab(props: PleDataReturn) {
   return (
     <TooltipProvider delayDuration={200}>
     <div className="h-full flex flex-col gap-3 sm:gap-4 overflow-hidden">
-      {/* Sync bar for integrated mode */}
-      {isIntegrated && (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-2 px-2">
-            {stats.mappedCount > 0 && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleSync}
-                disabled={isSyncing}
-                className="gap-1.5 text-xs h-7 border-primary/40 text-primary hover:bg-primary/10"
-              >
-                <RefreshCw className={`h-3 w-3 ${isSyncing ? "animate-spin" : ""}`} />
-                Sincronizar com Contrato da Obra
-              </Button>
-            )}
-            {unmappedEvents.length > 0 && (
-              <Button size="sm" variant="outline" onClick={() => setShowBatchMapping(true)} className="gap-1.5 text-xs h-7">
-                <Layers className="h-3 w-3" /> Mapear em lote ({unmappedEvents.length})
-              </Button>
-            )}
-            <Badge variant="outline" className="text-[10px]">
-              {stats.mappedCount}/{stats.totalEvents} mapeados
-            </Badge>
-          </div>
-
-          {/* Sync result summary */}
-          {syncResult && (
-            <div className="mx-2 p-2 rounded-md bg-green-500/10 border border-green-500/30 text-xs text-green-700 dark:text-green-400">
-              ✓ {syncResult.synced} serviços sincronizados com o contrato de <strong>{syncResult.projectName}</strong>
-            </div>
-          )}
-
-          {/* Sync summary table */}
-          {syncSummary.length > 0 && (
-            <div className="mx-2 border rounded-md overflow-hidden">
-              <div className="grid grid-cols-[1fr_60px_80px_80px_80px] gap-0 bg-muted/50 px-2 py-1 text-[9px] font-bold text-muted-foreground uppercase">
-                <span>Serviço</span>
-                <span className="text-center">Itens</span>
-                <span className="text-right">MAT</span>
-                <span className="text-right">MO</span>
-                <span className="text-right">Unit./casa</span>
-              </div>
-              {syncSummary.map((s, i) => (
-                <div key={i} className="grid grid-cols-[1fr_60px_80px_80px_80px] gap-0 px-2 py-1 border-t text-[10px]">
-                  <span className="truncate font-medium">{s.scopeName}</span>
-                  <span className="text-center text-muted-foreground">{s.count}</span>
-                  <span className="text-right font-mono">{fmtCur(s.totalMat)}</span>
-                  <span className="text-right font-mono">{fmtCur(s.totalMo)}</span>
-                  <span className="text-right font-mono font-semibold">{fmtCur(s.totalUnit / totalHouses)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Sincronização movida para a aba "Sincronização" */}
 
       {/* Budget Spreadsheet */}
       <div className="flex-1 flex flex-col min-h-0">
@@ -570,19 +515,22 @@ export function PleContractTab(props: PleDataReturn) {
           </div>
         </div>
 
-        {/* KPIs MAT / MO / Total — sempre refletem o orçamento lançado */}
+        {/* KPIs MAT / MO / Total — global e por unidade habitacional */}
         <div className="grid grid-cols-3 gap-2 mb-2">
           <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 px-3 py-2 min-w-0">
             <p className="text-[9px] sm:text-[10px] uppercase font-semibold text-blue-700 dark:text-blue-300">Material (MAT)</p>
             <p className="text-sm sm:text-base font-bold font-mono text-blue-700 dark:text-blue-300 tabular-nums truncate">{fmtCur(stats.totalMat)}</p>
+            <p className="text-[9px] font-mono text-blue-700/70 dark:text-blue-300/70 truncate">{fmtCur(stats.totalMat / houseCount)} / un. hab.</p>
           </div>
           <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 min-w-0">
             <p className="text-[9px] sm:text-[10px] uppercase font-semibold text-emerald-700 dark:text-emerald-300">Mão de obra (MO)</p>
             <p className="text-sm sm:text-base font-bold font-mono text-emerald-700 dark:text-emerald-300 tabular-nums truncate">{fmtCur(stats.totalMo)}</p>
+            <p className="text-[9px] font-mono text-emerald-700/70 dark:text-emerald-300/70 truncate">{fmtCur(stats.totalMo / houseCount)} / un. hab.</p>
           </div>
           <div className="rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 min-w-0">
             <p className="text-[9px] sm:text-[10px] uppercase font-semibold text-primary">Total Orçamento</p>
             <p className="text-sm sm:text-base font-bold font-mono text-primary tabular-nums truncate">{fmtCur(stats.totalContractual)}</p>
+            <p className="text-[9px] font-mono text-primary/70 truncate">{fmtCur(stats.totalContractual / houseCount)} / un. hab. · {houseCount} casas</p>
           </div>
         </div>
 
@@ -950,14 +898,14 @@ export function PleContractTab(props: PleDataReturn) {
 
       {/* Batch Mapping Dialog */}
       <Dialog open={showBatchMapping} onOpenChange={setShowBatchMapping}>
-        <DialogContent className="max-w-2xl max-h-[80vh]">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl w-[95vw] h-[85vh] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-3 flex-shrink-0">
             <DialogTitle className="text-sm flex items-center gap-2">
-              <Layers className="h-4 w-4" /> Mapear Itens em Lote
+              <Layers className="h-4 w-4" /> Mapear Itens em Lote ({unmappedEvents.length})
             </DialogTitle>
           </DialogHeader>
-          <ScrollArea className="max-h-[60vh]">
-            <div className="space-y-2 p-1">
+          <ScrollArea className="flex-1 min-h-0 px-6">
+            <div className="space-y-2 py-2">
               {unmappedEvents.map(ev => (
                 <div key={ev.id} className="flex items-center gap-2 p-2 rounded-md border bg-muted/30">
                   <div className="flex-1 min-w-0">
@@ -971,7 +919,7 @@ export function PleContractTab(props: PleDataReturn) {
                     <SelectTrigger className="h-7 text-[10px] w-[180px]">
                       <SelectValue placeholder="Selecionar serviço..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[300px]">
                       {Array.from(
                         obraMapServices.reduce((groups, s) => {
                           const arr = groups.get(s.macro_name) || [];
@@ -995,12 +943,12 @@ export function PleContractTab(props: PleDataReturn) {
               ))}
             </div>
           </ScrollArea>
-          <div className="flex justify-end gap-2 mt-2">
+          <DialogFooter className="px-6 py-3 border-t flex-shrink-0">
             <Button variant="outline" size="sm" onClick={() => setShowBatchMapping(false)}>Cancelar</Button>
             <Button size="sm" onClick={handleBatchMap} disabled={Object.values(batchMappings).filter(Boolean).length === 0}>
               Mapear {Object.values(batchMappings).filter(Boolean).length} itens
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

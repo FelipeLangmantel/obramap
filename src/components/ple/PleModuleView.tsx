@@ -3,7 +3,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, FileText, BarChart3, History, Grid3X3, ClipboardList, ArrowLeft, MapPin } from "lucide-react";
+import { Plus, FileText, BarChart3, History, Grid3X3, ClipboardList, ArrowLeft, MapPin, RefreshCw } from "lucide-react";
 import { PleSpreadsheetTab } from "./PleSpreadsheetTab";
 import { PleGridTab } from "./PleGridTab";
 import { PleChartsTab } from "./PleChartsTab";
@@ -14,6 +14,7 @@ import { PleProjectSetup } from "./PleProjectSetup";
 import { PleNewMeasurementDialog } from "./PleNewMeasurementDialog";
 import { PleDashboard } from "./PleDashboard";
 import { PleContractInfoTab } from "./PleContractInfoTab";
+import { PleSyncTab } from "./PleSyncTab";
 import type { usePleData } from "@/hooks/usePleData";
 
 type PleDataReturn = ReturnType<typeof usePleData>;
@@ -180,6 +181,10 @@ export function PleModuleView(props: PleDataReturn) {
               <FileText className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               Contrato
             </TabsTrigger>
+            <TabsTrigger value="sync" className="gap-1 text-[9px] sm:text-xs px-1.5 sm:px-3 h-6 sm:h-8">
+              <RefreshCw className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+              Sincronização
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -203,6 +208,9 @@ export function PleModuleView(props: PleDataReturn) {
         </TabsContent>
         <TabsContent value="contrato" className="flex-1 min-h-0 mt-1.5 sm:mt-3">
           <PleContractInfoTab {...props} />
+        </TabsContent>
+        <TabsContent value="sync" className="flex-1 min-h-0 mt-1.5 sm:mt-3">
+          <PleSyncTab {...props} />
         </TabsContent>
       </Tabs>
 

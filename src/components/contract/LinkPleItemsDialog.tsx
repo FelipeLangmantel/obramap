@@ -212,8 +212,8 @@ export function LinkPleItemsDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="max-w-6xl w-[95vw] h-[90vh] max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-3 flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5 text-primary" />
             Vincular itens da PLE ao serviço
@@ -224,7 +224,7 @@ export function LinkPleItemsDialog({
           </div>
         </DialogHeader>
 
-        <div className="flex items-center gap-2 py-2 border-b">
+        <div className="flex items-center gap-2 px-6 py-2 border-b flex-shrink-0">
           <div className="relative flex-1">
             <Search className="h-3.5 w-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
             <Input
@@ -242,7 +242,7 @@ export function LinkPleItemsDialog({
           </Badge>
         </div>
 
-        <ScrollArea className="flex-1 -mx-6 px-6">
+        <ScrollArea className="flex-1 min-h-0 px-6">
           {loading ? (
             <div className="flex items-center justify-center h-40">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -316,7 +316,7 @@ export function LinkPleItemsDialog({
           )}
         </ScrollArea>
 
-        <DialogFooter className="border-t pt-3">
+        <DialogFooter className="border-t px-6 py-3 flex-shrink-0">
           <div className="text-xs text-muted-foreground mr-auto">
             {totalHouses} casas · O valor "por casa" multiplica pelo nº de casas; "fixo" usa o total do item.
           </div>
