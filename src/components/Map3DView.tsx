@@ -40,10 +40,35 @@ interface HouseMarker {
   macros: any[];
 }
 
+// Aplica highlight branco emissivo na mesh selecionada (modo Revisar).
+function useSelectionHighlight(scene: THREE.Object3D | null, selectedKey: string | null) {
+  useEffect(() => {
+    if (!scene) return;
+    scene.traverse((child) => {
+      if (!(child as THREE.Mesh).isMesh) return;
+      const mesh = child as THREE.Mesh;
+      const mat = mesh.material as THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[];
+      const apply = (m: any) => {
+        if (!m || m.emissive === undefined) return;
+        if (mesh.uuid === selectedKey) {
+          m.emissive.set(0xffffff);
+          m.emissiveIntensity = 0.25;
+        } else {
+          m.emissive.set(0x000000);
+          m.emissiveIntensity = 0;
+        }
+        m.needsUpdate = true;
+      };
+      if (Array.isArray(mat)) mat.forEach(apply); else apply(mat);
+    });
+  }, [scene, selectedKey]);
+}
+
 // GLTF model - calls onLoaded after it's in the scene
-function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D) => void }) {
+function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }: { url: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D) => void; selectedMeshKey?: string | null }) {
   const { scene } = useGLTF(url);
   const calledRef = useRef(false);
+  useSelectionHighlight(scene, selectedMeshKey ?? null);
 
   useEffect(() => {
     if (scene && !calledRef.current) {
@@ -70,12 +95,13 @@ function GLTFModel({ url, onLoaded, onSceneReady, onMeshClick }: { url: string; 
 }
 
 // OBJ model - calls onLoaded after it's in the scene
-function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick }: { url: string; mtlUrl?: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D) => void }) {
+function OBJModel({ url, mtlUrl, onLoaded, onSceneReady, onMeshClick, selectedMeshKey }: { url: string; mtlUrl?: string; onLoaded: () => void; onSceneReady?: (scene: THREE.Object3D) => void; onMeshClick?: (mesh: THREE.Object3D) => void; selectedMeshKey?: string | null }) {
   const materials = mtlUrl ? useLoader(MTLLoader, mtlUrl) : null;
   const obj = useLoader(OBJLoader, url, (loader) => {
     if (materials) { materials.preload(); loader.setMaterials(materials); }
   });
   const calledRef = useRef(false);
+  useSelectionHighlight(obj, selectedMeshKey ?? null);
 
   useEffect(() => {
     if (obj && !calledRef.current) {
