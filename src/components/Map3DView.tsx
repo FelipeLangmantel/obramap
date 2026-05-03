@@ -1,4 +1,4 @@
-import { useState, useRef, Suspense, useCallback, useEffect } from "react";
+import { useState, useRef, Suspense, useCallback, useEffect, useMemo } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Html, PerspectiveCamera } from "@react-three/drei";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
