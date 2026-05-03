@@ -93,15 +93,40 @@ export function ImportWeightsFromBudgetDialog({ open, onOpenChange }: ImportWeig
       // ---------- Contrato (project_contract_services) ----------
       const { data: contractServices } = await supabase
         .from("project_contract_services")
-        .select("scope_id, unit_revenue_value")
+        .select("macro_id, scope_id, unit_revenue_value")
         .eq("project_id", currentProject.id);
+
+      const totalHouses = currentProject.totalHouses || (currentProject.houses?.length ?? 1);
+      const pleTotalsByService = new Map<string, number>();
+      const { data: pleProject } = await supabase
+        .from("ple_projects")
+        .select("id")
+        .eq("obramap_project_id", currentProject.id)
+        .maybeSingle();
+
+      if (pleProject?.id) {
+        const { data: pleEvents } = await supabase
+          .from("ple_events")
+          .select("obramap_macro_id, obramap_scope_id, quantity, unit_value, billing_type")
+          .eq("ple_project_id", pleProject.id)
+          .not("obramap_scope_id", "is", null);
+
+        (pleEvents || []).forEach((event) => {
+          if (!event.obramap_macro_id || !event.obramap_scope_id) return;
+          const key = `${event.obramap_macro_id}-${event.obramap_scope_id}`;
+          const lineTotal = Number(event.quantity || 0) * Number(event.unit_value || 0);
+          const value = event.billing_type === "fixed" ? lineTotal : lineTotal * totalHouses;
+          pleTotalsByService.set(key, (pleTotalsByService.get(key) || 0) + value);
+        });
+      }
 
       const contractTotalsByScope: Record<string, number> = {};
       let contractTotal = 0;
       (contractServices || [])
         .filter((s) => validScopeIds.has(s.scope_id))
         .forEach((s) => {
-          const v = Number(s.unit_revenue_value || 0);
+          const pleTotal = pleTotalsByService.get(`${s.macro_id}-${s.scope_id}`) || 0;
+          const v = pleTotal > 0 ? pleTotal : Number(s.unit_revenue_value || 0);
           if (v > 0) {
             contractTotalsByScope[s.scope_id] =
               (contractTotalsByScope[s.scope_id] || 0) + v;
