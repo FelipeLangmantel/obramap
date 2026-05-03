@@ -953,14 +953,14 @@ export function PleContractTab(props: PleDataReturn) {
 
       {/* Batch Mapping Dialog */}
       <Dialog open={showBatchMapping} onOpenChange={setShowBatchMapping}>
-        <DialogContent className="max-w-2xl max-h-[80vh]">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl w-[95vw] h-[85vh] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-3 flex-shrink-0">
             <DialogTitle className="text-sm flex items-center gap-2">
-              <Layers className="h-4 w-4" /> Mapear Itens em Lote
+              <Layers className="h-4 w-4" /> Mapear Itens em Lote ({unmappedEvents.length})
             </DialogTitle>
           </DialogHeader>
-          <ScrollArea className="max-h-[60vh]">
-            <div className="space-y-2 p-1">
+          <ScrollArea className="flex-1 min-h-0 px-6">
+            <div className="space-y-2 py-2">
               {unmappedEvents.map(ev => (
                 <div key={ev.id} className="flex items-center gap-2 p-2 rounded-md border bg-muted/30">
                   <div className="flex-1 min-w-0">
@@ -974,7 +974,7 @@ export function PleContractTab(props: PleDataReturn) {
                     <SelectTrigger className="h-7 text-[10px] w-[180px]">
                       <SelectValue placeholder="Selecionar serviço..." />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-h-[300px]">
                       {Array.from(
                         obraMapServices.reduce((groups, s) => {
                           const arr = groups.get(s.macro_name) || [];
@@ -998,12 +998,12 @@ export function PleContractTab(props: PleDataReturn) {
               ))}
             </div>
           </ScrollArea>
-          <div className="flex justify-end gap-2 mt-2">
+          <DialogFooter className="px-6 py-3 border-t flex-shrink-0">
             <Button variant="outline" size="sm" onClick={() => setShowBatchMapping(false)}>Cancelar</Button>
             <Button size="sm" onClick={handleBatchMap} disabled={Object.values(batchMappings).filter(Boolean).length === 0}>
               Mapear {Object.values(batchMappings).filter(Boolean).length} itens
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
