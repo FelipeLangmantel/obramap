@@ -55,6 +55,30 @@ interface IfcElementLinkRow {
   trigger_service_key: string;
 }
 
+interface IfcLinkDiagnosticRow {
+  id: string;
+  house_id: string | null;
+  house_number: number | null;
+  trigger_service_key: string | null;
+  trigger_service_label: string | null;
+}
+
+interface LinkDiagnosticSummary {
+  totalConfirmed: number;
+  withHouseId: number;
+  onlyHouseNumber: number;
+  uniqueHouses: number;
+  uniqueServices: number;
+  withoutService: number;
+  withoutHouse: number;
+  groups: Array<{
+    serviceKey: string;
+    serviceLabel: string;
+    total: number;
+    houses: string[];
+  }>;
+}
+
 interface HouseLookupRow {
   id?: string | null;
   houseNumber?: number | null;
@@ -163,6 +187,21 @@ function asIfcElementLinkRows(data: unknown): IfcElementLinkRow[] {
     .filter(item => item.ifc_element_id && item.trigger_service_key);
 }
 
+function asIfcLinkDiagnosticRows(data: unknown): IfcLinkDiagnosticRow[] {
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+    .map(item => ({
+      id: normalizeNullableString(item.id) || "",
+      house_id: normalizeNullableString(item.house_id),
+      house_number: normalizeNullableNumber(item.house_number),
+      trigger_service_key: normalizeNullableString(item.trigger_service_key),
+      trigger_service_label: normalizeNullableString(item.trigger_service_label),
+    }))
+    .filter(item => item.id);
+}
+
 function buildLinkKey(ifcElementId: string, houseId: string | null, houseNumber: number | null, serviceKey: string) {
   return `${ifcElementId}::${houseId || ""}::${houseNumber ?? ""}::${serviceKey}`;
 }
@@ -178,6 +217,51 @@ function statusBadgeClass(status: IfcSuggestionStatus) {
   return "bg-amber-100 text-amber-800";
 }
 
+function summarizeLinkDiagnostics(links: IfcLinkDiagnosticRow[]): LinkDiagnosticSummary {
+  const houseKeys = new Set<string>();
+  const serviceKeys = new Set<string>();
+  const groups = new Map<string, { serviceKey: string; serviceLabel: string; total: number; houses: Set<string> }>();
+
+  links.forEach(link => {
+    const houseKey = link.house_id || (link.house_number != null ? String(link.house_number) : "");
+    const serviceKey = link.trigger_service_key || "";
+
+    if (houseKey) houseKeys.add(houseKey);
+    if (serviceKey) serviceKeys.add(serviceKey);
+
+    const groupKey = serviceKey || "sem-servico";
+    const existing = groups.get(groupKey) || {
+      serviceKey: groupKey,
+      serviceLabel: link.trigger_service_label || serviceKey || "Sem serviço",
+      total: 0,
+      houses: new Set<string>(),
+    };
+
+    existing.total += 1;
+    if (link.house_number != null) existing.houses.add(String(link.house_number));
+    else if (link.house_id) existing.houses.add("house_id");
+    groups.set(groupKey, existing);
+  });
+
+  return {
+    totalConfirmed: links.length,
+    withHouseId: links.filter(link => !!link.house_id).length,
+    onlyHouseNumber: links.filter(link => !link.house_id && link.house_number != null).length,
+    uniqueHouses: houseKeys.size,
+    uniqueServices: serviceKeys.size,
+    withoutService: links.filter(link => !link.trigger_service_key).length,
+    withoutHouse: links.filter(link => !link.house_id && link.house_number == null).length,
+    groups: Array.from(groups.values())
+      .map(group => ({
+        serviceKey: group.serviceKey,
+        serviceLabel: group.serviceLabel,
+        total: group.total,
+        houses: Array.from(group.houses).sort((a, b) => Number(a) - Number(b)),
+      }))
+      .sort((a, b) => a.serviceLabel.localeCompare(b.serviceLabel)),
+  };
+}
+
 export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, houses = [] }: Props) {
   const [items, setItems] = useState<IfcSuggestionRow[]>([]);
   const [modelId, setModelId] = useState<string | null>(null);
@@ -188,6 +272,8 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
   const [savingId, setSavingId] = useState<string | null>(null);
   const [syncingLinks, setSyncingLinks] = useState(false);
   const [linkSyncResult, setLinkSyncResult] = useState<LinkSyncResult | null>(null);
+  const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
+  const [linkDiagnostics, setLinkDiagnostics] = useState<LinkDiagnosticSummary | null>(null);
 
   const houseIdByNumber = useMemo(() => {
     const map = new Map<number, string>();
@@ -426,6 +512,34 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
     }
   };
 
+  const loadLinkDiagnostics = async () => {
+    if (!projectId) {
+      toast.error("Projeto não identificado para carregar diagnóstico IFC");
+      return;
+    }
+
+    setLoadingDiagnostics(true);
+    try {
+      const linksTable = supabase.from("project_ifc_element_links" as any) as any;
+      let query = linksTable
+        .select("id, house_id, house_number, trigger_service_key, trigger_service_label")
+        .eq("project_id", projectId)
+        .eq("status", "confirmed");
+
+      if (modelId) query = query.eq("model_id", modelId);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      setLinkDiagnostics(summarizeLinkDiagnostics(asIfcLinkDiagnosticRows(data as unknown)));
+    } catch (err: any) {
+      console.error("[IFC] Falha ao carregar diagnóstico de vínculos", err);
+      toast.error("Falha ao carregar diagnóstico de vínculos IFC");
+    } finally {
+      setLoadingDiagnostics(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[90vh] w-[96vw] max-w-6xl flex-col gap-0 overflow-hidden p-0">
@@ -492,6 +606,50 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
               <Counter label="Ignorados" value={linkSyncResult.ignored} />
             </div>
           )}
+          <div className="rounded-md border border-border bg-background p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold">Diagnóstico de vínculos confirmados</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Este diagnóstico ainda não altera a visibilidade do 3D Real. A ativação visual será feita em etapa futura.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => void loadLinkDiagnostics()}
+                disabled={loadingDiagnostics}
+              >
+                {loadingDiagnostics ? "Atualizando..." : "Atualizar diagnóstico"}
+              </Button>
+            </div>
+            {linkDiagnostics && (
+              <div className="mt-3 space-y-3">
+                <div className="grid gap-2 text-xs sm:grid-cols-4 lg:grid-cols-7">
+                  <Counter label="Total" value={linkDiagnostics.totalConfirmed} />
+                  <Counter label="Com house_id" value={linkDiagnostics.withHouseId} />
+                  <Counter label="Só house_number" value={linkDiagnostics.onlyHouseNumber} />
+                  <Counter label="Casas" value={linkDiagnostics.uniqueHouses} />
+                  <Counter label="Serviços" value={linkDiagnostics.uniqueServices} />
+                  <Counter label="Sem serviço" value={linkDiagnostics.withoutService} />
+                  <Counter label="Sem casa" value={linkDiagnostics.withoutHouse} />
+                </div>
+                <div className="space-y-1.5">
+                  {linkDiagnostics.groups.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Nenhum vínculo confirmado encontrado.</p>
+                  ) : (
+                    linkDiagnostics.groups.map(group => (
+                      <div key={group.serviceKey} className="rounded border border-border bg-muted/30 px-3 py-2 text-xs">
+                        <span className="font-medium">Serviço: {group.serviceLabel}</span>
+                        <span className="text-muted-foreground"> - {group.total} vínculo(s) - casas: {group.houses.join(", ") || "-"}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           {!modelId && modelUrl && (
             <p className="text-xs text-muted-foreground">
               Modelo IFC persistido ainda não localizado; exibindo sugestões do projeto.
