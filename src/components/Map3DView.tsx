@@ -831,7 +831,7 @@ export function Map3DView() {
           const houseId = payload?.new?.house_id ?? payload?.old?.house_id;
           if (!houseId || houseIdSet.has(houseId)) {
             void refreshHousesFromDB();
-            autoSync();
+            autoSyncRef.current();
           }
         })
         .subscribe();
