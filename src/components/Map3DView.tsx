@@ -663,6 +663,8 @@ export function Map3DView() {
     if (syncDebounceRef.current) clearTimeout(syncDebounceRef.current);
     syncDebounceRef.current = setTimeout(() => { void handleSync3DReal(); }, 800);
   }, [lastSyncResult, handleSync3DReal]);
+  const autoSyncRef = useRef(autoSync);
+  useEffect(() => { autoSyncRef.current = autoSync; }, [autoSync]);
 
 
   const handleMeshClick = useCallback((obj: THREE.Object3D) => {
