@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useIfcActivationReadModel, type IfcActivationLink } from "@/hooks/useIfcActivationReadModel";
 import { supabase } from "@/integrations/supabase/client";
 
 type IfcSuggestionStatus = "suggested" | "confirmed" | "ignored";
@@ -76,22 +77,6 @@ interface LinkDiagnosticSummary {
     serviceLabel: string;
     total: number;
     houses: string[];
-  }>;
-}
-
-interface ActivationDiagnosticSummary {
-  totalConfirmed: number;
-  withHouse: number;
-  withService: number;
-  ready: number;
-  missingHouse: number;
-  missingService: number;
-  items: Array<{
-    key: string;
-    serviceLabel: string;
-    houseLabel: string;
-    status: "pronto" | "pendente";
-    total: number;
   }>;
 }
 
@@ -278,40 +263,6 @@ function summarizeLinkDiagnostics(links: IfcLinkDiagnosticRow[]): LinkDiagnostic
   };
 }
 
-function getActivationHouseLabel(link: IfcLinkDiagnosticRow) {
-  if (link.house_number != null) return String(link.house_number);
-  if (link.house_id) return "house_id";
-  return "sem casa";
-}
-
-function summarizeActivationDiagnostics(links: IfcLinkDiagnosticRow[]): ActivationDiagnosticSummary {
-  const groups = new Map<string, { serviceLabel: string; houseLabel: string; status: "pronto" | "pendente"; total: number }>();
-
-  links.forEach(link => {
-    const hasHouse = !!link.house_id || link.house_number != null;
-    const hasService = !!link.trigger_service_key;
-    const serviceLabel = link.trigger_service_label || link.trigger_service_key || "sem serviço";
-    const houseLabel = getActivationHouseLabel(link);
-    const status = hasHouse && hasService ? "pronto" : "pendente";
-    const key = `${serviceLabel}::${houseLabel}::${status}`;
-    const existing = groups.get(key) || { serviceLabel, houseLabel, status, total: 0 };
-    existing.total += 1;
-    groups.set(key, existing);
-  });
-
-  return {
-    totalConfirmed: links.length,
-    withHouse: links.filter(link => !!link.house_id || link.house_number != null).length,
-    withService: links.filter(link => !!link.trigger_service_key).length,
-    ready: links.filter(link => (!!link.house_id || link.house_number != null) && !!link.trigger_service_key).length,
-    missingHouse: links.filter(link => !link.house_id && link.house_number == null).length,
-    missingService: links.filter(link => !link.trigger_service_key).length,
-    items: Array.from(groups.entries())
-      .map(([key, group]) => ({ key, ...group }))
-      .sort((a, b) => a.serviceLabel.localeCompare(b.serviceLabel) || a.houseLabel.localeCompare(b.houseLabel)),
-  };
-}
-
 export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, houses = [] }: Props) {
   const [items, setItems] = useState<IfcSuggestionRow[]>([]);
   const [modelId, setModelId] = useState<string | null>(null);
@@ -324,7 +275,7 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
   const [linkSyncResult, setLinkSyncResult] = useState<LinkSyncResult | null>(null);
   const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
   const [linkDiagnostics, setLinkDiagnostics] = useState<LinkDiagnosticSummary | null>(null);
-  const [activationDiagnostics, setActivationDiagnostics] = useState<ActivationDiagnosticSummary | null>(null);
+  const activationReadModel = useIfcActivationReadModel({ projectId, modelId, enabled: open });
 
   const houseIdByNumber = useMemo(() => {
     const map = new Map<number, string>();
@@ -584,7 +535,6 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
 
       const links = asIfcLinkDiagnosticRows(data as unknown);
       setLinkDiagnostics(summarizeLinkDiagnostics(links));
-      setActivationDiagnostics(summarizeActivationDiagnostics(links));
     } catch (err: any) {
       console.error("[IFC] Falha ao carregar diagnóstico de vínculos", err);
       toast.error("Falha ao carregar diagnóstico de vínculos IFC");
@@ -592,6 +542,24 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
       setLoadingDiagnostics(false);
     }
   };
+
+  const activationItems = useMemo(() => {
+    const groups = new Map<string, { serviceLabel: string; houseLabel: string; status: "pronto" | "pendente"; total: number }>();
+
+    activationReadModel.links.forEach((link: IfcActivationLink) => {
+      const serviceLabel = link.trigger_service_label || link.trigger_service_key || "sem serviço";
+      const houseLabel = link.house_number != null ? String(link.house_number) : link.house_id ? "house_id" : "sem casa";
+      const status = link.activation_status === "ready" ? "pronto" : "pendente";
+      const key = `${serviceLabel}::${houseLabel}::${status}`;
+      const existing = groups.get(key) || { serviceLabel, houseLabel, status, total: 0 };
+      existing.total += 1;
+      groups.set(key, existing);
+    });
+
+    return Array.from(groups.entries())
+      .map(([key, group]) => ({ key, ...group }))
+      .sort((a, b) => a.serviceLabel.localeCompare(b.serviceLabel) || a.houseLabel.localeCompare(b.houseLabel));
+  }, [activationReadModel.links]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -715,40 +683,53 @@ export function IfcSuggestionsPanel({ open, onOpenChange, projectId, modelUrl, h
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => void loadLinkDiagnostics()}
-                disabled={loadingDiagnostics}
+                onClick={() => void activationReadModel.refetch()}
+                disabled={activationReadModel.loading}
               >
-                {loadingDiagnostics ? "Atualizando..." : "Atualizar diagnóstico"}
+                {activationReadModel.loading ? "Atualizando..." : "Atualizar diagnóstico"}
               </Button>
             </div>
-            {activationDiagnostics && (
-              <div className="mt-3 space-y-3">
-                <div className="grid gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
-                  <Counter label="Total" value={activationDiagnostics.totalConfirmed} />
-                  <Counter label="Com casa" value={activationDiagnostics.withHouse} />
-                  <Counter label="Com serviço" value={activationDiagnostics.withService} />
-                  <Counter label="Prontos" value={activationDiagnostics.ready} />
-                  <Counter label="Sem casa" value={activationDiagnostics.missingHouse} />
-                  <Counter label="Sem serviço" value={activationDiagnostics.missingService} />
-                </div>
-                <div className="space-y-1.5">
-                  {activationDiagnostics.items.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Nenhum vínculo confirmado encontrado para diagnóstico de ativação.</p>
-                  ) : (
-                    activationDiagnostics.items.map(item => (
-                      <div key={item.key} className="flex flex-wrap items-center gap-2 rounded border border-border bg-muted/30 px-3 py-2 text-xs">
-                        <span><span className="font-medium">Serviço:</span> {item.serviceLabel}</span>
-                        <span><span className="font-medium">Casa:</span> {item.houseLabel}</span>
-                        <span><span className="font-medium">Vínculos:</span> {item.total}</span>
-                        <Badge variant={item.status === "pronto" ? "default" : "outline"} className="text-[10px]">
-                          {item.status}
-                        </Badge>
-                      </div>
-                    ))
-                  )}
-                </div>
+            <div className="mt-3 space-y-3">
+              <div className="grid gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
+                <Counter label="Total" value={activationReadModel.summary.total} />
+                <Counter
+                  label="Com casa"
+                  value={activationReadModel.summary.with_house_id + activationReadModel.summary.with_house_number_only}
+                />
+                <Counter
+                  label="Com serviço"
+                  value={activationReadModel.summary.total - activationReadModel.summary.pending_service - activationReadModel.summary.pending_house_and_service}
+                />
+                <Counter label="Prontos" value={activationReadModel.summary.ready} />
+                <Counter
+                  label="Sem casa"
+                  value={activationReadModel.summary.pending_house + activationReadModel.summary.pending_house_and_service}
+                />
+                <Counter
+                  label="Sem serviço"
+                  value={activationReadModel.summary.pending_service + activationReadModel.summary.pending_house_and_service}
+                />
               </div>
-            )}
+              {activationReadModel.error && (
+                <p className="text-xs text-destructive">Falha ao carregar modelo de leitura de ativação IFC.</p>
+              )}
+              <div className="space-y-1.5">
+                {activationItems.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhum vínculo confirmado encontrado para diagnóstico de ativação.</p>
+                ) : (
+                  activationItems.map(item => (
+                    <div key={item.key} className="flex flex-wrap items-center gap-2 rounded border border-border bg-muted/30 px-3 py-2 text-xs">
+                      <span><span className="font-medium">Serviço:</span> {item.serviceLabel}</span>
+                      <span><span className="font-medium">Casa:</span> {item.houseLabel}</span>
+                      <span><span className="font-medium">Vínculos:</span> {item.total}</span>
+                      <Badge variant={item.status === "pronto" ? "default" : "outline"} className="text-[10px]">
+                        {item.status}
+                      </Badge>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
           {!modelId && modelUrl && (
             <p className="text-xs text-muted-foreground">
