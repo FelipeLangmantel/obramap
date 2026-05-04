@@ -819,11 +819,11 @@ export function Map3DView() {
         .on("postgres_changes", {
           event: "*", schema: "public", table: "productions",
           filter: `project_id=eq.${projectId}`,
-        }, () => { void refreshHousesFromDB(); autoSync(); })
+        }, () => { void refreshHousesFromDB(); autoSyncRef.current(); })
         .on("postgres_changes", {
           event: "*", schema: "public", table: "weekly_productions",
           filter: `project_id=eq.${projectId}`,
-        }, () => { void refreshHousesFromDB(); autoSync(); })
+        }, () => { void refreshHousesFromDB(); autoSyncRef.current(); })
         .on("postgres_changes", {
           event: "*", schema: "public", table: "diary_items",
         }, (payload: any) => {
